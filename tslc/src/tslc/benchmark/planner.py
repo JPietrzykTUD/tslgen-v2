@@ -8,26 +8,48 @@ import json
 import re
 
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.benchmark.correctness import (
+    immediate_cases as _immediate_correctness_cases,
+    immediate_values as _immediate_values,
+    indexed_load_bindings as _indexed_load_bindings,
+    indexed_load_cases as _indexed_load_correctness_cases,
+    mask_cases as _mask_correctness_cases,
+    reduction_cases as _reduction_correctness_cases,
+    vector_cases as _vector_correctness_cases,
+    vector_mask_cases as _vector_mask_correctness_cases,
+    vector_scalar_cases as _vector_scalar_correctness_cases,
+)
 from tslc.benchmark.model import (
     BenchmarkCandidate,
     BenchmarkCandidateSet,
     BenchmarkCorrectnessCase,
     BenchmarkCoverageEntry,
     BenchmarkCoverageStatus,
+    BenchmarkImmediateCorrectnessCase,
+    BenchmarkIndexedLoadCorrectnessCase,
     BenchmarkMaskCorrectnessCase,
-    BenchmarkMaskDensityScenario,
-    BenchmarkOperandGenerator,
     BenchmarkProfilePlan,
     BenchmarkProjectPlan,
-    BenchmarkRegisterScenario,
+    BenchmarkReductionCorrectnessCase,
     BenchmarkScenario,
-    BenchmarkTiming,
     BenchmarkVectorCorrectnessCase,
+    BenchmarkVectorMaskCorrectnessCase,
+    BenchmarkVectorScalarCorrectnessCase,
     SpecializationKey,
+)
+from tslc.benchmark.scenarios import (
+    immediate_scenarios,
+    indexed_load_scenarios,
+    mask_density_scenarios,
+    mask_result_scenarios,
+    reduction_scenarios,
+    register_scenarios,
+    vector_scalar_scenarios,
 )
 from tslc.catalog.model import Catalog, Extension, Primitive
 from tslc.catalog.scalar_types import scalar_bit_width
-from tslc.lower.lowerer import LoweredSpecialization
+from tslc.catalog.signatures import parse_signature
+from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.value_tests.harness import discover_harness_primitives
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestProjectPlan
 
@@ -36,7 +58,7 @@ BENCHMARK_PROTOCOL_VERSION = 1
 
 
 class BenchmarkPlanner:
-    """Select the deliberately small first benchmark scenario family.
+    """Plan typed benchmark scenarios for authored implementation variants.
 
     Eligibility is expressed entirely through typed signature/catalog facts.
     Unsupported variant slots remain visible in coverage rather than being
@@ -79,13 +101,30 @@ class BenchmarkPlanner:
                             )
                         )
                         continue
-                    candidate_set, reason, missing_correctness = self._candidate_set(
-                        emitted_profile,
-                        by_primitive,
-                        spec,
-                        cases,
-                    )
-                    if candidate_set is None:
+                    bindings: tuple[
+                        tuple[str | None, tuple[tuple[str, str], ...]], ...
+                    ] = ((None, ()),)
+                    if spec.type_params and _is_indexed_load_shape(spec):
+                        bindings = _indexed_load_bindings(cases, spec)
+                    elif spec.immediate is not None:
+                        bindings = tuple(
+                            (value, ()) for value in _immediate_values(cases, spec)
+                        )
+                    candidate_sets_for_spec: list[BenchmarkCandidateSet] = []
+                    reason = "no authored immediate case covers this specialization"
+                    missing_correctness = spec.immediate is not None
+                    for immediate_value, type_bindings in bindings:
+                        candidate_set, reason, missing_correctness = self._candidate_set(
+                            emitted_profile,
+                            by_primitive,
+                            spec,
+                            cases,
+                            immediate_value=immediate_value,
+                            simd_type_base_bindings=type_bindings,
+                        )
+                        if candidate_set is not None:
+                            candidate_sets_for_spec.append(candidate_set)
+                    if not candidate_sets_for_spec:
                         coverage.append(
                             _coverage(
                                 emitted_profile,
@@ -95,7 +134,7 @@ class BenchmarkPlanner:
                             )
                         )
                         continue
-                    candidate_sets.append(candidate_set)
+                    candidate_sets.extend(candidate_sets_for_spec)
                     coverage.append(_coverage(emitted_profile, spec, "emitted", ""))
             ordered_sets = tuple(sorted(candidate_sets, key=lambda item: item.stable_id))
             planned_profiles.append(
@@ -120,8 +159,11 @@ class BenchmarkPlanner:
         by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
         spec: LoweredSpecialization,
         cases: tuple[ValueTestCasePlan, ...],
+        *,
+        immediate_value: str | None,
+        simd_type_base_bindings: tuple[tuple[str, str], ...],
     ) -> tuple[BenchmarkCandidateSet | None, str, bool]:
-        primitive = self._catalog.primitive(spec.source_primitive_name)
+        primitive = _source_primitive(self._catalog, spec)
         extension = profile.extensions.get(spec.extension_name)
         reason = _common_unsupported_reason(spec, primitive, extension)
         if reason is not None:
@@ -141,15 +183,129 @@ class BenchmarkPlanner:
             type_tag=spec.type_tag,
             result_kind=spec.result_kind,
             param_kinds=spec.param_kinds,
+            immediate=immediate_value,
+            simd_type_base_bindings=simd_type_base_bindings,
+            generic_values=tuple(
+                (name, default) for name, _type, default in spec.generic_params
+            ),
+            overload_parameter_positions=varying_positions(
+                by_primitive[spec.primitive_name]
+            ),
             lanes=lanes,
         )
         stable_id = _stable_id(key)
         seed = int(sha256(stable_id.encode("utf-8")).hexdigest()[:16], 16)
         correctness: tuple[BenchmarkCorrectnessCase, ...]
         scenarios: tuple[BenchmarkScenario, ...]
-        if spec.result_kind == "v" and spec.param_kinds and all(
+        if _is_indexed_load_shape(spec):
+            if immediate_value is None or len(simd_type_base_bindings) != 1:
+                return None, "no concrete indexed-load binding was planned", True
+            try:
+                scale = int(immediate_value, 0)
+            except ValueError:
+                return None, "indexed-load scale is not a concrete integer", False
+            if scale != bits // 8:
+                return (
+                    None,
+                    "indexed-load benchmark requires an element-sized scale",
+                    False,
+                )
+            from_array = self._harness.from_array
+            to_array = self._harness.to_array
+            if from_array is None or to_array is None:
+                return None, "indexed-load harness primitives were not discovered", True
+            if from_array not in by_primitive or to_array not in by_primitive:
+                return (
+                    None,
+                    "indexed-load harness primitives are not in the emitted dependency closure",
+                    True,
+                )
+            index_type_tag = simd_type_base_bindings[0][1]
+            index_bits = scalar_bit_width(index_type_tag)
+            if index_bits is None or extension.vector_bits % index_bits:
+                return None, "indexed-load type does not have a fixed lane count", False
+            if not all(
+                _has_vector_specialization(
+                    by_primitive,
+                    primitive_name,
+                    spec.extension_name,
+                    index_type_tag,
+                )
+                for primitive_name in (from_array, to_array)
+            ):
+                return (
+                    None,
+                    "indexed-load SIMD-type harness specializations are not in the emitted closure",
+                    True,
+                )
+            index_lanes = extension.vector_bits // index_bits
+            correctness = _indexed_load_correctness_cases(
+                cases,
+                spec,
+                lanes,
+                index_lanes,
+                immediate_value,
+                index_type_tag,
+                from_array,
+                to_array,
+            )
+            scenarios = indexed_load_scenarios(index_lanes, seed)
+        elif spec.result_kind == "v" and spec.param_kinds == ("v", "sImm"):
+            if immediate_value is None:
+                return None, "no concrete immediate value was planned", True
+            from_array = self._harness.from_array
+            to_array = self._harness.to_array
+            if from_array is None or to_array is None:
+                return None, "vector round-trip harness primitives were not discovered", True
+            if from_array not in by_primitive or to_array not in by_primitive:
+                return (
+                    None,
+                    "vector round-trip harness primitives are not in the emitted dependency closure",
+                    True,
+                )
+            correctness = _immediate_correctness_cases(
+                cases,
+                spec,
+                lanes,
+                immediate_value,
+                from_array,
+                to_array,
+            )
+            scenarios = immediate_scenarios(primitive, spec, seed)
+        elif spec.result_kind == "v" and spec.param_kinds == ("v", "s"):
+            if primitive.cross_lane:
+                return (
+                    None,
+                    "cross-lane vector results require a dedicated benchmark scenario",
+                    False,
+                )
+            from_array = self._harness.from_array
+            to_array = self._harness.to_array
+            if from_array is None or to_array is None:
+                return None, "vector round-trip harness primitives were not discovered", True
+            if from_array not in by_primitive or to_array not in by_primitive:
+                return (
+                    None,
+                    "vector round-trip harness primitives are not in the emitted dependency closure",
+                    True,
+                )
+            correctness = _vector_scalar_correctness_cases(
+                cases,
+                spec,
+                lanes,
+                from_array,
+                to_array,
+            )
+            scenarios = vector_scalar_scenarios(primitive, spec, seed)
+        elif spec.result_kind == "v" and spec.param_kinds and all(
             kind == "v" for kind in spec.param_kinds
         ):
+            if primitive.cross_lane:
+                return (
+                    None,
+                    "cross-lane vector results require a dedicated benchmark scenario",
+                    False,
+                )
             from_array = self._harness.from_array
             to_array = self._harness.to_array
             if from_array is None or to_array is None:
@@ -167,7 +323,49 @@ class BenchmarkPlanner:
                 from_array,
                 to_array,
             )
-            scenarios = _register_scenarios(primitive, spec, seed)
+            scenarios = register_scenarios(primitive, spec, seed)
+        elif spec.result_kind == "m" and spec.param_kinds and all(
+            kind == "v" for kind in spec.param_kinds
+        ):
+            from_array = self._harness.from_array
+            to_integral = self._harness.to_integral
+            if from_array is None or to_integral is None:
+                return (
+                    None,
+                    "vector-to-mask harness primitives were not discovered",
+                    True,
+                )
+            if from_array not in by_primitive or to_integral not in by_primitive:
+                return (
+                    None,
+                    "vector-to-mask harness primitives are not in the emitted dependency closure",
+                    True,
+                )
+            correctness = _vector_mask_correctness_cases(
+                cases,
+                spec,
+                lanes,
+                from_array,
+                to_integral,
+            )
+            scenarios = mask_result_scenarios(primitive, spec, seed)
+        elif spec.result_kind == "s" and spec.param_kinds == ("v",):
+            from_array = self._harness.from_array
+            if from_array is None:
+                return None, "vector construction harness primitive was not discovered", True
+            if from_array not in by_primitive:
+                return (
+                    None,
+                    "vector construction harness primitive is not in the emitted dependency closure",
+                    True,
+                )
+            correctness = _reduction_correctness_cases(
+                cases,
+                spec,
+                lanes,
+                from_array,
+            )
+            scenarios = reduction_scenarios(seed)
         elif spec.result_kind == "m" and spec.param_kinds == ("im",):
             to_integral = self._harness.to_integral
             if to_integral is None:
@@ -179,7 +377,7 @@ class BenchmarkPlanner:
                     True,
                 )
             correctness = _mask_correctness_cases(cases, spec, lanes, to_integral)
-            scenarios = _mask_density_scenarios(lanes, seed)
+            scenarios = mask_density_scenarios(lanes, seed)
         else:
             return (
                 None,
@@ -216,17 +414,25 @@ def _common_unsupported_reason(
 ) -> str | None:
     if primitive is None:
         return "source primitive is not present in the catalog"
-    if primitive.cross_lane:
+    if primitive.cross_lane and not (
+        (spec.result_kind == "s" and spec.param_kinds == ("v",))
+        or _is_indexed_load_shape(spec)
+    ):
         return "cross-lane primitives require a dedicated benchmark scenario"
     if spec.target is not None:
         return "representation changes require a dedicated benchmark scenario"
     if spec.mask_policy is not None:
         return "masked primitives require mask-density scenarios"
-    if spec.axis or spec.immediate is not None or spec.generic_params or spec.type_params:
-        return "axes, immediates, and generic parameters are not benchmarked yet"
+    if spec.axis or (spec.type_params and not _is_indexed_load_shape(spec)):
+        return "axes and SIMD-type parameters are not benchmarked yet"
+    if spec.immediate is not None and not (
+        (spec.result_kind == "v" and spec.param_kinds == ("v", "sImm"))
+        or _is_indexed_load_shape(spec)
+    ):
+        return "this immediate result and parameter shape is not benchmarked yet"
     if spec.lane_list_params:
         return "lane-list primitives require a dedicated benchmark scenario"
-    if spec.safety.caller_unsafe:
+    if spec.safety.caller_unsafe and not _is_indexed_load_shape(spec):
         return "caller-unsafe primitives are not benchmarked automatically"
     if spec.uses_sized_vector:
         return "sized vectors require a concrete benchmark lane policy"
@@ -239,144 +445,43 @@ def _common_unsupported_reason(
     return None
 
 
-def _register_scenarios(
-    primitive: Primitive,
-    spec: LoweredSpecialization,
-    seed: int,
-) -> tuple[BenchmarkRegisterScenario, ...]:
-    generators: tuple[BenchmarkOperandGenerator, ...] = tuple(
-        "bounded_random" for _kind in spec.param_kinds
+def _is_indexed_load_shape(spec: LoweredSpecialization) -> bool:
+    return (
+        spec.result_kind == "v"
+        and spec.param_kinds == ("cptr", "vidx", "sImm")
+        and spec.immediate is not None
+        and len(spec.type_params) == 1
+        and spec.target is None
     )
-    scenarios = [
-        BenchmarkRegisterScenario(
-            scenario_id="throughput_independent",
-            kind="throughput",
-            timing=BenchmarkTiming(seed),
-            operand_generators=generators,
-        )
-    ]
-    dependency: int | None = None
-    if primitive.benchmark.latency_chain is not None:
-        dependency = primitive.parameters.index(primitive.benchmark.latency_chain)
-    elif len(spec.param_kinds) == 1:
-        dependency = 0
-    if dependency is not None:
-        scenarios.append(
-            BenchmarkRegisterScenario(
-                scenario_id="latency_dependency_chain",
-                kind="latency",
-                timing=BenchmarkTiming(seed ^ 0x9E3779B97F4A7C15),
-                operand_generators=generators,
-                dependency_parameter=dependency,
-            )
-        )
-    return tuple(scenarios)
 
 
-def _mask_density_scenarios(
-    lanes: int,
-    seed: int,
-) -> tuple[BenchmarkMaskDensityScenario, ...]:
-    requested = (
-        ("mask_sparse", 1),
-        ("mask_balanced", max(1, lanes // 2)),
-        ("mask_dense", max(1, lanes - 1)),
+def _has_vector_specialization(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    primitive_name: str,
+    extension_name: str,
+    type_tag: str,
+) -> bool:
+    return any(
+        candidate.extension_name == extension_name
+        and candidate.type_tag == type_tag
+        for candidate in by_primitive.get(primitive_name, ())
     )
-    scenarios: list[BenchmarkMaskDensityScenario] = []
-    seen_active_lanes: set[int] = set()
-    for index, (scenario_id, active_lanes) in enumerate(requested):
-        if active_lanes in seen_active_lanes:
-            continue
-        seen_active_lanes.add(active_lanes)
-        scenarios.append(
-            BenchmarkMaskDensityScenario(
-                scenario_id=scenario_id,
-                timing=BenchmarkTiming(
-                    (seed ^ ((index + 1) * 0x9E3779B97F4A7C15))
-                    & 0xFFFFFFFFFFFFFFFF
-                ),
-                parameter_index=0,
-                active_lanes=active_lanes,
-            )
-        )
-    return tuple(scenarios)
 
 
-def _vector_correctness_cases(
-    cases: tuple[ValueTestCasePlan, ...],
+def _source_primitive(
+    catalog: Catalog,
     spec: LoweredSpecialization,
-    lanes: int,
-    from_array_name: str,
-    to_array_name: str,
-) -> tuple[BenchmarkVectorCorrectnessCase, ...]:
-    matching: list[BenchmarkVectorCorrectnessCase] = []
-    seen: set[str] = set()
-    for case in cases:
+) -> Primitive | None:
+    for primitive in catalog.primitives_named(spec.source_primitive_name):
+        shape = parse_signature(primitive.signature)
         if (
-            case.kind != "generic_golden"
-            or case.call_name != spec.primitive_name
-            or case.type_tag != spec.type_tag
-            or not case.inputs.vectors
-            or len(case.inputs.vectors) != len(spec.param_kinds)
-            or not case.expectation.values
+            shape is not None
+            and shape.result_kind == spec.result_kind
+            and shape.param_kinds == spec.param_kinds
+            and primitive.attributes.get("mask") == spec.mask_policy
         ):
-            continue
-        if any(len(values) != case.lanes for values in case.inputs.vectors):
-            continue
-        if len(case.expectation.values) != case.lanes:
-            continue
-        if case.case_name in seen:
-            continue
-        seen.add(case.case_name)
-        matching.append(
-            BenchmarkVectorCorrectnessCase(
-                case_name=case.case_name,
-                vector_inputs=tuple(_tile(values, lanes) for values in case.inputs.vectors),
-                expected=_tile(case.expectation.values, lanes),
-                from_array_name=from_array_name,
-                to_array_name=to_array_name,
-            )
-        )
-    return tuple(matching)
-
-
-def _mask_correctness_cases(
-    cases: tuple[ValueTestCasePlan, ...],
-    spec: LoweredSpecialization,
-    lanes: int,
-    to_integral_name: str,
-) -> tuple[BenchmarkMaskCorrectnessCase, ...]:
-    matching: list[BenchmarkMaskCorrectnessCase] = []
-    seen: set[str] = set()
-    for case in cases:
-        if (
-            case.kind != "mask_result"
-            or case.call_name != spec.primitive_name
-            or case.type_tag != spec.type_tag
-            or case.lanes != lanes
-            or case.invocation.result_kind != "m"
-            or case.invocation.param_kinds != ("im",)
-            or len(case.inputs.masks) != 1
-            or len(case.expectation.values) != 1
-            or case.case_name in seen
-        ):
-            continue
-        seen.add(case.case_name)
-        matching.append(
-            BenchmarkMaskCorrectnessCase(
-                case_name=case.case_name,
-                mask_inputs=case.inputs.masks,
-                expected_mask=case.expectation.values[0],
-                to_integral_name=to_integral_name,
-            )
-        )
-    return tuple(matching)
-
-
-def _tile(values: tuple[str, ...], lanes: int) -> tuple[str, ...]:
-    if not values:
-        return ()
-    return tuple(values[index % len(values)] for index in range(lanes))
+            return primitive
+    return None
 
 
 def _stable_id(key: SpecializationKey) -> str:
@@ -441,7 +546,15 @@ def _body_hash(body: str) -> str:
 
 
 def _correctness_canonical_fields(
-    case: BenchmarkVectorCorrectnessCase | BenchmarkMaskCorrectnessCase,
+    case: (
+        BenchmarkVectorCorrectnessCase
+        | BenchmarkImmediateCorrectnessCase
+        | BenchmarkIndexedLoadCorrectnessCase
+        | BenchmarkMaskCorrectnessCase
+        | BenchmarkVectorMaskCorrectnessCase
+        | BenchmarkVectorScalarCorrectnessCase
+        | BenchmarkReductionCorrectnessCase
+    ),
 ) -> tuple[object, ...]:
     if isinstance(case, BenchmarkVectorCorrectnessCase):
         return (
@@ -451,6 +564,54 @@ def _correctness_canonical_fields(
             case.expected,
             case.from_array_name,
             case.to_array_name,
+        )
+    if isinstance(case, BenchmarkImmediateCorrectnessCase):
+        return (
+            "immediate",
+            case.case_name,
+            case.vector_input,
+            case.expected,
+            case.from_array_name,
+            case.to_array_name,
+        )
+    if isinstance(case, BenchmarkIndexedLoadCorrectnessCase):
+        return (
+            "indexed_load",
+            case.case_name,
+            case.memory_values,
+            case.index_values,
+            case.expected,
+            case.index_type_tag,
+            case.index_base_spelling,
+            case.from_array_name,
+            case.to_array_name,
+        )
+    if isinstance(case, BenchmarkVectorScalarCorrectnessCase):
+        return (
+            "vector_scalar",
+            case.case_name,
+            case.vector_input,
+            case.scalar_input,
+            case.expected,
+            case.from_array_name,
+            case.to_array_name,
+        )
+    if isinstance(case, BenchmarkReductionCorrectnessCase):
+        return (
+            "reduction",
+            case.case_name,
+            case.vector_input,
+            case.expected,
+            case.from_array_name,
+        )
+    if isinstance(case, BenchmarkVectorMaskCorrectnessCase):
+        return (
+            "vector_mask",
+            case.case_name,
+            case.vector_inputs,
+            case.expected_mask,
+            case.from_array_name,
+            case.to_integral_name,
         )
     return (
         "mask",
@@ -487,6 +648,7 @@ def _selector_slot_key(spec: LoweredSpecialization) -> tuple[object, ...]:
         spec.extension_name,
         spec.type_tag,
         spec.target.vector_spelling if spec.target is not None else None,
+        spec.param_kinds,
         spec.axis,
         spec.immediate,
         spec.generic_params,

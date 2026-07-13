@@ -73,6 +73,21 @@ inline T next_value(std::uint64_t& state) {
     }
 }
 
+template <class T>
+inline T next_nonzero_value(std::uint64_t& state) {
+    T value{};
+    do {
+        value = next_value<T>(state);
+    } while (value == T{});
+    return value;
+}
+
+template <class T>
+inline T next_shift_count(std::uint64_t& state) {
+    constexpr std::uint64_t lane_bits = sizeof(T) * 8U;
+    return static_cast<T>(splitmix64(state) % lane_bits);
+}
+
 inline std::uint64_t elapsed_ns(clock::time_point begin, clock::time_point end) {
     return static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count());

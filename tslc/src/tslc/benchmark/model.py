@@ -10,7 +10,11 @@ from tslc.lower.lowerer import LoweredSpecialization
 
 BenchmarkCoverageStatus = Literal["emitted", "unsupported", "missing_correctness"]
 BenchmarkScenarioKind = Literal["throughput", "latency"]
-BenchmarkOperandGenerator = Literal["bounded_random"]
+BenchmarkOperandGenerator = Literal[
+    "bounded_random",
+    "bounded_nonzero",
+    "bounded_shift_count",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +35,7 @@ class SpecializationKey:
     immediate: str | None = None
     generic_values: tuple[tuple[str, str], ...] = ()
     simd_type_base_bindings: tuple[tuple[str, str], ...] = ()
+    overload_parameter_positions: tuple[int, ...] = ()
     lanes: int | None = None
     header_group: str | None = None
 
@@ -50,6 +55,7 @@ class SpecializationKey:
             self.immediate,
             self.generic_values,
             self.simd_type_base_bindings,
+            self.overload_parameter_positions,
             self.lanes,
             self.header_group,
         )
@@ -79,6 +85,43 @@ class BenchmarkVectorCorrectnessCase:
 
 
 @dataclass(frozen=True, slots=True)
+class BenchmarkVectorScalarCorrectnessCase:
+    """Authored vector/scalar operands and one fixed-width vector expectation."""
+
+    case_name: str
+    vector_input: tuple[str, ...]
+    scalar_input: str
+    expected: tuple[str, ...]
+    from_array_name: str
+    to_array_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkImmediateCorrectnessCase:
+    """Authored vector expectation for one concrete compile-time immediate."""
+
+    case_name: str
+    vector_input: tuple[str, ...]
+    expected: tuple[str, ...]
+    from_array_name: str
+    to_array_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkIndexedLoadCorrectnessCase:
+    """Authored memory, index, and result facts for an indexed load."""
+
+    case_name: str
+    memory_values: tuple[str, ...]
+    index_values: tuple[str, ...]
+    expected: tuple[str, ...]
+    index_type_tag: str
+    index_base_spelling: str
+    from_array_name: str
+    to_array_name: str
+
+
+@dataclass(frozen=True, slots=True)
 class BenchmarkMaskCorrectnessCase:
     """Authored compact-mask conversion and its representation-neutral expectation."""
 
@@ -88,8 +131,35 @@ class BenchmarkMaskCorrectnessCase:
     to_integral_name: str
 
 
+@dataclass(frozen=True, slots=True)
+class BenchmarkVectorMaskCorrectnessCase:
+    """Authored vector operands and expected compact mask for a predicate result."""
+
+    case_name: str
+    vector_inputs: tuple[tuple[str, ...], ...]
+    expected_mask: str
+    from_array_name: str
+    to_integral_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkReductionCorrectnessCase:
+    """Authored vector input and scalar expectation for one fixed-width reduction."""
+
+    case_name: str
+    vector_input: tuple[str, ...]
+    expected: str
+    from_array_name: str
+
+
 BenchmarkCorrectnessCase = (
-    BenchmarkVectorCorrectnessCase | BenchmarkMaskCorrectnessCase
+    BenchmarkVectorCorrectnessCase
+    | BenchmarkVectorScalarCorrectnessCase
+    | BenchmarkImmediateCorrectnessCase
+    | BenchmarkIndexedLoadCorrectnessCase
+    | BenchmarkMaskCorrectnessCase
+    | BenchmarkVectorMaskCorrectnessCase
+    | BenchmarkReductionCorrectnessCase
 )
 
 
@@ -150,6 +220,91 @@ class BenchmarkRegisterScenario:
 
 
 @dataclass(frozen=True, slots=True)
+class BenchmarkVectorScalarScenario:
+    """A vector result from one vector and one independent scalar operand."""
+
+    scenario_id: str
+    kind: BenchmarkScenarioKind
+    timing: BenchmarkTiming
+    vector_generator: BenchmarkOperandGenerator
+    scalar_generator: BenchmarkOperandGenerator
+    dependency_parameter: Literal[0] | None = None
+
+    def __post_init__(self) -> None:
+        if not self.scenario_id:
+            raise ValueError("vector-scalar benchmark scenarios require an id")
+        if self.kind == "latency" and self.dependency_parameter != 0:
+            raise ValueError("vector-scalar latency must chain the vector operand")
+        if self.kind == "throughput" and self.dependency_parameter is not None:
+            raise ValueError("vector-scalar throughput cannot carry a dependency")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "vector_scalar",
+            self.scenario_id,
+            self.kind,
+            self.timing.canonical_fields(),
+            self.vector_generator,
+            self.scalar_generator,
+            self.dependency_parameter,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkImmediateScenario:
+    """One-vector workload for one concrete compile-time immediate."""
+
+    scenario_id: str
+    kind: BenchmarkScenarioKind
+    timing: BenchmarkTiming
+    operand_generator: BenchmarkOperandGenerator
+    dependency_parameter: Literal[0] | None = None
+
+    def __post_init__(self) -> None:
+        if not self.scenario_id:
+            raise ValueError("immediate benchmark scenarios require an id")
+        if self.kind == "latency" and self.dependency_parameter != 0:
+            raise ValueError("immediate latency must chain the vector operand")
+        if self.kind == "throughput" and self.dependency_parameter is not None:
+            raise ValueError("immediate throughput cannot carry a dependency")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "immediate",
+            self.scenario_id,
+            self.kind,
+            self.timing.canonical_fields(),
+            self.operand_generator,
+            self.dependency_parameter,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkIndexedLoadScenario:
+    """Hot-L1 independent throughput for bounded indexed memory loads."""
+
+    scenario_id: str
+    timing: BenchmarkTiming
+    memory_bytes: int
+    index_lanes: int
+    kind: Literal["throughput"] = "throughput"
+
+    def __post_init__(self) -> None:
+        if not self.scenario_id or self.memory_bytes <= 0 or self.index_lanes <= 0:
+            raise ValueError("indexed-load scenarios require positive workload facts")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "indexed_load",
+            self.scenario_id,
+            self.kind,
+            self.timing.canonical_fields(),
+            self.memory_bytes,
+            self.index_lanes,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class BenchmarkMaskDensityScenario:
     """Throughput for an integral mask input with an exact active-lane count."""
 
@@ -176,7 +331,61 @@ class BenchmarkMaskDensityScenario:
         )
 
 
-BenchmarkScenario = BenchmarkRegisterScenario | BenchmarkMaskDensityScenario
+@dataclass(frozen=True, slots=True)
+class BenchmarkMaskResultScenario:
+    """Independent throughput for vector operands producing a predicate mask."""
+
+    scenario_id: str
+    timing: BenchmarkTiming
+    operand_generators: tuple[BenchmarkOperandGenerator, ...]
+    kind: Literal["throughput"] = "throughput"
+
+    def __post_init__(self) -> None:
+        if not self.scenario_id or not self.operand_generators:
+            raise ValueError("mask-result benchmark scenarios require an id and operands")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "mask_result",
+            self.scenario_id,
+            self.kind,
+            self.timing.canonical_fields(),
+            self.operand_generators,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkReductionScenario:
+    """Independent throughput for a single-vector, scalar-result reduction."""
+
+    scenario_id: str
+    timing: BenchmarkTiming
+    operand_generator: BenchmarkOperandGenerator
+    kind: Literal["throughput"] = "throughput"
+
+    def __post_init__(self) -> None:
+        if not self.scenario_id:
+            raise ValueError("reduction benchmark scenarios require an id")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "reduction",
+            self.scenario_id,
+            self.kind,
+            self.timing.canonical_fields(),
+            self.operand_generator,
+        )
+
+
+BenchmarkScenario = (
+    BenchmarkRegisterScenario
+    | BenchmarkVectorScalarScenario
+    | BenchmarkImmediateScenario
+    | BenchmarkIndexedLoadScenario
+    | BenchmarkMaskDensityScenario
+    | BenchmarkMaskResultScenario
+    | BenchmarkReductionScenario
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,6 +423,101 @@ class BenchmarkCandidateSet:
                 for scenario in register_scenarios
             ):
                 raise ValueError("register scenario operands must match the specialization")
+            return
+        if isinstance(self.scenarios[0], BenchmarkVectorScalarScenario):
+            vector_scalar_scenarios = tuple(
+                scenario
+                for scenario in self.scenarios
+                if isinstance(scenario, BenchmarkVectorScalarScenario)
+            )
+            if (
+                len(vector_scalar_scenarios) != len(self.scenarios)
+                or not all(
+                    isinstance(case, BenchmarkVectorScalarCorrectnessCase)
+                    for case in self.correctness_cases
+                )
+                or self.key.result_kind != "v"
+                or self.key.param_kinds != ("v", "s")
+            ):
+                raise ValueError(
+                    "vector-scalar candidate sets require vector/scalar facts"
+                )
+            return
+        if isinstance(self.scenarios[0], BenchmarkImmediateScenario):
+            immediate_scenarios = tuple(
+                scenario
+                for scenario in self.scenarios
+                if isinstance(scenario, BenchmarkImmediateScenario)
+            )
+            if (
+                len(immediate_scenarios) != len(self.scenarios)
+                or not all(
+                    isinstance(case, BenchmarkImmediateCorrectnessCase)
+                    for case in self.correctness_cases
+                )
+                or self.key.result_kind != "v"
+                or self.key.param_kinds != ("v", "sImm")
+                or self.key.immediate is None
+            ):
+                raise ValueError("immediate candidate sets require immediate-only facts")
+            return
+        if isinstance(self.scenarios[0], BenchmarkIndexedLoadScenario):
+            indexed_load_scenarios = tuple(
+                scenario
+                for scenario in self.scenarios
+                if isinstance(scenario, BenchmarkIndexedLoadScenario)
+            )
+            if (
+                len(indexed_load_scenarios) != len(self.scenarios)
+                or not all(
+                    isinstance(case, BenchmarkIndexedLoadCorrectnessCase)
+                    for case in self.correctness_cases
+                )
+                or self.key.result_kind != "v"
+                or self.key.param_kinds != ("cptr", "vidx", "sImm")
+                or self.key.immediate is None
+                or len(self.key.simd_type_base_bindings) != 1
+            ):
+                raise ValueError("indexed-load candidate sets require indexed-load facts")
+            return
+        if isinstance(self.scenarios[0], BenchmarkMaskResultScenario):
+            mask_result_scenarios = tuple(
+                scenario
+                for scenario in self.scenarios
+                if isinstance(scenario, BenchmarkMaskResultScenario)
+            )
+            if (
+                len(mask_result_scenarios) != len(self.scenarios)
+                or not all(
+                    isinstance(case, BenchmarkVectorMaskCorrectnessCase)
+                    for case in self.correctness_cases
+                )
+                or self.key.result_kind != "m"
+                or not self.key.param_kinds
+                or not all(kind == "v" for kind in self.key.param_kinds)
+                or any(
+                    len(scenario.operand_generators) != len(self.key.param_kinds)
+                    for scenario in mask_result_scenarios
+                )
+            ):
+                raise ValueError("mask-result candidate sets require vector-to-mask facts")
+            return
+        if isinstance(self.scenarios[0], BenchmarkReductionScenario):
+            reduction_scenarios = tuple(
+                scenario
+                for scenario in self.scenarios
+                if isinstance(scenario, BenchmarkReductionScenario)
+            )
+            if (
+                len(reduction_scenarios) != len(self.scenarios)
+                or not all(
+                    isinstance(case, BenchmarkReductionCorrectnessCase)
+                    for case in self.correctness_cases
+                )
+                or self.key.result_kind != "s"
+                or self.key.param_kinds != ("v",)
+            ):
+                raise ValueError("reduction candidate sets require reduction-only facts")
             return
         mask_scenarios = tuple(
             scenario
@@ -281,18 +585,28 @@ __all__ = (
     "BenchmarkCandidate",
     "BenchmarkCandidateSet",
     "BenchmarkCorrectnessCase",
+    "BenchmarkImmediateCorrectnessCase",
+    "BenchmarkImmediateScenario",
+    "BenchmarkIndexedLoadCorrectnessCase",
+    "BenchmarkIndexedLoadScenario",
     "BenchmarkMaskCorrectnessCase",
     "BenchmarkMaskDensityScenario",
+    "BenchmarkMaskResultScenario",
     "BenchmarkOperandGenerator",
     "BenchmarkCoverageEntry",
     "BenchmarkCoverageStatus",
     "BenchmarkProfilePlan",
     "BenchmarkProjectPlan",
     "BenchmarkRegisterScenario",
+    "BenchmarkReductionCorrectnessCase",
+    "BenchmarkReductionScenario",
     "BenchmarkScenario",
     "BenchmarkScenarioKind",
     "BenchmarkTiming",
     "BenchmarkVectorCorrectnessCase",
+    "BenchmarkVectorMaskCorrectnessCase",
+    "BenchmarkVectorScalarCorrectnessCase",
+    "BenchmarkVectorScalarScenario",
     "EMPTY_BENCHMARK_PROJECT_PLAN",
     "SpecializationKey",
 )

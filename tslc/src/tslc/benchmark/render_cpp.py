@@ -10,13 +10,22 @@ from tslc.backend.cpp import (
 )
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
+    BenchmarkImmediateScenario,
+    BenchmarkIndexedLoadScenario,
     BenchmarkMaskDensityScenario,
+    BenchmarkMaskResultScenario,
     BenchmarkProfilePlan,
     BenchmarkProjectPlan,
+    BenchmarkReductionScenario,
     BenchmarkRegisterScenario,
+    BenchmarkVectorScalarScenario,
 )
 from tslc.benchmark.planner import BENCHMARK_PROTOCOL_VERSION
-from tslc.benchmark.render_cpp_candidate import render_candidate_set, vector_type
+from tslc.benchmark.render_cpp_candidate import (
+    index_vector_type,
+    render_candidate_set,
+    vector_type,
+)
 from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact
 from tslc.render._common import slug, text
@@ -97,6 +106,10 @@ def _render_manifest(profile: BenchmarkProfilePlan) -> str:
                     "extension": candidate_set.key.extension_name,
                     "type": candidate_set.key.type_tag,
                     "lanes": candidate_set.key.lanes,
+                    "immediate": candidate_set.key.immediate,
+                    "simd_type_base_bindings": dict(
+                        candidate_set.key.simd_type_base_bindings
+                    ),
                 },
                 "candidates": [
                     {
@@ -117,7 +130,15 @@ def _render_manifest(profile: BenchmarkProfilePlan) -> str:
 
 
 def _scenario_manifest(
-    scenario: BenchmarkRegisterScenario | BenchmarkMaskDensityScenario,
+    scenario: (
+        BenchmarkRegisterScenario
+        | BenchmarkMaskDensityScenario
+        | BenchmarkMaskResultScenario
+        | BenchmarkReductionScenario
+        | BenchmarkVectorScalarScenario
+        | BenchmarkImmediateScenario
+        | BenchmarkIndexedLoadScenario
+    ),
 ) -> dict[str, object]:
     timing = scenario.timing
     payload: dict[str, object] = {
@@ -136,12 +157,51 @@ def _scenario_manifest(
                 "dependency_parameter": scenario.dependency_parameter,
             }
         )
-    else:
+    elif isinstance(scenario, BenchmarkImmediateScenario):
+        payload.update(
+            {
+                "family": "immediate",
+                "operand_generator": scenario.operand_generator,
+                "dependency_parameter": scenario.dependency_parameter,
+            }
+        )
+    elif isinstance(scenario, BenchmarkIndexedLoadScenario):
+        payload.update(
+            {
+                "family": "indexed_load",
+                "memory_bytes": scenario.memory_bytes,
+                "index_lanes": scenario.index_lanes,
+            }
+        )
+    elif isinstance(scenario, BenchmarkVectorScalarScenario):
+        payload.update(
+            {
+                "family": "vector_scalar",
+                "vector_generator": scenario.vector_generator,
+                "scalar_generator": scenario.scalar_generator,
+                "dependency_parameter": scenario.dependency_parameter,
+            }
+        )
+    elif isinstance(scenario, BenchmarkMaskResultScenario):
+        payload.update(
+            {
+                "family": "mask_result",
+                "operand_generators": scenario.operand_generators,
+            }
+        )
+    elif isinstance(scenario, BenchmarkMaskDensityScenario):
         payload.update(
             {
                 "family": "mask_density",
                 "parameter_index": scenario.parameter_index,
                 "active_lanes": scenario.active_lanes,
+            }
+        )
+    else:
+        payload.update(
+            {
+                "family": "reduction",
+                "operand_generator": scenario.operand_generator,
             }
         )
     return payload
@@ -341,18 +401,44 @@ int main(int argc, char** argv) {{
 def _render_policy_branch(candidate_set: BenchmarkCandidateSet) -> str:
     spec = candidate_set.specialization
     vector = vector_type(candidate_set)
+    selector_arguments = ", ".join(
+        (
+            vector,
+            *((index_vector_type(candidate_set),) if spec.type_params else ()),
+            *((candidate_set.key.immediate,) if candidate_set.key.immediate else ()),
+            *(default for _name, _type, default in spec.generic_params),
+            *(
+                _policy_parameter_type(spec.param_kinds[position], vector)
+                for position in candidate_set.key.overload_parameter_positions
+            ),
+        )
+    )
     branches: list[str] = []
     for candidate in candidate_set.candidates[1:]:
         branches.append(
             f'''        if (decision.stable_id == {_cpp_string(candidate_set.stable_id)} &&
             decision.selected == {_cpp_string(candidate.variant_id)}) {{
-            output << "template <>\\nstruct {variant_selector_name(spec.primitive_name)}<{vector}> {{\\n"
+            output << "template <>\\nstruct {variant_selector_name(spec.primitive_name)}<{selector_arguments}> {{\\n"
                    << "    static constexpr auto value = {variant_enum_name(spec.primitive_name)}::{candidate.variant_id};\\n"
                    << "}};\\n\\n";
             continue;
         }}'''
         )
     return "\n".join(branches)
+
+
+def _policy_parameter_type(kind: str, vector: str) -> str:
+    return {
+        "v": f"typename ::tsl::reg_param<{vector}>::type",
+        "s": f"typename {vector}::base_type",
+        "m": f"typename {vector}::mask_type",
+        "im": f"typename {vector}::imask_type",
+        "usize": "std::size_t",
+        "ptr": f"typename {vector}::base_type*",
+        "ptr+": f"typename {vector}::base_type*",
+        "cptr": f"typename {vector}::base_type const*",
+        "cptr+": f"typename {vector}::base_type const*",
+    }[kind]
 
 
 def _render_policy_read(candidate_set: BenchmarkCandidateSet) -> str:

@@ -80,7 +80,7 @@ class CppBackend:
             f"enum class {variant_enum_name(primitive_name)} {{\n"
             f"{enum_values},\n"
             "};\n\n"
-            f"template <{', '.join(_selector_template_params(shape))}>\n"
+            f"template <{', '.join(_selector_template_params(shape, specializations))}>\n"
             f"struct {variant_selector_name(primitive_name)} {{\n"
             f"    static constexpr auto value = "
             f"{variant_enum_name(primitive_name)}::default_;\n"
@@ -315,7 +315,7 @@ class CppBackend:
         variants = _variant_names(specializations)
         selector = (
             f"    using selector = ::tsl::detail::variants::"
-            f"{variant_selector_name(primitive_name)}<{signature.impl_args}>;\n"
+            f"{variant_selector_name(primitive_name)}<{signature.selector_args}>;\n"
             if variants
             else ""
         )
@@ -370,6 +370,7 @@ class _WrapperSignature:
     params: str
     argument_names: str
     impl_args: str
+    selector_args: str
     result_type: str
 
 
@@ -418,6 +419,10 @@ def _wrapper_signature(
         + (f", {shape.immediate[0]}" if shape.immediate is not None else "")
         + "".join(f", {name}" for name, _, _ in shape.generic_params)
     )
+    selector_parameter_types = tuple(f"Arg{i}" for i in varying)
+    selector_args = impl_args + "".join(
+        f", {parameter_type}" for parameter_type in selector_parameter_types
+    )
     # The wrapper's result projects through the caller-bound `ToVec` param.
     result_type = (
         "typename ToVec::register_type"
@@ -429,11 +434,15 @@ def _wrapper_signature(
         params=params,
         argument_names=names,
         impl_args=impl_args,
+        selector_args=selector_args,
         result_type=result_type,
     )
 
 
-def _selector_template_params(shape: LoweredSpecialization) -> tuple[str, ...]:
+def _selector_template_params(
+    shape: LoweredSpecialization,
+    specializations: tuple[LoweredSpecialization, ...],
+) -> tuple[str, ...]:
     params = ["class Vec"]
     if shape.target is not None:
         params.append("class ToVec")
@@ -442,6 +451,7 @@ def _selector_template_params(shape: LoweredSpecialization) -> tuple[str, ...]:
     if shape.immediate is not None:
         params.append(f"{shape.immediate[1]} {shape.immediate[0]}")
     params.extend(f"{typ} {name}" for name, typ, _ in shape.generic_params)
+    params.extend(f"class Arg{index}" for index in varying_positions(specializations))
     return tuple(params)
 
 
@@ -604,10 +614,12 @@ def _implementation_state_query(
         query_args.append(f"value_arg<{name}>")
         impl_args.append(name)
     variants = _variant_names(specializations)
+    varying = varying_positions(specializations)
     if variants:
+        selector_params = tuple(f"Arg{index}" for index in varying)
         selector = (
             f"detail::variants::{variant_selector_name(primitive_name)}"
-            f"<{', '.join(impl_args)}>"
+            f"<{', '.join((*impl_args, *selector_params))}>"
         )
         variant_states = "".join(
             f"        if constexpr ({selector}::value == "
@@ -631,12 +643,31 @@ def _implementation_state_query(
             f"detail::primitives::{_impl_name(primitive_name)}"
             f"<{', '.join(impl_args)}>::implementation_state;\n"
         )
-    return (
+    query = (
         f"template <{', '.join(params)}>\n"
         f"struct implementation_state_of<{', '.join(query_args)}> {{\n"
         f"{value_body}"
         f"}};"
     )
+    if not variants or not varying:
+        return query
+    default_query = (
+        f"template <{', '.join(params)}>\n"
+        f"struct implementation_state_of<{', '.join(query_args)}> {{\n"
+        "    static constexpr implementation_state value = "
+        f"detail::primitives::{_impl_name(primitive_name)}"
+        f"<{', '.join(impl_args)}>::implementation_state;\n"
+        "};"
+    )
+    overload_params = (*params, *(f"class {name}" for name in selector_params))
+    overload_query_args = (*query_args, *selector_params)
+    overload_query = (
+        f"template <{', '.join(overload_params)}>\n"
+        f"struct implementation_state_of<{', '.join(overload_query_args)}> {{\n"
+        f"{value_body}"
+        "};"
+    )
+    return default_query + "\n\n" + overload_query
 
 
 def _group_implementation_state(

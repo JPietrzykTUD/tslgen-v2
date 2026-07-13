@@ -137,6 +137,8 @@ def test_benchmark_latency_chain_is_typed_primitive_metadata() -> None:
         "  impls:\n",
         "  benchmarks:\n"
         "    latency_chain data\n"
+        "    operand_domains:\n"
+        "      data nonzero\n"
         "  impls:\n",
     )
     document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
@@ -153,6 +155,10 @@ def test_benchmark_latency_chain_is_typed_primitive_metadata() -> None:
     primitive = result.catalog.primitive("id")
     assert primitive is not None
     assert primitive.benchmark.latency_chain == "data"
+    assert [
+        (operand.parameter, operand.domain)
+        for operand in primitive.benchmark.operand_domains
+    ] == [("data", "nonzero")]
 
 
 @pytest.mark.parametrize(
@@ -167,6 +173,18 @@ def test_benchmark_latency_chain_is_typed_primitive_metadata() -> None:
             "  benchmarks:\n    workload arbitrary_cpp\n",
             "TSL-CATALOG-UNKNOWN-FIELD",
         ),
+        (
+            '  benchmarks:\n    operand_domains "nonzero"\n',
+            "TSL-CATALOG-BENCHMARK-OPERAND-DOMAINS-NOT-MAP",
+        ),
+        (
+            "  benchmarks:\n    operand_domains:\n      missing nonzero\n",
+            "TSL-CATALOG-BENCHMARK-BAD-OPERAND",
+        ),
+        (
+            "  benchmarks:\n    operand_domains:\n      data arbitrary\n",
+            "TSL-CATALOG-BENCHMARK-BAD-OPERAND-DOMAIN",
+        ),
     ),
 )
 def test_benchmark_metadata_rejects_untyped_or_unknown_forms(
@@ -176,6 +194,65 @@ def test_benchmark_metadata_rejects_untyped_or_unknown_forms(
     source = _base_source().replace("  impls:\n", benchmarks + "  impls:\n")
 
     assert any(diagnostic.code == code for diagnostic in _diagnostics(source))
+
+
+def test_benchmark_operand_domain_rejects_non_vector_parameter() -> None:
+    source = _base_source().replace(
+        "prim<v:=v> id(data):\n  impls:\n",
+        "prim<v:=(v,s)> id(data, divisor):\n"
+        "  benchmarks:\n"
+        "    operand_domains:\n"
+        "      divisor nonzero\n"
+        "  impls:\n",
+    )
+
+    assert any(
+        diagnostic.code == "TSL-CATALOG-BENCHMARK-BAD-OPERAND"
+        for diagnostic in _diagnostics(source)
+    )
+
+
+def test_shift_count_operand_domain_accepts_scalar_parameter() -> None:
+    source = _base_source().replace(
+        "prim<v:=v> id(data):\n  impls:\n",
+        "prim<v:=(v,s)> id(data, count):\n"
+        "  benchmarks:\n"
+        "    operand_domains:\n"
+        "      count shift_count\n"
+        "  impls:\n",
+    )
+    document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+
+    assert (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=("cpp", "rust")),
+    ) == ()
+    primitive = result.catalog.primitive("id")
+    assert primitive is not None
+    assert [
+        (operand.parameter, operand.domain)
+        for operand in primitive.benchmark.operand_domains
+    ] == [("count", "shift_count")]
+
+
+def test_shift_count_operand_domain_rejects_immediate_parameter() -> None:
+    source = _base_source().replace(
+        "prim<v:=v> id(data):\n  impls:\n",
+        "prim<v:=(v,sImm)> id(data, count):\n"
+        "  benchmarks:\n"
+        "    operand_domains:\n"
+        "      count shift_count\n"
+        "  impls:\n",
+    )
+
+    assert any(
+        diagnostic.code == "TSL-CATALOG-BENCHMARK-BAD-OPERAND"
+        for diagnostic in _diagnostics(source)
+    )
 
 
 def test_implementation_variants_are_accepted_and_promoted() -> None:

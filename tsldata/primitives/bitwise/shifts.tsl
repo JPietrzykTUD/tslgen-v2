@@ -557,6 +557,10 @@ prim<v:=(v,s)> shift_left(data, shift):
         result[i] = 0
     return result
     """
+  benchmarks:
+    latency_chain data
+    operand_domains:
+      shift shift_count
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
     - {tags [edge], type "ui32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 5], expected [0, 32, 64, 96, 128, 160, 192, 224]}}
@@ -576,6 +580,8 @@ prim<v:=(v,s)> shift_left(data, shift):
     - {tags [edge], type "si64", case {inputs [[0, -1], 62], expected [0, -4611686018427387904]}}
     - {tags [basic, neon], extension "neon", type "f32", case {inputs [[1.40129846e-45, 1.40129846e-45, 1.40129846e-45, 1.40129846e-45], 1], expected [2.80259693e-45, 2.80259693e-45, 2.80259693e-45, 2.80259693e-45]}}
     - {tags [basic, neon], extension "neon", type "f64", case {inputs [[5e-324, 5e-324], 1], expected [1e-323, 1e-323]}}
+    - {tags [basic], type "f32", case {inputs [[1.40129846e-45, 1.40129846e-45, 1.40129846e-45, 1.40129846e-45], 1], expected [2.80259693e-45, 2.80259693e-45, 2.80259693e-45, 2.80259693e-45]}}
+    - {tags [basic], type "f64", case {inputs [[5e-324, 5e-324], 1], expected [1e-323, 1e-323]}}
   impls:
     [scalar, clang_v128]:
       arith:
@@ -994,12 +1000,23 @@ prim<v:=(v,v)> shift_left(data, shift):
         result[i] = 0
     return result
     """
+  benchmarks:
+    latency_chain data
+    operand_domains:
+      shift shift_count
   tests:
     - {tags [vector, basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [0, 1, 2, 3, 4, 5, 6, 7]], expected [1, 4, 12, 32, 80, 192, 448, 1024]}}
     - {tags [vector, edge], type "ui32", case {inputs [[1, 2, 3, 4, 0, 1, 2, 3], [31, 30, 29, 28, 0, 1, 2, 3]], expected [2147483648, 2147483648, 1610612736, 1073741824, 0, 2, 8, 24]}}
     - {tags [vector, byte], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 128, 255, 1, 2, 3, 4, 5, 6], [0, 1, 2, 3, 4, 5, 6, 7, 1, 1, 8, 9, 3, 4, 5, 6]], expected [1, 4, 12, 32, 80, 192, 192, 0, 0, 254, 0, 0, 24, 64, 160, 128]}}
     - {tags [vector, byte, avx2], extension "avx2", type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 128, 255, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 7, 8, 128, 255, 1, 2, 3, 4, 5, 6], [0, 1, 2, 3, 4, 5, 6, 7, 1, 1, 8, 9, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 7, 1, 1, 8, 9, 3, 4, 5, 6]], expected [1, 4, 12, 32, 80, 192, 192, 0, 0, 254, 0, 0, 24, 64, 160, 128, 1, 4, 12, 32, 80, 192, 192, 0, 0, 254, 0, 0, 24, 64, 160, 128]}}
     - {tags [vector, byte, signed], type "si8", case {inputs [[-1, -2, -128, 127, 1, -1, 2, -2, -1, -2, -128, 127, 1, -1, 2, -2], [0, 1, 2, 3, 7, 1, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1]], expected [-1, -4, 0, -8, -128, -2, -128, 0, 0, 0, 0, -32, 16, -8, 8, -4]}}
+    - {tags [vector], type "si16", case {inputs [[-1, 1, -2, 2, -3, 3, -4, 4], [0, 1, 2, 3, 4, 5, 6, 7]], expected [-1, 2, -8, 16, -48, 96, -256, 512]}}
+    - {tags [vector], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [0, 1, 2, 3, 4, 5, 6, 7]], expected [1, 4, 12, 32, 80, 192, 448, 1024]}}
+    - {tags [vector], type "si32", case {inputs [[-1, 1, -2, 2], [0, 1, 2, 3]], expected [-1, 2, -8, 16]}}
+    - {tags [vector], type "si64", case {inputs [[-1, 1], [1, 62]], expected [-2, 4611686018427387904]}}
+    - {tags [vector], type "ui64", case {inputs [[1, 18446744073709551615], [63, 1]], expected [9223372036854775808, 18446744073709551614]}}
+    - {tags [vector], type "f32", case {inputs [[1.40129846e-45, 1.40129846e-45, 1.40129846e-45, 1.40129846e-45], [0.0, 1.0, 2.0, 3.0]], expected [1.40129846e-45, 2.80259693e-45, 5.60519386e-45, 1.12103877e-44]}}
+    - {tags [vector], type "f64", case {inputs [[5e-324, 5e-324], [0.0, 1.0]], expected [5e-324, 1e-323]}}
     - {tags [vector, word, avx2], extension "avx2", type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected [1, 4, 12, 32, 80, 192, 448, 1024, 2304, 5120, 11264, 24576, 53248, 49152, 49152, 0]}}
     - {tags [vector, neon], extension "neon", type "f32", case {inputs [[1.40129846e-45, 1.40129846e-45, 1.40129846e-45, 1.40129846e-45], [0.0, 1.0, 2.0, 3.0]], expected [1.40129846e-45, 2.80259693e-45, 5.60519386e-45, 1.12103877e-44]}}
     - {tags [vector, neon], extension "neon", type "f64", case {inputs [[5e-324, 5e-324], [0.0, 1.0]], expected [5e-324, 1e-323]}}
@@ -1256,6 +1273,16 @@ prim<v:=(v,v)> shift_left(data, shift):
               result = call<primitive=insert[QuarterVec, Vec, 3]>(result, r3);
               complete(result);
             """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_data, generic_shift)
+              ));
+            """
       arith:
         requires [avx512f]
         safety:
@@ -1324,6 +1351,16 @@ prim<v:=(v,v)> shift_left(data, shift):
                 call<primitive=set_zero[Vec]>(), low
               ));
               complete(call<primitive=insert[HalfVec, Vec, 1]>(result, high));
+            """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_data, generic_shift)
+              ));
             """
       arith:
         requires [avx]
@@ -1400,6 +1437,16 @@ prim<v:=(v,v)> shift_left(data, shift):
               }
               complete(result);
             """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_data, generic_shift)
+              ));
+            """
     neon:
       ?i?:
         requires [neon]
@@ -1457,6 +1504,16 @@ prim<v:=(v,v)> shift_left(data, shift):
               }
               complete(result);
             """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_data, generic_shift)
+              ));
+            """
       f?:
         requires [simd128]
         safety:
@@ -1474,6 +1531,16 @@ prim<v:=(v,v)> shift_left(data, shift):
                 result = call<primitive=insert_value[Vec, i]>(result, shifted);
               }
               complete(result);
+            """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_data, generic_shift)
+              ));
             """
     sve:
       ?i?:
@@ -2228,6 +2295,10 @@ prim<v:=(v,s)> shift_right(data, shift):
         result[i] = large_right_shift_value(data[i], PreserveSign)
     return result
     """
+  benchmarks:
+    latency_chain data
+    operand_domains:
+      shift shift_count
   generic_params:
     PreserveSign:
       kind bool
@@ -3241,6 +3312,10 @@ prim<v:=(v,v)> shift_right(data, shift):
         result[i] = large_right_shift_value(data[i], PreserveSign)
     return result
     """
+  benchmarks:
+    latency_chain data
+    operand_domains:
+      shift shift_count
   generic_params:
     PreserveSign:
       kind bool
@@ -3252,6 +3327,9 @@ prim<v:=(v,v)> shift_right(data, shift):
     - {tags [vector, byte, signed], type "si8", case {inputs [[-1, -2, -128, 127, 16, -8, 4, -2, -1, -2, -128, 127, 16, -8, 4, -2], [0, 1, 2, 3, 4, 5, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1]], expected [-1, -1, -32, 15, 1, -1, 0, -1, -1, -1, -2, 3, 1, -1, 1, -1]}}
     - {tags [vector, byte, signed, avx2], extension "avx2", type "si8", case {inputs [[-1, -2, -128, 127, 16, -8, 4, -2, -1, -2, -128, 127, 16, -8, 4, -2, -1, -2, -128, 127, 16, -8, 4, -2, -1, -2, -128, 127, 16, -8, 4, -2], [0, 1, 2, 3, 4, 5, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1, 0, 1, 2, 3, 4, 5, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1]], expected [-1, -1, -32, 15, 1, -1, 0, -1, -1, -1, -2, 3, 1, -1, 1, -1, -1, -1, -32, 15, 1, -1, 0, -1, -1, -1, -2, 3, 1, -1, 1, -1]}}
     - {tags [vector, signed], type "si16", case {inputs [[-1, -2, -32768, 32767, 1, -4, 8, -16], [0, 1, 14, 14, 1, 2, 3, 4]], expected [-1, -1, -2, 1, 0, -1, 1, -1]}}
+    - {tags [vector], type "si32", case {inputs [[-1, -8, 8, 2147483647], [0, 2, 3, 30]], expected [-1, -2, 1, 1]}}
+    - {tags [vector], type "ui16", case {inputs [[65535, 32768, 8, 16, 32, 64, 128, 256], [0, 1, 2, 3, 4, 5, 6, 7]], expected [65535, 16384, 2, 2, 2, 2, 2, 2]}}
+    - {tags [vector], type "ui64", case {inputs [[18446744073709551615, 9223372036854775808], [1, 63]], expected [9223372036854775807, 1]}}
     - {tags [vector, word, signed, avx2], extension "avx2", type "si16", case {inputs [[-32768, 32767, -32768, 32767, -32768, 32767, -32768, 32767, -32768, 32767, -32768, 32767, -32768, 32767, -32768, 32767], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected [-32768, 16383, -8192, 4095, -2048, 1023, -512, 255, -128, 63, -32, 15, -8, 3, -2, 0]}}
     - {tags [vector, word, large_count, avx2], extension "avx2", type "si16", case {inputs [[-32768, 32767, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6, -7, 7], [16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16]], expected [-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0]}}
     - {tags [vector, signed], type "si64", case {inputs [[-9223372036854775808, -8], [63, 2]], expected [-1, -2]}}
@@ -3723,6 +3801,16 @@ prim<v:=(v,v)> shift_right(data, shift):
               result = call<primitive=insert[QuarterVec, Vec, 3]>(result, r3);
               complete(result);
             """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec, PreserveSign]>(generic_data, generic_shift)
+              ));
+            """
       arith:
         requires [avx512f]
         safety:
@@ -3859,6 +3947,16 @@ prim<v:=(v,v)> shift_right(data, shift):
               ));
               complete(call<primitive=insert[HalfVec, Vec, 1]>(result, high));
             """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec, PreserveSign]>(generic_data, generic_shift)
+              ));
+            """
       ?i?:
         requires [avx, sse, sse2]
         safety:
@@ -3880,6 +3978,16 @@ prim<v:=(v,v)> shift_right(data, shift):
                 call<primitive=set_zero[Vec]>(), low
               ));
               complete(call<primitive=insert[HalfVec, Vec, 1]>(result, high));
+            """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec, PreserveSign]>(generic_data, generic_shift)
+              ));
             """
       arith:
         requires [avx]
@@ -4014,6 +4122,16 @@ prim<v:=(v,v)> shift_right(data, shift):
               }
               complete(result);
             """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec, PreserveSign]>(generic_data, generic_shift)
+              ));
+            """
     neon:
       ?i?:
         requires [neon]
@@ -4098,6 +4216,16 @@ prim<v:=(v,v)> shift_right(data, shift):
               }
               complete(result);
             """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec, PreserveSign]>(generic_data, generic_shift)
+              ));
+            """
       f?:
         requires [simd128]
         safety:
@@ -4115,6 +4243,16 @@ prim<v:=(v,v)> shift_right(data, shift):
                 result = call<primitive=insert_value[Vec, i]>(result, shifted);
               }
               complete(result);
+            """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec, PreserveSign]>(generic_data, generic_shift)
+              ));
             """
     sve:
       ?i?:

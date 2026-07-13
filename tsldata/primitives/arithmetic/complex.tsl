@@ -841,10 +841,22 @@ prim<v:=(v,v)> div(divident, divisor):
       result[i] = divident[i] / divisor[i]
     return result
     """
+  benchmarks:
+    latency_chain divident
+    operand_domains:
+      divisor nonzero
   tests:
     - {tags [basic], type "f32", case {inputs [[8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [4.0, -3.0, -5.0, -3.0]}}
     - {tags [one], type "f32", case {inputs [[1.0, -2.0, 3.0, -4.0], [1.0, -2.0, 3.0, -4.0]], expected [1.0, 1.0, 1.0, 1.0]}}
     - {tags [basic], type "f64", case {inputs [[8.0, -9.0], [2.0, 3.0]], expected [4.0, -3.0]}}
+    - {tags [basic], type "si8", case {inputs [[8, -9, 10, -12, 15, -16, 21, -24, 25, -27, 30, -32, 35, -36, 40, -42], [2, 3, -2, 4, 5, -4, 7, -6, 5, 9, -5, 8, 7, -9, 10, -7]], expected [4, -3, -5, -3, 3, 4, 3, 4, 5, -3, -6, -4, 5, 4, 4, 6]}}
+    - {tags [basic], type "ui8", case {inputs [[8, 9, 10, 12, 15, 16, 21, 24, 25, 27, 30, 32, 35, 36, 40, 42], [2, 3, 2, 4, 5, 4, 7, 6, 5, 9, 5, 8, 7, 9, 10, 7]], expected [4, 3, 5, 3, 3, 4, 3, 4, 5, 3, 6, 4, 5, 4, 4, 6]}}
+    - {tags [basic], type "si16", case {inputs [[8, -9, 10, -12, 15, -16, 21, -24], [2, 3, -2, 4, 5, -4, 7, -6]], expected [4, -3, -5, -3, 3, 4, 3, 4]}}
+    - {tags [basic], type "ui16", case {inputs [[8, 9, 10, 12, 15, 16, 21, 24], [2, 3, 2, 4, 5, 4, 7, 6]], expected [4, 3, 5, 3, 3, 4, 3, 4]}}
+    - {tags [basic], type "si32", case {inputs [[8, -9, 10, -12], [2, 3, -2, 4]], expected [4, -3, -5, -3]}}
+    - {tags [basic], type "ui32", case {inputs [[8, 9, 10, 12], [2, 3, 2, 4]], expected [4, 3, 5, 3]}}
+    - {tags [basic], type "si64", case {inputs [[8, -9], [2, 3]], expected [4, -3]}}
+    - {tags [basic], type "ui64", case {inputs [[8, 9], [2, 3]], expected [4, 3]}}
     - {tags [basic], extension "generic", type "si32", case {inputs [[8, -9, 10, -12], [2, 3, -2, 4]], expected [4, -3, -5, -3]}}
     - {tags [basic, neon], extension "neon", type "si32", case {inputs [[8, -9, 10, -12], [2, 3, -2, 4]], expected [4, -3, -5, -3]}}
     - {tags [basic, wasm], extension "wasm128", type "ui32", case {inputs [[8, 9, 10, 12], [2, 3, 2, 4]], expected [4, 3, 5, 3]}}
@@ -946,6 +958,24 @@ prim<v:=(v,v)> div(divident, divisor):
             }
             complete(result);
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_divident, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(divident)
+              ));
+              var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(divisor)
+              ));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(
+                generic_divident,
+                generic_divisor
+              ));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=to_array[GenericVec]>(generic_result)
+              ));
+            """
     wasm128:
       f?:
         requires [simd128]
@@ -973,6 +1003,24 @@ prim<v:=(v,v)> div(divident, divisor):
             }
             complete(result);
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_divident, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(divident)
+              ));
+              var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(divisor)
+              ));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(
+                generic_divident,
+                generic_divisor
+              ));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=to_array[GenericVec]>(generic_result)
+              ));
+            """
     sve:
       idqword:
         requires [sve]
@@ -1373,6 +1421,10 @@ prim<v:=(v,v)> mod(dividend, divisor):
       result[i] = dividend[i] % divisor[i]
     return result
     """
+  benchmarks:
+    latency_chain dividend
+    operand_domains:
+      divisor nonzero
   tests:
     - {tags [basic], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], [3, 4, 5, 2, 3, 2, 3, 2]], expected [1, -1, 3, -1, 0, -1, 1, -1]}}
     - {tags [basic], type "ui32", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], [3, 4, 5, 2, 3, 2, 3, 2]], expected [1, 1, 3, 1, 0, 1, 1, 1]}}
@@ -1408,6 +1460,20 @@ prim<v:=(v,v)> mod(dividend, divisor):
             }
             complete(result);
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(dividend)
+              ));
+              var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(divisor)
+              ));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+              ));
+            """
       f32:
         requires [sse]
         safety:
@@ -1426,6 +1492,20 @@ prim<v:=(v,v)> mod(dividend, divisor):
             }
             complete(result);
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(dividend)
+              ));
+              var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(divisor)
+              ));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+              ));
+            """
     avx2:
       arith:
         requires [avx]
@@ -1449,6 +1529,20 @@ prim<v:=(v,v)> mod(dividend, divisor):
             ));
             complete(call<primitive=insert[HalfVec, Vec, 1]>(result, high));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(dividend)
+              ));
+              var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(divisor)
+              ));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+              ));
+            """
     avx512:
       arith:
         requires [avx, avx2, avx512dq, avx512f]
@@ -1472,6 +1566,20 @@ prim<v:=(v,v)> mod(dividend, divisor):
             ));
             complete(call<primitive=insert[HalfVec, Vec, 1]>(result, high));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(dividend)
+              ));
+              var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(divisor)
+              ));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+              ));
+            """
     avx512:
       arith:
         requires [avx512f, sse, sse2]
@@ -1527,6 +1635,20 @@ prim<v:=(v,v)> mod(dividend, divisor):
             result_bits = call<primitive=insert[QuarterBitVec, BitVec, 3]>(result_bits, r3_bits);
             complete(call<primitive=reinterpret[BitVec, Vec]>(result_bits));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(dividend)
+              ));
+              var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(divisor)
+              ));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+              ));
+            """
     [avx512, avx2, sse]:
       arith:
         requires:
@@ -1569,6 +1691,20 @@ prim<v:=(v,v)> mod(dividend, divisor):
             }
             complete(result);
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(dividend)
+              ));
+              var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(divisor)
+              ));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+              ));
+            """
     sve:
       ?i8:
         requires [sve]

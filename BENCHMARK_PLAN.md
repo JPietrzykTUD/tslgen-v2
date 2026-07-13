@@ -18,10 +18,10 @@ Four constraints materially change the original implementation order:
 
 - Benchmarking can compare only implementations that coexist as the default
   body and named `variants:`. A body removed by a recent refactor is not a
-  candidate. At the 2026-07-13 review, the corpus had only 15 `variants:`
-  blocks, 14 named `generic_fallback` and one named `intrinsic_gather`; it did
-  not yet represent most of the recent scalar-to-composed changes. Slice 0 must
-  regenerate this inventory rather than treating those counts as configuration.
+  candidate. The inventory is derived from the current catalog rather than
+  treated as configuration. The 2026-07-13 closure audit found 68 authored
+  variant leaves across 20 primitives; their 1,800 selected profile/type entries
+  all produced candidate sets.
 - Benchmarks answer a performance question, not a semantic-correctness question.
   Every candidate must pass the authored value-test semantics before it is
   timed. Agreement with the default alone is not a correctness oracle because
@@ -73,8 +73,11 @@ reducer concludes that no variant is reliably better.
 - No runtime dispatch or startup calibration.
 - No source-data rewrite or global winner committed to `tsldata`.
 - No mandatory third-party benchmark framework in the first slices.
-- No memory, gather/scatter, masked, reduction, or scalable-vector policy
-  decisions until their workload semantics are explicitly modeled.
+- No general memory, scatter, masked-reduction, or scalable-vector policy
+  decisions until their workload semantics are explicitly modeled. The only
+  supported memory shape is the typed indexed-load family with a hot-L1
+  workload; the only supported reduction shape is one vector input producing
+  one scalar result.
 - No Rust autotuning in `build.rs`.
 
 ## Compiler Boundary And Candidate Model
@@ -133,18 +136,33 @@ lowered named variant, all candidates and dependencies are emitted in the
 selected C++ profile, authored correctness cases cover the specialization, and
 the planner supports its scenario kind.
 
-The implemented scenario families are fixed-width pure-register operations with
-only vector inputs and a vector result, plus integral-mask-to-mask conversions.
-The former always receive independent-throughput measurement and receive a
-latency chain only when its dependency operand is unambiguous or explicitly
-declared. The latter receive sparse, balanced, and dense mask-throughput
-measurement. Pointer parameters, memory effects, lane lists, arbitrary mask
-shapes, immediates, reductions, scalable vectors, scalar results, and
-caller-unsafe APIs are skipped with structured reasons.
+The planner visits every variant-bearing specialization in that finalized
+profile. It does not widen a focused primitive request to the whole catalog:
+the benchmark boundary is the same requested-root plus selected-call dependency
+closure as ordinary generation. A generation request without a primitive
+filter already uses the whole catalog. Authored value-test tags do not admit or
+exclude benchmark candidates; matching uses typed primitive, signature, type,
+lane, input, and expectation facts.
 
-This deliberately excludes `gather_narrow_partial` as the first policy-bearing
-benchmark. It is useful later, but cache and index distributions make it a poor
-test of whether the basic tuner is trustworthy.
+The implemented scenario families are fixed-width pure-register operations with
+vector inputs, vector-plus-scalar operations, vector-plus-immediate operations,
+single-vector scalar-result reductions, vector-input mask-result comparisons,
+integral-mask-to-mask conversions, and the exact indexed-load shape
+`(cptr, vidx, sImm) -> v`. Register operations receive independent-throughput
+measurement and a latency chain where the result can feed a declared vector
+operand. Integral-mask conversions receive sparse, balanced, and dense
+mask-throughput measurement. Vector-input mask results and scalar reductions
+receive independent throughput only; neither result can form a vector
+dependency chain without adding unrelated work. Immediate candidate identity is
+split by each authored concrete value. Indexed loads use one explicitly named
+hot-L1 throughput scenario, bounded indices, an element-sized scale, and the
+authored SIMD index-type binding.
+
+General pointer and memory effects, lane lists, arbitrary mask shapes, masked or
+multi-input reductions, scalable vectors, other scalar results, and
+caller-unsafe APIs outside the indexed-load shape are skipped with structured
+reasons. One hot-L1 gather scenario is not evidence about cold, streaming,
+strided, or adversarial index distributions.
 
 ### Making Recent Refactors Comparable
 
@@ -380,7 +398,8 @@ Workload ownership is split deliberately:
 ```text
 primitive signature + PrimitiveBenchmarkSpec
   -> BenchmarkPlanner
-  -> fully resolved register/mask-density scenario
+  -> fully resolved register/vector-scalar/immediate/indexed-load/
+     mask-result/reduction/mask-density scenario
   -> C++ candidate/scenario renderer
   -> generated tsl_benchmark_core.hpp measurement runtime
 ```
@@ -416,10 +435,20 @@ benchmarks:
   latency_chain factor1
 ```
 
-The field names semantic call wiring only. It cannot contain C++, candidates,
-timing parameters, or arbitrary setup. A candidate is policy-selectable only if
-it dominates the default across the canonical scenarios; conflicting winners
-are `inconclusive`.
+An operand whose unrestricted random domain would be invalid can carry a
+validated semantic restriction:
+
+```tsl
+benchmarks:
+  latency_chain dividend
+  operand_domains:
+    divisor nonzero
+```
+
+These fields name semantic call wiring and input validity only. They cannot
+contain C++, candidates, timing parameters, or arbitrary setup. A candidate is
+policy-selectable only if it dominates the default across the canonical
+scenarios; conflicting winners are `inconclusive`.
 
 ### Correctness Before Timing
 
@@ -488,9 +517,9 @@ auto intrinsic_fn = [&] {
 };
 ```
 
-This example only illustrates direct detail calls; it does not make gather an
-eligible first-slice timing scenario. The generated benchmark source lives under
-the generated C++ project,
+The typed indexed-load family emits this direct call for an authored concrete
+scale and SIMD index binding. Its current timing contract is deliberately only
+hot-L1 throughput. The generated benchmark source lives under the generated C++ project,
 for example:
 
 ```text
@@ -570,10 +599,10 @@ show stable dominance. Otherwise it selects `default` with a structured reason.
 
 ### Scenario Families And Later Work
 
-Value-test inputs remain correctness inputs. Later timing scenarios model the
-performance-relevant distributions for each supported family.
+Value-test inputs remain correctness inputs. Timing scenarios separately model
+the performance-relevant distributions for each supported family.
 
-Examples:
+Additional examples that are not yet modeled:
 
 - gather/scatter may need random, strided, clustered, and cache-local index
   distributions;
@@ -581,17 +610,27 @@ Examples:
 - mask-heavy primitives may need sparse, dense, and alternating masks;
 - branchy fallbacks may need distributions that exercise both paths.
 
-The first source-authored fact and mask family are now implemented:
+The source-authored facts and mask family are implemented:
 
 ```tsl
 benchmarks:
   latency_chain factor1
 ```
 
+`operand_domains.<parameter> nonzero` resolves that operand to the deterministic
+bounded-nonzero generator; it is currently used by integer-safe modulo timing.
+`shift_count` resolves vector or scalar count operands to counts bounded by the
+element width.
+
 Integral-mask to mask conversions derive sparse, balanced, and dense workloads
-as exact active-lane counts; they do not require source metadata. Future fields
-must follow the same rule: add only semantic facts that a typed signature cannot
-provide. Do not add raw setup bodies or a general benchmark-case DSL.
+as exact active-lane counts; they do not require source metadata. Single-vector
+scalar reductions derive independent throughput batches and likewise need no
+metadata. Immediate shifts derive one candidate set for every authored immediate
+correctness value. Indexed loads derive their scale, index type, memory values,
+and oracle from typed value-test facts, then use compiler-owned bounded hot-L1
+timing inputs. Future fields must follow the same rule: add only semantic facts
+that a typed signature cannot provide. Do not add raw setup bodies or a general
+benchmark-case DSL.
 
 ## Cache And Reproducibility
 
@@ -633,10 +672,12 @@ word-operation body remains the authored default and its former generic
 round-trip is retained as the additive `generic_fallback` variant. An AVX2
 signed/unsigned 32-bit `to_mask` leaf is the integral-mask pilot, with its
 existing hardware-backed body as the default and its generic round-trip as an
-additive candidate. Planning is typed and emits structured coverage; the
-generated standalone C++ tool owns correctness checks, timing, reduction,
-policy validation, and policy-header rendering. CMake only owns the explicit
-target graph.
+additive candidate. AVX2 integer `hadd`, `hmax`, and `hmin` form the reduction
+pilot: their composed half-vector reductions remain the defaults and their
+generic round-trips are additive candidates. Planning is typed and emits
+structured coverage; the generated standalone C++ tool owns correctness checks,
+timing, reduction, policy validation, and policy-header rendering. CMake only
+owns the explicit target graph.
 
 The one-build distribution decision is therefore resolved in favor of a
 generated standalone reducer. Generated projects do not require the Python
@@ -657,10 +698,30 @@ that restriction can be relaxed.
 The workload boundary now resolves renderer-ready scenarios. Pure-register
 scenarios carry positional operand generators and an optional dependency
 parameter; the latter comes from the validated `benchmarks.latency_chain` fact
-when the signature is ambiguous. Integral-mask to mask conversions form the
-second family and carry exact active-lane counts for sparse, balanced, and dense
-throughput. The C++ renderer contains no `scenario == 1` or implicit
-first-operand policy.
+when the signature is ambiguous, while validated `operand_domains` facts
+restrict inputs whose unrestricted domain would be invalid. Single-vector
+scalar reductions carry a separate throughput-only scenario. Integral-mask to
+mask conversions carry exact active-lane counts for sparse, balanced, and dense
+throughput. Vector-input mask results likewise carry independent throughput
+only, with correctness checked through the representation-neutral
+`to_integral` harness primitive. Vector-plus-scalar scenarios keep the scalar
+operand independent while optionally chaining the vector operand. Immediate
+scenarios are keyed by authored concrete values. Indexed loads carry an authored
+SIMD index binding and a bounded hot-L1 throughput contract. The C++ renderer
+contains no `scenario == 1` or implicit first-operand policy.
+
+Scenario construction is owned by `benchmark/scenarios.py`; candidate
+admission, correctness availability, and dependency-closure checks remain in
+`benchmark/planner.py`. Correctness and candidate/scenario C++ rendering live
+in focused render modules instead of accumulating in the project renderer.
+
+The generated-build integration test keeps wall-clock timing out of its
+assertions. It first exercises the real one-build autotune graph, then rewrites
+one context-valid decision to a known non-default candidate and compiles a real
+consumer that asserts the generated selector value before invoking the public
+wrapper. Together with the reducer's synthetic-sample self-test, this proves
+reducer choice, policy rendering, include order, and compile-time consumption
+without requiring a particular host timing result.
 
 ### Slice 0: Candidate And Question Audit
 
@@ -728,10 +789,10 @@ target.
 
 ### Slice 5: Broader Scenario Coverage
 
-- Add more pure-register signature shapes.
-- Extend mask inputs/results beyond the implemented integral-mask conversion
-  family, then add reduction, memory, and gather/scatter scenarios one family at
-  a time.
+- Keep the implemented vector-plus-scalar, immediate, mask-result, reduction,
+  and indexed-load families closed under newly authored variants.
+- Add masked reduction and further memory/gather/scatter distributions one
+  typed family at a time; do not generalize from the hot-L1 indexed-load case.
 - Add source-authored benchmark metadata only where typed signature-derived
   scenarios are insufficient.
 - Track benchmark eligibility/skip coverage separately from primitive compile

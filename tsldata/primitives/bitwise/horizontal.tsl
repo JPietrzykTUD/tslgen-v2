@@ -23,6 +23,13 @@ prim<s:=v> hand(vec):
     - {tags [basic], type "ui64", case {inputs [[15, 3]], expected 3}}
     - {tags [basic], type "f32", case {inputs [[1.0, -1.0, INFINITY, "-INFINITY"]], expected 1.0}}
     - {tags [basic], type "f64", case {inputs [[1.0, -1.0]], expected 1.0}}
+    - {tags [avx2], extension "avx2", type "si8", lane_count 32, case {inputs [[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 127]], expected 127}}
+    - {tags [avx2], extension "avx2", type "ui8", lane_count 32, case {inputs [[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 15]], expected 15}}
+    - {tags [avx2], extension "avx2", type "si16", lane_count 16, case {inputs [[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 255]], expected 255}}
+    - {tags [avx2], extension "avx2", type "ui16", lane_count 16, case {inputs [[65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 255]], expected 255}}
+    - {tags [avx2], extension "avx2", type "si32", lane_count 8, case {inputs [[-1, -1, -1, -1, -1, -1, -1, 2147483647]], expected 2147483647}}
+    - {tags [avx2], extension "avx2", type "si64", lane_count 4, case {inputs [[-1, -1, -1, 15]], expected 15}}
+    - {tags [avx2], extension "avx2", type "ui64", lane_count 4, case {inputs [[15, 7, 3, 1]], expected 1}}
   impls:
     clang_v128:
       ?i?:
@@ -194,6 +201,15 @@ prim<s:=v> hand(vec):
             ));
             complete(call<primitive=@self[HalfVec]>(folded));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_vec, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(vec)
+              ));
+              complete(call<primitive=@self[GenericVec]>(generic_vec));
+            """
     sse:
       ?i8:
         requires [sse2]
@@ -369,6 +385,13 @@ prim<s:=v> hor(vec):
     - {tags [edge], type "si64", case {inputs [[0, -1]], expected -1}}
     - {tags [basic], type "f32", case {inputs [[1.0, -1.0, INFINITY, "-INFINITY"]], expected "-INFINITY"}}
     - {tags [basic], type "f64", case {inputs [[1.0, -1.0]], expected -1.0}}
+    - {tags [avx2], extension "avx2", type "si8", lane_count 32, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1]], expected -1}}
+    - {tags [avx2], extension "avx2", type "ui8", lane_count 32, case {inputs [[1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8]], expected 15}}
+    - {tags [avx2], extension "avx2", type "si16", lane_count 16, case {inputs [[1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8]], expected 15}}
+    - {tags [avx2], extension "avx2", type "ui16", lane_count 16, case {inputs [[1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8]], expected 15}}
+    - {tags [avx2], extension "avx2", type "si32", lane_count 8, case {inputs [[1, 2, 4, 8, 16, 32, 64, 128]], expected 255}}
+    - {tags [avx2], extension "avx2", type "si64", lane_count 4, case {inputs [[1, 2, 4, 8]], expected 15}}
+    - {tags [avx2], extension "avx2", type "ui64", lane_count 4, case {inputs [[1, 2, 4, 8]], expected 15}}
   impls:
     clang_v128:
       ?i?:
@@ -528,6 +551,15 @@ prim<s:=v> hor(vec):
             ));
             complete(call<primitive=@self[HalfVec]>(folded));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_vec, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(vec)
+              ));
+              complete(call<primitive=@self[GenericVec]>(generic_vec));
+            """
     sse:
       ?i8:
         requires [sse2]

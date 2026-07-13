@@ -6956,6 +6956,188 @@ def test_avx2_to_mask_keeps_generic_round_trip_as_additive_benchmark_candidate(
         assert "from_array" in fallback
 
 
+@pytest.mark.parametrize("primitive", ["hadd", "hmax", "hmin", "hand", "hor"])
+def test_avx2_integer_reduction_keeps_generic_fallback_as_additive_candidate(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], primitive, ("si32",))
+        .selected
+        if selected.extension.name == "avx2"
+        and len(selected.primitive.parameters) == 1
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "to_array" not in lowered.body_text
+        assert [variant.name for variant in lowered.variant_bodies] == [
+            "generic_fallback"
+        ]
+        fallback = lowered.variant_bodies[0].body_text
+        assert "to_array" in fallback
+        assert "from_array" in fallback
+        assert primitive in fallback
+
+
+@pytest.mark.parametrize(
+    ("profile_name", "extension_name", "type_tag"),
+    (
+        ("sse2", "sse", "si32"),
+        ("sse2", "sse", "f32"),
+        ("avx2", "avx2", "si32"),
+        ("skylake", "avx512", "si32"),
+        ("knl", "avx512", "si32"),
+        ("neon", "neon", "si32"),
+        ("wasm32-simd128", "wasm128", "si32"),
+    ),
+)
+def test_fixed_width_modulo_keeps_generic_fallback_as_additive_candidate(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+    extension_name: str,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles[profile_name], "mod", (type_tag,))
+        .selected
+        if selected.extension.name == extension_name
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "to_array" not in lowered.body_text
+        assert [variant.name for variant in lowered.variant_bodies] == [
+            "generic_fallback"
+        ]
+        fallback = lowered.variant_bodies[0].body_text
+        assert fallback.count("to_array") == 2
+        assert fallback.count("from_array") == 3
+        assert "mod" in fallback
+
+
+@pytest.mark.parametrize(
+    ("primitive", "profile_name", "extension_name", "type_tag", "variant_names"),
+    (
+        ("popcnt", "sse2", "sse", "ui8", ["generic_fallback"]),
+        (
+            "popcnt",
+            "avx2",
+            "avx2",
+            "ui8",
+            ["sse_halves", "generic_fallback"],
+        ),
+        ("popcnt", "avx2", "avx2", "ui32", ["generic_fallback"]),
+        ("lzc", "sse2", "sse", "ui32", ["generic_fallback"]),
+        ("lzc", "avx2", "avx2", "ui8", ["generic_fallback"]),
+        ("lzc", "avx2", "avx2", "ui32", ["generic_fallback"]),
+        (
+            "lzc",
+            "avx2",
+            "avx2",
+            "f32",
+            ["sse_halves", "generic_fallback"],
+        ),
+        ("lzc", "skylake", "avx512", "ui8", ["generic_fallback"]),
+        ("lzc", "knl", "avx512", "ui8", ["generic_fallback"]),
+    ),
+)
+def test_bit_count_algorithms_keep_additive_benchmark_candidates(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    profile_name: str,
+    extension_name: str,
+    type_tag: str,
+    variant_names: list[str],
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile_name],
+            primitive,
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == extension_name
+        and selected.primitive.attributes.get("mask") is None
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert [variant.name for variant in lowered.variant_bodies] == variant_names
+        fallback = next(
+            variant
+            for variant in lowered.variant_bodies
+            if variant.name == "generic_fallback"
+        )
+        assert fallback.body_text.count("to_array") == 2
+        assert fallback.body_text.count("from_array") == 2
+        if "sse_halves" in variant_names:
+            halves = next(
+                variant
+                for variant in lowered.variant_bodies
+                if variant.name == "sse_halves"
+            )
+            assert halves.body_text.count("extract") == 2
+            assert halves.body_text.count("insert") == 2
+
+
+@pytest.mark.parametrize(
+    ("profile_name", "extension_name"),
+    (("neon", "neon"), ("wasm32-simd128", "wasm128")),
+)
+def test_integer_division_keeps_generic_round_trip_as_additive_candidate(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+    extension_name: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles[profile_name], "div", ("si32",))
+        .selected
+        if selected.extension.name == extension_name
+        and selected.primitive.attributes.get("mask") is None
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "extract_value" in lowered.body_text
+        assert "insert_value" in lowered.body_text
+        assert [variant.name for variant in lowered.variant_bodies] == [
+            "generic_fallback"
+        ]
+        fallback = lowered.variant_bodies[0].body_text
+        assert fallback.count("to_array") == 3
+        assert fallback.count("from_array") == 3
+
+
 def test_sse2_equal_64_composes_word_equality_and_mask_conversion(
     catalog: Catalog, machine_profiles
 ) -> None:

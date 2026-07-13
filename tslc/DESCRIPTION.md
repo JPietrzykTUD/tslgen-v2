@@ -213,15 +213,25 @@ benchmark plans into a per-profile project with a top-level dispatch
 header/module.
 
 The optional [benchmark/](src/tslc/benchmark/) stage consumes finalized C++
-specializations and authored value-test facts. It plans only explicitly
-coexisting named variants, emits structured skip coverage for unsupported
-signature shapes, and renders a standalone native benchmark/policy tool.
-Workload semantics are resolved before rendering: pure-register scenarios carry
-their operand generators and dependency parameter, while integral-mask
-conversion scenarios carry exact active-lane counts. A primitive uses the
+specializations and authored value-test facts. It plans every explicitly
+coexisting named variant in the emitted primitive/dependency closure, emits
+structured skip coverage for unsupported signature shapes, and renders a
+standalone native benchmark/policy tool. Value-test tags do not control
+benchmark admission. Workload semantics are resolved in
+[benchmark/scenarios.py](src/tslc/benchmark/scenarios.py) before rendering:
+pure-register scenarios carry
+their operand generators and dependency parameter, vector-plus-scalar scenarios
+keep the scalar input independent, immediate scenarios carry an authored
+concrete value, indexed-load scenarios carry a SIMD index binding and bounded
+hot-L1 memory contract, vector-to-scalar reduction scenarios carry an
+independent input generator, vector-input mask-result scenarios carry their
+operand generators, and integral-mask conversion scenarios carry exact
+active-lane counts. A primitive uses the
 validated `benchmarks.latency_chain` catalog fact only when its latency operand
-is ambiguous; source data never embeds benchmark C++. The generated CMake
-project runs the tool only through explicit report, policy, or autotune options;
+is ambiguous; `benchmarks.operand_domains` can constrain a compatible vector or
+scalar operand to a validated domain such as `nonzero` or `shift_count`. Source
+data never embeds benchmark C++. The generated CMake project runs the tool only
+through explicit report, policy, or autotune options;
 ordinary generation and builds retain the authored default.
 
 ## Differential value tests

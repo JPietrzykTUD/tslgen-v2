@@ -149,6 +149,18 @@ prim<v:=v> popcnt(data):
               call<primitive=binary_and[UVec]>(bits, result_mask)
             ));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(data)
+              ));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_data));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=to_array[GenericVec]>(generic_result)
+              ));
+            """
     [avx2, avx2_vl]:
       ?i8:
         requires:
@@ -190,6 +202,30 @@ prim<v:=v> popcnt(data):
               intrin<shuffle, build[suffix=base::signed_of(base::in)]>(lookup, high)
             ));
           """
+        variants:
+          sse_halves:
+            tsil """
+              let<type>(HalfVec, type(vector::as(sse, type(base::in))));
+              var<const_infer>(low, call<primitive=extract[Vec, sse, 0]>(data));
+              var<const_infer>(high, call<primitive=extract[Vec, sse, 1]>(data));
+              var<const_infer>(low_counts, call<primitive=@self[HalfVec]>(low));
+              var<const_infer>(high_counts, call<primitive=@self[HalfVec]>(high));
+              var<infer>(result, call<primitive=insert[HalfVec, Vec, 0]>(
+                call<primitive=set_zero[Vec]>(), low_counts
+              ));
+              complete(call<primitive=insert[HalfVec, Vec, 1]>(result, high_counts));
+            """
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(data)
+              ));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_data));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=to_array[GenericVec]>(generic_result)
+              ));
+            """
     [sse, sse_vl]:
       ?i8:
         requires:
@@ -227,6 +263,18 @@ prim<v:=v> popcnt(data):
               intrin<shuffle, build[suffix=base::signed_of(base::in)]>(lookup, high)
             ));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(data)
+              ));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_data));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=to_array[GenericVec]>(generic_result)
+              ));
+            """
     [sse, sse_vl]:
       ?i8:
         requires:
@@ -266,6 +314,18 @@ prim<v:=v> popcnt(data):
             );
             complete(call<primitive=reinterpret[WordVec, Vec]>(bits));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(data)
+              ));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_data));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=to_array[GenericVec]>(generic_result)
+              ));
+            """
     avx2:
       ?i?:
         requires [avx]
@@ -818,6 +878,18 @@ prim<v:=v> lzc(data):
             ));
             complete(call<primitive=reinterpret[UVec, Vec]>(leading_zeros));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(data)
+              ));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_data));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=to_array[GenericVec]>(generic_result)
+              ));
+            """
       [?i16, ?i32, ?i64]:
         requires:
           avx512:
@@ -856,6 +928,18 @@ prim<v:=v> lzc(data):
             ));
             complete(call<primitive=reinterpret[UVec, Vec]>(leading_zeros));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(data)
+              ));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_data));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=to_array[GenericVec]>(generic_result)
+              ));
+            """
       f?:
         requires:
           avx512 [avx512f]
@@ -873,6 +957,18 @@ prim<v:=v> lzc(data):
             var<const_infer>(counts, call<primitive=@self[UVec]>(bits));
             complete(call<primitive=cast[UVec, type(base::in)]>(counts));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(data)
+              ));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_data));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=to_array[GenericVec]>(generic_result)
+              ));
+            """
     avx512:
       ?i8:
         requires [avx512f]
@@ -916,6 +1012,18 @@ prim<v:=v> lzc(data):
             );
             complete(call<primitive=reinterpret[WorkVec, Vec]>(counts));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(data)
+              ));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_data));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=to_array[GenericVec]>(generic_result)
+              ));
+            """
       ?i16:
         requires [avx512f]
         safety:
@@ -968,6 +1076,18 @@ prim<v:=v> lzc(data):
             );
             complete(call<primitive=reinterpret[WorkVec, Vec]>(counts));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(data)
+              ));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_data));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=to_array[GenericVec]>(generic_result)
+              ));
+            """
     avx2:
       f32:
         requires [avx, avx2]
@@ -983,6 +1103,30 @@ prim<v:=v> lzc(data):
             var<const_infer>(counts, call<primitive=@self[UVec]>(bits));
             complete(call<primitive=cast[UVec, type(base::in)]>(counts));
           """
+        variants:
+          sse_halves:
+            tsil """
+              let<type>(HalfVec, type(vector::as(sse, type(base::in))));
+              var<const_infer>(low, call<primitive=extract[Vec, sse, 0]>(data));
+              var<const_infer>(high, call<primitive=extract[Vec, sse, 1]>(data));
+              var<const_infer>(low_counts, call<primitive=@self[HalfVec]>(low));
+              var<const_infer>(high_counts, call<primitive=@self[HalfVec]>(high));
+              var<infer>(result, call<primitive=insert[HalfVec, Vec, 0]>(
+                call<primitive=set_zero[Vec]>(), low_counts
+              ));
+              complete(call<primitive=insert[HalfVec, Vec, 1]>(result, high_counts));
+            """
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(data)
+              ));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_data));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=to_array[GenericVec]>(generic_result)
+              ));
+            """
       f64:
         requires [avx, avx2]
         safety:
@@ -997,6 +1141,30 @@ prim<v:=v> lzc(data):
             var<const_infer>(counts, call<primitive=@self[UVec]>(bits));
             complete(call<primitive=cast[UVec, type(base::in)]>(counts));
           """
+        variants:
+          sse_halves:
+            tsil """
+              let<type>(HalfVec, type(vector::as(sse, type(base::in))));
+              var<const_infer>(low, call<primitive=extract[Vec, sse, 0]>(data));
+              var<const_infer>(high, call<primitive=extract[Vec, sse, 1]>(data));
+              var<const_infer>(low_counts, call<primitive=@self[HalfVec]>(low));
+              var<const_infer>(high_counts, call<primitive=@self[HalfVec]>(high));
+              var<infer>(result, call<primitive=insert[HalfVec, Vec, 0]>(
+                call<primitive=set_zero[Vec]>(), low_counts
+              ));
+              complete(call<primitive=insert[HalfVec, Vec, 1]>(result, high_counts));
+            """
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(data)
+              ));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_data));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=to_array[GenericVec]>(generic_result)
+              ));
+            """
     avx2:
       arith:
         requires [avx]

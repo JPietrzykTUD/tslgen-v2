@@ -607,6 +607,16 @@ prim<m:=im> to_mask(mask):
   tests:
     - {tags [basic], extension "avx2", type "si32", lane_count 8, case {inputs [170], expected 170}}
     - {tags [basic], extension "avx2", type "ui32", lane_count 8, case {inputs [170], expected 170}}
+    - {tags [basic], extension "wasm128", type "si8", lane_count 16, case {inputs [42405], expected 42405}}
+    - {tags [basic], extension "wasm128", type "ui8", lane_count 16, case {inputs [42405], expected 42405}}
+    - {tags [basic], extension "wasm128", type "si16", lane_count 8, case {inputs [165], expected 165}}
+    - {tags [basic], extension "wasm128", type "ui16", lane_count 8, case {inputs [165], expected 165}}
+    - {tags [basic], extension "wasm128", type "si32", lane_count 4, case {inputs [10], expected 10}}
+    - {tags [basic], extension "wasm128", type "ui32", lane_count 4, case {inputs [10], expected 10}}
+    - {tags [basic], extension "wasm128", type "f32", lane_count 4, case {inputs [10], expected 10}}
+    - {tags [basic], extension "wasm128", type "si64", lane_count 2, case {inputs [2], expected 2}}
+    - {tags [basic], extension "wasm128", type "ui64", lane_count 2, case {inputs [2], expected 2}}
+    - {tags [basic], extension "wasm128", type "f64", lane_count 2, case {inputs [2], expected 2}}
     - {tags [basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170], expected 170}}
     - {tags [edge], extension "avx512", type "ui8", lane_count 64, case {inputs [9223372036854775809], expected 9223372036854775809}}
     - {tags [basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690], expected 43690}}

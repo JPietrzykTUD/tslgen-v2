@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import NewType, TypeVar
+from typing import Literal, NewType, TypeVar
 
 from tslc.diagnostics import SourceSpan
 from tslc.catalog.target_families import TargetFamilyCatalog
@@ -144,10 +144,20 @@ class Implementation:
 
 
 @dataclass(frozen=True, slots=True)
+class PrimitiveBenchmarkOperandDomain:
+    """A semantic timing-input restriction for one declared primitive operand."""
+
+    parameter: str
+    domain: Literal["nonzero", "shift_count"]
+    source: SourceSpan | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class PrimitiveBenchmarkSpec:
     """Source-authored workload facts that cannot be inferred from a signature."""
 
     latency_chain: str | None = None
+    operand_domains: tuple[PrimitiveBenchmarkOperandDomain, ...] = ()
     source: SourceSpan | None = None
 
 
