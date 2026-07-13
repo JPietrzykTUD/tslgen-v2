@@ -91,11 +91,11 @@ prim<v:=(v,v)> mul(factor1, factor2):
             var<const_infer>(even_right, call<primitive=binary_and[WordVec]>(right, word_mask));
             var<const_infer>(even_product, call<primitive=@self[WordVec]>(even_left, even_right));
             var<const_infer>(even_result, call<primitive=binary_and[WordVec]>(even_product, word_mask));
-            var<const_infer>(odd_left, call<primitive=shift_right[WordVec, 8, false]>(left));
-            var<const_infer>(odd_right, call<primitive=shift_right[WordVec, 8, false]>(right));
+            var<const_infer>(odd_left, call<primitive=shift_right[WordVec, false]>(left, 8));
+            var<const_infer>(odd_right, call<primitive=shift_right[WordVec, false]>(right, 8));
             var<const_infer>(odd_product, call<primitive=@self[WordVec]>(odd_left, odd_right));
             var<const_infer>(odd_low, call<primitive=binary_and[WordVec]>(odd_product, word_mask));
-            var<const_infer>(odd_result, call<primitive=shift_left[WordVec, 8]>(odd_low));
+            var<const_infer>(odd_result, call<primitive=shift_left[WordVec]>(odd_low, 8));
             complete(call<primitive=reinterpret[WordVec, Vec]>(
               call<primitive=binary_or[WordVec]>(even_result, odd_result)
             ));

@@ -784,6 +784,33 @@ def test_neon_masked_extrema_unroll_semantic_lane_extracts(
 
 
 @pytest.mark.parametrize("primitive", ["hmax", "hmin"])
+@pytest.mark.parametrize("type_tag", ["ui32", "f32"])
+def test_sve_masked_extrema_use_semantic_empty_mask_test(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog, machine_profiles["sve128"], primitive, (type_tag,)
+        )
+        .selected
+        if selected.extension.name == "sve128"
+        and selected.primitive.signature == "s:=(m,v)"
+    )
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert "mask_population_count" in lowered.body_text
+    assert "to_integral" not in lowered.body_text
+
+
+@pytest.mark.parametrize("primitive", ["hmax", "hmin"])
 @pytest.mark.parametrize("profile", ["sse2", "avx2", "knl"])
 @pytest.mark.parametrize("type_tag", ["si8", "ui16", "si32", "ui64"])
 def test_x86_masked_integer_extrema_avoid_array_fallback(
@@ -1130,6 +1157,30 @@ def test_sve_conflict_accumulates_vector_matches_without_memory(
     assert "svld1" not in lowered.body_text
 
 
+def test_sve_insert_value_uses_semantic_singleton_lane_mask(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog, machine_profiles["sve128"], "insert_value", ("ui32",)
+        )
+        .selected
+        if selected.extension.name == "sve128"
+    )
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert "::tsl::sequence<" in lowered.body_text
+    assert "::tsl::equal<" in lowered.body_text
+    assert "::tsl::mov_mask<" in lowered.body_text
+    assert "imask_type" not in lowered.body_text
+
+
 @pytest.mark.parametrize(
     ("primitive", "type_tag", "evidence"),
     [
@@ -1303,6 +1354,45 @@ def test_neon_widening_cast_reuses_convert_up_low_chunk(
         assert "from_array" not in lowered.body_text
 
 
+@pytest.mark.parametrize(
+    ("source_type", "target_type", "low_intrinsic", "widen_intrinsic"),
+    [
+        ("si8", "si16", "vget_low_s8", "vmovl_s8"),
+        ("ui16", "ui32", "vget_low_u16", "vmovl_u16"),
+        ("si32", "si64", "vget_low_s32", "vmovl_s32"),
+        ("f32", "f64", "vget_low_f32", "vcvt_f64_f32"),
+    ],
+)
+def test_neon_convert_up_low_chunk_is_the_intrinsic_leaf(
+    catalog: Catalog,
+    machine_profiles,
+    source_type: str,
+    target_type: str,
+    low_intrinsic: str,
+    widen_intrinsic: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog, machine_profiles["neon"], "convert_up", (source_type,)
+        )
+        .selected
+        if selected.extension.name == "neon"
+        and selected.to_target == target_type
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert low_intrinsic in lowered.body_text
+        assert widen_intrinsic in lowered.body_text
+        assert "::tsl::cast<" not in lowered.body_text
+
+
 @pytest.mark.parametrize("source_type", ["si64", "ui64"])
 def test_avx2_i64_to_f64_cast_composes_semantic_operations(
     catalog: Catalog,
@@ -1342,12 +1432,11 @@ def test_avx2_i64_to_f64_cast_composes_semantic_operations(
         assert "_mm256_add_pd" not in lowered.body_text
 
 
-@pytest.mark.parametrize("source_type", ["si64", "ui64"])
 def test_sse_i64_to_f64_cast_is_pure_primitive_composition(
     catalog: Catalog,
     machine_profiles,
-    source_type: str,
 ) -> None:
+    source_type = "si64"
     slot = next(
         selected
         for selected in Selector()
@@ -1374,6 +1463,117 @@ def test_sse_i64_to_f64_cast_is_pure_primitive_composition(
         ):
             assert primitive in lowered.body_text
         assert "_mm" not in lowered.body_text
+
+
+def test_sse_ui64_to_f64_cast_prefers_exact_additive_fallback(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "cast", ("ui64",))
+        .selected
+        if selected.extension.name == "sse" and selected.to_target == "f64"
+    )
+
+    assert slot.required_features == frozenset({"sse2"})
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "to_array" in lowered.body_text
+        assert "from_array" in lowered.body_text
+
+
+@pytest.mark.parametrize("source_type", ["si64", "ui64"])
+def test_sse2_i64_to_f64_cast_keeps_additive_array_fallback(
+    catalog: Catalog,
+    machine_profiles,
+    source_type: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["sse2"], "cast", (source_type,))
+        .selected
+        if selected.extension.name == "sse" and selected.to_target == "f64"
+    )
+
+    assert slot.required_features == frozenset({"sse2"})
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "to_array" in lowered.body_text
+        assert "from_array" in lowered.body_text
+
+
+@pytest.mark.parametrize(
+    ("source_type", "target_type", "evidence"),
+    [
+        ("f32", "ui32", "::tsl::extract<Vec"),
+        ("f64", "ui64", "::tsl::extract<Vec"),
+    ],
+)
+def test_avx_float_to_unsigned_cast_keeps_lower_feature_path(
+    catalog: Catalog,
+    machine_profiles,
+    source_type: str,
+    target_type: str,
+    evidence: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx"], "cast", (source_type,))
+        .selected
+        if selected.extension.name == "avx2"
+        and selected.to_target == target_type
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert slot.required_features == frozenset({"avx"})
+    assert cpp is not None
+    assert evidence in cpp.body_text
+    assert "to_array" not in cpp.body_text
+
+
+@pytest.mark.parametrize(
+    ("source_type", "target_type", "evidence"),
+    [
+        ("f32", "ui32", "_mm256_cvttps_epi32"),
+        ("f64", "ui64", "_mm256_cvtepi32_epi64"),
+    ],
+)
+def test_avx2_float_to_unsigned_cast_keeps_preferred_existing_path(
+    catalog: Catalog,
+    machine_profiles,
+    source_type: str,
+    target_type: str,
+    evidence: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "cast", (source_type,))
+        .selected
+        if selected.extension.name == "avx2" and selected.to_target == target_type
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert slot.required_features == frozenset({"avx2"})
+    assert cpp is not None
+    assert evidence in cpp.body_text
+    assert "::tsl::extract<Vec" not in cpp.body_text
 
 
 @pytest.mark.parametrize(
@@ -2924,8 +3124,8 @@ def test_x86_byte_mul_composes_word_primitives_in_register(
     assert cpp is not None
     word_vec = f"tsl::simd<uint16_t, tsl::{extension}>"
     assert f"::tsl::mul<{word_vec}>" in cpp.body_text
-    assert f"::tsl::shift_left<{word_vec}, 8>" in cpp.body_text
-    assert f"::tsl::shift_right<{word_vec}, 8, false>" in cpp.body_text
+    assert f"::tsl::shift_left<{word_vec}>" in cpp.body_text
+    assert f"::tsl::shift_right<{word_vec}, false>" in cpp.body_text
     assert "_mullo_epi16" not in cpp.body_text
     assert "to_array" not in cpp.body_text
     assert "from_array" not in cpp.body_text
@@ -3375,6 +3575,44 @@ def test_custom_sequence_composes_sequence_scale_and_offset(
     assert "::tsl::add<Vec>" in cpp.body_text
     assert cpp.body_text.count("::tsl::set1<Vec>") == 2
     assert "to_array" not in cpp.body_text
+
+
+def test_avx_integer_custom_sequence_keeps_additive_array_fallback(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog, machine_profiles["avx"], "custom_sequence", ("si32",)
+        )
+        .selected
+        if selected.extension.name == "avx2"
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert slot.required_features == frozenset({"avx"})
+    assert cpp is not None
+    assert "::tsl::to_array<Vec>" in cpp.body_text
+    assert "::tsl::from_array<Vec>" in cpp.body_text
+    assert "::tsl::sequence<Vec>" not in cpp.body_text
+
+
+@pytest.mark.parametrize("primitive", ["allocate", "allocate_aligned", "deallocate"])
+def test_free_functions_keep_profile_owner_out_of_compiler_overlay(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+) -> None:
+    selected = Selector().select_profile(
+        catalog, machine_profiles["skylake"], primitive, ("si32",)
+    ).selected
+
+    assert selected
+    assert {slot.extension.name for slot in selected} == {"avx2_vl"}
 
 
 @pytest.mark.parametrize("primitive", ["hand", "hor"])
@@ -4220,6 +4458,33 @@ def test_x86_lzc_handles_avx1_and_avx512f_without_bw_in_registers(
             assert "reinterpret" in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
+
+
+def test_avx512_bitalg_lzc_keeps_preferred_composed_path(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["icelake_rockerlake"],
+            "lzc",
+            ("ui8",),
+        )
+        .selected
+        if selected.extension.name == "avx512"
+        and selected.primitive.attributes.get("mask") is None
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert "avx512_bitalg" in slot.required_features
+    assert cpp is not None
+    assert "::tsl::popcnt<" in cpp.body_text
+    assert "to_array" not in cpp.body_text
 
 
 @pytest.mark.parametrize(
@@ -6601,6 +6866,32 @@ def test_sse41_to_mask_fast_paths_win_over_portable_fallback(
     assert cpp_f64 is not None
     assert "::tsl::equal<tsl::simd<uint64_t, tsl::sse>>" in cpp_f64.body_text
     assert "::tsl::reinterpret<tsl::simd<uint64_t, tsl::sse>" in cpp_f64.body_text
+
+
+@pytest.mark.parametrize("type_tag", ["si32", "f64"])
+def test_avx_to_mask_composes_existing_sse_halves(
+    catalog: Catalog,
+    machine_profiles,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx"], "to_mask", (type_tag,))
+        .selected
+        if selected.extension.name == "avx2"
+    )
+
+    assert slot.required_features == frozenset({"avx"})
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert lowered.body_text.count("to_mask") == 2
+        assert lowered.body_text.count("insert") == 2
+        assert "to_array" not in lowered.body_text
 
 
 def test_sse2_equal_64_composes_word_equality_and_mask_conversion(

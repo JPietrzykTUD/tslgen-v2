@@ -910,6 +910,35 @@ prim<m:=im> to_mask(mask):
               var<const_infer>(anded_vec, call<primitive=binary_and[BitVec]>(data_vec, and_vec));
               complete(call<primitive=reinterpret[BitVec, Vec]>(call<primitive=equal[BitVec]>(anded_vec, and_vec)));
             """
+    # AVX integer operations are composed from the existing SSE halves. AVX2
+    # keeps the type-specific implementations above as the preferred leaves.
+    avx2:
+      arith:
+        requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(HalfVec, type(vector::as_extension(sse)));
+            let<type>(HalfImask, type(select(
+              value(type::same_size(type(base::in), ui8)),
+              ui16,
+              ui8
+            )));
+            var<const_infer>(low_mask, call<primitive=to_mask[HalfVec]>(
+              cast<static>(HalfImask, mask)
+            ));
+            var<const_infer>(high_mask, call<primitive=to_mask[HalfVec]>(
+              cast<static>(HalfImask, mask >> (value(vector::length) / 2))
+            ));
+            var<const_infer>(low, call<primitive=to_vector[HalfVec]>(low_mask));
+            var<const_infer>(high, call<primitive=to_vector[HalfVec]>(high_mask));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            result = call<primitive=insert[HalfVec, Vec, 0]>(result, low);
+            complete(call<primitive=insert[HalfVec, Vec, 1]>(result, high));
+          """
     sse:
       ?i8:
         requires [sse, sse2]

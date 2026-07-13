@@ -34,7 +34,7 @@ def _scalar_spec(catalog, machine_profiles, primitive, backend, type_tag="si32")
     return Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend)).specialization
 
 
-def _dependencies_for_body(catalog, machine_profiles, body):
+def _lowered_for_body(catalog, machine_profiles, body):
     slot = next(
         selected
         for selected in Selector()
@@ -53,9 +53,14 @@ def _dependencies_for_body(catalog, machine_profiles, body):
         create_backend_dialect(catalog, "cpp"),
     )
     assert lowered.specialization is not None, lowered.diagnostics
+    return lowered.specialization
+
+
+def _dependencies_for_body(catalog, machine_profiles, body):
+    specialization = _lowered_for_body(catalog, machine_profiles, body)
     return frozenset(
         origin.dependency
-        for origin in lowered.specialization.call_dependency_origins
+        for origin in specialization.call_dependency_origins
     )
 
 
@@ -205,6 +210,31 @@ def test_target_extension_dependency_preserves_source_vector_base(
             )
         }
     )
+
+    lowered = _lowered_for_body(catalog, machine_profiles, body)
+    assert (
+        "extract<tsl::simd<uint32_t, tsl::avx2>, "
+        "tsl::simd<uint32_t, tsl::sse>, 0>"
+    ) in lowered.body_text
+
+
+def test_target_base_rendering_preserves_source_vector_extension(
+    catalog: Catalog, machine_profiles
+) -> None:
+    body = """
+      let<type>(HalfVec, type(vector::as(sse, type(base::in))));
+      let<type>(ToBase, type(scalar::ui16));
+      var<const_infer>(low, call<primitive=convert_down[HalfVec, ToBase]>(left));
+      complete(left);
+    """
+
+    lowered = _lowered_for_body(catalog, machine_profiles, body)
+
+    assert (
+        "convert_down<tsl::simd<int32_t, tsl::sse>, "
+        "tsl::simd<uint16_t, tsl::sse>>"
+    ) in lowered.body_text
+    assert "tsl::simd<uint16_t, tsl::avx2>" not in lowered.body_text
 
 
 def test_dependency_closure_ignores_dead_generation_branch_calls(

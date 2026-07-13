@@ -676,6 +676,27 @@ prim<v:=(v,s)> insert_value(a, value):
           reasons []
         implementation:
           tsil "complete(value);"
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
+            let<type>(IndexVec, type(vector::as_base(IndexBase)));
+            var<const_infer>(index_lane, call<primitive=equal[IndexVec]>(
+              call<primitive=sequence[IndexVec]>(),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, Index))
+            ));
+            complete(call<primitive=mov, attrs[mask=pass_through]>(
+              index_lane,
+              a,
+              call<primitive=set1[Vec]>(value)
+            ));
+          """
     [generic, clang_v128, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128, sve]:
       arith:
         requires:

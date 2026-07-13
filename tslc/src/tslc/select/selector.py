@@ -192,7 +192,25 @@ class Selector:
                 else type_tags
             )
             emitted_free = False
-            for extension_name in emitted_extensions:
+            if free_function:
+                authored_extensions = {
+                    implementation.extension
+                    for implementation in primitive.implementations
+                    if implementation.extension in emitted_extensions
+                }
+                # Free functions still need one extension-shaped selection slot,
+                # but compiler overlays live in opt-in, backend-specific headers.
+                # Keep the established profile ordering while excluding those
+                # overlays as owners of ISA-independent declarations.
+                selection_extensions = [
+                    name
+                    for name in emitted_extensions
+                    if name in authored_extensions
+                    and catalog.extensions[name].family != "compiler_builtin"
+                ]
+            else:
+                selection_extensions = emitted_extensions
+            for extension_name in selection_extensions:
                 if emitted_free:
                     break
                 for type_tag in primitive_type_tags:

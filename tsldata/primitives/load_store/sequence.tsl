@@ -567,7 +567,9 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
         requires:
           clang_v128 []
           avx512 [avx512f]
-          avx2 [avx]
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
           avx2_vl [avx]
           sse [sse, sse2]
           sse_vl [sse, sse2]
@@ -590,6 +592,23 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
                 )
               )
             );
+          """
+    avx2:
+      arith:
+        requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+            var<infer>(current, start);
+            loop<backend>(i, 0, value(vector::length), 1) {
+              result[i] = current;
+              current = helper<arith_add>(current, stepwidth);
+            }
+            complete(call<primitive=from_array[Vec]>(result));
           """
     scalar:
       arith:

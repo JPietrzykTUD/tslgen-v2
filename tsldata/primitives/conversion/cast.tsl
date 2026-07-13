@@ -835,6 +835,63 @@ prim<v:=v>[cast=convert] cast(data):
               reasons []
             implementation:
               tsil "complete(call<primitive=reinterpret[Vec, ToBase]>(data));"
+    # AVX has a signed f32 conversion but no unsigned f32 or packed f64-to-i64
+    # conversion. Reuse the SSE halves where needed; the AVX2 implementations
+    # above remain preferred when AVX2 is available.
+    avx2:
+      f32:
+        requires [avx]
+        ToBase:
+          si32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(cast<reinterpret>(type(register::generic(ToType)), intrin<_mm256_cvttps_epi32>(data)));"
+          ui32:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                let<type>(HalfIn, type(vector::as(sse, f32)));
+                let<type>(HalfOut, type(vector::as(sse, ui32)));
+                let<type>(OutVec, type(vector::as_base(ui32)));
+                var<const_infer>(low, call<primitive=cast[HalfIn, ui32]>(
+                  call<primitive=extract[Vec, sse, 0]>(data)
+                ));
+                var<const_infer>(high, call<primitive=cast[HalfIn, ui32]>(
+                  call<primitive=extract[Vec, sse, 1]>(data)
+                ));
+                var<infer>(result, call<primitive=set_zero[OutVec]>());
+                result = call<primitive=insert[HalfOut, OutVec, 0]>(result, low);
+                complete(call<primitive=insert[HalfOut, OutVec, 1]>(result, high));
+              """
+      f64:
+        requires [avx]
+        ToBase:
+          ?i64:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                let<type>(HalfIn, type(vector::as(sse, f64)));
+                let<type>(HalfOut, type(vector::as(sse, ToBase)));
+                let<type>(OutVec, type(vector::as_base(ToBase)));
+                var<const_infer>(low, call<primitive=cast[HalfIn, ToBase]>(
+                  call<primitive=extract[Vec, sse, 0]>(data)
+                ));
+                var<const_infer>(high, call<primitive=cast[HalfIn, ToBase]>(
+                  call<primitive=extract[Vec, sse, 1]>(data)
+                ));
+                var<infer>(result, call<primitive=set_zero[OutVec]>());
+                result = call<primitive=insert[HalfOut, OutVec, 0]>(result, low);
+                complete(call<primitive=insert[HalfOut, OutVec, 1]>(result, high));
+              """
     sse:
       f32:
         requires [sse2]
@@ -1207,6 +1264,50 @@ prim<v:=v>[cast=convert] cast(data):
                     complete(cast<reinterpret>(type(register::generic(ToType)), intrin<_mm_cvtepu16_epi64>(data))) ;
                   }
                 """
+    # Exact unsigned fallback: the grouped SSE4.1 recipe above is retained for
+    # compatibility, but is not exact for ui64 values. This more-specific SSE2
+    # candidate therefore wins for ui64 even when SSE4.1 is available.
+    sse:
+      ui64:
+        requires [sse2]
+        ToBase:
+          f64:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                let<type>(OutVec, type(vector::as_base(ToBase)));
+                let<type>(OutBase, type(base::generic(OutVec)));
+                var<const_infer>(values, call<primitive=to_array[Vec]>(data));
+                var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+                loop<backend>(i, 0, value(vector::length), 1) {
+                  result[i] = cast<static>(OutBase, values[i]);
+                }
+                complete(call<primitive=from_array[OutVec]>(result));
+              """
+      # Lower-feature fallback for both signednesses. The signed SSE4.1
+      # composition remains preferred when that feature is available.
+      ?i64:
+        requires [sse2]
+        ToBase:
+          f64:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                let<type>(OutVec, type(vector::as_base(ToBase)));
+                let<type>(OutBase, type(base::generic(OutVec)));
+                var<const_infer>(values, call<primitive=to_array[Vec]>(data));
+                var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+                loop<backend>(i, 0, value(vector::length), 1) {
+                  result[i] = cast<static>(OutBase, values[i]);
+                }
+                complete(call<primitive=from_array[OutVec]>(result));
+              """
     neon:
       ?i8:
         requires [neon]

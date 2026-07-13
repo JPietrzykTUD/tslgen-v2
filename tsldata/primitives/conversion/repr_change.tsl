@@ -1117,7 +1117,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      complete(call<primitive=cast[Vec, ToBase]>(data));
+                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl, build[suffix=base::in]>(intrin<vget_low, build[suffix=base::in]>(data))));
                     }
                     1 => {
                       complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl_high, build[suffix=base::in]>(data)));
@@ -1201,7 +1201,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      complete(call<primitive=cast[Vec, ToBase]>(data));
+                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl, build[suffix=base::in]>(intrin<vget_low, build[suffix=base::in]>(data))));
                     }
                     1 => {
                       complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl_high, build[suffix=base::in]>(data)));
@@ -1248,7 +1248,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      complete(call<primitive=cast[Vec, ToBase]>(data));
+                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl, build[suffix=base::in]>(intrin<vget_low, build[suffix=base::in]>(data))));
                     }
                     1 => {
                       complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl_high, build[suffix=base::in]>(data)));
@@ -1270,7 +1270,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      complete(call<primitive=cast[Vec, ToBase]>(data));
+                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vcvt_f64_f32>(intrin<vget_low_f32>(data))));
                     }
                     1 => {
                       complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vcvt_high_f64_f32>(data)));

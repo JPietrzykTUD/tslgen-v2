@@ -1333,8 +1333,7 @@ prim<s:=(m,v)> hmax(mask, vec):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            if (mask_scalar == 0) {
+            if (call<primitive=mask_population_count[Vec]>(mask) == 0) {
               complete(cast<static>(type(base::in), 0));
             }
             complete(cast<static>(type(base::in), intrin<svmaxv, build>(mask, vec)));
@@ -1347,8 +1346,7 @@ prim<s:=(m,v)> hmax(mask, vec):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            if (mask_scalar == 0) {
+            if (call<primitive=mask_population_count[Vec]>(mask) == 0) {
               complete(cast<static>(type(base::in), 0));
             }
             complete(intrin<svmaxv, build>(mask, vec));
@@ -1803,8 +1801,7 @@ prim<s:=(m,v)> hmin(mask, vec):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            if (mask_scalar == 0) {
+            if (call<primitive=mask_population_count[Vec]>(mask) == 0) {
               complete(cast<static>(type(base::in), 0));
             }
             complete(cast<static>(type(base::in), intrin<svminv, build>(mask, vec)));
@@ -1817,8 +1814,7 @@ prim<s:=(m,v)> hmin(mask, vec):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            if (mask_scalar == 0) {
+            if (call<primitive=mask_population_count[Vec]>(mask) == 0) {
               complete(cast<static>(type(base::in), 0));
             }
             complete(intrin<svminv, build>(mask, vec));

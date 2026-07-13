@@ -752,7 +752,7 @@ prim<v:=v> lzc(data):
     [avx512, avx2, sse]:
       ?i8:
         requires:
-          avx512 [avx512bw, avx512f]
+          avx512 [avx512_bitalg, avx512bw, avx512f]
           avx2 [avx, avx2]
           sse [sse, sse2]
         safety:

@@ -55,7 +55,7 @@ def resolve_lowered_call_dependency(
     )
     entries = selector.type_args
     source = (
-        _resolve_lowered_vector(entries[0], context, evaluator)
+        resolve_lowered_call_vector(entries[0], context, evaluator)
         if entries
         else None
     ) or current
@@ -66,11 +66,11 @@ def resolve_lowered_call_dependency(
                 resolved
                 for entry in entries[1:]
                 if (
-                    resolved := _resolve_lowered_vector(
+                    resolved := resolve_lowered_call_vector(
                         entry,
                         context,
                         evaluator,
-                        extension_base_tag=source.base_tag,
+                        relative_to=source,
                     )
                 )
                 is not None
@@ -99,13 +99,21 @@ def origin_sort_key(
     return (*dependency_sort_key(origin.dependency), origin.origin)
 
 
-def _resolve_lowered_vector(
+def resolve_lowered_call_vector(
     expression: str,
     context: LoweringSession,
     evaluator: QueryEvaluator,
     *,
-    extension_base_tag: str | None = None,
+    relative_to: VectorIdentity | None = None,
 ) -> VectorIdentity | None:
+    """Resolve one call-vector expression using representation-change rules.
+
+    Explicit vectors are absolute. A bare extension target inherits the source
+    vector's base, while a bare base target inherits its extension. Rendering
+    and dependency closure share this resolver so those identities cannot
+    drift apart.
+    """
+
     expression = expression.strip()
     if expression == "Vec":
         return VectorIdentity(context.env.type_tag, context.env.extension.isa_name)
@@ -124,13 +132,23 @@ def _resolve_lowered_vector(
         return VectorIdentity(vector.base_tag, vector.extension_isa)
     extension = _resolve_lowered_extension_isa(expression, context)
     if extension is not None:
-        return VectorIdentity(extension_base_tag or context.env.type_tag, extension)
+        return VectorIdentity(
+            relative_to.base_tag if relative_to is not None else context.env.type_tag,
+            extension,
+        )
 
     value = evaluator.evaluate(expression, context)
     if isinstance(value, VectorValue):
         return VectorIdentity(value.base_tag, value.extension_isa)
     if isinstance(value, TypeValue):
-        return VectorIdentity(value.type_tag, context.env.extension.isa_name)
+        return VectorIdentity(
+            value.type_tag,
+            (
+                relative_to.extension_isa
+                if relative_to is not None
+                else context.env.extension.isa_name
+            ),
+        )
     return None
 
 
@@ -184,5 +202,6 @@ __all__ = (
     "VectorIdentity",
     "dependency_sort_key",
     "origin_sort_key",
+    "resolve_lowered_call_vector",
     "resolve_lowered_call_dependency",
 )
