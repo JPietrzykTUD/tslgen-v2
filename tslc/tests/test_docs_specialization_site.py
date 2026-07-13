@@ -51,8 +51,9 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
         docs_specialization_artifacts["docs/specializations/specializations.json"]
     )
     records = _decode_specialization_records(payload)
+    strings = payload["strings"]
 
-    assert payload["schema_version"] == 9
+    assert payload["schema_version"] == 10
     assert "profiles" in payload
     assert "target_classes" in payload
     assert "backends" in payload
@@ -62,10 +63,14 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     assert "target_class" in payload["columns"]
     assert "width_label" in payload["columns"]
     assert "extension_rank" in payload["columns"]
+    assert "compiler_set" in payload["columns"]
+    assert {strings[index] for index in payload["compilers"]} == {
+        "AppleClang",
+        "Clang",
+    }
     assert sum(record["count"] for record in records) == len(
         docs_specialization_result.coverage
     )
-    strings = payload["strings"]
     primitive_docs = {strings[row[0]]: row for row in payload["primitives"]}
     add_doc = primitive_docs["add"]
     add_signature = strings[add_doc[5]]
@@ -195,6 +200,12 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
         for record in records
     )
     assert any(
+        record["backend"] == "cpp"
+        and record["extension"] == "clang_v256"
+        and record["compiler_ids"] == ["AppleClang", "Clang"]
+        for record in records
+    )
+    assert any(
         record["profile"] == "skylake"
         and record["primitive"] == "add"
         and record["extension"] == "avx512"
@@ -262,7 +273,7 @@ def test_specialization_explorer_react_source_keeps_expected_views() -> None:
     assert 'url.searchParams.set("dev", "1")' in app_source
     assert "TSL Primitive Specialization Reference" in app_source
     assert "Primitive support without misleading profile shortcuts" not in app_source
-    assert "Profile capabilities are shown separately" in app_source
+    assert "Profile capabilities and compiler availability are shown separately" in app_source
     assert "function typeLabel" in app_source
     assert "function targetWidthForRecord" not in app_source
     assert "record.target_class === targetClass.key" in app_source
@@ -274,6 +285,11 @@ def test_specialization_explorer_react_source_keeps_expected_views() -> None:
     assert "Selected implementation requirements are shown in the drilldown" in app_source
     assert "enabledRequirements" in app_source
     assert "enabledProfiles" in app_source
+    assert "enabledCompilers" in app_source
+    assert "recordCompilerVisible" in app_source
+    assert "supportedCompilerRows" in app_source
+    assert "compiler_ids.length > 0 || enabledProfiles" in app_source
+    assert 'title="Compilers"' in app_source
     assert "function ProfileChipGroups" in app_source
     assert "function profileFilterGroups" in app_source
     assert "function profileSortKey" in app_source
@@ -329,6 +345,10 @@ def _decode_specialization_records(payload: dict) -> list[dict]:
         [strings[index] for index in feature_set]
         for feature_set in payload["features"]
     ]
+    compiler_sets = [
+        [strings[index] for index in compiler_set]
+        for compiler_set in payload["compiler_sets"]
+    ]
     safeties = [
         {
             "caller_unsafe": caller,
@@ -358,7 +378,8 @@ def _decode_specialization_records(payload: dict) -> list[dict]:
                     "extension_group": strings[row[12]],
                     "extension_rank": strings[row[13]],
                     "family_rank": strings[row[14]],
-                    "count": row[15] if len(row) > 15 else 1,
+                    "compiler_ids": compiler_sets[row[15]],
+                    "count": row[16] if len(row) > 16 else 1,
                 }
             )
     return records

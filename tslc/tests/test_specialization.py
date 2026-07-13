@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -419,13 +420,34 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     lib = specialization_artifacts["rust/src/lib.rs"]
     cargo = specialization_artifacts["rust/Cargo.toml"]
     avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
+    documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert 'name = "tsl"' in cargo
+    assert 'default = ["scalar"]' in cargo
     assert "pub mod tsl_algorithm;" in lib
     assert "pub use tsl_algorithm::dataparallel;" in lib
-    assert "pub mod tsl_avx2;" in lib
-    assert '#[cfg(all(feature = "avx2", not(any(' in lib
+    assert "#[doc(hidden)]\npub mod tsl_test_core;" in lib
+    assert "#[doc(hidden)]\npub mod primitive {" in lib
+    assert "#[cfg(doc)]\n#[doc(hidden)]\npub mod tsl_documentation;" in lib
+    assert (
+        '#[cfg(doc)]\n#[doc = "Profile-neutral union of generated primitive APIs."]'
+        in lib
+    )
+    assert "pub use crate::tsl_documentation as profile;" in lib
+    assert "#[doc(hidden)]\npub mod tsl_avx2;" in lib
+    assert '#[cfg(all(not(doc), all(feature = "avx2", not(any(' in lib
+    assert "#[doc(inline)]\npub use crate::tsl_avx2 as profile;" in lib
     assert "pub use crate::tsl_avx2 as profile;" in lib
+    documented_functions = re.findall(
+        r"^pub (?:unsafe )?fn (?:r#)?([A-Za-z_][A-Za-z0-9_]*)",
+        documentation,
+        flags=re.MULTILINE,
+    )
+    assert documented_functions.count("add") == 1
+    assert len(documented_functions) == len(set(documented_functions))
+    assert len(documented_functions) == lib.count("    pub struct ")
+    assert "detail::primitives" not in documentation
+    assert "unimplemented!()" in documentation
     assert "pub mod dataparallel" in helper
     assert "pub struct Native" in helper
     assert "pub struct Fixed<const N: usize>" in helper
@@ -1022,7 +1044,7 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "const ALIGN: usize = 32;" in avx2
     assert "unsafe { return core::arch::x86_64::_mm256_add_epi32(left, right); }" in avx2
     assert "impl AddImpl for Simd<i32, Sse> {" in avx2
-    assert "pub mod detail {\n    pub mod primitives {" in avx2
+    assert "#[doc(hidden)]\npub mod detail {\n    pub mod primitives {" in avx2
     assert "pub struct Profile;" in avx2
     assert "pub mod primitive {\n    pub struct Add;" in lib
     assert (

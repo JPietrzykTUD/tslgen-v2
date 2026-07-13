@@ -71,6 +71,7 @@ class GeneratedDocumentationSpec:
     project_path: str
     output_path: str
     site_input: DocumentationSiteInput
+    args: tuple[str, ...] = ()
 
 
 class BackendDocumentationFormatter(Protocol):

@@ -97,7 +97,7 @@ def test_document_generated_writes_assets_and_runs_tools(
     log_text = log.read_text()
     assert "doxygen" in log_text
     assert "sphinx-build" in log_text
-    assert "cargo doc --no-deps" in log_text
+    assert "cargo doc --no-deps --no-default-features" in log_text
     assert "npm ci --no-audit --no-fund" in log_text
     assert "npm run build" in log_text
     assert "VITE_TSLC_GIT_BRANCH=" in log_text
@@ -168,6 +168,7 @@ def test_fake_backend_drives_generated_documentation(monkeypatch, tmp_path) -> N
         ("site", "sphinx"),
     ]
     assert report.commands[0].cwd == project
+    assert "--no-default-features" not in report.commands[0].argv
     assert root / "fake-language/docs/target/doc" in report.outputs
 
 
