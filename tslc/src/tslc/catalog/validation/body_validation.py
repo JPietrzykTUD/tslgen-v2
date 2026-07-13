@@ -215,7 +215,7 @@ def _validate_mask_region(
             message=(
                 f"primitive {primitive_name!r}: malformed mask selector "
                 f"{region.selector_text!r}; expected one of "
-                "`mask<lane_true>()`, `mask<lane_false>()`, `mask<zero>()`, "
+                "`mask<lane_true>()`, `mask<lane_false>()`, `mask<none>()`, "
                 "`mask<all>()`, `mask<test>(mask, index)`, "
                 "`mask<test, imask>(imask, index)`, "
                 "`mask<set>(mask, index)`, `mask<clear>(mask, index)`, or "

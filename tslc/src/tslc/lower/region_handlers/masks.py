@@ -12,7 +12,7 @@ class MaskLowerer:
     """``mask<...>`` lane values and mask-container operations.
 
     ``lane_true`` / ``lane_false`` produce a scalar lane payload value.
-    ``zero`` / ``all`` / ``test`` / ``set`` / ``clear`` / ``set_to`` operate on a mask
+    ``none`` / ``all`` / ``test`` / ``set`` / ``clear`` / ``set_to`` operate on a mask
     container and lower per the selected extension's mask representation.
     ``test, imask`` tests a packed integral mask bitset.
     """
@@ -44,7 +44,7 @@ class MaskLowerer:
             fields = {"base": base} if base is not None else {}
             if base is None:
                 key = ""
-        elif selector is not None and selector.kind in ("zero", "all"):
+        elif selector is not None and selector.kind in ("none", "all"):
             key, fields = f"mask_{selector.op}_{repr_kind}", {}
         elif selector is not None and selector.kind == "test_imask":
             key, fields = "mask_test_imask", {"mask": args[0], "index": args[1]}

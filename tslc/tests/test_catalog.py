@@ -61,6 +61,32 @@ def test_scalar_extension_has_no_intrinsic_compose(catalog: Catalog) -> None:
     assert scalar.compose_prefix == {}  # scalar has no intrinsic prefix
 
 
+@pytest.mark.parametrize(("name", "operation"), (("mul_imm", "mul"), ("mod_imm", "mod")))
+def test_immediate_arithmetic_composes_semantic_primitives(
+    catalog: Catalog, name: str, operation: str
+) -> None:
+    variants = catalog.primitives_named(name, unmasked=False)
+    assert variants
+    for primitive in variants:
+        for implementation in primitive.implementations:
+            assert f"call<primitive={operation}" in implementation.body_text
+            assert "call<primitive=set1" in implementation.body_text
+            assert "intrin<" not in implementation.body_text
+            assert "helper<arith_" not in implementation.body_text
+
+
+def test_insert_value_has_semantic_index_contract(catalog: Catalog) -> None:
+    primitive = catalog.primitive("insert_value")
+    assert primitive is not None
+    assert primitive.signature == "v:=(v,s)"
+    params = tuple(
+        (param.name, param.kind, param.default) for param in primitive.generic_params
+    )
+    assert params == (
+        ("Index", "int", "0"),
+    )
+
+
 def test_native_extension_register_metadata_promoted(catalog: Catalog) -> None:
     neon = catalog.extensions["neon"]
     assert neon.direct_vector_register_type("cpp", "si32") == "int32x4_t"
@@ -327,7 +353,9 @@ def test_target_families_promoted(catalog: Catalog) -> None:
         "cuda",
         "wasm",
     }
-    assert families.universal_extension_families == frozenset({"scalar", "generic_like"})
+    assert families.universal_extension_families == frozenset(
+        {"scalar", "generic_like", "compiler_builtin"}
+    )
     assert families.profile_families["x86"].extension_families == frozenset({"x86"})
     assert families.profile_families["aarch64"].extension_families == frozenset({"arm"})
     assert families.profile_families["wasm32"].extension_families == frozenset({"wasm"})
@@ -338,6 +366,21 @@ def test_target_families_promoted(catalog: Catalog) -> None:
     assert families.profile_families["wasm32"].runner_kinds == frozenset({"wasmtime"})
     assert families.profile_families["wasm32"].backend("cpp").target == "wasm32-wasip1"
     assert families.profile_families["wasm32"].backend("rust").target == "wasm32-wasip1"
+
+
+def test_clang_vector_extensions_are_cpp_opt_in_overlays(catalog: Catalog) -> None:
+    for width in (128, 256, 512):
+        extension = catalog.extensions[f"clang_v{width}"]
+        assert extension.family == "compiler_builtin"
+        assert extension.vector_bits == width
+        assert extension.supports_backend("cpp")
+        assert not extension.supports_backend("rust")
+        assert extension.mask_policy.kind == "comparison_lane_vector"
+        metadata = extension.metadata.backend["cpp"]
+        assert metadata.header_group == "clang"
+        assert metadata.compiler_ids == ("Clang", "AppleClang")
+        assert not metadata.participates_in_dataparallel_inference
+        assert metadata.compile_guards[0].macro == "__clang__"
 
 
 def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:

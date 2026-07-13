@@ -257,11 +257,17 @@ def _differential(case: ValueTestCasePlan) -> str:
         )
         hw_args.append(f"{from_array}::<Hw>(&hin{position})")
         ref_args.append(f"r{position}")
+    hw_template_args = ["Hw", *case.invocation.generic_defaults]
+    ref_template_args = ["Ref", *case.invocation.generic_defaults]
+    hw_template_args.extend("_" for _ in range(case.invocation.inferred_type_args))
+    ref_template_args.extend("_" for _ in range(case.invocation.inferred_type_args))
     hw_call = (
-        f"{rust_raw_identifier(case.call_name)}::<Hw>({', '.join(hw_args)})"
+        f"{rust_raw_identifier(case.call_name)}"
+        f"::<{', '.join(hw_template_args)}>({', '.join(hw_args)})"
     )
     ref_call = (
-        f"{rust_raw_identifier(case.call_name)}::<Ref>({', '.join(ref_args)})"
+        f"{rust_raw_identifier(case.call_name)}"
+        f"::<{', '.join(ref_template_args)}>({', '.join(ref_args)})"
     )
     if case.invocation.result_kind == "m":
         to_integral = _required_name(

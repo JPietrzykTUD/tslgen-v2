@@ -305,8 +305,10 @@ def test_unsigned_compare_resolves_branch_no_dead_code(catalog: Catalog, machine
     assert spec is not None, "unsigned avx2 greater_than should lower"
     body = spec.body_text
     assert "if<generation>" not in body and "else<generation>" not in body
-    assert "0x8000" in body and "0x80000000" not in body  # only the ui16 sign bit
-    assert "_mm256_cmpgt_epi16" in body  # compared as signed int16
+    assert "::tsl::set1<Vec>" in body
+    assert "16 - 1" in body and "32 - 1" not in body  # only the ui16 sign bit
+    assert "::tsl::greater_than<tsl::simd<int16_t" in body
+    assert "_mm256_cmpgt_epi16" not in body
 
 
 def test_signed_and_float_compares_lower_on_avx2(catalog: Catalog, machine_profiles) -> None:
@@ -323,13 +325,17 @@ def test_hand_float_bitwise_carrier_type_query_lowers(catalog: Catalog, machine_
     spec_f64 = _spec(catalog, machine_profiles, "avx2", "hand", "avx2", "f64")
     rust_f32 = _spec(catalog, machine_profiles, "avx2", "hand", "avx2", "f32", backend="rust")
 
-    assert spec_f32 is not None and "static_cast<uint32_t>(0)" in spec_f32.body_text
-    assert spec_f64 is not None and "static_cast<uint64_t>(0)" in spec_f64.body_text
+    assert spec_f32 is not None
+    assert "tsl::simd<uint32_t, tsl::avx2>" in spec_f32.body_text
+    assert "::tsl::hand<tsl::simd<uint32_t, tsl::avx2>>" in spec_f32.body_text
+    assert spec_f64 is not None
+    assert "tsl::simd<uint64_t, tsl::avx2>" in spec_f64.body_text
+    assert "::tsl::hand<tsl::simd<uint64_t, tsl::avx2>>" in spec_f64.body_text
     assert "select(" not in spec_f32.body_text
     assert "select(" not in spec_f64.body_text
     assert rust_f32 is not None
-    assert "core::ptr::addr_of_mut!(result).cast::<u8>()" in rust_f32.body_text
-    assert "core::ptr::addr_of!(data_arr[0]).cast::<u8>()" in rust_f32.body_text
+    assert "Simd<u32, Avx2>" in rust_f32.body_text
+    assert "hand::<Simd<u32, Avx2>>" in rust_f32.body_text
 
 
 def test_lzc_scalar_float_bitwise_path_does_not_need_offset_base(
@@ -430,7 +436,7 @@ def test_native_mask_registration_per_profile(
     assert "native_mask<256" in _mask_line("skylake")  # avx2_vl native predicate
 
 
-def test_mask_all_and_zero_lower_for_native_predicate_masks(
+def test_mask_all_and_none_lower_for_native_predicate_masks(
     catalog: Catalog, machine_profiles
 ) -> None:
     cpp_true = _spec(catalog, machine_profiles, "skylake", "mask_true", "avx512", "ui32")

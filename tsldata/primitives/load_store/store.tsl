@@ -52,11 +52,19 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
           reasons [raw_pointer]
         implementation:
           tsil """
-            var<const_infer>(values, call<primitive=to_array[Vec]>(data));
             loop<backend, unroll>(idx, 0, value(vector::length), 1)  {
-              *ptr_add_mut(ptr, idx) = values[idx];
+              *ptr_add_mut(ptr, idx) = data[idx];
             }
           """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [compiler_builtin, raw_memory, raw_pointer]
+        implementation:
+          tsil "mem<copy>(ptr, &data, sizeof(data));"
     [avx512, avx2, avx2_vl, sse, sse_vl]:
       ?i?:
         requires:
@@ -343,6 +351,26 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
               );
             }
           """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [compiler_builtin, raw_memory, raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(packed))) {
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
+              *(cast<reinterpret, type=ptr>(type(vector::imask), ptr)) = imask;
+            } else<generation> {
+              mem<copy>(
+                cast<reinterpret, type=ptr>(void, ptr),
+                cast<reinterpret, type=const_ptr>(void, &mask),
+                sizeof(mask)
+              );
+            }
+          """
     [avx2, sse, neon, wasm128]:
       arith:
         requires:
@@ -374,15 +402,14 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer, intrinsic]
+          reasons [raw_pointer]
         implementation:
           tsil """
             if<generation>(value(primitive::attribute(packed))) {
               let<type>(UBase, type(base::unsigned_of(type(base::in))));
               let<type>(UVec, type(vector::as_base(UBase)));
-              var<const_infer>(all, call<primitive=mask_true[Vec]>());
               var<const_infer>(idx, call<primitive=sequence[UVec]>());
-              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(UBase)));
+              var<const_infer>(lanes, value(generic::runtime_length(UVec)));
               var<const_infer>(nbytes, ((lanes + 7) >> 3));
               var<const_infer>(bytes, cast<reinterpret, type=ptr>(type(scalar::ui8), ptr));
 
@@ -391,10 +418,13 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
               }
 
               loop<backend>(lane, 0, lanes, 1) {
-                var<const_infer>(one, intrin<svcmpeq_n, build[suffix=base::unsigned_of(base::in)]>(
-                  all, idx, cast<static>(UBase, lane)
+                var<const_infer>(one, call<primitive=equal[UVec]>(
+                  idx,
+                  call<primitive=set1[UVec]>(cast<static>(UBase, lane))
                 ));
-                if (intrin<svptest_any>(one, mask)) {
+                if (call<primitive=mask_population_count[UVec]>(
+                  call<primitive=mask_binary_and[UVec]>(one, mask)
+                ) != 0) {
                   *ptr_add_mut(bytes, lane >> 3) =
                     *ptr_add(bytes, lane >> 3) |
                     cast<static>(type(scalar::ui8), (1 << (lane & 7)));
@@ -463,9 +493,10 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
     - {tags [scalar, edge], attrs [aligned=false], type "f64", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
   # avx512 omits this to avoid duplicates when scalar equals mask.
   impls:
-    [avx2,sse,neon,scalar,generic,oneapi_fpga,wasm128]:
+    [clang_v128,avx2,sse,neon,scalar,generic,oneapi_fpga,wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2 []
           sse []
           neon []
@@ -593,9 +624,10 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
               complete(intrin<mask_storeu, build>(ptr, mask, data));
             }
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2 [avx2]
           sse  [sse2]
           neon [neon]

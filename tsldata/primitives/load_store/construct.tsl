@@ -156,6 +156,15 @@ prim<v:=s> set1(value):
           reasons []
         implementation:
           tsil "complete(value);"
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(cast<static>(type(vector::register), value));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -211,9 +220,10 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
     - {tags [masked, set1, basic], type "f64", case {inputs [2, [1.0, -2.0], -2.25], expected [1.0, -2.25]}}
     - {tags [masked, set1, edge], type "f64", case {inputs [3, [1.0, -2.0], -2.25], expected [-2.25, -2.25]}}
   impls:
-    [avx512, avx2, sse, neon, wasm128]:
+    [clang_v128, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -325,6 +335,15 @@ prim<v:=()>[value=zero] set_zero():
           reasons []
         implementation:
           tsil "complete(cast<static>(type(base::in), 0));"
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(cast<static>(type(vector::register), cast<static>(type(base::in), 0)));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -404,9 +423,9 @@ prim<v:=()>[value=zero] set_zero():
       arith:
         requires [simd128]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             complete(
@@ -438,6 +457,18 @@ prim<v:=()>[value=undef] set_undef():
         implementation:
           tsil """
               var<typed>(type(base::in), result, value(uninit::scalar));
+              complete(result);
+            """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              var<typed>(type(vector::register), result, value(uninit::array));
               complete(result);
             """
     [generic, oneapi_fpga]:
@@ -671,14 +702,80 @@ prim<v:=(lanes<s>)> set(values):
               )
             );
           """
-    [neon, sve, generic, oneapi_fpga, wasm128]:
+    clang_v128:
       arith:
-        requires:
-          neon [neon]
-          sve [sve]
-          generic []
-          oneapi_fpga []
-          wasm128 [simd128]
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          # ext_vector_type aggregate initialization is lane-zero first, while set's
+          # public lane-list contract is highest-lane first.
+          tsil """
+            complete(type(vector::register){
+              lanes<at>(values, value(vector::length) - 1)
+              loop<generation>(i, 1, value(vector::length), 1) {
+                , lanes<at>(values, value(vector::length) - 1 - i)
+              }
+            });
+          """
+    neon:
+      arith:
+        requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation>(i, 0, value(vector::length), 1) {
+              result = call<primitive=insert_value[Vec, i]>(
+                result,
+                lanes<at>(values, value(vector::length) - 1 - i)
+              );
+            }
+            complete(result);
+          """
+    wasm128:
+      ?i?:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation>(i, 0, value(vector::length), 1) {
+              result = call<primitive=insert_value[Vec, i]>(
+                result,
+                lanes<at>(values, value(vector::length) - 1 - i)
+              );
+            }
+            complete(result);
+          """
+      f?:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation>(i, 0, value(vector::length), 1) {
+              result = call<primitive=insert_value[Vec, i]>(
+                result,
+                cast<static>(type(base::in), lanes<at>(values, value(vector::length) - 1 - i))
+              );
+            }
+            complete(result);
+          """
+    sve:
+      arith:
+        requires [sve]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -692,6 +789,26 @@ prim<v:=(lanes<s>)> set(values):
               }
                complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr())) ;
             """
+    [generic, oneapi_fpga]:
+      arith:
+        requires:
+          generic []
+          oneapi_fpga []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<backend>(i, 0, value(vector::length), 1) {
+              result[i] = cast<static>(
+                type(base::in),
+                values[value(vector::length) - 1 - i]
+              );
+            }
+            complete(result);
+          """
     scalar:
       arith:
         requires []

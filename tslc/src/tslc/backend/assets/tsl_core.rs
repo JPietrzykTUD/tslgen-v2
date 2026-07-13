@@ -535,11 +535,11 @@ pub mod detail {
     pub mod helpers {
     use super::super::*;
 
-    pub fn arith_add<T: core::ops::Add<Output = T>>(a: T, b: T) -> T {
-        a + b
+    pub fn arith_add<T: LaneArith>(a: T, b: T) -> T {
+        a.tsl_add(b)
     }
-    pub fn arith_mul<T: core::ops::Mul<Output = T>>(a: T, b: T) -> T {
-        a * b
+    pub fn arith_mul<T: LaneArith>(a: T, b: T) -> T {
+        a.tsl_mul(b)
     }
     // Remainder for emulated `mod` loops. Rust `%` is integer remainder / float fmod, so one
     // bound covers both; counterpart to C++ `tsl::detail::helpers::arith_rem`.

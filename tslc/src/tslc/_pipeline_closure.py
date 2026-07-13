@@ -36,35 +36,35 @@ def _prune_unresolved(
     satisfy bare calls that lower to that one emitted specialization.
     """
 
-    valid = {_slot_key(slot, split_names) for slot in slots}
+    valid = set(slots)
     changed = True
     while changed:
         changed = False
+        available = {_slot_key(slot, split_names) for slot in valid}
         for slot in slots:
-            slot_key = _slot_key(slot, split_names)
-            if slot_key not in valid:
+            if slot not in valid:
                 continue
             origins = {
                 origin.dependency: origin for origin in slot.callee_origins
             }
             for dependency in slot.callees:
                 resolved = _dependency_key(slot, dependency, split_names)
-                if resolved not in valid:
+                if resolved not in available:
                     slot.unresolved_callee = origins.get(
                         dependency,
                         CallDependencyOrigin(dependency, "implementation"),
                     )
-                    valid.discard(slot_key)
+                    valid.discard(slot)
                     changed = True
                     break
 
-    live_slots = [slot for slot in slots if _slot_key(slot, split_names) in valid]
+    live_slots = [slot for slot in slots if slot in valid]
     _propagate_transitive_call_facts(live_slots, split_names)
 
     grouped: dict[str, dict[str, list[LoweredSpecialization]]] = {}
     pruned: list[_LoweredSlot] = []
     for slot in slots:
-        if _slot_key(slot, split_names) in valid:
+        if slot in valid:
             grouped.setdefault(slot.backend, {}).setdefault(
                 slot.spec.primitive_name, []
             ).append(slot.spec)

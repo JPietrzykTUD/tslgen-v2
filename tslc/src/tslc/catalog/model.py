@@ -93,6 +93,28 @@ class ImplementationVariant:
 
 
 @dataclass(frozen=True, slots=True)
+class TargetConstraint:
+    """Relations accepted by a target-axis ``where`` implementation body."""
+
+    family: str | None = None
+    width: str | None = None
+
+    def matches(self, source: "Extension", target: "Extension") -> bool:
+        if self.family is not None:
+            if self.family != "same_as" or source.family != target.family:
+                return False
+        if self.width is None:
+            return True
+        if source.vector_bits_kind != "fixed" or target.vector_bits_kind != "fixed":
+            return False
+        if self.width == "smaller_than":
+            return 0 < target.vector_bits < source.vector_bits
+        if self.width == "larger_than":
+            return target.vector_bits > source.vector_bits > 0
+        return False
+
+
+@dataclass(frozen=True, slots=True)
 class Implementation:
     """One source-authored body for a (extension, type-group) selector path."""
 
@@ -107,6 +129,7 @@ class Implementation:
     # branch below it (the target type-group `?i?` / a target extension name `sse`). The
     # source type-group stays in `type_group`. None for ordinary single-axis primitives.
     to_target_group: str | None = None
+    target_constraint: TargetConstraint | None = None
     # Per-impl override of the extension's ``unroll_variants`` default. None inherits the
     # extension's value; True/False forces it for this body. Only meaningful on a sized
     # extension: when effective-true, a size-changing body is monomorphized over the
@@ -320,6 +343,9 @@ class MaskPolicy:
     - ``"bool"`` (scalar): the mask is a ``bool``.
     - ``"lane_bitmask"`` (sse/avx2): the mask *is* the vector register (all-ones /
       all-zeros per lane), so ``mask_type = register_type``.
+    - ``"comparison_lane_vector"`` (compiler vectors): the mask is the exact
+      lane vector produced by comparing two data registers. It has the data
+      vector's lane count and lane width with all-ones / all-zeros truth values.
     - ``"exact_lane_bitmask"`` (sized generic-like vectors): the mask is an
       integer-like bitset with exactly one bit per lane; backend spellings may
       name a lane-parameterized type such as ``ac_int<LANES, false>``.
@@ -391,11 +417,24 @@ class BackendExtensionMetadata:
     """Backend-specific extension facts consumed by code generation or validation."""
 
     compile_guards: tuple[BackendCompileGuard, ...] = ()
+    # Optional generated-header group. Extensions in a named group are emitted in
+    # a dedicated opt-in header instead of the profile's default header.
+    header_group: str | None = None
+    # CMake compiler IDs that expose this opt-in header group.
+    compiler_ids: tuple[str, ...] = ()
+    # None inherits/defaults to true. Compiler-vector overlays set this false so
+    # dataparallel::native/fixed<N> continue to resolve to the hardware substrate.
+    dataparallel_inference: bool | None = None
     type_name: str | None = None
     arch_module: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "compile_guards", tuple(self.compile_guards))
+        object.__setattr__(self, "compiler_ids", tuple(self.compiler_ids))
+
+    @property
+    def participates_in_dataparallel_inference(self) -> bool:
+        return self.dataparallel_inference is not False
 
 
 @dataclass(frozen=True, slots=True)
@@ -558,6 +597,10 @@ class Extension:
 
     def headers_for_backend(self, backend_id: str) -> tuple[str, ...]:
         return self.backend_headers.get(backend_id, ())
+
+    def header_group_for_backend(self, backend_id: str) -> str | None:
+        metadata = self.metadata.backend.get(backend_id)
+        return None if metadata is None else metadata.header_group
 
 
 @dataclass(frozen=True, slots=True)

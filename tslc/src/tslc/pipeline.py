@@ -229,12 +229,12 @@ class _GenerationSession:
         selected_extensions: dict[str, Extension] = {}
         all_backend_ids = frozenset(capability.backend_id for capability in self.backends)
         worklist = [
-            (primitive, all_backend_ids)
+            (primitive, self.type_tags, all_backend_ids)
             for primitive in _requested_primitives(self.request, self.inputs.catalog)
         ]
         if self.request.test_harness:
             worklist.extend(
-                (name, all_backend_ids)
+                (name, self.type_tags, all_backend_ids)
                 for name in (
                     self.inputs.test_harness.from_array,
                     self.inputs.test_harness.to_array,
@@ -246,27 +246,44 @@ class _GenerationSession:
             )
         for capability in self.backends:
             worklist.extend(
-                (name, frozenset({capability.backend_id}))
+                (name, self.type_tags, frozenset({capability.backend_id}))
                 for name in capability.closure_seed_primitives(self.inputs.catalog)
             )
-        processed: dict[str, set[str]] = {}
+        processed: dict[tuple[str, str], set[str]] = {}
         while worklist:
-            primitive, target_backends = worklist.pop(0)
-            remaining_backends = target_backends - processed.get(primitive, set())
-            if not remaining_backends:
-                continue
-            primitive_slots, discovered_primitives = self._process_primitive(
-                profile,
-                profile_name,
-                primitive,
-                selected_extensions,
-                remaining_backends,
-            )
-            processed.setdefault(primitive, set()).update(remaining_backends)
-            lowered_specs.extend(primitive_slots)
-            for dependency_primitive in discovered_primitives:
-                if remaining_backends - processed.get(dependency_primitive, set()):
-                    worklist.append((dependency_primitive, remaining_backends))
+            primitive, requested_types, target_backends = worklist.pop(0)
+            for backend in sorted(target_backends):
+                remaining_types = tuple(
+                    type_tag
+                    for type_tag in requested_types
+                    if backend not in processed.get((primitive, type_tag), set())
+                )
+                if not remaining_types:
+                    continue
+                primitive_slots, discovered_dependencies = self._process_primitive(
+                    profile,
+                    profile_name,
+                    primitive,
+                    remaining_types,
+                    selected_extensions,
+                    frozenset({backend}),
+                )
+                for type_tag in remaining_types:
+                    processed.setdefault((primitive, type_tag), set()).add(backend)
+                lowered_specs.extend(primitive_slots)
+                for dependency_primitive, dependency_type, dependency_backend in (
+                    discovered_dependencies
+                ):
+                    if dependency_backend not in processed.get(
+                        (dependency_primitive, dependency_type), set()
+                    ):
+                        worklist.append(
+                            (
+                                dependency_primitive,
+                                (dependency_type,),
+                                frozenset({dependency_backend}),
+                            )
+                        )
 
         grouped, pruned = _prune_unresolved(lowered_specs, self.inputs.split_names)
         for slot in pruned:
@@ -295,16 +312,17 @@ class _GenerationSession:
         profile: MachineProfile,
         profile_name: str,
         primitive: str,
+        type_tags: tuple[str, ...],
         selected_extensions: dict[str, Extension],
         backend_ids: frozenset[str],
-    ) -> tuple[list["_LoweredSlot"], list[str]]:
+    ) -> tuple[list["_LoweredSlot"], tuple[tuple[str, str, str], ...]]:
         catalog = self.inputs.catalog
         selection = self.selector.select_profile(
-            catalog, profile, primitive, self.type_tags
+            catalog, profile, primitive, type_tags
         )
         self.diagnostics.extend(selection.diagnostics)
         lowered_slots: list[_LoweredSlot] = []
-        discovered_primitives: list[str] = []
+        discovered_dependencies: set[tuple[str, str, str]] = set()
 
         for slot in selection.selected:
             _record_render_extensions(catalog, selected_extensions, slot)
@@ -312,11 +330,14 @@ class _GenerationSession:
                 slot.implementation.body_text,
                 source=slot.implementation.body_source,
             )
-            slot_lowered = False
-            slot_dependencies: set[CallDependency] = set()
             for capability in self.backends:
                 backend = capability.backend_id
                 if backend not in backend_ids:
+                    continue
+                if not slot.extension.supports_backend(backend):
+                    # Backend support is an extension admission fact, not a
+                    # lowering coverage attempt. Direct Lowerer use still
+                    # diagnoses an unsupported extension/backend pair.
                     continue
                 dialect = capability.create_dialect(catalog)
                 lowered = self.lowerer.lower(
@@ -342,19 +363,13 @@ class _GenerationSession:
                         callee_origins=callee_origins,
                     )
                 )
-                slot_dependencies.update(callees)
-                slot_lowered = True
-
-            if slot_lowered:
-                discovered_primitives.extend(
-                    dependency_primitive
-                    for dependency_primitive in sorted(
-                        {dependency.primitive for dependency in slot_dependencies}
-                    )
-                    if catalog.primitives_named(dependency_primitive, unmasked=False)
+                discovered_dependencies.update(
+                    (dependency.primitive, dependency.source.base_tag, backend)
+                    for dependency in callees
+                    if catalog.primitives_named(dependency.primitive, unmasked=False)
                 )
 
-        return lowered_slots, discovered_primitives
+        return lowered_slots, tuple(sorted(discovered_dependencies))
 
     def _record_lowering_diagnostics(
         self,
@@ -413,7 +428,11 @@ def _record_render_extensions(
     selected_extensions: dict[str, Extension],
     slot: SelectedImplementation,
 ) -> None:
-    selected_extensions[slot.extension.isa_name] = slot.extension
+    _record_preferred_render_extension(selected_extensions, slot.extension)
+    if slot.fixed_fallback_extension is not None:
+        _record_preferred_render_extension(
+            selected_extensions, slot.fixed_fallback_extension
+        )
     if (
         slot.primitive.result_target is None
         or slot.primitive.result_target[0] != RESULT_DIM_EXTENSION
@@ -422,7 +441,30 @@ def _record_render_extensions(
         return
     target_extension = catalog.extensions.get(slot.to_target)
     if target_extension is not None:
-        selected_extensions[target_extension.isa_name] = target_extension
+        _record_preferred_render_extension(selected_extensions, target_extension)
+
+
+def _record_preferred_render_extension(
+    selected_extensions: dict[str, Extension],
+    extension: Extension,
+) -> None:
+    """Keep the most capable active variant for one emitted public ISA tag.
+
+    Internal variants such as ``avx2_vl`` and their base ``avx2`` both render as
+    ``avx2``. Dependency closure can discover a base extension later as a fixed-width
+    fallback or representation target; that must not overwrite the active variant's
+    native-predicate mask policy.
+    """
+
+    current = selected_extensions.get(extension.isa_name)
+    if current is None or _render_extension_priority(extension) > _render_extension_priority(
+        current
+    ):
+        selected_extensions[extension.isa_name] = extension
+
+
+def _render_extension_priority(extension: Extension) -> tuple[int, str]:
+    return (extension.metadata.native_sort_order or 0, extension.name)
 
 
 def _pruned_reason(slot: "_LoweredSlot") -> str:

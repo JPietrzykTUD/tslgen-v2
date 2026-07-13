@@ -10,6 +10,8 @@ from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.dependencies import (
     CallDependencyOrigin,
+    VectorIdentity,
+    resolve_lowered_call_vector,
     resolve_lowered_call_dependency,
 )
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
@@ -61,6 +63,13 @@ class CallLowerer:
         # template/const-generic args forwarded into the callee's wrapper (e.g.
         # `@self[GenericVec, shift, PreserveSign]` delegating with the in-scope immediate + param).
         entries = list(parsed.type_args)
+        source_identity = (
+            resolve_lowered_call_vector(entries[0], context, self._evaluator)
+            if entries
+            else None
+        ) or VectorIdentity(
+            context.env.type_tag, context.env.extension.isa_name
+        )
         immediate_forwarded = (
             context.env.immediate_name is not None
             and context.env.immediate_name in entries[1:]
@@ -77,7 +86,7 @@ class CallLowerer:
                 return region.full_text
         extra_args: list[str] = []
         for entry in entries[1:]:
-            rendered = self._render_call_arg(entry, context)
+            rendered = self._render_call_arg(entry, context, source_identity)
             if rendered is None:
                 context.effects.skip(
                     "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
@@ -165,7 +174,12 @@ class CallLowerer:
             return "true" if resolved.value else "false"
         return value
 
-    def _render_call_arg(self, entry: str, context: LoweringSession) -> str | None:
+    def _render_call_arg(
+        self,
+        entry: str,
+        context: LoweringSession,
+        source: VectorIdentity,
+    ) -> str | None:
         """A forwarded call-bracket arg (entries 1..) as a target template/const-generic arg:
         a query that resolves to a `TextValue` spelling, or a bare `generic_params` name (e.g.
         `PreserveSign`) passed through verbatim. Returns None when it is neither (so the caller
@@ -201,7 +215,7 @@ class CallLowerer:
             return entry
         extension = context.env.catalog.extensions.get(entry)
         if extension is not None:
-            base = context.env.backend.types.scalar_spelling(context.env.type_tag)
+            base = context.env.backend.types.scalar_spelling(source.base_tag)
             return (
                 _vector_type_for_extension(base, extension, context)
                 if base is not None
@@ -214,9 +228,17 @@ class CallLowerer:
         # wrapper takes as its second type param: `simd<ToBase, current_ext>`.
         if isinstance(value, TypeValue):
             base = context.env.backend.types.scalar_spelling(value.type_tag)
+            extension = next(
+                (
+                    candidate
+                    for candidate in context.env.catalog.extensions.values()
+                    if candidate.isa_name == source.extension_isa
+                ),
+                None,
+            )
             return (
-                _vector_type_for_extension(base, context.env.extension, context)
-                if base is not None
+                _vector_type_for_extension(base, extension, context)
+                if base is not None and extension is not None
                 else None
             )
         if isinstance(value, VectorValue):  # an already-vector target -> its spelling

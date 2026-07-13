@@ -27,6 +27,12 @@ class _CppTypes:
         # representation-change uses the impl's lane template parameter.
         return f"tsl::simd<{base_spelling}, tsl::{extension_name}<{lanes}>>"
 
+    def fixed_vector_spelling(self, base_spelling: str, lanes: int) -> str:
+        return (
+            "::tsl::dataparallel::simd_for_t<"
+            f"::tsl::dataparallel::fixed<{lanes}>, {base_spelling}>"
+        )
+
     def target_register_spelling(
         self,
         base_tag: str,

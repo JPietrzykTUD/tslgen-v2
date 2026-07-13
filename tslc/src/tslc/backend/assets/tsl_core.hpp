@@ -321,11 +321,31 @@ struct reg_param<simd<T, generic<LANES>>> {
 namespace detail::helpers {
 template <class T>
 inline T arith_add(T a, T b) {
-    return a + b;
+    if constexpr (std::is_integral_v<T>) {
+        using U = std::make_unsigned_t<T>;
+        const U result = static_cast<U>(a) + static_cast<U>(b);
+        if constexpr (std::is_signed_v<T>) {
+            return ::tsl::bit_cast<T>(result);
+        } else {
+            return result;
+        }
+    } else {
+        return a + b;
+    }
 }
 template <class T>
 inline T arith_mul(T a, T b) {
-    return a * b;
+    if constexpr (std::is_integral_v<T>) {
+        using U = std::make_unsigned_t<T>;
+        const U result = static_cast<U>(a) * static_cast<U>(b);
+        if constexpr (std::is_signed_v<T>) {
+            return ::tsl::bit_cast<T>(result);
+        } else {
+            return result;
+        }
+    } else {
+        return a * b;
+    }
 }
 // Remainder for emulated `mod` loops: integer `%`, or `std::fmod` for floats (where `%`
 // is ill-formed). Matches the frozen runtime-support `arith_rem`.

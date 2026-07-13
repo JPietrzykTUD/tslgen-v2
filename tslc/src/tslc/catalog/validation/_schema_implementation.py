@@ -24,6 +24,9 @@ _KNOWN_SAFETY_FIELDS = frozenset({"internal_unsafe", "caller_unsafe", "reasons"}
 _KNOWN_VARIANT_SAFETY_FIELDS = frozenset({"internal_unsafe", "reasons"})
 _KNOWN_VARIANT_FIELDS = frozenset({"safety", "tsil", "tsl"})
 _VARIANT_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_KNOWN_TARGET_CONSTRAINT_FIELDS = frozenset(
+    {"family", "width", "safety", "implementation", "variants"}
+)
 
 
 def validate_implementation_safety(
@@ -31,6 +34,8 @@ def validate_implementation_safety(
     diagnostics: list[Diagnostic],
 ) -> None:
     def walk(entry: ParsedImplementationSelectorEntry) -> None:
+        if entry.selector.text == "where":
+            _validate_target_constraint(entry, diagnostics)
         diagnose_duplicate_fields(
             tuple(field for field in entry.fields if field.key.text == "safety"),
             diagnostics,
@@ -60,6 +65,41 @@ def validate_implementation_safety(
 
     for entry in declaration.impl_entries:
         walk(entry)
+
+
+def _validate_target_constraint(
+    entry: ParsedImplementationSelectorEntry, diagnostics: list[Diagnostic]
+) -> None:
+    validate_known_fields(
+        entry.fields,
+        _KNOWN_TARGET_CONSTRAINT_FIELDS,
+        diagnostics,
+        owner="target constraint",
+    )
+    for name, allowed in (
+        ("family", frozenset({"same_as"})),
+        ("width", frozenset({"smaller_than", "larger_than"})),
+    ):
+        matches = tuple(field for field in entry.fields if field.key.text == name)
+        diagnose_duplicate_fields(matches, diagnostics, label=f"target constraint {name}")
+        if not matches:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-MALFORMED-TARGET-CONSTRAINT",
+                    message=f"target constraint requires a {name!r} relation",
+                    source=source_span(entry.source),
+                )
+            )
+            continue
+        value = field_text(matches[0])
+        if value not in allowed:
+            invalid_enum(
+                diagnostics,
+                matches[0],
+                f"target constraint {name} value {value!r}",
+                sorted(allowed),
+            )
 
 
 def _validate_implementation_body_field(

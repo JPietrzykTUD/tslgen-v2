@@ -29,7 +29,12 @@ def _generic_golden(case: ValueTestCasePlan) -> str:
         )
         lines.append(f"        for i in 0..{case.lanes} {{ a{position}[i] = in{position}[i]; }}")
         arg_names.append(f"a{position}")
-    call = f"{rust_raw_identifier(case.call_name)}::<Vec>({', '.join(arg_names)})"
+    template_args = ["Vec", *case.invocation.generic_defaults]
+    template_args.extend("_" for _ in range(case.invocation.inferred_type_args))
+    call = (
+        f"{rust_raw_identifier(case.call_name)}"
+        f"::<{', '.join(template_args)}>({', '.join(arg_names)})"
+    )
     if case.invocation.result_kind == "m":
         bits = ", ".join("true" if token_truthy(v) else "false" for v in case.expectation.values)
         lines.append(f"        let expected: [bool; {case.lanes}] = [{bits}];")
@@ -302,10 +307,15 @@ def _scalar_vector(case: ValueTestCasePlan) -> str:
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
     args = append_call_args(lines, case)
+    template_args = ["Vec"]
+    if case.index is not None and case.index.value is not None:
+        template_args.append(case.index.value)
+    template_args.extend(case.invocation.generic_defaults)
+    template_args.extend("_" for _ in range(case.invocation.inferred_type_args))
     lines.append(f"        let expected: [{case.base_spelling}; {case.lanes}] = [{expected}];")
     lines.append(
         f"        let result = {rust_raw_identifier(case.call_name)}"
-        f"::<Vec>({', '.join(args)});"
+        f"::<{', '.join(template_args)}>({', '.join(args)});"
     )
     lines.append(_lane_assert(case, case.lanes, "result"))
     lines.append("    }")

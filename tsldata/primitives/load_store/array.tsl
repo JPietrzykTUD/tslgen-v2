@@ -156,13 +156,13 @@ prim<s[]:=v> to_array(a):
       arith:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              intrin<svst1>(call<primitive=mask_true[Vec]>(), tmp.data(), a);
+              call<primitive=store[Vec], attrs[aligned=false]>(tmp.data(), a);
                complete(tmp) ;
             """
     [generic, oneapi_fpga]:
@@ -176,6 +176,19 @@ prim<s[]:=v> to_array(a):
           reasons []
         implementation:
           tsil "complete(a);"
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, raw_memory]
+        implementation:
+          tsil """
+            var<typed>(array_type<type(base::in), value(vector::length)>, result, value(uninit::array));
+            mem<copy>(result.data(), &a, sizeof(a));
+            complete(result);
+          """
     scalar:
       ?i?:
         requires []
@@ -239,16 +252,29 @@ prim<v:=s[]> from_array(data):
           tsil """
             complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
           """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, raw_memory]
+        implementation:
+          tsil """
+            var<typed>(type(vector::register), result, value(uninit::array));
+            mem<copy>(&result, data.as_ptr(), sizeof(result));
+            complete(result);
+          """
     sve:
       arith:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            complete(intrin<svld1>(call<primitive=mask_true[Vec]>(), data.as_ptr()));
+            complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
           """
     [sse, avx2, avx512, neon, wasm128]:
       arith:
@@ -302,6 +328,38 @@ prim<s:=v[idx]> extract_value(a):
   impls:
     avx512:
       arith:
+        requires [avx512f, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(Base, type(base::in));
+            let<type>(BitBase, type(base::unsigned_of(type(base::in))));
+            let<type>(InputChunkVec, type(vector::as(sse, type(base::in))));
+            let<type>(BitChunkVec, type(vector::as(sse, BitBase)));
+            var<const_infer>(q0, call<primitive=reinterpret[InputChunkVec, BitChunkVec]>(call<primitive=extract[Vec, sse, 0]>(a)));
+            var<const_infer>(q1, call<primitive=reinterpret[InputChunkVec, BitChunkVec]>(call<primitive=extract[Vec, sse, 1]>(a)));
+            var<const_infer>(q2, call<primitive=reinterpret[InputChunkVec, BitChunkVec]>(call<primitive=extract[Vec, sse, 2]>(a)));
+            var<const_infer>(q3, call<primitive=reinterpret[InputChunkVec, BitChunkVec]>(call<primitive=extract[Vec, sse, 3]>(a)));
+            var<const_typed>(type(scalar::size), lanes_per_chunk, 64 / value(type::size_bits(base::in)));
+            var<const_infer>(chunk_index, cast<static>(type(scalar::size), Index) / lanes_per_chunk);
+            var<typed>(type(scalar::ui64), chunk, cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(q0)));
+            if (chunk_index == 1) { chunk = cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q0, 8))); }
+            if (chunk_index == 2) { chunk = cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(q1)); }
+            if (chunk_index == 3) { chunk = cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q1, 8))); }
+            if (chunk_index == 4) { chunk = cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(q2)); }
+            if (chunk_index == 5) { chunk = cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q2, 8))); }
+            if (chunk_index == 6) { chunk = cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(q3)); }
+            if (chunk_index == 7) { chunk = cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q3, 8))); }
+            var<const_infer>(lane_shift,
+              (cast<static>(type(scalar::size), Index) % lanes_per_chunk) * value(type::size_bits(base::in))
+            );
+            var<const_infer>(lane_bits, cast<static>(BitBase, chunk >> lane_shift));
+            complete(cast<bitcast>(Base, lane_bits));
+          """
+      arith:
         requires [avx512f]
         safety:
           internal_unsafe false
@@ -314,6 +372,32 @@ prim<s:=v[idx]> extract_value(a):
             """
     avx2:
       arith:
+        requires [avx, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(Base, type(base::in));
+            let<type>(BitBase, type(base::unsigned_of(type(base::in))));
+            let<type>(InputChunkVec, type(vector::as(sse, type(base::in))));
+            let<type>(BitChunkVec, type(vector::as(sse, BitBase)));
+            var<const_infer>(low, call<primitive=reinterpret[InputChunkVec, BitChunkVec]>(call<primitive=extract[Vec, sse, 0]>(a)));
+            var<const_infer>(high, call<primitive=reinterpret[InputChunkVec, BitChunkVec]>(call<primitive=extract[Vec, sse, 1]>(a)));
+            var<const_typed>(type(scalar::size), lanes_per_chunk, 64 / value(type::size_bits(base::in)));
+            var<const_infer>(chunk_index, cast<static>(type(scalar::size), Index) / lanes_per_chunk);
+            var<typed>(type(scalar::ui64), chunk, cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(low)));
+            if (chunk_index == 1) { chunk = cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(low, 8))); }
+            if (chunk_index == 2) { chunk = cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(high)); }
+            if (chunk_index == 3) { chunk = cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(high, 8))); }
+            var<const_infer>(lane_shift,
+              (cast<static>(type(scalar::size), Index) % lanes_per_chunk) * value(type::size_bits(base::in))
+            );
+            var<const_infer>(lane_bits, cast<static>(BitBase, chunk >> lane_shift));
+            complete(cast<bitcast>(Base, lane_bits));
+          """
+      arith:
         requires [avx]
         safety:
           internal_unsafe false
@@ -325,6 +409,58 @@ prim<s:=v[idx]> extract_value(a):
                complete(arr[cast<static>(type(scalar::size), Index)]) ;
             """
     sse:
+      [?i8, ?i16, ?i32, ?i64]:
+        requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(Base, type(base::in));
+            let<type>(BitBase, type(base::unsigned_of(type(base::in))));
+            var<const_typed>(type(scalar::size), lanes_per_chunk, 64 / value(type::size_bits(base::in)));
+            var<const_infer>(chunk_index, cast<static>(type(scalar::size), Index) / lanes_per_chunk);
+            var<typed>(type(scalar::ui64), chunk, cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(a)));
+            if (chunk_index == 1) {
+              chunk = cast<static>(type(scalar::ui64), intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(a, 8)));
+            }
+            var<const_infer>(lane_shift,
+              (cast<static>(type(scalar::size), Index) % lanes_per_chunk) * value(type::size_bits(base::in))
+            );
+            var<const_infer>(lane_bits, cast<static>(BitBase, chunk >> lane_shift));
+            complete(cast<bitcast>(Base, lane_bits));
+          """
+      f32:
+        requires [sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            switch<compile>(Index) {
+              0 => { complete(intrin<_mm_cvtss_f32>(a)); }
+              1 => { complete(intrin<_mm_cvtss_f32>(intrin<_mm_shuffle_ps>(a, a, 1))); }
+              2 => { complete(intrin<_mm_cvtss_f32>(intrin<_mm_shuffle_ps>(a, a, 2))); }
+              3 => { complete(intrin<_mm_cvtss_f32>(intrin<_mm_shuffle_ps>(a, a, 3))); }
+              _ => { complete(cast<static>(type(base::in), 0)); }
+            }
+          """
+      f64:
+        requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            switch<compile>(Index) {
+              0 => { complete(intrin<_mm_cvtsd_f64>(a)); }
+              1 => { complete(intrin<_mm_cvtsd_f64>(intrin<_mm_unpackhi_pd>(a, a))); }
+              _ => { complete(cast<static>(type(base::in), 0)); }
+            }
+          """
       arith:
         requires [sse]
         safety:
@@ -337,17 +473,84 @@ prim<s:=v[idx]> extract_value(a):
                complete(arr[cast<static>(type(scalar::size), Index)]) ;
             """
     wasm128:
-      arith:
+      ?i8:
         requires [simd128]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-               var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
-               complete(arr[cast<static>(type(scalar::size), Index)]) ;
-            """
+            switch<compile>(Index) {
+              0 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=0]>(a, 0))); }
+              1 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=1]>(a, 1))); }
+              2 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=2]>(a, 2))); }
+              3 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=3]>(a, 3))); }
+              4 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=4]>(a, 4))); }
+              5 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=5]>(a, 5))); }
+              6 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=6]>(a, 6))); }
+              7 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=7]>(a, 7))); }
+              8 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=8]>(a, 8))); }
+              9 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=9]>(a, 9))); }
+              10 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=10]>(a, 10))); }
+              11 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=11]>(a, 11))); }
+              12 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=12]>(a, 12))); }
+              13 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=13]>(a, 13))); }
+              14 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=14]>(a, 14))); }
+              15 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=15]>(a, 15))); }
+              _ => { complete(cast<static>(type(base::in), 0)); }
+            }
+          """
+      ?i16:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            switch<compile>(Index) {
+              0 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=0]>(a, 0))); }
+              1 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=1]>(a, 1))); }
+              2 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=2]>(a, 2))); }
+              3 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=3]>(a, 3))); }
+              4 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=4]>(a, 4))); }
+              5 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=5]>(a, 5))); }
+              6 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=6]>(a, 6))); }
+              7 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=7]>(a, 7))); }
+              _ => { complete(cast<static>(type(base::in), 0)); }
+            }
+          """
+      [?i32, f32]:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            switch<compile>(Index) {
+              0 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=0]>(a, 0))); }
+              1 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=1]>(a, 1))); }
+              2 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=2]>(a, 2))); }
+              3 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=3]>(a, 3))); }
+              _ => { complete(cast<static>(type(base::in), 0)); }
+            }
+          """
+      [?i64, f64]:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            switch<compile>(Index) {
+              0 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=0]>(a, 0))); }
+              1 => { complete(cast<static>(type(base::in), intrin<extract_lane, build[suffix=base::in, immediate(1)=1]>(a, 1))); }
+              _ => { complete(cast<static>(type(base::in), 0)); }
+            }
+          """
     neon:
       arith:
         requires [neon]
@@ -358,26 +561,75 @@ prim<s:=v[idx]> extract_value(a):
         implementation:
           tsil "complete(intrin<vgetq_lane, build[suffix=base::in, immediate(1)=Index]>(a, Index));"
     sve:
-      arith:
+      [si8, ui8]:
         requires [sve]
         safety:
           internal_unsafe true
           caller_unsafe false
-          reasons [intrinsic, raw_pointer]
+          reasons [intrinsic]
         implementation:
           tsil """
-               let<type>(Base, type(base::in));
-               var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-               var<const_infer>(values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
-               intrin<svst1, build>(call<primitive=mask_true[Vec]>(), values, a);
-               var<const_infer>(result, values[cast<static>(type(scalar::size), Index)]);
-               std::free(values);
-               complete(result);
-            """
-    [generic, oneapi_fpga]:
+            let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
+            let<type>(IndexVec, type(vector::as_base(IndexBase)));
+            var<const_infer>(index_lane, call<primitive=equal[IndexVec]>(
+              call<primitive=sequence[IndexVec]>(),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, Index))
+            ));
+            complete(intrin<svlastb, build>(index_lane, a));
+          """
+      [si16, ui16]:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
+            let<type>(IndexVec, type(vector::as_base(IndexBase)));
+            var<const_infer>(index_lane, call<primitive=equal[IndexVec]>(
+              call<primitive=sequence[IndexVec]>(),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, Index))
+            ));
+            complete(intrin<svlastb, build>(index_lane, a));
+          """
+      [si32, ui32, f32]:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
+            let<type>(IndexVec, type(vector::as_base(IndexBase)));
+            var<const_infer>(index_lane, call<primitive=equal[IndexVec]>(
+              call<primitive=sequence[IndexVec]>(),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, Index))
+            ));
+            complete(intrin<svlastb, build>(index_lane, a));
+          """
+      [si64, ui64, f64]:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
+            let<type>(IndexVec, type(vector::as_base(IndexBase)));
+            var<const_infer>(index_lane, call<primitive=equal[IndexVec]>(
+              call<primitive=sequence[IndexVec]>(),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, Index))
+            ));
+            complete(intrin<svlastb, build>(index_lane, a));
+          """
+    [generic, clang_v128, oneapi_fpga]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
         safety:
           internal_unsafe false
@@ -394,3 +646,83 @@ prim<s:=v[idx]> extract_value(a):
           reasons []
         implementation:
           tsil "complete(a);"
+
+prim<v:=(v,s)> insert_value(a, value):
+  brief_description "Replaces the scalar lane at the compile-time index."
+  detailed_description """
+    Returns a vector equal to `a` except that the lane selected by the
+    generation-time immediate `Index` contains `value`.
+    """
+  semantics """
+    input: register a, scalar value, immediate Index
+    result = a
+    result[Index] = value
+    return result
+    """
+  generic_params:
+    Index {kind int, default 0}
+  tests:
+    - {tags [basic], type "ui32", index 0, case {inputs [[10, 20, 30, 40], 99], expected [99, 20, 30, 40]}}
+    - {tags [edge], type "si32", index 3, case {inputs [[1, -2, 3, -4], -99], expected [1, -2, 3, -99]}}
+    - {tags [basic], type "ui8", index 15, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 255], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 255]}}
+    - {tags [edge], type "f64", index 1, case {inputs [[1.0, -2.0], INFINITY], expected [1.0, INFINITY]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(value);"
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
+            let<type>(IndexVec, type(vector::as_base(IndexBase)));
+            var<const_infer>(index_lane, call<primitive=equal[IndexVec]>(
+              call<primitive=sequence[IndexVec]>(),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, Index))
+            ));
+            complete(call<primitive=mov, attrs[mask=pass_through]>(
+              index_lane,
+              a,
+              call<primitive=set1[Vec]>(value)
+            ));
+          """
+    [generic, clang_v128, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128, sve]:
+      arith:
+        requires:
+          generic []
+          clang_v128 []
+          avx512 [avx512f]
+          avx2_vl [avx, avx512f, avx512vl]
+          avx2 [avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+          sse [sse]
+          neon [neon]
+          wasm128 [simd128]
+          sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(Imask, type(vector::imask));
+            var<const_infer>(lane_bit, (cast<static>(Imask, 1)) << Index);
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
+                call<primitive=to_mask[Vec]>(lane_bit),
+                a,
+                call<primitive=set1[Vec]>(value)
+              )
+            );
+          """

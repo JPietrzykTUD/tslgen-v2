@@ -397,24 +397,91 @@ prim<v:=()> sequence():
               indexes
             ));
           """
-    [neon, generic, oneapi_fpga, wasm128]:
+    clang_v128:
       arith:
-        requires:
-          neon [neon]
-          generic []
-          oneapi_fpga []
-          wasm128 [simd128]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
           reasons []
         implementation:
           tsil """
-            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+            complete(type(vector::register){
+              cast<static>(type(base::in), 0)
+              loop<generation>(i, 1, value(vector::length), 1) {
+                , cast<static>(type(base::in), value(i))
+              }
+            });
+          """
+    neon:
+      arith:
+        requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation>(i, 1, value(vector::length), 1) {
+              result = call<primitive=insert_value[Vec, i]>(
+                result,
+                cast<static>(type(base::in), value(i))
+              );
+            }
+            complete(result);
+          """
+    wasm128:
+      ?i?:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation>(i, 1, value(vector::length), 1) {
+              result = call<primitive=insert_value[Vec, i]>(
+                result,
+                cast<static>(type(base::in), value(i))
+              );
+            }
+            complete(result);
+          """
+      f?:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation>(i, 1, value(vector::length), 1) {
+              result = call<primitive=insert_value[Vec, i]>(
+                result,
+                cast<static>(type(base::in), value(i))
+              );
+            }
+            complete(result);
+          """
+    [generic, oneapi_fpga]:
+      arith:
+        requires:
+          generic []
+          oneapi_fpga []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<backend>(i, 0, value(vector::length), 1) {
               result[i] = cast<static>(type(base::in), i);
             }
-            complete(call<primitive=from_array[Vec]>(result));
+            complete(result);
           """
     scalar:
       arith:
@@ -444,8 +511,10 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
     - {tags [edge], type "si32", case {inputs [-5, 2], expected [-5, -3, -1, 1, 3, 5, 7, 9]}}
     - {tags [basic], type "ui8", case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31]}}
     - {tags [edge], type "ui8", case {inputs [2, 3], expected [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47]}}
+    - {tags [edge, wrap], type "ui8", case {inputs [250, 10], expected [250, 4, 14, 24, 34, 44, 54, 64, 74, 84, 94, 104, 114, 124, 134, 144]}}
     - {tags [basic], type "si8", case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31]}}
     - {tags [edge], type "si8", case {inputs [-3, -1], expected [-3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16, -17, -18]}}
+    - {tags [edge, wrap], type "si8", case {inputs [120, 10], expected [120, -126, -116, -106, -96, -86, -76, -66, -56, -46, -36, -26, -16, -6, 4, 14]}}
     - {tags [basic], type "ui16", case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15]}}
     - {tags [edge], type "ui16", case {inputs [2, 3], expected [2, 5, 8, 11, 14, 17, 20, 23]}}
     - {tags [basic], type "si16", case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15]}}
@@ -454,6 +523,8 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
     - {tags [edge], type "ui64", case {inputs [2, 3], expected [2, 5]}}
     - {tags [basic], type "si64", case {inputs [1, 2], expected [1, 3]}}
     - {tags [edge], type "si64", case {inputs [-3, -1], expected [-3, -4]}}
+    - {tags [basic], type "f32", case {inputs [1.5, 0.5], expected [1.5, 2.0, 2.5, 3.0]}}
+    - {tags [basic], type "f64", case {inputs [-1.0, 2.0], expected [-1.0, 1.0]}}
   impls:
     sve:
       ?i?:
@@ -482,27 +553,23 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
               cast<static>(IndexBase, 0),
               cast<static>(IndexBase, 1)
             ));
-            var<const_infer>(scale, intrin<svcvt_, build[infix=base::in, suffix=IndexBase, post=x]>(
-              call<primitive=mask_true[Vec]>(),
-              indexes
-            ));
-            complete(
-              intrin<svadd, build[post=x]>(
-                call<primitive=mask_true[Vec]>(),
-                intrin<svdup_n, build>(start),
-                intrin<svmul_n, build[post=x]>(
-                  call<primitive=mask_true[Vec]>(),
-                  scale,
-                  stepwidth
-                )
+            var<const_infer>(scale, call<primitive=cast[IndexVec, type(base::in)]>(indexes));
+            complete(call<primitive=add[Vec]>(
+              call<primitive=set1[Vec]>(start),
+              call<primitive=mul[Vec]>(
+                scale,
+                call<primitive=set1[Vec]>(stepwidth)
               )
-            );
+            ));
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
+    [clang_v128, avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
-          avx2 [avx]
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
           avx2_vl [avx]
           sse [sse, sse2]
           sse_vl [sse, sse2]
@@ -510,6 +577,25 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
           generic []
           oneapi_fpga []
           wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=add[Vec]>(
+                call<primitive=set1[Vec]>(start),
+                call<primitive=mul[Vec]>(
+                  call<primitive=sequence[Vec]>(),
+                  call<primitive=set1[Vec]>(stepwidth)
+                )
+              )
+            );
+          """
+    avx2:
+      arith:
+        requires [avx]
         safety:
           internal_unsafe false
           caller_unsafe false

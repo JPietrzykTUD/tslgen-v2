@@ -288,6 +288,26 @@ def test_pruned_variant_dependency_keeps_variant_origin() -> None:
     )
 
 
+def test_pruning_one_overload_keeps_live_sibling() -> None:
+    runtime = _slot("shift_like")
+    dependency = CallDependency(
+        primitive="missing",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    immediate = _slot(
+        "shift_like",
+        param_kinds=("v", "sImm"),
+        immediate=("shift", "u32"),
+        callees=frozenset({dependency}),
+    )
+
+    grouped, pruned = _prune_unresolved([runtime, immediate], frozenset())
+
+    assert grouped["rust"]["shift_like"] == [runtime.spec]
+    assert pruned == [immediate]
+
+
 def test_render_profile_features_include_transitive_lowered_requirements() -> None:
     profile = MachineProfile(
         name="fixture",

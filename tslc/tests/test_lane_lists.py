@@ -213,6 +213,24 @@ def test_generation_loop_expands_with_bound_lane_indexes() -> None:
     )
 
 
+def test_scoped_generation_loop_preserves_iteration_declaration_scope() -> None:
+    catalog, selected = _lane_list_catalog(
+        "loop<generation, scoped>(i, 0, value(vector::length), 1) { "
+        "auto lane = value(i); lane; "
+        "} complete(lanes<at>(values, value(vector::length) - 1));",
+        extension_name="simd128",
+        family="x86",
+        vector_bits=128,
+    )
+
+    result = Lowerer().lower(selected, catalog, create_backend_dialect(catalog, "cpp"))
+
+    assert result.diagnostics == ()
+    assert result.specialization is not None
+    assert result.specialization.body_text.count("{\n") == 4
+    assert result.specialization.body_text.count("auto lane") == 4
+
+
 def test_generation_loop_rejects_non_integer_bounds() -> None:
     catalog, selected = _lane_list_catalog(
         "loop<generation>(i, 0, LANES, 1) { lanes<at>(values, i); } "

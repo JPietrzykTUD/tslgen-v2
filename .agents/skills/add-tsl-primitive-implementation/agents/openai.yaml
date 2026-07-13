@@ -1,4 +1,4 @@
 interface:
   display_name: "Add TSL Primitive Implementation"
-  short_description: "Complete primitive specializations with coverage and value tests."
-  default_prompt: "Add or complete a TSL primitive implementation specialization."
+  short_description: "Build specializations from semantic TSL primitives."
+  default_prompt: "Use $add-tsl-primitive-implementation to add or complete a TSL primitive specialization."

@@ -133,6 +133,23 @@ def validate_cpp_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnos
                     )
                 )
                 continue
+            cpp_metadata = extension.metadata.backend.get("cpp")
+            if (
+                cpp_metadata is not None
+                and cpp_metadata.header_group is not None
+                and not cpp_metadata.compiler_ids
+            ):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-BACKEND-CPP-HEADER-GROUP-MISSING-COMPILER-IDS",
+                        message=(
+                            f"extension {extension.name!r} uses C++ header group "
+                            f"{cpp_metadata.header_group!r} without compiler_ids"
+                        ),
+                        source=extension.source,
+                    )
+                )
             if (
                 extension.mask_policy.kind == "exact_lane_bitmask"
                 and extension.mask_policy.spelling("cpp") is None
@@ -176,13 +193,31 @@ def validate_cpp_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnos
                         source=extension.source,
                     )
                 )
-        diagnostics.extend(
-            resolve_cpp_compile_guards(
-                emitted_extensions,
-                profile.extensions,
-                profile_name=profile.profile.name,
-            ).diagnostics
-        )
+        header_groups = {
+            (
+                extension.header_group_for_backend("cpp")
+                if (extension := profile.extensions.get(name)) is not None
+                else None
+            )
+            for name in emitted_extensions
+        }
+        for header_group in sorted(header_groups, key=lambda value: value or ""):
+            diagnostics.extend(
+                resolve_cpp_compile_guards(
+                    tuple(
+                        name
+                        for name in emitted_extensions
+                        if (
+                            extension.header_group_for_backend("cpp")
+                            if (extension := profile.extensions.get(name)) is not None
+                            else None
+                        )
+                        == header_group
+                    ),
+                    profile.extensions,
+                    profile_name=profile.profile.name,
+                ).diagnostics
+            )
     return tuple(diagnostics)
 
 

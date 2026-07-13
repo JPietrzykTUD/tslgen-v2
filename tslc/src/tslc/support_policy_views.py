@@ -41,8 +41,7 @@ def selectable_variants(
         and is_maskable_primitive(primitive, support)
     )
     if unmasked:
-        arity = len(unmasked[0].parameters)
-        return tuple(p for p in unmasked if len(p.parameters) == arity) + masked
+        return unmasked + masked
     if masked:
         return masked
     return catalog.primitives_named(primitive_name, unmasked=False)
@@ -111,15 +110,16 @@ def concrete_target_candidates(
     # target symbolically and works for ANY target, e.g. the generic vector's software
     # `convert_*` loop) — it draws the primitive's GLOBAL target set (the targets declared by the
     # other bodies). Extensions that declare their own targets keep exactly their chain's set.
-    has_own_target = any(
+    has_chain_target = any(
         impl.extension in chain
         and impl.to_target_group is not None
         and catalog.type_group_contains(impl.type_group, type_tag)
         for impl in primitive.implementations
     )
-    has_catch_all = not has_own_target and any(
+    has_unconstrained_catch_all = not has_chain_target and any(
         impl.extension in chain
         and impl.to_target_group is None
+        and impl.target_constraint is None
         and catalog.type_group_contains(impl.type_group, type_tag)
         for impl in primitive.implementations
     )
@@ -127,7 +127,7 @@ def concrete_target_candidates(
     for implementation in primitive.implementations:
         if implementation.to_target_group is None:
             continue
-        if not (has_catch_all or implementation.extension in chain):
+        if not (has_unconstrained_catch_all or implementation.extension in chain):
             continue
         if not catalog.type_group_contains(implementation.type_group, type_tag):
             continue
@@ -135,9 +135,45 @@ def concrete_target_candidates(
             if member.strip('"') not in support.target_marker_values:
                 targets.add(member)
     if dim == RESULT_DIM_EXTENSION:
+        source_extension = catalog.extensions.get(extension_name)
+        if source_extension is not None:
+            constraints = (
+                implementation.target_constraint
+                for implementation in primitive.implementations
+                if implementation.extension in chain
+                and implementation.target_constraint is not None
+                and catalog.type_group_contains(implementation.type_group, type_tag)
+            )
+            for constraint in constraints:
+                assert constraint is not None
+                targets.update(
+                    candidate_name
+                    for candidate_name, candidate in catalog.extensions.items()
+                    # Activation variants such as ``sse_vl`` share their public
+                    # ISA identity with the canonical ``sse`` target. A
+                    # representation target is keyed by that public identity,
+                    # so admitting both would emit duplicate backend impls.
+                    if candidate_name == candidate.isa_name
+                    if constraint.matches(source_extension, candidate)
+                )
         return tuple(sorted(t for t in targets if t in catalog.extensions))
     if dim == RESULT_DIM_BASE and primitive.attributes.get("cast") == "reinterpret":
-        return tuple(sorted(t for t in targets if support.same_type_width(t, type_tag)))
+        extension = catalog.extensions.get(extension_name)
+        # Scalar and lane-count-parametric vectors preserve their lane count
+        # when rebased, so a different scalar width would change total
+        # storage and cannot be a bit reinterpretation. Fixed/scalable
+        # register extensions preserve register width instead; rebasing them
+        # legitimately regroups the same bits into a different lane width.
+        if (
+            extension is None
+            or extension.vector_bits <= 0
+            or support.uses_sized_vector(extension)
+        ):
+            targets = {
+                target
+                for target in targets
+                if support.same_type_width(target, type_tag)
+            }
     return tuple(sorted(targets))
 
 

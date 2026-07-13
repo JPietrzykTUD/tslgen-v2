@@ -1,9 +1,17 @@
 ---
 name: add-tsl-primitive-implementation
-description: Add or complete a specialization of an existing TSL primitive. Use when Codex is asked to add a primitive implementation body for a specific extension, profile, type group, backend, or missing coverage slot, or to close generated build/value-test gaps for existing primitive source data.
+description: Add, complete, or refactor a specialization of an existing TSL primitive. Use when Codex is asked to add an implementation body for a specific extension, profile, type group, or backend; replace scattered intrinsic recipes with semantic TSL-primitive composition; close a missing coverage slot; or fix generated build/value-test gaps in existing primitive source data.
 ---
 
 # Add TSL Primitive Implementation
+
+## Semantic Boundary Rule
+
+- Let the primitive being implemented own an exact intrinsic that implements its complete contract.
+- Otherwise split the recipe into semantic operations and irreducible target mechanics. Express every semantic operation through a TSL primitive; do not inline that primitive's intrinsic recipe in the caller.
+- Keep representation shuffles, lane plumbing, mask packing, ABI adaptation, and immediate-only mechanics local when they have no useful target-independent contract.
+- Add a precursor primitive only for a stable, independently testable semantic operation. Repetition is evidence, not sufficient justification; never add a primitive merely to name an intrinsic sequence.
+- Treat adding a primitive as a public-corpus decision. Propose its contract and semantic names, but obtain TSL-maintainer approval before adding it unless the user has already authorized that prerequisite explicitly.
 
 ## Workflow
 
@@ -11,19 +19,28 @@ description: Add or complete a specialization of an existing TSL primitive. Use 
 2. Identify the exact coverage gap: primitive, signature shape, attributes, mask policy, extension/profile, data type or type group, backend, and failing render/build/value evidence.
 3. Define the supported matrix from current catalog data, support policy, generated profiles, and existing backend capabilities. Aim to cover every supported extension/profile and data type, but produce explicit diagnostics or skips for unsupported combinations rather than pretending they work.
 4. Choose the implementation strategy in this priority order:
-   - Direct hardware intrinsic call, when an available intrinsic exactly matches the primitive semantics for the concrete extension/type/backend.
-   - Composition of existing primitives, preserving signedness, floating behavior, masks, lanes, safety, undefined-behavior rules, immediates, and attributes. If required helper primitives are missing, add those first as a separate precursor slice unless the dependency is tiny and clearly in scope.
+   - A direct hardware intrinsic leaf when one intrinsic exactly implements the complete primitive contract for the concrete extension/type/backend.
+   - Otherwise, decompose the implementation into independently meaningful, target-independent semantic operations. Call an existing TSL primitive for every such operation, preserving signedness, floating behavior, masks, lanes, safety, undefined-behavior rules, immediates, and attributes. Do not reproduce that primitive's intrinsic implementation in the parent body.
+   - When a required semantic operation is absent, search for aliases and near-duplicates, then propose it as a precursor primitive. Specify its observable contract, signature, attributes, tests, dependency direction, and candidate semantic names; obtain the approval required by step 6; add, implement, and verify it before returning to the requested specialization.
+   - A documented target-local intrinsic sequence only for irreducible mechanics that cannot be represented honestly by existing primitives and do not define a useful independent TSL operation. Keep the sequence in the primitive that owns those semantics, state why no semantic primitive fits, and keep each exact intrinsic use at the lowest possible leaf. Do not create a public primitive solely to hide an ISA-specific recipe.
    - Explicit fallback through the generic extension, using the repo's existing array round-trip/generic-call pattern only when `to_array`, `from_array`, generic dispatch, and the target backend are available for the slot.
    - Deterministic unsupported diagnostic or skip explaining why the specialization cannot be implemented.
-5. Update `.tsl` source data first. Do not add renderer or backend hacks to compensate for missing primitive bodies, malformed source, or unsupported semantics.
-6. Add or update value tests that exercise the specialization's real edge cases: width, sign, floating corner behavior, masks, zero/pass-through policy, shift counts, immediates, lane order, and aliasing or alignment when relevant.
-7. Verify the implementation renders, builds, and passes generated value tests for every supported backend/language/profile/type affected by the change. Treat skipped generated cases as verification gaps that must be summarized, not as silent success.
+5. Sketch the primitive-call dependency direction before editing and identify which implementations terminate in exact intrinsic or generic leaves. Keep the graph acyclic: a precursor must not directly or transitively depend on the primitive being implemented. If implementing `A` through new primitive `B` would produce `A -> B -> A`, do not add `B` as a wrapper. Instead factor a lower-level operation below both, make one side an honest leaf, use an existing generic fallback, or stop and report the missing abstraction. Never rely on profile, type, backend, or selection conditions to make a catalog cycle harmless.
+6. Treat a new primitive as public domain vocabulary. Name it after observable semantics, never after an intrinsic, ISA, register shape, algorithm, or implementation recipe. The skill may recommend a contract, signature, attributes, and preferred name, but a TSL maintainer owns the decision to add it. Proceed without another checkpoint only when the user already authorized the prerequisite primitive explicitly.
+7. Update `.tsl` source data first. Do not add renderer or backend hacks to compensate for missing primitive bodies, malformed source, or unsupported semantics.
+8. Add or update value tests that exercise the specialization's real edge cases: width, sign, floating corner behavior, masks, zero/pass-through policy, shift counts, immediates, lane order, and aliasing or alignment when relevant.
+9. Verify the implementation renders, builds, and passes generated value tests for every supported backend/language/profile/type affected by the change. Treat skipped generated cases as verification gaps that must be summarized, not as silent success.
 
 ## Checks
 
 - Complete supported coverage is the target; unsupported coverage must remain explicit, deterministic, and explainable.
-- Prefer exact intrinsics over clever compositions, but do not use an intrinsic unless the semantics match the TSL primitive contract.
+- Prefer an exact intrinsic at a semantic leaf, but do not use an intrinsic unless its semantics match the TSL primitive contract.
 - Primitive composition must go through `call<...>` or other typed TSIL regions, not raw target-language rewrites.
+- Do not duplicate the intrinsic implementation of an operation that already has a suitable TSL primitive.
+- Do not create one primitive per intrinsic. Promote independently meaningful target-independent operations; keep representation shuffles, lane plumbing, and mask packing local when they have no honest standalone contract.
+- Treat a proposed composed primitive as domain vocabulary, not code deduplication. Add it when the combination itself has stable target-independent semantics, an independently testable contract, useful meaning beyond hiding one ISA recipe, and an acyclic dependency direction. Recurrence is supporting evidence, not the definition, and an arbitrary second call site is not required when the semantic boundary is already clear.
+- Keep an algorithmic recipe in the parent primitive when the combination has no useful semantics of its own.
+- Search for semantic aliases and near-duplicates before adding a primitive. Keep primitive names independent of the implementation technology.
 - Generic fallback is a last-resort implementation strategy, not a substitute for available hardware semantics.
 - Do not broaden a slice into a primitive-family rewrite unless the missing helper primitive or source shape is required to make the requested specialization honest.
 - Keep generated output deterministic and source-located diagnostics actionable for TSL authors.
@@ -43,6 +60,9 @@ description: Add or complete a specialization of an existing TSL primitive. Use 
 ## Stop Conditions
 
 - The requested specialization depends on a missing helper primitive or TSIL/source shape that is larger than the current slice.
+- A proposed helper would directly or transitively introduce a primitive-call cycle and no honest lower-level semantic split is clear.
+- A new primitive's semantic boundary, public contract, or name is novel or ambiguous and a TSL maintainer has not approved it.
+- A proposed primitive would only give a name to one target-specific intrinsic recipe without defining a useful target-independent operation; keep it as a documented leaf implementation or report it as unsupported instead.
 - Available intrinsics differ from the primitive's signedness, overflow, floating, mask, lane, or UB semantics and no safe composition exists.
 - The value-test oracle is missing or ambiguous for the affected type/profile/backend.
 - Required hardware/toolchain verification is unavailable and cannot be covered by SDE, QEMU, FPGA tooling, or an explicit injectable runner.

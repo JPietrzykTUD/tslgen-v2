@@ -12,9 +12,14 @@ CPP_VALUE_TEST_SUPPORT = CPP_VALUE_TEST_RENDERER.backend_support()
 def render_cpp_values_runner(
     profile: ValueTestProfilePlan, assets: RenderAssets
 ) -> str:
-    functions = [render_cpp_case(case) for case in profile.cases]
+    functions = [
+        _guarded(render_cpp_case(case), case.header_group) for case in profile.cases
+    ]
     body = "\n\n".join(functions)
-    call_lines = "\n".join(f"  failures += {case.function_name}();" for case in profile.cases)
+    call_lines = "\n".join(
+        _guarded(f"  failures += {case.function_name}();", case.header_group)
+        for case in profile.cases
+    )
     support_includes = "".join(
         f'#include "{header}"\n' for header in profile.support_headers
     )
@@ -24,6 +29,13 @@ def render_cpp_values_runner(
         body=body,
         call_lines=call_lines,
     )
+
+
+def _guarded(text: str, header_group: str | None) -> str:
+    if header_group is None:
+        return text
+    macro = f"TSL_ENABLE_{header_group.upper()}"
+    return f"#if defined({macro})\n{text}\n#endif"
 
 
 __all__ = ["CPP_VALUE_TEST_SUPPORT", "render_cpp_values_runner"]

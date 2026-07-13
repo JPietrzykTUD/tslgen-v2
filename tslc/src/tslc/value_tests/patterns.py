@@ -161,6 +161,13 @@ def default_value_test_patterns(
         _simple(vector_to_array_case, "s[]", ("v",), support=support),
         _simple(broadcast_case, "v", ("s",), support=support),
         _simple(scalar_vector_case, "v", ("s", "s"), support=support),
+        _simple(
+            scalar_vector_case,
+            "v",
+            ("v", "s"),
+            support=support,
+            allow_generic_params=True,
+        ),
         _MaskedScalarVectorPattern(),
         _simple(lane_list_case, "v", (support.lane_list_kind,), support=support),
         _ImmediatePattern(support),

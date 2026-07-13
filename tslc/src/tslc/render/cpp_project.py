@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from tslc.backend.cpp import CppBackend
 from tslc.backend.cpp_profile import (
+    _cpp_compiler_builtin_fixed_registrations,
     _cpp_includes,
     _cpp_inferred_simd_registrations,
     _cpp_native_registration,
@@ -11,11 +14,13 @@ from tslc.backend.cpp_profile import (
     _cpp_registration,
     _cpp_sized_registration,
     _guard_cpp_profile,
+    cpp_header_group,
     cpp_profiles_support_algorithm,
 )
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
 from tslc.backend.target_capability import is_x86_register_extension
 from tslc.compiler_assets import RenderAssets
+from tslc.catalog.model import Extension
 from tslc.lower.lowerer import (
     LoweredSpecialization,
     LoweredTypeParam,
@@ -59,7 +64,21 @@ def cpp_artifacts(
         text("cpp/.clang-format", assets.text(".clang-format"), media_type=media_type),
     ]
     for emitted_profile in profiles:
-        by_primitive = emitted_profile.specializations("cpp")
+        all_specializations = emitted_profile.specializations("cpp")
+        header_groups = tuple(
+            sorted(
+                {
+                    group
+                    for extension in emitted_profile.extensions.values()
+                    if (group := cpp_header_group(extension)) is not None
+                }
+            )
+        )
+        by_primitive = _cpp_specializations_for_group(
+            all_specializations,
+            emitted_profile.extensions,
+            None,
+        )
         emitted_exts = used_extensions(by_primitive)
         x86_exts = [
             e
@@ -110,10 +129,72 @@ def cpp_artifacts(
                 media_type=media_type,
             )
         )
+        for header_group in header_groups:
+            grouped = _cpp_specializations_for_group(
+                all_specializations,
+                emitted_profile.extensions,
+                header_group,
+            )
+            if not grouped:
+                continue
+            grouped_exts = used_extensions(grouped)
+            grouped_includes = f'#include "tsl_{profile_slug}.hpp"\n'
+            grouped_registrations = _cpp_native_registration(
+                grouped,
+                emitted_profile.extensions,
+            )
+            grouped_registrations += _cpp_compiler_builtin_fixed_registrations(
+                grouped,
+                emitted_profile.extensions,
+                header_group,
+            )
+            grouped_declarations = "\n\n".join(
+                backend.render_declarations(name, grouped[name])
+                for name in sorted(grouped)
+                if name not in by_primitive
+            )
+            grouped_definitions = "\n\n".join(
+                backend.render_definitions(name, grouped[name])
+                for name in sorted(grouped)
+            )
+            grouped_bodies = (
+                grouped_declarations + "\n\n" + grouped_definitions
+                if grouped_declarations
+                else grouped_definitions
+            )
+            grouped_content = assets.fill(
+                "cpp_profile_header.hpp.tmpl",
+                includes=grouped_includes,
+                registrations=grouped_registrations,
+                bodies=grouped_bodies,
+            )
+            grouped_content = _guard_cpp_profile(
+                grouped_content,
+                grouped_exts,
+                emitted_profile.extensions,
+            )
+            artifacts.append(
+                text(
+                    f"cpp/include/tsl_{profile_slug}_{header_group}.hpp",
+                    grouped_content,
+                    media_type=media_type,
+                )
+            )
+            artifacts.append(
+                text(
+                    f"cpp/tests/smoke_{profile_slug}_{header_group}.cpp",
+                    _cpp_smoke(
+                        emitted_profile,
+                        by_primitive=grouped,
+                        include_header=f"tsl_{profile_slug}_{header_group}.hpp",
+                    ),
+                    media_type=media_type,
+                )
+            )
         artifacts.append(
             text(
                 f"cpp/tests/smoke_{profile_slug}.cpp",
-                _cpp_smoke(emitted_profile),
+                _cpp_smoke(emitted_profile, by_primitive=by_primitive),
                 media_type=media_type,
             )
         )
@@ -158,6 +239,26 @@ def _cpp_dispatch(
     lines.append("#else")
     lines.append('#  error "No supported TSL profile selected"')
     lines.append("#endif")
+    header_groups = tuple(
+        sorted(
+            {
+                group
+                for profile in profiles
+                for extension in profile.extensions.values()
+                if (group := cpp_header_group(extension)) is not None
+            }
+        )
+    )
+    for group in header_groups:
+        macro = f"TSL_ENABLE_{group.upper()}"
+        lines.append(f"#if defined({macro})")
+        for index, emitted_profile in enumerate(profiles):
+            profile_slug = slug(emitted_profile.profile.name)
+            keyword = "#if" if index == 0 else "#elif"
+            lines.append(f"{keyword} defined(TSL_PROFILE_{profile_slug.upper()})")
+            lines.append(f'#  include "tsl_{profile_slug}_{group}.hpp"')
+        lines.append("#endif")
+        lines.append("#endif")
     if include_algorithm:
         lines.append('#include "tsl_algorithm.hpp"')
     return "\n".join(lines) + "\n"
@@ -192,12 +293,18 @@ def _cpp_documentation_facade(profiles: tuple[EmittedProfile, ...]) -> str:
     ]
     return "\n\n".join(section.rstrip() for section in sections if section.strip()) + "\n"
 
-def _cpp_smoke(emitted_profile: EmittedProfile) -> str:
+def _cpp_smoke(
+    emitted_profile: EmittedProfile,
+    *,
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]] | None = None,
+    include_header: str = "tsl.hpp",
+) -> str:
     # Address-take every emitted wrapper instantiation so the profile's bodies are
     # fully compiled (with the profile's ISA flags), not merely parsed.
-    lines = ["#include <tsl.hpp>", "", "namespace {"]
+    lines = [f"#include <{include_header}>", "", "namespace {"]
     index = 0
-    by_primitive = emitted_profile.specializations("cpp")
+    if by_primitive is None:
+        by_primitive = emitted_profile.specializations("cpp")
     for name in sorted(by_primitive):
         specs = by_primitive[name]
         first = specs[0]
@@ -276,6 +383,24 @@ def _cpp_smoke(emitted_profile: EmittedProfile) -> str:
     lines.append("  return 0;")
     lines.append("}")
     return "\n".join(lines) + "\n"
+
+
+def _cpp_specializations_for_group(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
+    header_group: str | None,
+) -> dict[str, tuple[LoweredSpecialization, ...]]:
+    grouped: dict[str, tuple[LoweredSpecialization, ...]] = {}
+    for primitive, specializations in by_primitive.items():
+        selected = tuple(
+            specialization
+            for specialization in specializations
+            if cpp_header_group(extensions.get(specialization.extension_name))
+            == header_group
+        )
+        if selected:
+            grouped[primitive] = selected
+    return grouped
 
 
 def _cpp_type_param_smoke_vector(

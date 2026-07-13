@@ -12,6 +12,10 @@ _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def resolve_query_leaf(head: str, context: LoweringSession) -> QueryValue | None:
+    generation_int = context.scope.resolve_generation_int(head)
+    if generation_int is not None:
+        return TextValue(str(generation_int))
+
     target_type_symbol = context.scope.resolve_target_type_symbol(head)
     if target_type_symbol is not None:
         return TypeValue(target_type_symbol)

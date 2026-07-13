@@ -19,7 +19,19 @@ def cpp_literal(token: str, type_tag: str) -> str:
             return f"static_cast<{target}>({token})"
         return token
     wrapped = _wrapped_int(token, type_tag)
-    return wrapped if wrapped is not None else token
+    if wrapped is None:
+        return token
+    # `-9223372036854775808` is lexed as unary minus applied to the unsigned
+    # decimal literal 9223372036854775808, which makes list initialization of
+    # int64_t ill-formed. Spell the minimum as an in-range signed expression.
+    if type_tag == "si64" and wrapped == "-9223372036854775808":
+        return "(-9223372036854775807LL - 1LL)"
+    # Decimal literals above INT64_MAX otherwise acquire an implementation-
+    # selected extended/unsigned type and trigger diagnostics on Clang's Wasm
+    # target. Make the intended 64-bit unsigned type explicit.
+    if type_tag == "ui64":
+        return f"{wrapped}ULL"
+    return wrapped
 
 
 def cpp_literal_list(values: tuple[str, ...], type_tag: str) -> str:

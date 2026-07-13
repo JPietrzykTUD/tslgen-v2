@@ -85,6 +85,28 @@ prim<v:=(v,v)> add(left, right):
   such as `-msve-vector-bits=N`, not a separate hardware target feature.
   Scalable `sve` remains available through the separate `sve` profile; fixed
   profiles make `dataparallel::native` resolve to the selected fixed SVE model.
+- **Clang vector overlays**: C++ profiles may expose the opt-in
+  `clang_v128`/`clang_v256`/`clang_v512` extensions through a dedicated
+  `tsl_<profile>_clang.hpp` header and `tsl::<profile>_clang` CMake target.
+  These compiler-vector types do not participate in `native` or `fixed<N>`
+  inference. Consumers explicitly request one with
+  `dataparallel::simd_for_t<clang_fixed<N>, T>`, where `N` is the lane count;
+  the guarded overlay maps the resulting bit width to the corresponding
+  `clang_v128`/`clang_v256`/`clang_v512` extension. A body that needs a hardware
+  implementation uses the typed `vector::fixed` query, which dependency closure
+  resolves concretely while C++ renders
+  `dataparallel::simd_for_t<fixed<N>, T>`. Their `comparison_lane_vector` mask
+  policy derives `mask_type` from Clang's exact vector-comparison result. Direct
+  mask operations retain all-one/all-zero lane semantics, while
+  `to_integral`/`to_mask` form the representation-safe bridge to hardware masks;
+  mask objects are never assumed bit-cast-compatible. Compact Clang boolean
+  masks are deferred until benchmarks justify explicit target-feature variants.
+  Rust does not emit these
+  compiler-builtin extensions: stable Rust's SIMD surface is the
+  architecture-specific `core::arch`, while its analogous portable
+  `core::simd::Simd<T, N>` and lower-level compiler SIMD facilities remain
+  nightly-only. A future nightly Rust path belongs in a separate opt-in
+  `portable_simd` overlay rather than behind the Clang-specific policy.
 - **Mask policies**: `[mask=zero]` (zeroing) and `[mask=pass_through]` (merge).
 - `requires`, `safety` (internal/caller unsafe), and boolean attribute wildcards
   (e.g. `[aligned=*]`, expanded at catalog-build time).
@@ -150,8 +172,9 @@ After closure, constructing an
 [backend/emitted_names.py](src/tslc/backend/emitted_names.py) to finalize masked
 and immediate wrapper names, then freezes deterministic per-backend groups.
 Backend validators reject contradictory declared
-capabilities before artifacts are constructed, while declared unsupported
-extensions remain explicit coverage skips. Helper dependency roots and helper
+capabilities before artifacts are constructed, while an extension that declares
+a backend unsupported is not admitted as a coverage attempt for that backend.
+Helper dependency roots and helper
 admission both come from typed manifests in
 [backend/helper_requirements.py](src/tslc/backend/helper_requirements.py).
 

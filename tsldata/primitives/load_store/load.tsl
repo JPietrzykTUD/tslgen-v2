@@ -60,6 +60,19 @@ prim<v:=cptr>[aligned=*] load(ptr):
               }
               complete(reg);
             """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [compiler_builtin, raw_memory, raw_pointer]
+        implementation:
+          tsil """
+            var<typed>(type(vector::register), result, value(uninit::array));
+            mem<copy>(&result, ptr, sizeof(result));
+            complete(result);
+          """
     [avx512, avx2, sse]:
       ?i?:
         requires:
@@ -289,9 +302,10 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
               );
             }
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2 [avx]
           sse [sse, sse2]
           neon [neon]
@@ -457,9 +471,10 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
               );
             }
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2 [avx]
           sse [sse, sse2]
           neon [neon]
@@ -523,6 +538,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
   tests:
     - {tags [mask, none], attrs [aligned=false, packed=true], type "ui32", offset 1, case {inputs [[0, 0, 0]], expected 0}}
     - {tags [mask, none], attrs [aligned=false, packed=false], type "ui32", offset 0, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected 0}}
+    - {tags [mask, clang, unpacked], extension "clang_v256", attrs [aligned=false, packed=false], type "ui32", lane_count 8, offset 0, case {inputs [[0, 1, 0, 2, 0, 0, 3, 0]], expected 74}}
   impls:
     scalar:
       arith:
@@ -544,6 +560,29 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               );
             }
           """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(packed))) {
+              complete(call<primitive=to_mask[Vec]>(cast<static>(type(vector::imask), *ptr)));
+            } else<generation> {
+              let<type>(MaskWord, type(base::unsigned_of(type(base::in))));
+              let<type>(MaskVec, type(vector::as_base(MaskWord)));
+              var<const_infer>(words, call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+                cast<reinterpret, type=const_ptr>(MaskWord, ptr)
+              ));
+              complete(call<primitive=nequal[MaskVec]>(
+                words,
+                call<primitive=set_zero[MaskVec]>()
+              ));
+            }
+          """
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -561,7 +600,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               let<type>(MaskT, type(vector::mask));
               let<type>(MaskWord, type(base::unsigned_of(type(base::in))));
               var<const_infer>(words, cast<reinterpret, type=const_ptr>(MaskWord, ptr));
-              var<typed>(MaskT, result, mask<zero>());
+              var<typed>(MaskT, result, mask<none>());
               loop<backend>(i, 0, value(vector::length), 1) {
                 if ((*ptr_add(words, i)) != cast<static>(MaskWord, 0)) {
                   mask<set>(result, i);
@@ -637,42 +676,46 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             if<generation>(value(primitive::attribute(packed))) {
               let<type>(MaskT, type(vector::mask));
               let<type>(UVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
-              var<typed>(MaskT, out, intrin<svpfalse_b>());
-              var<const_infer>(all, call<primitive=mask_true[Vec]>());
+              var<typed>(MaskT, out, call<primitive=mask_false[Vec]>());
               var<const_infer>(idx, call<primitive=sequence[UVec]>());
               var<const_infer>(
                 lanes,
-                (intrin<svcntb>() / sizeof(type(base::unsigned_of(type(base::in)))))
+                value(generic::runtime_length(UVec))
               );
               var<const_infer>(bytes, cast<reinterpret, type=const_ptr>(type(scalar::ui8), ptr));
 
               loop<backend>(lane, 0, lanes, 1) {
                 var<const_infer>(set, (((*ptr_add(bytes, lane >> 3)) >> (lane & 7)) & 1));
                 if (set) {
-                  var<const_infer>(one, intrin<svcmpeq_n, build[suffix=base::unsigned_of(base::in)]>(
-                    all, idx, cast<static>(type(base::unsigned_of(type(base::in))), lane)
+                  var<const_infer>(one, call<primitive=equal[UVec]>(
+                    idx,
+                    call<primitive=set1[UVec]>(
+                      cast<static>(type(base::unsigned_of(type(base::in))), lane)
+                    )
                   ));
-                  out = intrin<svorr_b_z>(all, out, one);
+                  out = call<primitive=mask_binary_or[Vec]>(out, one);
                 }
               }
               complete(out);
             } else<generation> {
               let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
               let<type>(UVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
-              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
               var<infer>(vec, call<primitive=set_zero[UVec]>());
               if<generation>(value(primitive::attribute(aligned))) {
                 vec = call<primitive=load[UVec], attrs[aligned=true]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
               } else<generation> {
                 vec = call<primitive=load[UVec], attrs[aligned=false]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
               }
-              complete(intrin<svcmpne_n, build[suffix=base::unsigned_of(base::in)]>(pg, vec, cast<static>(UnsignedT, 0)));
+              complete(call<primitive=nequal[UVec]>(
+                vec,
+                call<primitive=set_zero[UVec]>()
+              ));
             }
           """
 
@@ -708,10 +751,12 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
     - {tags [scalar, basic], type "f64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
     - {tags [scalar, edge], type "f64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
   impls:
-    [scalar, generic, avx512, avx2, sse, neon, sve, oneapi_fpga, wasm128]:
+    [scalar, generic, clang_v128, avx512, avx2, sse, neon, sve, oneapi_fpga, wasm128]:
       arith:
         requires:
+          scalar []
           generic []
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]

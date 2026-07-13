@@ -296,8 +296,34 @@ def test_value_full_corpus_avx2_rust_parity_inventory_is_explicit(
     assert status_counts[("rust", "authored_unplanned")] == 0
     assert status_counts[("rust", "backend_unsupported")] == 0
     assert status_counts[("rust", "compile_only_emitted")] == 1
-    assert status_counts[("rust", "emitted")] == status_counts[("cpp", "emitted")]
-    assert parity_gaps(plan.coverage, ("cpp", "rust")) == ()
+    # The only intentional inventory difference is the C++-only Clang cases.
+    # Rust does not expose the compiler-builtin extension family, so those cases
+    # have no Rust specialization to plan.
+    overlay_only = parity_gaps(plan.coverage, ("cpp", "rust"))
+    assert {
+        (entry.primitive_name, entry.case_name)
+        for entry in overlay_only
+    } == {
+        ("extract", "extract_f64_clang_v512_to_clang_v256_clang_high"),
+        ("extract", "extract_si32_clang_v256_to_clang_v128_clang_low"),
+        ("extract", "extract_si32_clang_v512_to_clang_v128_clang_high"),
+        ("insert", "insert_f64_clang_v128_to_clang_v512_clang_middle"),
+        ("insert", "insert_f64_clang_v256_to_clang_v512_clang_high"),
+        ("insert", "insert_si32_clang_v128_to_clang_v256_clang_low"),
+        (
+            "load_mask_repr",
+            "load_mask_repr_ui32_clang_v256_aligned_false_packed_false_mask_clang_unpacked",
+        ),
+    }
+    assert all(
+        len(entry.backend_statuses) == 1
+        and entry.backend_statuses[0].backend_id == "cpp"
+        and entry.backend_statuses[0].status == "emitted"
+        for entry in overlay_only
+    )
+    assert status_counts[("rust", "emitted")] + len(overlay_only) == status_counts[
+        ("cpp", "emitted")
+    ]
     assert Counter(diagnostic.code for diagnostic in plan.diagnostics) == {}
 
 

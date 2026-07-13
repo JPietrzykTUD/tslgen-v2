@@ -223,6 +223,32 @@ class AsExtensionQuery:
         return _vector_value_for_extension(context.env.type_tag, ext, context)
 
 
+class FixedFacadeQuery:
+    """``vector::fixed`` -> the profile's exact-width hardware facade.
+
+    The selector records the concrete extension used for dependency closure;
+    C++ rendering deliberately spells the public fixed<N> facade instead.
+    """
+
+    head = "vector::fixed"
+
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
+        if args:
+            return None
+        extension = context.env.fixed_fallback_extension
+        if extension is None:
+            context.effects.skip(
+                "TSL-LOWER-NO-FIXED-FALLBACK",
+                f"extension {context.env.extension.name!r} has no emitted "
+                "hardware-backed fixed-width fallback for this primitive and type",
+            )
+            return None
+        value = _vector_value_from_extension(context.env.type_tag, extension)
+        return replace(value, spelling_policy="fixed_facade")
+
+
 class AsBaseQuery:
     """``vector::as_base(base)`` -> given base under the current extension."""
 

@@ -78,7 +78,9 @@ def test_policy_owns_mask_forms() -> None:
     assert policy.mask_suffix("pass_through") == "_mask"
     assert policy.mask_split_base("add_maskz") == "add"
     assert policy.is_maskable_signature(add_shape)
-    assert not policy.is_maskable_signature(gather_shape)
+    # Indexed memory mask forms are fully selected and value-tested now; `vidx`
+    # is no longer a compiler-wide deferred parameter kind.
+    assert policy.is_maskable_signature(gather_shape)
 
 
 def test_signature_kind_capabilities_own_language_neutral_rules() -> None:

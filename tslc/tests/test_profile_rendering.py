@@ -67,6 +67,85 @@ def test_backend_selection_is_honored(data_root: Path, machine_profiles_path: Pa
     assert [b.backend_id for b in cpp_only.rendered.verify.backends] == ["cpp"]
 
 
+def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["add", "hadd"],
+        profiles=["avx2"],
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    by = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
+
+    base = by["cpp/include/tsl_avx2.hpp"]
+    overlay = by["cpp/include/tsl_avx2_clang.hpp"]
+    dispatch = by["cpp/include/tsl.hpp"]
+    cmake = by["cpp/CMakeLists.txt"]
+    base_smoke = by["cpp/tests/smoke_avx2.cpp"]
+    overlay_smoke = by["cpp/tests/smoke_avx2_clang.cpp"]
+
+    assert "clang_v128" not in base
+    assert "clang_v256" not in base
+    assert "clang_v512" not in base
+    assert "clang_v128" not in base_smoke
+    assert "clang_fixed" not in base
+    assert "clang_v128" in overlay_smoke
+    assert "struct clang_v128 {};" in overlay
+    assert "struct clang_v256 {};" in overlay
+    assert "struct clang_v512 {};" in overlay
+    assert "using mask_type = decltype(register_type{} == register_type{});" in overlay
+    assert "struct clang_fixed" in overlay
+    assert "tsl::dataparallel::clang_fixed<N> requires N > 0" in overlay
+    assert "struct simd_for<clang_fixed<4>, int32_t>" in overlay
+    assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v128>;" in overlay
+    assert "struct simd_for<clang_fixed<8>, int32_t>" in overlay
+    assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v256>;" in overlay
+    assert "struct simd_for<clang_fixed<16>, int32_t>" in overlay
+    assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v512>;" in overlay
+    assert "#if defined(__clang__) && __clang__ == 1" in overlay
+    assert "return (left + right);" in overlay
+    assert "return __builtin_reduce_add(vec);" in overlay
+    assert "struct hadd_impl<tsl::simd<int32_t, tsl::clang_v512>>" in overlay
+    assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v256>;" not in base
+    assert "#if defined(TSL_ENABLE_CLANG)" in dispatch
+    assert '#  include "tsl_avx2_clang.hpp"' in dispatch
+    assert 'if(CMAKE_CXX_COMPILER_ID MATCHES "^(AppleClang|Clang)$")' in cmake
+    assert "add_library(tsl::avx2_clang ALIAS tsl_profile_avx2_clang)" in cmake
+    assert "target_compile_definitions(tsl_profile_avx2_clang INTERFACE TSL_ENABLE_CLANG)" in cmake
+    assert "add_executable(tsl_values_clang tests/values_${TSL_SELECTED_PROFILE}.cpp)" in cmake
+    assert "add_dependencies(tsl_values tsl_values_clang)" in cmake
+    assert "add_test(NAME values_clang COMMAND tsl_values_clang)" in cmake
+    assert "&& __clang__ == 1" not in cmake
+
+
+def test_clang_overlay_declares_primitive_missing_from_hardware_profile(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["insert"],
+        profiles=["wasm32-simd128"],
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    by = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
+
+    base = by["cpp/include/tsl_wasm32_simd128.hpp"]
+    overlay = by["cpp/include/tsl_wasm32_simd128_clang.hpp"]
+    declaration = "struct insert_impl;"
+    specialization = "struct insert_impl<tsl::simd<int8_t, tsl::clang_v128>"
+
+    assert declaration not in base
+    assert declaration in overlay
+    assert "inline typename ToVec::register_type insert(" in overlay
+    assert specialization in overlay
+    assert overlay.index(declaration) < overlay.index(specialization)
+
+
 def test_profile_name_sanitized_to_valid_identifiers(
     data_root: Path, machine_profiles_path: Path
 ) -> None:

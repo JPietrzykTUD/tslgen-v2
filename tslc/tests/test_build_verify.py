@@ -42,6 +42,22 @@ def _compiler_basename(command: str) -> str:
     return Path(parts[0]).name
 
 
+def _native_clangxx() -> str | None:
+    candidates = ("/usr/bin/clang++", shutil.which("clang++"))
+    for candidate in candidates:
+        if candidate is None or not Path(candidate).is_file():
+            continue
+        target = subprocess.run(
+            (candidate, "-dumpmachine"),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if target.returncode == 0 and "linux" in target.stdout and "wasm" not in target.stdout:
+            return candidate
+    return None
+
+
 def test_generated_profiles_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
@@ -63,6 +79,144 @@ def test_generated_profiles_build(
     assert report.diagnostics == (), report.diagnostics
     # configure+build for 4 C++ profiles (8) + cargo test for 4 Rust profiles (4).
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    clangxx = _native_clangxx()
+    if shutil.which("cmake") is None or clangxx is None:
+        pytest.skip("native clang++ and cmake are required")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=[
+            "add",
+            "blend",
+            "equal",
+            "hadd",
+            "mask_binary_and",
+            "mask_binary_not",
+            "mask_binary_or",
+            "mask_binary_xor",
+            "mask_false",
+            "mask_population_count",
+            "mask_true",
+            "to_integral",
+            "to_mask",
+        ],
+        profiles=["sse2"],
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    consumer = tmp_path / "clang-vector-consumer"
+    consumer.mkdir()
+    (consumer / "CMakeLists.txt").write_text(
+        textwrap.dedent(
+            f"""
+            cmake_minimum_required(VERSION 3.20)
+            project(tsl_clang_vector_consumer LANGUAGES CXX)
+
+            include(FetchContent)
+            set(TSL_PROFILE sse2 CACHE STRING "TSL profile" FORCE)
+            set(TSL_BUILD_TESTS OFF CACHE BOOL "TSL tests" FORCE)
+            FetchContent_Declare(tsl SOURCE_DIR "{(generated / 'cpp').as_posix()}")
+            FetchContent_MakeAvailable(tsl)
+
+            add_executable(clang_vector_probe main.cpp)
+            target_link_libraries(clang_vector_probe PRIVATE tsl::sse2_clang)
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (consumer / "main.cpp").write_text(
+        textwrap.dedent(
+            """
+            #include <cstdint>
+            #include <tsl.hpp>
+
+            int main() {
+              using Vec = tsl::dataparallel::simd_for_t<
+                  tsl::dataparallel::clang_fixed<4>, std::int32_t>;
+              using FloatVec = tsl::dataparallel::simd_for_t<
+                  tsl::dataparallel::clang_fixed<4>, float>;
+              using WideVec = tsl::dataparallel::simd_for_t<
+                  tsl::dataparallel::clang_fixed<64>, std::uint8_t>;
+              Vec::register_type left = {1, 2, 3, 4};
+              Vec::register_type right = {4, 3, 2, 1};
+              auto sum = tsl::add<Vec>(left, right);
+              Vec::register_type compared_right = {1, 0, 3, 0};
+              auto equal = tsl::equal<Vec>(left, compared_right);
+              auto odd = tsl::to_mask<Vec>(static_cast<Vec::imask_type>(0b1010));
+              auto blended = tsl::blend<Vec>(odd, left, compared_right);
+              auto all = tsl::mask_true<Vec>();
+              auto none = tsl::mask_false<Vec>();
+              auto both = tsl::mask_binary_and<Vec>(equal, odd);
+              auto either = tsl::mask_binary_or<Vec>(equal, odd);
+              auto different = tsl::mask_binary_xor<Vec>(equal, odd);
+              auto inverted = tsl::mask_binary_not<Vec>(equal);
+              FloatVec::register_type float_left = {1.0f, 2.0f, 3.0f, 4.0f};
+              FloatVec::register_type float_right = {1.0f, 0.0f, 3.0f, 0.0f};
+              auto float_equal = tsl::equal<FloatVec>(float_left, float_right);
+              constexpr std::uint64_t wide_bits = 0x8000000000000001ull;
+              auto wide = tsl::to_mask<WideVec>(wide_bits);
+              return sum[0] == 5 && sum[3] == 5 &&
+                             tsl::hadd<Vec>(sum) == 20 &&
+                             tsl::to_integral<Vec>(equal) == 0b0101 &&
+                             tsl::to_integral<Vec>(odd) == 0b1010 &&
+                             tsl::to_integral<Vec>(all) == 0b1111 &&
+                             tsl::to_integral<Vec>(none) == 0 &&
+                             tsl::to_integral<Vec>(both) == 0 &&
+                             tsl::to_integral<Vec>(either) == 0b1111 &&
+                             tsl::to_integral<Vec>(different) == 0b1111 &&
+                             tsl::to_integral<Vec>(inverted) == 0b1010 &&
+                             tsl::mask_population_count<Vec>(odd) == 2 &&
+                             tsl::to_integral<FloatVec>(float_equal) == 0b0101 &&
+                             tsl::to_integral<WideVec>(wide) == wide_bits &&
+                             blended[0] == 1 && blended[1] == 0 &&
+                             blended[2] == 3 && blended[3] == 0
+                         ? 0
+                         : 1;
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+
+    build = tmp_path / "clang-vector-build"
+    configured = subprocess.run(
+        (
+            "cmake",
+            "-S",
+            str(consumer),
+            "-B",
+            str(build),
+            f"-DCMAKE_CXX_COMPILER={clangxx}",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert configured.returncode == 0, configured.stderr + configured.stdout
+    built = subprocess.run(
+        ("cmake", "--build", str(build), "--target", "clang_vector_probe"),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert built.returncode == 0, built.stderr + built.stdout
+    executed = subprocess.run(
+        (str(build / "clang_vector_probe"),),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert executed.returncode == 0, executed.stderr + executed.stdout
 
 
 def test_rust_target_feature_body_builds_with_typed_vector_owner(
@@ -348,7 +502,7 @@ def test_generic_masks_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
     # The generic vector's emulated mask: comparisons build a bitset mask via `let<type>(MaskT,
-    # vector::mask)` + `var<typed>` + `mask<zero>`/`mask<set>` (the `mask<*>` ops lowered per
+    # vector::mask)` + `var<typed>` + `mask<none>`/`mask<set>` (the `mask<*>` ops lowered per
     # the lane-bitmask representation), and the mask/bitwise primitives (pulled by le/ge)
     # combine them with `mask<test>`/`mask<set_to>`. Builds in both backends; the native
     # comparison bodies are unaffected.
@@ -957,11 +1111,12 @@ def test_reinterpret_integer_builds(
 ) -> None:
     # `reinterpret` is the `base`-dimension of the target-vector second axis: `return_type: base:
     # ToBase` makes the result the source vector with its base type replaced. Delivered for
-    # same-width integer targets (signedness flips `si32<->ui32`) — the corpus `?i?: ToBase: ?i?`
-    # `bit_cast` branch. The backend emits a SECOND type param (C++ `reinterpret_impl<simd<i32,
+    # same-register-width targets (including lane regrouping on fixed-width extensions) — the
+    # corpus `?i?: ToBase: ?i?` `bit_cast` branch. The backend emits a SECOND type param (C++ `reinterpret_impl<simd<i32,
     # avx2>, simd<u32,avx2>>` / Rust `ReinterpretImpl<ToVec>`); `register::generic(ToType)` resolves
-    # the target register. Scalar + sse2 + avx2. Different-width / float / cross-domain reinterpret
-    # and the generic (LANES-sized) vector are deferred. Both backends.
+    # the target register. Scalar + sse2 + avx2. Scalar and the generic (LANES-sized) vector keep
+    # same-scalar-width targets because rebasing them would otherwise change total storage. Both
+    # backends.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,

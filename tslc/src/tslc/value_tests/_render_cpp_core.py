@@ -114,7 +114,14 @@ def _scalar_vector(case: ValueTestCasePlan) -> str:
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
     ]
     args = _append_call_args(lines, case)
-    lines.append(f"  typename Vec::register_type result = tsl::{case.call_name}<Vec>({', '.join(args)});")
+    template_args = ["Vec"]
+    if case.index is not None and case.index.value is not None:
+        template_args.append(case.index.value)
+    template_args.extend(case.invocation.generic_defaults)
+    lines.append(
+        f"  typename Vec::register_type result = "
+        f"tsl::{case.call_name}<{', '.join(template_args)}>({', '.join(args)});"
+    )
     lines.append(f"  static const {case.base_spelling} expected[{case.lanes}] = {{{expected}}};")
     lines.append(
         f'  return tsl::test::check_lanes<{case.base_spelling}>('

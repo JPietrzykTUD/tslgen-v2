@@ -434,22 +434,128 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
         implementation:
           tsil """
             let<type>(Base, type(base::in));
+            let<type>(DataVec, type(vector::as_base(Base)));
             let<type>(IndexBase, type(base::generic(IndicesType)));
-            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-            var<runtime_array>(IndexBase, idx_array, lanes);
+            if constexpr (
+              std::is_same_v<typename IndicesType::extension_type, typename Vec::extension_type> &&
+              sizeof(IndexBase) == sizeof(Base)
+            ) {
+              switch<compile>(scale) {
+                4 => {
+                  if<generation>(
+                    type::is_same(type(base::in), si32) ||
+                    type::is_same(type(base::in), ui32) ||
+                    type::is_same(type(base::in), f32)
+                  ) {
+                    complete(intrin<svld1_gather_index>(
+                      call<primitive=mask_true[Vec]>(),
+                      base_ptr,
+                      index
+                    ));
+                  }
+                }
+                8 => {
+                  if<generation>(
+                    type::is_same(type(base::in), si64) ||
+                    type::is_same(type(base::in), ui64) ||
+                    type::is_same(type(base::in), f64)
+                  ) {
+                    complete(intrin<svld1_gather_index>(
+                      call<primitive=mask_true[Vec]>(),
+                      base_ptr,
+                      index
+                    ));
+                  }
+                }
+                _ => {}
+              }
+            }
+            var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
+            var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
+            var<runtime_array>(IndexBase, idx_array, index_lanes);
             var<runtime_array>(Base, result, lanes);
-            intrin<svst1>(
-              call<primitive=mask_true[IndicesType]>(),
-              idx_array,
-              index
-            );
+            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
             loop<backend>(i, 0, lanes, 1) {
               result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
             }
-            var<const_infer>(loaded, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result));
+            var<const_infer>(loaded, call<primitive=load[Vec], attrs[aligned=false]>(result));
             complete(loaded);
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(lane_index, call<primitive=extract_value[IndicesType, i]>(index));
+              result[value(i)] = *(cast<reinterpret, type=const_ptr>(
+                type(base::in),
+                ptr_add(
+                  cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr),
+                  idx_offset(lane_index, scale)
+                )
+              ));
+            }
+            complete(result);
+          """
+    neon:
+      arith:
+        requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(lane, *(cast<reinterpret, type=const_ptr>(
+                type(base::in),
+                ptr_add(
+                  cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr),
+                  idx_offset(idx_array[value(i)], scale)
+                )
+              )));
+              result = call<primitive=insert_value[Vec, i]>(
+                result,
+                lane
+              );
+            }
+            complete(result);
+          """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(lane, *(cast<reinterpret, type=const_ptr>(
+                type(base::in),
+                ptr_add(
+                  cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr),
+                  idx_offset(idx_array[value(i)], scale)
+                )
+              )));
+              result = call<primitive=insert_value[Vec, i]>(
+                result,
+                lane
+              );
+            }
+            complete(result);
+          """
+    [avx512, avx2, avx2_vl, sse, sse_vl]:
       arith:
         requires:
           avx512 [avx512f]
@@ -457,10 +563,6 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
           avx2_vl [avx2]
           sse [sse2]
           sse_vl [sse2]
-          neon [neon]
-          generic []
-          oneapi_fpga []
-          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -473,6 +575,24 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
               result[i] = *(cast<reinterpret, type=const_ptr>(type(base::in), ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
             }
             complete(call<primitive=from_array[Vec]>(result));
+          """
+    [generic, oneapi_fpga]:
+      arith:
+        requires:
+          generic []
+          oneapi_fpga []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<backend>(i, 0, value(vector::length), 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(type(base::in), ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
+            }
+            complete(result);
           """
     scalar:
       arith:
@@ -544,6 +664,7 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
               reasons [intrinsic]
             tsil """
               let<type>(SignedBase, type(base::signed_of(base::in)));
+              let<type>(LowVec, type(vector::as(avx2, type(base::in))));
               switch<compile>(scale) {
                 1 => {
                   var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
@@ -551,7 +672,9 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
                     cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
                     1
                   ));
-                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                  complete(call<primitive=insert[LowVec, Vec, 0]>(
+                    call<primitive=set_zero[Vec]>(), loaded
+                  ));
                 }
                 2 => {
                   var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
@@ -559,7 +682,9 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
                     cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
                     2
                   ));
-                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                  complete(call<primitive=insert[LowVec, Vec, 0]>(
+                    call<primitive=set_zero[Vec]>(), loaded
+                  ));
                 }
                 4 => {
                   var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
@@ -567,7 +692,9 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
                     cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
                     4
                   ));
-                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                  complete(call<primitive=insert[LowVec, Vec, 0]>(
+                    call<primitive=set_zero[Vec]>(), loaded
+                  ));
                 }
                 8 => {
                   var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
@@ -575,7 +702,9 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
                     cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
                     8
                   ));
-                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                  complete(call<primitive=insert[LowVec, Vec, 0]>(
+                    call<primitive=set_zero[Vec]>(), loaded
+                  ));
                 }
                 _ => {
                   var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
@@ -587,7 +716,29 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
                 }
               }
             """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
+    clang_v128:
+      [bword, dword]:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<backend, unroll>(i, 0, value(generic::length(IndicesType)), 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(
+                type(base::in),
+                ptr_add(
+                  cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr),
+                  idx_offset(idx_array[i], scale)
+                )
+              ));
+            }
+            complete(result);
+          """
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, wasm128]:
       [bword, dword]:
         requires:
           avx512:
@@ -598,8 +749,6 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
           sse [sse, sse2]
           sse_vl [sse, sse2]
           neon [neon]
-          generic []
-          oneapi_fpga []
           wasm128 [simd128]
         safety:
           internal_unsafe true
@@ -614,13 +763,31 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
+    [generic, oneapi_fpga]:
+      [bword, dword]:
+        requires:
+          generic []
+          oneapi_fpga []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<backend, unroll>(i, 0, value(generic::length(IndicesType)), 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(type(base::in), ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
+            }
+            complete(result);
+          """
     sve:
       [bword, dword]:
         requires [sve]
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             let<type>(Base, type(base::in));
@@ -629,18 +796,14 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
             var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
             var<runtime_array>(IndexBase, idx_array, index_lanes);
             var<runtime_array>(Base, result, lanes);
-            intrin<svst1>(
-              call<primitive=mask_true[IndicesType]>(),
-              idx_array,
-              index
-            );
+            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
             loop<backend>(i, 0, lanes, 1) {
               result[i] = cast<static>(Base, 0);
             }
             loop<backend>(i, 0, index_lanes, 1) {
               result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
             }
-            var<const_infer>(loaded, intrin<svld1>(call<primitive=mask_true[Vec]>(), result));
+            var<const_infer>(loaded, call<primitive=load[Vec], attrs[aligned=false]>(result));
             complete(loaded);
           """
     scalar:
@@ -698,7 +861,78 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
     - {tags [basic], type "si32", index_type "si64", scale 4, case {inputs [[-10, -20, -30, -40], [1, 2, 3, 0]], expected [-20, -30, -40, -10]}}
     - {tags [basic], type "f32", index_type "si64", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [2, 0, 3, 1]], expected [3.5, 1.0, -4.5, -2.0]}}
   impls:
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
+    clang_v128:
+      [bword, dword]:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              result[value(i)] = *(cast<reinterpret, type=const_ptr>(
+                type(base::in),
+                ptr_add(
+                  cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr),
+                  idx_offset(*(ptr_add(index_ptr, value(i))), scale)
+                )
+              ));
+            }
+            complete(result);
+          """
+    neon:
+      [bword, dword]:
+        requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(lane, *(cast<reinterpret, type=const_ptr>(
+                type(base::in),
+                ptr_add(
+                  cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr),
+                  idx_offset(*(ptr_add(index_ptr, value(i))), scale)
+                )
+              )));
+              result = call<primitive=insert_value[Vec, i]>(
+                result,
+                lane
+              );
+            }
+            complete(result);
+          """
+    wasm128:
+      [bword, dword]:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(lane, *(cast<reinterpret, type=const_ptr>(
+                type(base::in),
+                ptr_add(
+                  cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr),
+                  idx_offset(*(ptr_add(index_ptr, value(i))), scale)
+                )
+              )));
+              result = call<primitive=insert_value[Vec, i]>(
+                result,
+                lane
+              );
+            }
+            complete(result);
+          """
+    [avx512, avx2, avx2_vl, sse, sse_vl]:
       [bword, dword]:
         requires:
           avx512:
@@ -708,10 +942,6 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
           avx2_vl [avx, avx2]
           sse [sse, sse2]
           sse_vl [sse, sse2]
-          neon [neon]
-          generic []
-          oneapi_fpga []
-          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -724,13 +954,30 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
+    [generic, oneapi_fpga]:
+      [bword, dword]:
+        requires:
+          generic []
+          oneapi_fpga []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(type(base::in), ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(*(ptr_add(index_ptr, i)), scale))));
+            }
+            complete(result);
+          """
     sve:
       [bword, dword]:
         requires [sve]
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             let<type>(Base, type(base::in));
@@ -739,7 +986,7 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
             loop<backend>(i, 0, lanes, 1) {
               result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(*(ptr_add(index_ptr, i)), scale))));
             }
-            complete(intrin<svld1>(call<primitive=mask_true[Vec]>(), result));
+            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
           """
     scalar:
       [bword, dword]:
@@ -791,14 +1038,14 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
     - {tags [masked, gather, merge, edge], type "ui32", scale 4, case {inputs [[10, 11, 12, 13], [0, 1, 2, 3], [100, 101, 102, 103], 0], expected [100, 101, 102, 103]}}
     - {tags [masked, gather, merge, basic], type "si32", scale 4, case {inputs [[10, 11, 12, 13], [0, 1, 2, 3], [100, 101, 102, 103], 10], expected [100, 11, 102, 13]}}
     - {tags [masked, gather, merge, edge], type "si32", scale 4, case {inputs [[10, 11, 12, 13], [0, 1, 2, 3], [100, 101, 102, 103], 0], expected [100, 101, 102, 103]}}
-    - {tags [masked, gather, merge, basic], type "f32", scale 4, case {inputs [[10.0, 11.0, 12.0, 13.0], [0, 1, 2, 3], [100.0, 101.0, 102.0, 103.0], 10], expected [100.0, 11.0, 102.0, 13.0]}}
-    - {tags [masked, gather, merge, edge], type "f32", scale 4, case {inputs [[10.0, 11.0, 12.0, 13.0], [0, 1, 2, 3], [100.0, 101.0, 102.0, 103.0], 0], expected [100.0, 101.0, 102.0, 103.0]}}
+    - {tags [masked, gather, merge, basic], type "f32", index_type "si32", scale 4, case {inputs [[10.0, 11.0, 12.0, 13.0], [0, 1, 2, 3], [100.0, 101.0, 102.0, 103.0], 10], expected [100.0, 11.0, 102.0, 13.0]}}
+    - {tags [masked, gather, merge, edge], type "f32", index_type "si32", scale 4, case {inputs [[10.0, 11.0, 12.0, 13.0], [0, 1, 2, 3], [100.0, 101.0, 102.0, 103.0], 0], expected [100.0, 101.0, 102.0, 103.0]}}
     - {tags [masked, gather, merge, basic], type "ui64", scale 8, case {inputs [[10, 11], [0, 1], [100, 101], 2], expected [100, 11]}}
     - {tags [masked, gather, merge, edge], type "ui64", scale 8, case {inputs [[10, 11], [0, 1], [100, 101], 0], expected [100, 101]}}
     - {tags [masked, gather, merge, basic], type "si64", scale 8, case {inputs [[10, 11], [0, 1], [100, 101], 2], expected [100, 11]}}
     - {tags [masked, gather, merge, edge], type "si64", scale 8, case {inputs [[10, 11], [0, 1], [100, 101], 0], expected [100, 101]}}
-    - {tags [masked, gather, merge, basic], type "f64", scale 8, case {inputs [[10.0, 11.0], [0, 1], [100.0, 101.0], 2], expected [100.0, 11.0]}}
-    - {tags [masked, gather, merge, edge], type "f64", scale 8, case {inputs [[10.0, 11.0], [0, 1], [100.0, 101.0], 0], expected [100.0, 101.0]}}
+    - {tags [masked, gather, merge, basic], type "f64", index_type "si64", scale 8, case {inputs [[10.0, 11.0], [0, 1], [100.0, 101.0], 2], expected [100.0, 11.0]}}
+    - {tags [masked, gather, merge, edge], type "f64", index_type "si64", scale 8, case {inputs [[10.0, 11.0], [0, 1], [100.0, 101.0], 0], expected [100.0, 101.0]}}
   impls:
     avx512:
       ?i32:
@@ -1031,7 +1278,149 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
               }
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneapi_fpga, wasm128]:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<infer>(result, source);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test>(mask, value(i))) {
+                var<const_infer>(lane_index, call<primitive=extract_value[IndicesType, i]>(index));
+                result[value(i)] = *(cast<reinterpret, type=const_ptr>(
+                  type(base::in),
+                  ptr_add(
+                    cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr),
+                    idx_offset(lane_index, scale)
+                  )
+                ));
+              }
+            }
+            complete(result);
+          """
+    neon:
+      arith:
+        requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
+            var<infer>(result, source);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(imask, value(i))) {
+                var<const_infer>(lane, *(cast<reinterpret, type=const_ptr>(
+                  type(base::in),
+                  ptr_add(
+                    cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr),
+                    idx_offset(idx_array[value(i)], scale)
+                  )
+                )));
+                result = call<primitive=insert_value[Vec, i]>(
+                  result,
+                  lane
+                );
+              }
+            }
+            complete(result);
+          """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
+            var<infer>(result, source);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(imask, value(i))) {
+                var<const_infer>(lane, *(cast<reinterpret, type=const_ptr>(
+                  type(base::in),
+                  ptr_add(
+                    cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr),
+                    idx_offset(idx_array[value(i)], scale)
+                  )
+                )));
+                result = call<primitive=insert_value[Vec, i]>(
+                  result,
+                  lane
+                );
+              }
+            }
+            complete(result);
+          """
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, type(base::in));
+            let<type>(DataVec, type(vector::as_base(Base)));
+            let<type>(IndexBase, type(base::generic(IndicesType)));
+            if constexpr (
+              std::is_same_v<typename IndicesType::extension_type, typename Vec::extension_type> &&
+              sizeof(IndexBase) == sizeof(Base)
+            ) {
+              switch<compile>(scale) {
+                4 => {
+                  if<generation>(
+                    type::is_same(type(base::in), si32) ||
+                    type::is_same(type(base::in), ui32) ||
+                    type::is_same(type(base::in), f32)
+                  ) {
+                    var<const_infer>(loaded, intrin<svld1_gather_index>(mask, base_ptr, index));
+                    complete(call<primitive=blend[Vec]>(mask, source, loaded));
+                  }
+                }
+                8 => {
+                  if<generation>(
+                    type::is_same(type(base::in), si64) ||
+                    type::is_same(type(base::in), ui64) ||
+                    type::is_same(type(base::in), f64)
+                  ) {
+                    var<const_infer>(loaded, intrin<svld1_gather_index>(mask, base_ptr, index));
+                    complete(call<primitive=blend[Vec]>(mask, source, loaded));
+                  }
+                }
+                _ => {}
+              }
+            }
+            var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
+            var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
+            var<runtime_array>(IndexBase, idx_array, index_lanes);
+            var<runtime_array>(Base, result, lanes);
+            var<runtime_array>(Base, active_array, lanes);
+            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
+            call<primitive=store[Vec], attrs[aligned=false]>(result, source);
+            var<const_infer>(active, call<primitive=blend[Vec]>(
+              mask,
+              call<primitive=set_zero[Vec]>(),
+              call<primitive=set1[Vec]>(cast<static>(Base, 1))
+            ));
+            call<primitive=store[Vec], attrs[aligned=false]>(active_array, active);
+            loop<backend>(i, 0, lanes, 1) {
+              if (active_array[i] != cast<static>(Base, 0)) {
+                result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
+              }
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+          """
+    [avx512, avx2, avx2_vl, sse, sse_vl]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1039,11 +1428,6 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
           avx2_vl [avx2]
           sse [sse2]
           sse_vl [sse2]
-          neon [neon]
-          sve [sve]
-          generic []
-          oneapi_fpga []
-          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -1058,6 +1442,26 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
               }
             }
             complete(call<primitive=from_array[Vec]>(result));
+          """
+    [generic, oneapi_fpga]:
+      arith:
+        requires:
+          generic []
+          oneapi_fpga []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<infer>(result, source);
+            loop<backend>(i, 0, value(vector::length), 1) {
+              if (mask<test>(mask, i)) {
+                result[i] = *(cast<reinterpret, type=const_ptr>(type(base::in), ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
+              }
+            }
+            complete(result);
           """
     scalar:
       arith:
@@ -1115,6 +1519,11 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
     - {tags [edge], type "ui64", scale 8, case {inputs [[1, 2], [0, 0]], expected [2]}}
     - {tags [basic], type "si64", scale 8, case {inputs [[1, 2], [0, 1]], expected [1, 2]}}
     - {tags [edge], type "si64", scale 8, case {inputs [[1, 2], [0, 0]], expected [2]}}
+    - {tags [basic], type "f32", index_type "si32", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [0, 1, 2, 3]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [repeat], type "f32", index_type "si32", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [0, 0, 1, 1]], expected [-2.0, -4.5]}}
+    - {tags [basic], type "f64", index_type "si64", scale 8, case {inputs [[1.0, -2.0], [0, 1]], expected [1.0, -2.0]}}
+    - {tags [repeat], type "f64", index_type "si64", scale 8, case {inputs [[1.0, -2.0], [0, 0]], expected [-2.0]}}
+    - {tags [nonstandard_scale], type "ui32", scale 12, case {inputs [[11, 12, 13, 14, 15, 16, 17, 18], [0, 1, 2, 3, 4, 5, 6, 7]], expected [11, 0, 0, 12, 0, 0, 13, 0, 0, 14, 0, 0, 15, 0, 0, 16, 0, 0, 17, 0, 0, 18]}}
   impls:
     [avx512, avx2_vl, sse_vl]:
       ?i32:
@@ -1167,10 +1576,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               _ => {
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
-                loop<backend>(i, 0, value(vector::length), 1) {
-                  *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+                loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                  var<const_infer>(lane_value, call<primitive=extract_value[Vec, i]>(a));
+                  *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[value(i)], scale)))) = lane_value;
                 }
               }
             }
@@ -1225,10 +1634,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               _ => {
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
-                loop<backend>(i, 0, value(vector::length), 1) {
-                  *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+                loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                  var<const_infer>(lane_value, call<primitive=extract_value[Vec, i]>(a));
+                  *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[value(i)], scale)))) = lane_value;
                 }
               }
             }
@@ -1282,10 +1691,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               _ => {
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
-                loop<backend>(i, 0, value(vector::length), 1) {
-                  *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+                loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                  var<const_infer>(lane_value, call<primitive=extract_value[Vec, i]>(a));
+                  *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[value(i)], scale)))) = lane_value;
                 }
               }
             }
@@ -1339,10 +1748,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               _ => {
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
-                loop<backend>(i, 0, value(vector::length), 1) {
-                  *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+                loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                  var<const_infer>(lane_value, call<primitive=extract_value[Vec, i]>(a));
+                  *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[value(i)], scale)))) = lane_value;
                 }
               }
             }
@@ -1353,25 +1762,42 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             let<type>(Base, type(base::in));
+            let<type>(DataVec, type(vector::as_base(Base)));
             let<type>(IndexBase, type(base::generic(IndicesType)));
-            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+            var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
+            var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
             var<runtime_array>(Base, val_array, lanes);
-            var<runtime_array>(IndexBase, idx_array, lanes);
-            intrin<svst1, build>(call<primitive=mask_true[Vec]>(), val_array, a);
-            intrin<svst1>(
-              call<primitive=mask_true[IndicesType]>(),
-              idx_array,
-              index
-            );
+            var<runtime_array>(IndexBase, idx_array, index_lanes);
+            call<primitive=store[Vec], attrs[aligned=false]>(val_array, a);
+            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
             loop<backend>(i, 0, lanes, 1) {
               *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              *(cast<reinterpret, type=ptr>(
+                type(base::in),
+                ptr_add_mut(
+                  cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr),
+                  idx_offset(index[value(i)], scale)
+                )
+              )) = a[value(i)];
+            }
+          """
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1380,8 +1806,6 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           sse [sse2]
           sse_vl [sse2]
           neon [neon]
-          generic []
-          oneapi_fpga []
           wasm128 [simd128]
         safety:
           internal_unsafe true
@@ -1389,14 +1813,36 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           reasons [raw_pointer]
         implementation:
           tsil """
-            var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(lane_value, call<primitive=extract_value[Vec, i]>(a));
+              *(cast<reinterpret, type=ptr>(
+                type(base::in),
+                ptr_add_mut(
+                  cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr),
+                  idx_offset(idx_array[value(i)], scale)
+                )
+              )) = lane_value;
+            }
+          """
+    [generic, oneapi_fpga]:
+      arith:
+        requires:
+          generic []
+          oneapi_fpga []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
             loop<backend>(i, 0, value(vector::length), 1) {
-              *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+              *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = a[i];
             }
           """
     scalar:
-      ?i?:
+      arith:
         requires []
         safety:
           internal_unsafe true
@@ -1443,14 +1889,15 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
     - {tags [masked, scatter, edge], type "ui32", scale 4, case {inputs [[0, 1, 2, 3], [0, 1, 2, 3], 0], expected [0, 0, 0, 0]}}
     - {tags [masked, scatter, basic], type "si32", scale 4, case {inputs [[0, 1, 2, 3], [0, 1, 2, 3], 10], expected [0, 1, 0, 3]}}
     - {tags [masked, scatter, edge], type "si32", scale 4, case {inputs [[0, 1, 2, 3], [0, 1, 2, 3], 0], expected [0, 0, 0, 0]}}
-    - {tags [masked, scatter, basic], type "f32", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [0, 1, 2, 3], 10], expected [0.0, -2.0, 0.0, -4.5]}}
-    - {tags [masked, scatter, edge], type "f32", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [0, 1, 2, 3], 0], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [masked, scatter, basic], type "f32", index_type "si32", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [0, 1, 2, 3], 10], expected [0.0, -2.0, 0.0, -4.5]}}
+    - {tags [masked, scatter, edge], type "f32", index_type "si32", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [0, 1, 2, 3], 0], expected [0.0, 0.0, 0.0, 0.0]}}
     - {tags [masked, scatter, basic], type "ui64", scale 8, case {inputs [[1, 2], [0, 1], 2], expected [0, 2]}}
     - {tags [masked, scatter, edge], type "ui64", scale 8, case {inputs [[1, 2], [0, 1], 0], expected [0, 0]}}
     - {tags [masked, scatter, basic], type "si64", scale 8, case {inputs [[1, -2], [0, 1], 2], expected [0, -2]}}
     - {tags [masked, scatter, edge], type "si64", scale 8, case {inputs [[1, -2], [0, 1], 0], expected [0, 0]}}
-    - {tags [masked, scatter, basic], type "f64", scale 8, case {inputs [[1.0, -2.0], [0, 1], 2], expected [0.0, -2.0]}}
-    - {tags [masked, scatter, edge], type "f64", scale 8, case {inputs [[1.0, -2.0], [0, 1], 0], expected [0.0, 0.0]}}
+    - {tags [masked, scatter, basic], type "f64", index_type "si64", scale 8, case {inputs [[1.0, -2.0], [0, 1], 2], expected [0.0, -2.0]}}
+    - {tags [masked, scatter, edge], type "f64", index_type "si64", scale 8, case {inputs [[1.0, -2.0], [0, 1], 0], expected [0.0, 0.0]}}
+    - {tags [masked, scatter, nonstandard_scale], type "ui32", scale 12, case {inputs [[11, 12, 13, 14, 15, 16, 17, 18], [0, 1, 2, 3, 4, 5, 6, 7], 170], expected [0, 0, 0, 12, 0, 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 0, 18]}}
   impls:
     [avx512, avx2_vl, sse_vl]:
       ?i32:
@@ -1508,10 +1955,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               }
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
-                loop<backend>(i, 0, value(vector::length), 1) {
-                  if (mask<test>(mask, i)) {
-                    *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+                loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                  if (mask<test>(mask, value(i))) {
+                    var<const_infer>(lane_value, call<primitive=extract_value[Vec, i]>(a));
+                    *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[value(i)], scale)))) = lane_value;
                   }
                 }
               }
@@ -1572,10 +2019,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               }
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
-                loop<backend>(i, 0, value(vector::length), 1) {
-                  if (mask<test>(mask, i)) {
-                    *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+                loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                  if (mask<test>(mask, value(i))) {
+                    var<const_infer>(lane_value, call<primitive=extract_value[Vec, i]>(a));
+                    *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[value(i)], scale)))) = lane_value;
                   }
                 }
               }
@@ -1635,10 +2082,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               }
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
-                loop<backend>(i, 0, value(vector::length), 1) {
-                  if (mask<test>(mask, i)) {
-                    *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+                loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                  if (mask<test>(mask, value(i))) {
+                    var<const_infer>(lane_value, call<primitive=extract_value[Vec, i]>(a));
+                    *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[value(i)], scale)))) = lane_value;
                   }
                 }
               }
@@ -1698,16 +2145,37 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               }
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
-                loop<backend>(i, 0, value(vector::length), 1) {
-                  if (mask<test>(mask, i)) {
-                    *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+                loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                  if (mask<test>(mask, value(i))) {
+                    var<const_infer>(lane_value, call<primitive=extract_value[Vec, i]>(a));
+                    *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[value(i)], scale)))) = lane_value;
                   }
                 }
               }
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneapi_fpga, wasm128]:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test>(mask, value(i))) {
+                *(cast<reinterpret, type=ptr>(
+                  type(base::in),
+                  ptr_add_mut(
+                    cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr),
+                    idx_offset(index[value(i)], scale)
+                  )
+                )) = a[value(i)];
+              }
+            }
+          """
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1716,9 +2184,6 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           sse [sse2]
           sse_vl [sse2]
           neon [neon]
-          sve [sve]
-          generic []
-          oneapi_fpga []
           wasm128 [simd128]
         safety:
           internal_unsafe true
@@ -1727,15 +2192,70 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
         implementation:
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
-            var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test>(mask, value(i))) {
+                var<const_infer>(lane_value, call<primitive=extract_value[Vec, i]>(a));
+                *(cast<reinterpret, type=ptr>(
+                  type(base::in),
+                  ptr_add_mut(
+                    cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr),
+                    idx_offset(idx_array[value(i)], scale)
+                  )
+                )) = lane_value;
+              }
+            }
+          """
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, type(base::in));
+            let<type>(DataVec, type(vector::as_base(Base)));
+            let<type>(IndexBase, type(base::generic(IndicesType)));
+            var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
+            var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
+            var<runtime_array>(Base, val_array, lanes);
+            var<runtime_array>(IndexBase, idx_array, index_lanes);
+            var<runtime_array>(Base, active_array, lanes);
+            call<primitive=store[Vec], attrs[aligned=false]>(val_array, a);
+            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
+            var<const_infer>(active, call<primitive=blend[Vec]>(
+              mask,
+              call<primitive=set_zero[Vec]>(),
+              call<primitive=set1[Vec]>(cast<static>(Base, 1))
+            ));
+            call<primitive=store[Vec], attrs[aligned=false]>(active_array, active);
+            loop<backend>(i, 0, lanes, 1) {
+              if (active_array[i] != cast<static>(Base, 0)) {
+                *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+              }
+            }
+          """
+    [generic, oneapi_fpga]:
+      arith:
+        requires:
+          generic []
+          oneapi_fpga []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+                *(cast<reinterpret, type=ptr>(type(base::in), ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = a[i];
               }
             }
           """
     scalar:
-      ?i?:
+      arith:
         requires []
         safety:
           internal_unsafe true

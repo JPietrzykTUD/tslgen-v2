@@ -62,6 +62,15 @@ prim<v:=(v,v)> add(left, right):
             }
             complete(result);
           """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(op<add>(left, right));"
     avx512:
       ?i?:
         requires:
@@ -201,10 +210,11 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
+    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
           oneapi_fpga_rtl []
           wasm128 [simd128]
@@ -331,10 +341,11 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
             }
             complete(left);
           """
-    [generic, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
+    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
           oneapi_fpga_rtl []
           wasm128 [simd128]
@@ -486,6 +497,15 @@ prim<v:=(v,v)> sub(left, right):
             }
             complete(result);
           """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(op<sub>(left, right));"
     avx512:
       ?i?:
         requires:
@@ -625,10 +645,11 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
+    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
           oneapi_fpga_rtl []
           wasm128 [simd128]
@@ -751,10 +772,11 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
             }
             complete(left);
           """
-    [generic, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
+    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
           oneapi_fpga_rtl []
           wasm128 [simd128]
@@ -878,11 +900,12 @@ prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
     - {tags [blend, add, basic], type "si64", case {inputs [10, [-1, -2, -3, -4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [11, -2, 31, -4]}}
     - {tags [blend, add, edge], type "si64", case {inputs [15, [-1, -2, -3, -4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [-1, -2, -3, -4]}}
   impls:
-    [scalar, generic, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
       arith:
         requires:
           scalar []
           generic []
+          clang_v128 []
           oneapi_fpga []
           oneapi_fpga_rtl []
           avx512 [avx512f]

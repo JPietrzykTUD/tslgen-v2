@@ -35,7 +35,7 @@ prim<v:=(v,v)> binary_and(left, right):
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
     - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
   impls:
-    scalar:
+    [scalar, clang_v128]:
       ?i?:
         requires []
         safety:
@@ -88,17 +88,17 @@ prim<v:=(v,v)> binary_and(left, right):
       f?:
         requires [avx512f, avx512dq]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            let<type>(BitBase, type(base::signed_of(type(base::in))));
+            let<type>(BitVec, type(vector::as_base(type(base::signed_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<BitBase>, Vec]>(
-                intrin<and, build[suffix=intrin::suffix("stream")]>(
-                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(right)
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec]>(
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -170,16 +170,17 @@ prim<v:=(v,v)> binary_and(left, right):
       f?:
         requires [neon]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<vandq, build[suffix=base::unsigned_of(base::in)]>(
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec]>(
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -209,17 +210,17 @@ prim<v:=(v,v)> binary_and(left, right):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<svand, build[suffix=base::unsigned_of(base::in), post=x]>(
-                  call<primitive=mask_true[Vec]>(),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec]>(
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -247,7 +248,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
     - {tags [basic], type "f32", case {inputs [[0.0, 0.0, 0.0, 0.0], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
     - {tags [basic], type "f64", case {inputs [[0.0, 0.0], [1.0, -2.0]], expected [1.0, -2.0]}}
   impls:
-    scalar:
+    [scalar, clang_v128]:
       ?i?:
         requires []
         safety:
@@ -376,16 +377,17 @@ prim<v:=(v,v)> binary_andnot(left, right):
       f?:
         requires [neon]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<vbicq, build[suffix=base::unsigned_of(base::in)]>(
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left)
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec]>(
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -415,17 +417,17 @@ prim<v:=(v,v)> binary_andnot(left, right):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<svbic, build[suffix=base::unsigned_of(base::in), post=x]>(
-                  call<primitive=mask_true[Vec]>(),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left)
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec]>(
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -467,7 +469,7 @@ prim<v:=(v,v)> binary_or(left, right):
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
     - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
   impls:
-    scalar:
+    [scalar, clang_v128]:
       ?i?:
         requires []
         safety:
@@ -520,17 +522,17 @@ prim<v:=(v,v)> binary_or(left, right):
       f?:
         requires [avx512f]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            let<type>(BitBase, type(base::signed_of(type(base::in))));
+            let<type>(BitVec, type(vector::as_base(type(base::signed_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<BitBase>, Vec]>(
-                intrin<or, build[suffix=intrin::suffix("stream")]>(
-                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(right)
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec]>(
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -602,16 +604,17 @@ prim<v:=(v,v)> binary_or(left, right):
       f?:
         requires [neon]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<vorrq, build[suffix=base::unsigned_of(base::in)]>(
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec]>(
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -641,17 +644,17 @@ prim<v:=(v,v)> binary_or(left, right):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<svorr, build[suffix=base::unsigned_of(base::in), post=x]>(
-                  call<primitive=mask_true[Vec]>(),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec]>(
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -693,7 +696,7 @@ prim<v:=(v,v)> binary_xor(left, right):
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
     - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, 0.0]}}
   impls:
-    scalar:
+    [scalar, clang_v128]:
       ?i?:
         requires []
         safety:
@@ -746,17 +749,17 @@ prim<v:=(v,v)> binary_xor(left, right):
       f?:
         requires [avx512f]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            let<type>(BitBase, type(base::signed_of(type(base::in))));
+            let<type>(BitVec, type(vector::as_base(type(base::signed_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<BitBase>, Vec]>(
-                intrin<xor, build[suffix=intrin::suffix("stream")]>(
-                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(right)
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec]>(
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -828,16 +831,17 @@ prim<v:=(v,v)> binary_xor(left, right):
       f?:
         requires [neon]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<veorq, build[suffix=base::unsigned_of(base::in)]>(
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec]>(
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -867,17 +871,17 @@ prim<v:=(v,v)> binary_xor(left, right):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=x]>(
-                  call<primitive=mask_true[Vec]>(),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec]>(
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -923,10 +927,11 @@ prim<v:=v> inv(data):
           reasons []
         implementation:
           tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(mask<lane_true>())));"
-    [generic, oneapi_fpga, avx512, avx2, sse, neon, sve]:
+    [generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
           avx512 [avx512f]
           avx2:
@@ -1060,9 +1065,10 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
               intrin<maskz_and, build>(mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -1101,17 +1107,18 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<svand, build[suffix=base::unsigned_of(base::in), post=z]>(
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec], attrs[mask=zero]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -1223,9 +1230,10 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
               intrin<mask_and, build>(left, mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -1265,17 +1273,18 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<svand, build[suffix=base::unsigned_of(base::in), post=m]>(
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec], attrs[mask=pass_through]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -1387,9 +1396,10 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
               intrin<maskz_andnot, build>(mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -1428,17 +1438,18 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<svbic, build[suffix=base::unsigned_of(base::in), post=z]>(
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec], attrs[mask=zero]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left)
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -1551,9 +1562,10 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
               intrin<mask_andnot, build>(left, mask, left, right)
             );
           """
-    [avx2, sse, neon, sve, wasm128]:
+    [clang_v128, avx2, sse, neon, sve, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -1684,9 +1696,10 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
               intrin<maskz_or, build>(mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -1725,17 +1738,18 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<svorr, build[suffix=base::unsigned_of(base::in), post=z]>(
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec], attrs[mask=zero]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -1847,9 +1861,10 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
               intrin<mask_or, build>(left, mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -1889,17 +1904,18 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<svorr, build[suffix=base::unsigned_of(base::in), post=m]>(
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec], attrs[mask=pass_through]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -2010,9 +2026,10 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
               intrin<maskz_xor, build>(mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -2051,17 +2068,18 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=z]>(
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec], attrs[mask=zero]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -2173,9 +2191,10 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
               intrin<mask_xor, build>(left, mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -2215,17 +2234,18 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=m]>(
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec], attrs[mask=pass_through]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, BitVec]>(left),
+                  call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
               )
             );
@@ -2300,13 +2320,13 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             complete(
-              intrin<maskz_xor, build[suffix=base::signed_of(base::in)]>(
+              call<primitive=binary_xor[Vec], attrs[mask=zero]>(
                 mask,
                 data,
                 call<primitive=set1[Vec]>(mask<lane_true>())
@@ -2337,22 +2357,23 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
           avx2_vl [avx512f, avx512vl, avx512dq, avx]
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             complete(
-              intrin<maskz_xor, build>(
+              call<primitive=binary_xor[Vec], attrs[mask=zero]>(
                 mask,
                 data,
                 call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -2379,13 +2400,13 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
       ?i?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             complete(
-              intrin<sveor, build[post=z]>(
+              call<primitive=binary_xor[Vec], attrs[mask=zero]>(
                 mask,
                 data,
                 call<primitive=set1[Vec]>(mask<lane_true>())
@@ -2395,19 +2416,17 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=z]>(
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec], attrs[mask=zero]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(data),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(
-                    call<primitive=set1[Vec]>(mask<lane_true>())
-                  )
+                  call<primitive=reinterpret[Vec, BitVec]>(data)
                 )
               )
             );
@@ -2482,14 +2501,13 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             complete(
-              intrin<mask_xor, build[suffix=base::signed_of(base::in)]>(
-                data,
+              call<primitive=binary_xor[Vec], attrs[mask=pass_through]>(
                 mask,
                 data,
                 call<primitive=set1[Vec]>(mask<lane_true>())
@@ -2521,23 +2539,23 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
           avx2_vl [avx512f, avx512vl, avx512dq, avx]
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             complete(
-              intrin<mask_xor, build>(
-                data,
+              call<primitive=binary_xor[Vec], attrs[mask=pass_through]>(
                 mask,
                 data,
                 call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -2565,13 +2583,13 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
       ?i?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             complete(
-              intrin<sveor, build[post=m]>(
+              call<primitive=binary_xor[Vec], attrs[mask=pass_through]>(
                 mask,
                 data,
                 call<primitive=set1[Vec]>(mask<lane_true>())
@@ -2581,19 +2599,17 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
-                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=m]>(
+              call<primitive=reinterpret[BitVec, Vec]>(
+                call<primitive=@self[BitVec], attrs[mask=pass_through]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(data),
-                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(
-                    call<primitive=set1[Vec]>(mask<lane_true>())
-                  )
+                  call<primitive=reinterpret[Vec, BitVec]>(data)
                 )
               )
             );

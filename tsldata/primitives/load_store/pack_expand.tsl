@@ -102,7 +102,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
             var<const_infer>(store_mask, call<primitive=less_than[IndexVec]>(indices, limit));
             call<primitive=store[Vec], attrs[aligned=false, mask=pass_through]>(store_mask, ptr, packed);
           """
-      [?i8, ?i16]:
+      ?i8:
         requires [sve]
         safety:
           internal_unsafe true
@@ -111,44 +111,125 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
         implementation:
           tsil """
             let<type>(Base, type(base::in));
-            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-            var<const_infer>(values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
-            intrin<svst1, build>(call<primitive=mask_true[Vec]>(), values, a);
-            var<const_infer>(all, call<primitive=mask_true[Vec]>());
-            var<const_infer>(indexes, intrin<svindex, build>(cast<static>(Base, 0), cast<static>(Base, 1)));
+            let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
+            let<type>(IndexVec, type(vector::as_base(IndexBase)));
+            var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+            var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
             var<infer>(offset, 0);
             loop<backend>(i, 0, lanes, 1) {
-              var<const_infer>(lane, intrin<svcmpeq_n, build[suffix=base::in]>(all, indexes, cast<static>(Base, i)));
-              if (intrin<svptest_any>(lane, m)) {
-                *ptr_add_mut(ptr, offset) = values[i];
+              var<const_infer>(lane, call<primitive=equal[IndexVec]>(
+                indexes,
+                call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
+              ));
+              if (call<primitive=mask_population_count[IndexVec]>(
+                call<primitive=mask_binary_and[IndexVec]>(lane, m)
+              ) != 0) {
+                *ptr_add_mut(ptr, offset) = intrin<svlastb, build>(lane, a);
                 offset += 1;
               }
             }
-            std::free(values);
           """
-    [avx2, sse, neon, wasm128]:
+      ?i16:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, type(base::in));
+            let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
+            let<type>(IndexVec, type(vector::as_base(IndexBase)));
+            var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+            var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
+            var<infer>(offset, 0);
+            loop<backend>(i, 0, lanes, 1) {
+              var<const_infer>(lane, call<primitive=equal[IndexVec]>(
+                indexes,
+                call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
+              ));
+              if (call<primitive=mask_population_count[IndexVec]>(
+                call<primitive=mask_binary_and[IndexVec]>(lane, m)
+              ) != 0) {
+                *ptr_add_mut(ptr, offset) = intrin<svlastb, build>(lane, a);
+                offset += 1;
+              }
+            }
+          """
+    wasm128:
       arith:
-        requires:
-          avx2 [avx2]
-          sse [sse2]
-          neon [neon]
-          wasm128 [simd128]
+        requires [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true
           reasons [raw_pointer]
         implementation:
           tsil """
-               var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
-               var<const_infer>(data_array, call<primitive=to_array[Vec]>(a));
-               var<infer>(offset, 0);
-               loop<backend>(i, 0, value(vector::length), 1) {
-                if (mask<test, imask>(imask, i)) {
-                  *ptr_add_mut(ptr, offset) = data_array[i];
-                  offset += 1;
-                }
+            var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
+            var<infer>(offset, 0);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(imask, value(i))) {
+                var<const_infer>(lane, call<primitive=extract_value[Vec, i]>(a));
+                *ptr_add_mut(ptr, offset) = lane;
+                offset += 1;
               }
-            """
+            }
+          """
+    neon:
+      arith:
+        requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
+            var<infer>(offset, 0);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(imask, value(i))) {
+                *ptr_add_mut(ptr, offset) = call<primitive=extract_value[Vec, i]>(a);
+                offset += 1;
+              }
+            }
+          """
+    [avx2, sse]:
+      arith:
+        requires:
+          avx2 [avx2]
+          sse [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
+            var<infer>(offset, 0);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(imask, value(i))) {
+                  *ptr_add_mut(ptr, offset) = call<primitive=extract_value[Vec, i]>(a);
+                  offset += 1;
+              }
+            }
+          """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<infer>(offset, 0);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test>(m, value(i))) {
+                *ptr_add_mut(ptr, offset) = a[value(i)];
+                offset += 1;
+              }
+            }
+          """
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -280,38 +361,86 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
                let<type>(Base, type(base::in));
                let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
                let<type>(IndexVec, type(vector::as_base(IndexBase)));
-               var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-               var<const_infer>(result_values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
-               loop<backend>(i, 0, lanes, 1) {
-                 result_values[i] = cast<static>(Base, 0);
-               }
-               var<const_infer>(all, call<primitive=mask_true[IndexVec]>());
-               var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(cast<static>(IndexBase, 0), cast<static>(IndexBase, 1)));
+               var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+               var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
+               var<infer>(result, call<primitive=set_zero[Vec]>());
                var<infer>(offset, 0);
                loop<backend>(i, 0, lanes, 1) {
-                 var<const_infer>(lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(all, indexes, cast<static>(IndexBase, i)));
-                 if (intrin<svptest_any>(lane, m)) {
-                   result_values[i] = *ptr_add(ptr, offset);
+                 var<const_infer>(lane, call<primitive=equal[IndexVec]>(
+                   indexes,
+                   call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
+                 ));
+                 if (call<primitive=mask_population_count[IndexVec]>(
+                   call<primitive=mask_binary_and[IndexVec]>(lane, m)
+                 ) != 0) {
+                   result = call<primitive=masked_set1[Vec]>(
+                     lane,
+                     result,
+                     *ptr_add(ptr, offset)
+                   );
                    offset += 1;
                  }
                }
-               var<const_infer>(result, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result_values));
-               std::free(result_values);
                complete(result);
             """
-    [avx2, sse, neon, wasm128]:
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            var<infer>(offset, 0);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(imask, value(i))) {
+                var<const_infer>(lane, *ptr_add(ptr, offset));
+                result = call<primitive=insert_value[Vec, i]>(
+                  result,
+                  lane
+                );
+                offset += 1;
+              }
+            }
+            complete(result);
+          """
+    neon:
+      arith:
+        requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            var<infer>(offset, 0);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(imask, value(i))) {
+                result = call<primitive=insert_value[Vec, i]>(
+                  result,
+                  *ptr_add(ptr, offset)
+                );
+                offset += 1;
+              }
+            }
+            complete(result);
+          """
+    [avx2, sse]:
       arith:
         requires:
           avx2 [avx2]
           sse [sse2]
-          neon [neon]
-          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -329,6 +458,25 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
               }
                complete(call<primitive=from_array[Vec]>(data_array));
             """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            var<infer>(offset, 0);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test>(m, value(i))) {
+                result[value(i)] = *ptr_add(ptr, offset);
+                offset += 1;
+              }
+            }
+            complete(result);
+          """
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -340,7 +488,7 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
           reasons [raw_pointer]
         implementation:
           tsil """
-               var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+               var<infer>(result, call<primitive=set_zero[Vec]>());
                var<infer>(offset, 0);
                loop<backend>(i, 0, value(vector::length), 1)  {
                 if(mask<test>(m, i)) {
@@ -348,7 +496,7 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
                   offset += 1;
                 }
               }
-               complete(call<primitive=from_array[Vec]>(result)) ;
+               complete(result);
             """
     scalar:
       arith:
@@ -383,33 +531,46 @@ prim<v:=cptr+> load_convert_up(ptr):
     - {tags [basic], extension "avx2", type "si8", to_type "si16", case {inputs [[-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]}}
     - {tags [edge], extension "avx2", type "si8", to_type "si16", case {inputs [[-128, -127, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 127]], expected [-128, -127, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 127]}}
     - {tags [basic], extension "avx2", type "si8", to_type "si32", case {inputs [[-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]], expected [-5, -4, -3, -2, -1, 0, 1, 2]}}
-    - {tags [edge], extension "avx2", type "si8", to_type "si32", case {inputs [[-128, -127, -1, 0, 1, 2, 3, 127]], expected [-128, -127, -1, 0, 1, 2, 3, 127]}}
-    - {tags [basic], extension "avx2", type "si8", to_type "si64", case {inputs [[-3, -2, -1, 0, 1, 2, 3, 4]], expected [-3, -2, -1, 0]}}
-    - {tags [edge], extension "avx2", type "si8", to_type "si64", case {inputs [[-128, -1, 0, 127]], expected [-128, -1, 0, 127]}}
+    - {tags [edge], extension "avx2", type "si8", to_type "si32", case {inputs [[-128, -127, -1, 0, 1, 2, 3, 127, 0, 0, 0, 0, 0, 0, 0, 0]], expected [-128, -127, -1, 0, 1, 2, 3, 127]}}
+    - {tags [basic], extension "avx2", type "si8", to_type "si64", case {inputs [[-3, -2, -1, 0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0]], expected [-3, -2, -1, 0]}}
+    - {tags [edge], extension "avx2", type "si8", to_type "si64", case {inputs [[-128, -1, 0, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected [-128, -1, 0, 127]}}
     - {tags [basic], extension "avx2", type "si16", to_type "si32", case {inputs [[-300, -200, -100, -50, -1, 0, 1, 50, 100, 200, 300, 400, 500, 600, 700, 800]], expected [-300, -200, -100, -50, -1, 0, 1, 50]}}
     - {tags [edge], extension "avx2", type "si16", to_type "si32", case {inputs [[-32768, -32767, -1, 0, 1, 2, 3, 32767]], expected [-32768, -32767, -1, 0, 1, 2, 3, 32767]}}
     - {tags [basic], extension "avx2", type "si16", to_type "si64", case {inputs [[-8, -7, -6, -5, -4, -3, -2, -1]], expected [-8, -7, -6, -5]}}
-    - {tags [edge], extension "avx2", type "si16", to_type "si64", case {inputs [[-32768, -1, 0, 32767]], expected [-32768, -1, 0, 32767]}}
+    - {tags [edge], extension "avx2", type "si16", to_type "si64", case {inputs [[-32768, -1, 0, 32767, 0, 0, 0, 0]], expected [-32768, -1, 0, 32767]}}
     - {tags [basic], extension "avx2", type "ui8", to_type "ui16", case {inputs [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
     - {tags [edge], extension "avx2", type "ui8", to_type "ui16", case {inputs [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
     - {tags [basic], extension "avx2", type "ui8", to_type "ui32", case {inputs [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {tags [edge], extension "avx2", type "ui8", to_type "ui32", case {inputs [0, 255, 1, 254, 2, 253, 3, 252], expected [0, 255, 1, 254, 2, 253, 3, 252]}}
-    - {tags [basic], extension "avx2", type "ui8", to_type "ui64", case {inputs [1, 2, 3, 4, 5, 6, 7, 8], expected [1, 2, 3, 4]}}
-    - {tags [edge], extension "avx2", type "ui8", to_type "ui64", case {inputs [0, 255, 1, 254], expected [0, 255, 1, 254]}}
+    - {tags [edge], extension "avx2", type "ui8", to_type "ui32", case {inputs [0, 255, 1, 254, 2, 253, 3, 252, 0, 0, 0, 0, 0, 0, 0, 0], expected [0, 255, 1, 254, 2, 253, 3, 252]}}
+    - {tags [basic], extension "avx2", type "ui8", to_type "ui64", case {inputs [1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0], expected [1, 2, 3, 4]}}
+    - {tags [edge], extension "avx2", type "ui8", to_type "ui64", case {inputs [0, 255, 1, 254, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], expected [0, 255, 1, 254]}}
     - {tags [basic], extension "avx2", type "ui16", to_type "ui32", case {inputs [1, 2, 3, 4, 5, 6, 7, 8], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
     - {tags [edge], extension "avx2", type "ui16", to_type "ui32", case {inputs [0, 1, 65535, 65534, 2, 3, 4, 5], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
     - {tags [basic], extension "avx2", type "ui16", to_type "ui64", case {inputs [1, 2, 3, 4, 5, 6, 7, 8], expected [1, 2, 3, 4]}}
-    - {tags [edge], extension "avx2", type "ui16", to_type "ui64", case {inputs [0, 1, 65535, 65534], expected [0, 1, 65535, 65534]}}
+    - {tags [edge], extension "avx2", type "ui16", to_type "ui64", case {inputs [0, 1, 65535, 65534, 0, 0, 0, 0], expected [0, 1, 65535, 65534]}}
     - {tags [basic], extension "avx2", type "ui32", to_type "ui64", case {inputs [1, 2, 3, 4], expected [1, 2, 3, 4]}}
     - {tags [edge], extension "avx2", type "ui32", to_type "ui64", case {inputs [0, 1, 4294967295, 4294967294], expected [0, 1, 4294967295, 4294967294]}}
     - {tags [basic], extension "avx2", type "si32", to_type "si64", case {inputs [1, 2, 3, 4], expected [1, 2, 3, 4]}}
     - {tags [edge], extension "avx2", type "si32", to_type "si64", case {inputs [0, -1, -2147483648, 2147483647], expected [0, -1, -2147483648, 2147483647]}}
     - {tags [basic], extension "avx2", type "f32", to_type "f64", case {inputs [1.5, -2.5, 3.25, -4.75, 5.5, -6.5, 7.75, -8.25], expected [1.5, -2.5, 3.25, -4.75]}}
     - {tags [edge], extension "avx2", type "f32", to_type "f64", case {inputs [0.0, -0.0, 16777216.0, -16777216.0, 1.0, -1.0, 2.0, -2.0], expected [0.0, -0.0, 16777216.0, -16777216.0]}}
+    - {tags [avx512f, basic], extension "avx512", type "si8", to_type "si16", case {inputs [[-16, -15, -14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected [-16, -15, -14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {tags [avx512f, edge], extension "avx512", type "ui8", to_type "ui16", case {inputs [[0, 255, 1, 254, 2, 253, 3, 252, 4, 251, 5, 250, 6, 249, 7, 248, 8, 247, 9, 246, 10, 245, 11, 244, 12, 243, 13, 242, 14, 241, 15, 240]], expected [0, 255, 1, 254, 2, 253, 3, 252, 4, 251, 5, 250, 6, 249, 7, 248, 8, 247, 9, 246, 10, 245, 11, 244, 12, 243, 13, 242, 14, 241, 15, 240]}}
+    - {tags [avx512f, edge], extension "avx512", type "si8", to_type "si64", case {inputs [[-128, -1, 0, 127, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0]], expected [-128, -1, 0, 127, 1, 2, 3, 4]}}
+    - {tags [avx512f, edge], extension "avx512", type "ui8", to_type "ui64", case {inputs [[0, 255, 1, 254, 2, 253, 3, 252, 0, 0, 0, 0, 0, 0, 0, 0]], expected [0, 255, 1, 254, 2, 253, 3, 252]}}
+    - {tags [neon, edge], extension "neon", type "si8", to_type "si16", case {inputs [[-128, -1, 0, 1, 2, 3, 4, 127, 0, 0, 0, 0, 0, 0, 0, 0]], expected [-128, -1, 0, 1, 2, 3, 4, 127]}}
+    - {tags [neon, edge], extension "neon", type "ui16", to_type "ui32", case {inputs [[0, 1, 65535, 65534, 0, 0, 0, 0]], expected [0, 1, 65535, 65534]}}
+    - {tags [neon, edge], extension "neon", type "f32", to_type "f64", case {inputs [[0.0, -0.0, 0.0, 0.0]], expected [0.0, -0.0]}}
+    - {tags [exact_bytes, multistep], extension "sse", type "si8", to_type "si64", case {inputs [[-1, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected [-1, 127]}}
+    - {tags [exact_bytes, multistep], extension "sse", type "ui8", to_type "ui64", case {inputs [[0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected [0, 255]}}
+    - {tags [exact_bytes, multistep], extension "neon", type "si8", to_type "si64", case {inputs [[-128, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected [-128, 127]}}
+    - {tags [exact_bytes, multistep], extension "neon", type "ui8", to_type "ui64", case {inputs [[0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected [0, 255]}}
+    - {tags [exact_bytes, multistep], extension "wasm128", type "ui8", to_type "ui64", case {inputs [[0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected [0, 255]}}
+    - {tags [exact_bytes, multistep], extension "wasm128", type "ui16", to_type "ui64", case {inputs [[0, 65535, 0, 0, 0, 0, 0, 0]], expected [0, 65535]}}
   impls:
     avx512:
       si8:
-        requires [avx512f, avx512bw]
+        requires [avx512f]
         ToBase:
           si16:
             requires [avx512bw]
@@ -436,8 +597,25 @@ prim<v:=cptr+> load_convert_up(ptr):
                    var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
                    complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm512_cvtepi8_epi32>(loaded)));
                 """
+          si64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_memory, raw_pointer]
+            implementation:
+              tsil """
+                   let<type>(InVec, type(vector::as(sse, type(base::in))));
+                   let<type>(OutVec, type(vector::as_base(ToBase)));
+                   var<infer>(loaded, call<primitive=set_zero[InVec]>());
+                   mem<copy>(
+                     cast<reinterpret, type=ptr>(void, &loaded),
+                     cast<reinterpret, type=const_ptr>(void, ptr),
+                     value(generic::length(OutVec)) * value(type::size_bytes(type(base::in)))
+                   );
+                   complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm512_cvtepi8_epi64>(loaded)));
+                """
       ui8:
-        requires [avx512f, avx512bw]
+        requires [avx512f]
         ToBase:
           ui16:
             requires [avx512bw]
@@ -464,8 +642,25 @@ prim<v:=cptr+> load_convert_up(ptr):
                    var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
                    complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm512_cvtepu8_epi32>(loaded)));
                 """
+          ui64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_memory, raw_pointer]
+            implementation:
+              tsil """
+                   let<type>(InVec, type(vector::as(sse, type(base::in))));
+                   let<type>(OutVec, type(vector::as_base(ToBase)));
+                   var<infer>(loaded, call<primitive=set_zero[InVec]>());
+                   mem<copy>(
+                     cast<reinterpret, type=ptr>(void, &loaded),
+                     cast<reinterpret, type=const_ptr>(void, ptr),
+                     value(generic::length(OutVec)) * value(type::size_bytes(type(base::in)))
+                   );
+                   complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm512_cvtepu8_epi64>(loaded)));
+                """
       si16:
-        requires [avx512f, avx512bw]
+        requires [avx512f]
         ToBase:
           si32:
             safety:
@@ -492,7 +687,7 @@ prim<v:=cptr+> load_convert_up(ptr):
                    complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm512_cvtepi16_epi64>(loaded)));
                 """
       ui16:
-        requires [avx512f, avx512bw]
+        requires [avx512f]
         ToBase:
           ui32:
             safety:
@@ -563,22 +758,52 @@ prim<v:=cptr+> load_convert_up(ptr):
                    var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
                    complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm512_cvtps_pd>(loaded)));
                 """
-      arith:
-        requires [avx512f, avx]
-        safety:
-          internal_unsafe true
-          caller_unsafe true
-          reasons [raw_pointer]
-        implementation:
-          tsil """
-               let<type>(OutVec, type(vector::as_base(ToBase)));
-               let<type>(OutBase, type(base::generic(OutVec)));
-               var<infer>(out, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-               loop<backend>(i, 0, value(generic::length(OutVec)), 1)  {
-                out[i] = cast<static>(OutBase, *ptr_add(ptr, i));
-              }
-               complete(call<primitive=from_array[OutVec]>(out)) ;
-            """
+      si8:
+        requires [avx512f]
+        ToBase:
+          si16:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [raw_pointer]
+            implementation:
+              tsil """
+                   let<type>(HalfInVec, type(vector::as(avx2, type(base::in))));
+                   let<type>(HalfOutVec, type(vector::as(avx2, ToBase)));
+                   let<type>(OutVec, type(vector::as_base(ToBase)));
+                   var<const_infer>(low, call<primitive=@self[HalfInVec, ToBase]>(ptr));
+                   var<const_infer>(high, call<primitive=@self[HalfInVec, ToBase]>(
+                     ptr_add(ptr, value(generic::length(HalfOutVec)))
+                   ));
+                   var<infer>(result, call<primitive=insert[HalfOutVec, OutVec, 0]>(
+                     call<primitive=set_zero[OutVec]>(),
+                     low
+                   ));
+                   complete(call<primitive=insert[HalfOutVec, OutVec, 1]>(result, high));
+                """
+      ui8:
+        requires [avx512f]
+        ToBase:
+          ui16:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [raw_pointer]
+            implementation:
+              tsil """
+                   let<type>(HalfInVec, type(vector::as(avx2, type(base::in))));
+                   let<type>(HalfOutVec, type(vector::as(avx2, ToBase)));
+                   let<type>(OutVec, type(vector::as_base(ToBase)));
+                   var<const_infer>(low, call<primitive=@self[HalfInVec, ToBase]>(ptr));
+                   var<const_infer>(high, call<primitive=@self[HalfInVec, ToBase]>(
+                     ptr_add(ptr, value(generic::length(HalfOutVec)))
+                   ));
+                   var<infer>(result, call<primitive=insert[HalfOutVec, OutVec, 0]>(
+                     call<primitive=set_zero[OutVec]>(),
+                     low
+                   ));
+                   complete(call<primitive=insert[HalfOutVec, OutVec, 1]>(result, high));
+                """
     [avx2, avx2_vl]:
       si8:
         requires:
@@ -597,6 +822,22 @@ prim<v:=cptr+> load_convert_up(ptr):
                    var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
                    complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm256_cvtepi8_epi16>(loaded)));
                 """
+          [si32, si64]:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [raw_memory, raw_pointer]
+            implementation:
+              tsil """
+                  let<type>(OutVec, type(vector::as_base(ToBase)));
+                  var<infer>(loaded, call<primitive=set_zero[Vec]>());
+                  mem<copy>(
+                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=const_ptr>(void, ptr),
+                    value(generic::length(OutVec)) * value(type::size_bytes(type(base::in)))
+                  );
+                  complete(call<primitive=convert_up[Vec, ToBase, 0]>(loaded));
+                """
       ui8:
         requires:
           avx2 [avx2]
@@ -613,6 +854,22 @@ prim<v:=cptr+> load_convert_up(ptr):
                    let<type>(OutVec, type(vector::as_base(ToBase)));
                    var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
                    complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm256_cvtepu8_epi16>(loaded)));
+                """
+          [ui32, ui64]:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [raw_memory, raw_pointer]
+            implementation:
+              tsil """
+                  let<type>(OutVec, type(vector::as_base(ToBase)));
+                  var<infer>(loaded, call<primitive=set_zero[Vec]>());
+                  mem<copy>(
+                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=const_ptr>(void, ptr),
+                    value(generic::length(OutVec)) * value(type::size_bytes(type(base::in)))
+                  );
+                  complete(call<primitive=convert_up[Vec, ToBase, 0]>(loaded));
                 """
       si16:
         requires:
@@ -631,6 +888,22 @@ prim<v:=cptr+> load_convert_up(ptr):
                    var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
                    complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm256_cvtepi16_epi32>(loaded)));
                 """
+          si64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [raw_memory, raw_pointer]
+            implementation:
+              tsil """
+                  let<type>(OutVec, type(vector::as_base(ToBase)));
+                  var<infer>(loaded, call<primitive=set_zero[Vec]>());
+                  mem<copy>(
+                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=const_ptr>(void, ptr),
+                    value(generic::length(OutVec)) * value(type::size_bytes(type(base::in)))
+                  );
+                  complete(call<primitive=convert_up[Vec, ToBase, 0]>(loaded));
+                """
       ui16:
         requires:
           avx2 [avx2]
@@ -647,6 +920,22 @@ prim<v:=cptr+> load_convert_up(ptr):
                    let<type>(OutVec, type(vector::as_base(ToBase)));
                    var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
                    complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm256_cvtepu16_epi32>(loaded)));
+                """
+          ui64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [raw_memory, raw_pointer]
+            implementation:
+              tsil """
+                  let<type>(OutVec, type(vector::as_base(ToBase)));
+                  var<infer>(loaded, call<primitive=set_zero[Vec]>());
+                  mem<copy>(
+                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=const_ptr>(void, ptr),
+                    value(generic::length(OutVec)) * value(type::size_bytes(type(base::in)))
+                  );
+                  complete(call<primitive=convert_up[Vec, ToBase, 0]>(loaded));
                 """
       si32:
         requires:
@@ -699,24 +988,141 @@ prim<v:=cptr+> load_convert_up(ptr):
                    var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
                    complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm256_cvtps_pd>(loaded)));
                 """
-      arith:
-        requires:
-          avx2 [avx2]
-          avx2_vl [avx512f, avx512vl, avx]
-        safety:
-          internal_unsafe true
-          caller_unsafe true
-          reasons [raw_pointer]
-        implementation:
-          tsil """
-               let<type>(OutVec, type(vector::as_base(ToBase)));
-               let<type>(OutBase, type(base::generic(OutVec)));
-               var<infer>(out, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-               loop<backend>(i, 0, value(generic::length(OutVec)), 1)  {
-                out[i] = cast<static>(OutBase, *ptr_add(ptr, i));
-              }
-               complete(call<primitive=from_array[OutVec]>(out)) ;
-            """
+    neon:
+      si8:
+        requires [neon]
+        ToBase:
+          si16:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
+            implementation:
+              tsil "complete(intrin<vmovl_s8>(intrin<vld1_s8>(ptr)));"
+          [si32, si64]:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [raw_memory, raw_pointer]
+            implementation:
+              tsil """
+                  let<type>(OutVec, type(vector::as_base(ToBase)));
+                  var<infer>(loaded, call<primitive=set_zero[Vec]>());
+                  mem<copy>(
+                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=const_ptr>(void, ptr),
+                    value(generic::length(OutVec)) * value(type::size_bytes(type(base::in)))
+                  );
+                  complete(call<primitive=convert_up[Vec, ToBase, 0]>(loaded));
+                """
+      ui8:
+        requires [neon]
+        ToBase:
+          ui16:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
+            implementation:
+              tsil "complete(intrin<vmovl_u8>(intrin<vld1_u8>(ptr)));"
+          [ui32, ui64]:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [raw_memory, raw_pointer]
+            implementation:
+              tsil """
+                  let<type>(OutVec, type(vector::as_base(ToBase)));
+                  var<infer>(loaded, call<primitive=set_zero[Vec]>());
+                  mem<copy>(
+                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=const_ptr>(void, ptr),
+                    value(generic::length(OutVec)) * value(type::size_bytes(type(base::in)))
+                  );
+                  complete(call<primitive=convert_up[Vec, ToBase, 0]>(loaded));
+                """
+      si16:
+        requires [neon]
+        ToBase:
+          si32:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
+            implementation:
+              tsil "complete(intrin<vmovl_s16>(intrin<vld1_s16>(ptr)));"
+          si64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [raw_memory, raw_pointer]
+            implementation:
+              tsil """
+                  let<type>(OutVec, type(vector::as_base(ToBase)));
+                  var<infer>(loaded, call<primitive=set_zero[Vec]>());
+                  mem<copy>(
+                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=const_ptr>(void, ptr),
+                    value(generic::length(OutVec)) * value(type::size_bytes(type(base::in)))
+                  );
+                  complete(call<primitive=convert_up[Vec, ToBase, 0]>(loaded));
+                """
+      ui16:
+        requires [neon]
+        ToBase:
+          ui32:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
+            implementation:
+              tsil "complete(intrin<vmovl_u16>(intrin<vld1_u16>(ptr)));"
+          ui64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [raw_memory, raw_pointer]
+            implementation:
+              tsil """
+                  let<type>(OutVec, type(vector::as_base(ToBase)));
+                  var<infer>(loaded, call<primitive=set_zero[Vec]>());
+                  mem<copy>(
+                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=const_ptr>(void, ptr),
+                    value(generic::length(OutVec)) * value(type::size_bytes(type(base::in)))
+                  );
+                  complete(call<primitive=convert_up[Vec, ToBase, 0]>(loaded));
+                """
+      si32:
+        requires [neon]
+        ToBase:
+          si64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
+            implementation:
+              tsil "complete(intrin<vmovl_s32>(intrin<vld1_s32>(ptr)));"
+      ui32:
+        requires [neon]
+        ToBase:
+          ui64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
+            implementation:
+              tsil "complete(intrin<vmovl_u32>(intrin<vld1_u32>(ptr)));"
+      f32:
+        requires [neon]
+        ToBase:
+          f64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
+            implementation:
+              tsil "complete(intrin<vcvt_f64_f32>(intrin<vld1_f32>(ptr)));"
     sve:
       si8:
         requires [sve]
@@ -867,20 +1273,50 @@ prim<v:=cptr+> load_convert_up(ptr):
             implementation:
               tsil """
                    let<type>(OutVec, type(vector::as_base(ToBase)));
-                   var<const_infer>(loaded, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), ptr));
+                   var<const_infer>(loaded, call<primitive=load[Vec], attrs[aligned=false]>(ptr));
                    complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[OutVec]>(), loaded));
                 """
-    [sse, sse_vl, neon, sve, generic, oneapi_fpga, scalar, wasm128]:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            let<type>(OutVec, type(vector::as_base(ToBase)));
+            let<type>(OutBase, type(base::generic(OutVec)));
+            var<infer>(out, call<primitive=set_zero[OutVec]>());
+            loop<generation, scoped>(i, 0, value(generic::length(OutVec)), 1) {
+              out[value(i)] = cast<static>(OutBase, *ptr_add(ptr, value(i)));
+            }
+            complete(out);
+          """
+    [sse, sse_vl, wasm128]:
       arith:
         requires:
           sse [sse2]
           sse_vl [avx512f, avx512vl, sse, sse2]
-          neon [neon]
-          sve [sve]
-          generic []
-          oneapi_fpga []
-          scalar []
           wasm128 [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
+        implementation:
+          tsil """
+              let<type>(OutVec, type(vector::as_base(ToBase)));
+              var<infer>(loaded, call<primitive=set_zero[Vec]>());
+              mem<copy>(
+                cast<reinterpret, type=ptr>(void, &loaded),
+                cast<reinterpret, type=const_ptr>(void, ptr),
+                value(generic::length(OutVec)) * value(type::size_bytes(type(base::in)))
+              );
+              complete(call<primitive=convert_up[Vec, ToBase, 0]>(loaded));
+            """
+    sve:
+      arith:
+        requires [sve]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -894,4 +1330,36 @@ prim<v:=cptr+> load_convert_up(ptr):
                 out[i] = cast<static>(OutBase, *ptr_add(ptr, i));
               }
                complete(call<primitive=from_array[OutVec]>(out)) ;
+            """
+    [generic, oneapi_fpga]:
+      arith:
+        requires:
+          generic []
+          oneapi_fpga []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+               let<type>(OutVec, type(vector::as_base(ToBase)));
+               let<type>(OutBase, type(base::generic(OutVec)));
+               var<infer>(out, call<primitive=set_zero[OutVec]>());
+               loop<backend>(i, 0, value(generic::length(OutVec)), 1)  {
+                out[i] = cast<static>(OutBase, *ptr_add(ptr, i));
+              }
+               complete(out);
+            """
+    scalar:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+               let<type>(OutVec, type(vector::as_base(ToBase)));
+               let<type>(OutBase, type(base::generic(OutVec)));
+               complete(cast<static>(OutBase, *ptr));
             """

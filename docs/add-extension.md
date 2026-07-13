@@ -121,6 +121,22 @@ type uses `v128_t` in C++ and `core::arch::wasm32::v128` in Rust. Prefer
 explicit mappings when native registration or render logic expects concrete
 scalar tags.
 
+Compiler-vector overlays use the same typed extension path but may need a
+dedicated opt-in header. In a backend block:
+
+- `header_group "clang"` emits the extension into
+  `tsl_<profile>_clang.hpp`;
+- `compiler_ids [Clang, AppleClang]` gates the generated opt-in CMake target;
+- `compile_guards` declares the required compile-time macro contract;
+- `dataparallel_inference false` keeps the overlay out of `native` and
+  `fixed<N>` inference.
+
+An overlay fallback should use the typed `vector::fixed` query and explicit
+`cast<bitcast>` conversions. The query renders through
+`dataparallel::simd_for_t<fixed<N>, T>` while dependency closure tracks the
+concrete hardware extension selected for that profile. Do not hard-code `sse`,
+`avx2`, `avx512`, or `neon` into a compiler-vector fallback body.
+
 ## 5. Add Intrinsic Dialect Support Only If Needed
 
 Most extensions can use existing intrinsic composition. If the target has a new

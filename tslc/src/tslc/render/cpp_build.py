@@ -15,6 +15,7 @@ from tslc.compiler_assets import RenderAssets
 from tslc.output.verify_model import VerifyProfile, VerifyRunner
 from tslc.render._common import slug
 from tslc.backend.cpp_profile import _cpp_compile_guard_condition
+from tslc.backend.cpp_profile import cpp_header_group
 
 _CMAKE_CXX_FEATURE_FLAG_COMPILERS = "GNU,Clang,AppleClang,IntelLLVM"
 
@@ -100,6 +101,7 @@ def _cpp_cmakelists(profiles: tuple[EmittedProfile, ...], assets: RenderAssets) 
         profile_detection=_cpp_profile_detection(profiles, fallback, auto_gate=None),
         profile_auto_modes=_cpp_profile_auto_modes(profiles),
         profile_targets=_cpp_profile_targets(profiles),
+        overlay_test_targets=_cpp_overlay_test_targets(profiles),
     )
     return rendered.rstrip("\n") + "\n"
 
@@ -173,6 +175,101 @@ def _cpp_profile_targets(profiles: tuple[EmittedProfile, ...]) -> str:
                 + ")"
             )
         blocks.append("\n".join(lines))
+        for header_group in _cpp_profile_header_groups(emitted_profile):
+            overlay_target = f"{target}_{header_group}"
+            macro = f"TSL_ENABLE_{header_group.upper()}"
+            compiler_ids = _cpp_header_group_compiler_ids(
+                emitted_profile,
+                header_group,
+            )
+            compiler_pattern = "|".join(compiler_ids)
+            blocks.append(
+                "\n".join(
+                    (
+                        f'if(CMAKE_CXX_COMPILER_ID MATCHES "^({compiler_pattern})$")',
+                        f"  add_library({overlay_target} INTERFACE)",
+                        f"  add_library(tsl::{profile_slug}_{header_group} ALIAS {overlay_target})",
+                        f"  target_link_libraries({overlay_target} INTERFACE {target})",
+                        f"  target_compile_definitions({overlay_target} INTERFACE {macro})",
+                        "endif()",
+                    )
+                )
+            )
+    return "\n\n".join(blocks)
+
+
+def _cpp_profile_header_groups(profile: EmittedProfile) -> tuple[str, ...]:
+    used = set(used_extensions(profile.specializations("cpp")))
+    return tuple(
+        sorted(
+            {
+                group
+                for name, extension in profile.extensions.items()
+                if name in used and (group := cpp_header_group(extension)) is not None
+            }
+        )
+    )
+
+
+def _cpp_header_group_compiler_ids(
+    profile: EmittedProfile,
+    header_group: str,
+) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                compiler_id
+                for extension in profile.extensions.values()
+                if cpp_header_group(extension) == header_group
+                for compiler_id in extension.metadata.backend["cpp"].compiler_ids
+            }
+        )
+    )
+
+
+def _cpp_overlay_test_targets(profiles: tuple[EmittedProfile, ...]) -> str:
+    groups = tuple(
+        sorted(
+            {
+                group
+                for profile in profiles
+                for group in _cpp_profile_header_groups(profile)
+            }
+        )
+    )
+    blocks: list[str] = []
+    for group in groups:
+        blocks.append(
+            "\n".join(
+                (
+                    f"if(TSL_BUILD_TESTS AND TARGET tsl_profile_${{TSL_SELECTED_PROFILE}}_{group})",
+                    f"  add_executable(tsl_smoke_{group} tests/smoke_${{TSL_SELECTED_PROFILE}}_{group}.cpp)",
+                    (
+                        f"  target_link_libraries(tsl_smoke_{group} PRIVATE "
+                        f"tsl_profile_${{TSL_SELECTED_PROFILE}}_{group})"
+                    ),
+                    f"  add_executable(tsl_values_{group} tests/values_${{TSL_SELECTED_PROFILE}}.cpp)",
+                    (
+                        f"  target_link_libraries(tsl_values_{group} PRIVATE "
+                        f"tsl_profile_${{TSL_SELECTED_PROFILE}}_{group})"
+                    ),
+                    (
+                        f"  target_compile_options(tsl_values_{group} PRIVATE "
+                        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-fwrapv>)"
+                    ),
+                    f"  add_dependencies(tsl_values tsl_values_{group})",
+                    "  if(TSL_TEST_LAUNCHER)",
+                    (
+                        f"    add_test(NAME values_{group} COMMAND ${{TSL_TEST_LAUNCHER}} "
+                        f"$<TARGET_FILE:tsl_values_{group}>)"
+                    ),
+                    "  else()",
+                    f"    add_test(NAME values_{group} COMMAND tsl_values_{group})",
+                    "  endif()",
+                    "endif()",
+                )
+            )
+        )
     return "\n\n".join(blocks)
 
 
@@ -308,7 +405,15 @@ def _cpp_profile_detection_source(
     if renderer is None:
         return None
     guards = resolve_cpp_compile_guards(
-        used_extensions(emitted_profile.specializations("cpp")),
+        tuple(
+            extension_name
+            for extension_name in used_extensions(
+                emitted_profile.specializations("cpp")
+            )
+            if cpp_header_group(
+                emitted_profile.extensions.get(extension_name)
+            ) is None
+        ),
         emitted_profile.extensions,
     ).guards
     return renderer(profile, guards)

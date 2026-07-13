@@ -144,7 +144,7 @@ Syntax:
 ```tsil
 mask<lane_true>()
 mask<lane_false>()
-mask<zero>()
+mask<none>()
 mask<all>()
 mask<test>(mask, index)
 mask<test, imask>(imask, index)
@@ -155,14 +155,14 @@ mask<set_to>(mask, index, value)
 
 Use `mask` for backend-neutral mask lane constants and mask bit operations in
 portable fallback bodies. `mask<lane_true>()` and `mask<lane_false>()` produce
-the scalar lane payload values used by lane-register masks. `mask<zero>()` and
+the scalar lane payload values used by lane-register masks. `mask<none>()` and
 `mask<all>()` produce all-inactive/all-active mask containers.
 `mask<test, imask>()` tests a packed integral mask bitset. The other forms
 operate on an existing mask container. Native mask bodies often use intrinsics
 directly instead.
 
 Lowering chooses templates based on the selected extension's mask
-representation: `mask_zero_*`, `mask_all_*`, `mask_test_*`, `mask_set_*`,
+representation: `mask_none_*`, `mask_all_*`, `mask_test_*`, `mask_set_*`,
 `mask_clear_*`, `mask_set_to_*`, or `mask_test_imask`. Unsupported
 operation/representation pairs are skipped with a lowering diagnostic.
 
@@ -321,17 +321,24 @@ Syntax:
 loop<backend>(var, start, end, step) { body }
 loop<backend, unroll>(var, start, end, step) { body }
 loop<generation>(var, start, end, step) { body }
+loop<generation, scoped>(var, start, end, step) { body }
 ```
 
 Use `loop<backend>` for loops that should remain in generated target code. Add
 `unroll` when a backend unroll hint should be emitted if the trip count is known
-at generation time. Use `loop<generation>` when the loop should expand during
-lowering, for example to build an intrinsic argument list.
+at generation time. Use `loop<generation>` when the loop should expand fragments
+during lowering, for example to build an intrinsic argument list. Add `scoped`
+when the expanded body contains statements or declarations that require a
+separate lexical block per iteration.
 
 Lowering renders backend loops with the `loop_backend` template and optional
 `loop_backend_unroll` template. Generation loops evaluate integer bounds,
 temporarily bind the loop variable as a generation-time integer, render the
-body once per iteration, and emit the concatenated result. Zero steps are
+body once per iteration, and emit the concatenated result. A `scoped`
+generation loop wraps each expanded iteration in its own lexical block,
+matching the declaration scope of a real loop iteration; an ordinary generation
+loop emits the fragments directly. The binding is available to `value(...)`
+queries and intrinsic `immediate(N)=...` modifiers in the body. Zero steps are
 diagnosed as errors.
 
 ### `switch`

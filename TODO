@@ -29,7 +29,6 @@ So: no emergency. The root vocabulary is okay. The real human burden is the **se
 
 
 @BENCHMARK_PLAN.md
-@WASM_SUPPORT_PLAN.md
 
 
 
@@ -44,3 +43,16 @@ CL_CONFIG_CPU_EMULATE_DEVICES=1 ./main.fpga_emu
 @RUST_ALGORITHM_PLAN.md (DONE)
 @CPP_ALGORITHM_HELPER_PLAN.md (DONE)
 @RUST_ALGORITHM_HELPER_PLAN.md (DONE)
+@WASM_SUPPORT_PLAN.md (DONE)
+
+
+I think we should rework the add-primitive-implementation skill:
+```
+- Direct hardware intrinsic call, when an available intrinsic exactly matches the primitive semantics for the concrete extension/type/backend.
+- Composition of existing primitives, preserving signedness, floating behavior, masks, lanes, safety, undefined-behavior rules, immediates, and attributes. If required helper primitives are missing, add those first as a separate precursor slice unless the dependency is tiny and clearly in scope.
+```
+If a primitive can be expressed as a composition of intrinsics, then the intrinsics should be called through TSL-primitives. If the primitive does not exist, it must be added first. 
+Thus we strengthen the TSL corpus and avoid direct intrinsic calls scattered throughout the codebase (which may increase maintenance burden).
+Problem: This may end up in a circular dependency if the primitive is not implemented yet.
+Furthermore, naming (of the primitive) may be a problem. The primitive name should capture the semantics of the operation, not the implementation. This opens up the question whether the decision should be approved by a TSL maintainer or if the skill should be able to propose a name. 
+Even if a number of intrinsics are combined, one could reason about whether they form a recurring pattern, which would justify a new "composed" primitive that just encapsulates the specific combination of intrinsics (or other primitives). This would be a more general solution, but it may be hard to decide whether a combination of intrinsics is a recurring pattern or not.

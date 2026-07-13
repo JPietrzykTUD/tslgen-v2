@@ -22,6 +22,7 @@ from tslc.target_text import LoweredBody
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.render.project import render_project
 from tslc.value_tests.coverage import parity_gaps, parity_inventory
+from tslc.value_tests.literals import cpp_literal
 from tslc.value_tests import (
     ValueTestBackendProfileInput,
     ValueTestPlanner,
@@ -153,6 +154,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
             if hardware_extension is not None
             else None
         ),
+        header_group=values.pop("header_group", None),
     )
     assert not values, f"unhandled fixture fields: {sorted(values)}"
     return plan
@@ -215,6 +217,89 @@ def test_emitted_name_split_preserves_source_primitive_identity() -> None:
     assert finalized["shift_imm"][0].source_primitive_name == "shift"
 
 
+def test_planner_selects_authored_tests_by_source_signature() -> None:
+    immediate_primitive = Primitive(
+        "shift",
+        "v:=(v,sImm)",
+        ("data", "amount"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="immediate",
+                type_tag="si32",
+                tags=("immediate",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("scalar", scalar="1"),
+                ),
+                expected=("2", "4", "6", "8"),
+            ),
+        ),
+    )
+    runtime_primitive = Primitive(
+        "shift",
+        "v:=(v,s)",
+        ("data", "amount"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="runtime",
+                type_tag="si32",
+                tags=("runtime",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("scalar", scalar="1"),
+                ),
+                expected=("2", "4", "6", "8"),
+            ),
+        ),
+    )
+    immediate = _spec(
+        "shift_imm",
+        "shift",
+        param_kinds=("v", "sImm"),
+        immediate=("amount", "std::uint32_t"),
+    )
+    runtime = _spec("shift", "shift", param_kinds=("v", "s"))
+    profile = _profile(
+        cpp={"shift": (runtime,), "shift_imm": (immediate,)},
+    )
+
+    plan = ValueTestPlanner(
+        _catalog(immediate_primitive, runtime_primitive, *_harness_primitives()),
+        (CPP_VALUE_TEST_SUPPORT,),
+    ).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp", "unit", profile.specializations("cpp")
+            ),
+        )
+    )
+
+    assert plan.diagnostics == ()
+    assert [
+        (case.call_name, case.case_name)
+        for case in plan.profiles_for("cpp")[0].cases
+    ] == [("shift", "runtime"), ("shift_imm", "immediate")]
+
+
+def test_different_arity_leading_mask_form_gets_portable_emitted_name() -> None:
+    plain = _spec("hadd", "hadd", param_kinds=("v",))
+    masked = _spec("hadd", "hadd", param_kinds=("m", "v"))
+
+    finalized = finalize_emitted_names(
+        {"hadd": (plain, masked)}, immediate_split_names=frozenset()
+    )
+
+    assert finalized["hadd"] == (plain,)
+    assert finalized["hadd_mask"][0].primitive_name == "hadd_mask"
+    assert finalized["hadd_mask"][0].source_primitive_name == "hadd"
+
+
 def test_planner_uses_source_identity_for_emitted_mask_name() -> None:
     primitive = Primitive(
         "sum",
@@ -252,6 +337,99 @@ def test_planner_uses_source_identity_for_emitted_mask_name() -> None:
     cpp_profiles = plan.profiles_for("cpp")
     assert cpp_profiles[0].cases[0].call_name == "sum_maskz"
     assert cpp_profiles[0].cases[0].kind == "masked"
+
+
+def test_planner_preserves_trailing_masks_for_indexed_memory_cases(
+    render_assets: RenderAssets,
+) -> None:
+    gather = Primitive(
+        "gather",
+        "v:=(m,cptr,vidx,v,sImm)",
+        ("mask", "base_ptr", "index", "source", "scale"),
+        ("mask",),
+        (),
+        attributes={"mask": "pass_through"},
+        tests=(
+            TslTestCase(
+                name="masked_gather",
+                type_tag="si32",
+                tags=("masked",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("10", "20", "30", "40")),
+                    TslTestArg("vector", values=("0", "1", "2", "3")),
+                    TslTestArg("vector", values=("100", "101", "102", "103")),
+                    # This is the catalog shape produced by the authored indexed-memory
+                    # tests, whose mask literal follows the vector-shaped operands.
+                    TslTestArg("scalar", scalar="10"),
+                ),
+                expected=("100", "20", "102", "40"),
+                scale=4,
+            ),
+        ),
+    )
+    scatter = Primitive(
+        "scatter",
+        "void:=(m,ptr,vidx,v,sImm)",
+        ("mask", "base_ptr", "index", "data", "scale"),
+        ("mask",),
+        (),
+        attributes={"mask": "zero"},
+        tests=(
+            TslTestCase(
+                name="masked_scatter",
+                type_tag="si32",
+                tags=("masked",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("10", "20", "30", "40")),
+                    TslTestArg("vector", values=("0", "1", "2", "3")),
+                    TslTestArg("scalar", scalar="10"),
+                ),
+                expected=("0", "20", "0", "40"),
+                scale=4,
+            ),
+        ),
+    )
+    gather_spec = _spec(
+        "gather_mask",
+        "gather",
+        param_kinds=("m", "cptr", "vidx", "v", "sImm"),
+        immediate=("scale", "std::size_t"),
+        mask_policy="pass_through",
+    )
+    scatter_spec = _spec(
+        "scatter_mask",
+        "scatter",
+        result_kind="void",
+        param_kinds=("m", "ptr", "vidx", "v", "sImm"),
+        immediate=("scale", "std::size_t"),
+        mask_policy="zero",
+    )
+    profile = _profile(
+        cpp={"gather_mask": (gather_spec,), "scatter_mask": (scatter_spec,)}
+    )
+
+    plan = ValueTestPlanner(
+        _catalog(gather, scatter, *_harness_primitives()),
+        (CPP_VALUE_TEST_SUPPORT,),
+    ).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp", profile.profile.name, profile.specializations("cpp")
+            ),
+        )
+    )
+
+    assert plan.diagnostics == ()
+    cases = plan.profiles_for("cpp")[0].cases
+    assert [(case.call_name, case.inputs.masks) for case in cases] == [
+        ("gather_mask", ("10",)),
+        ("scatter_mask", ("10",)),
+    ]
+    source = render_cpp_values_runner(plan.profiles_for("cpp")[0], render_assets)
+    assert "gather_mask<Vec, Indices, 4>(mask, data, idx, source)" in source
+    assert "scatter_mask<Vec, Indices, 4>(mask, data, idx, values)" in source
 
 
 def test_planner_emits_fixed_masked_mask_result_cases() -> None:
@@ -612,6 +790,26 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
     )
     assert "tsl::plus<Vec>(v0, v1)" in cpp_source
 
+    guarded_cpp_case = ValueTestCasePlan(
+        kind="generic_golden",
+        function_name="test_clang_add",
+        case_name="clang-basic",
+        call_name="plus",
+        type_tag="si32",
+        base_spelling="std::int32_t",
+        lanes=2,
+        vector_inputs=(("1", "2"), ("3", "4")),
+        expected=("4", "6"),
+        result_kind="v",
+        param_kinds=("v", "v"),
+        header_group="clang",
+    )
+    guarded_source = render_cpp_values_runner(
+        ValueTestProfilePlan("cpp", "unit-profile", (guarded_cpp_case,)),
+        render_assets,
+    )
+    assert guarded_source.count("#if defined(TSL_ENABLE_CLANG)") == 2
+
     cpp_indexed_case = ValueTestCasePlan(
         kind="indexed_load",
         function_name="test_gather_narrow_partial",
@@ -637,7 +835,7 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         "using Indices = tsl::simd<std::uint64_t, tsl::generic<2>>;"
         in cpp_indexed_source
     )
-    assert "static const std::uint64_t idx_in[2] = {0, 4};" in cpp_indexed_source
+    assert "static const std::uint64_t idx_in[2] = {0ULL, 4ULL};" in cpp_indexed_source
     assert (
         "tsl::gather_narrow_partial<Vec, Indices, 2>(data, idx);"
         in cpp_indexed_source
@@ -941,6 +1139,26 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
     assert "let s0: i32 = 3;" in rust_scalar_vector_source
     assert "sequence::<Vec>(s0)" in rust_scalar_vector_source
 
+    rust_indexed_vector_case = ValueTestCasePlan(
+        kind="scalar_vector",
+        function_name="test_insert_value",
+        case_name="insert_value",
+        call_name="insert_value",
+        type_tag="si32",
+        base_spelling="i32",
+        lanes=4,
+        vector_inputs=(("1", "2", "3", "4"),),
+        scalar_inputs=("9",),
+        expected=("1", "2", "9", "4"),
+        param_kinds=("v", "s"),
+        index_value="2",
+    )
+    rust_indexed_vector_source = render_rust_values_file(
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_indexed_vector_case,)),),
+        render_assets,
+    )
+    assert "insert_value::<Vec, 2>(v0, s0)" in rust_indexed_vector_source
+
     rust_scalar_case = ValueTestCasePlan(
         kind="scalar_result",
         function_name="test_extract_value",
@@ -1147,6 +1365,49 @@ def test_wasm_rust_value_tests_render_native_differential_cases(
     assert "from_array::<Hw>(&hin0)" in values_source
     assert "let hw = to_array::<Hw>(add::<Hw>(" in values_source
     assert "let reference = add::<Ref>(r0, r1);" in values_source
+
+
+def test_opt_in_clang_overlays_get_guarded_differential_targets(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add"],
+        profiles=["avx2"],
+        type_tags=("si32",),
+        backends=("cpp",),
+        test_harness=True,
+    )
+
+    assert result.rendered is not None
+    cases = tuple(
+        case
+        for profile in result.rendered.value_tests.profiles_for("cpp")
+        for case in profile.cases
+    )
+    assert any(
+        case.differential is not None
+        and case.differential.hardware_extension == "avx2"
+        for case in cases
+    )
+    clang_cases = tuple(
+        case
+        for case in cases
+        if case.differential is not None
+        and case.differential.hardware_extension.startswith("clang_v")
+    )
+    assert clang_cases
+    assert all(case.header_group == "clang" for case in clang_cases)
+
+    values_source = next(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path == "cpp/tests/values_avx2.cpp"
+    )
+    assert "#if defined(TSL_ENABLE_CLANG)" in values_source
+    assert "using Hw = tsl::simd<int32_t, tsl::clang_v256>;" in values_source
 
 
 def test_scalable_tiling_is_gated_on_corpus_cross_lane_fact() -> None:
@@ -1597,6 +1858,15 @@ def test_cpp_value_test_support_matches_renderer_dispatch() -> None:
         CPP_VALUE_TEST_RENDERER.case_renderers["new_case"] = (  # type: ignore[index]
             lambda case: ""
         )
+
+
+def test_cpp_integer_literals_are_valid_at_64_bit_boundaries() -> None:
+    assert cpp_literal("-9223372036854775808", "si64") == (
+        "(-9223372036854775807LL - 1LL)"
+    )
+    assert cpp_literal("18446744073709551615", "ui64") == (
+        "18446744073709551615ULL"
+    )
 
 
 def test_rust_value_test_support_matches_renderer_dispatch() -> None:

@@ -34,7 +34,7 @@ def _scalar_spec(catalog, machine_profiles, primitive, backend, type_tag="si32")
     return Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend)).specialization
 
 
-def _dependencies_for_body(catalog, machine_profiles, body):
+def _lowered_for_body(catalog, machine_profiles, body):
     slot = next(
         selected
         for selected in Selector()
@@ -53,9 +53,14 @@ def _dependencies_for_body(catalog, machine_profiles, body):
         create_backend_dialect(catalog, "cpp"),
     )
     assert lowered.specialization is not None, lowered.diagnostics
+    return lowered.specialization
+
+
+def _dependencies_for_body(catalog, machine_profiles, body):
+    specialization = _lowered_for_body(catalog, machine_profiles, body)
     return frozenset(
         origin.dependency
-        for origin in lowered.specialization.call_dependency_origins
+        for origin in specialization.call_dependency_origins
     )
 
 
@@ -183,6 +188,55 @@ def test_lowering_dependency_facts_use_shared_query_functions(
     )
 
 
+def test_target_extension_dependency_preserves_source_vector_base(
+    catalog: Catalog, machine_profiles
+) -> None:
+    body = """
+      let<type>(BitBase, type(base::unsigned_of(type(base::in))));
+      let<type>(BitVec, type(vector::as_base(BitBase)));
+      var<const_infer>(low, call<primitive=extract[BitVec, sse, 0]>(left));
+      complete(left);
+    """
+
+    dependencies = _dependencies_for_body(catalog, machine_profiles, body)
+
+    assert dependencies == frozenset(
+        {
+            CallDependency(
+                "extract",
+                None,
+                VectorIdentity("ui32", "avx2"),
+                VectorIdentity("ui32", "sse"),
+            )
+        }
+    )
+
+    lowered = _lowered_for_body(catalog, machine_profiles, body)
+    assert (
+        "extract<tsl::simd<uint32_t, tsl::avx2>, "
+        "tsl::simd<uint32_t, tsl::sse>, 0>"
+    ) in lowered.body_text
+
+
+def test_target_base_rendering_preserves_source_vector_extension(
+    catalog: Catalog, machine_profiles
+) -> None:
+    body = """
+      let<type>(HalfVec, type(vector::as(sse, type(base::in))));
+      let<type>(ToBase, type(scalar::ui16));
+      var<const_infer>(low, call<primitive=convert_down[HalfVec, ToBase]>(left));
+      complete(left);
+    """
+
+    lowered = _lowered_for_body(catalog, machine_profiles, body)
+
+    assert (
+        "convert_down<tsl::simd<int32_t, tsl::sse>, "
+        "tsl::simd<uint16_t, tsl::sse>>"
+    ) in lowered.body_text
+    assert "tsl::simd<uint16_t, tsl::avx2>" not in lowered.body_text
+
+
 def test_dependency_closure_ignores_dead_generation_branch_calls(
     data_root: Path,
     machine_profiles_path: Path,
@@ -219,6 +273,60 @@ def test_dependency_closure_ignores_dead_generation_branch_calls(
     assert {"dependency_probe", "set_zero"} <= emitted
     assert "dead_branch_only" not in emitted
     assert not any(entry.primitive == "dependency_probe" for entry in result.skipped)
+
+
+def test_dependency_closure_pulls_concrete_callee_source_types(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_left"],
+        profiles=["avx2"],
+        type_tags=["si32"],
+        backends=["cpp"],
+    )
+
+    assert not has_errors(result.diagnostics), result.diagnostics
+    coverage = {
+        (entry.primitive, entry.extension, entry.type_tag)
+        for entry in result.coverage
+    }
+    for extension in ("clang_v128", "clang_v256", "clang_v512"):
+        assert ("shift_left", extension, "si32") in coverage
+        assert ("reinterpret", extension, "ui32") in coverage
+    assert not any(
+        entry.primitive == "shift_left"
+        and entry.extension.startswith("clang_v")
+        and entry.type_tag == "si32"
+        for entry in result.skipped
+    )
+
+
+def test_active_extension_variant_outweighs_fixed_fallback_registration(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_left"],
+        profiles=["skylake"],
+        type_tags=["si32"],
+        backends=["cpp"],
+    )
+
+    assert not has_errors(result.diagnostics), result.diagnostics
+    header = next(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path == "cpp/include/tsl_skylake.hpp"
+    )
+    avx2_traits = header.split("struct simd<T, avx2> {", 1)[1].split("};", 1)[0]
+    sse_traits = header.split("struct simd<T, sse> {", 1)[1].split("};", 1)[0]
+    assert "using mask_type = typename detail::native_mask<256, T>::type;" in avx2_traits
+    assert "using mask_type = typename detail::native_mask<128, T>::type;" in sse_traits
 
 
 def test_primitive_corpus_uses_comma_separated_call_attrs(data_root: Path) -> None:

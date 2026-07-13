@@ -41,7 +41,6 @@ class _GenericGoldenPattern(_BasePattern):
             and spec.mask_policy is None
             and not spec.axis
             and spec.immediate is None
-            and not spec.generic_params
             and not spec.type_params
         )
 

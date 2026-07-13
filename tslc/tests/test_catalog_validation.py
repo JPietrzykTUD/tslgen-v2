@@ -73,6 +73,35 @@ def test_valid_tiny_catalog_has_no_validation_diagnostics() -> None:
     assert _diagnostics(_base_source()) == ()
 
 
+def test_target_constraint_relations_are_validated() -> None:
+    source = _base_source().replace(
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n',
+        "prim<v:=v> id(data):\n"
+        "  return_type:\n"
+        "    extension: ToExtension\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        ToExtension:\n"
+        "          where:\n"
+        "            family unrelated\n"
+        "            width sideways\n"
+        "            implementation:\n"
+        '              tsil "complete(data);"\n',
+    )
+
+    diagnostics = _diagnostics(source)
+
+    assert sum(diagnostic.code == "TSL-CATALOG-INVALID-ENUM" for diagnostic in diagnostics) == 2
+    assert any("target constraint family" in diagnostic.message for diagnostic in diagnostics)
+    assert any("target constraint width" in diagnostic.message for diagnostic in diagnostics)
+
+
 def test_primitive_documentation_fields_are_accepted_and_promoted() -> None:
     source = _base_source().replace(
         "  impls:\n",
@@ -570,6 +599,25 @@ def test_extension_backend_compile_guards_are_validated() -> None:
     codes = {diagnostic.code for diagnostic in diagnostics}
     assert "TSL-CATALOG-UNKNOWN-FIELD" in codes
     assert "TSL-CATALOG-MALFORMED-COMPILE-GUARD" in codes
+
+
+def test_extension_backend_dataparallel_inference_is_boolean() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension overlay:\n"
+            '  extension_name "overlay"\n'
+            '  family "x86"\n'
+            "  cpp:\n"
+            "    supported true\n"
+            '    header_group "clang"\n'
+            '    dataparallel_inference "sometimes"\n'
+        )
+    )
+
+    assert any(
+        diagnostic.code == "TSL-CATALOG-MALFORMED-DATAPARALLEL-INFERENCE"
+        for diagnostic in diagnostics
+    )
 
 
 def test_scalable_cpp_extension_requires_runtime_lane_count() -> None:
