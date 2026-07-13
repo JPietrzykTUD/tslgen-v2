@@ -5,20 +5,21 @@ from __future__ import annotations
 import json
 
 from tslc.backend.cpp import (
-    implementation_name,
     variant_enum_name,
     variant_selector_name,
 )
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
+    BenchmarkMaskDensityScenario,
     BenchmarkProfilePlan,
     BenchmarkProjectPlan,
+    BenchmarkRegisterScenario,
 )
 from tslc.benchmark.planner import BENCHMARK_PROTOCOL_VERSION
+from tslc.benchmark.render_cpp_candidate import render_candidate_set, vector_type
 from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact
 from tslc.render._common import slug, text
-from tslc.value_tests.literals import cpp_literal_list
 
 
 def cpp_benchmark_artifacts(
@@ -105,14 +106,7 @@ def _render_manifest(profile: BenchmarkProfilePlan) -> str:
                     for candidate in candidate_set.candidates
                 ],
                 "scenarios": [
-                    {
-                        "id": scenario.scenario_id,
-                        "kind": scenario.kind,
-                        "seed": scenario.seed,
-                        "batch_size": scenario.batch_size,
-                        "rounds": scenario.rounds,
-                        "minimum_sample_ns": scenario.minimum_sample_ns,
-                    }
+                    _scenario_manifest(scenario)
                     for scenario in candidate_set.scenarios
                 ],
             }
@@ -122,9 +116,40 @@ def _render_manifest(profile: BenchmarkProfilePlan) -> str:
     return json.dumps(payload, indent=2, sort_keys=True) + "\n"
 
 
+def _scenario_manifest(
+    scenario: BenchmarkRegisterScenario | BenchmarkMaskDensityScenario,
+) -> dict[str, object]:
+    timing = scenario.timing
+    payload: dict[str, object] = {
+        "id": scenario.scenario_id,
+        "kind": scenario.kind,
+        "seed": timing.seed,
+        "batch_size": timing.batch_size,
+        "rounds": timing.rounds,
+        "minimum_sample_ns": timing.minimum_sample_ns,
+    }
+    if isinstance(scenario, BenchmarkRegisterScenario):
+        payload.update(
+            {
+                "family": "register",
+                "operand_generators": scenario.operand_generators,
+                "dependency_parameter": scenario.dependency_parameter,
+            }
+        )
+    else:
+        payload.update(
+            {
+                "family": "mask_density",
+                "parameter_index": scenario.parameter_index,
+                "active_lanes": scenario.active_lanes,
+            }
+        )
+    return payload
+
+
 def _render_source(profile: BenchmarkProfilePlan) -> str:
     declarations = "\n\n".join(
-        _render_candidate_set(index, candidate_set)
+        render_candidate_set(index, candidate_set)
         for index, candidate_set in enumerate(profile.candidate_sets)
     )
     runs = "\n".join(
@@ -311,228 +336,11 @@ int main(int argc, char** argv) {{
 '''
 
 
-def _render_candidate_set(index: int, candidate_set: BenchmarkCandidateSet) -> str:
-    spec = candidate_set.specialization
-    vector_type = _vector_type(candidate_set)
-    inputs = len(spec.param_kinds)
-    batch_size = candidate_set.scenarios[0].batch_size
-    invoke = _render_invoke(index, candidate_set)
-    correctness = "\n".join(
-        _render_correctness(index, candidate_index, candidate_set)
-        for candidate_index, _candidate in enumerate(candidate_set.candidates)
-    )
-    throughput_args = ", ".join(
-        f"inputs.vectors[{argument}][position]" for argument in range(inputs)
-    )
-    latency_args = ", ".join(
-        ("current", *(f"inputs.vectors[{argument}][position]" for argument in range(1, inputs)))
-    )
-    measure_cases = "\n".join(
-        f"    case {candidate_index}: return latency ? measure_latency_{index}<{candidate_index}>(inputs, iterations) : measure_throughput_{index}<{candidate_index}>(inputs, iterations);"
-        for candidate_index, _candidate in enumerate(candidate_set.candidates)
-    )
-    candidate_names = ", ".join(
-        _cpp_string(candidate.variant_id) for candidate in candidate_set.candidates
-    )
-    scenario_names = ", ".join(
-        _cpp_string(scenario.scenario_id) for scenario in candidate_set.scenarios
-    )
-    scenario_seeds = ", ".join(
-        f"{scenario.seed}ULL" for scenario in candidate_set.scenarios
-    )
-    rounds = candidate_set.scenarios[0].rounds
-    minimum_ns = candidate_set.scenarios[0].minimum_sample_ns
-    correctness_calls = " && ".join(
-        f"correct_{index}_{candidate_index}()"
-        for candidate_index, _candidate in enumerate(candidate_set.candidates)
-    )
-    stable_id = _cpp_string(candidate_set.stable_id)
-    return f'''using Vec_{index} = {vector_type};
-using Reg_{index} = typename Vec_{index}::register_type;
-using Base_{index} = typename Vec_{index}::base_type;
-constexpr std::size_t kBatch_{index} = {batch_size};
-
-struct Inputs_{index} {{
-    Reg_{index} vectors[{inputs}][kBatch_{index}]{{}};
-}};
-
-Inputs_{index} make_inputs_{index}() {{
-    Inputs_{index} inputs;
-    std::uint64_t state = {candidate_set.scenarios[0].seed}ULL;
-    for (std::size_t argument = 0; argument < {inputs}; ++argument) {{
-        for (std::size_t position = 0; position < kBatch_{index}; ++position) {{
-            typename tsl::array_for<Vec_{index}>::type lanes{{}};
-            for (std::size_t lane = 0; lane < {candidate_set.key.lanes}; ++lane)
-                lanes[lane] = tsl::benchmark::next_value<Base_{index}>(state);
-            inputs.vectors[argument][position] = tsl::{candidate_set.correctness_cases[0].from_array_name}<Vec_{index}>(lanes);
-        }}
-    }}
-    tsl::benchmark::do_not_optimize(inputs);
-    return inputs;
-}}
-
-{invoke}
-
-{correctness}
-
-template <std::size_t Candidate>
-std::uint64_t measure_throughput_{index}(Inputs_{index} const& inputs,
-                                        std::size_t iterations) {{
-    Reg_{index} result{{}};
-    const auto begin = tsl::benchmark::clock::now();
-    for (std::size_t iteration = 0; iteration < iterations; ++iteration) {{
-        for (std::size_t position = 0; position < kBatch_{index}; ++position) {{
-            result = invoke_{index}<Candidate>({throughput_args});
-            tsl::benchmark::do_not_optimize(result);
-        }}
-    }}
-    const auto end = tsl::benchmark::clock::now();
-    tsl::benchmark::do_not_optimize(result);
-    return tsl::benchmark::elapsed_ns(begin, end);
-}}
-
-template <std::size_t Candidate>
-std::uint64_t measure_latency_{index}(Inputs_{index} const& inputs,
-                                     std::size_t iterations) {{
-    Reg_{index} current = inputs.vectors[0][0];
-    const auto begin = tsl::benchmark::clock::now();
-    for (std::size_t iteration = 0; iteration < iterations; ++iteration) {{
-        for (std::size_t position = 0; position < kBatch_{index}; ++position) {{
-            current = invoke_{index}<Candidate>({latency_args});
-        }}
-    }}
-    const auto end = tsl::benchmark::clock::now();
-    tsl::benchmark::do_not_optimize(current);
-    return tsl::benchmark::elapsed_ns(begin, end);
-}}
-
-std::uint64_t measure_{index}(std::size_t candidate, bool latency,
-                             Inputs_{index} const& inputs, std::size_t iterations) {{
-    switch (candidate) {{
-{measure_cases}
-    default: throw std::runtime_error("invalid candidate index");
-    }}
-}}
-
-bool benchmark_set_{index}(std::vector<RawSample>& all_samples,
-                           std::vector<Decision>& decisions,
-                           Options const& options) {{
-    if (!({correctness_calls})) {{
-        std::cerr << "candidate correctness failed for " << {stable_id} << '\\n';
-        return false;
-    }}
-    const Inputs_{index} inputs = make_inputs_{index}();
-    const std::array<std::string, {len(candidate_set.candidates)}> candidates = {{{candidate_names}}};
-    const std::array<std::string, {len(candidate_set.scenarios)}> scenarios = {{{scenario_names}}};
-    const std::array<std::uint64_t, {len(candidate_set.scenarios)}> scenario_seeds = {{{scenario_seeds}}};
-    const std::size_t rounds = options.rounds_override == 0 ? {rounds} : options.rounds_override;
-    const std::uint64_t minimum_ns = options.minimum_sample_ns_override == 0
-        ? {minimum_ns}ULL : options.minimum_sample_ns_override;
-    std::vector<RawSample> set_samples;
-    for (std::size_t scenario = 0; scenario < scenarios.size(); ++scenario) {{
-        const bool latency = scenario == 1;
-        std::uint64_t schedule_state = scenario_seeds[scenario];
-        for (std::size_t candidate = 0; candidate < candidates.size(); ++candidate)
-            (void)measure_{index}(candidate, latency, inputs, 1);
-        const std::size_t iterations = tsl::benchmark::calibrate(
-            [&](std::size_t count) {{ return measure_{index}(0, latency, inputs, count); }},
-            minimum_ns);
-        for (std::size_t round = 0; round < rounds; ++round) {{
-            const std::uint64_t schedule = tsl::benchmark::splitmix64(schedule_state);
-            const bool reverse = (schedule & 1U) != 0U;
-            const std::size_t rotation = (schedule >> 1U) % candidates.size();
-            for (std::size_t offset = 0; offset < candidates.size(); ++offset) {{
-                const std::size_t ordered = reverse
-                    ? candidates.size() - 1 - offset
-                    : offset;
-                const std::size_t candidate = (rotation + ordered) % candidates.size();
-                set_samples.push_back(RawSample{{
-                    {stable_id}, scenarios[scenario], candidates[candidate], round, iterations,
-                    measure_{index}(candidate, latency, inputs, iterations)}});
-            }}
-        }}
-    }}
-    all_samples.insert(all_samples.end(), set_samples.begin(), set_samples.end());
-    decisions.push_back(tsl::benchmark::reduce_candidate_set(
-        {stable_id}, std::vector<std::string>(candidates.begin(), candidates.end()),
-        std::vector<std::string>(scenarios.begin(), scenarios.end()), set_samples,
-        options.threshold));
-    return true;
-}}'''
-
-
-def _render_invoke(
-    index: int,
-    candidate_set: BenchmarkCandidateSet,
-) -> str:
-    spec = candidate_set.specialization
-    params = ", ".join(
-        f"typename tsl::reg_param<Vec_{index}>::type value_{position}"
-        for position, _kind in enumerate(spec.param_kinds)
-    )
-    arguments = ", ".join(
-        f"value_{position}" for position, _kind in enumerate(spec.param_kinds)
-    )
-    branches: list[str] = []
-    for candidate_index, candidate in enumerate(candidate_set.candidates):
-        implementation = implementation_name(
-            spec.primitive_name,
-            None if candidate.is_default else candidate.variant_id,
-        )
-        keyword = "if" if candidate_index == 0 else "else if"
-        branches.append(
-            f"    {keyword} constexpr (Candidate == {candidate_index}) {{\n"
-            f"        return ::tsl::detail::primitives::{implementation}"
-            f"<Vec_{index}>::apply({arguments});\n"
-            "    }"
-        )
-    return f'''template <std::size_t Candidate>
-inline Reg_{index} invoke_{index}({params}) {{
-{chr(10).join(branches)}
-    else {{
-        static_assert(Candidate < {len(candidate_set.candidates)}, "invalid benchmark candidate");
-        return Reg_{index}{{}};
-    }}
-}}'''
-
-
-def _render_correctness(
-    index: int,
-    candidate_index: int,
-    candidate_set: BenchmarkCandidateSet,
-) -> str:
-    case_blocks: list[str] = []
-    for case_index, case in enumerate(candidate_set.correctness_cases):
-        arrays = "\n".join(
-            f"    typename tsl::array_for<Vec_{index}>::type input_{argument} = "
-            f"{{{cpp_literal_list(values, candidate_set.key.type_tag)}}};\n"
-            f"    const auto value_{argument} = tsl::{case.from_array_name}<Vec_{index}>(input_{argument});"
-            for argument, values in enumerate(case.vector_inputs)
-        )
-        arguments = ", ".join(
-            f"value_{argument}" for argument, _values in enumerate(case.vector_inputs)
-        )
-        expected = cpp_literal_list(case.expected, candidate_set.key.type_tag)
-        case_blocks.append(
-            f'''{{
-{arrays}
-    const auto result = invoke_{index}<{candidate_index}>({arguments});
-    const auto actual = tsl::{case.to_array_name}<Vec_{index}>(result);
-    const Base_{index} expected[] = {{{expected}}};
-    failures += tsl::test::check_lanes<Base_{index}>(
-        {_cpp_string(case.case_name)}, actual, expected, {len(case.expected)});
-}}'''
-        )
-    return f'''bool correct_{index}_{candidate_index}() {{
-    int failures = 0;
-{_indent("\n".join(case_blocks), 4)}
-    return failures == 0;
-}}'''
 
 
 def _render_policy_branch(candidate_set: BenchmarkCandidateSet) -> str:
     spec = candidate_set.specialization
-    vector = _vector_type(candidate_set)
+    vector = vector_type(candidate_set)
     branches: list[str] = []
     for candidate in candidate_set.candidates[1:]:
         branches.append(
@@ -571,20 +379,8 @@ def _render_policy_read(candidate_set: BenchmarkCandidateSet) -> str:
     }}'''
 
 
-def _vector_type(candidate_set: BenchmarkCandidateSet) -> str:
-    spec = candidate_set.specialization
-    if spec.vector_spelling is not None:
-        return spec.vector_spelling
-    return f"::tsl::simd<{spec.base_type_spelling}, ::tsl::{spec.extension_name}>"
-
-
 def _cpp_string(value: str) -> str:
     return json.dumps(value)
-
-
-def _indent(value: str, spaces: int) -> str:
-    prefix = " " * spaces
-    return "\n".join(prefix + line if line else line for line in value.splitlines())
 
 
 __all__ = ("cpp_benchmark_artifacts",)

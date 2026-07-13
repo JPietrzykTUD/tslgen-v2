@@ -119,10 +119,11 @@ identity. A backend renderer derives them from the typed key.
 @dataclass(frozen=True, slots=True)
 class BenchmarkCandidateSet:
     key: SpecializationKey
-    default: VariantChoice
-    alternatives: tuple[VariantChoice, ...]
+    specialization: LoweredSpecialization
+    candidates: tuple[BenchmarkCandidate, ...]
     correctness_cases: tuple[BenchmarkCorrectnessCase, ...]
     scenarios: tuple[BenchmarkScenario, ...]
+    stable_id: str
 ```
 
 ### Eligibility
@@ -132,10 +133,14 @@ lowered named variant, all candidates and dependencies are emitted in the
 selected C++ profile, authored correctness cases cover the specialization, and
 the planner supports its scenario kind.
 
-The first supported scenario is a pure register operation with vector inputs
-and a vector or scalar result. Pointer parameters, memory effects, lane lists,
-masks, immediates, reductions, scalable vectors, and caller-unsafe APIs are
-skipped with structured reasons.
+The implemented scenario families are fixed-width pure-register operations with
+only vector inputs and a vector result, plus integral-mask-to-mask conversions.
+The former always receive independent-throughput measurement and receive a
+latency chain only when its dependency operand is unambiguous or explicitly
+declared. The latter receive sparse, balanced, and dense mask-throughput
+measurement. Pointer parameters, memory effects, lane lists, arbitrary mask
+shapes, immediates, reductions, scalable vectors, scalar results, and
+caller-unsafe APIs are skipped with structured reasons.
 
 This deliberately excludes `gather_narrow_partial` as the first policy-bearing
 benchmark. It is useful later, but cache and index distributions make it a poor
@@ -366,8 +371,23 @@ The benchmark harness should be generated from typed facts:
 - typed benchmark scenarios.
 
 It must not classify primitive names like `gather` or `add` in production
-benchmark generation. If benchmark setup needs primitive-family-specific data,
-that should be represented by typed benchmark scenarios later.
+benchmark generation. Scenario admission is selected from typed result and
+parameter shapes. Any source-authored workload fact is promoted and validated
+before benchmark planning.
+
+Workload ownership is split deliberately:
+
+```text
+primitive signature + PrimitiveBenchmarkSpec
+  -> BenchmarkPlanner
+  -> fully resolved register/mask-density scenario
+  -> C++ candidate/scenario renderer
+  -> generated tsl_benchmark_core.hpp measurement runtime
+```
+
+The static runtime owns calibration, barriers, schedules, samples, and
+reduction. The backend renderer owns concrete C++ types and direct detail calls.
+It must not choose dependency operands, mask densities, or input domains.
 
 ### Correctness Inputs And Timing Scenarios Are Separate
 
@@ -381,15 +401,25 @@ signature/scenario facts -> BenchmarkScenario
 ```
 
 The first pure-register timing scenario generates a deterministic batch from an
-explicit seed, covers ordinary and edge values, cycles through many input
-instances, keeps setup outside the timed region, and consumes every result. This
-prevents one tiny authored example from becoming a constant-folded hot loop.
+explicit seed, uses bounded pseudo-random ordinary values, cycles through many
+input instances, keeps setup outside the timed region, and consumes every
+result. Edge semantics remain the responsibility of the authored correctness
+gate; they are not silently promoted into a timing distribution. This prevents
+one tiny authored example from becoming a constant-folded hot loop.
 
-Latency and throughput are different performance questions. When both are
-valid for a signature, emit both a dependency-chain scenario and an independent
-calls scenario. A candidate is policy-selectable only if it dominates the
-default across the canonical scenarios; conflicting winners are
-`inconclusive`.
+Latency and throughput are different performance questions. Vector throughput
+is shape-derived. Unary vector operations have one possible dependency operand;
+ambiguous operations declare it explicitly:
+
+```tsl
+benchmarks:
+  latency_chain factor1
+```
+
+The field names semantic call wiring only. It cannot contain C++, candidates,
+timing parameters, or arbitrary setup. A candidate is policy-selectable only if
+it dominates the default across the canonical scenarios; conflicting winners
+are `inconclusive`.
 
 ### Correctness Before Timing
 
@@ -538,7 +568,7 @@ The reducer selects a variant only when all required correctness and scenario
 records exist, their manifest/tune-context identities match, and paired results
 show stable dominance. Otherwise it selects `default` with a structured reason.
 
-### Later Benchmark Scenarios
+### Scenario Families And Later Work
 
 Value-test inputs remain correctness inputs. Later timing scenarios model the
 performance-relevant distributions for each supported family.
@@ -551,16 +581,17 @@ Examples:
 - mask-heavy primitives may need sparse, dense, and alternating masks;
 - branchy fallbacks may need distributions that exercise both paths.
 
-If needed, add a later typed source-data feature such as:
+The first source-authored fact and mask family are now implemented:
 
 ```tsl
 benchmarks:
-  - tags [hot, random_indices]
-    case { ... }
+  latency_chain factor1
 ```
 
-Do not add this DSL in the first slice. Start with typed pure-register scenarios
-and let real gaps justify benchmark-specific source data.
+Integral-mask to mask conversions derive sparse, balanced, and dense workloads
+as exact active-lane counts; they do not require source metadata. Future fields
+must follow the same rule: add only semantic facts that a typed signature cannot
+provide. Do not add raw setup bodies or a general benchmark-case DSL.
 
 ## Cache And Reproducibility
 
@@ -596,13 +627,16 @@ explicit, but it cannot prove equivalence with arbitrary downstream targets.
 
 ### Implemented Baseline (2026-07-13)
 
-Slices 0 through 4 now have a C++ baseline implementation. The pilot is the
-fixed-width signed/unsigned byte `mul` leaf: its composed word-operation body
-remains the authored default and its former generic round-trip is retained as
-the additive `generic_fallback` variant. Planning is typed and emits structured
-coverage; the generated standalone C++ tool owns correctness checks, timing,
-reduction, policy validation, and policy-header rendering. CMake only owns the
-explicit target graph.
+Slices 0 through 4 now have a C++ baseline implementation. The pure-register
+pilot is the fixed-width signed/unsigned byte `mul` leaf: its composed
+word-operation body remains the authored default and its former generic
+round-trip is retained as the additive `generic_fallback` variant. An AVX2
+signed/unsigned 32-bit `to_mask` leaf is the integral-mask pilot, with its
+existing hardware-backed body as the default and its generic round-trip as an
+additive candidate. Planning is typed and emits structured coverage; the
+generated standalone C++ tool owns correctness checks, timing, reduction,
+policy validation, and policy-header rendering. CMake only owns the explicit
+target graph.
 
 The one-build distribution decision is therefore resolved in favor of a
 generated standalone reducer. Generated projects do not require the Python
@@ -619,6 +653,14 @@ Manual policy consumption is currently native-only because the generated
 validator is a target executable and binds the policy to the runtime CPU. A
 remote/cross policy workflow needs an explicit target-runner identity before
 that restriction can be relaxed.
+
+The workload boundary now resolves renderer-ready scenarios. Pure-register
+scenarios carry positional operand generators and an optional dependency
+parameter; the latter comes from the validated `benchmarks.latency_chain` fact
+when the signature is ambiguous. Integral-mask to mask conversions form the
+second family and carry exact active-lane counts for sparse, balanced, and dense
+throughput. The C++ renderer contains no `scenario == 1` or implicit
+first-operand policy.
 
 ### Slice 0: Candidate And Question Audit
 
@@ -687,7 +729,8 @@ target.
 ### Slice 5: Broader Scenario Coverage
 
 - Add more pure-register signature shapes.
-- Add typed mask, reduction, memory, and gather/scatter scenarios one family at
+- Extend mask inputs/results beyond the implemented integral-mask conversion
+  family, then add reduction, memory, and gather/scatter scenarios one family at
   a time.
 - Add source-authored benchmark metadata only where typed signature-derived
   scenarios are insufficient.

@@ -14,9 +14,15 @@ from tslc.benchmark.model import (
     BenchmarkCorrectnessCase,
     BenchmarkCoverageEntry,
     BenchmarkCoverageStatus,
+    BenchmarkMaskCorrectnessCase,
+    BenchmarkMaskDensityScenario,
+    BenchmarkOperandGenerator,
     BenchmarkProfilePlan,
     BenchmarkProjectPlan,
+    BenchmarkRegisterScenario,
     BenchmarkScenario,
+    BenchmarkTiming,
+    BenchmarkVectorCorrectnessCase,
     SpecializationKey,
 )
 from tslc.catalog.model import Catalog, Extension, Primitive
@@ -117,7 +123,7 @@ class BenchmarkPlanner:
     ) -> tuple[BenchmarkCandidateSet | None, str, bool]:
         primitive = self._catalog.primitive(spec.source_primitive_name)
         extension = profile.extensions.get(spec.extension_name)
-        reason = _unsupported_reason(spec, primitive, extension)
+        reason = _common_unsupported_reason(spec, primitive, extension)
         if reason is not None:
             return None, reason, False
         assert primitive is not None and extension is not None
@@ -126,25 +132,6 @@ class BenchmarkPlanner:
         lanes = extension.vector_bits // bits
         if lanes <= 0:
             return None, "extension width does not contain a complete scalar lane", False
-        from_array = self._harness.from_array
-        to_array = self._harness.to_array
-        if from_array is None or to_array is None:
-            return None, "vector round-trip harness primitives were not discovered", True
-        if from_array not in by_primitive or to_array not in by_primitive:
-            return (
-                None,
-                "vector round-trip harness primitives are not in the emitted dependency closure",
-                True,
-            )
-        correctness = _correctness_cases(
-            cases,
-            spec,
-            lanes,
-            from_array,
-            to_array,
-        )
-        if not correctness:
-            return None, "no authored expected-value case covers this specialization", True
         key = SpecializationKey(
             backend_id="cpp",
             profile_name=profile.profile.name,
@@ -156,19 +143,56 @@ class BenchmarkPlanner:
             param_kinds=spec.param_kinds,
             lanes=lanes,
         )
+        stable_id = _stable_id(key)
+        seed = int(sha256(stable_id.encode("utf-8")).hexdigest()[:16], 16)
+        correctness: tuple[BenchmarkCorrectnessCase, ...]
+        scenarios: tuple[BenchmarkScenario, ...]
+        if spec.result_kind == "v" and spec.param_kinds and all(
+            kind == "v" for kind in spec.param_kinds
+        ):
+            from_array = self._harness.from_array
+            to_array = self._harness.to_array
+            if from_array is None or to_array is None:
+                return None, "vector round-trip harness primitives were not discovered", True
+            if from_array not in by_primitive or to_array not in by_primitive:
+                return (
+                    None,
+                    "vector round-trip harness primitives are not in the emitted dependency closure",
+                    True,
+                )
+            correctness = _vector_correctness_cases(
+                cases,
+                spec,
+                lanes,
+                from_array,
+                to_array,
+            )
+            scenarios = _register_scenarios(primitive, spec, seed)
+        elif spec.result_kind == "m" and spec.param_kinds == ("im",):
+            to_integral = self._harness.to_integral
+            if to_integral is None:
+                return None, "mask round-trip harness primitive was not discovered", True
+            if to_integral not in by_primitive:
+                return (
+                    None,
+                    "mask round-trip harness primitive is not in the emitted dependency closure",
+                    True,
+                )
+            correctness = _mask_correctness_cases(cases, spec, lanes, to_integral)
+            scenarios = _mask_density_scenarios(lanes, seed)
+        else:
+            return (
+                None,
+                "no typed benchmark scenario supports this result and parameter shape",
+                False,
+            )
+        if not correctness:
+            return None, "no authored expected-value case covers this specialization", True
         candidates = (
             BenchmarkCandidate("default", _body_hash(spec.body_text)),
             *(
                 BenchmarkCandidate(variant.name, _body_hash(variant.body_text))
                 for variant in spec.variant_bodies
-            ),
-        )
-        stable_id = _stable_id(key)
-        seed = int(sha256(stable_id.encode("utf-8")).hexdigest()[:16], 16)
-        scenarios = (
-            BenchmarkScenario("throughput_independent", "throughput", seed),
-            BenchmarkScenario(
-                "latency_dependency_chain", "latency", seed ^ 0x9E3779B97F4A7C15
             ),
         )
         return (
@@ -185,7 +209,7 @@ class BenchmarkPlanner:
         )
 
 
-def _unsupported_reason(
+def _common_unsupported_reason(
     spec: LoweredSpecialization,
     primitive: Primitive | None,
     extension: Extension | None,
@@ -194,10 +218,6 @@ def _unsupported_reason(
         return "source primitive is not present in the catalog"
     if primitive.cross_lane:
         return "cross-lane primitives require a dedicated benchmark scenario"
-    if spec.result_kind != "v" or not spec.param_kinds or any(
-        kind != "v" for kind in spec.param_kinds
-    ):
-        return "first benchmark slice supports vector results and vector-only operands"
     if spec.target is not None:
         return "representation changes require a dedicated benchmark scenario"
     if spec.mask_policy is not None:
@@ -219,14 +239,77 @@ def _unsupported_reason(
     return None
 
 
-def _correctness_cases(
+def _register_scenarios(
+    primitive: Primitive,
+    spec: LoweredSpecialization,
+    seed: int,
+) -> tuple[BenchmarkRegisterScenario, ...]:
+    generators: tuple[BenchmarkOperandGenerator, ...] = tuple(
+        "bounded_random" for _kind in spec.param_kinds
+    )
+    scenarios = [
+        BenchmarkRegisterScenario(
+            scenario_id="throughput_independent",
+            kind="throughput",
+            timing=BenchmarkTiming(seed),
+            operand_generators=generators,
+        )
+    ]
+    dependency: int | None = None
+    if primitive.benchmark.latency_chain is not None:
+        dependency = primitive.parameters.index(primitive.benchmark.latency_chain)
+    elif len(spec.param_kinds) == 1:
+        dependency = 0
+    if dependency is not None:
+        scenarios.append(
+            BenchmarkRegisterScenario(
+                scenario_id="latency_dependency_chain",
+                kind="latency",
+                timing=BenchmarkTiming(seed ^ 0x9E3779B97F4A7C15),
+                operand_generators=generators,
+                dependency_parameter=dependency,
+            )
+        )
+    return tuple(scenarios)
+
+
+def _mask_density_scenarios(
+    lanes: int,
+    seed: int,
+) -> tuple[BenchmarkMaskDensityScenario, ...]:
+    requested = (
+        ("mask_sparse", 1),
+        ("mask_balanced", max(1, lanes // 2)),
+        ("mask_dense", max(1, lanes - 1)),
+    )
+    scenarios: list[BenchmarkMaskDensityScenario] = []
+    seen_active_lanes: set[int] = set()
+    for index, (scenario_id, active_lanes) in enumerate(requested):
+        if active_lanes in seen_active_lanes:
+            continue
+        seen_active_lanes.add(active_lanes)
+        scenarios.append(
+            BenchmarkMaskDensityScenario(
+                scenario_id=scenario_id,
+                timing=BenchmarkTiming(
+                    (seed ^ ((index + 1) * 0x9E3779B97F4A7C15))
+                    & 0xFFFFFFFFFFFFFFFF
+                ),
+                parameter_index=0,
+                active_lanes=active_lanes,
+            )
+        )
+    return tuple(scenarios)
+
+
+def _vector_correctness_cases(
     cases: tuple[ValueTestCasePlan, ...],
     spec: LoweredSpecialization,
     lanes: int,
     from_array_name: str,
     to_array_name: str,
-) -> tuple[BenchmarkCorrectnessCase, ...]:
-    matching: list[BenchmarkCorrectnessCase] = []
+) -> tuple[BenchmarkVectorCorrectnessCase, ...]:
+    matching: list[BenchmarkVectorCorrectnessCase] = []
     seen: set[str] = set()
     for case in cases:
         if (
@@ -246,12 +329,45 @@ def _correctness_cases(
             continue
         seen.add(case.case_name)
         matching.append(
-            BenchmarkCorrectnessCase(
+            BenchmarkVectorCorrectnessCase(
                 case_name=case.case_name,
                 vector_inputs=tuple(_tile(values, lanes) for values in case.inputs.vectors),
                 expected=_tile(case.expectation.values, lanes),
                 from_array_name=from_array_name,
                 to_array_name=to_array_name,
+            )
+        )
+    return tuple(matching)
+
+
+def _mask_correctness_cases(
+    cases: tuple[ValueTestCasePlan, ...],
+    spec: LoweredSpecialization,
+    lanes: int,
+    to_integral_name: str,
+) -> tuple[BenchmarkMaskCorrectnessCase, ...]:
+    matching: list[BenchmarkMaskCorrectnessCase] = []
+    seen: set[str] = set()
+    for case in cases:
+        if (
+            case.kind != "mask_result"
+            or case.call_name != spec.primitive_name
+            or case.type_tag != spec.type_tag
+            or case.lanes != lanes
+            or case.invocation.result_kind != "m"
+            or case.invocation.param_kinds != ("im",)
+            or len(case.inputs.masks) != 1
+            or len(case.expectation.values) != 1
+            or case.case_name in seen
+        ):
+            continue
+        seen.add(case.case_name)
+        matching.append(
+            BenchmarkMaskCorrectnessCase(
+                case_name=case.case_name,
+                mask_inputs=case.inputs.masks,
+                expected_mask=case.expectation.values[0],
+                to_integral_name=to_integral_name,
             )
         )
     return tuple(matching)
@@ -302,24 +418,11 @@ def _manifest_hash(
                     for candidate in candidate_set.candidates
                 ],
                 "scenarios": [
-                    (
-                        scenario.scenario_id,
-                        scenario.kind,
-                        scenario.seed,
-                        scenario.batch_size,
-                        scenario.rounds,
-                        scenario.minimum_sample_ns,
-                    )
+                    scenario.canonical_fields()
                     for scenario in candidate_set.scenarios
                 ],
                 "correctness": [
-                    (
-                        case.case_name,
-                        case.vector_inputs,
-                        case.expected,
-                        case.from_array_name,
-                        case.to_array_name,
-                    )
+                    _correctness_canonical_fields(case)
                     for case in candidate_set.correctness_cases
                 ],
                 "required_features": sorted(
@@ -335,6 +438,27 @@ def _manifest_hash(
 
 def _body_hash(body: str) -> str:
     return sha256(body.encode("utf-8")).hexdigest()
+
+
+def _correctness_canonical_fields(
+    case: BenchmarkVectorCorrectnessCase | BenchmarkMaskCorrectnessCase,
+) -> tuple[object, ...]:
+    if isinstance(case, BenchmarkVectorCorrectnessCase):
+        return (
+            "vector",
+            case.case_name,
+            case.vector_inputs,
+            case.expected,
+            case.from_array_name,
+            case.to_array_name,
+        )
+    return (
+        "mask",
+        case.case_name,
+        case.mask_inputs,
+        case.expected_mask,
+        case.to_integral_name,
+    )
 
 
 def _specialization_sort_key(spec: LoweredSpecialization) -> tuple[object, ...]:

@@ -132,6 +132,52 @@ def test_primitive_documentation_fields_are_accepted_and_promoted() -> None:
     assert "return data" in (primitive.semantics or "")
 
 
+def test_benchmark_latency_chain_is_typed_primitive_metadata() -> None:
+    source = _base_source().replace(
+        "  impls:\n",
+        "  benchmarks:\n"
+        "    latency_chain data\n"
+        "  impls:\n",
+    )
+    document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+    diagnostics = (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=("cpp", "rust")),
+    )
+
+    assert diagnostics == ()
+    primitive = result.catalog.primitive("id")
+    assert primitive is not None
+    assert primitive.benchmark.latency_chain == "data"
+
+
+@pytest.mark.parametrize(
+    ("benchmarks", "code"),
+    (
+        ('  benchmarks "latency"\n', "TSL-CATALOG-BENCHMARKS-NOT-MAP"),
+        (
+            "  benchmarks:\n    latency_chain missing\n",
+            "TSL-CATALOG-BENCHMARK-BAD-LATENCY-CHAIN",
+        ),
+        (
+            "  benchmarks:\n    workload arbitrary_cpp\n",
+            "TSL-CATALOG-UNKNOWN-FIELD",
+        ),
+    ),
+)
+def test_benchmark_metadata_rejects_untyped_or_unknown_forms(
+    benchmarks: str,
+    code: str,
+) -> None:
+    source = _base_source().replace("  impls:\n", benchmarks + "  impls:\n")
+
+    assert any(diagnostic.code == code for diagnostic in _diagnostics(source))
+
+
 def test_implementation_variants_are_accepted_and_promoted() -> None:
     source = _base_source().replace(
         "        implementation:\n"

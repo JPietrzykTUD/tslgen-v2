@@ -5,12 +5,39 @@ the profile selected by `TSL_PROFILE`. This is opt-in: normal generation and
 normal CMake builds neither run benchmarks nor change the authored default
 implementation.
 
-The first supported scenario family is deliberately narrow. It covers fixed-
-width, pure-register primitives with vector-only inputs and a vector result.
+The supported scenario families are deliberately narrow. Fixed-width,
+pure-register primitives with vector-only inputs and a vector result receive
+independent throughput scenarios; they receive a latency scenario only when the
+dependency operand is unambiguous or declared by the primitive. Integral-mask
+to mask conversions receive sparse, balanced, and dense throughput scenarios.
 Every candidate must have authored expected-value coverage and must pass those
-checks before it is timed. Masked, memory, reduction, immediate, scalable, and
-caller-unsafe shapes are currently reported as unsupported by benchmark
-coverage rather than assigned a guessed workload.
+checks before it is timed. Memory, reduction, immediate, scalable, and
+caller-unsafe shapes are reported as unsupported rather than assigned a guessed
+workload.
+
+## Workload Ownership
+
+TSL source data does not contain benchmark functions or target-language setup.
+The signature supplies parameter and result shapes, while an optional
+`benchmarks:` block carries only semantic facts that cannot be inferred safely.
+For example, `mul` declares which operand carries the dependency chain:
+
+```tsl
+benchmarks:
+  latency_chain factor1
+```
+
+Seeds, batches, mask values, timing loops, candidate order, and statistical
+rules remain compiler-owned. `tslc.benchmark.planner` resolves those facts into
+typed register or mask-density scenarios. The C++ benchmark renderer then emits
+direct candidate calls without making workload decisions. Shared calibration,
+timing, compiler barriers, and reduction live in the generated
+`tsl_benchmark_core.hpp` runtime.
+
+Unknown benchmark fields, raw setup code, and a latency chain naming an
+incompatible parameter are rejected at catalog validation. A future workload
+family should add a small typed vocabulary rather than an arbitrary C++ escape
+hatch.
 
 ## Report Only
 

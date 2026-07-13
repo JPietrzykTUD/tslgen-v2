@@ -6925,6 +6925,37 @@ def test_avx_to_mask_composes_existing_sse_halves(
         assert "to_array" not in lowered.body_text
 
 
+@pytest.mark.parametrize("type_tag", ["si32", "ui32"])
+def test_avx2_to_mask_keeps_generic_round_trip_as_additive_benchmark_candidate(
+    catalog: Catalog,
+    machine_profiles,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "to_mask", (type_tag,))
+        .selected
+        if selected.extension.name == "avx2"
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "to_array" not in lowered.body_text
+        assert [variant.name for variant in lowered.variant_bodies] == [
+            "generic_fallback"
+        ]
+        fallback = lowered.variant_bodies[0].body_text
+        assert "to_mask" in fallback
+        assert "to_vector" in fallback
+        assert "to_array" in fallback
+        assert "from_array" in fallback
+
+
 def test_sse2_equal_64_composes_word_equality_and_mask_conversion(
     catalog: Catalog, machine_profiles
 ) -> None:

@@ -605,6 +605,8 @@ prim<m:=im> to_mask(mask):
     return mask result
     """
   tests:
+    - {tags [basic], extension "avx2", type "si32", lane_count 8, case {inputs [170], expected 170}}
+    - {tags [basic], extension "avx2", type "ui32", lane_count 8, case {inputs [170], expected 170}}
     - {tags [basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170], expected 170}}
     - {tags [edge], extension "avx512", type "ui8", lane_count 64, case {inputs [9223372036854775809], expected 9223372036854775809}}
     - {tags [basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690], expected 43690}}
@@ -868,6 +870,19 @@ prim<m:=im> to_mask(mask):
               var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type(base::in), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               complete(call<primitive=equal[Vec]>(anded_vec, and_vec));
+            """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_mask, call<primitive=to_mask[GenericVec]>(cast<static>(type(scalar::ui64), mask)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_mask)
+                  )
+                )
+              );
             """
       ?i64:
         requires [avx, avx2]

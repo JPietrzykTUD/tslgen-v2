@@ -13,6 +13,8 @@ prim<v:=(v,v)> mul(factor1, factor2):
       result[i] = factor1[i] * factor2[i]
     return result
     """
+  benchmarks:
+    latency_chain factor1
   tests:
     - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [2, 0, -1, -2, 3, -3, 4, -4]], expected [2, 0, -3, -8, 15, -18, 28, -32]}}
     - {tags [zero], type "si32", case {inputs [[0, 1, -1, 0, 2, -2, 0, 3], [5, 0, 7, -8, 0, 9, 0, -10]], expected [0, 0, -7, 0, 0, -18, 0, -30]}}

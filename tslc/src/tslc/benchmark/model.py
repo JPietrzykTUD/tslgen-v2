@@ -10,6 +10,7 @@ from tslc.lower.lowerer import LoweredSpecialization
 
 BenchmarkCoverageStatus = Literal["emitted", "unsupported", "missing_correctness"]
 BenchmarkScenarioKind = Literal["throughput", "latency"]
+BenchmarkOperandGenerator = Literal["bounded_random"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,7 +68,7 @@ class BenchmarkCandidate:
 
 
 @dataclass(frozen=True, slots=True)
-class BenchmarkCorrectnessCase:
+class BenchmarkVectorCorrectnessCase:
     """Authored operands and expectation, tiled for one fixed-width vector."""
 
     case_name: str
@@ -78,23 +79,104 @@ class BenchmarkCorrectnessCase:
 
 
 @dataclass(frozen=True, slots=True)
-class BenchmarkScenario:
-    """A deterministic timed workload, separate from correctness examples."""
+class BenchmarkMaskCorrectnessCase:
+    """Authored compact-mask conversion and its representation-neutral expectation."""
 
-    scenario_id: str
-    kind: BenchmarkScenarioKind
+    case_name: str
+    mask_inputs: tuple[str, ...]
+    expected_mask: str
+    to_integral_name: str
+
+
+BenchmarkCorrectnessCase = (
+    BenchmarkVectorCorrectnessCase | BenchmarkMaskCorrectnessCase
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkTiming:
+    """Measurement protocol shared by fully resolved workload scenarios."""
+
     seed: int
     batch_size: int = 256
     rounds: int = 9
     minimum_sample_ns: int = 20_000_000
 
     def __post_init__(self) -> None:
+        if not 0 <= self.seed <= 0xFFFFFFFFFFFFFFFF:
+            raise ValueError("benchmark seed must fit an unsigned 64-bit value")
         if self.batch_size <= 0 or self.batch_size & (self.batch_size - 1):
             raise ValueError("benchmark batch_size must be a positive power of two")
         if self.rounds < 3:
             raise ValueError("benchmark scenarios require at least three rounds")
         if self.minimum_sample_ns <= 0:
             raise ValueError("benchmark minimum_sample_ns must be positive")
+
+    def canonical_fields(self) -> tuple[int, int, int, int]:
+        return (self.seed, self.batch_size, self.rounds, self.minimum_sample_ns)
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkRegisterScenario:
+    """One exact pure-register workload; no call wiring is left to rendering."""
+
+    scenario_id: str
+    kind: BenchmarkScenarioKind
+    timing: BenchmarkTiming
+    operand_generators: tuple[BenchmarkOperandGenerator, ...]
+    dependency_parameter: int | None = None
+
+    def __post_init__(self) -> None:
+        if not self.scenario_id or not self.operand_generators:
+            raise ValueError("register benchmark scenarios require an id and operands")
+        if self.kind == "latency" and self.dependency_parameter is None:
+            raise ValueError("latency scenarios require a dependency parameter")
+        if self.kind == "throughput" and self.dependency_parameter is not None:
+            raise ValueError("throughput scenarios cannot carry a dependency parameter")
+        if self.dependency_parameter is not None and not (
+            0 <= self.dependency_parameter < len(self.operand_generators)
+        ):
+            raise ValueError("benchmark dependency parameter is out of range")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "register",
+            self.scenario_id,
+            self.kind,
+            self.timing.canonical_fields(),
+            self.operand_generators,
+            self.dependency_parameter,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkMaskDensityScenario:
+    """Throughput for an integral mask input with an exact active-lane count."""
+
+    scenario_id: str
+    timing: BenchmarkTiming
+    parameter_index: int
+    active_lanes: int
+    kind: Literal["throughput"] = "throughput"
+
+    def __post_init__(self) -> None:
+        if not self.scenario_id:
+            raise ValueError("mask-density benchmark scenarios require an id")
+        if self.parameter_index < 0 or self.active_lanes <= 0:
+            raise ValueError("mask-density scenario facts must be positive")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "mask_density",
+            self.scenario_id,
+            self.kind,
+            self.timing.canonical_fields(),
+            self.parameter_index,
+            self.active_lanes,
+        )
+
+
+BenchmarkScenario = BenchmarkRegisterScenario | BenchmarkMaskDensityScenario
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,9 +193,46 @@ class BenchmarkCandidateSet:
     def __post_init__(self) -> None:
         if not self.candidates or not self.candidates[0].is_default:
             raise ValueError("benchmark candidate sets must begin with default")
+        if not self.correctness_cases or not self.scenarios:
+            raise ValueError("benchmark candidate sets require correctness and scenarios")
         ids = tuple(candidate.variant_id for candidate in self.candidates)
         if len(set(ids)) != len(ids):
             raise ValueError(f"duplicate benchmark candidate IDs: {ids!r}")
+        if isinstance(self.scenarios[0], BenchmarkRegisterScenario):
+            register_scenarios = tuple(
+                scenario
+                for scenario in self.scenarios
+                if isinstance(scenario, BenchmarkRegisterScenario)
+            )
+            if len(register_scenarios) != len(self.scenarios) or not all(
+                isinstance(case, BenchmarkVectorCorrectnessCase)
+                for case in self.correctness_cases
+            ):
+                raise ValueError("register candidate sets require register-only facts")
+            if any(
+                len(scenario.operand_generators) != len(self.key.param_kinds)
+                for scenario in register_scenarios
+            ):
+                raise ValueError("register scenario operands must match the specialization")
+            return
+        mask_scenarios = tuple(
+            scenario
+            for scenario in self.scenarios
+            if isinstance(scenario, BenchmarkMaskDensityScenario)
+        )
+        if len(mask_scenarios) != len(self.scenarios) or not all(
+            isinstance(case, BenchmarkMaskCorrectnessCase)
+            for case in self.correctness_cases
+        ):
+            raise ValueError("mask-density candidate sets require mask-only facts")
+        lanes = self.key.lanes
+        if lanes is None or any(
+            scenario.parameter_index >= len(self.key.param_kinds)
+            or self.key.param_kinds[scenario.parameter_index] != "im"
+            or scenario.active_lanes > lanes
+            for scenario in mask_scenarios
+        ):
+            raise ValueError("mask-density scenario does not match the specialization")
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,12 +281,18 @@ __all__ = (
     "BenchmarkCandidate",
     "BenchmarkCandidateSet",
     "BenchmarkCorrectnessCase",
+    "BenchmarkMaskCorrectnessCase",
+    "BenchmarkMaskDensityScenario",
+    "BenchmarkOperandGenerator",
     "BenchmarkCoverageEntry",
     "BenchmarkCoverageStatus",
     "BenchmarkProfilePlan",
     "BenchmarkProjectPlan",
+    "BenchmarkRegisterScenario",
     "BenchmarkScenario",
     "BenchmarkScenarioKind",
+    "BenchmarkTiming",
+    "BenchmarkVectorCorrectnessCase",
     "EMPTY_BENCHMARK_PROJECT_PLAN",
     "SpecializationKey",
 )

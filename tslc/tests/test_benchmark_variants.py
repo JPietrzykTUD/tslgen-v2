@@ -13,6 +13,11 @@ import textwrap
 import pytest
 
 from tslc.api import generate_project, write_artifacts
+from tslc.benchmark.model import (
+    BenchmarkMaskCorrectnessCase,
+    BenchmarkMaskDensityScenario,
+    BenchmarkRegisterScenario,
+)
 from tslc.diagnostics import has_errors
 
 
@@ -24,6 +29,41 @@ def benchmark_result(data_root: Path, machine_profiles_path: Path):
         primitives=["mul"],
         profiles=["scalar", "sse2", "avx2"],
         type_tags=["si8"],
+        backends=["cpp"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    return result
+
+
+@pytest.fixture(scope="module")
+def mask_benchmark_result(data_root: Path, machine_profiles_path: Path):
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["to_mask"],
+        profiles=["scalar", "sse2", "avx2"],
+        type_tags=["ui32"],
+        backends=["cpp"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    return result
+
+
+@pytest.fixture(scope="module")
+def ambiguous_register_benchmark_result(
+    data_root: Path,
+    machine_profiles_path: Path,
+):
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["max"],
+        profiles=["wasm32-simd128"],
+        type_tags=["f32"],
         backends=["cpp"],
         test_harness=True,
     )
@@ -55,10 +95,36 @@ def test_planner_keeps_default_and_authored_fallback_with_correctness(
             "latency",
         }
         assert all(
+            isinstance(scenario, BenchmarkRegisterScenario)
+            for scenario in candidate_set.scenarios
+        )
+        latency = next(
+            scenario
+            for scenario in candidate_set.scenarios
+            if scenario.kind == "latency"
+        )
+        assert latency.dependency_parameter == 0
+        assert all(
             len(values) == candidate_set.key.lanes
             for case in candidate_set.correctness_cases
             for values in (*case.vector_inputs, case.expected)
         )
+
+
+def test_ambiguous_register_shape_without_metadata_omits_latency(
+    ambiguous_register_benchmark_result,
+) -> None:
+    profile = ambiguous_register_benchmark_result.rendered.benchmarks.profile(
+        "cpp", "wasm32-simd128"
+    )
+    assert profile is not None
+    candidate_set = next(
+        candidate_set
+        for candidate_set in profile.candidate_sets
+        if candidate_set.key.extension_name == "wasm128"
+    )
+
+    assert [scenario.kind for scenario in candidate_set.scenarios] == ["throughput"]
 
 
 def test_benchmark_manifest_and_source_are_typed_deterministic_artifacts(
@@ -81,9 +147,45 @@ def test_benchmark_manifest_and_source_are_typed_deterministic_artifacts(
     assert "mul_impl<Vec_" in source
     assert "mul_impl_generic_fallback<Vec_" in source
     assert "check_lanes<Base_" in source
-    assert "measure_throughput_" in source
-    assert "measure_latency_" in source
+    assert "measure_candidate_" in source
+    assert "run_scenario_" in source
+    assert "scenario == 1" not in source
     assert "reduce_candidate_set" in source
+
+
+def test_integral_mask_variants_get_resolved_density_scenarios(
+    mask_benchmark_result,
+) -> None:
+    profile = mask_benchmark_result.rendered.benchmarks.profile(
+        "cpp", "avx2"
+    )
+    assert profile is not None
+    assert len(profile.candidate_sets) == 1
+    candidate_set = profile.candidate_sets[0]
+
+    assert candidate_set.key.primitive_name == "to_mask"
+    assert all(
+        isinstance(scenario, BenchmarkMaskDensityScenario)
+        for scenario in candidate_set.scenarios
+    )
+    assert [scenario.active_lanes for scenario in candidate_set.scenarios] == [1, 4, 7]
+    assert all(
+        isinstance(case, BenchmarkMaskCorrectnessCase)
+        for case in candidate_set.correctness_cases
+    )
+
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in mask_benchmark_result.artifacts.artifacts
+    }
+    manifest = json.loads(artifacts["cpp/bench/manifest_avx2.json"])
+    assert [
+        scenario["family"]
+        for scenario in manifest["candidate_sets"][0]["scenarios"]
+    ] == ["mask_density", "mask_density", "mask_density"]
+    source = artifacts["cpp/bench/tsl_variant_bench_avx2.cpp"]
+    assert "rotating_mask_bits" in source
+    assert "check_scalar<Imask_" in source
 
 
 def test_cpp_selector_defaults_and_policy_include_order(benchmark_result) -> None:

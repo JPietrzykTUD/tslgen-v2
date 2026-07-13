@@ -13,6 +13,7 @@ from tslc.catalog._builder_common import (
     _source_span,
 )
 from tslc.catalog._builder_implementations import _implementations_from_entries
+from tslc.catalog.benchmark_promotion import build_benchmark_spec
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     GenericParam,
@@ -66,6 +67,7 @@ def _build_primitives(
     immediate_params = _immediate_params(declaration, diagnostics)
     generic_params = _generic_params(declaration)
     tests = build_test_cases(declaration, diagnostics)
+    benchmark = build_benchmark_spec(declaration)
     brief_description = _primitive_field_text(declaration, "brief_description")
     detailed_description = _primitive_field_text(declaration, "detailed_description")
     semantics = _primitive_field_text(declaration, "semantics")
@@ -85,6 +87,7 @@ def _build_primitives(
             generic_params=generic_params,
             result_target=result_target,
             tests=tests,
+            benchmark=benchmark,
             brief_description=brief_description,
             detailed_description=detailed_description,
             semantics=semantics,

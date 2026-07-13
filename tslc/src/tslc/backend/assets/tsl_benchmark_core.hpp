@@ -42,6 +42,18 @@ inline std::uint64_t splitmix64(std::uint64_t& state) {
     return value ^ (value >> 31U);
 }
 
+inline std::uint64_t rotating_mask_bits(std::size_t lanes, std::size_t active_lanes,
+                                        std::size_t rotation) {
+    if (lanes == 0 || lanes > 64 || active_lanes == 0 || active_lanes > lanes) {
+        throw std::runtime_error("invalid compact-mask benchmark dimensions");
+    }
+    std::uint64_t result = 0;
+    for (std::size_t offset = 0; offset < active_lanes; ++offset) {
+        result |= std::uint64_t{1} << ((rotation + offset) % lanes);
+    }
+    return result;
+}
+
 template <class T>
 inline T next_value(std::uint64_t& state) {
     const std::uint64_t bits = splitmix64(state);

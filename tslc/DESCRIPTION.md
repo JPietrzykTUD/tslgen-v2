@@ -215,9 +215,14 @@ header/module.
 The optional [benchmark/](src/tslc/benchmark/) stage consumes finalized C++
 specializations and authored value-test facts. It plans only explicitly
 coexisting named variants, emits structured skip coverage for unsupported
-signature shapes, and renders a standalone native benchmark/policy tool. The
-generated CMake project runs it only through explicit report, policy, or
-autotune options; ordinary generation and builds retain the authored default.
+signature shapes, and renders a standalone native benchmark/policy tool.
+Workload semantics are resolved before rendering: pure-register scenarios carry
+their operand generators and dependency parameter, while integral-mask
+conversion scenarios carry exact active-lane counts. A primitive uses the
+validated `benchmarks.latency_chain` catalog fact only when its latency operand
+is ambiguous; source data never embeds benchmark C++. The generated CMake
+project runs the tool only through explicit report, policy, or autotune options;
+ordinary generation and builds retain the authored default.
 
 ## Differential value tests
 

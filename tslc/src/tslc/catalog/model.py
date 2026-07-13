@@ -144,6 +144,14 @@ class Implementation:
 
 
 @dataclass(frozen=True, slots=True)
+class PrimitiveBenchmarkSpec:
+    """Source-authored workload facts that cannot be inferred from a signature."""
+
+    latency_chain: str | None = None
+    source: SourceSpan | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Primitive:
     name: str
     signature: str
@@ -179,6 +187,10 @@ class Primitive:
     # Value-correctness cases authored in the `tests:` block. Consumed by the test-generation
     # render stage (golden anchor against the generic software reference); empty when none.
     tests: tuple["TestCase", ...] = ()
+    # Optional benchmark workload facts. Timing protocol, generated values, and candidate
+    # selection are compiler-owned; source data only names semantic wiring that is ambiguous
+    # from the signature, such as the operand carrying a latency dependency.
+    benchmark: PrimitiveBenchmarkSpec = field(default_factory=PrimitiveBenchmarkSpec)
     # Human-authored documentation metadata. These fields are carried as raw text for future
     # documentation rendering; they are not lowered, evaluated, or used as compiler semantics.
     brief_description: str | None = None
