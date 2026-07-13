@@ -81,6 +81,7 @@ tslc/
     render/                   Formatting of finalized profiles into project artifacts
     output/                   Artifact writing and build/test verification
     value_tests/              Pre-render generated value-test planning and harness data
+    benchmark/                Typed variant benchmark planning and C++ artifact rendering
     maintenance/              Developer tools: explain, stage dump, coverage ratchet
   tests/                      Python test suite
   CHARTER.md                  Short design contract

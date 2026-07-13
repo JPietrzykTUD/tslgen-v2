@@ -37,6 +37,119 @@ add_library(tsl_generated INTERFACE)
 add_library(tsl::tsl ALIAS tsl_generated)
 target_link_libraries(tsl_generated INTERFACE tsl_profile_${TSL_SELECTED_PROFILE})
 
+option(TSL_BUILD_BENCHMARKS "Build generated implementation-variant benchmarks" OFF)
+option(TSL_AUTOTUNE_VARIANTS "Benchmark variants and consume a build-local policy" OFF)
+set(TSL_VARIANT_POLICY_FILE "" CACHE FILEPATH "Precomputed TSL variant-policy JSON")
+set(TSL_BENCHMARK_COMPILE_OPTIONS "" CACHE STRING "Additional compile options used for variant tuning")
+set(TSL_BENCHMARK_THRESHOLD "0.05" CACHE STRING "Minimum paired improvement required to select a variant")
+set(TSL_BENCHMARK_ROUNDS "9" CACHE STRING "Number of interleaved benchmark rounds")
+set(TSL_BENCHMARK_MINIMUM_SAMPLE_NS "20000000" CACHE STRING "Minimum duration of one benchmark sample")
+
+set(_TSL_POLICY_REQUESTED OFF)
+if(TSL_AUTOTUNE_VARIANTS AND NOT TSL_VARIANT_POLICY_FILE STREQUAL "")
+  message(FATAL_ERROR "Choose TSL_AUTOTUNE_VARIANTS or TSL_VARIANT_POLICY_FILE, not both")
+endif()
+if(TSL_AUTOTUNE_VARIANTS OR NOT TSL_VARIANT_POLICY_FILE STREQUAL "")
+  set(_TSL_POLICY_REQUESTED ON)
+endif()
+
+if((TSL_BUILD_BENCHMARKS OR _TSL_POLICY_REQUESTED) AND CMAKE_CROSSCOMPILING)
+  message(FATAL_ERROR "TSL variant benchmarks and policy validation are native-only; use a native build for report/autotune")
+endif()
+get_property(_TSL_MULTI_CONFIG_GENERATOR GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(_TSL_POLICY_REQUESTED AND _TSL_MULTI_CONFIG_GENERATOR)
+  message(FATAL_ERROR "TSL variant policy generation currently requires a single-config CMake generator")
+endif()
+
+if(TSL_BUILD_BENCHMARKS OR _TSL_POLICY_REQUESTED)
+  add_executable(tsl_variant_bench bench/tsl_variant_bench_${TSL_SELECTED_PROFILE}.cpp)
+  # Deliberately use the concrete, policy-free profile. Linking tsl_generated here
+  # would create a cycle: benchmark -> policy -> public consumer target.
+  target_link_libraries(tsl_variant_bench PRIVATE tsl_profile_${TSL_SELECTED_PROFILE})
+  target_compile_options(tsl_variant_bench PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3>
+    $<$<CXX_COMPILER_ID:MSVC>:/O2>
+    ${TSL_BENCHMARK_COMPILE_OPTIONS}
+  )
+  get_target_property(_TSL_BENCHMARK_TARGET_OPTIONS
+    tsl_variant_bench COMPILE_OPTIONS)
+  get_target_property(_TSL_BENCHMARK_TARGET_LINK_OPTIONS
+    tsl_variant_bench LINK_OPTIONS)
+  if("${_TSL_BENCHMARK_TARGET_OPTIONS}" STREQUAL "_TSL_BENCHMARK_TARGET_OPTIONS-NOTFOUND")
+    set(_TSL_BENCHMARK_TARGET_OPTIONS "")
+  endif()
+  if("${_TSL_BENCHMARK_TARGET_LINK_OPTIONS}" STREQUAL "_TSL_BENCHMARK_TARGET_LINK_OPTIONS-NOTFOUND")
+    set(_TSL_BENCHMARK_TARGET_LINK_OPTIONS "")
+  endif()
+  string(TOUPPER "${CMAKE_BUILD_TYPE}" _TSL_BUILD_TYPE_UPPER)
+  set(_TSL_BUILD_TYPE_FLAGS "${CMAKE_CXX_FLAGS_${_TSL_BUILD_TYPE_UPPER}}")
+  set(_TSL_BUILD_TYPE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS_${_TSL_BUILD_TYPE_UPPER}}")
+  set(_TSL_TUNE_CONTEXT
+    "${CMAKE_CXX_COMPILER}|${CMAKE_CXX_COMPILER_ID}|${CMAKE_CXX_COMPILER_VERSION}|${CMAKE_CXX_COMPILER_TARGET}|${CMAKE_BUILD_TYPE}|${CMAKE_CXX_FLAGS}|${_TSL_BUILD_TYPE_FLAGS}|${CMAKE_EXE_LINKER_FLAGS}|${_TSL_BUILD_TYPE_LINKER_FLAGS}|${_TSL_BENCHMARK_TARGET_OPTIONS}|${_TSL_BENCHMARK_TARGET_LINK_OPTIONS}|${TSL_BENCHMARK_COMPILE_OPTIONS}|${TSL_BENCHMARK_THRESHOLD}|${TSL_BENCHMARK_ROUNDS}|${TSL_BENCHMARK_MINIMUM_SAMPLE_NS}|${TSL_SELECTED_PROFILE}")
+  string(SHA256 _TSL_TUNE_CONTEXT_HASH "${_TSL_TUNE_CONTEXT}")
+  target_compile_definitions(tsl_variant_bench PRIVATE
+    TSL_BENCHMARK_TUNE_CONTEXT_HASH="${_TSL_TUNE_CONTEXT_HASH}")
+
+  add_custom_target(tsl_benchmark_report
+    COMMAND tsl_variant_bench
+      --results "${CMAKE_CURRENT_BINARY_DIR}/tsl_variant_results.jsonl"
+      --rounds "${TSL_BENCHMARK_ROUNDS}"
+      --minimum-sample-ns "${TSL_BENCHMARK_MINIMUM_SAMPLE_NS}"
+      --threshold "${TSL_BENCHMARK_THRESHOLD}"
+    DEPENDS tsl_variant_bench
+    COMMENT "Benchmarking TSL implementation variants (report only)"
+    VERBATIM
+  )
+endif()
+
+if(_TSL_POLICY_REQUESTED)
+  set(_TSL_POLICY_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tsl/generated")
+  set(_TSL_POLICY_HEADER "${_TSL_POLICY_DIRECTORY}/tsl_variant_policy_autotuned.hpp")
+  set(_TSL_POLICY_JSON "${CMAKE_CURRENT_BINARY_DIR}/tsl_variant_policy.json")
+  set(_TSL_RESULTS_JSONL "${CMAKE_CURRENT_BINARY_DIR}/tsl_variant_results.jsonl")
+  if(TSL_AUTOTUNE_VARIANTS)
+    add_custom_command(
+      OUTPUT
+        "${_TSL_POLICY_HEADER}"
+        "${_TSL_POLICY_JSON}"
+        "${_TSL_RESULTS_JSONL}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${_TSL_POLICY_DIRECTORY}"
+      COMMAND tsl_variant_bench
+        --results "${_TSL_RESULTS_JSONL}"
+        --policy-json "${_TSL_POLICY_JSON}"
+        --policy-header "${_TSL_POLICY_HEADER}"
+        --rounds "${TSL_BENCHMARK_ROUNDS}"
+        --minimum-sample-ns "${TSL_BENCHMARK_MINIMUM_SAMPLE_NS}"
+        --threshold "${TSL_BENCHMARK_THRESHOLD}"
+      DEPENDS tsl_variant_bench
+      COMMENT "Benchmarking and selecting TSL implementation variants"
+      VERBATIM
+    )
+  else()
+    get_filename_component(_TSL_VARIANT_POLICY_FILE_ABSOLUTE
+      "${TSL_VARIANT_POLICY_FILE}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+    if(NOT EXISTS "${_TSL_VARIANT_POLICY_FILE_ABSOLUTE}")
+      message(FATAL_ERROR "TSL_VARIANT_POLICY_FILE does not exist: ${_TSL_VARIANT_POLICY_FILE_ABSOLUTE}")
+    endif()
+    add_custom_command(
+      OUTPUT "${_TSL_POLICY_HEADER}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${_TSL_POLICY_DIRECTORY}"
+      COMMAND tsl_variant_bench
+        --render-policy "${_TSL_VARIANT_POLICY_FILE_ABSOLUTE}"
+        --policy-header "${_TSL_POLICY_HEADER}"
+      DEPENDS tsl_variant_bench "${_TSL_VARIANT_POLICY_FILE_ABSOLUTE}"
+      COMMENT "Validating and rendering the TSL implementation-variant policy"
+      VERBATIM
+    )
+  endif()
+  add_custom_target(tsl_variant_policy DEPENDS "${_TSL_POLICY_HEADER}")
+  add_dependencies(tsl_generated tsl_variant_policy)
+  target_include_directories(tsl_generated INTERFACE
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>")
+  target_compile_definitions(tsl_generated INTERFACE
+    TSL_HAS_AUTOTUNED_VARIANT_POLICY)
+endif()
+
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
   set(_TSL_BUILD_TESTS_DEFAULT ON)
 else()

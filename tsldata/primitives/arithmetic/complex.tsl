@@ -100,6 +100,18 @@ prim<v:=(v,v)> mul(factor1, factor2):
               call<primitive=binary_or[WordVec]>(even_result, odd_result)
             ));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
+              var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=@self[GenericVec]>(generic_factor1, generic_factor2)
+                )
+              );
+            """
       ?i64:
         requires:
           avx512 [avx512f]

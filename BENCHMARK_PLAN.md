@@ -104,6 +104,7 @@ A policy key identifies the complete specialization, not just
 
 - backend and selected profile;
 - emitted and source primitive names;
+- result and parameter signature kinds;
 - extension and input type;
 - representation-change target;
 - boolean axes and immediate value;
@@ -513,17 +514,17 @@ Example record:
 ```json
 {
   "backend": "cpp",
-  "profile": "skylake",
-  "primitive": "gather_narrow_partial",
-  "extension": "avx512",
-  "type": "ui32",
+  "protocol_version": 1,
+  "profile": "avx2",
+  "manifest_hash": "...",
+  "tune_context_hash": "...",
+  "cpu_id": "x86:GenuineIntel:6:143:8",
+  "stable_id": "avx2_mul_avx2_si8_f6a56893eab5",
   "scenario": "throughput_independent",
-  "variant": "intrinsic_gather",
-  "correct": true,
-  "warmup_iterations": 10000,
-  "seed": 41731,
-  "iterations": 1000000,
-  "raw_ns_per_call": [1.18, 1.31, 1.22, 1.27]
+  "candidate": "generic_fallback",
+  "round": 0,
+  "iterations": 65536,
+  "elapsed_ns": 20731422
 }
 ```
 
@@ -564,7 +565,7 @@ and let real gaps justify benchmark-specific source data.
 ## Cache And Reproducibility
 
 Autotune decisions are valid only for the candidate and tune context that
-produced them. The fingerprint includes at least:
+produced them. The target fingerprint should include:
 
 - generated candidate/manifest content hash;
 - compiler executable, ID, version, and target triple;
@@ -576,6 +577,12 @@ produced them. The fingerprint includes at least:
 - benchmark protocol/schema version, seeds, and runner; and
 - best-effort runtime metadata such as OS and CPU affinity.
 
+The implemented baseline binds policies to the manifest/profile facts,
+compiler and target identity, CMake and target compile/link options, reducer
+settings, and runtime CPU identity. OS, scheduler, frequency-governor, and CPU
+affinity metadata are still evidence gaps; until they are recorded, policies
+should be treated as build-local rather than portable benchmark results.
+
 A timestamp is provenance, not a cache-validity input. Policy consumption
 rejects a mismatched manifest or tune context; it does not silently rerun a
 benchmark during an ordinary build.
@@ -586,6 +593,32 @@ options match. `TSL_BENCHMARK_COMPILE_OPTIONS` makes extra tuning options
 explicit, but it cannot prove equivalence with arbitrary downstream targets.
 
 ## Implementation Slices
+
+### Implemented Baseline (2026-07-13)
+
+Slices 0 through 4 now have a C++ baseline implementation. The pilot is the
+fixed-width signed/unsigned byte `mul` leaf: its composed word-operation body
+remains the authored default and its former generic round-trip is retained as
+the additive `generic_fallback` variant. Planning is typed and emits structured
+coverage; the generated standalone C++ tool owns correctness checks, timing,
+reduction, policy validation, and policy-header rendering. CMake only owns the
+explicit target graph.
+
+The one-build distribution decision is therefore resolved in favor of a
+generated standalone reducer. Generated projects do not require the Python
+compiler at build time, and reduction logic is not duplicated in CMake.
+
+The baseline reducer requires each alternative to improve on the default in
+both latency and throughput scenarios. For each scenario it requires a median
+paired improvement above the configurable threshold, wins in at least two
+thirds of rounds, and bounded median absolute dispersion. Otherwise it records
+`inconclusive` and selects the default. Raw samples remain the evidence and the
+rule can evolve only with a schema/protocol update.
+
+Manual policy consumption is currently native-only because the generated
+validator is a target executable and binds the policy to the runtime CPU. A
+remote/cross policy workflow needs an explicit target-runner identity before
+that restriction can be relaxed.
 
 ### Slice 0: Candidate And Question Audit
 
@@ -703,15 +736,13 @@ The feature is healthy when:
 - the one-build dependency graph is tested and cycle-free; and
 - unsupported scenarios produce structured skips rather than invented results.
 
-## Open Decisions To Resolve With The Pilot
+## Decisions For Later Slices
 
-- Which recent pure-register refactor gives the first meaningful coexisting
-  default/variant pair on an auto-detected native profile?
-- Which canonical latency/throughput scenarios are valid for that signature?
-- What paired-noise metric and practical improvement threshold match observed
-  run-to-run behavior?
 - Which compile options constitute the supported tune context for downstream
   consumers?
-- Is one-build autotune sufficiently valuable after the two-phase workflow is
-  available, or does its additional CMake ordering surface outweigh the
-  convenience?
+- Which additional signature shape should follow pure vector-input/vector-
+  result operations without weakening scenario validity?
+- What explicit runner and target identity should permit remote or
+  cross-compiled policy generation?
+- Should a later stable-Rust policy consumer mirror the C++ selector model, or
+  is its code-generation proof insufficiently strong?

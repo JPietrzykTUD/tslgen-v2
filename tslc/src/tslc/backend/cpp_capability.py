@@ -13,6 +13,7 @@ from tslc.backend.capability import (
     GeneratedFormatSpec,
 )
 from tslc.backend.cpp_translation import CppBackendDialect
+from tslc.benchmark.render_cpp import cpp_benchmark_artifacts
 from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.cpp_validation import validate_cpp_profiles
 from tslc.catalog.model import Catalog
@@ -80,6 +81,7 @@ CPP_BACKEND = BackendCapability(
     test_renderer=cpp_value_test_artifacts,
     verify_driver_factory=create_cpp_verify_driver,
     documentation_formatter_factory=cpp_documentation_formatter,
+    benchmark_renderer=cpp_benchmark_artifacts,
     helper_manifest=CPP_HELPER_MANIFEST,
     profile_validator=validate_cpp_profiles,
     generated_format=GeneratedFormatSpec(

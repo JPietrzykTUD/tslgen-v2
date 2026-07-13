@@ -22,6 +22,8 @@ from tslc._pipeline_closure import (
 from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.registry import backend_capabilities, registered_backend_ids
+from tslc.benchmark import BenchmarkPlanner
+from tslc.benchmark.model import EMPTY_BENCHMARK_PROJECT_PLAN
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import RESULT_DIM_EXTENSION, Catalog, Extension
 from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
@@ -180,11 +182,21 @@ class _GenerationSession:
             for diagnostic in value_tests.diagnostics
             if self.request.value_test_warnings or diagnostic.severity == "error"
         )
+        benchmarks = (
+            BenchmarkPlanner(self.inputs.catalog).plan(
+                emitted_profiles,
+                value_tests,
+            )
+            if "cpp" in self.request.backends
+            else EMPTY_BENCHMARK_PROJECT_PLAN
+        )
+        self.diagnostics.extend(benchmarks.diagnostics)
         rendered = (
             render_project(
                 emitted_profiles,
                 self.request.backends,
                 value_tests,
+                benchmarks,
                 assets=self.inputs.render_assets,
             )
             if self.emitted_profiles

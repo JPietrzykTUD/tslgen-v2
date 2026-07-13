@@ -51,6 +51,48 @@ class CppBackend:
         *every* primitive before any specialization body, so a body may call any
         other primitive's wrapper (``::tsl::set1<Vec>(...)``) regardless of order."""
 
+        selectors = self.render_variant_selectors(primitive_name, specializations)
+        implementations = self.render_implementation_declarations(
+            primitive_name, specializations
+        )
+        wrappers = self.render_wrappers(primitive_name, specializations)
+        return "\n\n".join(
+            part for part in (selectors, implementations, wrappers) if part
+        )
+
+    def render_variant_selectors(
+        self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
+    ) -> str:
+        """Render the stable default selector before an optional policy include."""
+
+        variants = _variant_names(specializations)
+        shape = specializations[0]
+        if not variants or DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind,
+            shape.param_kinds,
+        ):
+            return ""
+        enum_values = ",\n".join(
+            ("    default_", *(f"    {name}" for name in variants))
+        )
+        return (
+            "namespace detail::variants {\n"
+            f"enum class {variant_enum_name(primitive_name)} {{\n"
+            f"{enum_values},\n"
+            "};\n\n"
+            f"template <{', '.join(_selector_template_params(shape))}>\n"
+            f"struct {variant_selector_name(primitive_name)} {{\n"
+            f"    static constexpr auto value = "
+            f"{variant_enum_name(primitive_name)}::default_;\n"
+            "};\n"
+            "}  // namespace detail::variants"
+        )
+
+    def render_implementation_declarations(
+        self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
+    ) -> str:
+        """Render detail implementation templates and their state query."""
+
         shape = specializations[0]  # all share the same signature shape + axis keys
         if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
             shape.result_kind,
@@ -88,9 +130,20 @@ class CppBackend:
             "}  // namespace detail::primitives"
             + "\n\n"
             + _implementation_state_query(primitive_name, specializations)
-            + "\n\n"
-            + self._wrapper(primitive_name, specializations)
         )
+
+    def render_wrappers(
+        self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
+    ) -> str:
+        """Render the public wrapper after policy specializations are visible."""
+
+        shape = specializations[0]
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind,
+            shape.param_kinds,
+        ):
+            return ""
+        return self._wrapper(primitive_name, specializations)
 
     def render_definitions(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -259,10 +312,27 @@ class CppBackend:
         signature = _wrapper_signature(specializations)
         doc = _cpp_doc(specializations[0], context="C++ wrapper", concrete=False)
         prefix = f"{doc}\n" if doc else ""
+        variants = _variant_names(specializations)
+        selector = (
+            f"    using selector = ::tsl::detail::variants::"
+            f"{variant_selector_name(primitive_name)}<{signature.impl_args}>;\n"
+            if variants
+            else ""
+        )
+        variant_dispatch = "".join(
+            "    if constexpr (selector::value == "
+            f"::tsl::detail::variants::{variant_enum_name(primitive_name)}::{name}) {{\n"
+            f"        return ::tsl::detail::primitives::{_impl_name(primitive_name, name)}"
+            f"<{signature.impl_args}>::apply({signature.argument_names});\n"
+            "    }\n"
+            for name in variants
+        )
         vector_wrapper = (
             prefix
             + f"template <{', '.join(signature.template_params)}>\n"
             f"inline {signature.result_type} {primitive_name}({signature.params}) {{\n"
+            f"{selector}"
+            f"{variant_dispatch}"
             f"    return ::tsl::detail::primitives::{_impl_name(primitive_name)}"
             f"<{signature.impl_args}>::apply("
             f"{signature.argument_names});\n"
@@ -361,6 +431,18 @@ def _wrapper_signature(
         impl_args=impl_args,
         result_type=result_type,
     )
+
+
+def _selector_template_params(shape: LoweredSpecialization) -> tuple[str, ...]:
+    params = ["class Vec"]
+    if shape.target is not None:
+        params.append("class ToVec")
+    params.extend(f"class {param.name}" for param in shape.type_params)
+    params.extend(f"bool {_axis_name(key)}" for key, _ in shape.axis)
+    if shape.immediate is not None:
+        params.append(f"{shape.immediate[1]} {shape.immediate[0]}")
+    params.extend(f"{typ} {name}" for name, typ, _ in shape.generic_params)
+    return tuple(params)
 
 
 def _dataparallel_primitive_facade_wrapper(
@@ -521,12 +603,38 @@ def _implementation_state_query(
         params.append(f"{typ} {name}")
         query_args.append(f"value_arg<{name}>")
         impl_args.append(name)
+    variants = _variant_names(specializations)
+    if variants:
+        selector = (
+            f"detail::variants::{variant_selector_name(primitive_name)}"
+            f"<{', '.join(impl_args)}>"
+        )
+        variant_states = "".join(
+            f"        if constexpr ({selector}::value == "
+            f"detail::variants::{variant_enum_name(primitive_name)}::{name}) {{\n"
+            f"            return detail::primitives::{_impl_name(primitive_name, name)}"
+            f"<{', '.join(impl_args)}>::implementation_state;\n"
+            "        }\n"
+            for name in variants
+        )
+        value_body = (
+            "    static constexpr implementation_state selected_value() {\n"
+            f"{variant_states}"
+            f"        return detail::primitives::{_impl_name(primitive_name)}"
+            f"<{', '.join(impl_args)}>::implementation_state;\n"
+            "    }\n"
+            "    static constexpr implementation_state value = selected_value();\n"
+        )
+    else:
+        value_body = (
+            "    static constexpr implementation_state value = "
+            f"detail::primitives::{_impl_name(primitive_name)}"
+            f"<{', '.join(impl_args)}>::implementation_state;\n"
+        )
     return (
         f"template <{', '.join(params)}>\n"
         f"struct implementation_state_of<{', '.join(query_args)}> {{\n"
-        f"    static constexpr implementation_state value = "
-        f"detail::primitives::{_impl_name(primitive_name)}"
-        f"<{', '.join(impl_args)}>::implementation_state;\n"
+        f"{value_body}"
         f"}};"
     )
 
@@ -551,9 +659,23 @@ def _cpp_implementation_state(state: ImplementationState) -> str:
 
 
 def _impl_name(primitive_name: str, variant_name: str | None = None) -> str:
+    return implementation_name(primitive_name, variant_name)
+
+
+def implementation_name(
+    primitive_name: str, variant_name: str | None = None
+) -> str:
     if variant_name is None:
         return f"{primitive_name}_impl"
     return f"{primitive_name}_impl_{variant_name}"
+
+
+def variant_enum_name(primitive_name: str) -> str:
+    return f"{primitive_name}_variant"
+
+
+def variant_selector_name(primitive_name: str) -> str:
+    return f"{primitive_name}_selector"
 
 
 def _specialized_base_type_params(

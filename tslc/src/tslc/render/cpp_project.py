@@ -99,21 +99,34 @@ def cpp_artifacts(
         registrations += _cpp_inferred_simd_registrations(
             by_primitive, emitted_profile.extensions
         )
-        # All declarations (impl primary templates + wrappers) precede all
-        # specialization bodies, so any body may call any primitive's wrapper.
-        declarations = "\n\n".join(
-            backend.render_declarations(name, by_primitive[name])
+        selectors = "\n\n".join(
+            rendered
             for name in sorted(by_primitive)
+            if (rendered := backend.render_variant_selectors(name, by_primitive[name]))
+        )
+        # All implementation templates precede all wrappers and specialization
+        # bodies. Selectors precede the optional build-local policy include.
+        implementation_declarations = "\n\n".join(
+            backend.render_implementation_declarations(name, by_primitive[name])
+            for name in sorted(by_primitive)
+        )
+        wrappers = "\n\n".join(
+            rendered
+            for name in sorted(by_primitive)
+            if (rendered := backend.render_wrappers(name, by_primitive[name]))
         )
         definitions = "\n\n".join(
             backend.render_definitions(name, by_primitive[name])
             for name in sorted(by_primitive)
         )
-        bodies = declarations + "\n\n" + definitions
+        bodies = "\n\n".join(
+            part for part in (implementation_declarations, wrappers, definitions) if part
+        )
         content = assets.fill(
             "cpp_profile_header.hpp.tmpl",
             includes=includes,
             registrations=registrations,
+            selectors=selectors,
             bodies=bodies,
         )
         content = _guard_cpp_profile(
@@ -148,24 +161,41 @@ def cpp_artifacts(
                 emitted_profile.extensions,
                 header_group,
             )
-            grouped_declarations = "\n\n".join(
-                backend.render_declarations(name, grouped[name])
+            grouped_selectors = "\n\n".join(
+                rendered
                 for name in sorted(grouped)
                 if name not in by_primitive
+                if (rendered := backend.render_variant_selectors(name, grouped[name]))
+            )
+            grouped_implementation_declarations = "\n\n".join(
+                backend.render_implementation_declarations(name, grouped[name])
+                for name in sorted(grouped)
+                if name not in by_primitive
+            )
+            grouped_wrappers = "\n\n".join(
+                rendered
+                for name in sorted(grouped)
+                if name not in by_primitive
+                if (rendered := backend.render_wrappers(name, grouped[name]))
             )
             grouped_definitions = "\n\n".join(
                 backend.render_definitions(name, grouped[name])
                 for name in sorted(grouped)
             )
-            grouped_bodies = (
-                grouped_declarations + "\n\n" + grouped_definitions
-                if grouped_declarations
-                else grouped_definitions
+            grouped_bodies = "\n\n".join(
+                part
+                for part in (
+                    grouped_implementation_declarations,
+                    grouped_wrappers,
+                    grouped_definitions,
+                )
+                if part
             )
             grouped_content = assets.fill(
                 "cpp_profile_header.hpp.tmpl",
                 includes=grouped_includes,
                 registrations=grouped_registrations,
+                selectors=grouped_selectors,
                 bodies=grouped_bodies,
             )
             grouped_content = _guard_cpp_profile(

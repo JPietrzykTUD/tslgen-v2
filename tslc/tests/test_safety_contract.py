@@ -503,7 +503,10 @@ def test_implementation_variants_lower_and_render_as_detail_symbols() -> None:
     assert "struct id_impl<" in cpp_source
     assert "struct id_impl_alt<" in cpp_source
     assert "::tsl::detail::primitives::id_impl<" in cpp_source
-    assert "::tsl::detail::primitives::id_impl_alt<" not in cpp_source
+    assert "enum class id_variant" in cpp_source
+    assert "id_variant::default_" in cpp_source
+    assert "::tsl::detail::primitives::id_impl_alt<" in cpp_source
+    assert "if constexpr (selector::value" in cpp_source
 
     rust_source = RustBackend().render_primitive("id", (rust,))
     assert "pub trait IdImpl" in rust_source

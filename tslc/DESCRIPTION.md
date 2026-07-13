@@ -45,6 +45,7 @@ sources + compiler assets → parse → catalog → select → scan body → low
 | **lower** | [lower/](src/tslc/lower/) | Walk segments, resolve queries/intrinsics → `LoweredSpecialization` |
 | **backend** | [backend/](src/tslc/backend/) | Own target type projection, helper manifests, emitted profiles, validation, and C++/Rust function text |
 | **value tests** | [value_tests/](src/tslc/value_tests/) | Plan executable cases from finalized emitted names |
+| **benchmark** | [benchmark/](src/tslc/benchmark/) | Plan explicit implementation-variant measurements and render the optional C++ benchmark/policy tool |
 | **render** | [render/](src/tslc/render/) | Format validated profiles and prebuilt test plans into headers/modules, dispatch, CMake/Cargo, and docs |
 | **output** | [output/](src/tslc/output/) | Write the file tree; build-verify with real toolchains (incl. SDE/QEMU emulation) |
 
@@ -183,8 +184,8 @@ Backends differ idiomatically (a `BackendDialect`,
 spellings, intrinsic composition, call syntax, and unsafe framing). The
 [backend registry](src/tslc/backend/registry.py) owns each backend's dialect
 factory, artifact media type and renderers, documentation formatter, validation,
-helper manifest, value-test support, verification adapter, and post-generation
-formatting/documentation specs. Signature type
+helper manifest, value-test/benchmark support, verification adapter, and
+post-generation formatting/documentation specs. Signature type
 projection machinery and the concrete C++/Rust projection tables are co-located
 in [backend/signature_types.py](src/tslc/backend/signature_types.py), then shared
 by function emitters and documentation formatting. They are backend-owned facts,
@@ -207,8 +208,16 @@ A static substrate ships as assets
 [tsl_core.rs](src/tslc/backend/assets/tsl_core.rs)) defining `simd<T,Ext>` /
 `SimdVector` and helpers. Backend target-text values use
 [target_text.py](src/tslc/target_text.py); [render/](src/tslc/render/) only formats
-finalized, validated profiles and prebuilt value-test plans into a per-profile
-project with a top-level dispatch header/module.
+finalized, validated profiles, prebuilt value-test plans, and prebuilt
+benchmark plans into a per-profile project with a top-level dispatch
+header/module.
+
+The optional [benchmark/](src/tslc/benchmark/) stage consumes finalized C++
+specializations and authored value-test facts. It plans only explicitly
+coexisting named variants, emits structured skip coverage for unsupported
+signature shapes, and renders a standalone native benchmark/policy tool. The
+generated CMake project runs it only through explicit report, policy, or
+autotune options; ordinary generation and builds retain the authored default.
 
 ## Differential value tests
 

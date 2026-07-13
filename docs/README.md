@@ -12,6 +12,8 @@ overview in `README.md` and do not belong to the compiler design contract in
   with backends.
 - [Adding a TSIL keyword region](add-keyword.md) gives maintainers a
   step-by-step guide for adding a new recognized TSIL keyword.
+- [Variant benchmarking and autotuning](variant-benchmarking.md) explains the
+  optional native C++ report, policy-consumption, and one-build autotune flows.
 
 Do not use this directory for generated-TSL documentation assets. Those live in
 `supplementary/docs/` because they are inputs used by TSL documentation
