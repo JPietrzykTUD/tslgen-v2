@@ -7,7 +7,9 @@ description: Add or update a TSL primitive in tsldata and the tslc compiler. Use
 
 ## Workflow
 
-1. Read `AGENTS.md`, `PLANS.md`, `tslc/CHARTER.md`, and the closest existing primitive examples under `tsldata/primitives/`.
+1. Read `AGENTS.md`, `CHARTER.md`, `PLANS.md`, `tsldata/AGENTS.md`,
+   `tslc/AGENTS.md`, `tslc/CHARTER.md`, and the closest existing primitive
+   examples under `tsldata/primitives/`.
 2. Identify the primitive family, signatures, type groups, extension coverage, masks, immediate parameters, and value-test needs before editing.
 3. Add or update source data in `tsldata/` first. Keep source forms explicit; do not make the compiler silently repair malformed `.tsl`.
 4. If the current parser/catalog/schema does not accept the needed shape, add typed validation and promotion at the parser/catalog boundary.

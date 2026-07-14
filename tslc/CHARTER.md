@@ -1,9 +1,9 @@
-# tslc charter
+# tslc Compiler Charter
 
-This is a one-page contract for how `tslc` is built. The project is a compact
-compiler, not a framework for compiler-shaped ceremony: it should grow by
-adding clear domain vocabulary and behavior, while keeping plumbing and handoff
-objects rare.
+This is the compiler-specific refinement of the repository
+[`CHARTER.md`](../CHARTER.md). `tslc` is a compact compiler, not a framework for
+compiler-shaped ceremony: it should grow by adding clear domain vocabulary and
+behavior while keeping plumbing and handoff objects rare.
 
 ## 1. It is a compiler
 
@@ -16,9 +16,10 @@ vocabulary that represents something real.
 
 What stays minimal is **plumbing**: never a `Discovery → DiscoveryResult →
 Handoff → HandoffResult` quartet for one concept. There is one body model
-(`Segment`), one lowered form (`LoweredSpecialization`). Result objects carry only
-`(value, diagnostics)`. If you are about to add a wrapper whose only job is to
-carry another type between two functions, don't.
+(`Segment`) and one lowered specialization model (`LoweredSpecialization`).
+Boundary results carry their substantive stage outputs and diagnostics directly.
+If you are about to add a wrapper whose only job is to carry another type
+between two functions, don't.
 
 ## 3. New types are gated on delivered behavior
 
@@ -46,15 +47,15 @@ promoted to typed TSIL regions before such a backend relies on them.
 - Typed, immutable domain objects after the parser boundary. No dicts as domain
   objects.
 - Diagnostics are structured values. Pure logic never calls `SystemExit`.
-- File I/O lives only in source loading, static compiler-asset loading, and
-  artifact writing. Parsing, catalog building, selection, lowering, and
-  rendering consume loaded inputs and are pure.
+- File I/O lives in source/config/static-asset loading, artifact writing,
+  verification, or explicit maintenance tools. Parsing, catalog building,
+  selection, lowering, and rendering consume loaded inputs and are pure.
 - Deterministic ordering everywhere (sorted artifacts, stable iteration).
 - Selection closure, emitted-name finalization, backend validation, and test
   planning finish before project rendering begins.
 - Templates format already-decided values. No backend semantics in templates.
 
-## 6. Scratch and output go in `./tslctmp`, never `/tmp`
+## 6. Scratch and output go in repository `./tslctmp`, never `/tmp`
 
 This runs in a WSL devcontainer: `/` (and `/tmp`) is the container overlay,
 backed by a VHDX that only ever grows. Generated trees, build dirs, and test

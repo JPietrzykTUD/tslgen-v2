@@ -8,8 +8,9 @@
 [![Docs](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/docs.yml)
 
 This repository contains `tslc`, a Python compiler for the TSL data language,
-plus the source data, templates, helper assets, coverage baselines, and CI
-workflows used to generate deterministic C++ and Rust SIMD library artifacts.
+plus the authored source data, packaged compiler assets, generated-documentation
+inputs, coverage baselines, examples, and CI workflows used to generate
+deterministic C++ and Rust SIMD library artifacts.
 
 `tslc` reads `.tsl` source data, builds a validated catalog, selects primitive
 implementations for explicit targets, lowers TSIL body regions, renders
@@ -18,12 +19,15 @@ generated projects, and optionally verifies them with real toolchains.
 ## Project Map
 
 ```text
-tslc/          Python compiler package, tests, charter, and architecture docs
-tsldata/       TSL extension/profile/type/primitive source corpus
+CHARTER.md    Repository-wide design contract
+tslc/         Python compiler package, tests, compiler charter, and architecture docs
+tsldata/      TSL type/language/extension/primitive source corpus
+docs/         Human-authored maintainer guides
+examples/     Checked-in C++ and Rust generated-library consumers
 .github/      GitHub Actions workflows, actions, and workflow-only scripts
-supplementary/ Build-system templates, helper sources, docs assets, reusable CI helpers
-coverage/      Coverage ratchet baseline and generated coverage inventory
-tslctmp/       Local generated output and scratch space; do not commit
+supplementary/ Machine profiles, generated-doc inputs, and reusable CI helpers
+coverage/     Coverage and benchmark ratchet evidence
+tslctmp/      Local generated output and scratch space; do not commit
 ```
 
 ## Quick Start
@@ -55,7 +59,10 @@ overlay.
 ## Where To Look
 
 - Package quick start: [tslc/README.md](tslc/README.md)
-- Design contract: [tslc/CHARTER.md](tslc/CHARTER.md)
+- Repository charter: [CHARTER.md](CHARTER.md)
+- Compiler charter: [tslc/CHARTER.md](tslc/CHARTER.md)
 - Architecture narrative: [tslc/DESCRIPTION.md](tslc/DESCRIPTION.md)
 - Active planning guide: [PLANS.md](PLANS.md)
-- Contributor/agent instructions: [AGENTS.md](AGENTS.md)
+- Repository instructions: [AGENTS.md](AGENTS.md)
+- Compiler instructions: [tslc/AGENTS.md](tslc/AGENTS.md)
+- TSL source-data instructions: [tsldata/AGENTS.md](tsldata/AGENTS.md)

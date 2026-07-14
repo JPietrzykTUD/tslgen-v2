@@ -3,9 +3,11 @@
 This directory contains human-authored project documentation for maintainers and
 contributors.
 
-Use this directory for topic guides that are broader than the quick-start
-overview in `README.md` and do not belong to the compiler design contract in
-`tslc/CHARTER.md` or the architecture narrative in `tslc/DESCRIPTION.md`.
+Use this directory for topic guides that are broader than the root
+[`README.md`](../README.md) and do not belong to the repository contract in
+[`CHARTER.md`](../CHARTER.md), the compiler contract in
+[`tslc/CHARTER.md`](../tslc/CHARTER.md), or the architecture narrative in
+[`tslc/DESCRIPTION.md`](../tslc/DESCRIPTION.md).
 
 - [TSIL keyword regions](tsil-keywords.md) inventories the TSIL regions
   recognized by `tslc` and describes how they validate, lower, and interact

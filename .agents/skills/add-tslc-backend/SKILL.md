@@ -7,7 +7,9 @@ description: Add a backend or backend capability to tslc. Use when Codex is aske
 
 ## Workflow
 
-1. Read `AGENTS.md`, `PLANS.md`, `tslc/CHARTER.md`, and the existing `tslc/src/tslc/backend/`, `render/`, `output/`, and `supplementary/` patterns.
+1. Read `AGENTS.md`, `CHARTER.md`, `PLANS.md`, `tslc/AGENTS.md`,
+   `tslc/CHARTER.md`, and the existing `tslc/src/tslc/backend/`, `render/`,
+   `output/`, relevant `tsldata/detail/`, and `supplementary/` patterns.
 2. Define the backend ID, supported profiles/extensions, type spellings, intrinsic/value translations, generated project layout, and verification story.
 3. Add backend capabilities through the existing backend registry/support-policy boundary. Do not scatter hardcoded backend ID lists.
 4. Add typed translation/render values before templates. Templates may format decided values only.

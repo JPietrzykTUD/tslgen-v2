@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: Review tslc design health and detect drift from AGENTS.md, PLANS.md, tslc/CHARTER.md, and tslc/DESCRIPTION.md. Use when Codex is asked for a design review, architecture drift audit, extensibility review, maintainability review, KISS/DRY review, or pre/post-check after adding primitives, TSIL regions, backend support, or major compiler pipeline changes.
+description: Review tslc design health and detect drift from the repository and compiler charters, scoped AGENTS.md files, PLANS.md, and tslc/DESCRIPTION.md. Use when Codex is asked for a design review, architecture drift audit, extensibility review, maintainability review, KISS/DRY review, or pre/post-check after adding primitives, TSIL regions, backend support, or major compiler pipeline changes.
 ---
 
 # Design Review
@@ -10,14 +10,16 @@ description: Review tslc design health and detect drift from AGENTS.md, PLANS.md
 Default to read-only. Do not edit files unless the user explicitly asks for a
 fix after the review. If fixes are needed, recommend small coherent slices.
 
-Review the active project shape, not historical intent. Treat `AGENTS.md`,
-`PLANS.md`, `tslc/CHARTER.md`, `tslc/DESCRIPTION.md`, tests, `tslc/`, and
-`tsldata/` as the relevant design evidence.
+Review the active project shape, not historical intent. Treat `CHARTER.md`, the
+root and applicable nested `AGENTS.md` files, `PLANS.md`, `tslc/CHARTER.md`,
+`tslc/DESCRIPTION.md`, tests, `tslc/`, and `tsldata/` as the relevant design
+evidence.
 
 ## Workflow
 
-1. Read `AGENTS.md`, `PLANS.md`, `tslc/CHARTER.md`, and
-   `tslc/DESCRIPTION.md`.
+1. Read `AGENTS.md`, `CHARTER.md`, `PLANS.md`, `tslc/AGENTS.md`,
+   `tslc/CHARTER.md`, `tslc/DESCRIPTION.md`, and `tsldata/AGENTS.md` when source
+   data is in scope.
 2. Identify the review scope from the user request. If no scope is given, scan
    `tslc/src/tslc/`, `tslc/tests/`, and the relevant `tsldata/` paths.
 3. Inspect structure before details: package layout, dependency direction,

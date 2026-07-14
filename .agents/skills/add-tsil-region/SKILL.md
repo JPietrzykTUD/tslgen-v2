@@ -7,7 +7,10 @@ description: Add a TSIL keyword region to tslc. Use when Codex is asked to recog
 
 ## Workflow
 
-1. Read `AGENTS.md`, `PLANS.md`, `tslc/CHARTER.md`, and the existing `tslc/src/tslc/ir/`, `catalog/validation/body_validation.py`, and `lower/region_handlers/` patterns.
+1. Read `AGENTS.md`, `CHARTER.md`, `PLANS.md`, `tslc/AGENTS.md`,
+   `tslc/CHARTER.md`, and the existing `tslc/src/tslc/ir/`,
+   `catalog/validation/body_validation.py`, and `lower/region_handlers/`
+   patterns. Read `tsldata/AGENTS.md` when source bodies are in scope.
 2. Define the exact accepted source forms and nearby malformed forms before editing.
 3. Add the keyword to the region descriptor/registry path so scanning, validation, and lowerer registration share one source of truth.
 4. Keep scanning lexical: delimiters, nesting, spans, and recursive segments only. Do not add expression semantics to the scanner.
