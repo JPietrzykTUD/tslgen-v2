@@ -42,18 +42,22 @@ PYTHONPATH=tslc/src python -m pytest -q tslc/tests
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
 # Write scratch/output under the workspace (./tslctmp), not /tmp: on WSL the
 # container overlay (which backs /tmp) only grows the VHDX and never shrinks.
-PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata \
-  --machine-profiles supplementary/buildsystem/machine_profiles.json \
-  --primitives add,sub --profiles scalar,avx2 \
-  --output-root ./tslctmp/generated --verify
+python -m pip install -e ./tslc
+tslc check
+tslc list primitives
+tslc generate --primitives add,sub --profiles scalar,avx2
+tslc build --primitives add,sub --profiles scalar,avx2
 
 # Build and run generated value tests.
 # The CLI prints captured ctest/cargo test output for the test steps.
-PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata \
-  --machine-profiles supplementary/buildsystem/machine_profiles.json \
-  --primitives add,sub --profiles avx2 --backends cpp \
-  --output-root ./tslctmp/value-tests --test
+tslc test --primitives add,sub --profiles avx2 --backends cpp
 ```
+
+The repository `tslc.toml` supplies source, machine-profile, backend, and
+workspace-output defaults. `PYTHONPATH=tslc/src python -m tslc ...` exposes the
+same commands without installation. See the full
+[command-line tools guide](../docs/tslc-cli.md) for `check --watch`, JSON
+diagnostics, catalog discovery, `doctor`, inspection, audits, and exit codes.
 
 Contributor instructions for compiler changes live in
 [`AGENTS.md`](AGENTS.md), in addition to the repository instructions.

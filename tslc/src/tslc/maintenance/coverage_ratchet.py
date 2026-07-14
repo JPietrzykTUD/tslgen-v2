@@ -341,7 +341,7 @@ def _label(key: SlotKey) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="tslc-coverage-ratchet",
+        prog="tslc coverage ratchet",
         description="Fail when a change drops a coverage slot that used to lower.",
     )
     parser.add_argument("--baseline", default=str(_BASELINE), help="path to the baseline JSON")

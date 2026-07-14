@@ -76,6 +76,9 @@ class GenerationRequest:
     # specialization against the generic scalar reference over many random inputs. Opt-in (adds
     # build/run cost); requires the test harness so the generated code can round-trip registers.
     value_test_fuzz: bool = False
+    # Authoring checks reuse selection and lowering but stop before test planning,
+    # benchmarking, render-asset loading, and artifact rendering.
+    render_artifacts: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,6 +193,11 @@ class _GenerationSession:
                 self.diagnostics, self.coverage, self.skipped
             )
 
+        if not self.request.render_artifacts:
+            return _result_without_artifacts(
+                self.diagnostics, self.coverage, self.skipped
+            )
+
         value_tests = (
             self._plan_value_tests(emitted_profiles)
             if emitted_profiles
@@ -218,6 +226,8 @@ class _GenerationSession:
             return _result_without_artifacts(
                 self.diagnostics, self.coverage, self.skipped
             )
+        if self.inputs.render_assets is None:
+            raise AssertionError("render assets were not loaded for generation")
         rendered = (
             render_project(
                 emitted_profiles,

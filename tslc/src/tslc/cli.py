@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable, Mapping
 import shlex
 import sys
 from pathlib import Path
@@ -13,22 +14,115 @@ from tslc.diagnostics import has_errors
 from tslc.output.verify import BuildVerificationReport
 from tslc.output.verify_model import BackendToolchain
 from tslc.pipeline import GenerationResult
+from tslc.project_config import ProjectConfig, load_project_config
 
 if TYPE_CHECKING:
     from tslc.output.summary import ProfileValueTestSummary
 
 
+_COMMANDS = (
+    "generate",
+    "check",
+    "build",
+    "test",
+    "explain",
+    "inspect",
+    "list",
+    "show",
+    "audit",
+    "coverage",
+    "doctor",
+)
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="tslc", description="Compile TSL data to C++/Rust.")
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    # Preserve the original flat generation surface for scripts that already use it.
+    if arguments and arguments[0].startswith("-") and arguments[0] not in ("-h", "--help"):
+        return _generation_main(arguments, use_project_config=False)
+    if not arguments or arguments[0] in ("-h", "--help"):
+        _root_parser().parse_args(arguments)
+        return 0
+    command, rest = arguments[0], arguments[1:]
+    if command == "generate":
+        return _generation_main(rest, use_project_config=True, command="generate")
+    if command == "build":
+        return _generation_main(rest, use_project_config=True, command="build")
+    if command == "test":
+        return _generation_main(rest, use_project_config=True, command="test")
+    if command == "check":
+        from tslc.check_cli import main as check_main
+
+        return check_main(rest)
+    if command in ("list", "show"):
+        from tslc.catalog_cli import main as catalog_main
+
+        return catalog_main(_catalog_arguments(command, rest))
+    if command == "doctor":
+        from tslc.doctor import main as doctor_main
+
+        return doctor_main(rest)
+    if command == "explain":
+        from tslc.maintenance.explain import main as explain_main
+
+        return _run_configured_maintenance(explain_main, rest)
+    if command == "inspect":
+        from tslc.maintenance.stage_dump import main as inspect_main
+
+        return _run_configured_maintenance(inspect_main, rest)
+    if command == "audit":
+        return _maintenance_group("audit", rest)
+    if command == "coverage":
+        return _maintenance_group("coverage", rest)
+    parser = _root_parser()
+    parser.error(f"unknown command {command!r}")
+
+
+def _root_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="tslc",
+        description="Validate, inspect, compile, and verify TSL source data.",
+    )
+    subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
+    descriptions = {
+        "generate": "render configured generated projects",
+        "check": "validate the corpus without rendering",
+        "build": "generate and build-verify",
+        "test": "generate, build, and run value tests",
+        "explain": "explain one selection/lowering slot",
+        "inspect": "dump a compiler pipeline stage",
+        "list": "list catalog entries",
+        "show": "describe one catalog entry",
+        "audit": "run source metadata audits",
+        "coverage": "run coverage maintenance tools",
+        "doctor": "probe configured toolchains and runners",
+    }
+    for name in _COMMANDS:
+        subparsers.add_parser(name, help=descriptions[name], add_help=False)
+    return parser
+
+
+def _generation_main(
+    argv: list[str],
+    *,
+    use_project_config: bool,
+    command: str = "generate",
+) -> int:
+    parser = argparse.ArgumentParser(
+        prog="tslc" if not use_project_config else f"tslc {command}",
+        description="Compile TSL data to C++/Rust.",
+    )
+    if use_project_config:
+        parser.add_argument("--config", help="path to tslc.toml (discovered by default)")
     parser.add_argument(
         "--sources",
         nargs="+",
-        required=True,
+        required=not use_project_config,
         help="explicit .tsl source paths or directories (dirs load all .tsl beneath them)",
     )
     parser.add_argument(
         "--machine-profiles",
-        required=True,
+        required=not use_project_config,
         help="path to machine_profiles.json",
     )
     parser.add_argument(
@@ -49,7 +143,11 @@ def main(argv: list[str] | None = None) -> int:
         default="si8,si16,si32,si64,ui8,ui16,ui32,ui64,f32,f64",
         help="comma-separated type tags",
     )
-    parser.add_argument("--backends", default="cpp,rust", help="comma-separated backends")
+    parser.add_argument(
+        "--backends",
+        default=None if use_project_config else "cpp,rust",
+        help="comma-separated backends",
+    )
     parser.add_argument(
         "--generation-mode",
         choices=("partial", "strict"),
@@ -119,14 +217,28 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        toolchains = _toolchain_overrides(
+        project = (
+            load_project_config(args.config) if use_project_config else None
+        )
+        sources, machine_profiles, configured_backends, output_root = (
+            _generation_settings(args, project, command)
+        )
+        toolchains = _merge_toolchains(
+            project.toolchains if project is not None else {},
             _assignments(args.compiler, "--compiler"),
             _assignments(args.target, "--target"),
             _assignments(args.linker, "--linker"),
         )
-        runner_paths = _assignments(args.runner, "--runner")
+        runner_paths = dict(project.runner_paths) if project is not None else {}
+        runner_paths.update(_assignments(args.runner, "--runner"))
     except ValueError as exc:
         parser.error(str(exc))
+
+    if command == "build":
+        args.verify = True
+    elif command == "test":
+        args.test = True
+    args.output_root = output_root
 
     # Fuzzing only matters once the value tests are built and run, and it needs the test harness
     # (round-trip primitives) pulled into the closure — so --fuzz implies --test.
@@ -142,9 +254,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     generate_kwargs = {
-        "machine_profiles_path": args.machine_profiles,
+        "machine_profiles_path": machine_profiles,
         "type_tags": _split(args.types),
-        "backends": _split(args.backends),
+        "backends": configured_backends,
         "generation_mode": args.generation_mode,
         "test_harness": args.test,
         "value_test_warnings": args.value_test_warnings or args.test,
@@ -156,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
         generate_kwargs["primitives"] = _split(args.primitives)
 
     result = generate_project(
-        [Path(path) for path in args.sources],
+        sources,
         **generate_kwargs,
     )
     verify_report: BuildVerificationReport | None = None
@@ -199,7 +311,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.format:
             from tslc.output.format import format_generated
 
-            format_report = format_generated(args.output_root, tuple(_split(args.backends)))
+            format_report = format_generated(args.output_root, tuple(configured_backends))
             for note in format_report.notes:
                 print(f"[format-skip] {note}", file=sys.stderr)
             if format_report.formatted:
@@ -276,19 +388,132 @@ def _assignments(values: list[str], option: str) -> dict[str, str]:
     return assignments
 
 
-def _toolchain_overrides(
+def _merge_toolchains(
+    configured: Mapping[str, BackendToolchain],
     compilers: dict[str, str],
     targets: dict[str, str],
     linkers: dict[str, str],
 ) -> dict[str, BackendToolchain]:
-    return {
-        backend_id: BackendToolchain.create(
-            compiler=compilers.get(backend_id),
-            target=targets.get(backend_id),
-            linker=linkers.get(backend_id),
+    base = dict(configured)
+    for backend_id in sorted(compilers.keys() | targets.keys() | linkers.keys()):
+        previous = base.get(backend_id, BackendToolchain())
+        base[backend_id] = BackendToolchain.create(
+            compiler=compilers.get(backend_id) or previous.compiler,
+            target=targets.get(backend_id) or previous.target,
+            linker=linkers.get(backend_id) or previous.linker,
         )
-        for backend_id in sorted(compilers.keys() | targets.keys() | linkers.keys())
-    }
+    return base
+
+
+def _generation_settings(
+    args: argparse.Namespace,
+    project: ProjectConfig | None,
+    command: str,
+) -> tuple[tuple[Path, ...], Path, list[str], str | Path | None]:
+    sources = (
+        tuple(Path(path) for path in args.sources)
+        if args.sources
+        else project.sources
+        if project is not None
+        else ()
+    )
+    machine_profiles = (
+        Path(args.machine_profiles)
+        if args.machine_profiles
+        else project.machine_profiles
+        if project is not None
+        else None
+    )
+    if not sources or machine_profiles is None:
+        raise ValueError(
+            "sources and machine profiles are not configured; pass --sources and "
+            "--machine-profiles or create tslc.toml"
+        )
+    backends = (
+        _split(args.backends)
+        if args.backends is not None
+        else list(project.backends)
+        if project is not None
+        else ["cpp", "rust"]
+    )
+    output_root: str | Path | None = (
+        args.output_root
+        if args.output_root is not None
+        else project.output_root
+        if project is not None
+        else None
+    )
+    if command in ("build", "test") and output_root is None:
+        raise ValueError(
+            f"tslc {command} requires --output-root or tslc.output_root in tslc.toml"
+        )
+    return sources, machine_profiles, backends, output_root
+
+
+def _catalog_arguments(command: str, arguments: list[str]) -> list[str]:
+    return [command, *arguments]
+
+
+def _configured_maintenance_arguments(arguments: list[str]) -> list[str]:
+    if "-h" in arguments or "--help" in arguments:
+        return arguments
+    values = list(arguments)
+    config_path: str | None = None
+    if "--config" in values:
+        index = values.index("--config")
+        if index + 1 >= len(values):
+            raise ValueError("--config expects a path")
+        config_path = values[index + 1]
+        del values[index : index + 2]
+    try:
+        project = load_project_config(config_path)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
+    if project is None:
+        return values
+    if "--sources" not in values:
+        if len(project.sources) != 1:
+            raise ValueError(
+                "this inspector accepts one --sources root; pass it explicitly"
+            )
+        values.extend(("--sources", str(project.sources[0])))
+    if "--machine-profiles" not in values:
+        values.extend(("--machine-profiles", str(project.machine_profiles)))
+    return values
+
+
+def _run_configured_maintenance(
+    command: Callable[[list[str] | None], int],
+    arguments: list[str],
+) -> int:
+    try:
+        configured = _configured_maintenance_arguments(arguments)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    return command(configured)
+
+
+def _maintenance_group(group: str, arguments: list[str]) -> int:
+    if not arguments or arguments[0] in ("-h", "--help"):
+        choices = "metadata" if group == "audit" else "ratchet, inventory"
+        print(f"usage: tslc {group} {{{choices.replace(', ', ',')}}} [options]")
+        return 0
+    action, rest = arguments[0], arguments[1:]
+    if group == "audit" and action == "metadata":
+        from tslc.maintenance.metadata_audit import main as metadata_main
+
+        return _run_configured_maintenance(metadata_main, rest)
+    if group == "coverage" and action == "ratchet":
+        from tslc.maintenance.coverage_ratchet import main as ratchet_main
+
+        return _run_configured_maintenance(ratchet_main, rest)
+    if group == "coverage" and action == "inventory":
+        from tslc.maintenance.coverage_inventory import main as inventory_main
+
+        return inventory_main(rest)
+    print(f"unknown tslc {group} command {action!r}", file=sys.stderr)
+    return 2
 
 
 def _configured_runner_labels(runner_paths: dict[str, str]) -> list[str]:

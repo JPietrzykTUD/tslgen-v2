@@ -49,8 +49,15 @@ sources + compiler assets → parse → catalog → select → scan body → low
 | **render** | [render/](src/tslc/render/) | Format validated profiles and prebuilt test plans into headers/modules, dispatch, CMake/Cargo, and docs |
 | **output** | [output/](src/tslc/output/) | Write the file tree; build-verify with real toolchains (incl. SDE/QEMU emulation) |
 
-Entry points: [cli.py](src/tslc/cli.py) (`python -m tslc.cli`) and
-[api.py](src/tslc/api.py).
+Entry points: [cli.py](src/tslc/cli.py) (installed as `tslc`, also
+`python -m tslc`) and [api.py](src/tslc/api.py). The CLI discovers repository
+defaults through [project_config.py](src/tslc/project_config.py). Catalog-only
+author validation is a separate boundary in
+[authoring.py](src/tslc/authoring.py): `tslc check` stops after parse, catalog
+promotion, invariants, and TSIL shell validation unless explicit slot filters
+request selection and lowering. Catalog `list`/`show` and `doctor` consume the
+same typed catalog, backend registry, machine-profile projection, and verifier
+drivers rather than maintaining parallel compiler knowledge.
 
 ## The input language (two nested languages)
 

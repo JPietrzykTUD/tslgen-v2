@@ -79,11 +79,23 @@ Choose checks for the affected source behavior and run them from the repository
 root:
 
 ```bash
+PYTHONPATH=tslc/src python -m tslc check
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower*.py tslc/tests/test_lower_*.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py
 git diff --check
 ```
+
+Use a slot-aware check while iterating on one implementation without rendering
+a project:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc check \
+  --primitive add --profile avx2 --backend cpp --type si32
+```
+
+Positional paths filter displayed diagnostics but never narrow the loaded
+corpus; shared definitions must remain available during validation.
 
 Broaden to `./dev.sh build` or `./dev.sh test` with the smallest useful
 primitive/profile/backend matrix when source changes affect emitted code or

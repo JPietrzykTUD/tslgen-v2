@@ -1,0 +1,13 @@
+[tslc]
+sources = ["tsldata"]
+machine_profiles = "supplementary/buildsystem/machine_profiles.json"
+backends = ["cpp", "rust"]
+output_root = "tslctmp/generated"
+
+# Optional local overrides use these tables; keep host-specific values uncommitted.
+# [tslc.toolchains.cpp]
+# compiler = "clang++"
+# target = "aarch64-linux-gnu"
+# linker = "aarch64-linux-gnu-g++"
+# [tslc.runners]
+# qemu-aarch64 = "/usr/bin/qemu-aarch64"

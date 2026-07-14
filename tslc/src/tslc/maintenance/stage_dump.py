@@ -48,7 +48,7 @@ _STAGES = ("catalog", "segments", "selection", "lowered")
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="tslc-stage-dump",
+        prog="tslc inspect",
         description="Dump one pipeline stage (catalog/segments/selection/lowered) as text or JSON.",
     )
     parser.add_argument("--stage", required=True, choices=_STAGES)

@@ -26,7 +26,9 @@ description: Add or change generated build and value-test verification in tslc. 
    runner extension point before adding more branches.
 5. Preflight compilers and targets before expensive generated builds. Preserve
    complete commands and deterministic diagnostics without leaking secrets or
-   ambient host assumptions.
+   ambient host assumptions. Keep `tslc doctor` on the same typed profile
+   projection, backend verifier driver, and `BuildVerifierConfig` path so its
+   readiness report cannot drift from build/test verification.
 6. Treat absent optional compilers, targets, runners, emulators, or hardware as
    explicit skips unless the requested gate requires them. Injectable
    configuration must override ambient discovery.
@@ -54,6 +56,7 @@ description: Add or change generated build and value-test verification in tslc. 
 
 ```bash
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify_config.py
+PYTHONPATH=tslc/src python -m tslc doctor --profile scalar
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
 git diff --check

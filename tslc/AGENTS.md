@@ -35,6 +35,12 @@ loaded sources/assets -> parse -> catalog -> select -> scan TSIL -> lower
 - `tslc/src/tslc/render/` formats finalized, validated render values.
 - `tslc/src/tslc/output/` writes artifacts and performs explicit build/test
   verification.
+- `tslc/src/tslc/authoring.py` owns catalog-only validation; it must not load
+  machine profiles or render assets. `check_cli.py` may opt into the ordinary
+  selection/lowering pipeline but must stop before planning and rendering.
+- `tslc/src/tslc/project_config.py` owns discovered `tslc.toml` defaults.
+  `cli.py` owns installed command routing and legacy flat-generation
+  compatibility; focused commands keep testable cores outside the router.
 
 Use `.agents/skills/add-value-test-shape/SKILL.md` when extending executable
 case planning/rendering. Use `.agents/skills/extend-tslc-verification/SKILL.md`
@@ -106,6 +112,7 @@ configuration remain correct.
 ```bash
 # Parser, catalog, and validation
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py
+PYTHONPATH=tslc/src python -m tslc check
 
 # TSIL scanning and lowering
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_select_and_lower*.py tslc/tests/test_lower_*.py
@@ -114,7 +121,7 @@ PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_render_model.py tslc/tests/test_generation_conditionals.py
 
 # Output and verification configuration
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify_config.py tslc/tests/test_output_format.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify_config.py tslc/tests/test_output_format.py tslc/tests/test_authoring_tools.py
 
 # Documentation maintenance
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_maintenance_documentation.py

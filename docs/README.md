@@ -8,6 +8,7 @@ Generated documentation inputs live in `supplementary/docs/`.
 
 | Goal | Guide |
 | --- | --- |
+| Use `tslc` validation, discovery, generation, and doctor commands | [TSLC command-line tools](tslc-cli.md) |
 | Add or change a primitive | [Adding a primitive](add-primitive.md) |
 | Add a target extension or profile | [Adding an extension](add-extension.md) |
 | Read the TSIL region reference | [TSIL keyword regions](tsil-keywords.md) |

@@ -199,7 +199,7 @@ def interactive_apply(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="python -m tslc.maintenance.metadata_audit",
+        prog="tslc audit metadata",
         description="Audit and optionally apply TSL safety/requires metadata suggestions.",
     )
     parser.add_argument("--sources", nargs="+", required=True)

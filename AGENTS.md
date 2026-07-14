@@ -121,12 +121,23 @@ PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_b
 Use `./dev.sh` for generated-project workflows:
 
 ```bash
+./dev.sh check
+./dev.sh check --primitive add --profile avx2 --backend cpp --type si32
+./dev.sh list primitives
+./dev.sh show extension avx2
+./dev.sh doctor --profile avx2 --backend cpp
 ./dev.sh generate --primitives add --profiles scalar --backends cpp,rust
 ./dev.sh build --primitives add --profiles scalar,avx2 --backends cpp,rust
 ./dev.sh test --primitives add --profiles avx2 --backends cpp
 ./dev.sh explain --primitive add --profile avx2 --type si32 --backend cpp
 ./dev.sh dump --stage lowered --primitive add --profile avx2 --type si32 --backend cpp
 ```
+
+The installed `tslc` command and `PYTHONPATH=tslc/src python -m tslc` expose the
+same authoring/compiler tools. Prefer `tslc check` for corpus validation that
+must not render or write projects; add singular primitive/profile/backend/type
+filters only when slot selection and lowering are part of the check. Repository
+defaults come from the discovered `tslc.toml`.
 
 ## Scratch And Generated Output
 

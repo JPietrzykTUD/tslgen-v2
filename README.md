@@ -40,6 +40,32 @@ PYTHONPATH=tslc/src python -m pytest -q tslc/tests
 git diff --check
 ```
 
+Install the unified command locally, or use its module equivalent:
+
+```bash
+python -m pip install -e ./tslc
+tslc check
+tslc list primitives
+tslc doctor --profile scalar
+```
+
+The checked-in `tslc.toml` supplies corpus, profile, backend, and scratch-output
+defaults. See the [command-line tools guide](docs/tslc-cli.md) for validation,
+discovery, generation, inspection, audit, coverage, and configuration commands.
+
+Install the unified command locally, or use its module equivalent:
+
+```bash
+python -m pip install -e ./tslc
+tslc check
+tslc list primitives
+tslc doctor --profile scalar
+```
+
+The checked-in `tslc.toml` supplies corpus, profile, backend, and scratch-output
+defaults. See the [command-line tools guide](docs/tslc-cli.md) for validation,
+discovery, generation, inspection, audit, coverage, and configuration commands.
+
 Generate and verify a small C++/Rust project:
 
 ```bash
@@ -59,6 +85,8 @@ overlay.
 ## Where To Look
 
 - Package quick start: [tslc/README.md](tslc/README.md)
+- Command-line tools: [docs/tslc-cli.md](docs/tslc-cli.md)
+- Command-line tools: [docs/tslc-cli.md](docs/tslc-cli.md)
 - Repository charter: [CHARTER.md](CHARTER.md)
 - Compiler charter: [tslc/CHARTER.md](tslc/CHARTER.md)
 - Architecture narrative: [tslc/DESCRIPTION.md](tslc/DESCRIPTION.md)

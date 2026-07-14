@@ -71,7 +71,7 @@ _DEFAULT_PROFILES = _REPO_ROOT / "supplementary" / "buildsystem" / "machine_prof
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="tslc-explain",
+        prog="tslc explain",
         description="Explain why one primitive/profile/backend/extension/type slot compiles.",
     )
     parser.add_argument("--primitive", required=True, help="primitive name, e.g. add")

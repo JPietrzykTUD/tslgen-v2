@@ -124,24 +124,29 @@ def rust_artifacts(
 
 def rust_verify_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[VerifyProfile, ...]:
     return tuple(
-        VerifyProfile(
-            profile_name=slug(emitted_profile.profile.name),
-            file_stem=slug(emitted_profile.profile.name),
-            family=emitted_profile.profile.family,
-            native_without_runner=(
-                emitted_profile.profile_family.native_without_runner
-                if emitted_profile.profile_family is not None
-                else False
-            ),
-            compile_modes=emitted_profile.profile.compile_modes,
-            target_features=rust_target_features(
-                emitted_profile.profile, emitted_profile.profile_family
-            ),
-            target=rust_target(emitted_profile.profile, emitted_profile.profile_family),
-            linker=rust_linker(emitted_profile.profile, emitted_profile.profile_family),
-            runner=_verify_runner(emitted_profile.profile),
-        )
+        rust_verify_profile(emitted_profile.profile, emitted_profile.profile_family)
         for emitted_profile in profiles
+    )
+
+
+def rust_verify_profile(
+    profile: MachineProfile,
+    capability: ProfileFamilyCapability | None = None,
+) -> VerifyProfile:
+    """Project a source machine profile into verifier-owned Rust facts."""
+
+    return VerifyProfile(
+        profile_name=slug(profile.name),
+        file_stem=slug(profile.name),
+        family=profile.family,
+        native_without_runner=(
+            capability.native_without_runner if capability is not None else False
+        ),
+        compile_modes=profile.compile_modes,
+        target_features=rust_target_features(profile, capability),
+        target=rust_target(profile, capability),
+        linker=rust_linker(profile, capability),
+        runner=_verify_runner(profile),
     )
 
 

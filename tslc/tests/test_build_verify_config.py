@@ -39,6 +39,7 @@ def _config(
     sde_path: str | None = None,
     qemu_aarch64_path: str | None = None,
     wasmtime_path: str | None = None,
+    cpp_linker: str | None = None,
 ) -> BuildVerifierConfig:
     toolchains = {
         backend_id: BackendToolchain.create(compiler=compiler)
@@ -46,8 +47,13 @@ def _config(
             ("cpp", cpp_compiler),
             ("rust", rust_compiler),
         )
-        if compiler is not None
+        if compiler is not None or (backend_id == "cpp" and cpp_linker is not None)
     }
+    if cpp_linker is not None:
+        toolchains["cpp"] = BackendToolchain.create(
+            compiler=cpp_compiler,
+            linker=cpp_linker,
+        )
     runner_paths = {
         kind: path
         for kind, path in (
@@ -135,13 +141,14 @@ def test_cpp_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
         tmp_path,
         project,
         runner,
-        config=_config(cpp_compiler="/usr/bin/c++"),
+        config=_config(cpp_compiler="/usr/bin/c++", cpp_linker="/usr/bin/ld"),
     )
 
     assert report.diagnostics == ()
     assert report.skipped == ()
     assert [command.step for command in seen] == ["preflight", "configure", "build"]
     assert seen[0].argv[0] == "/usr/bin/c++"
+    assert "-DCMAKE_LINKER=/usr/bin/ld" in seen[1].argv
     assert _env(seen[1])["CXX"] == "/usr/bin/c++"
     assert _env(seen[2])["CXX"] == "/usr/bin/c++"
 
