@@ -358,8 +358,10 @@ tests need to make that decision.
 
 ## Compiler-Builtin SIMD Implementation
 
-The first compiler-builtin SIMD slice is implemented as three C++-only Clang
-overlays: `clang_v128`, `clang_v256`, and `clang_v512`.
+The compiler-builtin SIMD slice is implemented as two additive C++-only Clang
+mask families at each width. `clang_v128`, `clang_v256`, and `clang_v512` use
+Clang's comparison-result vectors as masks; `clang_v128_bool`,
+`clang_v256_bool`, and `clang_v512_bool` use dense Clang boolean vectors.
 
 These are not machine profiles and do not supersede hardware extensions. They
 are routed through the universal `compiler_builtin` extension family, selected
@@ -389,12 +391,22 @@ overlays must never become `dataparallel::native` or
 `dataparallel::simd_for_t<fixed<N>, T>`, because the latter is their escape
 hatch to the hardware-backed profile extension.
 
-The opt-in header exposes the compiler overlay explicitly through the lane-count
-policy `dataparallel::clang_fixed<N>`:
+The opt-in header exposes the compiler overlay through the lane-count policy
+`dataparallel::clang_fixed<N, Mask>`. The default preserves the established
+comparison-vector contract:
 
 ```cpp
 using Vec = tsl::dataparallel::simd_for_t<
     tsl::dataparallel::clang_fixed<N>, DataType>;
+```
+
+Consumers opt into dense boolean masks explicitly:
+
+```cpp
+using Vec = tsl::dataparallel::simd_for_t<
+    tsl::dataparallel::clang_fixed<
+        N, tsl::dataparallel::clang_mask::boolean_vector>,
+    DataType>;
 ```
 
 This policy resolves to `clang_v128`, `clang_v256`, or `clang_v512` according
@@ -402,7 +414,10 @@ to `N * sizeof(DataType) * 8`. It is deliberately named after Clang rather than
 `builtin_fixed`: the generated register type is specifically Clang's
 `ext_vector_type`, and no compiler-neutral builtin-vector contract exists yet.
 The policy is emitted only in the guarded Clang overlay header and never changes
-ordinary `fixed<N>` or `native` selection.
+ordinary `fixed<N>` or `native` selection. Consumers should use this facade,
+not the internal `clang_v*_bool` tags; the tags remain distinct so generation,
+coverage, value tests, and benchmarks can reason about both representations in
+one project without changing the default ABI.
 
 Primitive bodies use `vector::fixed` when a compiler-vector operation needs a
 hardware fallback. Selection resolves that query to the best emitted concrete
@@ -436,20 +451,36 @@ representation bridge: a fallback that crosses into a hardware extension must
 pack and reconstruct its mask through those primitives rather than `bit_cast`
 unrelated mask objects.
 
+The boolean family uses the `boolean_lane_vector` policy, which renders
+`bool __attribute__((ext_vector_type(LANES)))`. Clang stores that type densely
+at one bit per lane. This is a representation choice, not a promise that the
+compiler will select a hardware predicate register; code-generation quality is
+still a benchmark question. The family is emitted only when Clang reports
+`__has_feature(ext_vector_type_boolean)`. That compiler feature is declared in
+typed extension metadata, so registrations, specialization definitions, smoke
+uses, and generated value cases share one availability fact.
+
+Boolean-vector comparisons, mask construction, bitwise algebra, blend, and the
+integral-mask bridge reuse the same semantic primitive bodies. `to_vector` is
+the one representation-specific conversion: a dense mask cannot be bit-cast to
+a full data register, so it composes `blend`, `set_zero`, and `set1` to expand
+each boolean lane to the data lane's all-zero/all-one value. The current corpus
+has lowering coverage for every primitive and arithmetic type in both mask
+families, and generated Clang builds compile the whole specialization surface.
+
 TSIL spells an all-inactive abstract mask as `mask<none>()`; the mask policy
 owns its concrete scalar-predicate, comparison-vector, or boolean rendering.
 The spelling deliberately describes mask semantics rather than storage. A
 register-backed mask may still reuse the ordinary vector constructors when its
 `mask_type` and `register_type` are identical.
 
-Compact Clang boolean-vector masks remain a benchmark-gated future variant.
-Clang documents them as intended, but not guaranteed, to map to hardware mask
-registers. If materialized-mask benchmarks justify them, they should be modeled
-as explicit target-feature-activated extension variants, analogous to
-`avx2_vl`/`sse_vl`, without changing the stable `clang_v*` mask contract.
+Benchmark results may eventually choose a mask representation automatically,
+but they must not silently change the meaning of `clang_fixed<N>`. Any such
+selection belongs in a separate opt-in policy or generated tuning decision;
+the explicit `comparison_vector` and `boolean_vector` spellings remain stable.
 
-This delivers the compiler decision without introducing general-purpose
-`compiler_features`, runtime, device, or executable-path taxonomies.
+This uses one narrow, typed `compiler_features` tuple in backend extension
+metadata; it does not introduce runtime, device, or executable-path taxonomies.
 
 Generated value tests keep the ordinary profile runner compiler-independent.
 Cases whose source or target extension belongs to the Clang header group are

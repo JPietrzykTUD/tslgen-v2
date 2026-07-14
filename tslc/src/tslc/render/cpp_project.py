@@ -14,6 +14,7 @@ from tslc.backend.cpp_profile import (
     _cpp_registration,
     _cpp_sized_registration,
     _guard_cpp_profile,
+    cpp_extension_availability_condition,
     cpp_header_group,
     cpp_profiles_support_algorithm,
 )
@@ -115,9 +116,10 @@ def cpp_artifacts(
             for name in sorted(by_primitive)
             if (rendered := backend.render_wrappers(name, by_primitive[name]))
         )
-        definitions = "\n\n".join(
-            backend.render_definitions(name, by_primitive[name])
-            for name in sorted(by_primitive)
+        definitions = _cpp_conditioned_definitions(
+            backend,
+            by_primitive,
+            emitted_profile.extensions,
         )
         bodies = "\n\n".join(
             part for part in (implementation_declarations, wrappers, definitions) if part
@@ -178,9 +180,10 @@ def cpp_artifacts(
                 if name not in by_primitive
                 if (rendered := backend.render_wrappers(name, grouped[name]))
             )
-            grouped_definitions = "\n\n".join(
-                backend.render_definitions(name, grouped[name])
-                for name in sorted(grouped)
+            grouped_definitions = _cpp_conditioned_definitions(
+                backend,
+                grouped,
+                emitted_profile.extensions,
             )
             grouped_bodies = "\n\n".join(
                 part
@@ -323,6 +326,54 @@ def _cpp_documentation_facade(profiles: tuple[EmittedProfile, ...]) -> str:
     ]
     return "\n\n".join(section.rstrip() for section in sections if section.strip()) + "\n"
 
+
+def _cpp_conditioned_definitions(
+    backend: CppBackend,
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
+) -> str:
+    """Render specialization definitions under their compiler capability guard."""
+
+    rendered: list[str] = []
+    for name in sorted(by_primitive):
+        by_condition: dict[str | None, list[LoweredSpecialization]] = {}
+        for specialization in by_primitive[name]:
+            condition = _cpp_specialization_availability_condition(
+                specialization,
+                extensions,
+            )
+            by_condition.setdefault(condition, []).append(specialization)
+        for condition in sorted(by_condition, key=lambda value: value or ""):
+            definitions = backend.render_definitions(
+                name,
+                tuple(by_condition[condition]),
+            )
+            if condition is not None:
+                definitions = f"#if {condition}\n{definitions}\n#endif"
+            rendered.append(definitions)
+    return "\n\n".join(rendered)
+
+
+def _cpp_specialization_availability_condition(
+    specialization: LoweredSpecialization,
+    extensions: Mapping[str, Extension],
+) -> str | None:
+    names = [specialization.extension_name]
+    if specialization.target is not None:
+        names.append(specialization.target.extension_isa)
+    conditions = sorted(
+        {
+            condition
+            for name in names
+            for condition in (
+                cpp_extension_availability_condition(extensions.get(name)),
+            )
+            if condition is not None
+        }
+    )
+    return " && ".join(conditions) if conditions else None
+
+
 def _cpp_smoke(
     emitted_profile: EmittedProfile,
     *,
@@ -333,6 +384,7 @@ def _cpp_smoke(
     # fully compiled (with the profile's ISA flags), not merely parsed.
     lines = [f"#include <{include_header}>", "", "namespace {"]
     index = 0
+    used_conditions: list[str | None] = []
     if by_primitive is None:
         by_primitive = emitted_profile.specializations("cpp")
     for name in sorted(by_primitive):
@@ -345,6 +397,7 @@ def _cpp_smoke(
             # A free function (`allocate`/`deallocate`) is not a template — address-take it
             # directly (once), so its body is compiled under the profile's flags.
             lines.append(f"auto* _tsl_use_{index} = &tsl::{name};")
+            used_conditions.append(None)
             index += 1
             continue
         varying = varying_positions(specs)
@@ -403,13 +456,24 @@ def _cpp_smoke(
                 + [default for _, _, default in spec.generic_params]
                 + [_concrete_arg_type(vec, spec.param_kinds[i]) for i in varying]
             )
-            lines.append(f"auto* _tsl_use_{index} = &tsl::{name}<{', '.join(targs)}>;")
+            use_line = f"auto* _tsl_use_{index} = &tsl::{name}<{', '.join(targs)}>;"
+            condition = _cpp_specialization_availability_condition(
+                spec,
+                emitted_profile.extensions,
+            )
+            if condition is not None:
+                use_line = f"#if {condition}\n{use_line}\n#endif"
+            lines.append(use_line)
+            used_conditions.append(condition)
             index += 1
     lines.append("}  // namespace")
     lines.append("")
     lines.append("int main() {")
-    for used in range(index):
-        lines.append(f"  (void)_tsl_use_{used};")
+    for used, condition in enumerate(used_conditions):
+        use_line = f"  (void)_tsl_use_{used};"
+        if condition is not None:
+            use_line = f"#if {condition}\n{use_line}\n#endif"
+        lines.append(use_line)
     lines.append("  return 0;")
     lines.append("}")
     return "\n".join(lines) + "\n"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from tslc.compiler_assets import RenderAssets
 from tslc.value_tests._render_cpp_dispatch import CPP_VALUE_TEST_RENDERER, render_cpp_case
+from tslc.value_tests.case_plan import ValueTestCasePlan
 from tslc.value_tests.model import ValueTestProfilePlan
 
 CPP_VALUE_TEST_SUPPORT = CPP_VALUE_TEST_RENDERER.backend_support()
@@ -12,12 +13,10 @@ CPP_VALUE_TEST_SUPPORT = CPP_VALUE_TEST_RENDERER.backend_support()
 def render_cpp_values_runner(
     profile: ValueTestProfilePlan, assets: RenderAssets
 ) -> str:
-    functions = [
-        _guarded(render_cpp_case(case), case.header_group) for case in profile.cases
-    ]
+    functions = [_guarded(render_cpp_case(case), case) for case in profile.cases]
     body = "\n\n".join(functions)
     call_lines = "\n".join(
-        _guarded(f"  failures += {case.function_name}();", case.header_group)
+        _guarded(f"  failures += {case.function_name}();", case)
         for case in profile.cases
     )
     support_includes = "".join(
@@ -31,11 +30,20 @@ def render_cpp_values_runner(
     )
 
 
-def _guarded(text: str, header_group: str | None) -> str:
-    if header_group is None:
-        return text
-    macro = f"TSL_ENABLE_{header_group.upper()}"
-    return f"#if defined({macro})\n{text}\n#endif"
+def _guarded(text: str, case: ValueTestCasePlan) -> str:
+    guarded = text
+    for feature in reversed(case.required_compiler_features):
+        guarded = (
+            "#if defined(__has_feature)\n"
+            f"#  if __has_feature({feature})\n"
+            f"{guarded}\n"
+            "#  endif\n"
+            "#endif"
+        )
+    if case.header_group is not None:
+        macro = f"TSL_ENABLE_{case.header_group.upper()}"
+        guarded = f"#if defined({macro})\n{guarded}\n#endif"
+    return guarded
 
 
 __all__ = ["CPP_VALUE_TEST_SUPPORT", "render_cpp_values_runner"]

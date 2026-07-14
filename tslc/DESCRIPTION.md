@@ -93,15 +93,21 @@ prim<v:=(v,v)> add(left, right):
   inference. Consumers explicitly request one with
   `dataparallel::simd_for_t<clang_fixed<N>, T>`, where `N` is the lane count;
   the guarded overlay maps the resulting bit width to the corresponding
-  `clang_v128`/`clang_v256`/`clang_v512` extension. A body that needs a hardware
+  `clang_v128`/`clang_v256`/`clang_v512` extension. The default uses Clang's
+  comparison-result vector as its mask. Consumers may instead request the
+  dense boolean-vector representation with
+  `clang_fixed<N, clang_mask::boolean_vector>` when Clang reports
+  `__has_feature(ext_vector_type_boolean)`. The generated data vector is the
+  same; only the mask contract changes. A body that needs a hardware
   implementation uses the typed `vector::fixed` query, which dependency closure
   resolves concretely while C++ renders
   `dataparallel::simd_for_t<fixed<N>, T>`. Their `comparison_lane_vector` mask
   policy derives `mask_type` from Clang's exact vector-comparison result. Direct
   mask operations retain all-one/all-zero lane semantics, while
   `to_integral`/`to_mask` form the representation-safe bridge to hardware masks;
-  mask objects are never assumed bit-cast-compatible. Compact Clang boolean
-  masks are deferred until benchmarks justify explicit target-feature variants.
+  mask objects are never assumed bit-cast-compatible. The dense boolean mask is
+  not assumed to map to a hardware predicate register, and its explicit policy
+  keeps that performance choice benchmarkable without changing the default.
   Rust does not emit these
   compiler-builtin extensions: stable Rust's SIMD surface is the
   architecture-specific `core::arch`, while its analogous portable

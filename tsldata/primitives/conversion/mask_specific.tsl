@@ -443,6 +443,23 @@ prim<v:=m> to_vector(mask):
     - {tags [basic], type "f64", case {inputs [2], expected [0.0, NAN]}}
     - {tags [edge], type "f64", case {inputs [3], expected [NAN, NAN]}}
   impls:
+    [clang_v128_bool, clang_v256_bool, clang_v512_bool]:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=blend[Vec]>(
+                mask,
+                call<primitive=set_zero[Vec]>(),
+                call<primitive=set1[Vec]>(mask<lane_true>())
+              )
+            );
+          """
     clang_v128:
       arith:
         requires []

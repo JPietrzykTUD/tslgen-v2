@@ -247,6 +247,7 @@ def _backend_extension_metadata(
             compile_guards=_backend_compile_guards(_child(backend, "compile_guards")),
             header_group=_field_text(_child(backend, "header_group")),
             compiler_ids=_list_text(_child(backend, "compiler_ids")),
+            compiler_features=_list_text(_child(backend, "compiler_features")),
             dataparallel_inference=_bool_text(
                 _child(backend, "dataparallel_inference")
             ),
@@ -357,6 +358,11 @@ def _merge_backend_metadata(
             ),
             header_group=child_meta.header_group or parent_meta.header_group,
             compiler_ids=child_meta.compiler_ids or parent_meta.compiler_ids,
+            compiler_features=tuple(
+                dict.fromkeys(
+                    parent_meta.compiler_features + child_meta.compiler_features
+                )
+            ),
             dataparallel_inference=(
                 child_meta.dataparallel_inference
                 if child_meta.dataparallel_inference is not None

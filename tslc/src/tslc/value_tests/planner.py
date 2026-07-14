@@ -248,7 +248,22 @@ class ValueTestPlanner:
                 f"value-test case {case.function_name!r} spans incompatible header groups "
                 f"{sorted(groups)}"
             )
-        return replace(case, header_group=next(iter(groups), None))
+        compiler_features = tuple(
+            sorted(
+                {
+                    feature
+                    for name in extension_names
+                    if (extension := self._catalog.extensions.get(name)) is not None
+                    if (metadata := extension.metadata.backend.get(backend_id)) is not None
+                    for feature in metadata.compiler_features
+                }
+            )
+        )
+        return replace(
+            case,
+            header_group=next(iter(groups), None),
+            required_compiler_features=compiler_features,
+        )
 
 
 def _duplicate_case_diagnostics(

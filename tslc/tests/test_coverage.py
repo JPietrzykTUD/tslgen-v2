@@ -81,13 +81,13 @@ def test_scalable_fixed_lane_signatures_are_policy_deferred(
     )
     by = {row.primitive: row for row in coverage_by_primitive(result)}
 
-    assert by["from_array"].emitted == 50
+    assert by["from_array"].emitted == 80
     assert by["from_array"].skipped == 0
     assert by["from_array"].policy_deferred == 10
-    assert by["to_array"].emitted == 50
+    assert by["to_array"].emitted == 80
     assert by["to_array"].skipped == 0
     assert by["to_array"].policy_deferred == 10
-    assert by["set"].emitted == 50
+    assert by["set"].emitted == 80
     assert by["set"].skipped == 0
     assert by["set"].policy_deferred == 10
     assert {entry.status for entry in result.skipped} == {"policy_deferred"}
@@ -96,7 +96,7 @@ def test_scalable_fixed_lane_signatures_are_policy_deferred(
     # Compile/runtime branch-local type aliases no longer leak into the opposite arm's
     # dependency closure. Fixed/scalable reinterpret dependencies may regroup the same
     # register bits across lane widths, so those reachable target-base slots count too.
-    assert "2150 emitted / 2150 attempted" in report
+    assert "3272 emitted / 3272 attempted" in report
     assert "30 policy-deferred slots" in report
     assert "skipped because" not in report
     assert "policy-deferred because" in report
@@ -146,7 +146,14 @@ def test_clang_overlay_full_corpus_has_no_lowering_gaps(
         profiles=["icelake_rockerlake"],
         backends=["cpp"],
     )
-    clang_extensions = {"clang_v128", "clang_v256", "clang_v512"}
+    clang_extensions = {
+        "clang_v128",
+        "clang_v256",
+        "clang_v512",
+        "clang_v128_bool",
+        "clang_v256_bool",
+        "clang_v512_bool",
+    }
     emitted = [
         entry for entry in result.coverage if entry.extension in clang_extensions
     ]

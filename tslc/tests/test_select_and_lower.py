@@ -120,6 +120,9 @@ def test_profile_reachability(catalog: Catalog, machine_profiles) -> None:
         "clang_v128",
         "clang_v256",
         "clang_v512",
+        "clang_v128_bool",
+        "clang_v256_bool",
+        "clang_v512_bool",
     }
 
     # avx profile: avx2 integer add needs the avx2 flag (absent) -> falls to sse;
@@ -2850,7 +2853,7 @@ def test_sse_to_mask_builds_lane_bit_constants_without_memory(
         assert intrinsic in lowered.body_text
 
 
-def test_clang_mask_kernel_uses_comparison_lane_vectors_and_integral_bridge(
+def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridge(
     catalog: Catalog, machine_profiles
 ) -> None:
     profile = machine_profiles["avx2"]
@@ -2885,6 +2888,44 @@ def test_clang_mask_kernel_uses_comparison_lane_vectors_and_integral_bridge(
     )
     assert "result[i] = -1;" in to_mask.body_text
 
+    bool_equal_slot = _by_key(catalog, profile, "equal")[("f32", "clang_v256_bool")]
+    bool_equal = Lowerer().lower(
+        bool_equal_slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert bool_equal is not None
+    assert "return left == right;" in bool_equal.body_text
+
+    bool_to_integral_slot = _by_key(catalog, profile, "to_integral")[
+        ("f32", "clang_v256_bool")
+    ]
+    bool_to_integral = Lowerer().lower(
+        bool_to_integral_slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert bool_to_integral is not None
+    assert "if (mask[i])" in bool_to_integral.body_text
+
+    bool_to_mask_slot = _by_key(catalog, profile, "to_mask")[
+        ("f32", "clang_v256_bool")
+    ]
+    bool_to_mask = Lowerer().lower(
+        bool_to_mask_slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert bool_to_mask is not None
+    assert "static_cast<typename Vec::mask_type>(false)" in bool_to_mask.body_text
+    assert "result[i] = true;" in bool_to_mask.body_text
+
+    bool_to_vector_slot = _by_key(catalog, profile, "to_vector")[
+        ("f32", "clang_v256_bool")
+    ]
+    bool_to_vector = Lowerer().lower(
+        bool_to_vector_slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert bool_to_vector is not None
+    assert "::tsl::blend<Vec>" in bool_to_vector.body_text
+    assert "::tsl::set_zero<Vec>()" in bool_to_vector.body_text
+    assert "::tsl::set1<Vec>" in bool_to_vector.body_text
+    assert "::tsl::bit_cast" not in bool_to_vector.body_text
+
 
 def test_clang_representation_change_constraints_select_every_valid_width_pair(
     catalog: Catalog, machine_profiles
@@ -2900,15 +2941,25 @@ def test_clang_representation_change_constraints_select_every_valid_width_pair(
             and slot.to_target is not None
         }
 
+    clang_widths = {
+        "clang_v128": 128,
+        "clang_v256": 256,
+        "clang_v512": 512,
+        "clang_v128_bool": 128,
+        "clang_v256_bool": 256,
+        "clang_v512_bool": 512,
+    }
     assert pairs("extract") == {
-        ("clang_v256", "clang_v128"),
-        ("clang_v512", "clang_v128"),
-        ("clang_v512", "clang_v256"),
+        (source, target)
+        for source, source_width in clang_widths.items()
+        for target, target_width in clang_widths.items()
+        if target_width < source_width
     }
     assert pairs("insert") == {
-        ("clang_v128", "clang_v256"),
-        ("clang_v128", "clang_v512"),
-        ("clang_v256", "clang_v512"),
+        (source, target)
+        for source, source_width in clang_widths.items()
+        for target, target_width in clang_widths.items()
+        if target_width > source_width
     }
 
     slot = next(
@@ -2935,7 +2986,14 @@ def test_clang_overlay_has_authored_coverage_for_every_supported_corpus_slot(
 ) -> None:
     selector = Selector()
     profile = machine_profiles["icelake_rockerlake"]
-    clang_extensions = {"clang_v128", "clang_v256", "clang_v512"}
+    clang_extensions = {
+        "clang_v128",
+        "clang_v256",
+        "clang_v512",
+        "clang_v128_bool",
+        "clang_v256_bool",
+        "clang_v512_bool",
+    }
     selected_names: set[str] = set()
     inherited: list[str] = []
 

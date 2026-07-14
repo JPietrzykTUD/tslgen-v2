@@ -293,7 +293,14 @@ def test_dependency_closure_pulls_concrete_callee_source_types(
         (entry.primitive, entry.extension, entry.type_tag)
         for entry in result.coverage
     }
-    for extension in ("clang_v128", "clang_v256", "clang_v512"):
+    for extension in (
+        "clang_v128",
+        "clang_v256",
+        "clang_v512",
+        "clang_v128_bool",
+        "clang_v256_bool",
+        "clang_v512_bool",
+    ):
         assert ("shift_left", extension, "si32") in coverage
         assert ("reinterpret", extension, "ui32") in coverage
     assert not any(

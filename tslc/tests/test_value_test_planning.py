@@ -155,6 +155,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
             else None
         ),
         header_group=values.pop("header_group", None),
+        required_compiler_features=values.pop("required_compiler_features", ()),
     )
     assert not values, f"unhandled fixture fields: {sorted(values)}"
     return plan
@@ -803,12 +804,15 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         result_kind="v",
         param_kinds=("v", "v"),
         header_group="clang",
+        required_compiler_features=("ext_vector_type_boolean",),
     )
     guarded_source = render_cpp_values_runner(
         ValueTestProfilePlan("cpp", "unit-profile", (guarded_cpp_case,)),
         render_assets,
     )
     assert guarded_source.count("#if defined(TSL_ENABLE_CLANG)") == 2
+    assert guarded_source.count("#if defined(__has_feature)") == 2
+    assert guarded_source.count("#  if __has_feature(ext_vector_type_boolean)") == 2
 
     cpp_indexed_case = ValueTestCasePlan(
         kind="indexed_load",
@@ -1400,6 +1404,19 @@ def test_opt_in_clang_overlays_get_guarded_differential_targets(
     )
     assert clang_cases
     assert all(case.header_group == "clang" for case in clang_cases)
+    bool_cases = tuple(
+        case
+        for case in clang_cases
+        if case.differential is not None
+        and case.differential.hardware_extension.endswith("_bool")
+    )
+    comparison_cases = tuple(case for case in clang_cases if case not in bool_cases)
+    assert bool_cases
+    assert all(
+        case.required_compiler_features == ("ext_vector_type_boolean",)
+        for case in bool_cases
+    )
+    assert all(not case.required_compiler_features for case in comparison_cases)
 
     values_source = next(
         artifact.content
@@ -1407,6 +1424,7 @@ def test_opt_in_clang_overlays_get_guarded_differential_targets(
         if artifact.logical_path == "cpp/tests/values_avx2.cpp"
     )
     assert "#if defined(TSL_ENABLE_CLANG)" in values_source
+    assert "#  if __has_feature(ext_vector_type_boolean)" in values_source
     assert "using Hw = tsl::simd<int32_t, tsl::clang_v256>;" in values_source
 
 

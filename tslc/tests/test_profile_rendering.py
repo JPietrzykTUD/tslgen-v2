@@ -96,15 +96,37 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     assert "struct clang_v128 {};" in overlay
     assert "struct clang_v256 {};" in overlay
     assert "struct clang_v512 {};" in overlay
+    assert "struct clang_v128_bool {};" in overlay
+    assert "struct clang_v256_bool {};" in overlay
+    assert "struct clang_v512_bool {};" in overlay
     assert "using mask_type = decltype(register_type{} == register_type{});" in overlay
+    assert "using mask_type = bool __attribute__((ext_vector_type(4)));" in overlay
     assert "struct clang_fixed" in overlay
+    assert "namespace clang_mask" in overlay
+    assert "struct comparison_vector {};" in overlay
+    assert "struct boolean_vector {};" in overlay
     assert "tsl::dataparallel::clang_fixed<N> requires N > 0" in overlay
-    assert "struct simd_for<clang_fixed<4>, int32_t>" in overlay
+    assert (
+        "struct simd_for<clang_fixed<4, clang_mask::comparison_vector>, int32_t>"
+        in overlay
+    )
     assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v128>;" in overlay
-    assert "struct simd_for<clang_fixed<8>, int32_t>" in overlay
+    assert (
+        "struct simd_for<clang_fixed<8, clang_mask::comparison_vector>, int32_t>"
+        in overlay
+    )
     assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v256>;" in overlay
-    assert "struct simd_for<clang_fixed<16>, int32_t>" in overlay
+    assert (
+        "struct simd_for<clang_fixed<16, clang_mask::comparison_vector>, int32_t>"
+        in overlay
+    )
     assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v512>;" in overlay
+    assert (
+        "struct simd_for<clang_fixed<4, clang_mask::boolean_vector>, int32_t>"
+        in overlay
+    )
+    assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v128_bool>;" in overlay
+    assert "#if __has_feature(ext_vector_type_boolean)" in overlay
     assert "#if defined(__clang__) && __clang__ == 1" in overlay
     assert "return (left + right);" in overlay
     assert "return __builtin_reduce_add(vec);" in overlay

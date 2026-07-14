@@ -18,10 +18,34 @@ from tslc.target_text import TemplateApplication
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 _CPP_COMPARISON_LANE_MASK_TYPE = "decltype(register_type{} == register_type{})"
+_CPP_COMPILER_BUILTIN_MASK_POLICY_NAMES = {
+    "comparison_lane_vector": "comparison_vector",
+    "boolean_lane_vector": "boolean_vector",
+}
 
 
 def cpp_header_group(extension: Extension | None) -> str | None:
     return None if extension is None else extension.header_group_for_backend("cpp")
+
+
+def cpp_extension_availability_condition(extension: Extension | None) -> str | None:
+    """Optional compiler capability needed for one extension's declarations."""
+
+    if extension is None:
+        return None
+    metadata = extension.metadata.backend.get("cpp")
+    if metadata is None or not metadata.compiler_features:
+        return None
+    return " && ".join(
+        f"__has_feature({feature})" for feature in sorted(metadata.compiler_features)
+    )
+
+
+def _guard_cpp_extension(content: str, extension: Extension | None) -> str:
+    condition = cpp_extension_availability_condition(extension)
+    if condition is None:
+        return content
+    return f"#if {condition}\n{content}#endif\n"
 
 
 def _cpp_includes(
@@ -161,7 +185,12 @@ def _cpp_native_registration(
         and extension.direct_vector_register_type("cpp", type_tag) is not None
     }
     for ext in sorted(emitted):
-        lines.append(f"struct {ext} {{}};\n")
+        lines.append(
+            _guard_cpp_extension(
+                f"struct {ext} {{}};\n",
+                extensions.get(ext),
+            )
+        )
     for ext, type_tag, base in used_type_specs(by_primitive):
         extension = extensions.get(ext)
         if extension is None or is_x86_register_extension(extension):
@@ -181,21 +210,24 @@ def _cpp_native_registration(
         alignment = DEFAULT_SUPPORT_POLICY.vector_alignment_bytes(extension, type_tag)
         element_count = _cpp_element_count_metadata(extension, type_tag, base)
         lines.append(
-            f"template <>\n"
-            f"struct simd<{base}, {ext}> {{\n"
-            f"    using base_type = {base};\n"
-            f"    using extension_type = {ext};\n"
-            f"    using register_type = {register};\n"
-            f"    using mask_type = {mask};\n"
-            f"    using imask_type = {imask};\n"
-            f"    template <class ToBase>\n"
-            f"    using with_base_type = simd<ToBase, {ext}>;\n"
-            f"    template <class ToExtension>\n"
-            f"    using with_extension = simd<{base}, ToExtension>;\n"
-            f"{element_count}"
-            f"    static constexpr std::size_t vector_alignment = {alignment};\n"
-            "    static constexpr std::size_t simd_register_alignment_v = vector_alignment;\n"
-            f"}};\n\n"
+            _guard_cpp_extension(
+                f"template <>\n"
+                f"struct simd<{base}, {ext}> {{\n"
+                f"    using base_type = {base};\n"
+                f"    using extension_type = {ext};\n"
+                f"    using register_type = {register};\n"
+                f"    using mask_type = {mask};\n"
+                f"    using imask_type = {imask};\n"
+                f"    template <class ToBase>\n"
+                f"    using with_base_type = simd<ToBase, {ext}>;\n"
+                f"    template <class ToExtension>\n"
+                f"    using with_extension = simd<{base}, ToExtension>;\n"
+                f"{element_count}"
+                f"    static constexpr std::size_t vector_alignment = {alignment};\n"
+                "    static constexpr std::size_t simd_register_alignment_v = vector_alignment;\n"
+                f"}};\n\n",
+                extension,
+            )
         )
     return "".join(lines)
 
@@ -366,7 +398,7 @@ def _cpp_compiler_builtin_fixed_registrations(
 ) -> str:
     """Expose an explicit fixed-lane policy for one compiler-builtin overlay."""
 
-    candidates: dict[tuple[str, int], tuple[tuple[int, str], str]] = {}
+    candidates: dict[tuple[str, str, int], tuple[tuple[int, str], str]] = {}
     for ext, type_tag, base in used_type_specs(by_primitive):
         extension = extensions.get(ext)
         if (
@@ -380,7 +412,12 @@ def _cpp_compiler_builtin_fixed_registrations(
         lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
         if lane_count is None:
             continue
-        key = (base, lane_count)
+        mask_policy = _CPP_COMPILER_BUILTIN_MASK_POLICY_NAMES.get(
+            extension.mask_policy.kind
+        )
+        if mask_policy is None:
+            continue
+        key = (mask_policy, base, lane_count)
         preference = (extension.vector_bits, extension.isa_name)
         current = candidates.get(key)
         if current is None or preference > current[0]:
@@ -390,21 +427,32 @@ def _cpp_compiler_builtin_fixed_registrations(
         return ""
 
     policy = f"{header_group}_fixed"
+    mask_namespace = f"{header_group}_mask"
     lines = [
         "namespace dataparallel {\n",
-        "template <std::size_t N>\n",
+        f"namespace {mask_namespace} {{\n",
+        "struct comparison_vector {};\n",
+        "struct boolean_vector {};\n",
+        f"}}  // namespace {mask_namespace}\n\n",
+        f"template <std::size_t N, class Mask = {mask_namespace}::comparison_vector>\n",
         f"struct {policy} {{\n",
         f'    static_assert(N > 0, "tsl::dataparallel::{policy}<N> requires N > 0");\n',
         "    static constexpr std::size_t lanes = N;\n",
         "};\n\n",
     ]
-    for (base, lane_count), (_preference, ext) in sorted(candidates.items()):
+    for (mask_policy, base, lane_count), (_preference, ext) in sorted(candidates.items()):
+        condition = cpp_extension_availability_condition(extensions.get(ext))
+        if condition is not None:
+            lines.append(f"#if {condition}\n")
         lines.append(
             f"template <>\n"
-            f"struct simd_for<{policy}<{lane_count}>, {base}> {{\n"
+            f"struct simd_for<{policy}<{lane_count}, "
+            f"{mask_namespace}::{mask_policy}>, {base}> {{\n"
             f"    using type = ::tsl::simd<{base}, ::tsl::{ext}>;\n"
             f"}};\n\n"
         )
+        if condition is not None:
+            lines.append("#endif\n")
     lines.append("}  // namespace dataparallel\n\n")
     return "".join(lines)
 
@@ -436,6 +484,9 @@ def _cpp_mask_type(
         return f"typename detail::native_mask<{vector_bits}, {base_type}>::type"
     if kind == "comparison_lane_vector":
         return _CPP_COMPARISON_LANE_MASK_TYPE
+    if kind == "boolean_lane_vector":
+        lanes = vector_bits // scalar_bit_width_or_default(type_tag)
+        return f"bool __attribute__((ext_vector_type({lanes})))"
     return register
 
 

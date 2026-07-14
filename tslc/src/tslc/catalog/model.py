@@ -368,6 +368,8 @@ class MaskPolicy:
     - ``"comparison_lane_vector"`` (compiler vectors): the mask is the exact
       lane vector produced by comparing two data registers. It has the data
       vector's lane count and lane width with all-ones / all-zeros truth values.
+    - ``"boolean_lane_vector"`` (Clang compiler vectors): the mask is a dense
+      ``bool ext_vector_type`` with one boolean element per data lane.
     - ``"exact_lane_bitmask"`` (sized generic-like vectors): the mask is an
       integer-like bitset with exactly one bit per lane; backend spellings may
       name a lane-parameterized type such as ``ac_int<LANES, false>``.
@@ -444,6 +446,10 @@ class BackendExtensionMetadata:
     header_group: str | None = None
     # CMake compiler IDs that expose this opt-in header group.
     compiler_ids: tuple[str, ...] = ()
+    # Optional compiler feature-test names required by this extension. The
+    # backend owns their concrete preprocessor spelling and guards only the
+    # declarations/cases that need them.
+    compiler_features: tuple[str, ...] = ()
     # None inherits/defaults to true. Compiler-vector overlays set this false so
     # dataparallel::native/fixed<N> continue to resolve to the hardware substrate.
     dataparallel_inference: bool | None = None
@@ -453,6 +459,11 @@ class BackendExtensionMetadata:
     def __post_init__(self) -> None:
         object.__setattr__(self, "compile_guards", tuple(self.compile_guards))
         object.__setattr__(self, "compiler_ids", tuple(self.compiler_ids))
+        object.__setattr__(
+            self,
+            "compiler_features",
+            tuple(sorted(set(self.compiler_features))),
+        )
 
     @property
     def participates_in_dataparallel_inference(self) -> bool:

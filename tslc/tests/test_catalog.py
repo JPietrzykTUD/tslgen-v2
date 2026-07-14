@@ -379,8 +379,23 @@ def test_clang_vector_extensions_are_cpp_opt_in_overlays(catalog: Catalog) -> No
         metadata = extension.metadata.backend["cpp"]
         assert metadata.header_group == "clang"
         assert metadata.compiler_ids == ("Clang", "AppleClang")
+        assert not metadata.compiler_features
         assert not metadata.participates_in_dataparallel_inference
         assert metadata.compile_guards[0].macro == "__clang__"
+
+    for width in (128, 256, 512):
+        extension = catalog.extensions[f"clang_v{width}_bool"]
+        assert extension.family == "compiler_builtin"
+        assert extension.vector_bits == width
+        assert extension.supports_backend("cpp")
+        assert not extension.supports_backend("rust")
+        assert extension.mask_policy.kind == "boolean_lane_vector"
+        assert extension.imask_policy.kind == "lane_bitmask"
+        metadata = extension.metadata.backend["cpp"]
+        assert metadata.header_group == "clang"
+        assert metadata.compiler_ids == ("Clang", "AppleClang")
+        assert metadata.compiler_features == ("ext_vector_type_boolean",)
+        assert not metadata.participates_in_dataparallel_inference
 
 
 def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:
