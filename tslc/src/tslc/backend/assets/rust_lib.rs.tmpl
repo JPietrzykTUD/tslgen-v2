@@ -1,0 +1,19 @@
+#![allow(dead_code)]
+#![allow(non_camel_case_types)]
+#![allow(non_upper_case_globals)]
+
+pub mod tsl_core;
+pub mod tsl_algorithm;
+#[doc(hidden)]
+pub mod tsl_test_core;
+pub use tsl_algorithm::dataparallel;
+
+#[cfg(doc)]
+#[doc(hidden)]
+pub mod tsl_documentation;
+#[cfg(doc)]
+#[doc = "Profile-neutral union of generated primitive APIs."]
+#[doc(inline)]
+pub use crate::tsl_documentation as profile;
+
+@{primitive_tags}@{profile_modules}

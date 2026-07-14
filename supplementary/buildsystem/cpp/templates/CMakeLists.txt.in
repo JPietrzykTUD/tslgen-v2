@@ -1,9 +1,0 @@
-cmake_minimum_required(VERSION 3.20)
-project({project_name} LANGUAGES CXX)
-
-add_library({project_name} INTERFACE)
-target_include_directories({project_name} INTERFACE include)
-
-# backend: {backend_id}
-# primary artifact: {artifact_path}
-{helper_manifest}

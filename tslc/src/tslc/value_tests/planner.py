@@ -67,7 +67,13 @@ class ValueTestPlanner:
         raw_coverage: list[ValueTestCoverageEntry] = []
         coverage_locations: dict[CoverageIdentity, SourceLocation | None] = {}
         profile_plans = [
-            self._plan_backend_profile(profile, harness, raw_coverage, coverage_locations)
+            self._plan_backend_profile(
+                profile,
+                harness,
+                raw_coverage,
+                coverage_locations,
+                diagnostics,
+            )
             for profile in profiles
             if profile.backend_id in self._backend_supports
         ]
@@ -86,6 +92,7 @@ class ValueTestPlanner:
         harness: HarnessPrimitiveNames,
         coverage: list[ValueTestCoverageEntry],
         coverage_locations: dict[CoverageIdentity, SourceLocation | None],
+        diagnostics: list[Diagnostic],
     ) -> ValueTestProfilePlan:
         backend = self._backend_supports[profile.backend_id]
         cases: list[ValueTestCasePlan] = []
@@ -111,7 +118,9 @@ class ValueTestPlanner:
                     fuzz_planned = fuzz_builder(
                         self._fuzz_context(backend, emitted_name, specs, harness)
                     )
-                    cases.extend(self._supported_cases(fuzz_planned, backend))
+                    cases.extend(
+                        self._supported_cases(fuzz_planned, backend, diagnostics)
+                    )
                 if not primitive.tests:
                     entry = ValueTestCoverageEntry(
                         backend_id=profile.backend_id,
@@ -155,7 +164,7 @@ class ValueTestPlanner:
                             )
                             for case in planned
                         )
-                    supported = self._supported_cases(planned, backend)
+                    supported = self._supported_cases(planned, backend, diagnostics)
                     cases.extend(supported)
                     entry = case_coverage(
                         backend=backend,
@@ -218,16 +227,23 @@ class ValueTestPlanner:
         self,
         cases: tuple[ValueTestCasePlan, ...],
         backend: ValueTestBackendSupport,
+        diagnostics: list[Diagnostic],
     ) -> tuple[ValueTestCasePlan, ...]:
-        return tuple(
-            self._with_header_group(case, backend.backend_id)
-            for case in cases
-            if case.kind in backend.case_kinds
-        )
+        supported: list[ValueTestCasePlan] = []
+        for case in cases:
+            if case.kind not in backend.case_kinds:
+                continue
+            planned = self._with_header_group(case, backend.backend_id, diagnostics)
+            if planned is not None:
+                supported.append(planned)
+        return tuple(supported)
 
     def _with_header_group(
-        self, case: ValueTestCasePlan, backend_id: str
-    ) -> ValueTestCasePlan:
+        self,
+        case: ValueTestCasePlan,
+        backend_id: str,
+        diagnostics: list[Diagnostic],
+    ) -> ValueTestCasePlan | None:
         extension_names: set[str] = set()
         if case.differential is not None:
             extension_names.add(case.differential.hardware_extension)
@@ -244,10 +260,28 @@ class ValueTestPlanner:
             if metadata.header_group is not None
         }
         if len(groups) > 1:
-            raise ValueError(
-                f"value-test case {case.function_name!r} spans incompatible header groups "
-                f"{sorted(groups)}"
+            extensions = tuple(
+                self._catalog.extensions[name]
+                for name in sorted(extension_names)
+                if name in self._catalog.extensions
             )
+            source = next(
+                (extension.source for extension in extensions if extension.source is not None),
+                None,
+            )
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-VALUE-TEST-INCOMPATIBLE-HEADER-GROUPS",
+                    message=(
+                        f"{backend_id} value-test case {case.function_name!r} spans "
+                        f"incompatible header groups {sorted(groups)} through extensions "
+                        f"{sorted(extension_names)}"
+                    ),
+                    location=source.start if source is not None else None,
+                )
+            )
+            return None
         compiler_features = tuple(
             sorted(
                 {

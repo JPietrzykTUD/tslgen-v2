@@ -80,6 +80,12 @@ prim<v:=(v,v)> add(left, right):
 - **Extension fallback**: extensions form `inherits` chains (e.g. `avx2_vl →
   avx2`); an active variant can explicitly `supersedes` another extension while
   still borrowing fallback bodies from its inheritance chain.
+- **Target-family capabilities**: `target_families:` owns behavioral roles for
+  source-named extension families—fallback classification, free-function
+  ownership, declared-register requirements, and index-vector support—and for
+  profile families, including whether a profile runs natively without an
+  emulator. Selection, lowering, translation, and verification consume those
+  typed roles instead of recognizing family-name strings.
 - **Fixed-width SVE**: `sve128`/`sve256`/`sve512` inherit scalable `sve` bodies
   but supersede `sve` in their fixed profiles, so one profile emits one SVE
   model. The fixed width is a compile mode (`sve_vector_bits_N`) plus C++ flags
@@ -200,6 +206,11 @@ not registry capabilities. Backend-neutral variant/body facts live in
 language documentation assembly and Rust type-parameter/state-query spelling
 live in focused sibling modules rather than the function emitters.
 
+Sized-vector lane arithmetic crosses that boundary as a typed `LaneCount`.
+C++ renders scaled symbolic counts as constant expressions; stable Rust rejects
+them before target text is produced unless selection has monomorphized the
+count. Neutral lowering never constructs a C++ or Rust lane-count expression.
+
 - **C++** — `*_impl<Vec>` struct partial-specializations + wrapper function
   templates ([backend/cpp.py](src/tslc/backend/cpp.py)).
 - **Rust** — traits + impls + turbofish wrappers, explicit `unsafe {}` framing,
@@ -212,7 +223,9 @@ live in focused sibling modules rather than the function emitters.
 A static substrate ships as assets
 ([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),
 [tsl_core.rs](src/tslc/backend/assets/tsl_core.rs)) defining `simd<T,Ext>` /
-`SimdVector` and helpers. Backend target-text values use
+`SimdVector` and helpers. Whole-file scaffolding and stable profile metadata
+also live there as named templates; Python renderers supply only finalized,
+typed holes and dynamic declarations. Backend target-text values use
 [target_text.py](src/tslc/target_text.py); [render/](src/tslc/render/) only formats
 finalized, validated profiles, prebuilt value-test plans, and prebuilt
 benchmark plans into a per-profile project with a top-level dispatch

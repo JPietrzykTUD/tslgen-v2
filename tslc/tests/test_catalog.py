@@ -356,6 +356,14 @@ def test_target_families_promoted(catalog: Catalog) -> None:
     assert families.universal_extension_families == frozenset(
         {"scalar", "generic_like", "compiler_builtin"}
     )
+    assert families.extension_family("scalar").implementation_fallback
+    assert not families.extension_family(
+        "scalar"
+    ).requires_declared_vector_register
+    assert families.extension_family("generic_like").implementation_fallback
+    assert not families.extension_family("compiler_builtin").free_function_owner
+    assert families.extension_family("x86").index_vector_register
+    assert families.profile_families["generic"].native_without_runner
     assert families.profile_families["x86"].extension_families == frozenset({"x86"})
     assert families.profile_families["aarch64"].extension_families == frozenset({"arm"})
     assert families.profile_families["wasm32"].extension_families == frozenset({"wasm"})

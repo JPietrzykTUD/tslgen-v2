@@ -47,6 +47,7 @@ def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
     )
     assert region_shell_validator("call") == "call_selector"
     assert region_shell_validator("mask") == "mask_selector"
+    assert region_shell_validator("array") == "array_set"
     assert region_shell_validator("var") == "var_selector"
     assert region_shell_validator("type") == "no_selector"
     assert region_shell_validator("value") == "no_selector"
@@ -131,6 +132,21 @@ def test_select_expr_arguments_recurse() -> None:
     assert any(
         isinstance(segment, Region) and segment.keyword == "call"
         for segment in select.body
+    )
+
+
+def test_array_set_arguments_recurse() -> None:
+    region = scan(
+        "array<set>(lanes, cast<static>(type(scalar::size), Index), value);"
+    )[0]
+
+    assert isinstance(region, Region)
+    assert region.keyword == "array"
+    assert region.selector_text == "set"
+    assert region.has_statement_terminator
+    assert any(
+        isinstance(segment, Region) and segment.keyword == "cast"
+        for segment in region.body
     )
 
 

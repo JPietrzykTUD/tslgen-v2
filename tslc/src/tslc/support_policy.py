@@ -21,6 +21,7 @@ from tslc.catalog.signature_kinds import (
 )
 from tslc.catalog.signatures import SignatureShape
 from tslc.catalog.target_families import TargetFamilyCatalog
+from tslc.lane_count import LaneCount
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,19 +154,21 @@ class SupportPolicy:
 
     def windowed_lane_parameter(
         self, extension: Extension, from_type: str, to_type: str
-    ) -> str:
-        """The sized vector's lane-count term for a *windowing* base change (`convert_up`/`down`):
-        the output keeps the total width, so the lane count scales by the byte ratio —
-        ``(LANES * from_bits / to_bits)`` (e.g. i8->i16 -> ``(LANES * 8 / 16)``). Same-width gives
-        plain ``LANES``. C++ accepts this const expression in lane-count position; stable Rust does
-        not (the window query skips there). Lane-PRESERVING base changes (`cast`/`reinterpret`)
-        keep plain ``LANES`` and must NOT use this."""
+    ) -> LaneCount:
+        """Typed lane count for a width-preserving sized-vector window.
+
+        The output keeps the total bit width, so its count scales the source
+        parameter by the source/target element-width ratio. Backends decide how
+        to spell or reject that arithmetic.
+        """
         base = self.size_parameter_name(extension)
         from_bits = self.type_bit_width_or_default(from_type)
         to_bits = self.type_bit_width_or_default(to_type)
-        if from_bits == to_bits:
-            return base
-        return f"({base} * {from_bits} / {to_bits})"
+        return LaneCount.symbolic(
+            base,
+            multiplier=from_bits,
+            divisor=to_bits,
+        )
 
     def windowed_lane_count(self, from_type: str, to_type: str, lanes: int) -> int:
         """The concrete windowed lane count for a width-changing convert at a fixed source

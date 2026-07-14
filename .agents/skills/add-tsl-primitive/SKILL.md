@@ -26,7 +26,7 @@ description: Add or update a TSL primitive in tsldata and the tslc compiler. Use
 
 ```bash
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog_validation.py
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower.py tslc/tests/test_lower_text.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower*.py tslc/tests/test_lower_text.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py
 ./dev.sh build --primitives NAME --profiles scalar,avx2 --backends cpp,rust
 ```

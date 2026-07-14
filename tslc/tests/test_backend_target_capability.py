@@ -11,6 +11,7 @@ from tslc.backend.target_capability import (
 )
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
+from tslc.lane_count import LaneCount
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.backend.cpp_profile import (
     _cpp_native_registration,
@@ -118,6 +119,21 @@ def test_rust_register_spelling_uses_source_register_metadata(catalog: Catalog) 
         )
         == "array_type<i32, LANES>"
     )
+
+
+def test_lane_count_arithmetic_is_rendered_by_backend_dialects(
+    catalog: Catalog,
+) -> None:
+    cpp = create_backend_dialect(catalog, "cpp")
+    rust = create_backend_dialect(catalog, "rust")
+    plain = LaneCount.symbolic("LANES")
+    scaled = LaneCount.symbolic("LANES", multiplier=8, divisor=32)
+
+    assert cpp.types.render_lane_count(LaneCount.fixed(4)) == "4"
+    assert cpp.types.render_lane_count(plain) == "LANES"
+    assert cpp.types.render_lane_count(scaled) == "(LANES * 8 / 32)"
+    assert rust.types.render_lane_count(plain) == "LANES"
+    assert rust.types.render_lane_count(scaled) is None
 
 
 def test_wasm_intrinsic_composition_is_lane_shape_first(catalog: Catalog) -> None:

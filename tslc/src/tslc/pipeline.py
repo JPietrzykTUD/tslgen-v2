@@ -195,11 +195,12 @@ class _GenerationSession:
             if emitted_profiles
             else ValueTestProjectPlan(profiles=())
         )
-        self.diagnostics.extend(
+        value_test_diagnostics = tuple(
             diagnostic
             for diagnostic in value_tests.diagnostics
             if self.request.value_test_warnings or diagnostic.severity == "error"
         )
+        self.diagnostics.extend(value_test_diagnostics)
         benchmarks = (
             BenchmarkPlanner(self.inputs.catalog).plan(
                 emitted_profiles,
@@ -209,6 +210,10 @@ class _GenerationSession:
             else EMPTY_BENCHMARK_PROJECT_PLAN
         )
         self.diagnostics.extend(benchmarks.diagnostics)
+        if has_errors((*value_test_diagnostics, *benchmarks.diagnostics)):
+            return _result_without_artifacts(
+                self.diagnostics, self.coverage, self.skipped
+            )
         rendered = (
             render_project(
                 emitted_profiles,
@@ -347,28 +352,27 @@ class _GenerationSession:
         backend_ids: frozenset[str],
     ) -> tuple[list["_LoweredSlot"], tuple[tuple[str, str, str], ...]]:
         catalog = self.inputs.catalog
-        selection = self.selector.select_profile(
-            catalog, profile, primitive, type_tags
-        )
-        self.diagnostics.extend(selection.diagnostics)
         lowered_slots: list[_LoweredSlot] = []
         discovered_dependencies: set[tuple[str, str, str]] = set()
 
-        for slot in selection.selected:
-            _record_render_extensions(catalog, selected_extensions, slot)
-            body_segments = scan(
-                slot.implementation.body_text,
-                source=slot.implementation.body_source,
+        for capability in self.backends:
+            backend = capability.backend_id
+            if backend not in backend_ids:
+                continue
+            selection = self.selector.select_profile(
+                catalog,
+                profile,
+                primitive,
+                type_tags,
+                backend_id=backend,
             )
-            for capability in self.backends:
-                backend = capability.backend_id
-                if backend not in backend_ids:
-                    continue
-                if not slot.extension.supports_backend(backend):
-                    # Backend support is an extension admission fact, not a
-                    # lowering coverage attempt. Direct Lowerer use still
-                    # diagnoses an unsupported extension/backend pair.
-                    continue
+            self.diagnostics.extend(selection.diagnostics)
+            for slot in selection.selected:
+                _record_render_extensions(catalog, selected_extensions, slot)
+                body_segments = scan(
+                    slot.implementation.body_text,
+                    source=slot.implementation.body_source,
+                )
                 dialect = capability.create_dialect(catalog)
                 lowered = self.lowerer.lower(
                     slot,

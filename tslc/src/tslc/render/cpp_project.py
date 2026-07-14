@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 
 from tslc.backend.cpp import CppBackend
@@ -57,7 +58,7 @@ def cpp_artifacts(
     ] + [
         text(
             "cpp/include/tsl_primitives.hpp",
-            _cpp_primitive_tags(profiles),
+            _cpp_primitive_tags(profiles, assets),
             media_type=media_type,
         ),
         # Ship the formatter config at the C++ project root so `clang-format` (ascending from
@@ -124,9 +125,17 @@ def cpp_artifacts(
         bodies = "\n\n".join(
             part for part in (implementation_declarations, wrappers, definitions) if part
         )
+        profile_slug = slug(emitted_profile.profile.name)
+        profile_metadata = assets.fill(
+            "cpp_profile_metadata.hpp.tmpl",
+            profile_namespace=profile_slug,
+            profile_name=json.dumps(profile_slug),
+            profile_family=json.dumps(emitted_profile.profile.family),
+        ).rstrip()
         content = assets.fill(
             "cpp_profile_header.hpp.tmpl",
             includes=includes,
+            profile_metadata=profile_metadata,
             registrations=registrations,
             selectors=selectors,
             bodies=bodies,
@@ -136,7 +145,6 @@ def cpp_artifacts(
             used_extensions(by_primitive),
             emitted_profile.extensions,
         )
-        profile_slug = slug(emitted_profile.profile.name)
         artifacts.append(
             text(
                 f"cpp/include/tsl_{profile_slug}.hpp",
@@ -197,6 +205,7 @@ def cpp_artifacts(
             grouped_content = assets.fill(
                 "cpp_profile_header.hpp.tmpl",
                 includes=grouped_includes,
+                profile_metadata="",
                 registrations=grouped_registrations,
                 selectors=grouped_selectors,
                 bodies=grouped_bodies,
@@ -218,6 +227,7 @@ def cpp_artifacts(
                     f"cpp/tests/smoke_{profile_slug}_{header_group}.cpp",
                     _cpp_smoke(
                         emitted_profile,
+                        assets,
                         by_primitive=grouped,
                         include_header=f"tsl_{profile_slug}_{header_group}.hpp",
                     ),
@@ -227,7 +237,7 @@ def cpp_artifacts(
         artifacts.append(
             text(
                 f"cpp/tests/smoke_{profile_slug}.cpp",
-                _cpp_smoke(emitted_profile, by_primitive=by_primitive),
+                _cpp_smoke(emitted_profile, assets, by_primitive=by_primitive),
                 media_type=media_type,
             )
         )
@@ -237,6 +247,7 @@ def cpp_artifacts(
             "cpp/include/tsl.hpp",
             _cpp_dispatch(
                 profiles,
+                assets,
                 include_algorithm=cpp_profiles_support_algorithm(profiles),
             ),
             media_type=media_type,
@@ -245,7 +256,7 @@ def cpp_artifacts(
     artifacts.append(
         text(
             "cpp/docs/input/tsl_api_docs.hpp",
-            _cpp_documentation_facade(profiles),
+            _cpp_documentation_facade(profiles, assets),
             media_type=media_type,
         )
     )
@@ -260,18 +271,21 @@ def cpp_artifacts(
 
 def _cpp_dispatch(
     profiles: tuple[EmittedProfile, ...],
+    assets: RenderAssets,
     *,
     include_algorithm: bool = False,
 ) -> str:
-    lines = ["#pragma once", ""]
+    profile_cases: list[str] = []
     for index, emitted_profile in enumerate(profiles):
         profile_slug = slug(emitted_profile.profile.name)
-        keyword = "#if" if index == 0 else "#elif"
-        lines.append(f"{keyword} defined(TSL_PROFILE_{profile_slug.upper()})")
-        lines.append(f'#  include "tsl_{profile_slug}.hpp"')
-    lines.append("#else")
-    lines.append('#  error "No supported TSL profile selected"')
-    lines.append("#endif")
+        profile_cases.append(
+            assets.fill(
+                "cpp_dispatch_case.hpp.tmpl",
+                directive="#if" if index == 0 else "#elif",
+                profile_macro=profile_slug.upper(),
+                header=f"tsl_{profile_slug}.hpp",
+            ).rstrip()
+        )
     header_groups = tuple(
         sorted(
             {
@@ -282,22 +296,43 @@ def _cpp_dispatch(
             }
         )
     )
+    overlay_cases: list[str] = []
     for group in header_groups:
-        macro = f"TSL_ENABLE_{group.upper()}"
-        lines.append(f"#if defined({macro})")
+        group_profile_cases: list[str] = []
         for index, emitted_profile in enumerate(profiles):
             profile_slug = slug(emitted_profile.profile.name)
-            keyword = "#if" if index == 0 else "#elif"
-            lines.append(f"{keyword} defined(TSL_PROFILE_{profile_slug.upper()})")
-            lines.append(f'#  include "tsl_{profile_slug}_{group}.hpp"')
-        lines.append("#endif")
-        lines.append("#endif")
-    if include_algorithm:
-        lines.append('#include "tsl_algorithm.hpp"')
-    return "\n".join(lines) + "\n"
+            group_profile_cases.append(
+                assets.fill(
+                    "cpp_dispatch_case.hpp.tmpl",
+                    directive="#if" if index == 0 else "#elif",
+                    profile_macro=profile_slug.upper(),
+                    header=f"tsl_{profile_slug}_{group}.hpp",
+                ).rstrip()
+            )
+        overlay_cases.append(
+            assets.fill(
+                "cpp_dispatch_overlay.hpp.tmpl",
+                group_macro=group.upper(),
+                profile_cases="\n".join(group_profile_cases),
+            ).rstrip()
+        )
+    rendered_overlay_cases = "\n".join(overlay_cases)
+    return assets.fill(
+        "cpp_dispatch.hpp.tmpl",
+        profile_cases="\n".join(profile_cases),
+        overlay_cases=(f"\n{rendered_overlay_cases}" if overlay_cases else ""),
+        algorithm_include=(
+            f'\n{assets.text("cpp_dispatch_algorithm_include.hpp").rstrip()}'
+            if include_algorithm
+            else ""
+        ),
+    )
 
 
-def _cpp_documentation_facade(profiles: tuple[EmittedProfile, ...]) -> str:
+def _cpp_documentation_facade(
+    profiles: tuple[EmittedProfile, ...],
+    assets: RenderAssets,
+) -> str:
     backend = CppBackend()
     api_declarations: list[str] = []
     seen_api: set[str] = set()
@@ -310,21 +345,11 @@ def _cpp_documentation_facade(profiles: tuple[EmittedProfile, ...]) -> str:
             if declaration not in seen_api:
                 api_declarations.append(declaration)
                 seen_api.add(declaration)
-    sections = [
-        "\n".join(
-            (
-                "#pragma once",
-                "",
-                "// Documentation-only facade. This file is intentionally not part of",
-                "// the generated C++ implementation surface.",
-                "",
-                "namespace tsl {",
-            )
-        ),
-        *api_declarations,
-        "}  // namespace tsl",
-    ]
-    return "\n\n".join(section.rstrip() for section in sections if section.strip()) + "\n"
+    declarations = "\n\n".join(api_declarations)
+    return assets.fill(
+        "cpp_documentation.hpp.tmpl",
+        api_declarations=f"\n\n{declarations}" if declarations else "",
+    )
 
 
 def _cpp_conditioned_definitions(
@@ -376,13 +401,14 @@ def _cpp_specialization_availability_condition(
 
 def _cpp_smoke(
     emitted_profile: EmittedProfile,
+    assets: RenderAssets,
     *,
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]] | None = None,
     include_header: str = "tsl.hpp",
 ) -> str:
     # Address-take every emitted wrapper instantiation so the profile's bodies are
     # fully compiled (with the profile's ISA flags), not merely parsed.
-    lines = [f"#include <{include_header}>", "", "namespace {"]
+    declarations: list[str] = []
     index = 0
     used_conditions: list[str | None] = []
     if by_primitive is None:
@@ -396,7 +422,7 @@ def _cpp_smoke(
         ):
             # A free function (`allocate`/`deallocate`) is not a template — address-take it
             # directly (once), so its body is compiled under the profile's flags.
-            lines.append(f"auto* _tsl_use_{index} = &tsl::{name};")
+            declarations.append(f"auto* _tsl_use_{index} = &tsl::{name};")
             used_conditions.append(None)
             index += 1
             continue
@@ -463,20 +489,23 @@ def _cpp_smoke(
             )
             if condition is not None:
                 use_line = f"#if {condition}\n{use_line}\n#endif"
-            lines.append(use_line)
+            declarations.append(use_line)
             used_conditions.append(condition)
             index += 1
-    lines.append("}  // namespace")
-    lines.append("")
-    lines.append("int main() {")
+    references: list[str] = []
     for used, condition in enumerate(used_conditions):
         use_line = f"  (void)_tsl_use_{used};"
         if condition is not None:
             use_line = f"#if {condition}\n{use_line}\n#endif"
-        lines.append(use_line)
-    lines.append("  return 0;")
-    lines.append("}")
-    return "\n".join(lines) + "\n"
+        references.append(use_line)
+    rendered_declarations = "\n".join(declarations)
+    rendered_references = "\n".join(references)
+    return assets.fill(
+        "cpp_smoke.cpp.tmpl",
+        include_header=include_header,
+        declarations=(f"\n{rendered_declarations}" if declarations else ""),
+        references=(f"\n{rendered_references}" if references else ""),
+    )
 
 
 def _cpp_specializations_for_group(

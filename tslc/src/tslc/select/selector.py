@@ -31,6 +31,7 @@ from tslc.catalog.model import (
 )
 from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.catalog.signatures import parse_signature
+from tslc.catalog.target_families import ExtensionFamilyCapability
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 from tslc.support_policy_views import (
@@ -70,9 +71,12 @@ class SelectedImplementation:
     # binding gives lowering one concrete associated base case for generation-time
     # queries such as ``base::generic(IndicesType)``.
     simd_type_base_bindings: tuple[SimdTypeBaseBinding, ...] = ()
-    # Concrete profile extension behind the C++ dataparallel::fixed<N> facade.
-    # This stays typed for dependency closure while the backend renders the facade.
+    # Concrete profile extension behind a backend's fixed-width facade. This
+    # stays typed for dependency closure while the backend renders the facade.
     fixed_fallback_extension: Extension | None = None
+    extension_family_capability: ExtensionFamilyCapability = (
+        ExtensionFamilyCapability("")
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +146,7 @@ class Selector:
         profile: MachineProfile,
         primitive_name: str,
         type_tags: tuple[str, ...],
+        backend_id: str | None = None,
     ) -> ProfileSelectionResult:
         # Variants of this name fall into two groups, emitted side by side:
         #  - the UNMASKED overload set: same-arity overloads (store's `(ptr,v)`/`(ptr,s)`,
@@ -169,6 +174,12 @@ class Selector:
         selected: list[SelectedImplementation] = []
         warnings: dict[str, Diagnostic] = {}  # keyed by message, so each ambiguity warns once
         emitted_extensions = self._emit_extensions(catalog, profile)
+        if backend_id is not None:
+            emitted_extensions = [
+                name
+                for name in emitted_extensions
+                if catalog.extensions[name].supports_backend(backend_id)
+            ]
         for primitive in variants:
             # A non-vector (free-function) primitive (`allocate`/`deallocate`) has no SIMD axis:
             # its type group is a placeholder (`ptr`) that no arith tag matches, and its body is
@@ -206,7 +217,9 @@ class Selector:
                     name
                     for name in emitted_extensions
                     if name in authored_extensions
-                    and catalog.extensions[name].family != "compiler_builtin"
+                    and catalog.target_families.extension_family(
+                        catalog.extensions[name].family
+                    ).free_function_owner
                 ]
             else:
                 selection_extensions = emitted_extensions
@@ -256,6 +269,14 @@ class Selector:
                                                     type_tag,
                                                     to_target,
                                                     emitted_extensions,
+                                                    backend_id,
+                                                )
+                                                if backend_id is not None
+                                                else None
+                                            ),
+                                            extension_family_capability=(
+                                                catalog.target_families.extension_family(
+                                                    extension.family
                                                 )
                                             ),
                                         )
@@ -280,20 +301,21 @@ class Selector:
         type_tag: str,
         to_target: str | None,
         emitted_extensions: list[str],
+        backend_id: str,
     ) -> Extension | None:
-        """Best emitted hardware substrate for the source extension's exact width.
+        """Best backend-emitted substrate for the source extension's exact width.
 
-        The result mirrors C++ ``simd_for<fixed<N>, T>`` preference, but remains
-        concrete so call dependency closure can prove the fallback specialization
-        exists. Compiler overlays opt out through backend metadata.
+        The result remains concrete so call dependency closure can prove the
+        fallback specialization exists. Backend overlays opt out through their
+        extension metadata.
         """
 
         if source.vector_bits <= 0 or source.vector_bits_kind != "fixed":
             return None
-        source_cpp = source.metadata.backend.get("cpp")
+        source_backend = source.metadata.backend.get(backend_id)
         if (
-            source_cpp is None
-            or source_cpp.participates_in_dataparallel_inference
+            source_backend is None
+            or source_backend.participates_in_dataparallel_inference
         ):
             return None
         candidates: list[tuple[tuple[int, int, str], Extension]] = []
@@ -305,12 +327,17 @@ class Selector:
                 continue
             if extension.vector_bits_kind != "fixed":
                 continue
-            cpp = extension.metadata.backend.get("cpp")
-            if cpp is not None and not cpp.participates_in_dataparallel_inference:
+            backend_metadata = extension.metadata.backend.get(backend_id)
+            if (
+                backend_metadata is not None
+                and not backend_metadata.participates_in_dataparallel_inference
+            ):
                 continue
-            if not extension.supports_backend("cpp"):
+            if not extension.supports_backend(backend_id):
                 continue
-            if not _extension_declares_type(catalog, extension, type_tag):
+            if not _extension_declares_type(
+                catalog, extension, type_tag, backend_id
+            ):
                 continue
             if not self.evaluate_candidates(
                 catalog,
@@ -589,9 +616,10 @@ def _extension_declares_type(
     catalog: Catalog,
     extension: Extension,
     type_tag: str,
+    backend_id: str,
 ) -> bool:
     return any(
-        extension.direct_vector_register_type("cpp", group) is not None
+        extension.direct_vector_register_type(backend_id, group) is not None
         and catalog.type_group_contains(group, type_tag)
         for group in extension.vector_register_types
     )

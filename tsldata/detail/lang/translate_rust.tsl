@@ -112,6 +112,7 @@ translation rust:
   mem_alloc "crate::tsl_core::mem_alloc({count})"
   mem_alloc_aligned "crate::tsl_core::mem_alloc_aligned({align}, {count})"
   mem_free "crate::tsl_core::mem_free({ptr})"
+  array_set "{array}[({index}) as usize] = {value}"
   io_get_flags "crate::tsl::io_get_flags({out})"
   io_set_flags "crate::tsl::io_set_flags({out}, {flags})"
   io_set_base "crate::tsl::io_set_base({out}, {base})"

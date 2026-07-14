@@ -24,6 +24,7 @@ class VerifyProfile:
     profile_name: str
     file_stem: str
     family: str = "generic"
+    native_without_runner: bool = False
     compile_modes: frozenset[str] = frozenset()
     flags: tuple[str, ...] = ()
     target_features: tuple[str, ...] = ()

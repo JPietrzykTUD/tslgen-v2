@@ -29,6 +29,7 @@ The recognized keywords, in registry order, are:
 | `mask` | call | Construct, inspect, or update masks. |
 | `mem` | call | Perform raw byte-memory operations. |
 | `lanes` | call | Read a generation-known lane-list element. |
+| `array` | call | Assign one element of backend-owned array storage. |
 | `io` | call | Invoke formatted vector output. |
 | `cast` | call | Render a backend-specific cast. |
 | `call` | call | Invoke another generated primitive wrapper. |
@@ -64,7 +65,7 @@ switch<compile>(selector) { label => { body } _ => { body } }
 
 Catalog validation checks malformed region shells before lowering. Regions with
 structured selectors or argument shells, such as `intrin`, `helper`, `var`,
-`let`, `mask`, `cast`, `call`, `type`, and `value`, have extra shell
+`let`, `mask`, `array`, `cast`, `call`, `type`, and `value`, have extra shell
 validation before backend lowering.
 
 ## Keyword Inventory
@@ -407,6 +408,36 @@ values[3]
 
 ```rust
 values[3]
+```
+
+</details>
+
+### `array`
+
+Syntax:
+
+```tsil
+array<set>(array, index, value)
+```
+
+Use `array<set>` to assign one element of array-backed local storage when the
+backend owns the index type. Catalog validation accepts only the `set` selector
+with exactly three arguments. Lowering recursively renders all three arguments
+and uses the backend's `array_set` translation.
+
+<details>
+<summary>Representative expansion</summary>
+
+```tsil
+array<set>(lanes, Index, value)
+```
+
+```cpp
+lanes[Index] = value
+```
+
+```rust
+lanes[(Index) as usize] = value
 ```
 
 </details>

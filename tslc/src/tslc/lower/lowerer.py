@@ -344,7 +344,7 @@ class Lowerer:
             backend.types.target_register_spelling("si32", selected.extension.isa_name)
             if (
                 self._support.index_vector_kind in shape.param_kinds
-                and selected.extension.family == "x86"
+                and selected.extension_family_capability.index_vector_register
             )
             else None
         )

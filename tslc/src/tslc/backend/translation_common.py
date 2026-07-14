@@ -52,7 +52,9 @@ def requires_declared_vector_register(catalog: Catalog, extension_isa: str) -> b
     """
 
     return any(
-        extension.family not in {"scalar", "generic_like"}
+        catalog.target_families.extension_family(
+            extension.family
+        ).requires_declared_vector_register
         and (
             (extension.vector_bits_kind == "fixed" and extension.vector_bits > 0)
             or extension.vector_bits_kind == "scalable"

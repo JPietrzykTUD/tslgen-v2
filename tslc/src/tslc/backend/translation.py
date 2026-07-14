@@ -12,11 +12,13 @@ from tslc.catalog.scalar_types import (
     signed_of,
     unsigned_of,
 )
+from tslc.lane_count import LaneCount
 from tslc.target_text import RenderField, RenderText
 
 
 class BackendTypeDialect(Protocol):
     def scalar_spelling(self, type_tag: str) -> str | None: ...
+    def render_lane_count(self, count: LaneCount) -> str | None: ...
     def vector_type_spelling(self, base_spelling: str, extension_name: str) -> str: ...
     def sized_vector_spelling(
         self, base_spelling: str, extension_name: str, lanes: int | str
@@ -112,9 +114,6 @@ class BackendSyntaxDialect(Protocol):
 class BackendDialect(Protocol):
     @property
     def backend_id(self) -> str: ...
-
-    @property
-    def supports_sized_vector_lane_expressions(self) -> bool: ...
 
     @property
     def types(self) -> BackendTypeDialect: ...

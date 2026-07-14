@@ -26,6 +26,6 @@ description: Add a TSIL keyword region to tslc. Use when Codex is asked to recog
 
 ```bash
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_tsil_scan.py
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_lower_text.py tslc/tests/test_select_and_lower.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_lower_text.py tslc/tests/test_select_and_lower*.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_safety_contract.py
 ```

@@ -74,7 +74,7 @@ rg -n "prim<.* NAME|NAME\\(" tsldata/primitives tslc/tests
 ./dev.sh explain --primitive NAME --profile PROFILE --type TYPE --backend cpp
 ./dev.sh dump --stage lowered --primitive NAME --profile PROFILE --type TYPE --backend cpp
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog_validation.py
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower.py tslc/tests/test_lower_text.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower*.py tslc/tests/test_lower_text.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
 ./dev.sh build --primitives NAME --profiles PROFILE --backends cpp,rust

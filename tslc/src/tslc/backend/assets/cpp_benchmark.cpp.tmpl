@@ -1,0 +1,166 @@
+#include "tsl_@{profile_slug}.hpp"
+#include "tsl_benchmark_core.hpp"
+#include "tsl_test_core.hpp"
+
+#include <array>
+#include <cstdlib>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+
+#ifndef TSL_BENCHMARK_TUNE_CONTEXT_HASH
+#  define TSL_BENCHMARK_TUNE_CONTEXT_HASH "unspecified"
+#endif
+
+namespace {
+
+using tsl::benchmark::Decision;
+using tsl::benchmark::RawSample;
+
+constexpr char kManifestHash[] = @{manifest};
+constexpr char kProfile[] = @{profile_name};
+constexpr char kTuneContextHash[] = TSL_BENCHMARK_TUNE_CONTEXT_HASH;
+constexpr int kProtocolVersion = @{protocol_version};
+
+struct Options {
+    std::string results_path;
+    std::string policy_json_path;
+    std::string policy_header_path;
+    std::string render_policy_path;
+    double threshold = 0.05;
+    std::size_t rounds_override = 0;
+    std::uint64_t minimum_sample_ns_override = 0;
+    bool self_test = false;
+};
+
+@{declarations}
+
+std::string render_policy_header(std::vector<Decision> const& decisions) {
+    std::ostringstream output;
+    output << "#pragma once\n\nnamespace tsl::detail::variants {\n\n";
+    for (auto const& decision : decisions) {
+        if (decision.selected == "default") continue;
+@{policy_branches}
+        throw std::runtime_error("policy contains an unknown specialization or candidate: " +
+                                 decision.stable_id + "/" + decision.selected);
+    }
+    output << "}  // namespace tsl::detail::variants\n";
+    return output.str();
+}
+
+std::string render_policy_json(std::vector<Decision> const& decisions) {
+    std::ostringstream output;
+    output << R"json({"schema_version":1,"protocol_version":)json" << kProtocolVersion
+           << R"json(,"manifest_hash":")json" << kManifestHash
+           << R"json(","tune_context_hash":")json" << kTuneContextHash
+           << R"json(","cpu_id":")json" << tsl::benchmark::json_escape(tsl::benchmark::cpu_id())
+           << R"json(","decisions":[)json";
+    for (std::size_t index = 0; index < decisions.size(); ++index) {
+        if (index != 0) output << ',';
+        auto const& decision = decisions[index];
+        output << R"json({"stable_id":")json" << decision.stable_id
+               << R"json(","selected":")json" << decision.selected
+               << R"json(","status":")json" << decision.status
+               << R"json(","minimum_improvement":)json" << std::setprecision(8)
+               << decision.minimum_improvement << '}';
+    }
+    output << "]}\n";
+    return output.str();
+}
+
+std::vector<Decision> read_policy(std::string const& path) {
+    const std::string document = tsl::benchmark::read_file(path);
+    if (document.find(R"json("schema_version":1)json") == std::string::npos ||
+        tsl::benchmark::json_string_field(document, "manifest_hash") != kManifestHash ||
+        tsl::benchmark::json_string_field(document, "tune_context_hash") != kTuneContextHash ||
+        tsl::benchmark::json_string_field(document, "cpu_id") != tsl::benchmark::cpu_id()) {
+        throw std::runtime_error(
+            "variant policy does not match this manifest, compiler context, and CPU");
+    }
+    if (tsl::benchmark::substring_count(document, R"json("stable_id":)json") !=
+        @{candidate_set_count}) {
+        throw std::runtime_error("variant policy has missing or unexpected decisions");
+    }
+    std::vector<Decision> decisions;
+@{decision_reads}
+    return decisions;
+}
+
+void write_samples(std::vector<RawSample> const& samples, std::ostream& output) {
+    for (auto const& sample : samples) {
+        output << R"json({"backend":"cpp","protocol_version":)json" << kProtocolVersion
+               << R"json(,"profile":")json" << kProfile
+               << R"json(","manifest_hash":")json" << kManifestHash
+               << R"json(","tune_context_hash":")json" << kTuneContextHash
+               << R"json(","cpu_id":")json" << tsl::benchmark::json_escape(tsl::benchmark::cpu_id())
+               << R"json(","stable_id":")json" << sample.stable_id
+               << R"json(","scenario":")json" << sample.scenario
+               << R"json(","candidate":")json" << sample.candidate
+               << R"json(","round":)json" << sample.round
+               << R"json(,"iterations":)json" << sample.iterations
+               << R"json(,"elapsed_ns":)json" << sample.elapsed << "}\n";
+    }
+}
+
+Options parse_options(int argc, char** argv) {
+    Options options;
+    for (int index = 1; index < argc; ++index) {
+        const std::string argument = argv[index];
+        auto value = [&]() -> std::string {
+            if (++index >= argc) throw std::runtime_error("missing value for " + argument);
+            return argv[index];
+        };
+        if (argument == "--results") options.results_path = value();
+        else if (argument == "--policy-json") options.policy_json_path = value();
+        else if (argument == "--policy-header") options.policy_header_path = value();
+        else if (argument == "--render-policy") options.render_policy_path = value();
+        else if (argument == "--threshold") options.threshold = std::stod(value());
+        else if (argument == "--rounds") options.rounds_override = std::stoull(value());
+        else if (argument == "--minimum-sample-ns")
+            options.minimum_sample_ns_override = std::stoull(value());
+        else if (argument == "--self-test") options.self_test = true;
+        else throw std::runtime_error("unknown benchmark option: " + argument);
+    }
+    if (options.threshold < 0.0 || options.threshold >= 1.0)
+        throw std::runtime_error("--threshold must be in [0, 1)");
+    if (options.rounds_override != 0 && options.rounds_override < 3)
+        throw std::runtime_error("--rounds must be at least 3");
+    return options;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    try {
+        const Options options = parse_options(argc, argv);
+        if (options.self_test) {
+            tsl::benchmark::reducer_self_test();
+            return 0;
+        }
+        if (!options.render_policy_path.empty()) {
+            if (options.policy_header_path.empty())
+                throw std::runtime_error("--render-policy requires --policy-header");
+            tsl::benchmark::write_file(
+                options.policy_header_path,
+                render_policy_header(read_policy(options.render_policy_path)));
+            return 0;
+        }
+        std::vector<RawSample> samples;
+        std::vector<Decision> decisions;
+@{runs}
+        if (options.results_path.empty()) write_samples(samples, std::cout);
+        else {
+            std::ofstream output(options.results_path);
+            if (!output) throw std::runtime_error("cannot open results output");
+            write_samples(samples, output);
+        }
+        if (!options.policy_json_path.empty())
+            tsl::benchmark::write_file(options.policy_json_path, render_policy_json(decisions));
+        if (!options.policy_header_path.empty())
+            tsl::benchmark::write_file(options.policy_header_path, render_policy_header(decisions));
+        return 0;
+    } catch (std::exception const& error) {
+        std::cerr << "TSL benchmark error: " << error.what() << '\n';
+        return 1;
+    }
+}

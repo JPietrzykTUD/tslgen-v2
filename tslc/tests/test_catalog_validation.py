@@ -769,9 +769,13 @@ def test_invalid_enum_like_values_are_diagnosed() -> None:
         "target_families:\n"
         "  known_extension_families [scalar]\n"
         "  universal_extension_families [scalar]\n"
+        "  extension_family_capabilities:\n"
+        "    scalar:\n"
+        "      implementation_fallback sometimes\n"
         "  profile_families:\n"
         "    generic:\n"
         "      extension_families []\n"
+        "      native_without_runner sometimes\n"
         "types:\n"
         "  ints {types [si32]}\n"
         "extension scalar:\n"
@@ -794,6 +798,8 @@ def test_invalid_enum_like_values_are_diagnosed() -> None:
     messages = [d.message for d in diagnostics if d.code == "TSL-CATALOG-INVALID-ENUM"]
     assert any("family" in message for message in messages)
     assert any("mask_type_policy" in message for message in messages)
+    assert any("implementation_fallback" in message for message in messages)
+    assert any("native_without_runner" in message for message in messages)
 
 
 def test_target_family_data_makes_new_extension_family_additive() -> None:
@@ -1155,6 +1161,38 @@ def test_malformed_mask_body_region_is_diagnosed(body: str) -> None:
 
     diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-MASK-SELECTOR")
     assert "malformed mask selector" in diagnostic.message
+
+
+def test_array_set_body_region_is_accepted_with_nested_index() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            'tsil "complete(data);"',
+            (
+                'tsil "array<set>(lanes, '
+                'cast<static>(type(scalar::size), 0), data); complete(data);"'
+            ),
+        )
+    )
+
+    assert diagnostics == ()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "array<get>(lanes, 0, data); complete(data);",
+        "array<set>(lanes, 0); complete(data);",
+        "array<set>(lanes, 0, data, extra); complete(data);",
+        "array(lanes, 0, data); complete(data);",
+    ],
+)
+def test_malformed_array_body_region_is_diagnosed(body: str) -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace('tsil "complete(data);"', f'tsil "{body}"')
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-ARRAY")
+    assert "array<set>(array, index, value)" in diagnostic.message
 
 
 @pytest.mark.parametrize(

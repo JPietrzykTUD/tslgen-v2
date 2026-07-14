@@ -6,16 +6,21 @@ from typing import Any
 
 import pytest
 
+import tslc.pipeline as pipeline_module
 from tslc.api import generate_project
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
+    BackendExtensionMetadata,
     Catalog,
+    Extension,
+    ExtensionMetadata,
     ParamTypeRule,
     Primitive,
     TestArg as TslTestArg,
     TestCase as TslTestCase,
 )
 from tslc.compiler_assets import RenderAssets
+from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.backend.emitted_names import finalize_emitted_names
 from tslc.target_text import LoweredBody
@@ -41,6 +46,7 @@ from tslc.value_tests.model import (
     ValueTestInvocation,
     ValueTestMemory,
     ValueTestProfilePlan,
+    ValueTestProjectPlan,
     ValueTestRepresentation,
     ValueTestScalable,
     ValueTestTarget,
@@ -1426,6 +1432,106 @@ def test_opt_in_clang_overlays_get_guarded_differential_targets(
     assert "#if defined(TSL_ENABLE_CLANG)" in values_source
     assert "#  if __has_feature(ext_vector_type_boolean)" in values_source
     assert "using Hw = tsl::simd<int32_t, tsl::clang_v256>;" in values_source
+
+
+def test_incompatible_value_test_header_groups_are_diagnosed() -> None:
+    first = Extension(
+        "first",
+        "first",
+        "unit",
+        {},
+        {},
+        backend_supported={"cpp": True},
+        metadata=ExtensionMetadata(
+            backend={
+                "cpp": BackendExtensionMetadata(header_group="first_group")
+            }
+        ),
+        source=SourceSpan(Path("extensions.tsl"), 10, 1, 10, 6),
+    )
+    second = Extension(
+        "second",
+        "second",
+        "unit",
+        {},
+        {},
+        backend_supported={"cpp": True},
+        metadata=ExtensionMetadata(
+            backend={
+                "cpp": BackendExtensionMetadata(header_group="second_group")
+            }
+        ),
+        source=SourceSpan(Path("extensions.tsl"), 20, 1, 20, 7),
+    )
+    catalog = Catalog(
+        primitives=(),
+        type_groups={},
+        extensions={"first": first, "second": second},
+        type_spellings={},
+        translations={},
+    )
+    planner = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,))
+    case = ValueTestCasePlan(
+        "compile_only",
+        "test_conflicting_headers",
+        "conflicting_headers",
+        "unit",
+        "si32",
+        "std::int32_t",
+        4,
+        result_kind="v",
+        source_extension="first",
+        target_extension="second",
+    )
+    diagnostics: list[Diagnostic] = []
+
+    planned = planner._with_header_group(case, "cpp", diagnostics)
+
+    assert planned is None
+    assert diagnostics == [
+        Diagnostic(
+            severity="error",
+            code="TSL-VALUE-TEST-INCOMPATIBLE-HEADER-GROUPS",
+            message=(
+                "cpp value-test case 'test_conflicting_headers' spans incompatible "
+                "header groups ['first_group', 'second_group'] through extensions "
+                "['first', 'second']"
+            ),
+            location=first.source.start if first.source is not None else None,
+        )
+    ]
+
+
+def test_value_test_planning_error_prevents_project_rendering(
+    data_root: Path,
+    machine_profiles_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    planning_error = Diagnostic(
+        severity="error",
+        code="TSL-VALUE-TEST-UNIT-ERROR",
+        message="unit planning failure",
+    )
+    monkeypatch.setattr(
+        pipeline_module._GenerationSession,
+        "_plan_value_tests",
+        lambda self, profiles: ValueTestProjectPlan(  # noqa: ARG005
+            profiles=(), diagnostics=(planning_error,)
+        ),
+    )
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add"],
+        profiles=["scalar"],
+        type_tags=("si32",),
+        backends=("rust",),
+    )
+
+    assert result.rendered is None
+    assert result.artifacts.artifacts == ()
+    assert planning_error in result.diagnostics
 
 
 def test_scalable_tiling_is_gated_on_corpus_cross_lane_fact() -> None:

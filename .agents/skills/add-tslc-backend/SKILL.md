@@ -11,7 +11,10 @@ description: Add a backend or backend capability to tslc. Use when Codex is aske
 2. Define the backend ID, supported profiles/extensions, type spellings, intrinsic/value translations, generated project layout, and verification story.
 3. Add backend capabilities through the existing backend registry/support-policy boundary. Do not scatter hardcoded backend ID lists.
 4. Add typed translation/render values before templates. Templates may format decided values only.
-5. Place static files, templates, helpers, and docs assets under `supplementary/` in the existing layout.
+5. Place packaged backend static files, templates, and helpers under
+   `tslc/src/tslc/backend/assets/`. Keep generated-documentation inputs under
+   `supplementary/docs/` and machine-profile configuration under
+   `supplementary/buildsystem/`.
 6. Diagnose unsupported capability combinations before rendering or artifact writing.
 7. Add focused tests for registration, capability validation, rendering, deterministic artifacts, and verifier configuration.
 

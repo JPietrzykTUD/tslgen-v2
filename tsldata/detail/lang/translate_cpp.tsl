@@ -126,6 +126,7 @@ translation cpp:
   mem_alloc "std::malloc({count})"
   mem_alloc_aligned "std::aligned_alloc({align}, {count})"
   mem_free "std::free({ptr})"
+  array_set "{array}[{index}] = {value}"
   io_get_flags "{out}.flags()"
   io_set_flags "{out}.flags({flags})"
   io_set_base "{out} << std::setbase({base})"

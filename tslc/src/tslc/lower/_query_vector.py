@@ -5,15 +5,24 @@ from __future__ import annotations
 from dataclasses import replace
 
 from tslc.catalog.model import Extension
+from tslc.lane_count import LaneCount
 from tslc.lower._query_model import QueryValue, TextValue, TypeValue
-from tslc.lower.context import LoweringSession, SimdTypeParameterValue, VectorValue
+from tslc.lower.context import (
+    LoweringSession,
+    SimdTypeParameterValue,
+    VectorSpellingPolicy,
+    VectorValue,
+)
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
 def _vector_value(base_tag: str, context: LoweringSession) -> VectorValue:
     value = _vector_value_from_extension(base_tag, context.env.extension)
     if value.uses_sized_vector:
-        return replace(value, lane_parameter=context.env.lane_symbol())
+        return replace(
+            value,
+            lane_parameter=LaneCount.symbolic(context.env.lane_symbol()),
+        )
     return value
 
 
@@ -34,7 +43,7 @@ def _vector_value_from_extension(base_tag: str, extension: Extension) -> VectorV
         lanes=DEFAULT_SUPPORT_POLICY.lane_count(extension, base_tag),
         uses_sized_vector=uses_sized_vector,
         lane_parameter=(
-            DEFAULT_SUPPORT_POLICY.size_parameter_name(extension)
+            LaneCount.symbolic(DEFAULT_SUPPORT_POLICY.size_parameter_name(extension))
             if uses_sized_vector
             else None
         ),
@@ -57,7 +66,7 @@ def _sized_vector_value(
 ) -> VectorValue | None:
     lanes = DEFAULT_SUPPORT_POLICY.lane_count(context.env.extension, base_tag)
     if lanes is None:
-        lane_parameter = context.env.lane_symbol()
+        lane_parameter = LaneCount.symbolic(context.env.lane_symbol())
     else:
         lane_parameter = None
     return VectorValue(
@@ -91,21 +100,28 @@ class RegisterGenericQuery:
         if len(args) != 1:
             return None
         arg = args[0]
-        lane_parameter: str | None
+        lane_count: LaneCount | None
         if isinstance(arg, TypeValue):
             base_tag, isa = arg.type_tag, context.env.extension.isa_name
             uses_sized_vector = DEFAULT_SUPPORT_POLICY.uses_sized_vector(
                 context.env.extension
             )
-            lane_parameter = context.env.lane_symbol()
+            lane_count = LaneCount.symbolic(context.env.lane_symbol())
         elif isinstance(arg, VectorValue):
             base_tag, isa = arg.base_tag, arg.extension_isa
             uses_sized_vector = arg.uses_sized_vector
-            lane_parameter = arg.lane_parameter
+            lane_count = arg.lane_parameter
         elif isinstance(arg, SimdTypeParameterValue):
             spelling = _simd_type_param_register_spelling(arg, context)
             return TextValue(spelling) if spelling is not None else None
         else:
+            return None
+        lane_parameter = (
+            context.env.backend.types.render_lane_count(lane_count)
+            if lane_count is not None
+            else None
+        )
+        if uses_sized_vector and lane_parameter is None:
             return None
         spelling = context.env.backend.types.target_register_spelling(
             base_tag,
@@ -226,8 +242,8 @@ class AsExtensionQuery:
 class FixedFacadeQuery:
     """``vector::fixed`` -> the profile's exact-width hardware facade.
 
-    The selector records the concrete extension used for dependency closure;
-    C++ rendering deliberately spells the public fixed<N> facade instead.
+    The backend-scoped selector records the concrete extension used for
+    dependency closure; the active dialect spells its public facade.
     """
 
     head = "vector::fixed"
@@ -246,7 +262,10 @@ class FixedFacadeQuery:
             )
             return None
         value = _vector_value_from_extension(context.env.type_tag, extension)
-        return replace(value, spelling_policy="fixed_facade")
+        return replace(
+            value,
+            spelling_policy=VectorSpellingPolicy.FIXED_FACADE,
+        )
 
 
 class AsBaseQuery:
@@ -282,7 +301,7 @@ class WindowBaseQuery:
                 extension_isa=extension.isa_name,
                 lanes=None,
                 uses_sized_vector=True,
-                lane_parameter=str(
+                lane_parameter=LaneCount.fixed(
                     DEFAULT_SUPPORT_POLICY.windowed_lane_count(
                         context.env.type_tag, to_base, context.env.concrete_lanes
                     )
@@ -291,9 +310,11 @@ class WindowBaseQuery:
         lane_parameter = DEFAULT_SUPPORT_POLICY.windowed_lane_parameter(
             extension, context.env.type_tag, to_base
         )
-        if lane_parameter == DEFAULT_SUPPORT_POLICY.size_parameter_name(extension):
+        if lane_parameter.is_plain_symbol(
+            DEFAULT_SUPPORT_POLICY.size_parameter_name(extension)
+        ):
             return _vector_value(to_base, context)
-        if not context.env.backend.supports_sized_vector_lane_expressions:
+        if context.env.backend.types.render_lane_count(lane_parameter) is None:
             context.effects.skip(
                 "TSL-LOWER-SIZED-WIDTH-CHANGE",
                 f"sized-vector windowing convert ({context.env.type_tag} -> {to_base}) needs a "
@@ -369,7 +390,10 @@ class GenericLengthQuery:
             if value.lanes is not None:
                 return TextValue(str(value.lanes))
             if value.lane_parameter is not None:
-                return TextValue(value.lane_parameter)
+                spelling = context.env.backend.types.render_lane_count(
+                    value.lane_parameter
+                )
+                return TextValue(spelling) if spelling is not None else None
         return None
 
 
@@ -396,7 +420,10 @@ class GenericRuntimeLengthQuery:
         if value.lanes is not None:
             return TextValue(str(value.lanes))
         if value.lane_parameter is not None:
-            return TextValue(value.lane_parameter)
+            spelling = context.env.backend.types.render_lane_count(
+                value.lane_parameter
+            )
+            return TextValue(spelling) if spelling is not None else None
         extension = _catalog_extension(value.extension_isa, context)
         if extension is None:
             return None

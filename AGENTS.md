@@ -77,7 +77,7 @@ tslc/
     select/                   Target/profile implementation selection
     ir/                       Recursive TSIL body segments and region registry
     lower/                    Lowering from catalog + TSIL regions to typed output facts
-    backend/                  Backend dialects, manifests, validation, emitted profiles/functions
+    backend/                  Backend dialects, packaged assets, validation, emitted profiles/functions
     render/                   Formatting of finalized profiles into project artifacts
     output/                   Artifact writing and build/test verification
     value_tests/              Pre-render generated value-test planning and harness data
@@ -94,11 +94,9 @@ tsldata/
   primitives/                 Primitive source corpus
 
 supplementary/
-  buildsystem/                C++/Rust build-system static files and templates
+  buildsystem/                Machine-profile configuration
   ci/                         Reusable CI helper scripts
   docs/                       Generated-TSL documentation input assets
-  helpers/                    C++/Rust helper sources
-  templates/                  C++/Rust render templates
 
 .github/
   workflows/                  GitHub Actions workflow entry points
@@ -140,7 +138,7 @@ Useful focused tests:
 ```bash
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog_validation.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_lower_text.py
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower*.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_render_model.py tslc/tests/test_generation_conditionals.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify_config.py tslc/tests/test_output_format.py
 ```
@@ -218,7 +216,7 @@ feature must touch.
 When adding a backend:
 
 - register capabilities in the backend/support-policy boundary;
-- add typed translation/render support and supplementary assets;
+- add typed translation/render support and packaged backend assets;
 - validate unsupported capabilities before render/write;
 - add focused tests proving the backend ID or capability is data-driven.
 

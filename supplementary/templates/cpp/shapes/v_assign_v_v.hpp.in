@@ -1,3 +1,0 @@
-inline {result_type} {function_name}({parameters}) {{
-  return {body_text};
-}}

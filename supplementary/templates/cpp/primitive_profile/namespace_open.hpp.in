@@ -1,4 +1,0 @@
-namespace tsl::profiles::{namespace} {{
-
-inline constexpr const char* name = "{profile_name}";
-inline constexpr const char* family = "{family}";

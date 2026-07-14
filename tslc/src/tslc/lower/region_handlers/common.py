@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from tslc.lower.context import LoweringSession, VectorValue
+from tslc.lower.context import (
+    LoweringSession,
+    VectorSpellingPolicy,
+    VectorValue,
+)
 
 
 def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None:
@@ -11,7 +15,7 @@ def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None
     base = context.env.backend.types.scalar_spelling(value.base_tag)
     if base is None:
         return None
-    if value.spelling_policy == "fixed_facade":
+    if value.spelling_policy is VectorSpellingPolicy.FIXED_FACADE:
         if value.lanes is None:
             return None
         return context.env.backend.types.fixed_vector_spelling(base, value.lanes)
@@ -21,7 +25,11 @@ def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None
         lanes = (
             value.lanes
             if value.lanes is not None
-            else value.lane_parameter
+            else (
+                context.env.backend.types.render_lane_count(value.lane_parameter)
+                if value.lane_parameter is not None
+                else None
+            )
         )
         if lanes is None:
             return None

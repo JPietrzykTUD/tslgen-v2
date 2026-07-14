@@ -13,6 +13,7 @@ from tslc.backend.target_capability import (
 )
 from tslc.catalog.model import BackendCompileGuard, Extension
 from tslc.catalog.scalar_types import scalar_bit_width_or_default
+from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.target_text import TemplateApplication
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
@@ -71,7 +72,10 @@ def _cpp_includes(
     return "\n".join(lines) + "\n"
 
 
-def _cpp_primitive_tags(profiles: tuple[EmittedProfile, ...]) -> str:
+def _cpp_primitive_tags(
+    profiles: tuple[EmittedProfile, ...],
+    assets: RenderAssets,
+) -> str:
     names = sorted(
         {
             primitive
@@ -79,14 +83,11 @@ def _cpp_primitive_tags(profiles: tuple[EmittedProfile, ...]) -> str:
             for primitive in emitted_profile.specializations("cpp")
         }
     )
-    lines = [
-        "#pragma once",
-        "namespace tsl::primitive {",
-        *(f"struct {name} {{}};" for name in names),
-        "}  // namespace tsl::primitive",
-        "",
-    ]
-    return "\n".join(lines)
+    declarations = "\n".join(f"struct {name} {{}};" for name in names)
+    return assets.fill(
+        "cpp_primitive_tags.hpp.tmpl",
+        declarations=f"\n{declarations}" if declarations else "",
+    )
 
 
 def cpp_profiles_support_algorithm(profiles: tuple[EmittedProfile, ...]) -> bool:

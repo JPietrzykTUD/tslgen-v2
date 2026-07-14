@@ -20,7 +20,7 @@ from tslc.backend.rust_capability import RUST_BACKEND
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.validation import validate_catalog
-from tslc.compiler_assets import RenderAssets
+from tslc.compiler_assets import RenderAssets, load_default_render_assets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile
@@ -50,6 +50,44 @@ def test_cpp_project_renderer_has_focused_owned_modules() -> None:
     assert cpp_project.cpp_artifacts.__module__ == "tslc.render.cpp_project"
     assert cpp_profile._cpp_registration.__module__ == "tslc.backend.cpp_profile"
     assert cpp_build.cpp_flags.__module__ == "tslc.render.cpp_build"
+
+
+def test_render_assets_have_one_packaged_source_of_truth() -> None:
+    assets = load_default_render_assets()
+    assert {
+        "cpp_benchmark.cpp.tmpl",
+        "cpp_dispatch.hpp.tmpl",
+        "cpp_dispatch_algorithm_include.hpp",
+        "cpp_dispatch_case.hpp.tmpl",
+        "cpp_dispatch_overlay.hpp.tmpl",
+        "cpp_documentation.hpp.tmpl",
+        "cpp_profile_header.hpp.tmpl",
+        "cpp_profile_metadata.hpp.tmpl",
+        "cpp_primitive_tags.hpp.tmpl",
+        "cpp_smoke.cpp.tmpl",
+        "rust_documentation.rs.tmpl",
+        "rust_lib.rs.tmpl",
+        "rust_lib_profile.rs.tmpl",
+        "rust_primitive_tags.rs.tmpl",
+        "rust_profile_module.rs.tmpl",
+        "rust_profile_metadata.rs.tmpl",
+        "rust_smoke.rs",
+    } <= assets.files.keys()
+    assert "int main(int argc, char** argv)" in assets.text(
+        "cpp_benchmark.cpp.tmpl"
+    )
+    assert "namespace tsl::profiles::@{profile_namespace}" in assets.text(
+        "cpp_profile_metadata.hpp.tmpl"
+    )
+    for retired_tree in (
+        "supplementary/buildsystem/cpp",
+        "supplementary/buildsystem/rust",
+        "supplementary/helpers",
+        "supplementary/templates",
+    ):
+        assert not any(
+            path.is_file() for path in (_REPO_ROOT / retired_tree).rglob("*")
+        )
 
 
 def test_backend_closure_seed_primitives_are_capability_owned() -> None:

@@ -1,8 +1,0 @@
-}}  // namespace tsl::profiles::{namespace}
-
-namespace tsl {{
-
-inline constexpr const char* active_profile = profiles::{namespace}::name;
-inline constexpr const char* active_profile_family = profiles::{namespace}::family;
-
-}}  // namespace tsl

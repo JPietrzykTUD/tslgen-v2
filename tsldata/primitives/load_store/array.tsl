@@ -699,7 +699,7 @@ prim<v:=(v,s)> insert_value(a, value):
         implementation:
           tsil """
             var<infer>(lanes, call<primitive=to_array[Vec]>(a));
-            lanes[Index] = value;
+            array<set>(lanes, Index, value);
             complete(call<primitive=from_array[Vec]>(lanes));
           """
     [generic, clang_v128, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128, sve]:

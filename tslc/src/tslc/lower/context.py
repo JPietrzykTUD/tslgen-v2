@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from enum import Enum
 from types import MappingProxyType
 from types import TracebackType
 from typing import TYPE_CHECKING, TypeVar
@@ -27,6 +28,7 @@ from tslc.lower.implementation_facts import (
     ImplementationState,
     ImplementationStateFacts,
 )
+from tslc.lane_count import LaneCount
 from tslc.target_text import RenderText, as_render_text
 
 if TYPE_CHECKING:
@@ -35,6 +37,13 @@ if TYPE_CHECKING:
 
 _K = TypeVar("_K")
 _V = TypeVar("_V")
+
+
+class VectorSpellingPolicy(str, Enum):
+    """How a typed vector value is projected by the active backend."""
+
+    CONCRETE = "concrete"
+    FIXED_FACADE = "fixed_facade"
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,10 +61,8 @@ class VectorValue:
     extension_isa: str
     lanes: int | None
     uses_sized_vector: bool = False
-    lane_parameter: str | None = None
-    # "fixed_facade" renders through dataparallel::simd_for_t<fixed<N>, T>
-    # while extension_isa remains concrete for dependency closure.
-    spelling_policy: str = "concrete"
+    lane_parameter: LaneCount | None = None
+    spelling_policy: VectorSpellingPolicy = VectorSpellingPolicy.CONCRETE
 
 
 @dataclass(frozen=True, slots=True)

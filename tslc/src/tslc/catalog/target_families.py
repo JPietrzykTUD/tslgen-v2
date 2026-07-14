@@ -21,12 +21,25 @@ class BackendProfileFamily:
 
 
 @dataclass(frozen=True, slots=True)
+class ExtensionFamilyCapability:
+    """Compiler behavior shared by extensions in one source-named family."""
+
+    name: str
+    implementation_fallback: bool = False
+    free_function_owner: bool = True
+    requires_declared_vector_register: bool = True
+    index_vector_register: bool = False
+    source: SourceSpan | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ProfileFamilyCapability:
     """One machine-profile family and the backend behavior it owns."""
 
     name: str
     extension_families: frozenset[str] = frozenset()
     runner_kinds: frozenset[str] = frozenset()
+    native_without_runner: bool = False
     sort_order: int = 100
     backends: Mapping[str, BackendProfileFamily] = field(default_factory=dict)
     source: SourceSpan | None = None
@@ -53,6 +66,9 @@ class TargetFamilyCatalog:
 
     known_extension_families: frozenset[str] = frozenset()
     universal_extension_families: frozenset[str] = frozenset()
+    extension_families: Mapping[str, ExtensionFamilyCapability] = field(
+        default_factory=dict
+    )
     profile_families: Mapping[str, ProfileFamilyCapability] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -60,6 +76,12 @@ class TargetFamilyCatalog:
             {
                 name: capability
                 for name, capability in sorted(self.profile_families.items())
+            }
+        )
+        extension_families = MappingProxyType(
+            {
+                name: capability
+                for name, capability in sorted(self.extension_families.items())
             }
         )
         emitted = set(self.universal_extension_families)
@@ -75,6 +97,7 @@ class TargetFamilyCatalog:
             "universal_extension_families",
             frozenset(self.universal_extension_families),
         )
+        object.__setattr__(self, "extension_families", extension_families)
         object.__setattr__(self, "profile_families", profile_families)
 
     @property
@@ -105,6 +128,12 @@ class TargetFamilyCatalog:
     def profile_family(self, family: str) -> ProfileFamilyCapability | None:
         return self.profile_families.get(family)
 
+    def extension_family(self, family: str) -> ExtensionFamilyCapability:
+        return self.extension_families.get(
+            family,
+            ExtensionFamilyCapability(family),
+        )
+
     def extension_targets_profile(
         self,
         extension_family: str,
@@ -122,6 +151,7 @@ class TargetFamilyCatalog:
 
 __all__ = (
     "BackendProfileFamily",
+    "ExtensionFamilyCapability",
     "ProfileFamilyCapability",
     "TargetFamilyCatalog",
 )

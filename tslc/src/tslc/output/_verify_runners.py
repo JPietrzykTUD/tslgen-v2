@@ -37,7 +37,7 @@ def filter_runner_verifiable_profiles(
     skipped: list[str] = []
     for profile in backend.profiles:
         if profile.runner is None:
-            if profile.family != "generic":
+            if not profile.native_without_runner:
                 skipped.append(
                     f"{backend.backend_id}: profile {profile.profile_name} has no "
                     "runner metadata; value-test verification skipped"

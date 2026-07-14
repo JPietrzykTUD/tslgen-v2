@@ -409,17 +409,19 @@ def _requires_suggestions(
             if primitive_name in processed:
                 continue
             processed.add(primitive_name)
-            selected = selector.select_profile(
-                inputs.catalog, profile, primitive_name, type_tags
-            )
-            for selected_slot in selected.selected:
-                body_segments = scan(
-                    selected_slot.implementation.body_text,
-                    source=selected_slot.implementation.body_source,
+            for backend in backends:
+                selected = selector.select_profile(
+                    inputs.catalog,
+                    profile,
+                    primitive_name,
+                    type_tags,
+                    backend_id=backend,
                 )
-                lowered_any = False
-                slot_dependencies: set[CallDependency] = set()
-                for backend in backends:
+                for selected_slot in selected.selected:
+                    body_segments = scan(
+                        selected_slot.implementation.body_text,
+                        source=selected_slot.implementation.body_source,
+                    )
                     lowered = lowerer.lower(
                         selected_slot,
                         inputs.catalog,
@@ -442,11 +444,8 @@ def _requires_suggestions(
                             ),
                         )
                     )
-                    slot_dependencies.update(callees)
-                    lowered_any = True
-                if lowered_any:
                     dependency_names = sorted(
-                        {dependency.primitive for dependency in slot_dependencies}
+                        {dependency.primitive for dependency in callees}
                     )
                     for dependency_name in dependency_names:
                         if (

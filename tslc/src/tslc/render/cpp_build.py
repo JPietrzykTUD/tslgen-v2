@@ -26,6 +26,11 @@ def cpp_verify_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[VerifyPro
             profile_name=slug(emitted_profile.profile.name),
             file_stem=slug(emitted_profile.profile.name),
             family=emitted_profile.profile.family,
+            native_without_runner=(
+                emitted_profile.profile_family.native_without_runner
+                if emitted_profile.profile_family is not None
+                else False
+            ),
             compile_modes=emitted_profile.profile.compile_modes,
             flags=cpp_flags(emitted_profile.profile, emitted_profile.profile_family),
             target=cpp_target(emitted_profile.profile, emitted_profile.profile_family),
