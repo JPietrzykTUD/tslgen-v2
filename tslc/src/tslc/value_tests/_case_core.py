@@ -211,6 +211,35 @@ def compile_only_case(
         scalar_inputs=_scalar_inputs(case),
     )
 
+
+def status_pointer_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> ValueTestCasePlan | None:
+    """Plan a status-returning operation that conditionally writes one pointee."""
+
+    scalar_inputs = _scalar_inputs(case)
+    base_spelling = _base_spelling(specs, case.type_tag)
+    if (
+        case.expected_rule != "status_pointer"
+        or base_spelling is None
+        or len(scalar_inputs) != 1
+        or case.expected
+    ):
+        return None
+    return _plan(
+        "status_pointer",
+        name,
+        index,
+        case,
+        specs,
+        base_spelling,
+        scalar_inputs=scalar_inputs,
+        lanes=1,
+    )
+
 def array_to_vector_case(
     name: str,
     index: int,
@@ -409,5 +438,6 @@ __all__ = (
     "masked_mask_result_case",
     "mask_result_case",
     "scalar_vector_case",
+    "status_pointer_case",
     "immediate_case",
 )

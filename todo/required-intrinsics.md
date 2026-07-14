@@ -16,24 +16,27 @@ Intrinsics Guide on 2026-07-14. The 191 source-list intrinsics currently split
 into **130 covered**, **61 partial**, and **0 missing**. Every source-list entry
 is assigned exactly once below.
 
-Public TSL names describe operations rather than Intel spellings. The current
-`permute_lanes`, `permute_lanes2`, and `permute_lanes4` declarations are three
-different signatures, not three fundamentally separate primitive families:
-the one- and two-source indexed forms could be overloads of `permute_lanes`,
-and the immediate four-lane-group form could also share that source-family
-name. Its `sImm` control is already emitted as a C++ template argument or Rust
-const generic; moving it to `generic_params` would not add compile-time
-behavior. An attribute would be inappropriate because the control is a
-call-site operand with 256 values, not an orthogonal policy such as alignment
-or masking.
+Public TSL names describe operations rather than Intel spellings. The immediate
+`(v, sImm)` and indexed `(v, vidx)` declarations now share the
+`permute_lanes` source name; the former emits as `permute_lanes_imm` and the
+latter as `permute_lanes`. `sImm` already becomes a C++ template argument or
+Rust const generic, so a second generic parameter would add no behavior. The
+arity-changing `(v, vidx, v)` operation is the ordinary `table_lookup`
+primitive: it indexes the concatenation of two lane tables. A generic parameter
+cannot carry its second runtime vector or change function arity, and Rust cannot
+overload free functions by argument count. Keeping the semantic name explicit
+avoids a one-off source attribute whose only purpose would be target-language
+naming. It is not named `zip`, because arbitrary indexes may reorder, repeat,
+or select all lanes from either input rather than performing a fixed
+interleave.
 
 `random_step` is intentionally different. It maps the required
 `_rdrand64_step`, so its output is only `ui64` and it is available only on
-64-bit x86 profiles with `rdrand`. Its current authored test is compile/contract
-coverage: RDRAND may legally report failure, so the test cannot demand a random
-value. The otherwise irrelevant `lane_count 2` and two-zero vector are test
-harness scaffolding used to materialize one mutable `ui64` pointee; they are not
-part of the primitive contract.
+64-bit x86 profiles with `rdrand`. Its authored test is a runtime
+status-and-pointer contract: the result must be 0 or 1, and a zero result must
+leave the output unchanged. A successful result cannot be compared with a
+fixed expected value because hardware entropy is nondeterministic. The test no
+longer fabricates a vector or lane count for this scalar pointer API.
 
 ## Covered mapping
 
@@ -117,12 +120,13 @@ These required intrinsics already map to existing TSL primitive semantics.
 - `mask_binary_not`: `_mm512_knot`.
 - `expand[mask=pass_through]`: `_mm512_mask_expand_epi32`.
 - `align_right_lanes`: `_mm512_alignr_epi32`, `_mm512_alignr_epi64`.
-- `permute_lanes4`: `_mm256_permute4x64_epi64`, `_mm_shuffle_epi32`.
-- `permute_lanes`: `_mm512_permutexvar_epi32`.
-- `permute_lanes2`: `_mm512_permutex2var_epi32`.
+- `permute_lanes(data, control: sImm)` / emitted `permute_lanes_imm`:
+  `_mm256_permute4x64_epi64`, `_mm_shuffle_epi32`.
+- `permute_lanes(data, indexes)`: `_mm512_permutexvar_epi32`.
+- `table_lookup`: `_mm512_permutex2var_epi32`.
 - `random_step`: `_rdrand64_step`.
 
-## Partial coverage
+## Partial coverage (61)
 
 These are close enough to have existing TSL vocabulary, but should not be
 counted complete until the exact Intel operation shape is verified or added.
@@ -169,8 +173,9 @@ counted complete until the exact Intel operation shape is verified or added.
   immediate-predicate compare shape.
 - `_mm512_mask_compress_epi32`: `compress` exists with zero-fill semantics;
   verify/add exact masked compress shape.
-- `_mm512_mask_expand_epi32`: `expand_load` exists; add/verify exact vector
-  expand shape.
+- `_mm512_mask_compressstoreu_epi32`: `compress_store` packs the selected
+  lanes, but its public contract exposes only `[aligned=true]`; add an explicit
+  unaligned contract and test slot.
 - `_mm512_mask_expandloadu_epi32`: `expand_load` exists; verify exact unaligned
   masked expand-load shape.
 - `_mm512_mask_i32logather_epi64`: related narrow-index masked gather support
@@ -185,25 +190,16 @@ counted complete until the exact Intel operation shape is verified or added.
   independent `src, k, a, b` shape.
 - `_mm_loadl_epi64`: `load`/partial-load behavior is related; verify exact
   upper-zero behavior before counting complete.
-- `_mm_shuffle_epi32`: existing lane selection/shuffle use is related; verify
-  exact immediate-controlled public primitive if needed.
 
-## Missing coverage
+## Partial coverage (continued)
 
-These should become new primitives or focused extensions to existing primitive
-families.
+These operations have composable building blocks or an existing family to
+extend, but still lack the exact public operation shape.
 
 - `_mm256_testc_si256`: integer vector test-c/all-ones-after-andnot scalar result.
 - `_mm256_testz_si256`: integer vector test-zero-after-and scalar result.
-- `_mm256_permute4x64_epi64`: immediate-controlled 64-bit lane permute.
 - `_mm256_stream_load_si256`: non-temporal aligned integer load.
-- `_mm512_abs_epi64`: signed 64-bit lane absolute value.
-- `_mm512_alignr_epi32`: immediate-controlled concatenated lane-align.
-- `_mm512_alignr_epi64`: immediate-controlled concatenated lane-align.
-- `_mm512_kand`: native mask bitwise AND.
 - `_mm512_kandn`: native mask AND-NOT.
-- `_mm512_knot`: native mask NOT.
-- `_mm512_kor`: native mask OR.
 - `_mm512_kortestz`: native mask OR-test-zero scalar result.
 - `_mm512_kunpackb`: mask unpack/concatenate.
 - `_mm512_kxnor`: native mask XNOR.
@@ -213,8 +209,6 @@ families.
 - `_mm512_mask_testn_epi32_mask`: masked inverted bit-test mask-return primitive.
 - `_mm512_mask_testn_epi64_mask`: masked inverted bit-test mask-return primitive.
 - `_mm512_mul_epu32`: even-lane unsigned 32x32 to 64-bit multiply.
-- `_mm512_permutex2var_epi32`: two-source indexed permute.
-- `_mm512_permutexvar_epi32`: indexed permute.
 - `_mm512_rol_epi32`: rotate-left immediate.
 - `_mm512_ror_epi64`: rotate-right immediate.
 - `_mm512_stream_load_si512`: non-temporal aligned integer load.
@@ -227,8 +221,6 @@ families.
 - `__blsr_u64`: scalar reset-lowest-set-bit.
 - `__tzcnt_u32`: scalar trailing-zero-count for 32-bit input.
 - `__tzcnt_u64`: scalar trailing-zero-count for 64-bit input.
-- `_rdrand64_step`: x86-only random/entropy primitive or explicit unsupported
-  policy.
 - `_mm_cvtsi32_si128`: scalar-to-low-lane vector constructor with zeroed upper
   bits.
 - `_mm_cvtsi64_si128`: scalar-to-low-lane vector constructor with zeroed upper
@@ -237,6 +229,11 @@ families.
 - `_mm_stream_si32`: non-temporal scalar 32-bit store.
 - `_mm_stream_si64`: non-temporal scalar 64-bit store.
 - `_mm_stream_load_si128`: non-temporal aligned integer load.
+
+## Missing coverage (0)
+
+No source-list intrinsic currently lacks public semantic vocabulary or a
+suitable existing primitive family to extend.
 
 ## Source list
 

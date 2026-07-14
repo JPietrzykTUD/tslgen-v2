@@ -368,10 +368,7 @@ def _compile_only(case: ValueTestCasePlan) -> str:
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
     args = append_call_args(lines, case)
-    if case.invocation.result_kind == "usize" and case.invocation.param_kinds == ("ptr",):
-        call = f"unsafe {{ {rust_raw_identifier(case.call_name)}({', '.join(args)}) }}"
-    else:
-        call = f"{rust_raw_identifier(case.call_name)}::<Vec>({', '.join(args)})"
+    call = f"{rust_raw_identifier(case.call_name)}::<Vec>({', '.join(args)})"
     if case.invocation.result_kind == "void":
         lines.append(f"        {call};")
     else:
@@ -379,6 +376,25 @@ def _compile_only(case: ValueTestCasePlan) -> str:
         lines.append("        let _ = result;")
     lines.append("    }")
     return "\n".join(lines)
+
+
+def _status_pointer(case: ValueTestCasePlan) -> str:
+    value = rust_literal(case.inputs.scalars[0], case.type_tag)
+    call_name = rust_raw_identifier(case.call_name)
+    return "\n".join(
+        [
+            "    #[test]",
+            f"    fn {case.function_name}() {{",
+            f"        let mut value: {case.base_spelling} = {value};",
+            "        let before = value;",
+            f"        let status = unsafe {{ {call_name}(&mut value) }};",
+            f'        assert!(status <= 1, "{case.case_name}: invalid status {{status}}");',
+            "        if status == 0 {",
+            f'            assert_eq!(value, before, "{case.case_name}: failure modified output");',
+            "        }",
+            "    }",
+        ]
+    )
 
 
 def _lane_assert(case: ValueTestCasePlan, lanes: int, result_name: str) -> str:
@@ -404,5 +420,6 @@ __all__ = [
     "_reduction",
     "_scalar_result",
     "_scalar_vector",
+    "_status_pointer",
     "_vector_to_array",
 ]

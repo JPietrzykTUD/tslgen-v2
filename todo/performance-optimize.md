@@ -10,7 +10,8 @@ byte for byte and preserve structured diagnostics, coverage, skips, verification
 plans, ordering, and source locations. Performance work must exploit the current
 pure and immutable compiler boundaries; it must not fuse stages, bypass
 validation, parse target-language text, or introduce nondeterministic parallel
-execution.
+execution. Python multithreading is prohibited throughout this optimization
+project.
 
 ## Outcome
 
@@ -100,9 +101,10 @@ Follow-up probes found several highly repeated but individually cheap helpers:
   artifact writer.
 - Do not change `profiles=None`, `primitives=None`, partial/strict behavior,
   coverage granularity, or public API result shapes as a performance shortcut.
-- Do not add threads to parsing, scanning, selection, lowering, or rendering:
-  the current supported interpreter has the GIL enabled and these stages are
-  CPU-bound Python work.
+- Do not add Python multithreading anywhere in the compiler, snapshot harness,
+  or benchmark driver. This prohibition includes direct threads, thread pools,
+  and helpers that dispatch work to threads. It is a project constraint, not a
+  conditional optimization to revisit after profiling.
 - Do not add multiprocessing unless a later profile proves a coarse isolated
   unit of work whose serialization, duplicated memory, deterministic merge,
   and process-start costs still produce a material end-to-end gain.
@@ -144,10 +146,12 @@ post-Slice-3 profile shows that their combined cost is material.
 
 ### Parallelism
 
-Threaded compiler lowering is rejected for this plan. The current hot stages
-are CPU-bound pure Python under the GIL, so threads add scheduling and
-synchronization without parallel execution. Threading source reads is also out
-of scope because the input corpus is small and I/O is not material.
+Python multithreading is prohibited for this plan. The current hot stages are
+CPU-bound pure Python under the GIL, so threads add scheduling and
+synchronization without parallel execution. Threading source reads would not
+help because the input corpus is small and I/O is not material. A future
+free-threaded Python support decision would require a separate compiler-support
+proposal and does not relax this plan's prohibition.
 
 Multiprocessing is deferred, not treated as an expected slice. Per-profile or
 per-file workers would duplicate or serialize large catalogs, lowered results,
@@ -155,7 +159,8 @@ coverage facts, and artifacts; this works against the memory goal and adds a
 deterministic diagnostic/ordering merge. Reconsider it only after cache and
 retention work, with a fresh-process benchmark that includes startup, IPC,
 merge time, and aggregate RSS. Build-system parallelism for external CMake or
-Cargo verification remains separate from the Python compiler hot path.
+Cargo verification is controlled by those external tools and is not Python
+multithreading inside `tslc`.
 
 ### Generators And Streaming
 
@@ -737,9 +742,10 @@ The performance project is complete when:
 - the default full request completes on the designated verification host;
 - caches are bounded or session-owned, their keys cover all semantic inputs,
   and tests prove both hit reuse and miss separation;
-- threads, multiprocessing, and streaming remain excluded unless their
-  conditional evidence gates are met; mechanical generator conversions are not
-  counted as completed optimization work;
+- no Python multithreading was introduced; multiprocessing and streaming remain
+  excluded unless their separate conditional evidence gates are met, and
+  mechanical generator conversions are not counted as completed optimization
+  work;
 - no source data, machine profiles, render assets, or committed coverage
   baselines changed as part of the optimization;
 - the final review packet lists each slice, snapshot comparisons, tests,

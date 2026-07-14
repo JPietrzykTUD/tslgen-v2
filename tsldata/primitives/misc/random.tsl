@@ -20,7 +20,7 @@ prim<usize:=(ptr)> random_step(out):
       return 0
     """
   tests:
-    - {role "compile", tags [x86, contract], type "ui64", lane_count 2, case {inputs [[0, 0]], expected []}}
+    - {tags [x86, contract], type "ui64", expected_rule "status_pointer", case {inputs [0], expected []}}
   impls:
     [avx512, avx2, sse]:
       ui64:

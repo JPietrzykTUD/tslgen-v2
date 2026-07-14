@@ -316,10 +316,10 @@ class TestCase:
     ``name`` and ``lanes`` are promoted facts: source tests author semantic ``tags`` and
     optionally ``id``/``lane_count``; catalog promotion derives the stable case name and the lane
     count. ``expected`` holds per-lane literal tokens (a store case's ``expected`` instead models
-    the destination buffer and may exceed ``lanes``); ``expected_rule`` (e.g. ``"popcnt"``) names a
-    computed oracle in place of literal expected. ``role`` is normally ``"value"``; ``"compile"``
-    means the case intentionally checks that the callable instantiates without asserting a
-    deterministic runtime value.
+    the destination buffer and may exceed ``lanes``); ``expected_rule`` (e.g. ``"popcnt"`` or
+    ``"status_pointer"``) names a computed oracle in place of literal expected. ``role`` is
+    normally ``"value"``; ``"compile"`` means the case intentionally checks that the callable
+    instantiates without asserting a deterministic runtime value.
 
     Optional axes pin a case to one specialization or carry operand metadata: ``extension`` (a
     specific subject extension), ``to_type``/``to_extension`` (representation-change targets),

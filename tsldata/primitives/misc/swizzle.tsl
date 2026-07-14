@@ -138,7 +138,7 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
             complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
           """
 
-prim<v:=(v,sImm)> permute_lanes4(data, control):
+prim<v:=(v,sImm)> permute_lanes(data, control):
   brief_description "Permutes consecutive groups of up to four lanes using two-bit selectors."
   detailed_description """
     Each two-bit field in `control` selects a source lane within the current
@@ -452,7 +452,7 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
             complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
           """
 
-prim<v:=(v,vidx,v)> permute_lanes2(left, indexes, right):
+prim<v:=(v,vidx,v)> table_lookup(left, indexes, right):
   brief_description "Permutes lanes from two sources using same-width integral indices."
   detailed_description """
     Interprets each index lane as unsigned and reduces it modulo twice the lane

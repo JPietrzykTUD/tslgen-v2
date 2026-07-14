@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -293,6 +294,65 @@ def test_planner_selects_authored_tests_by_source_signature() -> None:
         (case.call_name, case.case_name)
         for case in plan.profiles_for("cpp")[0].cases
     ] == [("shift", "runtime"), ("shift_imm", "immediate")]
+
+
+def test_status_pointer_case_checks_runtime_contract_for_both_backends() -> None:
+    primitive = Primitive(
+        "random_step",
+        "usize:=(ptr)",
+        ("out",),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="random_step_ui64_contract",
+                type_tag="ui64",
+                tags=("contract",),
+                inputs=(TslTestArg("scalar", scalar="0"),),
+                expected=(),
+                expected_rule="status_pointer",
+            ),
+        ),
+    )
+    cpp_spec = replace(
+        _spec(
+            "random_step",
+            "random_step",
+            param_kinds=("ptr",),
+            result_kind="usize",
+        ),
+        type_tag="ui64",
+        base_type_spelling="std::uint64_t",
+    )
+    rust_spec = replace(
+        cpp_spec,
+        backend_id="rust",
+        base_type_spelling="u64",
+        register_spelling="u64",
+    )
+    plan = ValueTestPlanner(
+        _catalog(primitive, *_harness_primitives()),
+        _VALUE_TEST_SUPPORTS,
+    ).plan(
+        _inputs(
+            _profile(
+                cpp={"random_step": (cpp_spec,)},
+                rust={"random_step": (rust_spec,)},
+            )
+        )
+    )
+
+    assert plan.diagnostics == ()
+    assert {entry.status for entry in plan.coverage} == {"emitted"}
+    cpp_case = plan.profiles_for("cpp")[0].cases[0]
+    rust_case = plan.profiles_for("rust")[0].cases[0]
+    assert cpp_case.kind == rust_case.kind == "status_pointer"
+    cpp_source = CPP_VALUE_TEST_RENDERER.render_case(cpp_case)
+    rust_source = RUST_VALUE_TEST_RENDERER.render_case(rust_case)
+    assert "const std::size_t status = tsl::random_step(&value);" in cpp_source
+    assert "status == 0 && value != before" in cpp_source
+    assert "let status = unsafe { random_step(&mut value) };" in rust_source
+    assert "if status == 0" in rust_source
 
 
 def test_different_arity_leading_mask_form_gets_portable_emitted_name() -> None:

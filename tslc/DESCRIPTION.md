@@ -281,6 +281,9 @@ components
 [case-kind capabilities](src/tslc/value_tests/case_capabilities.py) validate
 those facts through the focused
 [case plan](src/tslc/value_tests/case_plan.py) before rendering. The
+`status_pointer` case kind validates nondeterministic status-plus-output
+contracts by checking the status domain and failure-path output preservation,
+without inventing vector lanes or a deterministic success value. The
 array↔register round-trip uses auto-discovered "harness primitives"
 (`from_array`, `to_array`,
 `to_integral`, found by signature shape in

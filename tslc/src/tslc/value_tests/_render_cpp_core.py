@@ -65,10 +65,7 @@ def _compile_only(case: ValueTestCasePlan) -> str:
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
     ]
     args = _append_call_args(lines, case)
-    if case.invocation.result_kind == "usize" and case.invocation.param_kinds == ("ptr",):
-        call = f"tsl::{case.call_name}({', '.join(args)})"
-    else:
-        call = f"tsl::{case.call_name}<Vec>({', '.join(args)})"
+    call = f"tsl::{case.call_name}<Vec>({', '.join(args)})"
     if case.invocation.result_kind == "void":
         lines.append(f"  {call};")
     else:
@@ -77,6 +74,22 @@ def _compile_only(case: ValueTestCasePlan) -> str:
     lines.append("  return 0;")
     lines.append("}")
     return "\n".join(lines)
+
+
+def _status_pointer(case: ValueTestCasePlan) -> str:
+    value = cpp_literal(case.inputs.scalars[0], case.type_tag)
+    return "\n".join(
+        [
+            f"int {case.function_name}() {{",
+            f"  {case.base_spelling} value = {value};",
+            f"  const {case.base_spelling} before = value;",
+            f"  const std::size_t status = tsl::{case.call_name}(&value);",
+            "  if (status > 1) return 1;",
+            "  if (status == 0 && value != before) return 1;",
+            "  return 0;",
+            "}",
+        ]
+    )
 
 def _array_to_vector(case: ValueTestCasePlan) -> str:
     literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
@@ -216,4 +229,5 @@ __all__ = (
     "_scalar_result",
     "_lane_list",
     "_reduction",
+    "_status_pointer",
 )

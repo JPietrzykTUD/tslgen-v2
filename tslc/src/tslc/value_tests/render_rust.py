@@ -27,6 +27,7 @@ from tslc.value_tests._render_rust_core import (
     _reduction,
     _scalar_result,
     _scalar_vector,
+    _status_pointer,
     _vector_to_array,
 )
 from tslc.value_tests._render_rust_memory import (
@@ -111,6 +112,7 @@ RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "scalar_result": _scalar_result,
         "scalar_vector": _scalar_vector,
         "store": _store,
+        "status_pointer": _status_pointer,
         "stream": _stream,
         "vector_to_array": _vector_to_array,
     },

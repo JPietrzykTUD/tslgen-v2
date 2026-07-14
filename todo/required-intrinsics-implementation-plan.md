@@ -31,8 +31,8 @@ behavior.
 ## Material changes from the previous inventory
 
 - The eight formerly missing spellings now have public contracts: `abs`,
-  `align_right_lanes`, `permute_lanes4`, `permute_lanes`, `permute_lanes2`, and
-  `random_step`.
+  `align_right_lanes`, the two-signature `permute_lanes` family,
+  `table_lookup`, and `random_step`.
 - The arithmetic and swizzle contracts cover every vector extension and all ten
   datatypes through portable semantic implementations, with exact x86
   specializations where the Intel operation matches. `random_step` is the
@@ -55,6 +55,16 @@ behavior.
 - `tsldata/primitives/misc/swizzle.tsl` now contains public, target-independent
   lane-alignment and permutation primitives; the Intel spellings are
   implementation choices rather than API names.
+- The immediate and indexed single-source signatures share the
+  `permute_lanes` source identity; the immediate form emits as
+  `permute_lanes_imm`. The arity-changing operation is the ordinary
+  `table_lookup` primitive because it indexes the concatenation of two lane
+  tables. Rust cannot overload free functions by argument count and a generic
+  parameter cannot supply a runtime vector operand. This is not a fixed `zip`:
+  indexes may reorder, repeat, or select entirely from either input.
+- `random_step` now has a runtime status-and-pointer contract test. It verifies
+  a 0/1 result and unchanged output on failure without inventing vector lanes
+  or asserting a nondeterministic success value.
 
 ## Public primitive naming decision
 
@@ -151,9 +161,10 @@ current corpus.
 - `mask_binary_not`: `_mm512_knot`.
 - `expand[mask=pass_through]`: `_mm512_mask_expand_epi32`.
 - `align_right_lanes`: `_mm512_alignr_epi32`, `_mm512_alignr_epi64`.
-- `permute_lanes4`: `_mm256_permute4x64_epi64`, `_mm_shuffle_epi32`.
-- `permute_lanes`: `_mm512_permutexvar_epi32`.
-- `permute_lanes2`: `_mm512_permutex2var_epi32`.
+- `permute_lanes(data, control: sImm)` / emitted `permute_lanes_imm`:
+  `_mm256_permute4x64_epi64`, `_mm_shuffle_epi32`.
+- `permute_lanes(data, indexes)`: `_mm512_permutexvar_epi32`.
+- `table_lookup`: `_mm512_permutex2var_epi32`.
 - `random_step`: `_rdrand64_step`.
 
 ## Partial inventory and proposed primitives (61)
@@ -207,10 +218,10 @@ No required intrinsic remains without a public semantic primitive contract.
 |---|---|---|
 | `_mm512_abs_epi64` | `abs(data) -> v` | All vector extensions and all ten datatypes. Signed minimum retains its two's-complement bit pattern; floating-point absolute value clears the sign bit. Exact AVX-512 `si64` specialization plus portable fallbacks. |
 | `_mm512_alignr_epi32`, `_mm512_alignr_epi64` | `align_right_lanes(left, right, count: sImm) -> v` | All vector extensions and datatypes, with count reduced modulo the active lane count. Exact AVX-512 32/64-bit integral specializations plus portable fallbacks. |
-| `_mm256_permute4x64_epi64`, `_mm_shuffle_epi32` | `permute_lanes4(data, control: sImm) -> v` | All vector extensions and datatypes, operating independently on groups of at most four lanes. Exact matching x86 specializations plus portable fallbacks. |
+| `_mm256_permute4x64_epi64`, `_mm_shuffle_epi32` | `permute_lanes(data, control: sImm) -> v` (emitted `permute_lanes_imm`) | All vector extensions and datatypes, operating independently on groups of at most four lanes. Exact matching x86 specializations plus portable fallbacks. |
 | `_mm512_permutexvar_epi32` | `permute_lanes(data, indexes) -> v` | All vector extensions and datatypes; signed or unsigned same-width integral index vectors are supported and indexes are reduced modulo lane count. Exact AVX-512 32-bit integral specialization plus portable fallbacks. |
-| `_mm512_permutex2var_epi32` | `permute_lanes2(left, indexes, right) -> v` | All vector extensions and datatypes; indexes address the concatenation of both sources modulo twice the lane count. Exact AVX-512 32-bit integral specialization plus portable fallbacks. |
-| `_rdrand64_step` | `random_step(out: ptr) -> usize` | Intentionally limited to x86 `ui64` profiles with the `rdrand` feature. Returns a 0/1 status and writes only on success; compile/contract tests avoid asserting randomness. |
+| `_mm512_permutex2var_epi32` | `table_lookup(left, indexes, right) -> v` | All vector extensions and datatypes; indexes address the concatenation of both sources modulo twice the lane count. Exact AVX-512 32-bit integral specialization plus portable fallbacks. |
+| `_rdrand64_step` | `random_step(out: ptr) -> usize` | Intentionally limited to x86 `ui64` profiles with the `rdrand` feature. Returns a 0/1 status and writes only on success; the runtime contract test checks status range and failure preservation without asserting randomness. |
 
 ## Implementation sequence for the remaining partial inventory
 
