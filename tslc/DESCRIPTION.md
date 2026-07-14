@@ -137,6 +137,13 @@ recursive `tuple[Segment, ...]`:
   syntax-only helpers in [ir/region_syntax.py](src/tslc/ir/region_syntax.py) and
   whose `(...)` payload is recursively scanned.
 
+`let<type>(Name, ...)` creates a typed lowering binding rather than a target-language
+declaration. TSIL-owned type positions resolve it directly, for example
+`cast<static>(Name, value)` or `var<typed>(Name, local, init)`. Use `type(Name)` only
+to insert its spelling into otherwise raw target text. A bare `Name` inside `RawText`
+is ordinary target text and is never searched or rewritten, including in comments,
+literals, and Rust lifetimes.
+
 The descriptor registry
 ([ir/region_registry.py](src/tslc/ir/region_registry.py)) is the lexical source
 of truth consumed by scanning and shell validation. The typed lower-owned
@@ -196,7 +203,8 @@ Backends differ idiomatically (a `BackendDialect`,
 spellings, intrinsic composition, call syntax, and unsafe framing). The
 [backend registry](src/tslc/backend/registry.py) owns each backend's dialect
 factory, artifact media type and renderers, documentation formatter, validation,
-helper manifest, value-test/benchmark support, verification adapter, and
+helper manifest, value-test support, optional benchmark planner and renderer,
+verification adapter, and
 post-generation formatting/documentation specs. Signature type
 projection machinery and the concrete C++/Rust projection tables are co-located
 in [backend/signature_types.py](src/tslc/backend/signature_types.py), then shared

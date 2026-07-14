@@ -13,8 +13,8 @@ sources -> parse -> catalog -> select -> scan body -> lower -> finalize/validate
 - **`sources`** reads `.tsl` files (the only filesystem-read boundary).
 - **`syntax`** parses outer declarations + TSIL body envelopes (Lark, ported).
 - **`catalog`** promotes the parse tree into a typed, immutable domain model.
-- **`select`** chooses an implementation for an explicit `Target`
-  (backend × extension × type), expanding type groups and extension fallbacks.
+- **`select`** chooses implementations for one machine profile and registered backend,
+  producing explicit extension × type slots while expanding type groups and fallbacks.
 - **`ir`** models a TSIL body as a recursive sequence of `[raw text | region]`
   segments — *not* an abstract syntax tree. Raw target-language text passes
   through verbatim; only recognized TSIL keyword islands are lowered.

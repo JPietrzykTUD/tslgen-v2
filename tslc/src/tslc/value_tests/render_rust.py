@@ -78,6 +78,7 @@ def _render_case(case: ValueTestCasePlan) -> str:
 RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
     backend_id="rust",
     supports_differential=True,
+    overload_inference_placeholders=1,
     case_renderers={
         "array_to_vector": _array_to_vector,
         "broadcast": _broadcast,

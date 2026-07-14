@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from tslc.lower.context import (
     LoweringSession,
+    SimdTypeParameterValue,
     VectorSpellingPolicy,
     VectorValue,
 )
+from tslc.lower.queries import QueryEvaluator, QueryValue, TextValue, TypeValue
+from tslc.target_text import RenderField, literal_text
 
 
 def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None:
@@ -37,3 +40,41 @@ def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None
             base, value.extension_isa, lanes
         )
     return context.env.backend.types.vector_type_spelling(base, value.extension_isa)
+
+
+def _type_value_spelling(
+    value: QueryValue, context: LoweringSession
+) -> RenderField | None:
+    """Render an already-evaluated value in a TSIL-owned type position."""
+
+    if isinstance(value, TextValue):
+        return value.text
+    if isinstance(value, TypeValue):
+        return context.env.backend.types.scalar_spelling(value.type_tag)
+    if isinstance(value, VectorValue):
+        return _vector_spelling(value, context)
+    if isinstance(value, SimdTypeParameterValue):
+        return literal_text(value.name)
+    return None
+
+
+def _resolve_type_expression(
+    text: str,
+    context: LoweringSession,
+    evaluator: QueryEvaluator,
+    *,
+    fallback: RenderField | None = None,
+) -> tuple[QueryValue, RenderField] | None:
+    """Evaluate one contextually typed TSIL argument and return value plus spelling.
+
+    ``fallback`` preserves explicitly structured target-type expressions such as
+    ``array_type<type(base::in), value(vector::length)>``. It is used only when the
+    argument is not a query expression; a query that evaluates to a non-type value
+    remains invalid.
+    """
+
+    value = evaluator.evaluate(text, context)
+    if value is None:
+        return None if fallback is None else (TextValue(fallback), fallback)
+    spelling = _type_value_spelling(value, context)
+    return None if spelling is None else (value, spelling)

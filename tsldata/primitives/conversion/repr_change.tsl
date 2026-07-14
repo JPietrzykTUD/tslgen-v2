@@ -181,10 +181,10 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
               reasons []
             implementation:
               tsl """
-                  let<type>(OutVec, type(vector::as_extension(ToExtension)));
+                  let<type>(OutVec, vector::as_extension(ToExtension));
                   var<infer>(result, call<primitive=set_zero[OutVec]>());
                   var<const_infer>(start,
-                    cast<static>(type(scalar::size), index) * value(generic::length(OutVec))
+                    cast<static>(scalar::size, index) * value(generic::length(OutVec))
                   );
                   loop<generation, scoped>(i, 0, value(generic::length(OutVec)), 1) {
                     result[value(i)] = data[start + value(i)];
@@ -204,10 +204,10 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
               reasons []
             implementation:
               tsl """
-                  let<type>(OutVec, type(vector::as_extension(ToExtension)));
+                  let<type>(OutVec, vector::as_extension(ToExtension));
                   var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  var<const_infer>(start, cast<static>(type(scalar::size), index) * value(generic::length(OutVec)));
+                  var<const_infer>(start, cast<static>(scalar::size, index) * value(generic::length(OutVec)));
                   loop<backend>(i, 0, value(generic::length(OutVec)), 1) {
                     result[i] = values[start + i];
                   }
@@ -228,9 +228,9 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
               reasons []
             implementation:
               tsl """
-                  let<type>(OutVec, type(vector::as_extension(ToExtension)));
+                  let<type>(OutVec, vector::as_extension(ToExtension));
                   var<infer>(result, call<primitive=set_zero[OutVec]>());
-                  var<const_infer>(start, cast<static>(type(scalar::size), index) * value(generic::length(OutVec)));
+                  var<const_infer>(start, cast<static>(scalar::size, index) * value(generic::length(OutVec)));
                   loop<backend>(i, 0, value(generic::length(OutVec)), 1) {
                     result[i] = data[start + i];
                   }
@@ -267,10 +267,10 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
               reasons []
             implementation:
               tsl """
-                  let<type>(OutVec, type(vector::as_extension(ToExtension)));
+                  let<type>(OutVec, vector::as_extension(ToExtension));
                   var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  var<const_infer>(start, cast<static>(type(scalar::size), index) * value(generic::length(OutVec)));
+                  var<const_infer>(start, cast<static>(scalar::size, index) * value(generic::length(OutVec)));
                   loop<backend>(i, 0, value(generic::length(OutVec)), 1) {
                     result[i] = values[start + i];
                   }
@@ -425,7 +425,7 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
               tsl """
                   var<infer>(result, orig);
                   var<const_infer>(start,
-                    cast<static>(type(scalar::size), index) * value(vector::length)
+                    cast<static>(scalar::size, index) * value(vector::length)
                   );
                   loop<generation, scoped>(i, 0, value(vector::length), 1) {
                     result[start + value(i)] = data[value(i)];
@@ -445,10 +445,10 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
               reasons []
             implementation:
               tsl """
-                  let<type>(OutVec, type(vector::as_extension(ToExtension)));
+                  let<type>(OutVec, vector::as_extension(ToExtension));
                   var<infer>(result, call<primitive=to_array[OutVec]>(orig));
                   var<const_infer>(chunk, call<primitive=to_array[Vec]>(data));
-                  var<const_infer>(start, cast<static>(type(scalar::size), index) * value(vector::length));
+                  var<const_infer>(start, cast<static>(scalar::size, index) * value(vector::length));
                   loop<backend>(i, 0, value(vector::length), 1) {
                     result[start + i] = chunk[i];
                   }
@@ -469,9 +469,9 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
               reasons []
             implementation:
               tsl """
-                  let<type>(OutVec, type(vector::as_extension(ToExtension)));
+                  let<type>(OutVec, vector::as_extension(ToExtension));
                   var<infer>(result, orig);
-                  var<const_infer>(start, cast<static>(type(scalar::size), index) * value(vector::length));
+                  var<const_infer>(start, cast<static>(scalar::size, index) * value(vector::length));
                   loop<backend>(i, 0, value(vector::length), 1) {
                     result[start + i] = data[i];
                   }
@@ -699,10 +699,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  if<generation>(value(type::is_signed(type(base::in)))) {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi16>(call<primitive=extract[Vec, sse, index]>(data))));
+                  if<generation>(value(type::is_signed(base::in))) {
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi8_epi16>(call<primitive=extract[Vec, sse, index]>(data))));
                   } else {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi16>(call<primitive=extract[Vec, sse, index]>(data))));
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu8_epi16>(call<primitive=extract[Vec, sse, index]>(data))));
                   }
                 """
           ?i32:
@@ -714,41 +714,41 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi32>(call<primitive=extract[Vec, sse, 0]>(data))));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi8_epi32>(call<primitive=extract[Vec, sse, 0]>(data))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi32>(call<primitive=extract[Vec, sse, 0]>(data))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu8_epi32>(call<primitive=extract[Vec, sse, 0]>(data))));
                       }
                     }
                     1 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 0]>(data));
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin<_mm_srli_si128>(chunk, 8))));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi8_epi32>(intrin<_mm_srli_si128>(chunk, 8))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin<_mm_srli_si128>(chunk, 8))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu8_epi32>(intrin<_mm_srli_si128>(chunk, 8))));
                       }
                     }
                     2 => {
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi32>(call<primitive=extract[Vec, sse, 1]>(data))));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi8_epi32>(call<primitive=extract[Vec, sse, 1]>(data))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi32>(call<primitive=extract[Vec, sse, 1]>(data))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu8_epi32>(call<primitive=extract[Vec, sse, 1]>(data))));
                       }
                     }
                     3 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 1]>(data));
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin<_mm_srli_si128>(chunk, 8))));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi8_epi32>(intrin<_mm_srli_si128>(chunk, 8))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin<_mm_srli_si128>(chunk, 8))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu8_epi32>(intrin<_mm_srli_si128>(chunk, 8))));
                       }
                     }
                     _ => {
-                      let<type>(OutVec, type(vector::window_base(ToBase)));
-                      let<type>(To, type(base::generic(OutVec)));
+                      let<type>(OutVec, vector::window_base(ToBase));
+                      let<type>(To, base::generic(OutVec));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type(scalar::size), index) * value(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(scalar::size, index) * value(generic::length(OutVec)));
                       loop<backend>(i, 0, value(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -765,73 +765,73 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi8_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu8_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
                       }
                     }
                     1 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 0]>(data));
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 4))));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 4))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 4))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 4))));
                       }
                     }
                     2 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 0]>(data));
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       }
                     }
                     3 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 0]>(data));
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 12))));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 12))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 12))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 12))));
                       }
                     }
                     4 => {
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(call<primitive=extract[Vec, sse, 1]>(data))));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi8_epi64>(call<primitive=extract[Vec, sse, 1]>(data))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(call<primitive=extract[Vec, sse, 1]>(data))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu8_epi64>(call<primitive=extract[Vec, sse, 1]>(data))));
                       }
                     }
                     5 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 1]>(data));
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 4))));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 4))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 4))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 4))));
                       }
                     }
                     6 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 1]>(data));
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       }
                     }
                     7 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 1]>(data));
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 12))));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 12))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 12))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 12))));
                       }
                     }
                     _ => {
-                      let<type>(OutVec, type(vector::window_base(ToBase)));
-                      let<type>(To, type(base::generic(OutVec)));
+                      let<type>(OutVec, vector::window_base(ToBase));
+                      let<type>(To, base::generic(OutVec));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type(scalar::size), index) * value(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(scalar::size, index) * value(generic::length(OutVec)));
                       loop<backend>(i, 0, value(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -849,10 +849,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  if<generation>(value(type::is_same(type(base::in), si16))) {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi32>(call<primitive=extract[Vec, sse, index]>(data))));
+                  if<generation>(value(type::is_same(base::in, si16))) {
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi16_epi32>(call<primitive=extract[Vec, sse, index]>(data))));
                   } else {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi32>(call<primitive=extract[Vec, sse, index]>(data))));
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu16_epi32>(call<primitive=extract[Vec, sse, index]>(data))));
                   }
                 """
           ?i64:
@@ -864,41 +864,41 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      if<generation>(value(type::is_same(type(base::in), si16))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
+                      if<generation>(value(type::is_same(base::in, si16))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi16_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu16_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
                       }
                     }
                     1 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 0]>(data));
-                      if<generation>(value(type::is_same(type(base::in), si16))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                      if<generation>(value(type::is_same(base::in, si16))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi16_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu16_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       }
                     }
                     2 => {
-                      if<generation>(value(type::is_same(type(base::in), si16))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi64>(call<primitive=extract[Vec, sse, 1]>(data))));
+                      if<generation>(value(type::is_same(base::in, si16))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi16_epi64>(call<primitive=extract[Vec, sse, 1]>(data))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi64>(call<primitive=extract[Vec, sse, 1]>(data))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu16_epi64>(call<primitive=extract[Vec, sse, 1]>(data))));
                       }
                     }
                     3 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 1]>(data));
-                      if<generation>(value(type::is_same(type(base::in), si16))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                      if<generation>(value(type::is_same(base::in, si16))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi16_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu16_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       }
                     }
                     _ => {
-                      let<type>(OutVec, type(vector::window_base(ToBase)));
-                      let<type>(To, type(base::generic(OutVec)));
+                      let<type>(OutVec, vector::window_base(ToBase));
+                      let<type>(To, base::generic(OutVec));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type(scalar::size), index) * value(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(scalar::size, index) * value(generic::length(OutVec)));
                       loop<backend>(i, 0, value(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -916,10 +916,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  if<generation>(value(type::is_same(type(base::in), si32))) {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepi32_epi64>(call<primitive=extract[Vec, sse, index]>(data))));
+                  if<generation>(value(type::is_same(base::in, si32))) {
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepi32_epi64>(call<primitive=extract[Vec, sse, index]>(data))));
                   } else {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtepu32_epi64>(call<primitive=extract[Vec, sse, index]>(data))));
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtepu32_epi64>(call<primitive=extract[Vec, sse, index]>(data))));
                   }
                 """
       f32:
@@ -932,7 +932,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm256_cvtps_pd>(call<primitive=extract[Vec, sse, index]>(data))));
+                  complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm256_cvtps_pd>(call<primitive=extract[Vec, sse, index]>(data))));
                 """
     avx512:
       ?i8:
@@ -946,10 +946,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  if<generation>(value(type::is_same(type(base::in), si8))) {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi16>(call<primitive=extract[Vec, avx2, index]>(data))));
+                  if<generation>(value(type::is_same(base::in, si8))) {
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepi8_epi16>(call<primitive=extract[Vec, avx2, index]>(data))));
                   } else {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi16>(call<primitive=extract[Vec, avx2, index]>(data))));
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepu8_epi16>(call<primitive=extract[Vec, avx2, index]>(data))));
                   }
                 """
           ?i32:
@@ -959,10 +959,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  if<generation>(value(type::is_same(type(base::in), si8))) {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi32>(call<primitive=extract[Vec, sse, index]>(data))));
+                  if<generation>(value(type::is_same(base::in, si8))) {
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepi8_epi32>(call<primitive=extract[Vec, sse, index]>(data))));
                   } else {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi32>(call<primitive=extract[Vec, sse, index]>(data))));
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepu8_epi32>(call<primitive=extract[Vec, sse, index]>(data))));
                   }
                 """
           ?i64:
@@ -974,71 +974,71 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      if<generation>(value(type::is_same(type(base::in), si8))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
+                      if<generation>(value(type::is_same(base::in, si8))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepi8_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepu8_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
                       }
                     }
                     1 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 0]>(data));
-                      if<generation>(value(type::is_same(type(base::in), si8))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                      if<generation>(value(type::is_same(base::in, si8))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       }
                     }
                     2 => {
-                      if<generation>(value(type::is_same(type(base::in), si8))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(call<primitive=extract[Vec, sse, 1]>(data))));
+                      if<generation>(value(type::is_same(base::in, si8))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepi8_epi64>(call<primitive=extract[Vec, sse, 1]>(data))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(call<primitive=extract[Vec, sse, 1]>(data))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepu8_epi64>(call<primitive=extract[Vec, sse, 1]>(data))));
                       }
                     }
                     3 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 1]>(data));
-                      if<generation>(value(type::is_same(type(base::in), si8))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                      if<generation>(value(type::is_same(base::in, si8))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       }
                     }
                     4 => {
-                      if<generation>(value(type::is_same(type(base::in), si8))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(call<primitive=extract[Vec, sse, 2]>(data))));
+                      if<generation>(value(type::is_same(base::in, si8))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepi8_epi64>(call<primitive=extract[Vec, sse, 2]>(data))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(call<primitive=extract[Vec, sse, 2]>(data))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepu8_epi64>(call<primitive=extract[Vec, sse, 2]>(data))));
                       }
                     }
                     5 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 2]>(data));
-                      if<generation>(value(type::is_same(type(base::in), si8))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                      if<generation>(value(type::is_same(base::in, si8))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       }
                     }
                     6 => {
-                      if<generation>(value(type::is_same(type(base::in), si8))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(call<primitive=extract[Vec, sse, 3]>(data))));
+                      if<generation>(value(type::is_same(base::in, si8))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepi8_epi64>(call<primitive=extract[Vec, sse, 3]>(data))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(call<primitive=extract[Vec, sse, 3]>(data))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepu8_epi64>(call<primitive=extract[Vec, sse, 3]>(data))));
                       }
                     }
                     7 => {
                       var<const_infer>(chunk, call<primitive=extract[Vec, sse, 3]>(data));
-                      if<generation>(value(type::is_same(type(base::in), si8))) {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                      if<generation>(value(type::is_same(base::in, si8))) {
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       } else {
-                        complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
+                        complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(chunk, 8))));
                       }
                     }
                     _ => {
-                      let<type>(OutVec, type(vector::window_base(ToBase)));
-                      let<type>(To, type(base::generic(OutVec)));
+                      let<type>(OutVec, vector::window_base(ToBase));
+                      let<type>(To, base::generic(OutVec));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type(scalar::size), index) * value(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(scalar::size, index) * value(generic::length(OutVec)));
                       loop<backend>(i, 0, value(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -1057,10 +1057,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  if<generation>(value(type::is_same(type(base::in), si16))) {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepi16_epi32>(call<primitive=extract[Vec, avx2, index]>(data))));
+                  if<generation>(value(type::is_same(base::in, si16))) {
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepi16_epi32>(call<primitive=extract[Vec, avx2, index]>(data))));
                   } else {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepu16_epi32>(call<primitive=extract[Vec, avx2, index]>(data))));
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepu16_epi32>(call<primitive=extract[Vec, avx2, index]>(data))));
                   }
                 """
           ?i64:
@@ -1070,10 +1070,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  if<generation>(value(type::is_same(type(base::in), si16))) {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepi16_epi64>(call<primitive=extract[Vec, sse, index]>(data))));
+                  if<generation>(value(type::is_same(base::in, si16))) {
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepi16_epi64>(call<primitive=extract[Vec, sse, index]>(data))));
                   } else {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepu16_epi64>(call<primitive=extract[Vec, sse, index]>(data))));
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepu16_epi64>(call<primitive=extract[Vec, sse, index]>(data))));
                   }
                 """
       ?i32:
@@ -1086,10 +1086,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  if<generation>(value(type::is_same(type(base::in), si32))) {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepi32_epi64>(call<primitive=extract[Vec, avx2, index]>(data))));
+                  if<generation>(value(type::is_same(base::in, si32))) {
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepi32_epi64>(call<primitive=extract[Vec, avx2, index]>(data))));
                   } else {
-                    complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtepu32_epi64>(call<primitive=extract[Vec, avx2, index]>(data))));
+                    complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtepu32_epi64>(call<primitive=extract[Vec, avx2, index]>(data))));
                   }
                 """
       f32:
@@ -1102,7 +1102,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  complete(cast<reinterpret>(type(register::generic(type(vector::window_base(ToBase)))), intrin<_mm512_cvtps_pd>(call<primitive=extract[Vec, avx2, index]>(data))));
+                  complete(cast<reinterpret>(register::generic(vector::window_base(ToBase)), intrin<_mm512_cvtps_pd>(call<primitive=extract[Vec, avx2, index]>(data))));
                 """
     neon:
       ?i8:
@@ -1117,13 +1117,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl, build[suffix=base::in]>(intrin<vget_low, build[suffix=base::in]>(data))));
+                      complete(cast<reinterpret>(register::generic(ToType), intrin<vmovl, build[suffix=base::in]>(intrin<vget_low, build[suffix=base::in]>(data))));
                     }
                     1 => {
-                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl_high, build[suffix=base::in]>(data)));
+                      complete(cast<reinterpret>(register::generic(ToType), intrin<vmovl_high, build[suffix=base::in]>(data)));
                     }
                     _ => {
-                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl_high, build[suffix=base::in]>(data)));
+                      complete(cast<reinterpret>(register::generic(ToType), intrin<vmovl_high, build[suffix=base::in]>(data)));
                     }
                   }
                 """
@@ -1201,13 +1201,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl, build[suffix=base::in]>(intrin<vget_low, build[suffix=base::in]>(data))));
+                      complete(cast<reinterpret>(register::generic(ToType), intrin<vmovl, build[suffix=base::in]>(intrin<vget_low, build[suffix=base::in]>(data))));
                     }
                     1 => {
-                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl_high, build[suffix=base::in]>(data)));
+                      complete(cast<reinterpret>(register::generic(ToType), intrin<vmovl_high, build[suffix=base::in]>(data)));
                     }
                     _ => {
-                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl_high, build[suffix=base::in]>(data)));
+                      complete(cast<reinterpret>(register::generic(ToType), intrin<vmovl_high, build[suffix=base::in]>(data)));
                     }
                   }
                 """
@@ -1248,13 +1248,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl, build[suffix=base::in]>(intrin<vget_low, build[suffix=base::in]>(data))));
+                      complete(cast<reinterpret>(register::generic(ToType), intrin<vmovl, build[suffix=base::in]>(intrin<vget_low, build[suffix=base::in]>(data))));
                     }
                     1 => {
-                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl_high, build[suffix=base::in]>(data)));
+                      complete(cast<reinterpret>(register::generic(ToType), intrin<vmovl_high, build[suffix=base::in]>(data)));
                     }
                     _ => {
-                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vmovl_high, build[suffix=base::in]>(data)));
+                      complete(cast<reinterpret>(register::generic(ToType), intrin<vmovl_high, build[suffix=base::in]>(data)));
                     }
                   }
                 """
@@ -1270,13 +1270,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vcvt_f64_f32>(intrin<vget_low_f32>(data))));
+                      complete(cast<reinterpret>(register::generic(ToType), intrin<vcvt_f64_f32>(intrin<vget_low_f32>(data))));
                     }
                     1 => {
-                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vcvt_high_f64_f32>(data)));
+                      complete(cast<reinterpret>(register::generic(ToType), intrin<vcvt_high_f64_f32>(data)));
                     }
                     _ => {
-                      complete(cast<reinterpret>(type(register::generic(ToType)), intrin<vcvt_high_f64_f32>(data)));
+                      complete(cast<reinterpret>(register::generic(ToType), intrin<vcvt_high_f64_f32>(data)));
                     }
                   }
                 """
@@ -1293,28 +1293,28 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        let<type>(StepBase, type(scalar::si16));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        let<type>(StepBase, scalar::si16);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpklo_s16>(data)));
                       } else {
-                        let<type>(StepBase, type(scalar::ui16));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                        let<type>(StepBase, scalar::ui16);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpklo_u16>(data)));
                       }
                     }
                     _ => {
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        let<type>(StepBase, type(scalar::si16));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        let<type>(StepBase, scalar::si16);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpkhi_s16>(data)));
                       } else {
-                        let<type>(StepBase, type(scalar::ui16));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                        let<type>(StepBase, scalar::ui16);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpkhi_u16>(data)));
                       }
                     }
@@ -1327,8 +1327,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  if<generation>(value(type::is_signed(type(base::in)))) {
-                    let<type>(StepVec, type(vector::as_base(type(scalar::si16))));
+                  if<generation>(value(type::is_signed(base::in))) {
+                    let<type>(StepVec, vector::as_base(scalar::si16));
                     switch<compile>(index) {
                       0 => {
                         complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpklo_s16>(data)));
@@ -1344,7 +1344,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       }
                     }
                   } else {
-                    let<type>(StepVec, type(vector::as_base(type(scalar::ui16))));
+                    let<type>(StepVec, vector::as_base(scalar::ui16));
                     switch<compile>(index) {
                       0 => {
                         complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpklo_u16>(data)));
@@ -1368,8 +1368,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  if<generation>(value(type::is_signed(type(base::in)))) {
-                    let<type>(StepVec, type(vector::as_base(type(scalar::si16))));
+                  if<generation>(value(type::is_signed(base::in))) {
+                    let<type>(StepVec, vector::as_base(scalar::si16));
                     switch<compile>(index) {
                       0 => {
                         complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpklo_s16>(data)));
@@ -1397,7 +1397,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       }
                     }
                   } else {
-                    let<type>(StepVec, type(vector::as_base(type(scalar::ui16))));
+                    let<type>(StepVec, vector::as_base(scalar::ui16));
                     switch<compile>(index) {
                       0 => {
                         complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpklo_u16>(data)));
@@ -1438,41 +1438,41 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        let<type>(StepBase, type(scalar::si32));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        let<type>(StepBase, scalar::si32);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpklo_s32>(data)));
                       } else {
-                        let<type>(StepBase, type(scalar::ui32));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                        let<type>(StepBase, scalar::ui32);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpklo_u32>(data)));
                       }
                     }
                     1 => {
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        let<type>(StepBase, type(scalar::si32));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        let<type>(StepBase, scalar::si32);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpkhi_s32>(data)));
                       } else {
-                        let<type>(StepBase, type(scalar::ui32));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                        let<type>(StepBase, scalar::ui32);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpkhi_u32>(data)));
                       }
                     }
                     _ => {
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        let<type>(StepBase, type(scalar::si32));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        let<type>(StepBase, scalar::si32);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpkhi_s32>(data)));
                       } else {
-                        let<type>(StepBase, type(scalar::ui32));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                        let<type>(StepBase, scalar::ui32);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpkhi_u32>(data)));
                       }
                     }
@@ -1485,8 +1485,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  if<generation>(value(type::is_signed(type(base::in)))) {
-                    let<type>(StepVec, type(vector::as_base(type(scalar::si32))));
+                  if<generation>(value(type::is_signed(base::in))) {
+                    let<type>(StepVec, vector::as_base(scalar::si32));
                     switch<compile>(index) {
                       0 => {
                         complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpklo_s32>(data)));
@@ -1502,7 +1502,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       }
                     }
                   } else {
-                    let<type>(StepVec, type(vector::as_base(type(scalar::ui32))));
+                    let<type>(StepVec, vector::as_base(scalar::ui32));
                     switch<compile>(index) {
                       0 => {
                         complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpklo_u32>(data)));
@@ -1531,41 +1531,41 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        let<type>(StepBase, type(scalar::si64));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        let<type>(StepBase, scalar::si64);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpklo_s64>(data)));
                       } else {
-                        let<type>(StepBase, type(scalar::ui64));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                        let<type>(StepBase, scalar::ui64);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpklo_u64>(data)));
                       }
                     }
                     1 => {
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        let<type>(StepBase, type(scalar::si64));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        let<type>(StepBase, scalar::si64);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpkhi_s64>(data)));
                       } else {
-                        let<type>(StepBase, type(scalar::ui64));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                        let<type>(StepBase, scalar::ui64);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpkhi_u64>(data)));
                       }
                     }
                     _ => {
-                      if<generation>(value(type::is_signed(type(base::in)))) {
-                        let<type>(StepBase, type(scalar::si64));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                      if<generation>(value(type::is_signed(base::in))) {
+                        let<type>(StepBase, scalar::si64);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpkhi_s64>(data)));
                       } else {
-                        let<type>(StepBase, type(scalar::ui64));
-                        let<type>(StepVec, type(vector::as_base(StepBase)));
-                        let<type>(OutVec, type(vector::as_base(ToBase)));
+                        let<type>(StepBase, scalar::ui64);
+                        let<type>(StepVec, vector::as_base(StepBase));
+                        let<type>(OutVec, vector::as_base(ToBase));
                         complete(call<primitive=reinterpret[StepVec, OutVec]>(intrin<svunpkhi_u64>(data)));
                       }
                     }
@@ -1586,9 +1586,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       complete(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     _ => {
-                      let<type>(OutVec, type(vector::window_base(ToBase)));
-                      let<type>(OutBase, type(base::generic(OutVec)));
-                      let<type>(IndexVec, type(vector::as_base(ui32)));
+                      let<type>(OutVec, vector::window_base(ToBase));
+                      let<type>(OutBase, base::generic(OutVec));
+                      let<type>(IndexVec, vector::as_base(ui32));
                       var<const_infer>(out_lanes, value(generic::runtime_length(OutVec)));
                       var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
                       var<const_infer>(high, call<primitive=greater_than_or_equal[IndexVec]>(
@@ -1615,9 +1615,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       complete(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     _ => {
-                      let<type>(OutVec, type(vector::window_base(ToBase)));
-                      let<type>(OutBase, type(base::generic(OutVec)));
-                      let<type>(IndexVec, type(vector::as_base(ui32)));
+                      let<type>(OutVec, vector::window_base(ToBase));
+                      let<type>(OutBase, base::generic(OutVec));
+                      let<type>(IndexVec, vector::as_base(ui32));
                       var<const_infer>(out_lanes, value(generic::runtime_length(OutVec)));
                       var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
                       var<const_infer>(high, call<primitive=greater_than_or_equal[IndexVec]>(
@@ -1638,10 +1638,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
           reasons []
         implementation:
           tsl """
-              let<type>(OutVec, type(vector::window_base(ToBase)));
-              let<type>(OutBase, type(base::generic(OutVec)));
+              let<type>(OutVec, vector::window_base(ToBase));
+              let<type>(OutBase, base::generic(OutVec));
               var<infer>(result, call<primitive=set_zero[OutVec]>());
-              var<const_infer>(start, cast<static>(type(scalar::size), index) * value(generic::length(OutVec)));
+              var<const_infer>(start, cast<static>(scalar::size, index) * value(generic::length(OutVec)));
               loop<generation>(i, 0, value(generic::length(OutVec)), 1) {
                 result[value(i)] = cast<static>(OutBase, data[start + value(i)]);
               }
@@ -1658,7 +1658,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                if<generation>(value(type::is_signed(type(base::in)))) {
+                if<generation>(value(type::is_signed(base::in))) {
                   switch<compile>(index) {
                     0 => { complete(intrin<i16x8_extend_low_i8x16, build[suffix=""]>(data)); }
                     _ => { complete(intrin<i16x8_extend_high_i8x16, build[suffix=""]>(data)); }
@@ -1677,12 +1677,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons []
             implementation:
               tsil """
-                let<type>(StepBase, type(select(
-                  value(type::is_signed(type(base::in))),
-                  type(scalar::si16),
-                  type(scalar::ui16)
-                )));
-                let<type>(StepVec, type(vector::as_base(StepBase)));
+                let<type>(StepBase, select(
+                  type::is_signed(base::in),
+                  scalar::si16,
+                  scalar::ui16
+                ));
+                let<type>(StepVec, vector::as_base(StepBase));
                 switch<compile>(index) {
                   0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                   1 => { complete(call<primitive=@self[StepVec, ToBase, 1]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
@@ -1697,12 +1697,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons []
             implementation:
               tsil """
-                let<type>(StepBase, type(select(
-                  value(type::is_signed(type(base::in))),
-                  type(scalar::si16),
-                  type(scalar::ui16)
-                )));
-                let<type>(StepVec, type(vector::as_base(StepBase)));
+                let<type>(StepBase, select(
+                  type::is_signed(base::in),
+                  scalar::si16,
+                  scalar::ui16
+                ));
+                let<type>(StepVec, vector::as_base(StepBase));
                 switch<compile>(index) {
                   0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                   1 => { complete(call<primitive=@self[StepVec, ToBase, 1]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
@@ -1724,7 +1724,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                if<generation>(value(type::is_signed(type(base::in)))) {
+                if<generation>(value(type::is_signed(base::in))) {
                   switch<compile>(index) {
                     0 => { complete(intrin<i32x4_extend_low_i16x8, build[suffix=""]>(data)); }
                     _ => { complete(intrin<i32x4_extend_high_i16x8, build[suffix=""]>(data)); }
@@ -1743,12 +1743,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons []
             implementation:
               tsil """
-                let<type>(StepBase, type(select(
-                  value(type::is_signed(type(base::in))),
-                  type(scalar::si32),
-                  type(scalar::ui32)
-                )));
-                let<type>(StepVec, type(vector::as_base(StepBase)));
+                let<type>(StepBase, select(
+                  type::is_signed(base::in),
+                  scalar::si32,
+                  scalar::ui32
+                ));
+                let<type>(StepVec, vector::as_base(StepBase));
                 switch<compile>(index) {
                   0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                   1 => { complete(call<primitive=@self[StepVec, ToBase, 1]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
@@ -1766,7 +1766,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                if<generation>(value(type::is_signed(type(base::in)))) {
+                if<generation>(value(type::is_signed(base::in))) {
                   switch<compile>(index) {
                     0 => { complete(intrin<i64x2_extend_low_i32x4, build[suffix=""]>(data)); }
                     _ => { complete(intrin<i64x2_extend_high_i32x4, build[suffix=""]>(data)); }
@@ -1791,7 +1791,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 switch<compile>(index) {
                   0 => { complete(intrin<f64x2_promote_low_f32x4, build[suffix=""]>(data)); }
                   _ => {
-                    let<type>(PairVec, type(vector::as_base(si64)));
+                    let<type>(PairVec, vector::as_base(si64));
                     var<const_infer>(pairs, call<primitive=reinterpret[Vec, PairVec]>(data));
                     var<const_infer>(high_pair, call<primitive=set1[PairVec]>(
                       call<primitive=extract_value[PairVec, 1]>(pairs)
@@ -1819,11 +1819,11 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
           reasons []
         implementation:
           tsl """
-              let<type>(OutVec, type(vector::window_base(ToBase)));
-              let<type>(To, type(base::generic(OutVec)));
+              let<type>(OutVec, vector::window_base(ToBase));
+              let<type>(To, base::generic(OutVec));
               var<const_infer>(values, call<primitive=to_array[Vec]>(data));
               var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-              var<const_infer>(start, cast<static>(type(scalar::size), index) * value(generic::length(OutVec)));
+              var<const_infer>(start, cast<static>(scalar::size, index) * value(generic::length(OutVec)));
               loop<backend>(i, 0, value(generic::length(OutVec)), 1) {
                 result[i] = cast<static>(To, values[start + i]);
               }
@@ -1838,8 +1838,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
           reasons []
         implementation:
           tsl """
-              let<type>(OutVec, type(vector::window_base(ToBase)));
-              complete(cast<static>(type(base::generic(OutVec)), data));
+              let<type>(OutVec, vector::window_base(ToBase));
+              complete(cast<static>(base::generic(OutVec), data));
             """
     [generic, oneapi_fpga]:
       arith:
@@ -1853,10 +1853,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
           reasons []
         implementation:
           tsl """
-              let<type>(OutVec, type(vector::window_base(ToBase)));
-              let<type>(To, type(base::generic(OutVec)));
+              let<type>(OutVec, vector::window_base(ToBase));
+              let<type>(To, base::generic(OutVec));
               var<infer>(result, call<primitive=set_zero[OutVec]>());
-              var<const_infer>(start, cast<static>(type(scalar::size), index) * value(generic::length(OutVec)));
+              var<const_infer>(start, cast<static>(scalar::size, index) * value(generic::length(OutVec)));
               loop<backend>(i, 0, value(generic::length(OutVec)), 1) {
                 result[i] = cast<static>(To, data[start + i]);
               }
@@ -1961,13 +1961,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
                   switch<compile>(index) {
                     0 => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packs_epi16>(data, call<primitive=set_zero[Vec]>())));
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packs_epi16>(data, call<primitive=set_zero[Vec]>())));
                     }
                     _ => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packs_epi16>(call<primitive=set_zero[Vec]>(), data)));
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packs_epi16>(call<primitive=set_zero[Vec]>(), data)));
                     }
                   }
                 """
@@ -1978,13 +1978,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
                   switch<compile>(index) {
                     0 => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packus_epi16>(data, call<primitive=set_zero[Vec]>()))) ;
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packus_epi16>(data, call<primitive=set_zero[Vec]>()))) ;
                     }
                     _ => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packus_epi16>(call<primitive=set_zero[Vec]>(), data))) ;
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packus_epi16>(call<primitive=set_zero[Vec]>(), data))) ;
                     }
                   }
                 """
@@ -2000,15 +2000,15 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 255)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 255)));
                   var<const_infer>(clamped, call<primitive=min[Vec]>(data, limit));
                   switch<compile>(index) {
                     0 => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packus_epi16>(clamped, call<primitive=set_zero[Vec]>())));
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packus_epi16>(clamped, call<primitive=set_zero[Vec]>())));
                     }
                     _ => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packus_epi16>(call<primitive=set_zero[Vec]>(), clamped)));
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packus_epi16>(call<primitive=set_zero[Vec]>(), clamped)));
                     }
                   }
                 """
@@ -2019,15 +2019,15 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 127)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 127)));
                   var<const_infer>(clamped, call<primitive=min[Vec]>(data, limit));
                   switch<compile>(index) {
                     0 => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packs_epi16>(clamped, call<primitive=set_zero[Vec]>()))) ;
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packs_epi16>(clamped, call<primitive=set_zero[Vec]>()))) ;
                     }
                     _ => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packs_epi16>(call<primitive=set_zero[Vec]>(), clamped))) ;
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packs_epi16>(call<primitive=set_zero[Vec]>(), clamped))) ;
                     }
                   }
                 """
@@ -2043,13 +2043,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
                   switch<compile>(index) {
                     0 => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packs_epi32>(data, call<primitive=set_zero[Vec]>())));
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packs_epi32>(data, call<primitive=set_zero[Vec]>())));
                     }
                     _ => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packs_epi32>(call<primitive=set_zero[Vec]>(), data)));
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packs_epi32>(call<primitive=set_zero[Vec]>(), data)));
                     }
                   }
                 """
@@ -2063,13 +2063,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
                   switch<compile>(index) {
                     0 => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packus_epi32>(data, call<primitive=set_zero[Vec]>()))) ;
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packus_epi32>(data, call<primitive=set_zero[Vec]>()))) ;
                     }
                     _ => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packus_epi32>(call<primitive=set_zero[Vec]>(), data))) ;
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packus_epi32>(call<primitive=set_zero[Vec]>(), data))) ;
                     }
                   }
                 """
@@ -2085,17 +2085,17 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
                   var<const_infer>(clamped, call<primitive=min[Vec]>(
                     data,
-                    call<primitive=set1[Vec]>(cast<static>(type(base::in), 65535))
+                    call<primitive=set1[Vec]>(cast<static>(base::in, 65535))
                   ));
                   switch<compile>(index) {
                     0 => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packus_epi32>(clamped, call<primitive=set_zero[Vec]>())));
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packus_epi32>(clamped, call<primitive=set_zero[Vec]>())));
                     }
                     _ => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packus_epi32>(call<primitive=set_zero[Vec]>(), clamped)));
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packus_epi32>(call<primitive=set_zero[Vec]>(), clamped)));
                     }
                   }
                 """
@@ -2106,17 +2106,17 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
                   var<const_infer>(clamped, call<primitive=min[Vec]>(
                     data,
-                    call<primitive=set1[Vec]>(cast<static>(type(base::in), 32767))
+                    call<primitive=set1[Vec]>(cast<static>(base::in, 32767))
                   ));
                   switch<compile>(index) {
                     0 => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packs_epi32>(clamped, call<primitive=set_zero[Vec]>()))) ;
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packs_epi32>(clamped, call<primitive=set_zero[Vec]>()))) ;
                     }
                     _ => {
-                      complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packs_epi32>(call<primitive=set_zero[Vec]>(), clamped))) ;
+                      complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packs_epi32>(call<primitive=set_zero[Vec]>(), clamped))) ;
                     }
                   }
                 """
@@ -2132,11 +2132,11 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(PackedVec, type(vector::as_base(si16)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(PackedVec, vector::as_base(si16));
                   var<const_infer>(zero, call<primitive=set_zero[Vec]>());
                   var<infer>(nonnegative, data);
-                  if<generation>(value(type::is_signed(type(base::in)))) {
+                  if<generation>(value(type::is_signed(base::in))) {
                     var<const_infer>(negative, call<primitive=greater_than[Vec]>(zero, data));
                     nonnegative = call<primitive=binary_andnot[Vec]>(
                       call<primitive=to_vector[Vec]>(negative),
@@ -2147,7 +2147,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                     call<primitive=shift_right[Vec, false]>(nonnegative, 16),
                     zero
                   ));
-                  var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 65535)));
+                  var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 65535)));
                   var<const_infer>(clamped, call<primitive=blend[Vec]>(
                     within_range,
                     limit,
@@ -2155,10 +2155,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   ));
                   var<const_infer>(biased, call<primitive=sub[Vec]>(
                     clamped,
-                    call<primitive=set1[Vec]>(cast<static>(type(base::in), 32768))
+                    call<primitive=set1[Vec]>(cast<static>(base::in, 32768))
                   ));
                   var<const_infer>(empty, call<primitive=set1[Vec]>(
-                    cast<static>(type(base::in), cast<static>(si32, -32768))
+                    cast<static>(base::in, cast<static>(si32, -32768))
                   ));
                   var<infer>(packed, call<primitive=set_zero[Vec]>());
                   switch<compile>(index) {
@@ -2166,7 +2166,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                     _ => { packed = intrin<_mm_packs_epi32>(empty, biased); }
                   }
                   complete(cast<reinterpret>(
-                    type(register::generic(OutVec)),
+                    register::generic(OutVec),
                     call<primitive=binary_xor[PackedVec]>(
                       packed,
                       call<primitive=set1[PackedVec]>(cast<static>(si16, -32768))
@@ -2180,17 +2180,17 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
                   var<const_infer>(zero, call<primitive=set_zero[Vec]>());
                   var<infer>(clamped, data);
-                  if<generation>(value(type::is_signed(type(base::in)))) {
+                  if<generation>(value(type::is_signed(base::in))) {
                     clamped = data;
                   } else {
                     var<const_infer>(within_range, call<primitive=equal[Vec]>(
                       call<primitive=shift_right[Vec, false]>(data, 15),
                       zero
                     ));
-                    var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 32767)));
+                    var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 32767)));
                     clamped = call<primitive=blend[Vec]>(
                       within_range,
                       limit,
@@ -2198,8 +2198,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                     );
                   }
                   switch<compile>(index) {
-                    0 => { complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packs_epi32>(clamped, zero))); }
-                    _ => { complete(cast<reinterpret>(type(register::generic(OutVec)), intrin<_mm_packs_epi32>(zero, clamped))); }
+                    0 => { complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packs_epi32>(clamped, zero))); }
+                    _ => { complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm_packs_epi32>(zero, clamped))); }
                   }
                 """
           ?i8:
@@ -2209,12 +2209,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                  let<type>(StepBase, type(select(
-                    value(type::is_signed(type(base::in))),
-                    type(scalar::si16),
-                    type(scalar::ui16)
-                  )));
-                  let<type>(StepVec, type(vector::as_base(StepBase)));
+                  let<type>(StepBase, select(
+                    type::is_signed(base::in),
+                    scalar::si16,
+                    scalar::ui16
+                  ));
+                  let<type>(StepVec, vector::as_base(StepBase));
                   switch<compile>(index) {
                     0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                     1 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 1]>(data))); }
@@ -2234,12 +2234,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                  let<type>(StepBase, type(select(
-                    value(type::is_signed(type(base::in))),
-                    type(scalar::si32),
-                    type(scalar::ui32)
-                  )));
-                  let<type>(StepVec, type(vector::as_base(StepBase)));
+                  let<type>(StepBase, select(
+                    type::is_signed(base::in),
+                    scalar::si32,
+                    scalar::ui32
+                  ));
+                  let<type>(StepVec, vector::as_base(StepBase));
                   switch<compile>(index) {
                     0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                     1 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 1]>(data))); }
@@ -2258,12 +2258,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                  let<type>(StepBase, type(select(
-                    value(type::is_signed(type(base::in))),
-                    type(scalar::si32),
-                    type(scalar::ui32)
-                  )));
-                  let<type>(StepVec, type(vector::as_base(StepBase)));
+                  let<type>(StepBase, select(
+                    type::is_signed(base::in),
+                    scalar::si32,
+                    scalar::ui32
+                  ));
+                  let<type>(StepVec, vector::as_base(StepBase));
                   switch<compile>(index) {
                     0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                     1 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 1]>(data))); }
@@ -2278,8 +2278,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(OutBase, type(base::generic(OutVec)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(OutBase, base::generic(OutVec));
                   var<const_infer>(low, cast<saturating>(
                     OutBase,
                     call<primitive=extract_value[Vec, 0]>(data)
@@ -2313,7 +2313,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
                   var<const_infer>(narrowed, intrin<_mm_cvtpd_ps>(data));
                   switch<compile>(index) {
                     0 => { complete(narrowed); }
@@ -2342,9 +2342,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(sse, ToBase)));
-                  var<const_infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm_packs_epi16>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(sse, ToBase));
+                  var<const_infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm_packs_epi16>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
           ui8:
@@ -2354,9 +2354,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(sse, ToBase)));
-                  var<const_infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm_packus_epi16>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(sse, ToBase));
+                  var<const_infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm_packus_epi16>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
       ui16:
@@ -2369,11 +2369,11 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(sse, ToBase)));
-                  var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 255)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(sse, ToBase));
+                  var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 255)));
                   var<const_infer>(clamped, call<primitive=min[Vec]>(data, limit));
-                  var<const_infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm_packus_epi16>(call<primitive=extract[Vec, sse, 0]>(clamped), call<primitive=extract[Vec, sse, 1]>(clamped))));
+                  var<const_infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm_packus_epi16>(call<primitive=extract[Vec, sse, 0]>(clamped), call<primitive=extract[Vec, sse, 1]>(clamped))));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
           si8:
@@ -2383,11 +2383,11 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(sse, ToBase)));
-                  var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 127)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(sse, ToBase));
+                  var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 127)));
                   var<const_infer>(clamped, call<primitive=min[Vec]>(data, limit));
-                  var<const_infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm_packs_epi16>(call<primitive=extract[Vec, sse, 0]>(clamped), call<primitive=extract[Vec, sse, 1]>(clamped))));
+                  var<const_infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm_packs_epi16>(call<primitive=extract[Vec, sse, 0]>(clamped), call<primitive=extract[Vec, sse, 1]>(clamped))));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
       si32:
@@ -2400,9 +2400,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(sse, ToBase)));
-                  var<const_infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm_packs_epi32>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(sse, ToBase));
+                  var<const_infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm_packs_epi32>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
           ui16:
@@ -2412,9 +2412,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(sse, ToBase)));
-                  var<const_infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm_packus_epi32>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(sse, ToBase));
+                  var<const_infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm_packus_epi32>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
       ui32:
@@ -2427,13 +2427,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(sse, ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(sse, ToBase));
                   var<const_infer>(clamped, call<primitive=min[Vec]>(
                     data,
-                    call<primitive=set1[Vec]>(cast<static>(type(base::in), 65535))
+                    call<primitive=set1[Vec]>(cast<static>(base::in, 65535))
                   ));
-                  var<const_infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm_packus_epi32>(call<primitive=extract[Vec, sse, 0]>(clamped), call<primitive=extract[Vec, sse, 1]>(clamped))));
+                  var<const_infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm_packus_epi32>(call<primitive=extract[Vec, sse, 0]>(clamped), call<primitive=extract[Vec, sse, 1]>(clamped))));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
           si16:
@@ -2443,13 +2443,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(sse, ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(sse, ToBase));
                   var<const_infer>(clamped, call<primitive=min[Vec]>(
                     data,
-                    call<primitive=set1[Vec]>(cast<static>(type(base::in), 32767))
+                    call<primitive=set1[Vec]>(cast<static>(base::in, 32767))
                   ));
-                  var<const_infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm_packs_epi32>(call<primitive=extract[Vec, sse, 0]>(clamped), call<primitive=extract[Vec, sse, 1]>(clamped))));
+                  var<const_infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm_packs_epi32>(call<primitive=extract[Vec, sse, 0]>(clamped), call<primitive=extract[Vec, sse, 1]>(clamped))));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
       f64:
@@ -2462,9 +2462,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(sse, ToBase)));
-                  var<const_infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm256_cvtpd_ps>(data)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(sse, ToBase));
+                  var<const_infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm256_cvtpd_ps>(data)));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
       ?i32:
@@ -2477,12 +2477,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                  let<type>(StepBase, type(select(
-                    value(type::is_signed(type(base::in))),
-                    type(scalar::si16),
-                    type(scalar::ui16)
-                  )));
-                  let<type>(StepVec, type(vector::as_base(StepBase)));
+                  let<type>(StepBase, select(
+                    type::is_signed(base::in),
+                    scalar::si16,
+                    scalar::ui16
+                  ));
+                  let<type>(StepVec, vector::as_base(StepBase));
                   switch<compile>(index) {
                     0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                     1 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 1]>(data))); }
@@ -2500,12 +2500,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                  let<type>(StepBase, type(select(
-                    value(type::is_signed(type(base::in))),
-                    type(scalar::si32),
-                    type(scalar::ui32)
-                  )));
-                  let<type>(StepVec, type(vector::as_base(StepBase)));
+                  let<type>(StepBase, select(
+                    type::is_signed(base::in),
+                    scalar::si32,
+                    scalar::ui32
+                  ));
+                  let<type>(StepVec, vector::as_base(StepBase));
                   switch<compile>(index) {
                     0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                     1 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 1]>(data))); }
@@ -2524,12 +2524,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                  let<type>(StepBase, type(select(
-                    value(type::is_signed(type(base::in))),
-                    type(scalar::si32),
-                    type(scalar::ui32)
-                  )));
-                  let<type>(StepVec, type(vector::as_base(StepBase)));
+                  let<type>(StepBase, select(
+                    type::is_signed(base::in),
+                    scalar::si32,
+                    scalar::ui32
+                  ));
+                  let<type>(StepVec, vector::as_base(StepBase));
                   switch<compile>(index) {
                     0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                     1 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 1]>(data))); }
@@ -2544,9 +2544,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(HalfInVec, type(vector::as(sse, type(base::in))));
-                  let<type>(HalfOutVec, type(vector::as(sse, ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(HalfInVec, vector::as(sse, base::in));
+                  let<type>(HalfOutVec, vector::as(sse, ToBase));
                   var<const_infer>(low, call<primitive=@self[HalfInVec, ToBase, 0]>(
                     call<primitive=extract[Vec, sse, 0]>(data)
                   ));
@@ -2579,9 +2579,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(avx2, ToBase)));
-                  var<const_infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm512_cvtsepi16_epi8>(data)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(avx2, ToBase));
+                  var<const_infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm512_cvtsepi16_epi8>(data)));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
       si32:
@@ -2594,10 +2594,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(sse, ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(sse, ToBase));
                   var<const_infer>(chunk, cast<reinterpret>(
-                    type(register::generic(ChunkVec)),
+                    register::generic(ChunkVec),
                     intrin<_mm512_cvtsepi32_epi8>(data)
                   ));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(
@@ -2612,9 +2612,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(avx2, ToBase)));
-                  var<const_infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm512_cvtsepi32_epi16>(data)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(avx2, ToBase));
+                  var<const_infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm512_cvtsepi32_epi16>(data)));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
       ?i16:
@@ -2627,27 +2627,27 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(avx2, ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(avx2, ToBase));
                   var<infer>(clamped, data);
-                  if<generation>(value(type::is_signed(type(base::in)))) {
+                  if<generation>(value(type::is_signed(base::in))) {
                     if<generation>(value(type::is_signed(ToBase))) {
                       clamped = data;
                     } else {
                       clamped = call<primitive=max[Vec]>(data, call<primitive=set_zero[Vec]>());
                     }
                   } else {
-                    var<infer>(limit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 255)));
+                    var<infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 255)));
                     if<generation>(value(type::is_signed(ToBase))) {
-                      limit = call<primitive=set1[Vec]>(cast<static>(type(base::in), 127));
+                      limit = call<primitive=set1[Vec]>(cast<static>(base::in, 127));
                     }
                     clamped = call<primitive=min[Vec]>(data, limit);
                   }
                   var<infer>(chunk, call<primitive=set_zero[ChunkVec]>());
                   if<generation>(value(type::is_signed(ToBase))) {
-                    chunk = cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm512_cvtsepi16_epi8>(clamped));
+                    chunk = cast<reinterpret>(register::generic(ChunkVec), intrin<_mm512_cvtsepi16_epi8>(clamped));
                   } else {
-                    chunk = cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm512_cvtusepi16_epi8>(clamped));
+                    chunk = cast<reinterpret>(register::generic(ChunkVec), intrin<_mm512_cvtusepi16_epi8>(clamped));
                   }
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(
                     call<primitive=set_zero[OutVec]>(),
@@ -2664,27 +2664,27 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(sse, ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(sse, ToBase));
                   var<infer>(clamped, data);
-                  if<generation>(value(type::is_signed(type(base::in)))) {
+                  if<generation>(value(type::is_signed(base::in))) {
                     if<generation>(value(type::is_signed(ToBase))) {
                       clamped = data;
                     } else {
                       clamped = call<primitive=max[Vec]>(data, call<primitive=set_zero[Vec]>());
                     }
                   } else {
-                    var<infer>(limit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 255)));
+                    var<infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 255)));
                     if<generation>(value(type::is_signed(ToBase))) {
-                      limit = call<primitive=set1[Vec]>(cast<static>(type(base::in), 127));
+                      limit = call<primitive=set1[Vec]>(cast<static>(base::in, 127));
                     }
                     clamped = call<primitive=min[Vec]>(data, limit);
                   }
                   var<infer>(chunk, call<primitive=set_zero[ChunkVec]>());
                   if<generation>(value(type::is_signed(ToBase))) {
-                    chunk = cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm512_cvtsepi32_epi8>(clamped));
+                    chunk = cast<reinterpret>(register::generic(ChunkVec), intrin<_mm512_cvtsepi32_epi8>(clamped));
                   } else {
-                    chunk = cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm512_cvtusepi32_epi8>(clamped));
+                    chunk = cast<reinterpret>(register::generic(ChunkVec), intrin<_mm512_cvtusepi32_epi8>(clamped));
                   }
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(
                     call<primitive=set_zero[OutVec]>(),
@@ -2698,27 +2698,27 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(avx2, ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(avx2, ToBase));
                   var<infer>(clamped, data);
-                  if<generation>(value(type::is_signed(type(base::in)))) {
+                  if<generation>(value(type::is_signed(base::in))) {
                     if<generation>(value(type::is_signed(ToBase))) {
                       clamped = data;
                     } else {
                       clamped = call<primitive=max[Vec]>(data, call<primitive=set_zero[Vec]>());
                     }
                   } else {
-                    var<infer>(limit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 65535)));
+                    var<infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 65535)));
                     if<generation>(value(type::is_signed(ToBase))) {
-                      limit = call<primitive=set1[Vec]>(cast<static>(type(base::in), 32767));
+                      limit = call<primitive=set1[Vec]>(cast<static>(base::in, 32767));
                     }
                     clamped = call<primitive=min[Vec]>(data, limit);
                   }
                   var<infer>(chunk, call<primitive=set_zero[ChunkVec]>());
                   if<generation>(value(type::is_signed(ToBase))) {
-                    chunk = cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm512_cvtsepi32_epi16>(clamped));
+                    chunk = cast<reinterpret>(register::generic(ChunkVec), intrin<_mm512_cvtsepi32_epi16>(clamped));
                   } else {
-                    chunk = cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm512_cvtusepi32_epi16>(clamped));
+                    chunk = cast<reinterpret>(register::generic(ChunkVec), intrin<_mm512_cvtusepi32_epi16>(clamped));
                   }
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(
                     call<primitive=set_zero[OutVec]>(),
@@ -2735,13 +2735,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
                   var<const_infer>(narrowed, intrin<_mm512_cvtsepi64_epi8>(data));
                   var<const_infer>(packed, intrin<_mm_cvtsi128_si64>(narrowed));
                   complete(cast<reinterpret>(
-                    type(register::generic(OutVec)),
+                    register::generic(OutVec),
                     intrin<_mm512_maskz_set1_epi64>(
-                      cast<static>(type(vector::imask), 1 << index),
+                      cast<static>(vector::imask, 1 << index),
                       packed
                     )
                   ));
@@ -2753,10 +2753,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(sse, ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(sse, ToBase));
                   var<const_infer>(chunk, cast<reinterpret>(
-                    type(register::generic(ChunkVec)),
+                    register::generic(ChunkVec),
                     intrin<_mm512_cvtsepi64_epi16>(data)
                   ));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(
@@ -2771,9 +2771,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(avx2, ToBase)));
-                  var<const_infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm512_cvtsepi64_epi32>(data)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(avx2, ToBase));
+                  var<const_infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm512_cvtsepi64_epi32>(data)));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
       ?i64:
@@ -2786,18 +2786,18 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
                   var<infer>(clamped, data);
-                  if<generation>(value(type::is_signed(type(base::in)))) {
+                  if<generation>(value(type::is_signed(base::in))) {
                     if<generation>(value(type::is_signed(ToBase))) {
                       clamped = data;
                     } else {
                       clamped = call<primitive=max[Vec]>(data, call<primitive=set_zero[Vec]>());
                     }
                   } else {
-                    var<infer>(limit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 255)));
+                    var<infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 255)));
                     if<generation>(value(type::is_signed(ToBase))) {
-                      limit = call<primitive=set1[Vec]>(cast<static>(type(base::in), 127));
+                      limit = call<primitive=set1[Vec]>(cast<static>(base::in, 127));
                     }
                     clamped = call<primitive=min[Vec]>(data, limit);
                   }
@@ -2807,9 +2807,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   }
                   var<const_infer>(packed, intrin<_mm_cvtsi128_si64>(narrowed));
                   complete(cast<reinterpret>(
-                    type(register::generic(OutVec)),
+                    register::generic(OutVec),
                     intrin<_mm512_maskz_set1_epi64>(
-                      cast<static>(type(vector::imask), 1 << index),
+                      cast<static>(vector::imask, 1 << index),
                       packed
                     )
                   ));
@@ -2821,29 +2821,29 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(sse, ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(sse, ToBase));
                   var<infer>(clamped, data);
-                  if<generation>(value(type::is_signed(type(base::in)))) {
+                  if<generation>(value(type::is_signed(base::in))) {
                     if<generation>(value(type::is_signed(ToBase))) {
                       clamped = data;
                     } else {
                       clamped = call<primitive=max[Vec]>(data, call<primitive=set_zero[Vec]>());
                     }
                   } else {
-                    var<infer>(limit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 65535)));
+                    var<infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 65535)));
                     if<generation>(value(type::is_signed(ToBase))) {
-                      limit = call<primitive=set1[Vec]>(cast<static>(type(base::in), 32767));
+                      limit = call<primitive=set1[Vec]>(cast<static>(base::in, 32767));
                     }
                     clamped = call<primitive=min[Vec]>(data, limit);
                   }
                   var<infer>(chunk, cast<reinterpret>(
-                    type(register::generic(ChunkVec)),
+                    register::generic(ChunkVec),
                     intrin<_mm512_cvtusepi64_epi16>(clamped)
                   ));
                   if<generation>(value(type::is_signed(ToBase))) {
                     chunk = cast<reinterpret>(
-                      type(register::generic(ChunkVec)),
+                      register::generic(ChunkVec),
                       intrin<_mm512_cvtsepi64_epi16>(clamped)
                     );
                   }
@@ -2859,25 +2859,25 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(avx2, ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(avx2, ToBase));
                   var<infer>(clamped, data);
-                  if<generation>(value(type::is_signed(type(base::in)))) {
+                  if<generation>(value(type::is_signed(base::in))) {
                     if<generation>(value(type::is_signed(ToBase))) {
                       clamped = data;
                     } else {
                       clamped = call<primitive=max[Vec]>(data, call<primitive=set_zero[Vec]>());
                     }
                   } else {
-                    var<infer>(limit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 4294967295)));
+                    var<infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 4294967295)));
                     if<generation>(value(type::is_signed(ToBase))) {
-                      limit = call<primitive=set1[Vec]>(cast<static>(type(base::in), 2147483647));
+                      limit = call<primitive=set1[Vec]>(cast<static>(base::in, 2147483647));
                     }
                     clamped = call<primitive=min[Vec]>(data, limit);
                   }
-                  var<infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm512_cvtusepi64_epi32>(clamped)));
+                  var<infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm512_cvtusepi64_epi32>(clamped)));
                   if<generation>(value(type::is_signed(ToBase))) {
-                    chunk = cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm512_cvtsepi64_epi32>(clamped));
+                    chunk = cast<reinterpret>(register::generic(ChunkVec), intrin<_mm512_cvtsepi64_epi32>(clamped));
                   }
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
@@ -2891,9 +2891,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(ChunkVec, type(vector::as(avx2, ToBase)));
-                  var<const_infer>(chunk, cast<reinterpret>(type(register::generic(ChunkVec)), intrin<_mm512_cvtpd_ps>(data)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(ChunkVec, vector::as(avx2, ToBase));
+                  var<const_infer>(chunk, cast<reinterpret>(register::generic(ChunkVec), intrin<_mm512_cvtpd_ps>(data)));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
       # AVX-512F-only targets (KNL/KML) lack the BW/DQ narrow-result instructions.
@@ -2909,10 +2909,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(InQuarterVec, type(vector::as(sse, type(base::in))));
-                  let<type>(QuarterVec, type(vector::as(sse, ToBase)));
-                  let<type>(ChunkVec, type(vector::as(avx2, ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(InQuarterVec, vector::as(sse, base::in));
+                  let<type>(QuarterVec, vector::as(sse, ToBase));
+                  let<type>(ChunkVec, vector::as(avx2, ToBase));
                   var<const_infer>(low, call<primitive=binary_or[QuarterVec]>(
                     call<primitive=@self[InQuarterVec, ToBase, 0]>(
                       call<primitive=extract[Vec, sse, 0]>(data)
@@ -2949,10 +2949,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                  let<type>(OutVec, type(vector::window_base(ToBase)));
-                  let<type>(HalfInVec, type(vector::as(avx2, type(base::in))));
-                  let<type>(HalfOutVec, type(vector::as(avx2, ToBase)));
-                  let<type>(QuarterVec, type(vector::as(sse, ToBase)));
+                  let<type>(OutVec, vector::window_base(ToBase));
+                  let<type>(HalfInVec, vector::as(avx2, base::in));
+                  let<type>(HalfOutVec, vector::as(avx2, ToBase));
+                  let<type>(QuarterVec, vector::as(sse, ToBase));
                   var<const_infer>(low, call<primitive=extract[HalfOutVec, sse, 0]>(
                     call<primitive=@self[HalfInVec, ToBase, 0]>(
                       call<primitive=extract[Vec, avx2, 0]>(data)
@@ -2989,18 +2989,18 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           reasons [intrinsic]
         implementation:
           tsl """
-              let<type>(OutVec, type(vector::window_base(ToBase)));
-              let<type>(InBase, type(base::in));
-              let<type>(SourceIndexBase, type(base::unsigned_of(InBase)));
-              let<type>(SourceIndexVec, type(vector::as_base(SourceIndexBase)));
-              let<type>(OutBase, type(base::generic(OutVec)));
-              let<type>(IndexBase, type(base::unsigned_of(OutBase)));
-              let<type>(IndexVec, type(vector::as_base(IndexBase)));
+              let<type>(OutVec, vector::window_base(ToBase));
+              let<type>(InBase, base::in);
+              let<type>(SourceIndexBase, base::unsigned_of(InBase));
+              let<type>(SourceIndexVec, vector::as_base(SourceIndexBase));
+              let<type>(OutBase, base::generic(OutVec));
+              let<type>(IndexBase, base::unsigned_of(OutBase));
+              let<type>(IndexVec, vector::as_base(IndexBase));
               var<const_infer>(in_lanes, value(generic::runtime_length(SourceIndexVec)));
               var<const_infer>(source_indexes, call<primitive=sequence[SourceIndexVec]>());
               var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, call<primitive=set_zero[OutVec]>());
-              var<const_infer>(start, cast<static>(type(scalar::size), index) * in_lanes);
+              var<const_infer>(start, cast<static>(scalar::size, index) * in_lanes);
               loop<backend>(i, 0, in_lanes, 1) {
                 var<const_infer>(source_lane, call<primitive=equal[SourceIndexVec]>(
                   source_indexes,
@@ -3027,18 +3027,18 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           reasons [intrinsic]
         implementation:
           tsl """
-              let<type>(OutVec, type(vector::window_base(ToBase)));
-              let<type>(InBase, type(base::in));
-              let<type>(SourceIndexBase, type(base::unsigned_of(InBase)));
-              let<type>(SourceIndexVec, type(vector::as_base(SourceIndexBase)));
-              let<type>(OutBase, type(base::generic(OutVec)));
-              let<type>(IndexBase, type(base::unsigned_of(OutBase)));
-              let<type>(IndexVec, type(vector::as_base(IndexBase)));
+              let<type>(OutVec, vector::window_base(ToBase));
+              let<type>(InBase, base::in);
+              let<type>(SourceIndexBase, base::unsigned_of(InBase));
+              let<type>(SourceIndexVec, vector::as_base(SourceIndexBase));
+              let<type>(OutBase, base::generic(OutVec));
+              let<type>(IndexBase, base::unsigned_of(OutBase));
+              let<type>(IndexVec, vector::as_base(IndexBase));
               var<const_infer>(in_lanes, value(generic::runtime_length(SourceIndexVec)));
               var<const_infer>(source_indexes, call<primitive=sequence[SourceIndexVec]>());
               var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, call<primitive=set_zero[OutVec]>());
-              var<const_infer>(start, cast<static>(type(scalar::size), index) * in_lanes);
+              var<const_infer>(start, cast<static>(scalar::size, index) * in_lanes);
               loop<backend>(i, 0, in_lanes, 1) {
                 var<const_infer>(source_lane, call<primitive=equal[SourceIndexVec]>(
                   source_indexes,
@@ -3065,18 +3065,18 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           reasons [intrinsic]
         implementation:
           tsl """
-              let<type>(OutVec, type(vector::window_base(ToBase)));
-              let<type>(InBase, type(base::in));
-              let<type>(SourceIndexBase, type(base::unsigned_of(InBase)));
-              let<type>(SourceIndexVec, type(vector::as_base(SourceIndexBase)));
-              let<type>(OutBase, type(base::generic(OutVec)));
-              let<type>(IndexBase, type(base::unsigned_of(OutBase)));
-              let<type>(IndexVec, type(vector::as_base(IndexBase)));
+              let<type>(OutVec, vector::window_base(ToBase));
+              let<type>(InBase, base::in);
+              let<type>(SourceIndexBase, base::unsigned_of(InBase));
+              let<type>(SourceIndexVec, vector::as_base(SourceIndexBase));
+              let<type>(OutBase, base::generic(OutVec));
+              let<type>(IndexBase, base::unsigned_of(OutBase));
+              let<type>(IndexVec, vector::as_base(IndexBase));
               var<const_infer>(in_lanes, value(generic::runtime_length(SourceIndexVec)));
               var<const_infer>(source_indexes, call<primitive=sequence[SourceIndexVec]>());
               var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, call<primitive=set_zero[OutVec]>());
-              var<const_infer>(start, cast<static>(type(scalar::size), index) * in_lanes);
+              var<const_infer>(start, cast<static>(scalar::size, index) * in_lanes);
               loop<backend>(i, 0, in_lanes, 1) {
                 var<const_infer>(source_lane, call<primitive=equal[SourceIndexVec]>(
                   source_indexes,
@@ -3103,18 +3103,18 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           reasons [intrinsic]
         implementation:
           tsl """
-              let<type>(OutVec, type(vector::window_base(ToBase)));
-              let<type>(InBase, type(base::in));
-              let<type>(SourceIndexBase, type(base::unsigned_of(InBase)));
-              let<type>(SourceIndexVec, type(vector::as_base(SourceIndexBase)));
-              let<type>(OutBase, type(base::generic(OutVec)));
-              let<type>(IndexBase, type(base::unsigned_of(OutBase)));
-              let<type>(IndexVec, type(vector::as_base(IndexBase)));
+              let<type>(OutVec, vector::window_base(ToBase));
+              let<type>(InBase, base::in);
+              let<type>(SourceIndexBase, base::unsigned_of(InBase));
+              let<type>(SourceIndexVec, vector::as_base(SourceIndexBase));
+              let<type>(OutBase, base::generic(OutVec));
+              let<type>(IndexBase, base::unsigned_of(OutBase));
+              let<type>(IndexVec, vector::as_base(IndexBase));
               var<const_infer>(in_lanes, value(generic::runtime_length(SourceIndexVec)));
               var<const_infer>(source_indexes, call<primitive=sequence[SourceIndexVec]>());
               var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, call<primitive=set_zero[OutVec]>());
-              var<const_infer>(start, cast<static>(type(scalar::size), index) * in_lanes);
+              var<const_infer>(start, cast<static>(scalar::size, index) * in_lanes);
               loop<backend>(i, 0, in_lanes, 1) {
                 var<const_infer>(source_lane, call<primitive=equal[SourceIndexVec]>(
                   source_indexes,
@@ -3146,7 +3146,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               tsil """
                 var<const_infer>(zero, call<primitive=set_zero[Vec]>());
                 var<infer>(clamped, data);
-                if<generation>(value(type::is_signed(type(base::in)))) {
+                if<generation>(value(type::is_signed(base::in))) {
                   if<generation>(value(type::is_signed(ToBase))) {
                     clamped = data;
                   } else {
@@ -3156,7 +3156,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   if<generation>(value(type::is_signed(ToBase))) {
                     clamped = call<primitive=min[Vec]>(
                       data,
-                      call<primitive=set1[Vec]>(cast<static>(type(base::in), 127))
+                      call<primitive=set1[Vec]>(cast<static>(base::in, 127))
                     );
                   } else {
                     clamped = data;
@@ -3184,12 +3184,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                let<type>(StepBase, type(select(
-                  value(type::is_signed(type(base::in))),
-                  type(scalar::si16),
-                  type(scalar::ui16)
-                )));
-                let<type>(StepVec, type(vector::as_base(StepBase)));
+                let<type>(StepBase, select(
+                  type::is_signed(base::in),
+                  scalar::si16,
+                  scalar::ui16
+                ));
+                let<type>(StepVec, vector::as_base(StepBase));
                 switch<compile>(index) {
                   0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                   1 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 1]>(data))); }
@@ -3206,7 +3206,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               tsil """
                 var<const_infer>(zero, call<primitive=set_zero[Vec]>());
                 var<infer>(clamped, data);
-                if<generation>(value(type::is_signed(type(base::in)))) {
+                if<generation>(value(type::is_signed(base::in))) {
                   if<generation>(value(type::is_signed(ToBase))) {
                     clamped = data;
                   } else {
@@ -3216,7 +3216,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   if<generation>(value(type::is_signed(ToBase))) {
                     clamped = call<primitive=min[Vec]>(
                       data,
-                      call<primitive=set1[Vec]>(cast<static>(type(base::in), 32767))
+                      call<primitive=set1[Vec]>(cast<static>(base::in, 32767))
                     );
                   } else {
                     clamped = data;
@@ -3244,12 +3244,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                let<type>(StepBase, type(select(
-                  value(type::is_signed(type(base::in))),
-                  type(scalar::si32),
-                  type(scalar::ui32)
-                )));
-                let<type>(StepVec, type(vector::as_base(StepBase)));
+                let<type>(StepBase, select(
+                  type::is_signed(base::in),
+                  scalar::si32,
+                  scalar::ui32
+                ));
+                let<type>(StepVec, vector::as_base(StepBase));
                 switch<compile>(index) {
                   0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                   1 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 1]>(data))); }
@@ -3268,12 +3268,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                let<type>(StepBase, type(select(
-                  value(type::is_signed(type(base::in))),
-                  type(scalar::si32),
-                  type(scalar::ui32)
-                )));
-                let<type>(StepVec, type(vector::as_base(StepBase)));
+                let<type>(StepBase, select(
+                  type::is_signed(base::in),
+                  scalar::si32,
+                  scalar::ui32
+                ));
+                let<type>(StepVec, vector::as_base(StepBase));
                 switch<compile>(index) {
                   0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                   1 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 1]>(data))); }
@@ -3288,8 +3288,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                let<type>(OutVec, type(vector::window_base(ToBase)));
-                let<type>(OutBase, type(base::generic(OutVec)));
+                let<type>(OutVec, vector::window_base(ToBase));
+                let<type>(OutBase, base::generic(OutVec));
                 var<infer>(result, call<primitive=set_zero[OutVec]>());
                 switch<compile>(index) {
                   0 => {
@@ -3325,8 +3325,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                let<type>(OutVec, type(vector::window_base(ToBase)));
-                let<type>(PairVec, type(vector::as_base(si64)));
+                let<type>(OutVec, vector::window_base(ToBase));
+                let<type>(PairVec, vector::as_base(si64));
                 var<const_infer>(demoted, intrin<f32x4_demote_f64x2_zero, build[suffix=""]>(data));
                 switch<compile>(index) {
                   0 => { complete(demoted); }
@@ -3351,11 +3351,11 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                let<type>(OutVec, type(vector::window_base(ToBase)));
+                let<type>(OutVec, vector::window_base(ToBase));
                 var<infer>(result, call<primitive=set_zero[OutVec]>());
                 var<const_infer>(zero_half, intrin<vget_low, build[suffix=ToBase]>(result));
                 var<infer>(narrowed, zero_half);
-                if<generation>(value(type::is_signed(type(base::in)))) {
+                if<generation>(value(type::is_signed(base::in))) {
                   if<generation>(value(type::is_signed(ToBase))) {
                     narrowed = intrin<vqmovn, build[suffix=base::in]>(data);
                   } else {
@@ -3363,11 +3363,11 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   }
                 } else {
                   if<generation>(value(type::is_signed(ToBase))) {
-                    let<type>(SignedBase, type(base::signed_of(type(base::in))));
-                    let<type>(SignedVec, type(vector::as_base(SignedBase)));
+                    let<type>(SignedBase, base::signed_of(base::in));
+                    let<type>(SignedVec, vector::as_base(SignedBase));
                     var<const_infer>(clamped, call<primitive=min[Vec]>(
                       data,
-                      call<primitive=set1[Vec]>(cast<static>(type(base::in), 127))
+                      call<primitive=set1[Vec]>(cast<static>(base::in, 127))
                     ));
                     narrowed = intrin<vqmovn, build[suffix=SignedBase]>(
                       call<primitive=reinterpret[Vec, SignedVec]>(clamped)
@@ -3392,12 +3392,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                let<type>(StepBase, type(select(
-                  value(type::is_signed(type(base::in))),
-                  type(scalar::si16),
-                  type(scalar::ui16)
-                )));
-                let<type>(StepVec, type(vector::as_base(StepBase)));
+                let<type>(StepBase, select(
+                  type::is_signed(base::in),
+                  scalar::si16,
+                  scalar::ui16
+                ));
+                let<type>(StepVec, vector::as_base(StepBase));
                 switch<compile>(index) {
                   0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                   1 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 1]>(data))); }
@@ -3412,11 +3412,11 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                let<type>(OutVec, type(vector::window_base(ToBase)));
+                let<type>(OutVec, vector::window_base(ToBase));
                 var<infer>(result, call<primitive=set_zero[OutVec]>());
                 var<const_infer>(zero_half, intrin<vget_low, build[suffix=ToBase]>(result));
                 var<infer>(narrowed, zero_half);
-                if<generation>(value(type::is_signed(type(base::in)))) {
+                if<generation>(value(type::is_signed(base::in))) {
                   if<generation>(value(type::is_signed(ToBase))) {
                     narrowed = intrin<vqmovn, build[suffix=base::in]>(data);
                   } else {
@@ -3424,11 +3424,11 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   }
                 } else {
                   if<generation>(value(type::is_signed(ToBase))) {
-                    let<type>(SignedBase, type(base::signed_of(type(base::in))));
-                    let<type>(SignedVec, type(vector::as_base(SignedBase)));
+                    let<type>(SignedBase, base::signed_of(base::in));
+                    let<type>(SignedVec, vector::as_base(SignedBase));
                     var<const_infer>(clamped, call<primitive=min[Vec]>(
                       data,
-                      call<primitive=set1[Vec]>(cast<static>(type(base::in), 32767))
+                      call<primitive=set1[Vec]>(cast<static>(base::in, 32767))
                     ));
                     narrowed = intrin<vqmovn, build[suffix=SignedBase]>(
                       call<primitive=reinterpret[Vec, SignedVec]>(clamped)
@@ -3453,12 +3453,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                let<type>(StepBase, type(select(
-                  value(type::is_signed(type(base::in))),
-                  type(scalar::si32),
-                  type(scalar::ui32)
-                )));
-                let<type>(StepVec, type(vector::as_base(StepBase)));
+                let<type>(StepBase, select(
+                  type::is_signed(base::in),
+                  scalar::si32,
+                  scalar::ui32
+                ));
+                let<type>(StepVec, vector::as_base(StepBase));
                 switch<compile>(index) {
                   0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                   1 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 1]>(data))); }
@@ -3477,12 +3477,12 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons []
             implementation:
               tsil """
-                let<type>(StepBase, type(select(
-                  value(type::is_signed(type(base::in))),
-                  type(scalar::si32),
-                  type(scalar::ui32)
-                )));
-                let<type>(StepVec, type(vector::as_base(StepBase)));
+                let<type>(StepBase, select(
+                  type::is_signed(base::in),
+                  scalar::si32,
+                  scalar::ui32
+                ));
+                let<type>(StepVec, vector::as_base(StepBase));
                 switch<compile>(index) {
                   0 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 0]>(data))); }
                   1 => { complete(call<primitive=@self[StepVec, ToBase, 0]>(call<primitive=@self[Vec, StepBase, 1]>(data))); }
@@ -3497,11 +3497,11 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                let<type>(OutVec, type(vector::window_base(ToBase)));
+                let<type>(OutVec, vector::window_base(ToBase));
                 var<infer>(result, call<primitive=set_zero[OutVec]>());
                 var<const_infer>(zero_half, intrin<vget_low, build[suffix=ToBase]>(result));
                 var<infer>(narrowed, zero_half);
-                if<generation>(value(type::is_signed(type(base::in)))) {
+                if<generation>(value(type::is_signed(base::in))) {
                   if<generation>(value(type::is_signed(ToBase))) {
                     narrowed = intrin<vqmovn, build[suffix=base::in]>(data);
                   } else {
@@ -3509,10 +3509,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   }
                 } else {
                   if<generation>(value(type::is_signed(ToBase))) {
-                    let<type>(SignedBase, type(base::signed_of(type(base::in))));
-                    let<type>(SignedVec, type(vector::as_base(SignedBase)));
+                    let<type>(SignedBase, base::signed_of(base::in));
+                    let<type>(SignedVec, vector::as_base(SignedBase));
                     var<const_infer>(limit, call<primitive=set1[Vec]>(
-                      cast<static>(type(base::in), 2147483647)
+                      cast<static>(base::in, 2147483647)
                     ));
                     var<const_infer>(clamped, call<primitive=min[Vec]>(data, limit));
                     narrowed = intrin<vqmovn, build[suffix=SignedBase]>(
@@ -3538,7 +3538,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               reasons [intrinsic]
             implementation:
               tsil """
-                let<type>(OutVec, type(vector::window_base(ToBase)));
+                let<type>(OutVec, vector::window_base(ToBase));
                 var<infer>(result, call<primitive=set_zero[OutVec]>());
                 var<const_infer>(zero_half, intrin<vget_low, build[suffix=ToBase]>(result));
                 var<const_infer>(narrowed, intrin<vcvt_f32_f64>(data));
@@ -3557,10 +3557,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           reasons []
         implementation:
           tsl """
-              let<type>(OutVec, type(vector::window_base(ToBase)));
-              let<type>(OutBase, type(base::generic(OutVec)));
+              let<type>(OutVec, vector::window_base(ToBase));
+              let<type>(OutBase, base::generic(OutVec));
               var<infer>(result, call<primitive=set_zero[OutVec]>());
-              var<const_infer>(start, cast<static>(type(scalar::size), index) * value(vector::length));
+              var<const_infer>(start, cast<static>(scalar::size, index) * value(vector::length));
               loop<generation>(i, 0, value(vector::length), 1) {
                 result[start + value(i)] = cast<saturating>(OutBase, data[value(i)]);
               }
@@ -3583,11 +3583,11 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           reasons []
         implementation:
           tsl """
-              let<type>(OutVec, type(vector::window_base(ToBase)));
-              let<type>(OutBase, type(base::generic(OutVec)));
+              let<type>(OutVec, vector::window_base(ToBase));
+              let<type>(OutBase, base::generic(OutVec));
               var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
               var<const_infer>(chunk, call<primitive=to_array[Vec]>(data));
-              var<const_infer>(start, cast<static>(type(scalar::size), index) * value(vector::length));
+              var<const_infer>(start, cast<static>(scalar::size, index) * value(vector::length));
               loop<backend>(i, 0, value(vector::length), 1) {
                 result[start + i] = cast<saturating>(OutBase, chunk[i]);
               }
@@ -3602,8 +3602,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           reasons []
         implementation:
           tsl """
-              let<type>(OutVec, type(vector::window_base(ToBase)));
-              complete(cast<saturating>(type(base::generic(OutVec)), data));
+              let<type>(OutVec, vector::window_base(ToBase));
+              complete(cast<saturating>(base::generic(OutVec), data));
             """
     [generic, oneapi_fpga]:
       arith:
@@ -3617,10 +3617,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           reasons []
         implementation:
           tsl """
-              let<type>(OutVec, type(vector::window_base(ToBase)));
-              let<type>(OutBase, type(base::generic(OutVec)));
+              let<type>(OutVec, vector::window_base(ToBase));
+              let<type>(OutBase, base::generic(OutVec));
               var<infer>(result, call<primitive=set_zero[OutVec]>());
-              var<const_infer>(start, cast<static>(type(scalar::size), index) * value(vector::length));
+              var<const_infer>(start, cast<static>(scalar::size, index) * value(vector::length));
               loop<backend>(i, 0, value(vector::length), 1) {
                 result[start + i] = cast<saturating>(OutBase, data[i]);
               }

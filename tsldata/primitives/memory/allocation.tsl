@@ -37,7 +37,7 @@ prim<ptr:=(usize)> allocate(count_bytes):
           reasons [raw_memory]
         implementation:
           tsil """
-              complete(cast<reinterpret>(type(base::in), mem<alloc>(count_bytes)));
+              complete(cast<reinterpret>(base::in, mem<alloc>(count_bytes)));
             """
 prim<ptr:=(usize,usize)> allocate_aligned(count_bytes, alignment):
   brief_description "Allocates contiguous memory with the requested alignment."
@@ -80,7 +80,7 @@ prim<ptr:=(usize,usize)> allocate_aligned(count_bytes, alignment):
           reasons [raw_memory]
         implementation:
           tsil """
-              complete(cast<reinterpret>(type(base::in), mem<alloc_aligned>(count_bytes, alignment)));
+              complete(cast<reinterpret>(base::in, mem<alloc_aligned>(count_bytes, alignment)));
             """
 prim<void:=(ptr)> deallocate(ptr):
   brief_description "Releases memory previously returned by a TSL allocation primitive."

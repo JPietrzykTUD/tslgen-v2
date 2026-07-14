@@ -13,6 +13,7 @@ from tslc.backend.capability import (
     GeneratedFormatSpec,
 )
 from tslc.backend.cpp_translation import CppBackendDialect
+from tslc.benchmark.planner import CppBenchmarkPlanner
 from tslc.benchmark.render_cpp import cpp_benchmark_artifacts
 from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.cpp_validation import validate_cpp_profiles
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
     from tslc.output.verify_drivers import VerifyBackendDriver
     from tslc.output.verify_model import VerifyProfile
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
+    from tslc.benchmark.model import BenchmarkProjectPlan
 
 
 def create_cpp_dialect(catalog: Catalog) -> BackendDialect:
@@ -62,6 +64,14 @@ def cpp_value_test_artifacts(
     return cpp_test_artifacts(plan, assets, media_type=media_type)
 
 
+def cpp_benchmark_plan(
+    catalog: Catalog,
+    profiles: tuple[EmittedProfile, ...],
+    value_tests: ValueTestProjectPlan,
+) -> BenchmarkProjectPlan:
+    return CppBenchmarkPlanner(catalog).plan(profiles, value_tests)
+
+
 def cpp_documentation_formatter() -> BackendDocumentationFormatter:
     return CPP_DOCUMENTATION_FORMATTER
 
@@ -81,6 +91,7 @@ CPP_BACKEND = BackendCapability(
     test_renderer=cpp_value_test_artifacts,
     verify_driver_factory=create_cpp_verify_driver,
     documentation_formatter_factory=cpp_documentation_formatter,
+    benchmark_plan_builder=cpp_benchmark_plan,
     benchmark_renderer=cpp_benchmark_artifacts,
     helper_manifest=CPP_HELPER_MANIFEST,
     profile_validator=validate_cpp_profiles,
@@ -102,6 +113,7 @@ CPP_BACKEND = BackendCapability(
 __all__ = [
     "CPP_BACKEND",
     "cpp_profile_verification",
+    "cpp_benchmark_plan",
     "cpp_documentation_formatter",
     "cpp_project_artifacts",
     "cpp_value_test_artifacts",

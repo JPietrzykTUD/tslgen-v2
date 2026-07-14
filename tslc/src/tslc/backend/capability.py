@@ -39,6 +39,10 @@ TestArtifactRenderer = Callable[
 BenchmarkArtifactRenderer = Callable[
     ["BenchmarkProjectPlan", "RenderAssets", str], list["Artifact"]
 ]
+BenchmarkPlanBuilder = Callable[
+    ["Catalog", tuple["EmittedProfile", ...], "ValueTestProjectPlan"],
+    "BenchmarkProjectPlan",
+]
 DocumentationFormatterFactory = Callable[[], "BackendDocumentationFormatter"]
 ValueTestSupportFactory = Callable[[], "ValueTestBackendSupport"]
 VerifyDriverFactory = Callable[[], "VerifyBackendDriver"]
@@ -112,6 +116,7 @@ class BackendCapability:
     test_renderer: TestArtifactRenderer
     verify_driver_factory: VerifyDriverFactory
     documentation_formatter_factory: DocumentationFormatterFactory
+    benchmark_plan_builder: BenchmarkPlanBuilder | None = None
     benchmark_renderer: BenchmarkArtifactRenderer = _no_benchmark_artifacts
     helper_manifest: BackendHelperManifest = EMPTY_HELPER_MANIFEST
     profile_validator: ProfileValidator = _no_profile_diagnostics
@@ -144,6 +149,16 @@ class BackendCapability:
         assets: RenderAssets,
     ) -> list[Artifact]:
         return self.benchmark_renderer(plan, assets, self.artifact_media_type)
+
+    def plan_benchmarks(
+        self,
+        catalog: Catalog,
+        profiles: tuple[EmittedProfile, ...],
+        value_tests: ValueTestProjectPlan,
+    ) -> BenchmarkProjectPlan | None:
+        if self.benchmark_plan_builder is None:
+            return None
+        return self.benchmark_plan_builder(catalog, profiles, value_tests)
 
     def documentation_formatter(self) -> BackendDocumentationFormatter:
         return self.documentation_formatter_factory()

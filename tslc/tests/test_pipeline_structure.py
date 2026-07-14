@@ -17,6 +17,7 @@ from tslc.backend.helper_requirements import (
     RUST_HELPER_MANIFEST,
 )
 from tslc.backend.rust_capability import RUST_BACKEND
+from tslc.benchmark.model import EMPTY_BENCHMARK_PROJECT_PLAN
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.validation import validate_catalog
@@ -30,6 +31,7 @@ from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.target_text import LoweredBody
+from tslc.value_tests.model import ValueTestProjectPlan
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -120,6 +122,57 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
         "store",
         "to_array",
     )
+
+
+def test_backend_capability_owns_optional_benchmark_planning(catalog) -> None:
+    calls: list[str] = []
+
+    def plan_benchmarks(catalog, profiles, value_tests):  # noqa: ANN001
+        del catalog, profiles, value_tests
+        calls.append("future")
+        return EMPTY_BENCHMARK_PROJECT_PLAN
+
+    future = BackendCapability(
+        backend_id="future",
+        root_path="future",
+        artifact_media_type="text/future",
+        dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
+        project_renderer=lambda profiles, assets, media_type: [],
+        verify_profiles=lambda profiles: (),
+        value_test_support_factory=lambda: None,  # type: ignore[return-value]
+        test_renderer=lambda plan, assets, media_type: [],
+        verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        documentation_formatter_factory=_FakeDocumentationFormatter,
+        benchmark_plan_builder=plan_benchmarks,
+    )
+
+    planned = future.plan_benchmarks(catalog, (), ValueTestProjectPlan(profiles=()))
+
+    assert planned is EMPTY_BENCHMARK_PROJECT_PLAN
+    assert calls == ["future"]
+
+
+def test_neutral_planners_do_not_branch_on_registered_backend_names() -> None:
+    pipeline_tree = ast.parse(
+        (_REPO_ROOT / "tslc/src/tslc/pipeline.py").read_text()
+    )
+    value_planner_tree = ast.parse(
+        (_REPO_ROOT / "tslc/src/tslc/value_tests/planner.py").read_text()
+    )
+
+    pipeline_literals = {
+        node.value
+        for node in ast.walk(pipeline_tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    value_planner_literals = {
+        node.value
+        for node in ast.walk(value_planner_tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+
+    assert "cpp" not in pipeline_literals
+    assert "rust" not in value_planner_literals
 
 
 def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) -> None:

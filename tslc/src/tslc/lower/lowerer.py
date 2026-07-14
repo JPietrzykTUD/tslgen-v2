@@ -111,6 +111,9 @@ class LoweredSpecialization:
     param_names: tuple[str, ...]
     param_kinds: tuple[str, ...]
     body: LoweredBody
+    # Support-policy-owned overload identity for each parameter. Carrying these tokens through
+    # lowering keeps backend grouping independent from the process-wide default policy.
+    param_identity_tokens: tuple[str, ...] = ()
     # Backend-spelled public/apply parameter type overrides from unconditional
     # `param_types: name: default "..."` rules. Each position is either the
     # override type or None, matching `param_names`/`param_kinds`.
@@ -371,6 +374,7 @@ class Lowerer:
             backend=backend,
             extension=selected.extension,
             type_tag=selected.type_tag,
+            support=self._support,
             fixed_fallback_extension=selected.fixed_fallback_extension,
             attributes=dict(selected.primitive.attributes),
             primitive_axes=catalog_facts.primitive_axes,
@@ -525,6 +529,15 @@ class Lowerer:
             param_names=parameters,
             param_kinds=shape.param_kinds,
             body=body,
+            param_identity_tokens=tuple(
+                self._support.overload_identity_token(
+                    kind,
+                    register_is_base=self._support.register_is_base(
+                        context.env.extension
+                    ),
+                )
+                for kind in shape.param_kinds
+            ),
             param_type_overrides=param_type_overrides,
             vector_spelling=vector_spelling,
             index_register_spelling=index_register_spelling,
@@ -841,16 +854,22 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
     """A per-position type token for overload dedup. `v` and `s` map to the same token
     where register_type == base_type (scalar/generic), so colliding overloads merge."""
 
+    identity_tokens = spec.param_identity_tokens or tuple(
+        DEFAULT_SUPPORT_POLICY.overload_identity_token(
+            kind,
+            register_is_base=spec.register_is_base,
+        )
+        for kind in spec.param_kinds
+    )
     return tuple(
         (
             override
             if override is not None
-            else DEFAULT_SUPPORT_POLICY.overload_identity_token(
-                kind,
-                register_is_base=spec.register_is_base,
-            )
+            else identity
         )
-        for kind, override in zip(spec.param_kinds, spec.effective_param_type_overrides)
+        for identity, override in zip(
+            identity_tokens, spec.effective_param_type_overrides
+        )
     )
 
 

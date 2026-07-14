@@ -10,14 +10,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Literal, NewType, TypeVar
+from typing import Literal, TypeVar
 
 from tslc.diagnostics import SourceSpan
 from tslc.catalog.target_families import TargetFamilyCatalog
 
-TypeTag = NewType("TypeTag", str)
-BackendId = NewType("BackendId", str)
-ExtensionName = NewType("ExtensionName", str)
 _K = TypeVar("_K")
 _V = TypeVar("_V")
 _InnerK = TypeVar("_InnerK")

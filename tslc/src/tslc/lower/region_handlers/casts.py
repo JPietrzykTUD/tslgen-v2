@@ -5,13 +5,14 @@ from __future__ import annotations
 from tslc.ir.region_syntax import parse_cast_selector, segments_text, split_arg_groups
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
-from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
+from tslc.lower.queries import QueryEvaluator
+from tslc.lower.region_handlers.common import _resolve_type_expression
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.target_text import RenderField
 
 
 class CastLowerer:
-    """``cast<variant>(type<...>(...), expr)`` -> the backend's cast template.
+    """``cast<variant>(type-expr, expr)`` -> the backend's cast template.
 
     The type argument is resolved by delegating to the query evaluator (so query
     semantics live in one place, not duplicated here); the value argument is
@@ -82,8 +83,8 @@ class CastLowerer:
             )
             return region.full_text
 
-        spelling = self._type_spelling(type_text, context)
-        if spelling is None:
+        resolved = _resolve_type_expression(type_text, context, self._evaluator)
+        if resolved is None:
             context.effects.skip(
                 "TSL-LOWER-UNRESOLVED-CAST-TYPE",
                 f"could not resolve cast type in {region.full_text!r}",
@@ -91,7 +92,7 @@ class CastLowerer:
             )
             return region.full_text
         return context.env.backend.templates.render_template(
-            key, type=spelling, expr=render(args[1])
+            key, type=resolved[1], expr=render(args[1])
         )
 
     def _pointer_cast(
@@ -103,10 +104,10 @@ class CastLowerer:
         context: LoweringSession,
         expr: RenderField,
     ) -> RenderField:
-        """``cast<reinterpret, type=ptr|const_ptr>(type<...>(), ptr)`` -> pointer cast."""
+        """``cast<reinterpret, type=ptr|const_ptr>(type-expr, ptr)`` -> pointer cast."""
 
-        inner = self._type_spelling(type_text, context)
-        if inner is None:
+        resolved = _resolve_type_expression(type_text, context, self._evaluator)
+        if resolved is None:
             context.effects.skip(
                 "TSL-LOWER-UNRESOLVED-CAST-TYPE",
                 f"could not resolve pointer cast type in {region.full_text!r}",
@@ -114,18 +115,5 @@ class CastLowerer:
             )
             return region.full_text
         return context.env.backend.syntax.render_pointer_cast(
-            inner, is_const=is_const, expr=expr
+            resolved[1], is_const=is_const, expr=expr
         )
-
-    def _type_spelling(
-        self, type_text: str, context: LoweringSession
-    ) -> RenderField | None:
-        """Resolve a type expression to its backend spelling — a register spelling
-        (``vector::register`` -> ``TextValue``) or a base type tag (-> scalar spelling)."""
-
-        value = self._evaluator.evaluate(type_text, context)
-        if isinstance(value, TextValue):
-            return value.text
-        if isinstance(value, TypeValue):
-            return context.env.backend.types.scalar_spelling(value.type_tag)
-        return None

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from tslc.backend.registry import (
@@ -15,6 +17,8 @@ from tslc.catalog.signature_kinds import (
     SignatureKindCatalog,
 )
 from tslc.catalog.signatures import parse_signature
+from tslc.lower.lowerer import Lowerer
+from tslc.select.selector import Selector
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
@@ -81,6 +85,76 @@ def test_policy_owns_mask_forms() -> None:
     # Indexed memory mask forms are fully selected and value-tested now; `vidx`
     # is no longer a compiler-wide deferred parameter kind.
     assert policy.is_maskable_signature(gather_shape)
+
+
+def test_lowerer_threads_injected_policy_into_queries(
+    catalog: Catalog, machine_profiles
+) -> None:
+    policy = replace(DEFAULT_SUPPORT_POLICY, default_size_parameter_name="WIDTH")
+    selected = next(
+        slot
+        for slot in Selector(policy).select_profile(
+            catalog,
+            machine_profiles["avx2"],
+            "add",
+            ("si32",),
+            backend_id="cpp",
+        ).selected
+        if slot.extension.name == "generic"
+    )
+    extension = replace(selected.extension, size_parameter_name=None)
+    implementation = replace(
+        selected.implementation,
+        body_text="complete(value(vector::length));",
+    )
+    selected = replace(
+        selected,
+        extension=extension,
+        implementation=implementation,
+    )
+    custom_catalog = replace(
+        catalog,
+        extensions={**catalog.extensions, extension.name: extension},
+    )
+
+    lowered = Lowerer(support=policy).lower(
+        selected,
+        custom_catalog,
+        create_backend_dialect(custom_catalog, "cpp"),
+    )
+
+    assert lowered.specialization is not None
+    assert lowered.specialization.body_text == "return WIDTH;"
+
+
+def test_lowerer_threads_injected_policy_into_call_naming(
+    catalog: Catalog, machine_profiles
+) -> None:
+    policy = replace(
+        DEFAULT_SUPPORT_POLICY,
+        mask_suffixes=(("pass_through", "_merge"), ("zero", "_zero")),
+    )
+    selected = next(
+        slot
+        for slot in Selector(policy).select_profile(
+            catalog,
+            machine_profiles["avx2"],
+            "load",
+            ("si32",),
+            backend_id="cpp",
+        ).selected
+        if "attrs[mask=zero]" in slot.implementation.body_text
+    )
+
+    lowered = Lowerer(support=policy).lower(
+        selected,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    )
+
+    assert lowered.specialization is not None
+    assert "::tsl::mov_zero<" in lowered.specialization.body_text
+    assert "::tsl::mov_maskz<" not in lowered.specialization.body_text
 
 
 def test_signature_kind_capabilities_own_language_neutral_rules() -> None:

@@ -67,7 +67,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
           tsil """
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(factor1[i], factor2[i]);
+              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(factor1[i], factor2[i]);
               }
               complete(result);
             """
@@ -83,11 +83,11 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons []
         implementation:
           tsil """
-            let<type>(WordVec, type(vector::as_base(type(scalar::ui16))));
+            let<type>(WordVec, vector::as_base(scalar::ui16));
             var<const_infer>(left, call<primitive=reinterpret[Vec, WordVec]>(factor1));
             var<const_infer>(right, call<primitive=reinterpret[Vec, WordVec]>(factor2));
             var<const_infer>(word_mask, call<primitive=set1[WordVec]>(
-              cast<static>(type(scalar::ui16), 255)
+              cast<static>(scalar::ui16, 255)
             ));
             var<const_infer>(even_left, call<primitive=binary_and[WordVec]>(left, word_mask));
             var<const_infer>(even_right, call<primitive=binary_and[WordVec]>(right, word_mask));
@@ -105,7 +105,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
               var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
               complete(
@@ -125,8 +125,8 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            let<type>(UVec, type(vector::as_base(UBase)));
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
             var<const_infer>(left, call<primitive=reinterpret[Vec, UVec]>(factor1));
             var<const_infer>(right, call<primitive=reinterpret[Vec, UVec]>(factor2));
             var<const_infer>(left_high, call<primitive=shift_right[UVec, false]>(left, 32));
@@ -151,8 +151,8 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(UVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
-            let<type>(QwordVec, type(vector::as_base(type(scalar::ui64))));
+            let<type>(UVec, vector::as_base(base::unsigned_of(base::in)));
+            let<type>(QwordVec, vector::as_base(scalar::ui64));
             var<const_infer>(left, call<primitive=reinterpret[Vec, UVec]>(factor1));
             var<const_infer>(right, call<primitive=reinterpret[Vec, UVec]>(factor2));
             var<const_infer>(even, intrin<_mm_mul_epu32>(left, right));
@@ -221,7 +221,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as_extension(sse)));
+            let<type>(HalfVec, vector::as_extension(sse));
             var<const_infer>(a0, call<primitive=extract[Vec, sse, 0]>(factor1));
             var<const_infer>(a1, call<primitive=extract[Vec, sse, 1]>(factor1));
             var<const_infer>(a2, call<primitive=extract[Vec, sse, 2]>(factor1));
@@ -250,7 +250,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons []
         implementation:
           tsil """
-            let<type>(GenericVec, type(vector::as_extension(generic)));
+            let<type>(GenericVec, vector::as_extension(generic));
             var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
             var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
             complete(
@@ -312,7 +312,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as_extension(sse)));
+            let<type>(HalfVec, vector::as_extension(sse));
             var<const_infer>(lo1, call<primitive=extract[Vec, sse, 0]>(factor1));
             var<const_infer>(hi1, call<primitive=extract[Vec, sse, 1]>(factor1));
             var<const_infer>(lo2, call<primitive=extract[Vec, sse, 0]>(factor2));
@@ -334,7 +334,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons []
         implementation:
           tsil """
-            let<type>(GenericVec, type(vector::as_extension(generic)));
+            let<type>(GenericVec, vector::as_extension(generic));
             var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
             var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
             complete(
@@ -404,7 +404,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons []
         implementation:
           tsil """
-            let<type>(GenericVec, type(vector::as_extension(generic)));
+            let<type>(GenericVec, vector::as_extension(generic));
             var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
             var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
             complete(
@@ -430,7 +430,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(UVec, type(vector::as_base(type(scalar::ui64))));
+            let<type>(UVec, vector::as_base(scalar::ui64));
             var<const_infer>(left, call<primitive=reinterpret[Vec, UVec]>(factor1));
             var<const_infer>(right, call<primitive=reinterpret[Vec, UVec]>(factor2));
             var<const_infer>(left_low, intrin<vmovn_u64>(left));
@@ -471,8 +471,8 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(WordVec, type(vector::as_base(ui16)));
-            let<type>(ByteVec, type(vector::as_base(ui8)));
+            let<type>(WordVec, vector::as_base(ui16));
+            let<type>(ByteVec, vector::as_base(ui8));
             var<const_infer>(low_products, intrin<extmul_low_u8x16, build[suffix="u16x8"]>(factor1, factor2));
             var<const_infer>(high_products, intrin<extmul_high_u8x16, build[suffix="u16x8"]>(factor1, factor2));
             var<const_infer>(low_byte_mask, call<primitive=set1[WordVec]>(cast<static>(ui16, 0x00ff)));
@@ -487,7 +487,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
         variants:
           generic_fallback:
             tsil """
-            let<type>(GenericVec, type(vector::as_extension(generic)));
+            let<type>(GenericVec, vector::as_extension(generic));
             var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
             var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
             complete(
@@ -892,7 +892,7 @@ prim<v:=(v,v)> div(divident, divisor):
           tsil """
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(divident[i], divisor[i]);
+              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(divident[i], divisor[i]);
             }
             complete(result);
           """
@@ -948,7 +948,7 @@ prim<v:=(v,v)> div(divident, divisor):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(divident));
@@ -961,7 +961,7 @@ prim<v:=(v,v)> div(divident, divisor):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_divident, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(divident)
               ));
@@ -993,7 +993,7 @@ prim<v:=(v,v)> div(divident, divisor):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(divident));
@@ -1006,7 +1006,7 @@ prim<v:=(v,v)> div(divident, divisor):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_divident, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(divident)
               ));
@@ -1307,7 +1307,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               call<primitive=mul>(
                 data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
+                call<primitive=set1>(cast<static>(base::in, factor))
               )
             );
           """
@@ -1355,7 +1355,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
               call<primitive=mul, attrs[mask=zero]>(
                 mask,
                 data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
+                call<primitive=set1>(cast<static>(base::in, factor))
               )
             );
           """
@@ -1403,7 +1403,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
               call<primitive=mul, attrs[mask=pass_through]>(
                 mask,
                 data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
+                call<primitive=set1>(cast<static>(base::in, factor))
               )
             );
           """
@@ -1450,7 +1450,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(dividend));
@@ -1463,7 +1463,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(dividend)
               ));
@@ -1482,7 +1482,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(dividend));
@@ -1495,7 +1495,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(dividend)
               ));
@@ -1515,7 +1515,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as(sse, type(base::in))));
+            let<type>(HalfVec, vector::as(sse, base::in));
             var<const_infer>(low, call<primitive=@self[HalfVec]>(
               call<primitive=extract[Vec, sse, 0]>(dividend),
               call<primitive=extract[Vec, sse, 0]>(divisor)
@@ -1532,7 +1532,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(dividend)
               ));
@@ -1552,7 +1552,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as(avx2, type(base::in))));
+            let<type>(HalfVec, vector::as(avx2, base::in));
             var<const_infer>(low, call<primitive=@self[HalfVec]>(
               call<primitive=extract[Vec, avx2, 0]>(dividend),
               call<primitive=extract[Vec, avx2, 0]>(divisor)
@@ -1569,7 +1569,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(dividend)
               ));
@@ -1593,10 +1593,10 @@ prim<v:=(v,v)> mod(dividend, divisor):
           # quarter preserves floating-point lanes while the SSE specialization
           # computes the exact scalar remainder for every lane type.
           tsil """
-            let<type>(BitBase, type(base::unsigned_of(type(base::in))));
-            let<type>(BitVec, type(vector::as_base(BitBase)));
-            let<type>(QuarterVec, type(vector::as(sse, type(base::in))));
-            let<type>(QuarterBitVec, type(vector::as(sse, BitBase)));
+            let<type>(BitBase, base::unsigned_of(base::in));
+            let<type>(BitVec, vector::as_base(BitBase));
+            let<type>(QuarterVec, vector::as(sse, base::in));
+            let<type>(QuarterBitVec, vector::as(sse, BitBase));
             var<const_infer>(dividend_bits, call<primitive=reinterpret[Vec, BitVec]>(dividend));
             var<const_infer>(divisor_bits, call<primitive=reinterpret[Vec, BitVec]>(divisor));
             var<const_infer>(a0_bits, call<primitive=extract[BitVec, sse, 0]>(dividend_bits));
@@ -1638,7 +1638,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(dividend)
               ));
@@ -1661,7 +1661,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons []
         implementation:
           tsil """
-            let<type>(GenericVec, type(vector::as_extension(generic)));
+            let<type>(GenericVec, vector::as_extension(generic));
             var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(dividend)));
             var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
             complete(
@@ -1681,7 +1681,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(dividend));
@@ -1694,7 +1694,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(dividend)
               ));
@@ -1714,9 +1714,9 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(Base, type(base::in));
-            let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
-            let<type>(IndexVec, type(vector::as_base(IndexBase)));
+            let<type>(Base, base::in);
+            let<type>(IndexBase, base::unsigned_of(base::in));
+            let<type>(IndexVec, vector::as_base(IndexBase));
             var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
             var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
             var<infer>(result, call<primitive=set_zero[Vec]>());
@@ -1743,9 +1743,9 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(Base, type(base::in));
-            let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
-            let<type>(IndexVec, type(vector::as_base(IndexBase)));
+            let<type>(Base, base::in);
+            let<type>(IndexBase, base::unsigned_of(base::in));
+            let<type>(IndexVec, vector::as_base(IndexBase));
             var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
             var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
             var<infer>(result, call<primitive=set_zero[Vec]>());
@@ -1790,11 +1790,11 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons []
         implementation:
           tsil """
-            let<type>(QuotientBase, type(base::signed_of(type(base::in))));
-            let<type>(QuotientVec, type(vector::as_base(QuotientBase)));
+            let<type>(QuotientBase, base::signed_of(base::in));
+            let<type>(QuotientVec, vector::as_base(QuotientBase));
             var<const_infer>(quotient, call<primitive=div[Vec]>(dividend, divisor));
             var<const_infer>(truncated, call<primitive=cast[Vec, QuotientBase]>(quotient));
-            var<const_infer>(truncated_float, call<primitive=cast[QuotientVec, type(base::in)]>(truncated));
+            var<const_infer>(truncated_float, call<primitive=cast[QuotientVec, base::in]>(truncated));
             complete(call<primitive=sub[Vec]>(
               dividend,
               call<primitive=mul[Vec]>(truncated_float, divisor)
@@ -2011,7 +2011,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
             complete(
               call<primitive=mod>(
                 dividend,
-                call<primitive=set1>(cast<static>(type(base::in), divisor))
+                call<primitive=set1>(cast<static>(base::in, divisor))
               )
             );
           """
@@ -2056,7 +2056,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
               call<primitive=mod, attrs[mask=zero]>(
                 mask,
                 dividend,
-                call<primitive=set1>(cast<static>(type(base::in), divisor))
+                call<primitive=set1>(cast<static>(base::in, divisor))
               )
             );
           """
@@ -2102,7 +2102,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
               call<primitive=mod, attrs[mask=pass_through]>(
                 mask,
                 dividend,
-                call<primitive=set1>(cast<static>(type(base::in), divisor))
+                call<primitive=set1>(cast<static>(base::in, divisor))
               )
             );
           """

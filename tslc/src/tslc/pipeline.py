@@ -22,8 +22,8 @@ from tslc._pipeline_closure import (
 from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.registry import backend_capabilities, registered_backend_ids
-from tslc.benchmark import BenchmarkPlanner
 from tslc.benchmark.model import EMPTY_BENCHMARK_PROJECT_PLAN
+from tslc.benchmark.model import BenchmarkProjectPlan
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
@@ -43,7 +43,6 @@ from tslc.select.selector import (
     SelectedImplementation,
     Selector,
 )
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.value_tests import (
     ValueTestBackendProfileInput,
     ValueTestPlanner,
@@ -104,6 +103,7 @@ class SkippedEntry:
     extension: str
     type_tag: str
     reason: str
+    diagnostics: tuple[Diagnostic, ...] = ()
     status: SkipStatus = "coverage_gap"
     source_primitive_name: str = ""
     result_kind: str = ""
@@ -201,13 +201,17 @@ class _GenerationSession:
             if self.request.value_test_warnings or diagnostic.severity == "error"
         )
         self.diagnostics.extend(value_test_diagnostics)
-        benchmarks = (
-            BenchmarkPlanner(self.inputs.catalog).plan(
-                emitted_profiles,
-                value_tests,
+        benchmarks = _merge_benchmark_plans(
+            tuple(
+                plan
+                for capability in self.backends
+                if (
+                    plan := capability.plan_benchmarks(
+                        self.inputs.catalog, emitted_profiles, value_tests
+                    )
+                )
+                is not None
             )
-            if "cpp" in self.request.backends
-            else EMPTY_BENCHMARK_PROJECT_PLAN
         )
         self.diagnostics.extend(benchmarks.diagnostics)
         if has_errors((*value_test_diagnostics, *benchmarks.diagnostics)):
@@ -421,18 +425,24 @@ class _GenerationSession:
         entry = _lowering_skipped_entry(profile_name, backend, primitive, slot, lowered)
         self.skipped.append(entry)
         if self.request.mode == "strict" and entry.status == "coverage_gap":
-            self.diagnostics.extend(
-                _strict_lowering_diagnostics(entry, lowered.diagnostics)
-            )
+            self.diagnostics.extend(_strict_lowering_diagnostics(entry))
 
     def _record_pruned_skip(self, profile_name: str, slot: "_LoweredSlot") -> None:
+        reason = _pruned_reason(slot)
+        diagnostic = Diagnostic(
+            severity="info",
+            code="TSL-PIPELINE-PRUNED-SPECIALIZATION",
+            message=reason,
+            location=slot.spec.source.start if slot.spec.source is not None else None,
+        )
         entry = SkippedEntry(
             profile=profile_name,
             backend=slot.backend,
             primitive=slot.spec.primitive_name,
             extension=slot.spec.extension_name,
             type_tag=slot.spec.type_tag,
-            reason=_pruned_reason(slot),
+            reason=reason,
+            diagnostics=(diagnostic,),
             source_primitive_name=slot.spec.source_primitive_name,
             result_kind=slot.spec.result_kind,
             param_kinds=slot.spec.param_kinds,
@@ -554,6 +564,7 @@ def _lowering_skipped_entry(
         extension=slot.extension.name,
         type_tag=slot.type_tag,
         reason=next((d.message for d in lowered.diagnostics), "unsupported body"),
+        diagnostics=lowered.diagnostics,
         status=_skip_status(lowered.diagnostics),
         source_primitive_name=slot.primitive.name,
         result_kind="" if shape is None else shape.result_kind,
@@ -580,10 +591,12 @@ def _has_strict_skips(skipped: list[SkippedEntry]) -> bool:
     return any(entry.status == "coverage_gap" for entry in skipped)
 
 
-def _strict_lowering_diagnostics(
-    entry: SkippedEntry, diagnostics: tuple[Diagnostic, ...]
-) -> tuple[Diagnostic, ...]:
-    coverage_gaps = tuple(d for d in diagnostics if d.severity == "info")
+def _strict_lowering_diagnostics(entry: SkippedEntry) -> tuple[Diagnostic, ...]:
+    coverage_gaps = tuple(
+        diagnostic
+        for diagnostic in entry.diagnostics
+        if diagnostic.severity == "info"
+    )
     if not coverage_gaps:
         return (
             _strict_skip_diagnostic(
@@ -646,6 +659,18 @@ def _requested_primitives(
     if request.primitives is not None:
         return request.primitives
     return tuple(sorted({primitive.name for primitive in catalog.primitives}))
+
+
+def _merge_benchmark_plans(
+    plans: tuple[BenchmarkProjectPlan, ...],
+) -> BenchmarkProjectPlan:
+    if not plans:
+        return EMPTY_BENCHMARK_PROJECT_PLAN
+    return BenchmarkProjectPlan(
+        profiles=tuple(profile for plan in plans for profile in plan.profiles),
+        diagnostics=tuple(diagnostic for plan in plans for diagnostic in plan.diagnostics),
+        coverage=tuple(entry for plan in plans for entry in plan.coverage),
+    )
 
 
 def _finalize(

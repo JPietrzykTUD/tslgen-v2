@@ -77,10 +77,28 @@ def test_query_facade_separates_evaluator_from_namespace_functions() -> None:
 def test_type_is_same_query(catalog: Catalog) -> None:
     ev = QueryEvaluator()
     ctx = _ctx(catalog, "avx2", "ui16")
+    assert ev.evaluate("type::is_same(base::in, ui16)", ctx) == BoolValue(True)
+    assert ev.evaluate("type::is_same(base::in, ui8)", ctx) == BoolValue(False)
+    # The passthrough wrapper remains accepted for compatibility, but is not canonical
+    # inside an already-typed query.
     assert ev.evaluate("type::is_same(type(base::in), ui16)", ctx) == BoolValue(True)
     assert ev.evaluate("type::is_same(type(base::in), ui8)", ctx) == BoolValue(False)
-    assert ev.evaluate("type::same_size(type(base::in), si16)", ctx) == BoolValue(True)
-    assert ev.evaluate("type::same_size(type(base::in), si32)", ctx) == BoolValue(False)
+    assert ev.evaluate("type::same_size(base::in, si16)", ctx) == BoolValue(True)
+    assert ev.evaluate("type::same_size(base::in, si32)", ctx) == BoolValue(False)
+
+
+def test_unsigned_type_query_handles_integer_and_float_inputs(catalog: Catalog) -> None:
+    ev = QueryEvaluator()
+
+    assert ev.evaluate(
+        "base::unsigned_of(base::in)", _ctx(catalog, "avx2", "si32")
+    ) == TypeValue("ui32")
+    assert ev.evaluate(
+        "base::unsigned_of(base::in)", _ctx(catalog, "avx2", "f32")
+    ) == TypeValue("ui32")
+    assert ev.evaluate(
+        "base::unsigned_of(base::in)", _ctx(catalog, "avx2", "f64")
+    ) == TypeValue("ui64")
 
 
 def test_type_size_queries_accept_type_values_without_wrapper(catalog: Catalog) -> None:
@@ -98,10 +116,7 @@ def test_select_query_chooses_same_kind_generation_value(catalog: Catalog) -> No
     ctx_f32 = _ctx(catalog, "avx2", "f32")
     ctx_f64 = _ctx(catalog, "avx2", "f64")
 
-    query = (
-        "select(value(type::is_same(type(base::in), f32)), "
-        "ui32, ui64)"
-    )
+    query = "select(type::is_same(base::in, f32), ui32, ui64)"
 
     assert ev.evaluate(query, ctx_f32) == TypeValue("ui32")
     assert ev.evaluate(query, ctx_f64) == TypeValue("ui64")

@@ -20,7 +20,7 @@ from tslc.benchmark.model import (
     BenchmarkVectorScalarScenario,
     SpecializationKey,
 )
-from tslc.benchmark.planner import BenchmarkPlanner
+from tslc.benchmark.planner import CppBenchmarkPlanner
 
 __all__ = (
     "BenchmarkCandidate",
@@ -32,7 +32,7 @@ __all__ = (
     "BenchmarkIndexedLoadCorrectnessCase",
     "BenchmarkIndexedLoadScenario",
     "BenchmarkMaskResultScenario",
-    "BenchmarkPlanner",
+    "CppBenchmarkPlanner",
     "BenchmarkProfilePlan",
     "BenchmarkProjectPlan",
     "BenchmarkReductionCorrectnessCase",

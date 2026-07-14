@@ -36,6 +36,7 @@ from tslc.value_tests import (
 from tslc.value_tests.model import (
     DEFAULT_VALUE_TEST_CASE_CAPABILITIES,
     DEFAULT_VALUE_TEST_CASE_KINDS,
+    ValueTestBackendSupport,
     ValueTestCasePlan as _ValueTestCasePlan,
     ValueTestCoverageEntry,
     ValueTestDifferential,
@@ -539,6 +540,51 @@ def test_simple_shape_patterns_are_not_ordered_by_first_overload() -> None:
     ] == [
         ("store", "basic", ("false",))
     ]
+
+
+def test_overload_inference_placeholders_are_backend_capability_driven() -> None:
+    primitive = Primitive(
+        "store",
+        "void:=(ptr,v)",
+        ("ptr", "data"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="basic",
+                type_tag="si32",
+                tags=("basic",),
+                lanes=4,
+                inputs=(TslTestArg("vector", values=("1", "2", "3", "4")),),
+                expected=("1", "2", "3", "4"),
+                attrs={"aligned": "false"},
+            ),
+        ),
+    )
+    scalar_overload = _spec(
+        "store", "store", result_kind="void", param_kinds=("ptr", "s")
+    )
+    vector_overload = _spec(
+        "store", "store", result_kind="void", param_kinds=("ptr", "v")
+    )
+    support = ValueTestBackendSupport(
+        backend_id="future",
+        case_kinds=CPP_VALUE_TEST_SUPPORT.case_kinds,
+        overload_inference_placeholders=2,
+    )
+
+    plan = ValueTestPlanner(
+        _catalog(primitive, *_harness_primitives()),
+        (support,),
+    ).plan(
+        (
+            ValueTestBackendProfileInput(
+                "future", "unit", {"store": (scalar_overload, vector_overload)}
+            ),
+        )
+    )
+
+    assert plan.profiles_for("future")[0].cases[0].invocation.inferred_type_args == 2
 
 
 def test_lane_list_value_tests_are_planned_and_rendered(

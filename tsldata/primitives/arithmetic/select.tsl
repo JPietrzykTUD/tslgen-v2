@@ -194,7 +194,7 @@ prim<v:=(v,v)> max(vec_a, vec_b):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_vec_a, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(vec_a)));
               var<const_infer>(generic_vec_b, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(vec_b)));
               complete(
@@ -398,7 +398,7 @@ prim<v:=(v,v)> min(vec_a, vec_b):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_vec_a, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(vec_a)));
               var<const_infer>(generic_vec_b, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(vec_b)));
               complete(

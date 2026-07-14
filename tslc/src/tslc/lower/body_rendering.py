@@ -165,7 +165,7 @@ class ExpressionRenderer:
 
     def _render_segment(self, segment: Segment) -> RenderText:
         if isinstance(segment, RawText):
-            return render_raw_text(segment.text, self._context)
+            return render_raw_text(segment.text)
         lowerer = self._lowerers.get(segment.keyword)
         if lowerer is None:
             self._context.effects.skip(

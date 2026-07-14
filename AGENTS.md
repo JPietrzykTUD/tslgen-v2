@@ -138,7 +138,7 @@ Useful focused tests:
 ```bash
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog_validation.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_lower_text.py
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower*.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower*.py tslc/tests/test_lower_*.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_render_model.py tslc/tests/test_generation_conditionals.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify_config.py tslc/tests/test_output_format.py
 ```

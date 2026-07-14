@@ -99,8 +99,8 @@ class ValueTestPlanner:
         for emitted_name in sorted(profile.specializations):
             emitted_specs = profile.specializations[emitted_name]
             inferred_type_args = (
-                1
-                if profile.backend_id == "rust" and varying_positions(emitted_specs)
+                backend.overload_inference_placeholders
+                if varying_positions(emitted_specs)
                 else 0
             )
             for specs in _value_test_spec_groups(emitted_specs):

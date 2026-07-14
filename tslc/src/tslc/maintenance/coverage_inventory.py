@@ -16,7 +16,6 @@ guarantee — only build-verified primitives are confirmed to compile.
 from __future__ import annotations
 
 import ast
-import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -26,6 +25,7 @@ from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.builder import CatalogBuilder
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import has_errors
+from tslc.pipeline import SkippedEntry
 from tslc.sources import SourceLoader
 from tslc.syntax.parser import TslParser
 
@@ -81,32 +81,36 @@ def _build_verified_primitives() -> set[str]:
     return verified
 
 
-def _category(reason: str) -> str:
-    """Collapse a raw skip reason into a short, stable category label."""
+_CATEGORY_BY_CODE = {
+    "TSL-PIPELINE-PRUNED-SPECIALIZATION": "pruned (closure)",
+    "TSL-LOWER-SIZED-WIDTH-CHANGE": "generic-vector repr-change (deferred)",
+    "TSL-LOWER-UNRESOLVED-TYPE-QUERY": "unresolved type query",
+    "TSL-LOWER-UNRESOLVED-VALUE-QUERY": "unresolved value query",
+    "TSL-LOWER-UNRESOLVED-CAST-TYPE": "unresolved cast type",
+    "TSL-LOWER-POLICY-DEFERRED-SIGNATURE": "policy-deferred scalable signature",
+    "TSL-LOWER-UNSUPPORTED-KIND": "unsupported signature kind",
+    "TSL-LOWER-NO-COMPLETE": "no top-level complete",
+    "TSL-LOWER-VARIANT-NO-COMPLETE": "no top-level complete",
+    "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS": "call type-args (bare-ext/index)",
+    "TSL-LOWER-UNSUPPORTED-MASK": "unsupported mask region",
+}
 
-    if reason.startswith("pruned:"):
-        return "pruned (closure)"
-    if "generic vector (LANES-sized target)" in reason:
-        return "generic-vector repr-change (deferred)"
-    if reason.startswith("could not resolve type<"):
-        return "unresolved type query"
-    if reason.startswith("could not resolve value<"):
-        return "unresolved value query"
-    if reason.startswith("could not resolve pointer cast"):
-        return "unresolved pointer-cast type"
-    if "is policy-deferred for scalable vector extension" in reason:
-        match = re.search(r"signature '([^']+)'", reason)
-        return f"policy-deferred scalable signature {match.group(1) if match else ''}".strip()
-    if "uses an unsupported kind" in reason:
-        match = re.search(r"signature '([^']+)'", reason)
-        return f"unsupported signature kind {match.group(1) if match else ''}".strip()
-    if "has no top-level complete" in reason or "has no top-level emit_return" in reason:
-        return "no top-level complete"
-    if reason.startswith("call type-args"):
-        return "call type-args (bare-ext/index)"
-    if reason.startswith("unsupported mask<test>"):
-        return "unsupported mask<test>"
-    return reason[:40]
+
+def skip_category(entry: SkippedEntry) -> str:
+    """Return a stable category from structured diagnostic identity, never prose."""
+
+    if not entry.diagnostics:
+        return f"unclassified {entry.status}"
+    diagnostic = next(
+        (
+            diagnostic
+            for diagnostic in entry.diagnostics
+            if diagnostic.severity == "error"
+        ),
+        entry.diagnostics[0],
+    )
+    code = diagnostic.code
+    return _CATEGORY_BY_CODE.get(code, code)
 
 
 _CATEGORY_NOTES = {
@@ -128,8 +132,8 @@ _CATEGORY_NOTES = {
         "`type::size_bytes(...)`). Blocks to_integral/to_mask generic paths "
         "and arithmetic fallback bodies."
     ),
-    "unresolved pointer-cast type": (
-        "`cast<reinterpret>` to a `vector::mask_underlying_t` pointer not resolved."
+    "unresolved cast type": (
+        "A typed cast target could not be resolved before backend rendering."
     ),
     "no top-level complete": (
         "Body has no top-level `complete(...)` (where-clause / switch-bodied "
@@ -187,14 +191,14 @@ def main() -> int:
         backend_id: defaultdict(set) for backend_id in backend_ids
     }
     skips: Counter[str] = Counter()
-    reasons: dict[str, Counter[str]] = defaultdict(Counter)
+    categories: dict[str, Counter[str]] = defaultdict(Counter)
     for coverage_entry in result.coverage:
         coverage_by_backend[coverage_entry.backend][coverage_entry.primitive].add(
             coverage_entry.extension
         )
     for skipped_entry in result.skipped:
         skips[skipped_entry.primitive] += 1
-        reasons[skipped_entry.primitive][skipped_entry.reason] += 1
+        categories[skipped_entry.primitive][skip_category(skipped_entry)] += 1
 
     def status(name: str) -> str:
         emitted = any(coverage[name] for coverage in coverage_by_backend.values())
@@ -211,7 +215,7 @@ def main() -> int:
     total_skipped = len(result.skipped)
     histogram: Counter[str] = Counter()
     for skipped_entry in result.skipped:
-        histogram[_category(skipped_entry.reason)] += 1
+        histogram[skip_category(skipped_entry)] += 1
     backend_label = "/".join(backend_ids)
     parity = all(
         len({frozenset(coverage[name]) for coverage in coverage_by_backend.values()}) <= 1
@@ -273,7 +277,7 @@ def main() -> int:
         )
         signatures = " ".join(f"`{s}`" for s in sorted(sigs[name]))
         dominant = (
-            _category(reasons[name].most_common(1)[0][0]) if reasons[name] else "—"
+            categories[name].most_common(1)[0][0] if categories[name] else "—"
         )
         w(f"| `{name}` | {signatures} | {status(name)} | {exts} | {skips[name]} | {dominant} |")
     w("")
@@ -286,8 +290,7 @@ def main() -> int:
     w("| skips | category | meaning / action |")
     w("|--:|---|---|")
     for category, count in histogram.most_common():
-        key = "unsupported signature kind" if category.startswith("unsupported signature kind") else category
-        w(f"| {count} | {category} | {_CATEGORY_NOTES.get(key, '')} |")
+        w(f"| {count} | {category} | {_CATEGORY_NOTES.get(category, '')} |")
     w("")
     w("### NONE primitives — why nothing emits\n")
     if not tier["NONE"]:
@@ -296,14 +299,9 @@ def main() -> int:
     else:
         for name in tier["NONE"]:
             signatures = " ".join(f"`{s}`" for s in sorted(sigs[name]))
-            if reasons[name]:
-                category = _category(reasons[name].most_common(1)[0][0])
-                key = (
-                    "unsupported signature kind"
-                    if category.startswith("unsupported signature kind")
-                    else category
-                )
-                note = _CATEGORY_NOTES.get(key, "")
+            if categories[name]:
+                category = categories[name].most_common(1)[0][0]
+                note = _CATEGORY_NOTES.get(category, "")
                 suffix = f": {category}. {note}" if note else f": {category}."
             else:
                 suffix = "."

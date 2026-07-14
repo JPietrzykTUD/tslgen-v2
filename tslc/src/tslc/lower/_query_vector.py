@@ -13,11 +13,13 @@ from tslc.lower.context import (
     VectorSpellingPolicy,
     VectorValue,
 )
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+from tslc.support_policy import SupportPolicy
 
 
 def _vector_value(base_tag: str, context: LoweringSession) -> VectorValue:
-    value = _vector_value_from_extension(base_tag, context.env.extension)
+    value = _vector_value_from_extension(
+        base_tag, context.env.extension, context.env.support
+    )
     if value.uses_sized_vector:
         return replace(
             value,
@@ -32,18 +34,20 @@ def _vector_value_for_extension(
     extension = _catalog_extension(extension_name, context)
     if extension is None:
         return None
-    return _vector_value_from_extension(base_tag, extension)
+    return _vector_value_from_extension(base_tag, extension, context.env.support)
 
 
-def _vector_value_from_extension(base_tag: str, extension: Extension) -> VectorValue:
-    uses_sized_vector = DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
+def _vector_value_from_extension(
+    base_tag: str, extension: Extension, support: SupportPolicy
+) -> VectorValue:
+    uses_sized_vector = support.uses_sized_vector(extension)
     return VectorValue(
         base_tag=base_tag,
         extension_isa=extension.isa_name,
-        lanes=DEFAULT_SUPPORT_POLICY.lane_count(extension, base_tag),
+        lanes=support.lane_count(extension, base_tag),
         uses_sized_vector=uses_sized_vector,
         lane_parameter=(
-            LaneCount.symbolic(DEFAULT_SUPPORT_POLICY.size_parameter_name(extension))
+            LaneCount.symbolic(support.size_parameter_name(extension))
             if uses_sized_vector
             else None
         ),
@@ -64,7 +68,7 @@ def _catalog_extension(extension_name: str, context: LoweringSession) -> Extensi
 def _sized_vector_value(
     base_tag: str, extension: Extension, context: LoweringSession
 ) -> VectorValue | None:
-    lanes = DEFAULT_SUPPORT_POLICY.lane_count(context.env.extension, base_tag)
+    lanes = context.env.support.lane_count(context.env.extension, base_tag)
     if lanes is None:
         lane_parameter = LaneCount.symbolic(context.env.lane_symbol())
     else:
@@ -103,7 +107,7 @@ class RegisterGenericQuery:
         lane_count: LaneCount | None
         if isinstance(arg, TypeValue):
             base_tag, isa = arg.type_tag, context.env.extension.isa_name
-            uses_sized_vector = DEFAULT_SUPPORT_POLICY.uses_sized_vector(
+            uses_sized_vector = context.env.support.uses_sized_vector(
                 context.env.extension
             )
             lane_count = LaneCount.symbolic(context.env.lane_symbol())
@@ -153,8 +157,8 @@ class ImaskQuery:
     ) -> QueryValue | None:
         if context.env.extension.vector_bits == 0:
             if (
-                DEFAULT_SUPPORT_POLICY.register_is_base(context.env.extension)
-                or DEFAULT_SUPPORT_POLICY.uses_sized_vector(context.env.extension)
+                context.env.support.register_is_base(context.env.extension)
+                or context.env.support.uses_sized_vector(context.env.extension)
             ):
                 return TypeValue("ui64")
         return TextValue(context.env.backend.types.imask_type_spelling())
@@ -170,7 +174,7 @@ class VectorAlignmentQuery:
     ) -> QueryValue | None:
         return TextValue(
             str(
-                DEFAULT_SUPPORT_POLICY.vector_alignment_bytes(
+                context.env.support.vector_alignment_bytes(
                     context.env.extension, context.env.type_tag
                 )
             )
@@ -187,10 +191,10 @@ class VectorLengthQuery:
     ) -> QueryValue | None:
         if context.env.concrete_lanes is not None:
             return TextValue(str(context.env.concrete_lanes))
-        if DEFAULT_SUPPORT_POLICY.uses_scalable_vector(context.env.extension):
+        if context.env.support.uses_scalable_vector(context.env.extension):
             return None
         return TextValue(
-            DEFAULT_SUPPORT_POLICY.lane_expression(
+            context.env.support.lane_expression(
                 context.env.extension, context.env.type_tag
             )
         )
@@ -208,9 +212,9 @@ class VectorRuntimeLengthQuery:
             return None
         if context.env.concrete_lanes is not None:
             return TextValue(str(context.env.concrete_lanes))
-        if DEFAULT_SUPPORT_POLICY.uses_sized_vector(context.env.extension):
+        if context.env.support.uses_sized_vector(context.env.extension):
             return TextValue(context.env.lane_symbol())
-        lanes = DEFAULT_SUPPORT_POLICY.lane_count(
+        lanes = context.env.support.lane_count(
             context.env.extension, context.env.type_tag
         )
         if lanes is not None:
@@ -234,7 +238,7 @@ class AsExtensionQuery:
             return None
         ext = args[0].as_text()
         extension = _catalog_extension(ext, context)
-        if extension is not None and DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
+        if extension is not None and context.env.support.uses_sized_vector(extension):
             return _sized_vector_value(context.env.type_tag, extension, context)
         return _vector_value_for_extension(context.env.type_tag, ext, context)
 
@@ -261,7 +265,9 @@ class FixedFacadeQuery:
                 "hardware-backed fixed-width fallback for this primitive and type",
             )
             return None
-        value = _vector_value_from_extension(context.env.type_tag, extension)
+        value = _vector_value_from_extension(
+            context.env.type_tag, extension, context.env.support
+        )
         return replace(
             value,
             spelling_policy=VectorSpellingPolicy.FIXED_FACADE,
@@ -293,7 +299,7 @@ class WindowBaseQuery:
             return None
         to_base = args[0].type_tag
         extension = context.env.extension
-        if not DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
+        if not context.env.support.uses_sized_vector(extension):
             return _vector_value(to_base, context)
         if context.env.concrete_lanes is not None:
             return VectorValue(
@@ -302,16 +308,16 @@ class WindowBaseQuery:
                 lanes=None,
                 uses_sized_vector=True,
                 lane_parameter=LaneCount.fixed(
-                    DEFAULT_SUPPORT_POLICY.windowed_lane_count(
+                    context.env.support.windowed_lane_count(
                         context.env.type_tag, to_base, context.env.concrete_lanes
                     )
                 ),
             )
-        lane_parameter = DEFAULT_SUPPORT_POLICY.windowed_lane_parameter(
+        lane_parameter = context.env.support.windowed_lane_parameter(
             extension, context.env.type_tag, to_base
         )
         if lane_parameter.is_plain_symbol(
-            DEFAULT_SUPPORT_POLICY.size_parameter_name(extension)
+            context.env.support.size_parameter_name(extension)
         ):
             return _vector_value(to_base, context)
         if context.env.backend.types.render_lane_count(lane_parameter) is None:

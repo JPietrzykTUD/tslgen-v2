@@ -514,7 +514,7 @@ prim<usize:=m> mask_population_count(mask):
             var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
             complete(
               cast<static>(
-                type(scalar::size),
+                scalar::size,
                 helper<popcount>(imask)
               )
             );
@@ -527,7 +527,7 @@ prim<usize:=m> mask_population_count(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), intrin<svcntp_b8>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(scalar::size, intrin<svcntp_b8>(call<primitive=mask_true[Vec]>(), mask)));"
       ?i16:
         requires [sve]
         safety:
@@ -535,7 +535,7 @@ prim<usize:=m> mask_population_count(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), intrin<svcntp_b16>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(scalar::size, intrin<svcntp_b16>(call<primitive=mask_true[Vec]>(), mask)));"
       ?i32:
         requires [sve]
         safety:
@@ -543,7 +543,7 @@ prim<usize:=m> mask_population_count(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(scalar::size, intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
       ?i64:
         requires [sve]
         safety:
@@ -551,7 +551,7 @@ prim<usize:=m> mask_population_count(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(scalar::size, intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
       f32:
         requires [sve]
         safety:
@@ -559,7 +559,7 @@ prim<usize:=m> mask_population_count(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(scalar::size, intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
       f64:
         requires [sve]
         safety:
@@ -567,7 +567,7 @@ prim<usize:=m> mask_population_count(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(scalar::size, intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
     generic:
       arith:
         requires []
@@ -577,7 +577,7 @@ prim<usize:=m> mask_population_count(mask):
           reasons []
         implementation:
           tsil """
-              complete(cast<static>(type(scalar::size), helper<popcount>(mask)));
+              complete(cast<static>(scalar::size, helper<popcount>(mask)));
             """
     oneapi_fpga:
       arith:
@@ -588,7 +588,7 @@ prim<usize:=m> mask_population_count(mask):
           reasons []
         implementation:
           tsil """
-              let<type>(CountT, type(scalar::size));
+              let<type>(CountT, scalar::size);
               var<typed>(CountT, count, cast<static>(CountT, 0));
               loop<backend, unroll>(i, 0, value(vector::length), 1) {
                 if (mask<test>(mask, i)) {
@@ -642,14 +642,14 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
           reasons []
         implementation:
           tsil """
-          if<compile>(( value(type::is_signed(type(vector::imask))) ) && (!PreserveSign)) {
+          if<compile>(( value(type::is_signed(vector::imask)) ) && (!PreserveSign)) {
              complete(
                select_expr(
                  shift >= value(type::size_bits(base::in)),
-                 cast<static>(type(vector::imask), 0),
+                 cast<static>(vector::imask, 0),
                  cast<static>(
-                   type(vector::imask),
-                   cast<static>(type(base::unsigned_of(type(vector::imask))), data) >> shift
+                   vector::imask,
+                   cast<static>(base::unsigned_of(vector::imask), data) >> shift
                  )
                )
              );
@@ -657,8 +657,8 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
              complete(
                select_expr(
                  shift >= value(type::size_bits(base::in)),
-                 cast<static>(type(vector::imask), 0),
-                 cast<static>(type(vector::imask), data >> shift)
+                 cast<static>(vector::imask, 0),
+                 cast<static>(vector::imask, data >> shift)
                )
              );
           }
@@ -685,8 +685,8 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
            complete(
              select_expr(
                shift >= value(type::size_bits(base::in)),
-               cast<static>(type(vector::imask), 0),
-               cast<static>(type(vector::imask), data >> shift)
+               cast<static>(vector::imask, 0),
+               cast<static>(vector::imask, data >> shift)
              )
            );
             """
@@ -729,8 +729,8 @@ prim<im:=(im,usize)> shift_left_imask(data, shift):
             complete(
               select_expr(
                 shift >= value(type::size_bits(base::in)),
-                cast<static>(type(vector::imask), 0),
-                cast<static>(type(vector::imask), data << shift)
+                cast<static>(vector::imask, 0),
+                cast<static>(vector::imask, data << shift)
               )
             );
           """

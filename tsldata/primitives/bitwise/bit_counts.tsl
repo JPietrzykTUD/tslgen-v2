@@ -90,17 +90,17 @@ prim<v:=v> popcnt(data):
           reasons []
         implementation:
           tsil """
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            let<type>(UVec, type(vector::as_base(UBase)));
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
             var<infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
             var<const_infer>(m1, call<primitive=set1[UVec]>(cast<static>(
-              UBase, cast<static>(type(scalar::ui64), 0x5555555555555555)
+              UBase, cast<static>(scalar::ui64, 0x5555555555555555)
             )));
             var<const_infer>(m2, call<primitive=set1[UVec]>(cast<static>(
-              UBase, cast<static>(type(scalar::ui64), 0x3333333333333333)
+              UBase, cast<static>(scalar::ui64, 0x3333333333333333)
             )));
             var<const_infer>(m4, call<primitive=set1[UVec]>(cast<static>(
-              UBase, cast<static>(type(scalar::ui64), 0x0F0F0F0F0F0F0F0F)
+              UBase, cast<static>(scalar::ui64, 0x0F0F0F0F0F0F0F0F)
             )));
             bits = call<primitive=sub[UVec]>(
               bits,
@@ -128,15 +128,15 @@ prim<v:=v> popcnt(data):
               call<primitive=shift_right[UVec, false]>(bits, 8)
             );
             if<generation>(
-              value(type::same_size(type(base::in), ui32)) ||
-              value(type::same_size(type(base::in), ui64))
+              value(type::same_size(base::in, ui32)) ||
+              value(type::same_size(base::in, ui64))
             ) {
               bits = call<primitive=add[UVec]>(
                 bits,
                 call<primitive=shift_right[UVec, false]>(bits, 16)
               );
             }
-            if<generation>(value(type::same_size(type(base::in), ui64))) {
+            if<generation>(value(type::same_size(base::in, ui64))) {
               bits = call<primitive=add[UVec]>(
                 bits,
                 call<primitive=shift_right[UVec, false]>(bits, 32)
@@ -152,7 +152,7 @@ prim<v:=v> popcnt(data):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(data)
               ));
@@ -172,8 +172,8 @@ prim<v:=v> popcnt(data):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
-            let<type>(WordVec, type(vector::as_base(ui16)));
+            let<type>(IntrinBase, base::signed_of(base::in));
+            let<type>(WordVec, vector::as_base(ui16));
             var<const_infer>(lookup, intrin<setr, build[suffix=base::signed_of(base::in)]>(
               cast<static>(IntrinBase, 0), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 2),
               cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 3),
@@ -185,7 +185,7 @@ prim<v:=v> popcnt(data):
               cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 4)
             ));
             var<const_infer>(nibble_mask, call<primitive=set1[Vec]>(
-              cast<static>(type(base::in), 15)
+              cast<static>(base::in, 15)
             ));
             var<const_infer>(low, call<primitive=binary_and[Vec]>(data, nibble_mask));
             var<const_infer>(high, call<primitive=binary_and[Vec]>(
@@ -205,7 +205,7 @@ prim<v:=v> popcnt(data):
         variants:
           sse_halves:
             tsil """
-              let<type>(HalfVec, type(vector::as(sse, type(base::in))));
+              let<type>(HalfVec, vector::as(sse, base::in));
               var<const_infer>(low, call<primitive=extract[Vec, sse, 0]>(data));
               var<const_infer>(high, call<primitive=extract[Vec, sse, 1]>(data));
               var<const_infer>(low_counts, call<primitive=@self[HalfVec]>(low));
@@ -217,7 +217,7 @@ prim<v:=v> popcnt(data):
             """
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(data)
               ));
@@ -237,8 +237,8 @@ prim<v:=v> popcnt(data):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
-            let<type>(WordVec, type(vector::as_base(ui16)));
+            let<type>(IntrinBase, base::signed_of(base::in));
+            let<type>(WordVec, vector::as_base(ui16));
             var<const_infer>(lookup, intrin<setr, build[suffix=base::signed_of(base::in)]>(
               cast<static>(IntrinBase, 0), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 2),
               cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 3),
@@ -246,7 +246,7 @@ prim<v:=v> popcnt(data):
               cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 4)
             ));
             var<const_infer>(nibble_mask, call<primitive=set1[Vec]>(
-              cast<static>(type(base::in), 15)
+              cast<static>(base::in, 15)
             ));
             var<const_infer>(low, call<primitive=binary_and[Vec]>(data, nibble_mask));
             var<const_infer>(high, call<primitive=binary_and[Vec]>(
@@ -266,7 +266,7 @@ prim<v:=v> popcnt(data):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(data)
               ));
@@ -286,7 +286,7 @@ prim<v:=v> popcnt(data):
           reasons []
         implementation:
           tsil """
-            let<type>(WordVec, type(vector::as_base(type(scalar::ui16))));
+            let<type>(WordVec, vector::as_base(scalar::ui16));
             var<infer>(bits, call<primitive=reinterpret[Vec, WordVec]>(data));
             var<const_infer>(m1, call<primitive=set1[WordVec]>(cast<static>(ui16, 0x5555)));
             var<const_infer>(m2, call<primitive=set1[WordVec]>(cast<static>(ui16, 0x3333)));
@@ -317,7 +317,7 @@ prim<v:=v> popcnt(data):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(data)
               ));
@@ -335,7 +335,7 @@ prim<v:=v> popcnt(data):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as(sse, type(base::in))));
+            let<type>(HalfVec, vector::as(sse, base::in));
             var<const_infer>(low, call<primitive=extract[Vec, sse, 0]>(data));
             var<const_infer>(high, call<primitive=extract[Vec, sse, 1]>(data));
             var<const_infer>(low_counts, call<primitive=@self[HalfVec]>(low));
@@ -362,8 +362,8 @@ prim<v:=v> popcnt(data):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(ByteVec, type(vector::as_base(type(scalar::ui8))));
-            let<type>(CountVec, type(vector::as_base(type(scalar::ui16))));
+            let<type>(ByteVec, vector::as_base(scalar::ui8));
+            let<type>(CountVec, vector::as_base(scalar::ui16));
             var<const_infer>(byte_counts, intrin<vcntq_u8>(call<primitive=reinterpret[Vec, ByteVec]>(data)));
             complete(call<primitive=reinterpret[CountVec, Vec]>(intrin<vpaddlq_u8>(byte_counts)));
           """
@@ -375,8 +375,8 @@ prim<v:=v> popcnt(data):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(ByteVec, type(vector::as_base(type(scalar::ui8))));
-            let<type>(CountVec, type(vector::as_base(type(scalar::ui32))));
+            let<type>(ByteVec, vector::as_base(scalar::ui8));
+            let<type>(CountVec, vector::as_base(scalar::ui32));
             var<const_infer>(byte_counts, intrin<vcntq_u8>(call<primitive=reinterpret[Vec, ByteVec]>(data)));
             var<const_infer>(counts16, intrin<vpaddlq_u8>(byte_counts));
             complete(call<primitive=reinterpret[CountVec, Vec]>(intrin<vpaddlq_u16>(counts16)));
@@ -389,8 +389,8 @@ prim<v:=v> popcnt(data):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(ByteVec, type(vector::as_base(type(scalar::ui8))));
-            let<type>(CountVec, type(vector::as_base(type(scalar::ui64))));
+            let<type>(ByteVec, vector::as_base(scalar::ui8));
+            let<type>(CountVec, vector::as_base(scalar::ui64));
             var<const_infer>(byte_counts, intrin<vcntq_u8>(call<primitive=reinterpret[Vec, ByteVec]>(data)));
             var<const_infer>(counts16, intrin<vpaddlq_u8>(byte_counts));
             var<const_infer>(counts32, intrin<vpaddlq_u16>(counts16));
@@ -413,7 +413,7 @@ prim<v:=v> popcnt(data):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(ByteVec, type(vector::as_base(type(scalar::ui8))));
+            let<type>(ByteVec, vector::as_base(scalar::ui8));
             var<const_infer>(byte_counts, call<primitive=@self[ByteVec]>(data));
             complete(intrin<extadd_pairwise_u8x16, build[suffix=u16x8]>(byte_counts));
           """
@@ -425,7 +425,7 @@ prim<v:=v> popcnt(data):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(ByteVec, type(vector::as_base(type(scalar::ui8))));
+            let<type>(ByteVec, vector::as_base(scalar::ui8));
             var<const_infer>(byte_counts, call<primitive=@self[ByteVec]>(data));
             var<const_infer>(counts16, intrin<extadd_pairwise_u8x16, build[suffix=u16x8]>(byte_counts));
             complete(intrin<extadd_pairwise_u16x8, build[suffix=u32x4]>(counts16));
@@ -438,8 +438,8 @@ prim<v:=v> popcnt(data):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(ByteVec, type(vector::as_base(type(scalar::ui8))));
-            let<type>(UVec, type(vector::as_base(type(scalar::ui64))));
+            let<type>(ByteVec, vector::as_base(scalar::ui8));
+            let<type>(UVec, vector::as_base(scalar::ui64));
             var<const_infer>(byte_counts, call<primitive=@self[ByteVec]>(data));
             var<const_infer>(counts16, intrin<extadd_pairwise_u8x16, build[suffix=u16x8]>(byte_counts));
             var<const_infer>(counts32, intrin<extadd_pairwise_u16x8, build[suffix=u32x4]>(counts16));
@@ -472,7 +472,7 @@ prim<v:=v> popcnt(data):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<base::unsigned_of(base::in)>, Vec]>(
                 intrin<svcnt, build[post=x]>(call<primitive=mask_true[Vec]>(), data)
               )
             );
@@ -492,7 +492,7 @@ prim<v:=v> popcnt(data):
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
                loop<backend, unroll>(i, 0, value(vector::length), 1)  {
-                data_arr[i] = cast<static>(type(base::in), helper<popcount>(data_arr[i]));
+                data_arr[i] = cast<static>(base::in, helper<popcount>(data_arr[i]));
               }
                complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
@@ -509,7 +509,7 @@ prim<v:=v> popcnt(data):
           tsil """
               var<infer>(result, data);
               loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = cast<static>(type(base::in), helper<popcount>(data[i]));
+                result[i] = cast<static>(base::in, helper<popcount>(data[i]));
               }
               complete(result);
             """
@@ -521,7 +521,7 @@ prim<v:=v> popcnt(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(base::in), helper<popcount>(data)));"
+          tsil "complete(cast<static>(base::in, helper<popcount>(data)));"
 prim<usize:=s> lzc_scalar(data):
   brief_description "Counts leading zero bits in a scalar value."
   detailed_description """
@@ -551,7 +551,7 @@ prim<usize:=s> lzc_scalar(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), helper<clz>(data)));"
+          tsil "complete(cast<static>(scalar::size, helper<clz>(data)));"
       f?:
         requires:
           scalar []
@@ -564,10 +564,10 @@ prim<usize:=s> lzc_scalar(data):
           reasons [raw_memory]
         implementation:
           tsil """
-               let<type>(UnsignedT, type(select(value(type::is_same(type(base::in), f32)), ui32, ui64)));
+               let<type>(UnsignedT, base::unsigned_of(base::in));
                var<infer>(bits, cast<static>(UnsignedT, 0));
-               mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data), value(type::size_bytes(type(base::in)))) ;
-               complete(cast<static>(type(scalar::size), helper<clz>(bits))) ;
+               mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data), value(type::size_bytes(base::in))) ;
+               complete(cast<static>(scalar::size, helper<clz>(bits))) ;
             """
     oneapi_fpga:
       ?i?:
@@ -577,7 +577,7 @@ prim<usize:=s> lzc_scalar(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), helper<clz>(data)));"
+          tsil "complete(cast<static>(scalar::size, helper<clz>(data)));"
     oneapi_fpga_rtl:
       ?i?:
         requires []
@@ -586,7 +586,7 @@ prim<usize:=s> lzc_scalar(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), helper<clz>(data)));"
+          tsil "complete(cast<static>(scalar::size, helper<clz>(data)));"
 prim<v:=v> lzc(data):
   brief_description "Counts leading zero bits independently in each vector lane."
   detailed_description """
@@ -645,11 +645,11 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            let<type>(UVec, type(vector::as_base(UBase)));
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
             var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
             var<const_infer>(counts, call<primitive=@self[UVec]>(bits));
-            complete(call<primitive=cast[UVec, type(base::in)]>(counts));
+            complete(call<primitive=cast[UVec, base::in]>(counts));
           """
     clang_v128:
       ?i?:
@@ -663,7 +663,7 @@ prim<v:=v> lzc(data):
             complete(intrin<__builtin_elementwise_clzg>(
               data,
               call<primitive=set1[Vec]>(
-                cast<static>(type(base::in), value(type::size_bits(base::in)))
+                cast<static>(base::in, value(type::size_bits(base::in)))
               )
             ));
           """
@@ -675,11 +675,11 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            let<type>(UVec, type(vector::as_base(UBase)));
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
             var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
             var<const_infer>(counts, call<primitive=@self[UVec]>(bits));
-            complete(call<primitive=cast[UVec, type(base::in)]>(counts));
+            complete(call<primitive=cast[UVec, base::in]>(counts));
           """
     neon:
       [si8, si16, si32, ui8, ui16, ui32]:
@@ -698,7 +698,7 @@ prim<v:=v> lzc(data):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(UVec, type(vector::as_base(type(scalar::ui64))));
+            let<type>(UVec, vector::as_base(scalar::ui64));
             var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
             var<const_infer>(high_words, intrin<vmovn_u64>(
               intrin<vshrq_n, build[suffix=ui64, immediate(1)=32]>(udata, 32)
@@ -728,9 +728,9 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            let<type>(UVec, type(vector::as_base(UBase)));
-            let<type>(ResultBase, type(base::in));
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
+            let<type>(ResultBase, base::in);
             var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
             var<const_infer>(counts, call<primitive=lzc[UVec]>(bits));
             complete(call<primitive=cast[UVec, ResultBase]>(counts));
@@ -753,7 +753,7 @@ prim<v:=v> lzc(data):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<base::unsigned_of(base::in)>, Vec]>(
                 intrin<svclz, build[post=x]>(call<primitive=mask_true[Vec]>(), data)
               )
             );
@@ -766,11 +766,11 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            let<type>(UVec, type(vector::as_base(UBase)));
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
             var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
             var<const_infer>(counts, call<primitive=@self[UVec]>(bits));
-            complete(call<primitive=cast[UVec, type(base::in)]>(counts));
+            complete(call<primitive=cast[UVec, base::in]>(counts));
           """
     wasm128:
       ?i?:
@@ -781,7 +781,7 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation>(i, 0, value(vector::length), 1) {
               {
@@ -789,7 +789,7 @@ prim<v:=v> lzc(data):
                 var<const_infer>(count, call<primitive=lzc_scalar[ScalarVec]>(lane));
                 result = call<primitive=insert_value[Vec, i]>(
                   result,
-                  cast<static>(type(base::in), count)
+                  cast<static>(base::in, count)
                 );
               }
             }
@@ -803,11 +803,11 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            let<type>(UVec, type(vector::as_base(UBase)));
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
             var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
             var<const_infer>(counts, call<primitive=@self[UVec]>(bits));
-            complete(call<primitive=cast[UVec, type(base::in)]>(counts));
+            complete(call<primitive=cast[UVec, base::in]>(counts));
           """
     [avx512, avx2, sse]:
       ?i8:
@@ -821,9 +821,9 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            let<type>(UVec, type(vector::as_base(UBase)));
-            let<type>(WordVec, type(vector::as_base(ui16)));
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
+            let<type>(WordVec, vector::as_base(ui16));
             var<infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
             var<const_infer>(mask1, call<primitive=reinterpret[WordVec, UVec]>(
               call<primitive=set1[WordVec]>(cast<static>(ui16, 0x7f7f))
@@ -871,7 +871,7 @@ prim<v:=v> lzc(data):
               )
             );
             var<const_infer>(all_ones, call<primitive=set1[UVec]>(
-              cast<bitcast>(UBase, cast<static>(type(base::signed_of(type(base::in))), -1))
+              cast<bitcast>(UBase, cast<static>(base::signed_of(base::in), -1))
             ));
             var<const_infer>(leading_zeros, call<primitive=popcnt[UVec]>(
               call<primitive=binary_andnot[UVec]>(bits, all_ones)
@@ -881,7 +881,7 @@ prim<v:=v> lzc(data):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(data)
               ));
@@ -904,24 +904,24 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            let<type>(UVec, type(vector::as_base(UBase)));
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
             var<infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
             bits = call<primitive=binary_or[UVec]>(bits, call<primitive=shift_right[UVec, false]>(bits, 1));
             bits = call<primitive=binary_or[UVec]>(bits, call<primitive=shift_right[UVec, false]>(bits, 2));
             bits = call<primitive=binary_or[UVec]>(bits, call<primitive=shift_right[UVec, false]>(bits, 4));
             bits = call<primitive=binary_or[UVec]>(bits, call<primitive=shift_right[UVec, false]>(bits, 8));
             if<generation>(
-              value(type::same_size(type(base::in), ui32)) ||
-              value(type::same_size(type(base::in), ui64))
+              value(type::same_size(base::in, ui32)) ||
+              value(type::same_size(base::in, ui64))
             ) {
               bits = call<primitive=binary_or[UVec]>(bits, call<primitive=shift_right[UVec, false]>(bits, 16));
             }
-            if<generation>(value(type::same_size(type(base::in), ui64))) {
+            if<generation>(value(type::same_size(base::in, ui64))) {
               bits = call<primitive=binary_or[UVec]>(bits, call<primitive=shift_right[UVec, false]>(bits, 32));
             }
             var<const_infer>(all_ones, call<primitive=set1[UVec]>(
-              cast<bitcast>(UBase, cast<static>(type(base::signed_of(type(base::in))), -1))
+              cast<bitcast>(UBase, cast<static>(base::signed_of(base::in), -1))
             ));
             var<const_infer>(leading_zeros, call<primitive=popcnt[UVec]>(
               call<primitive=binary_andnot[UVec]>(bits, all_ones)
@@ -931,7 +931,7 @@ prim<v:=v> lzc(data):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(data)
               ));
@@ -951,16 +951,16 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            let<type>(UVec, type(vector::as_base(UBase)));
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
             var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
             var<const_infer>(counts, call<primitive=@self[UVec]>(bits));
-            complete(call<primitive=cast[UVec, type(base::in)]>(counts));
+            complete(call<primitive=cast[UVec, base::in]>(counts));
           """
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(data)
               ));
@@ -978,7 +978,7 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(WorkVec, type(vector::as_base(ui32)));
+            let<type>(WorkVec, vector::as_base(ui32));
             var<infer>(bits, call<primitive=reinterpret[Vec, WorkVec]>(data));
             bits = call<primitive=binary_or[WorkVec]>(bits, call<primitive=binary_and[WorkVec]>(
               call<primitive=shift_right[WorkVec, false]>(bits, 1),
@@ -1015,7 +1015,7 @@ prim<v:=v> lzc(data):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(data)
               ));
@@ -1032,7 +1032,7 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(WorkVec, type(vector::as_base(ui32)));
+            let<type>(WorkVec, vector::as_base(ui32));
             var<infer>(bits, call<primitive=reinterpret[Vec, WorkVec]>(data));
             bits = call<primitive=binary_or[WorkVec]>(bits, call<primitive=binary_and[WorkVec]>(
               call<primitive=shift_right[WorkVec, false]>(bits, 1),
@@ -1079,7 +1079,7 @@ prim<v:=v> lzc(data):
         variants:
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(data)
               ));
@@ -1097,16 +1097,16 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            let<type>(UVec, type(vector::as_base(UBase)));
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
             var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
             var<const_infer>(counts, call<primitive=@self[UVec]>(bits));
-            complete(call<primitive=cast[UVec, type(base::in)]>(counts));
+            complete(call<primitive=cast[UVec, base::in]>(counts));
           """
         variants:
           sse_halves:
             tsil """
-              let<type>(HalfVec, type(vector::as(sse, type(base::in))));
+              let<type>(HalfVec, vector::as(sse, base::in));
               var<const_infer>(low, call<primitive=extract[Vec, sse, 0]>(data));
               var<const_infer>(high, call<primitive=extract[Vec, sse, 1]>(data));
               var<const_infer>(low_counts, call<primitive=@self[HalfVec]>(low));
@@ -1118,7 +1118,7 @@ prim<v:=v> lzc(data):
             """
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(data)
               ));
@@ -1135,16 +1135,16 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            let<type>(UVec, type(vector::as_base(UBase)));
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
             var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
             var<const_infer>(counts, call<primitive=@self[UVec]>(bits));
-            complete(call<primitive=cast[UVec, type(base::in)]>(counts));
+            complete(call<primitive=cast[UVec, base::in]>(counts));
           """
         variants:
           sse_halves:
             tsil """
-              let<type>(HalfVec, type(vector::as(sse, type(base::in))));
+              let<type>(HalfVec, vector::as(sse, base::in));
               var<const_infer>(low, call<primitive=extract[Vec, sse, 0]>(data));
               var<const_infer>(high, call<primitive=extract[Vec, sse, 1]>(data));
               var<const_infer>(low_counts, call<primitive=@self[HalfVec]>(low));
@@ -1156,7 +1156,7 @@ prim<v:=v> lzc(data):
             """
           generic_fallback:
             tsil """
-              let<type>(GenericVec, type(vector::as_extension(generic)));
+              let<type>(GenericVec, vector::as_extension(generic));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(data)
               ));
@@ -1174,7 +1174,7 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as(sse, type(base::in))));
+            let<type>(HalfVec, vector::as(sse, base::in));
             var<const_infer>(low, call<primitive=extract[Vec, sse, 0]>(data));
             var<const_infer>(high, call<primitive=extract[Vec, sse, 1]>(data));
             var<const_infer>(low_counts, call<primitive=@self[HalfVec]>(low));
@@ -1199,7 +1199,7 @@ prim<v:=v> lzc(data):
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
                loop<backend, unroll>(i, 0, value(vector::length), 1)  {
-                data_arr[i] = cast<static>(type(base::in), call<primitive=lzc_scalar[type(vector::as_extension(scalar))]>(data_arr[i]));
+                data_arr[i] = cast<static>(base::in, call<primitive=lzc_scalar[vector::as_extension(scalar)]>(data_arr[i]));
               }
                complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
@@ -1211,7 +1211,7 @@ prim<v:=v> lzc(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(base::in), call<primitive=lzc_scalar[type(vector::as_extension(scalar))]>(data)));"
+          tsil "complete(cast<static>(base::in, call<primitive=lzc_scalar[vector::as_extension(scalar)]>(data)));"
     [clang_v128, generic]:
       arith:
         requires:
@@ -1225,7 +1225,7 @@ prim<v:=v> lzc(data):
           tsil """
               var<infer>(result, data);
               loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = cast<static>(type(base::in), call<primitive=lzc_scalar[type(vector::as_extension(scalar))]>(data[i]));
+                result[i] = cast<static>(base::in, call<primitive=lzc_scalar[vector::as_extension(scalar)]>(data[i]));
               }
               complete(result);
             """
@@ -1242,7 +1242,7 @@ prim<v:=v> lzc(data):
           tsil """
                var<infer>(result, data);
                loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = cast<static>(type(base::in), call<primitive=lzc_scalar[type(vector::as_extension(scalar))]>(data[i]));
+                result[i] = cast<static>(base::in, call<primitive=lzc_scalar[vector::as_extension(scalar)]>(data[i]));
               }
                complete(result);
             """
@@ -1278,7 +1278,7 @@ prim<usize:=m> lzc_imask(value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), helper<clz>(call<primitive=to_integral[Vec]>(value))));"
+          tsil "complete(cast<static>(scalar::size, helper<clz>(call<primitive=to_integral[Vec]>(value))));"
     [oneapi_fpga, oneapi_fpga_rtl]:
       arith:
         requires:
@@ -1289,7 +1289,7 @@ prim<usize:=m> lzc_imask(value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), helper<clz>(call<primitive=to_integral[Vec]>(value))));"
+          tsil "complete(cast<static>(scalar::size, helper<clz>(call<primitive=to_integral[Vec]>(value))));"
 prim<usize:=m> tzc(value):
   brief_description "Counts trailing zero bits in an integral mask value."
   detailed_description """
@@ -1322,4 +1322,4 @@ prim<usize:=m> tzc(value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), helper<ctz>(call<primitive=to_integral[Vec]>(value))));"
+          tsil "complete(cast<static>(scalar::size, helper<ctz>(call<primitive=to_integral[Vec]>(value))));"

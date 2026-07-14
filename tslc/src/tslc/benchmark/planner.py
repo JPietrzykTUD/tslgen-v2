@@ -57,7 +57,7 @@ _STABLE_ID_RE = re.compile(r"[^0-9A-Za-z_]+")
 BENCHMARK_PROTOCOL_VERSION = 1
 
 
-class BenchmarkPlanner:
+class CppBenchmarkPlanner:
     """Plan typed benchmark scenarios for authored implementation variants.
 
     Eligibility is expressed entirely through typed signature/catalog facts.
@@ -701,4 +701,4 @@ def _coverage_sort_key(entry: BenchmarkCoverageEntry) -> tuple[str, ...]:
     )
 
 
-__all__ = ("BENCHMARK_PROTOCOL_VERSION", "BenchmarkPlanner")
+__all__ = ("BENCHMARK_PROTOCOL_VERSION", "CppBenchmarkPlanner")

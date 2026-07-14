@@ -18,7 +18,6 @@ from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _vector_spelling
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.target_text import RenderField, as_render_text, literal_text, render_sequence, render_text, unsafe_block
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 _DECIMAL_INTEGER = re.compile(r"^[0-9]+$")
 
@@ -115,7 +114,7 @@ class CallLowerer:
         # render rename); single-form callees (`blend`) aren't in the set and stay bare.
         call_name = name
         if attrs.get("mask") and name in context.env.policy_split_names:
-            call_name = f"{name}{DEFAULT_SUPPORT_POLICY.mask_suffix(attrs['mask'])}"
+            call_name = f"{name}{context.env.support.mask_suffix(attrs['mask'])}"
         # Forwarding the caller's compile-time immediate targets an `_imm` wrapper only for
         # callees whose emitted callable family actually splits runtime and `sImm` forms. Pure
         # `sImm` callees such as `insert` and `extract` keep their authored name.
@@ -283,11 +282,11 @@ def _vector_type_for_extension(
     extension: Extension,
     context: LoweringSession,
 ) -> str:
-    if DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
+    if context.env.support.uses_sized_vector(extension):
         lanes = (
             context.env.lane_symbol()
             if extension.isa_name == context.env.extension.isa_name
-            else DEFAULT_SUPPORT_POLICY.size_parameter_name(extension)
+            else context.env.support.size_parameter_name(extension)
         )
         return context.env.backend.types.sized_vector_spelling(
             base_spelling, extension.isa_name, lanes

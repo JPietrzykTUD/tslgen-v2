@@ -91,6 +91,16 @@ def test_scalable_fixed_lane_signatures_are_policy_deferred(
     assert by["set"].skipped == 0
     assert by["set"].policy_deferred == 10
     assert {entry.status for entry in result.skipped} == {"policy_deferred"}
+    assert {
+        diagnostic.code
+        for entry in result.skipped
+        for diagnostic in entry.diagnostics
+    } == {"TSL-LOWER-POLICY-DEFERRED-SIGNATURE"}
+    assert all(
+        diagnostic.location is not None
+        for entry in result.skipped
+        for diagnostic in entry.diagnostics
+    )
 
     report = format_coverage_report(result)
     # Compile/runtime branch-local type aliases no longer leak into the opposite arm's

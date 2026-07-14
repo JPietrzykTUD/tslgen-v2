@@ -20,6 +20,7 @@ class ValueTestRendererCapability:
     backend_id: str
     case_renderers: Mapping[str, ValueTestCaseRenderer]
     supports_differential: bool = False
+    overload_inference_placeholders: int = 0
 
     def __post_init__(self) -> None:
         if not self.backend_id:
@@ -28,6 +29,10 @@ class ValueTestRendererCapability:
             raise ValueError(
                 f"value-test renderer capability {self.backend_id!r} "
                 "requires at least one case renderer"
+            )
+        if self.overload_inference_placeholders < 0:
+            raise ValueError(
+                "value-test overload inference placeholders must be non-negative"
             )
         normalized = {
             kind: renderer
@@ -61,6 +66,7 @@ class ValueTestRendererCapability:
             backend_id=self.backend_id,
             case_kinds=self.case_kinds,
             supports_differential=self.supports_differential,
+            overload_inference_placeholders=self.overload_inference_placeholders,
         )
 
     def render_case(self, case: ValueTestCasePlan) -> str:

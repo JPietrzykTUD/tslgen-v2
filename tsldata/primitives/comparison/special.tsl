@@ -160,7 +160,7 @@ prim<s:=(v,s)> count_matches(data, value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "complete(cast<static>(base::in, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     [generic, clang_v128, wasm128]:
       arith:
         requires:
@@ -172,7 +172,7 @@ prim<s:=(v,s)> count_matches(data, value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "complete(cast<static>(base::in, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     oneapi_fpga:
       arith:
         requires []
@@ -181,7 +181,7 @@ prim<s:=(v,s)> count_matches(data, value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "complete(cast<static>(base::in, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     [avx512, avx2_vl, sse_vl]:
       arith:
         requires:
@@ -193,7 +193,7 @@ prim<s:=(v,s)> count_matches(data, value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "complete(cast<static>(base::in, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     avx2:
       arith:
         requires [avx2]
@@ -202,7 +202,7 @@ prim<s:=(v,s)> count_matches(data, value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "complete(cast<static>(base::in, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     sse:
       arith:
         requires [sse2]
@@ -211,7 +211,7 @@ prim<s:=(v,s)> count_matches(data, value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "complete(cast<static>(base::in, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     neon:
       arith:
         requires [neon]
@@ -220,7 +220,7 @@ prim<s:=(v,s)> count_matches(data, value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "complete(cast<static>(base::in, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     sve:
       arith:
         requires [sve]
@@ -229,4 +229,4 @@ prim<s:=(v,s)> count_matches(data, value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "complete(cast<static>(base::in, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"

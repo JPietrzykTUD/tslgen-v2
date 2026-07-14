@@ -101,9 +101,9 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(Base, type(base::in));
-              let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
-              let<type>(IndexVec, type(vector::as_base(IndexBase)));
+              let<type>(Base, base::in);
+              let<type>(IndexBase, base::unsigned_of(base::in));
+              let<type>(IndexVec, vector::as_base(IndexBase));
               var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
               var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, call<primitive=set_zero[Vec]>());
@@ -135,9 +135,9 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(Base, type(base::in));
-              let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
-              let<type>(IndexVec, type(vector::as_base(IndexBase)));
+              let<type>(Base, base::in);
+              let<type>(IndexBase, base::unsigned_of(base::in));
+              let<type>(IndexVec, vector::as_base(IndexBase));
               var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
               var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, call<primitive=set_zero[Vec]>());
@@ -234,7 +234,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           reasons []
         implementation:
           tsil """
-              var<infer>(result, cast<static>(type(base::in), 0));
+              var<infer>(result, cast<static>(base::in, 0));
               if (mask) {
                 result = data;
               }
@@ -335,9 +335,9 @@ prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
           reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(Base, type(base::in));
-              let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
-              let<type>(IndexVec, type(vector::as_base(IndexBase)));
+              let<type>(Base, base::in);
+              let<type>(IndexBase, base::unsigned_of(base::in));
+              let<type>(IndexVec, vector::as_base(IndexBase));
               var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
               var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, to_keep);
@@ -369,9 +369,9 @@ prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
           reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(Base, type(base::in));
-              let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
-              let<type>(IndexVec, type(vector::as_base(IndexBase)));
+              let<type>(Base, base::in);
+              let<type>(IndexBase, base::unsigned_of(base::in));
+              let<type>(IndexVec, vector::as_base(IndexBase));
               var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
               var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, to_keep);
@@ -403,9 +403,9 @@ prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
           reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(Base, type(base::in));
-              let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
-              let<type>(IndexVec, type(vector::as_base(IndexBase)));
+              let<type>(Base, base::in);
+              let<type>(IndexBase, base::unsigned_of(base::in));
+              let<type>(IndexVec, vector::as_base(IndexBase));
               var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
               var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, to_keep);
@@ -437,9 +437,9 @@ prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
           reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(Base, type(base::in));
-              let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
-              let<type>(IndexVec, type(vector::as_base(IndexBase)));
+              let<type>(Base, base::in);
+              let<type>(IndexBase, base::unsigned_of(base::in));
+              let<type>(IndexVec, vector::as_base(IndexBase));
               var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
               var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, to_keep);

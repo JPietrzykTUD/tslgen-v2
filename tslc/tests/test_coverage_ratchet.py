@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tslc.catalog.machine_profiles import load_machine_profiles
+from tslc.diagnostics import Diagnostic
 from tslc.maintenance.coverage_ratchet import (
     _BASELINE,
     Snapshot,
@@ -18,7 +19,9 @@ from tslc.maintenance.coverage_ratchet import (
 from tslc.maintenance.coverage_inventory import (
     PROFILES,
     _OUT as COVERAGE_INVENTORY_OUTPUT,
+    skip_category,
 )
+from tslc.pipeline import SkippedEntry
 
 
 def _snapshot(slots: dict[SlotKey, SlotRecord]) -> Snapshot:
@@ -33,6 +36,26 @@ def _snapshot(slots: dict[SlotKey, SlotRecord]) -> Snapshot:
 _A = SlotKey("avx2", "cpp", "add", "avx2", "si32")
 _B = SlotKey("avx2", "cpp", "sub", "avx2", "si32")
 _C = SlotKey("scalar", "cpp", "mul", "scalar", "f32")
+
+
+def test_skip_category_uses_diagnostic_code_not_message() -> None:
+    entry = SkippedEntry(
+        profile="scalar",
+        backend="cpp",
+        primitive="probe",
+        extension="scalar",
+        type_tag="si32",
+        reason="wording may change freely",
+        diagnostics=(
+            Diagnostic(
+                severity="info",
+                code="TSL-LOWER-UNRESOLVED-TYPE-QUERY",
+                message="different wording",
+            ),
+        ),
+    )
+
+    assert skip_category(entry) == "unresolved type query"
 
 
 def test_emitted_drop_is_a_regression() -> None:

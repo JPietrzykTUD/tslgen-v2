@@ -40,7 +40,7 @@ prim<v:=s> set1(value):
           tsil """
             complete(
               intrin<set1, build[suffix=base::signed_of(base::in)]>(
-                cast<static>(type(base::signed_of(type(base::in))), value)
+                cast<static>(base::signed_of(base::in), value)
               )
             );
           """
@@ -67,15 +67,15 @@ prim<v:=s> set1(value):
           reasons [intrinsic]
         implementation:
           tsil """
-            if<generation>(type::is_same(type(base::in), si64) || type::is_same(type(base::in), ui64)) {
+            if<generation>(type::is_same(base::in, si64) || type::is_same(base::in, ui64)) {
               // in 8byte path
               complete(
-                intrin<set1, build[suffix="epi64x"]>(cast<static>(type(base::signed_of(type(base::in))), value))
+                intrin<set1, build[suffix="epi64x"]>(cast<static>(base::signed_of(base::in), value))
               );
             } else<generation> {
               complete(
                 intrin<set1, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(type(base::signed_of(type(base::in))), value)
+                  cast<static>(base::signed_of(base::in), value)
                 )
               );
             }
@@ -131,7 +131,7 @@ prim<v:=s> set1(value):
           tsil """
             complete(
               intrin<splat, build>(
-                cast<static>(type(base::signed_of(type(base::in))), value)
+                cast<static>(base::signed_of(base::in), value)
               )
             );
           """
@@ -164,7 +164,7 @@ prim<v:=s> set1(value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(vector::register), value));"
+          tsil "complete(cast<static>(vector::register, value));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -334,7 +334,7 @@ prim<v:=()>[value=zero] set_zero():
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(base::in), 0));"
+          tsil "complete(cast<static>(base::in, 0));"
     clang_v128:
       arith:
         requires []
@@ -343,7 +343,7 @@ prim<v:=()>[value=zero] set_zero():
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(vector::register), cast<static>(type(base::in), 0)));"
+          tsil "complete(cast<static>(vector::register, cast<static>(base::in, 0)));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -429,7 +429,7 @@ prim<v:=()>[value=zero] set_zero():
         implementation:
           tsil """
             complete(
-              call<primitive=set1>(cast<static>(type(base::in), 0))
+              call<primitive=set1>(cast<static>(base::in, 0))
             );
           """
 
@@ -456,7 +456,7 @@ prim<v:=()>[value=undef] set_undef():
           reasons []
         implementation:
           tsil """
-              var<typed>(type(base::in), result, value(uninit::scalar));
+              var<typed>(base::in, result, value(uninit::scalar));
               complete(result);
             """
     clang_v128:
@@ -468,7 +468,7 @@ prim<v:=()>[value=undef] set_undef():
           reasons []
         implementation:
           tsil """
-              var<typed>(type(vector::register), result, value(uninit::array));
+              var<typed>(vector::register, result, value(uninit::array));
               complete(result);
             """
     [generic, oneapi_fpga]:
@@ -555,7 +555,7 @@ prim<v:=()>[value=undef] set_undef():
           reasons []
         implementation:
           tsil """
-              var<typed>(type(vector::register), value, value(uninit::array));
+              var<typed>(vector::register, value, value(uninit::array));
               complete(value);
             """
     sve:
@@ -615,21 +615,21 @@ prim<v:=(lanes<s>)> set(values):
           reasons [intrinsic]
         implementation:
           tsil """
-            if<generation>(type::is_same(type(base::in), si64) || type::is_same(type(base::in), ui64)) {
+            if<generation>(type::is_same(base::in, si64) || type::is_same(base::in, ui64)) {
               complete(
                 intrin<set, build[suffix="epi64"]>(
-                  cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, 0))
+                  cast<static>(base::signed_of(base::in), lanes<at>(values, 0))
                   loop<generation>(i, 1, value(vector::length), 1) {
-                    , cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, i))
+                    , cast<static>(base::signed_of(base::in), lanes<at>(values, i))
                   }
                 )
               );
             } else<generation> {
               complete(
                 intrin<set, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, 0))
+                  cast<static>(base::signed_of(base::in), lanes<at>(values, 0))
                   loop<generation>(i, 1, value(vector::length), 1) {
-                    , cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, i))
+                    , cast<static>(base::signed_of(base::in), lanes<at>(values, i))
                   }
                 )
               );
@@ -663,21 +663,21 @@ prim<v:=(lanes<s>)> set(values):
           reasons [intrinsic]
         implementation:
           tsil """
-            if<generation>(type::is_same(type(base::in), si64) || type::is_same(type(base::in), ui64)) {
+            if<generation>(type::is_same(base::in, si64) || type::is_same(base::in, ui64)) {
               complete(
                 intrin<set, build[suffix="epi64x"]>(
-                  cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, 0))
+                  cast<static>(base::signed_of(base::in), lanes<at>(values, 0))
                   loop<generation>(i, 1, value(vector::length), 1) {
-                    , cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, i))
+                    , cast<static>(base::signed_of(base::in), lanes<at>(values, i))
                   }
                 )
               );
             } else<generation> {
               complete(
                 intrin<set, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, 0))
+                  cast<static>(base::signed_of(base::in), lanes<at>(values, 0))
                   loop<generation>(i, 1, value(vector::length), 1) {
-                    , cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, i))
+                    , cast<static>(base::signed_of(base::in), lanes<at>(values, i))
                   }
                 )
               );
@@ -768,7 +768,7 @@ prim<v:=(lanes<s>)> set(values):
             loop<generation>(i, 0, value(vector::length), 1) {
               result = call<primitive=insert_value[Vec, i]>(
                 result,
-                cast<static>(type(base::in), lanes<at>(values, value(vector::length) - 1 - i))
+                cast<static>(base::in, lanes<at>(values, value(vector::length) - 1 - i))
               );
             }
             complete(result);
@@ -785,7 +785,7 @@ prim<v:=(lanes<s>)> set(values):
                var<const_infer>(zero, call<primitive=set_zero[Vec]>());
                var<infer>(data, call<primitive=to_array[Vec]>(zero));
                loop<backend>(i, 0, value(vector::length), 1)  {
-                data[i] = cast<static>(type(base::in), values[value(vector::length) - 1 - i]);
+                data[i] = cast<static>(base::in, values[value(vector::length) - 1 - i]);
               }
                complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr())) ;
             """
@@ -803,7 +803,7 @@ prim<v:=(lanes<s>)> set(values):
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<backend>(i, 0, value(vector::length), 1) {
               result[i] = cast<static>(
-                type(base::in),
+                base::in,
                 values[value(vector::length) - 1 - i]
               );
             }

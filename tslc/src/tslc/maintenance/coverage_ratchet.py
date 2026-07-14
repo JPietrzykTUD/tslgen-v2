@@ -38,7 +38,7 @@ from tslc.maintenance.coverage_inventory import (
     _DATA_ROOT,
     _PROFILES_PATH,
     _REPO_ROOT,
-    _category,
+    skip_category,
 )
 
 _BACKENDS = registered_backend_ids()
@@ -157,7 +157,7 @@ def compute_snapshot(
             skipped_entry.type_tag,
         )
         skipped[key] = skipped.get(key, 0) + 1
-        reasons.setdefault(key, set()).add(_category(skipped_entry.reason))
+        reasons.setdefault(key, set()).add(skip_category(skipped_entry))
 
     slots: dict[SlotKey, SlotRecord] = {}
     for key in emitted.keys() | skipped.keys():

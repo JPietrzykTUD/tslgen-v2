@@ -6,6 +6,7 @@ from tslc.ir.region_syntax import parse_var_selector, segments_text, split_arg_g
 from tslc.ir.segments import Region, Segment
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import QueryEvaluator, TypeValue
+from tslc.lower.region_handlers.common import _resolve_type_expression
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.target_text import (
     RenderField,
@@ -29,6 +30,9 @@ class VarLowerer:
     """
 
     keyword = "var"
+
+    def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
+        self._evaluator = evaluator or QueryEvaluator()
 
     def finish_statement(self, rendered: RenderText, region: Region) -> RenderField:
         del region
@@ -94,7 +98,20 @@ class VarLowerer:
                 source=region.source,
             )
             return region.full_text
-        type_value = render(groups[0])
+        resolved_type = _resolve_type_expression(
+            segments_text(groups[0]),
+            context,
+            self._evaluator,
+            fallback=render(groups[0]),
+        )
+        if resolved_type is None:
+            context.effects.skip(
+                "TSL-LOWER-UNRESOLVED-VAR-TYPE",
+                f"could not resolve var<{variant}> type in {region.full_text!r}",
+                source=region.source,
+            )
+            return region.full_text
+        type_value = resolved_type[1]
         name = render_text(render(groups[1])).strip()
         # An uninitialized array uses the type-carrying template (see class docstring).
         key = "var_array_uninit" if "uninit" in segments_text(groups[2]) else f"var_{variant}"
@@ -130,7 +147,20 @@ class VarLowerer:
             )
             return region.full_text
         context.effects.mark_internal_unsafe("raw_memory")
-        type_value = render(groups[0])
+        resolved_type = _resolve_type_expression(
+            segments_text(groups[0]),
+            context,
+            self._evaluator,
+            fallback=render(groups[0]),
+        )
+        if resolved_type is None:
+            context.effects.skip(
+                "TSL-LOWER-UNRESOLVED-VAR-TYPE",
+                f"could not resolve var<runtime_array> type in {region.full_text!r}",
+                source=region.source,
+            )
+            return region.full_text
+        type_value = resolved_type[1]
         name = render_text(render(groups[1])).strip()
         count = render(groups[2])
         return context.env.backend.templates.render_template(
@@ -148,12 +178,13 @@ def _join_rendered(groups: list[tuple[Segment, ...]], render: RenderBody) -> Ren
 
 
 class LetLowerer:
-    """``let<type>(Name, type-expr)`` -> a type alias, applied by **substitution**: the
-    resolved type spelling is recorded and raw source chunks become literal text plus typed
-    alias references during body rendering. A real local alias would be ``using Name = T;`` in
-    C++, but Rust rejects a fn-local ``type Name = Self::T;`` (E0401), so inlining is the
-    backend-neutral form. The type-expression is resolved via the normal region path (e.g.
-    ``type(vector::mask)`` -> the mask-type spelling)."""
+    """``let<type>(Name, type-expr)`` binds a type alias for later TSIL use.
+
+    Type-owned positions such as ``cast<static>(Name, value)`` and
+    ``var<typed>(Name, value, init)`` resolve the alias directly. ``type(Name)`` is
+    reserved for explicitly inserting its spelling into otherwise raw target text.
+    Raw target text remains opaque and is never searched for alias identifiers.
+    """
 
     keyword = "let"
 
@@ -179,8 +210,21 @@ class LetLowerer:
         name = render_text(render(groups[0])).strip()
         # A vector-valued alias (`let<type>(OutVec, transform_extension(ToBase))`) is captured
         # structurally too, so a later `generic::length(OutVec)` query arg resolves to the vector
-        # (the rendered spelling below still drives type-position substitution like `to_array[OutVec]`).
-        value = self._evaluator.evaluate(segments_text(groups[1]), context)
+        # (the rendered spelling below still drives direct type-position substitution).
+        resolved_type = _resolve_type_expression(
+            segments_text(groups[1]),
+            context,
+            self._evaluator,
+            fallback=render(groups[1]),
+        )
+        if resolved_type is None:
+            context.effects.skip(
+                "TSL-LOWER-UNRESOLVED-LET-TYPE",
+                f"could not resolve let<type> value in {region.full_text!r}",
+                source=region.source,
+            )
+            return region.full_text
+        value, spelling = resolved_type
         type_tag: str | None = None
         vector: VectorValue | None = None
         if isinstance(value, VectorValue):
@@ -189,7 +233,7 @@ class LetLowerer:
             type_tag = value.type_tag
         context.scope.bind_type_alias(
             name,
-            render(groups[1]),
+            spelling,
             type_tag=type_tag,
             vector=vector,
         )

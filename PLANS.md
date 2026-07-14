@@ -117,7 +117,7 @@ Choose the smallest useful validation first:
 - Parser/catalog/validation:
   `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py`
 - TSIL scanning/lowering:
-  `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_lower_text.py tslc/tests/test_select_and_lower*.py`
+  `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_select_and_lower*.py tslc/tests/test_lower_*.py`
 - Target-text/backend/render model:
   `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_render_model.py tslc/tests/test_generation_conditionals.py`
 - Output/verification/config:
