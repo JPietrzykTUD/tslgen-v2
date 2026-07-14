@@ -1,6 +1,6 @@
 ---
 name: add-tsl-primitive
-description: Add or update a TSL primitive in tsldata and the tslc compiler. Use when Codex is asked to add a new primitive, change primitive signatures/tests/bodies, support a new primitive shape, or make primitive source data compile through parsing, validation, selection, lowering, rendering, and generated value tests.
+description: Add or update a TSL primitive in tsldata and the tslc compiler. Use when asked to add a new primitive, change primitive signatures/tests/bodies, support a new primitive shape, or make primitive source data compile through parsing, validation, selection, lowering, rendering, and generated value tests.
 ---
 
 # Add TSL Primitive

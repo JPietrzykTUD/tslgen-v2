@@ -2,26 +2,27 @@
 
 ## Scope And Instruction Ownership
 
-This file applies to the entire repository. A nested `AGENTS.md` adds
-instructions for its subtree; it does not replace this root contract. Read this
-file and every applicable nested instruction file before changing files.
+This file applies repository-wide. A nested `AGENTS.md` adds instructions for
+its subtree; read this file and every applicable nested instruction file.
 
 The active guidance is split by responsibility:
 
-- `CHARTER.md` states the repository-wide product and design contract.
-- `PLANS.md` defines how to scope, execute, validate, and report a change.
-- `tslc/AGENTS.md` owns compiler-implementation rules and focused validation.
-- `tsldata/AGENTS.md` owns authored TSL source-data rules.
+- `CHARTER.md` states the product/design contract; `PLANS.md` defines how to
+  scope, execute, validate, and report changes.
+- `tslc/AGENTS.md` owns compiler rules; `tsldata/AGENTS.md` owns source-data
+  rules.
 - `tslc/CHARTER.md` and `tslc/DESCRIPTION.md` define the compiler contract and
   describe the current architecture.
-- `.agents/skills/` contains task-specific playbooks. Keep detailed feature
-  procedures there instead of duplicating them in instruction files.
+- `.agents/skills/` contains task playbooks; `.claude/skills/` exposes those
+  canonical playbooks through directory symlinks.
+- Root and nested `CLAUDE.md` files are import-only bridges to the applicable
+  `AGENTS.md` files. Edit canonical instructions and skills, not their bridges.
 
 ## Purpose
 
-This repository contains `tslc`, a Python compiler for the TSL data language,
-plus the authored source corpus, reusable inputs, tests, coverage evidence, and
-CI needed to generate deterministic C++ and Rust SIMD library artifacts.
+This repository contains `tslc`, a Python compiler for TSL data, plus its source
+corpus, reusable inputs, tests, coverage evidence, and CI for deterministic C++
+and Rust SIMD library generation.
 
 Optimize for a maintainable research compiler: typed models, clear ownership,
 small modules, deterministic output, and diagnostics that help a TSL author fix
@@ -80,55 +81,23 @@ The repository design rests on these ideas:
 
 ## Project Map
 
-```text
-CHARTER.md                  Repository-wide design contract
-PLANS.md                    Planning and execution protocol
-docs/                       Human-authored maintainer guides
-examples/                   Checked-in C++ and Rust consumer examples
-
-tslc/
-  AGENTS.md                 Compiler-local instructions
-  src/tslc/                 Compiler package
-  tests/                    Python test suite
-  CHARTER.md                Compiler-specific design contract
-  DESCRIPTION.md            Current architecture narrative
-  README.md                 Compiler quick start
-
-tsldata/
-  AGENTS.md                 Source-data-local instructions
-  detail/                   Type, language, and backend detail data
-  extensions/               Extension source data
-  primitives/               Primitive source corpus
-
-supplementary/
-  buildsystem/              Machine-profile configuration
-  ci/                       Reusable CI helper scripts
-  docs/                     Inputs for generated TSL documentation
-
-coverage/                   Coverage and benchmark ratchet evidence
-.agents/skills/             Task-specific agent playbooks
-.github/                    GitHub Actions workflows and actions
-tslctmp/                    Local scratch and generated output; do not commit
-```
+See the [README project map and navigation](README.md). Instruction and skill
+ownership remains defined above.
 
 ## Cross-Tree Feature Routing
 
 These workflows are task-specific rather than directory-specific:
 
-- Adding a backend or backend capability: use
-  `.agents/skills/add-tslc-backend/SKILL.md`.
-- Adding a primitive or source-data shape: use
-  `.agents/skills/add-tsl-primitive/SKILL.md`.
-- Adding or completing an implementation of an existing primitive: use
+- Backend/capability: `.agents/skills/add-tslc-backend/SKILL.md`.
+- Primitive/source shape: `.agents/skills/add-tsl-primitive/SKILL.md`.
+- Existing primitive implementation:
   `.agents/skills/add-tsl-primitive-implementation/SKILL.md`.
-- Adding a TSIL keyword region: use
-  `.agents/skills/add-tsil-region/SKILL.md`.
-- Reviewing architecture or extensibility: use
-  `.agents/skills/design-review/SKILL.md`.
+- TSIL keyword region: `.agents/skills/add-tsil-region/SKILL.md`.
+- Architecture/extensibility review: `.agents/skills/design-review/SKILL.md`.
 
-Read the root instructions and the instructions for every subtree touched by a
-workflow. Keep the essential cross-tree contract visible here; keep detailed
-paths, checks, and commands in the applicable skill.
+Read instructions for every subtree touched. Keep detailed paths, checks, and
+commands in the applicable skill. Claude exposes the same skill names through
+`.claude/skills/`.
 
 ## Common Commands
 
@@ -161,34 +130,52 @@ Use `./dev.sh` for generated-project workflows:
 
 ## Scratch And Generated Output
 
-Use workspace-local scratch paths. This repo is commonly used in a WSL
-container where `/tmp` lives on an overlay that only grows.
+Use workspace-local scratch paths; in common WSL setups, `/tmp` lives on an
+overlay that only grows.
 
-- Use `./tslctmp/...` for generated trees, build directories, and test scratch.
-- Keep tool caches under `./tslctmp` when configurable.
-- Do not commit generated scratch output.
+- Use `./tslctmp/...` for generated trees, builds, test scratch, and configurable
+  tool caches. Do not commit it.
 - Do not delete or rewrite committed baselines unless the task explicitly calls
   for it.
-- `supplementary/docs/` contains assets used only for generated-TSL
-  documentation; keep it.
-- Use top-level `docs/` for human-authored maintainer guides, not generated
-  documentation inputs or agent workflow machinery.
+- Keep generated-documentation inputs in `supplementary/docs/`; use top-level
+  `docs/` for human-authored maintainer guides.
 
 ## Review Expectations
 
-When asked for a review, lead with findings ordered by severity and include
-file/line references. Prioritize:
-
-- boundary violations;
-- extension-point weaknesses;
-- raw dictionaries leaking into domain logic;
-- unclear or missing diagnostics;
-- nondeterminism;
-- missing tests;
-- maintainability risks.
-
-If there are no blocking findings, say so clearly and mention any residual risk
+Lead reviews with findings ordered by severity and include file/line references.
+Prioritize boundary violations, weak extension points, raw dictionaries leaking
+into domain logic, unclear diagnostics, nondeterminism, missing tests, and
+maintainability risks. If none block the change, say so and note residual risks
 or test gaps.
+
+## Critical Judgment
+
+- Evaluate non-trivial implementation requests before acting: confirm that the
+  approach solves the stated goal, fits existing invariants and architecture,
+  and is not needlessly complex or risky.
+- Push back before implementation when a concern is material. State the concern
+  and preferred alternative briefly; request direction only when the choice
+  materially changes scope, behavior, or accepted risk.
+- Do not push back on trivial edits, harmless preferences, or approaches with no
+  substantive objection.
+- Do not withdraw a technical conclusion merely to agree. Revise it when new
+  facts or arguments justify doing so. If the user knowingly chooses the
+  original safe, in-scope approach, proceed without claiming the concern is
+  resolved.
+
+## Communication And Code Style
+
+- Be brief by default: lead with the outcome, then include only material
+  rationale, risks, validation, and follow-up.
+- For edits, change files directly and summarize the result with file links.
+  Show patches or full file contents only when requested.
+- Use a short plan for architectural uncertainty, multiple dependent steps, or
+  meaningful cross-file coordination. Skip it for straightforward local or
+  mechanical changes.
+- Keep comments sparse and useful to future maintainers; explain non-obvious
+  constraints or intent, not edit history.
+- Do not leave commented-out code or speculative TODOs. Add a TODO only for
+  intentionally deferred necessary work with a clear condition for removal.
 
 ## Working Rules
 

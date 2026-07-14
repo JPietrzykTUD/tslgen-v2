@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: Review tslc design health and detect drift from the repository and compiler charters, scoped AGENTS.md files, PLANS.md, and tslc/DESCRIPTION.md. Use when Codex is asked for a design review, architecture drift audit, extensibility review, maintainability review, KISS/DRY review, or pre/post-check after adding primitives, TSIL regions, backend support, or major compiler pipeline changes.
+description: Review tslc design health and detect drift from the repository and compiler charters, scoped AGENTS.md files, PLANS.md, and tslc/DESCRIPTION.md. Use when asked for a design review, architecture drift audit, extensibility review, maintainability review, KISS/DRY review, or pre/post-check after adding primitives, TSIL regions, backend support, or major compiler pipeline changes.
 ---
 
 # Design Review

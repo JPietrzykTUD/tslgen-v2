@@ -64,5 +64,8 @@ overlay.
 - Architecture narrative: [tslc/DESCRIPTION.md](tslc/DESCRIPTION.md)
 - Active planning guide: [PLANS.md](PLANS.md)
 - Repository instructions: [AGENTS.md](AGENTS.md)
+- Claude Code import bridge: [CLAUDE.md](CLAUDE.md)
 - Compiler instructions: [tslc/AGENTS.md](tslc/AGENTS.md)
 - TSL source-data instructions: [tsldata/AGENTS.md](tsldata/AGENTS.md)
+- Shared task skills: `.agents/skills/`, exposed to Claude Code through
+  `.claude/skills/`

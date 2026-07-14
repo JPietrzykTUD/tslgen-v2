@@ -1,6 +1,6 @@
 ---
 name: add-tsl-primitive-implementation
-description: Add, complete, or refactor a specialization of an existing TSL primitive. Use when Codex is asked to add an implementation body for a specific extension, profile, type group, or backend; replace scattered intrinsic recipes with semantic TSL-primitive composition; close a missing coverage slot; or fix generated build/value-test gaps in existing primitive source data.
+description: Add, complete, or refactor a specialization of an existing TSL primitive. Use when asked to add an implementation body for a specific extension, profile, type group, or backend; replace scattered intrinsic recipes with semantic TSL-primitive composition; close a missing coverage slot; or fix generated build/value-test gaps in existing primitive source data.
 ---
 
 # Add TSL Primitive Implementation
