@@ -50,6 +50,20 @@ are recorded as `not applicable`, rather than assigned speculative timing
 semantics. After an intentional complete corpus change, refresh it with
 `./dev.sh benchmark-ratchet --update`.
 
+The Generated Build CI workflow also runs the opt-in generated-build tests in
+`test_benchmark_variants.py`. On x86, that gate compiles the generated benchmark
+sources, executes the autotuner, and verifies that a consumer built afterward
+observes the selection recorded in the generated policy. The gate also
+cross-compiles a NEON benchmark and executes a short functional smoke
+under QEMU. The emulated run verifies ARM candidate correctness, timing-loop
+execution, and report serialization only; its timings never produce a consumed
+policy. Run the complete gate locally with:
+
+```bash
+PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds \
+  -m generated_build tslc/tests/test_benchmark_variants.py
+```
+
 ## Workload Ownership
 
 TSL source data does not contain benchmark functions or target-language setup.

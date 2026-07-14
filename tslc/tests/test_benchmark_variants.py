@@ -839,6 +839,8 @@ def test_generated_cmake_keeps_benchmarks_opt_in(benchmark_result) -> None:
     assert "target_link_libraries(tsl_variant_bench PRIVATE tsl_generated)" not in cmake
     assert "add_dependencies(tsl_generated tsl_variant_policy)" in cmake
     assert "if(TSL_BUILD_BENCHMARKS OR _TSL_POLICY_REQUESTED)" in cmake
+    assert "if(_TSL_POLICY_REQUESTED AND CMAKE_CROSSCOMPILING)" in cmake
+    assert "Cross-compiling tsl_variant_bench" in cmake
 
 
 def test_indexed_load_variant_gets_hot_l1_throughput_scenario(
@@ -938,7 +940,12 @@ def test_native_autotune_and_non_default_policy_build_consumer(
         textwrap.dedent(
             """
             #include <cstdint>
+            #include <iostream>
             #include <tsl.hpp>
+
+            #if !defined(TSL_HAS_AUTOTUNED_VARIANT_POLICY)
+            #  error "the autotuned consumer did not receive the policy definition"
+            #endif
 
             int main() {
             #if defined(TSL_PROFILE_SSE2)
@@ -949,6 +956,15 @@ def test_native_autotune_and_non_default_policy_build_consumer(
               typename Vec::register_type value{};
               auto result = tsl::mul<Vec>(value, value);
               (void)result;
+              constexpr auto selected = tsl::detail::variants::mul_selector<Vec>::value;
+              if constexpr (selected == tsl::detail::variants::mul_variant::default_) {
+                std::cout << "default\\n";
+              } else if constexpr (
+                  selected == tsl::detail::variants::mul_variant::generic_fallback) {
+                std::cout << "generic_fallback\\n";
+              } else {
+                return 2;
+              }
               return 0;
             }
             """
@@ -1001,6 +1017,12 @@ def test_native_autotune_and_non_default_policy_build_consumer(
         for decision in policy_document["decisions"]
         if decision["stable_id"] == selected_set.stable_id
     )
+    compiled_policy = _run((str(autotune / "autotune_consumer"),), environment)
+    assert compiled_policy.returncode == 0, (
+        compiled_policy.stderr + compiled_policy.stdout
+    )
+    assert compiled_policy.stdout.strip() == selected_decision["selected"]
+
     selected_decision.update(
         selected="generic_fallback",
         status="selected",
@@ -1156,6 +1178,112 @@ def test_indexed_load_benchmark_source_compiles(
         environment,
     )
     assert built.returncode == 0, built.stderr + built.stdout
+
+
+@pytest.mark.generated_build
+def test_neon_benchmark_cross_compiles_and_runs_functionally_under_qemu(
+    division_benchmark_result,
+    machine_profiles,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cmake") is None:
+        pytest.skip("cmake is required")
+    compiler = shutil.which("aarch64-linux-gnu-g++")
+    qemu = os.environ.get("TSLC_QEMU_AARCH64") or shutil.which("qemu-aarch64")
+    sysroot = Path("/usr/aarch64-linux-gnu")
+    if compiler is None or qemu is None or not sysroot.is_dir():
+        pytest.skip("the AArch64 compiler, QEMU, and sysroot are required")
+    runner = machine_profiles["neon"].runner
+    assert runner is not None
+    assert runner.kind == "qemu-aarch64"
+
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(division_benchmark_result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    environment = os.environ.copy()
+    environment["CXX"] = compiler
+    build = tmp_path / "build"
+    configured = _run(
+        (
+            "cmake",
+            "-S",
+            str(generated / "cpp"),
+            "-B",
+            str(build),
+            "-DCMAKE_SYSTEM_NAME=Linux",
+            "-DCMAKE_SYSTEM_PROCESSOR=aarch64",
+            "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
+            "-DTSL_PROFILE=neon",
+            "-DTSL_BUILD_TESTS=OFF",
+            "-DTSL_BUILD_BENCHMARKS=ON",
+        ),
+        environment,
+    )
+    assert configured.returncode == 0, configured.stderr + configured.stdout
+    assert "Cross-compiling tsl_variant_bench" in configured.stdout
+
+    built = _run(
+        ("cmake", "--build", str(build), "--target", "tsl_variant_bench"),
+        environment,
+    )
+    assert built.returncode == 0, built.stderr + built.stdout
+
+    results = tmp_path / "neon_results.jsonl"
+    executed = _run(
+        (
+            qemu,
+            "-L",
+            str(sysroot),
+            "-cpu",
+            runner.profile,
+            *runner.args,
+            str(build / "tsl_variant_bench"),
+            "--results",
+            str(results),
+            "--rounds",
+            "3",
+            "--minimum-sample-ns",
+            "1000",
+            "--threshold",
+            "0.05",
+        ),
+        environment,
+    )
+    assert executed.returncode == 0, executed.stderr + executed.stdout
+    records = tuple(
+        json.loads(line)
+        for line in results.read_text(encoding="utf-8").splitlines()
+        if line
+    )
+    assert records
+    assert {record["profile"] for record in records} == {"neon"}
+    assert {record["candidate"] for record in records} == {
+        "default",
+        "generic_fallback",
+    }
+
+    policy_build = tmp_path / "policy_build"
+    rejected = _run(
+        (
+            "cmake",
+            "-S",
+            str(generated / "cpp"),
+            "-B",
+            str(policy_build),
+            "-DCMAKE_SYSTEM_NAME=Linux",
+            "-DCMAKE_SYSTEM_PROCESSOR=aarch64",
+            "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
+            "-DTSL_PROFILE=neon",
+            "-DTSL_BUILD_TESTS=OFF",
+            "-DTSL_AUTOTUNE_VARIANTS=ON",
+        ),
+        environment,
+    )
+    assert rejected.returncode != 0
+    assert "policy generation and validation are native-only" in (
+        rejected.stderr + rejected.stdout
+    )
 
 
 def _run(command: tuple[str, ...], environment: dict[str, str]) -> subprocess.CompletedProcess[str]:

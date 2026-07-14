@@ -53,8 +53,8 @@ if(TSL_AUTOTUNE_VARIANTS OR NOT TSL_VARIANT_POLICY_FILE STREQUAL "")
   set(_TSL_POLICY_REQUESTED ON)
 endif()
 
-if((TSL_BUILD_BENCHMARKS OR _TSL_POLICY_REQUESTED) AND CMAKE_CROSSCOMPILING)
-  message(FATAL_ERROR "TSL variant benchmarks and policy validation are native-only; use a native build for report/autotune")
+if(_TSL_POLICY_REQUESTED AND CMAKE_CROSSCOMPILING)
+  message(FATAL_ERROR "TSL variant policy generation and validation are native-only; use a native build for autotune/policy consumption")
 endif()
 get_property(_TSL_MULTI_CONFIG_GENERATOR GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if(_TSL_POLICY_REQUESTED AND _TSL_MULTI_CONFIG_GENERATOR)
@@ -90,16 +90,20 @@ if(TSL_BUILD_BENCHMARKS OR _TSL_POLICY_REQUESTED)
   target_compile_definitions(tsl_variant_bench PRIVATE
     TSL_BENCHMARK_TUNE_CONTEXT_HASH="${_TSL_TUNE_CONTEXT_HASH}")
 
-  add_custom_target(tsl_benchmark_report
-    COMMAND tsl_variant_bench
-      --results "${CMAKE_CURRENT_BINARY_DIR}/tsl_variant_results.jsonl"
-      --rounds "${TSL_BENCHMARK_ROUNDS}"
-      --minimum-sample-ns "${TSL_BENCHMARK_MINIMUM_SAMPLE_NS}"
-      --threshold "${TSL_BENCHMARK_THRESHOLD}"
-    DEPENDS tsl_variant_bench
-    COMMENT "Benchmarking TSL implementation variants (report only)"
-    VERBATIM
-  )
+  if(CMAKE_CROSSCOMPILING)
+    message(STATUS "Cross-compiling tsl_variant_bench; benchmark report execution remains native-only")
+  else()
+    add_custom_target(tsl_benchmark_report
+      COMMAND tsl_variant_bench
+        --results "${CMAKE_CURRENT_BINARY_DIR}/tsl_variant_results.jsonl"
+        --rounds "${TSL_BENCHMARK_ROUNDS}"
+        --minimum-sample-ns "${TSL_BENCHMARK_MINIMUM_SAMPLE_NS}"
+        --threshold "${TSL_BENCHMARK_THRESHOLD}"
+      DEPENDS tsl_variant_bench
+      COMMENT "Benchmarking TSL implementation variants (report only)"
+      VERBATIM
+    )
+  endif()
 endif()
 
 if(_TSL_POLICY_REQUESTED)

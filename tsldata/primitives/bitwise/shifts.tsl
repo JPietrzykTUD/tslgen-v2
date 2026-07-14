@@ -1567,7 +1567,7 @@ prim<v:=(v,v)> shift_left(data, shift):
               let<type>(UVec, vector::as_base(UBase));
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
               var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-              var<const_infer>(shift_u, call<primitive=reinterpret[Vec, UVec]>(shift));
+              var<const_infer>(shift_u, call<primitive=cast[Vec, UBase]>(shift));
               var<const_infer>(ures, intrin<svlsl, build[suffix=UBase, post=x]>(pg, udata, shift_u));
               complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """

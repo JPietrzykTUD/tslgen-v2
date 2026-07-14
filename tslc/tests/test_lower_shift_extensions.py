@@ -365,6 +365,41 @@ def test_neon_vector_shift_right_composes_count_negation(
         assert "vnegq" not in cpp.body_text
 
 
+@pytest.mark.parametrize(
+    ("profile", "extension"),
+    [("sve", "sve"), ("sve128", "sve128")],
+)
+@pytest.mark.parametrize("type_tag", ["f32", "f64"])
+def test_sve_float_vector_shift_left_casts_numeric_counts(
+    catalog: Catalog,
+    machine_profiles,
+    profile: str,
+    extension: str,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile],
+            "shift_left",
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == extension
+        and selected.primitive.signature == "v:=(v,v)"
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert "shift_u = ::tsl::cast<Vec" in cpp.body_text
+    assert ">(shift)" in cpp.body_text
+    assert "shift_u = ::tsl::reinterpret" not in cpp.body_text
+
+
 def test_compile_time_branches_keep_type_aliases_lexically_scoped(
     catalog: Catalog,
     machine_profiles,
