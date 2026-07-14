@@ -53,10 +53,16 @@ as the style and shape reference.
 
 ## Cross-Tree Workflows
 
+- New target extension or machine profile:
+  `.agents/skills/add-tsl-extension/SKILL.md`; also use
+  `.agents/skills/extend-tslc-verification/SKILL.md` when it needs a new
+  compiler, target, runner, or emulator path.
 - New primitive or source-data shape:
   `.agents/skills/add-tsl-primitive/SKILL.md`.
 - New specialization of an existing primitive:
   `.agents/skills/add-tsl-primitive-implementation/SKILL.md`.
+- New authored value-test shape:
+  `.agents/skills/add-value-test-shape/SKILL.md`.
 - New TSIL region required by source bodies:
   `.agents/skills/add-tsil-region/SKILL.md` and `tslc/AGENTS.md`.
 - New backend language/detail data:

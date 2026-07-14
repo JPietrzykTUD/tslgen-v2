@@ -1,0 +1,4 @@
+interface:
+  display_name: "Add TSL Extension"
+  short_description: "Add target extensions and profiles end to end."
+  default_prompt: "Use $add-tsl-extension to add a target extension and profile through source data, compiler support, verification, and tests."

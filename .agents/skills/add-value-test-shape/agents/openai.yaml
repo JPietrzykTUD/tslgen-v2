@@ -1,0 +1,4 @@
+interface:
+  display_name: "Add Value-Test Shape"
+  short_description: "Extend typed generated value-test planning."
+  default_prompt: "Use $add-value-test-shape to support a new authored value-test shape end to end."

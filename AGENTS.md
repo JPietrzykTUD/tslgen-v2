@@ -86,13 +86,13 @@ ownership remains defined above.
 
 ## Cross-Tree Feature Routing
 
-These workflows are task-specific rather than directory-specific:
-
 - Backend/capability: `.agents/skills/add-tslc-backend/SKILL.md`.
+- Target extension/profile: `.agents/skills/add-tsl-extension/SKILL.md`.
 - Primitive/source shape: `.agents/skills/add-tsl-primitive/SKILL.md`.
-- Existing primitive implementation:
-  `.agents/skills/add-tsl-primitive-implementation/SKILL.md`.
+- Existing implementation: `.agents/skills/add-tsl-primitive-implementation/SKILL.md`.
 - TSIL keyword region: `.agents/skills/add-tsil-region/SKILL.md`.
+- Generated value-test shape: `.agents/skills/add-value-test-shape/SKILL.md`.
+- Toolchain/runner verification: `.agents/skills/extend-tslc-verification/SKILL.md`.
 - Architecture/extensibility review: `.agents/skills/design-review/SKILL.md`.
 
 Read instructions for every subtree touched. Keep detailed paths, checks, and
