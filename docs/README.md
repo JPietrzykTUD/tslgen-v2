@@ -1,22 +1,44 @@
-# Project Documentation
+# Maintainer Guides
 
-This directory contains human-authored project documentation for maintainers and
-contributors.
+This directory contains human-authored guides.
 
-Use this directory for topic guides that are broader than the root
-[`README.md`](../README.md) and do not belong to the repository contract in
-[`CHARTER.md`](../CHARTER.md), the compiler contract in
-[`tslc/CHARTER.md`](../tslc/CHARTER.md), or the architecture narrative in
-[`tslc/DESCRIPTION.md`](../tslc/DESCRIPTION.md).
+Generated documentation inputs live in `supplementary/docs/`.
 
-- [TSIL keyword regions](tsil-keywords.md) inventories the TSIL regions
-  recognized by `tslc` and describes how they validate, lower, and interact
-  with backends.
-- [Adding a TSIL keyword region](add-keyword.md) gives maintainers a
-  step-by-step guide for adding a new recognized TSIL keyword.
-- [Variant benchmarking and autotuning](variant-benchmarking.md) explains the
-  optional native C++ report, policy-consumption, and one-build autotune flows.
+## Choose A Guide
 
-Do not use this directory for generated-TSL documentation assets. Those live in
-`supplementary/docs/` because they are inputs used by TSL documentation
-generation.
+| Goal | Guide |
+| --- | --- |
+| Add or change a primitive | [Adding a primitive](add-primitive.md) |
+| Add a target extension or profile | [Adding an extension](add-extension.md) |
+| Read the TSIL region reference | [TSIL keyword regions](tsil-keywords.md) |
+| Add a TSIL region | [Adding a TSIL keyword region](add-keyword.md) |
+| Benchmark implementation variants | [Variant benchmarking and autotuning](variant-benchmarking.md) |
+
+## Compiler Connection
+
+The guides follow the compiler pipeline:
+
+```text
+TSL source
+  -> parsed syntax
+  -> typed catalog
+  -> selected implementations
+  -> lowered TSIL
+  -> backend render models
+  -> generated C++ and Rust
+```
+
+Use source data for source facts.
+
+Use typed compiler objects after parsing.
+
+Use backend assets for target-language structure.
+
+Use templates only to format decided values.
+
+## Repository Contracts
+
+- [`CHARTER.md`](../CHARTER.md) defines the product contract.
+- [`PLANS.md`](../PLANS.md) defines the change workflow.
+- [`tslc/DESCRIPTION.md`](../tslc/DESCRIPTION.md) describes the compiler.
+- [`AGENTS.md`](../AGENTS.md) defines repository rules.

@@ -1,42 +1,70 @@
-# Adding An Extension To `tsldata`
+# Adding A Target Extension
 
-This guide is the human checklist for adding a target extension or target
-profile to TSL. It is written from the `wasm128` WebAssembly SIMD slice, but the
-steps are general.
+An extension is one vertical compiler slice.
 
-The design goal is simple: a new extension should be mostly source data plus
-focused typed compiler support when the current compiler vocabulary is missing a
-real concept. Avoid extension-name branches in templates or primitive lowering.
+It crosses source data, profiles, backends, tests, and verification.
 
-## 1. Name The Target Contract
+Keep the slice additive.
 
-Before editing, write down the target contract in plain language.
+Avoid extension-name branches in primitive lowering and templates.
 
-- What is the extension name, for example `wasm128`, `neon`, or `avx2`?
-- Which extension family owns it, for example `wasm`, `arm`, or `x86`?
-- Which machine profile selects it, for example `wasm32-simd128`?
-- Which feature tokens must an implementation require, such as `simd128`?
-- Is the vector width fixed, scalable, inherited, or derived from another
-  extension?
-- Which C++ and Rust targets, flags, headers, architecture modules, and runtime
-  execution runners are needed?
-- Which primitive and type slice is small enough to prove the vertical path?
+## 1. Define The Target Contract
 
-For WebAssembly SIMD, the first contract was: fixed-width `wasm128`, selected by
-profile `wasm32-simd128`, gated by feature `simd128`, compiled through the
-existing C++ and Rust backends to `wasm32-wasip1`, and run through Wasmtime.
+Record these facts first:
 
-## 2. Add The Target Family
+| Fact | Example |
+| --- | --- |
+| Extension | `wasm128` |
+| Extension family | `wasm` |
+| Profile family | `wasm32` |
+| Machine profile | `wasm32-simd128` |
+| Required feature | `simd128` |
+| Vector width | `128` bits |
+| C++ target | `wasm32-wasip1` |
+| Rust target | `wasm32-wasip1` |
+| Runner | `wasmtime` |
 
-Start in `tsldata/detail/target_families.tsl`.
+Also choose a small primitive and type slice.
 
-Add the extension family to `known_extension_families`:
+The first slice must prove the whole path.
+
+## 2. Understand The Ownership Chain
+
+```text
+target_families.tsl
+  -> admits an extension family for a profile family
+
+machine_profiles.json
+  -> selects concrete target features, flags, and a runner
+
+extension.tsl
+  -> defines vector types, headers, masks, and intrinsic policy
+
+primitive implementations
+  -> declare required features and TSIL bodies
+
+backend dialects and assets
+  -> spell already-decided target code
+
+verifier
+  -> builds and runs the generated project
+```
+
+Each file owns one kind of fact.
+
+Do not repeat the same decision across layers.
+
+## 3. Add The Target Family
+
+Edit `tsldata/detail/target_families.tsl`.
+
+Add the extension family:
 
 ```tsl
 known_extension_families [scalar, generic_like, x86, arm, cuda, wasm]
 ```
 
-Then add or update the profile family:
+Add or update the profile family:
 
 ```tsl
 profile_families:
@@ -53,47 +81,40 @@ profile_families:
         target "wasm32-wasip1"
 ```
 
-Keep this file about routing and capabilities. Do not put primitive selection
-rules, intrinsic spellings, or build-system commands here.
+This file owns routing and capabilities.
 
-## 3. Add The Machine Profile
+It does not own primitive selection.
 
-Update `supplementary/buildsystem/machine_profiles.json`.
+It does not own intrinsic names.
 
-For WebAssembly SIMD, the profile is:
+It does not own build commands.
+
+## 4. Add The Machine Profile
+
+Edit `supplementary/buildsystem/machine_profiles.json`.
 
 ```json
-"wasm32": [
-  {
-    "name": "wasm32-simd128",
-    "target_features": "simd128",
-    "backend_flags": {"cpp": []},
-    "runner": {"kind": "wasmtime", "profile": "default"}
-  }
-]
+{
+  "wasm32": [
+    {
+      "name": "wasm32-simd128",
+      "target_features": "simd128",
+      "backend_flags": {"cpp": []},
+      "runner": {"kind": "wasmtime", "profile": "default"}
+    }
+  ]
+}
 ```
 
-`target_features` is the selector capability set. Implementation bodies with
-`requires [simd128]` are usable only when this profile is selected.
+`target_features` is a capability set.
 
-Use profile features for compile/profile capabilities. Do not treat Wasm
-`simd128` as host CPU probing.
+An implementation with `requires [simd128]` needs that capability.
 
-## 4. Add Extension Metadata
+Wasm target features are not host CPU probes.
 
-Add the extension block in `tsldata/extensions/extension.tsl`.
+## 5. Add Extension Metadata
 
-For a fixed-width SIMD extension, define:
-
-- `extension_name` and `family`;
-- `intrinsic_style` when intrinsic spelling differs from existing dialects;
-- vector width and sort order;
-- backend support metadata;
-- register type mappings for every supported scalar type;
-- intrinsic composition prefix/suffix data;
-- mask policy, even if mask primitives are not in the first slice.
-
-The WebAssembly SIMD shape is:
+Edit `tsldata/extensions/extension.tsl`.
 
 ```tsl
 extension wasm128:
@@ -112,149 +133,149 @@ extension wasm128:
     arch_module "wasm32"
 ```
 
-Base WebAssembly SIMD does not need `active_when`: the `wasm32` profile admits
-the extension family, and implementation bodies use `requires [simd128]` for the
-actual target-feature gate.
+Also define:
 
-Then add explicit `vector_register_types`. For `wasm128`, each supported base
-type uses `v128_t` in C++ and `core::arch::wasm32::v128` in Rust. Prefer
-explicit mappings when native registration or render logic expects concrete
-scalar tags.
+- register types for every supported scalar type;
+- intrinsic prefixes and suffixes;
+- mask representation;
+- backend support;
+- activation rules when needed.
 
-Compiler-vector overlays use the same typed extension path but may need a
-dedicated opt-in header. In a backend block:
+Use explicit register mappings when native registration needs concrete tags.
 
-- `header_group "clang"` emits the extension into
-  `tsl_<profile>_clang.hpp`;
-- `compiler_ids [Clang, AppleClang]` gates the generated opt-in CMake target;
-- `compile_guards` declares the required compile-time macro contract;
-- `dataparallel_inference false` keeps the overlay out of `native` and
-  `fixed<N>` inference.
+Base `wasm128` needs no `active_when` rule.
 
-An overlay fallback should use the typed `vector::fixed` query and explicit
-`cast<bitcast>` conversions. The query renders through
-`dataparallel::simd_for_t<fixed<N>, T>` while dependency closure tracks the
-concrete hardware extension selected for that profile. Do not hard-code `sse`,
-`avx2`, `avx512`, or `neon` into a compiler-vector fallback body.
+The profile admits the family.
 
-## 5. Add Intrinsic Dialect Support Only If Needed
+The implementation `requires` field gates the feature.
 
-Most extensions can use existing intrinsic composition. If the target has a new
-spelling rule, add a typed dialect path in compiler code.
+## 6. Model Compiler-Vector Overlays Explicitly
 
-WebAssembly SIMD is lane-shape-first:
+An overlay may need separate metadata:
+
+| Field | Effect |
+| --- | --- |
+| `header_group "clang"` | Emits a separate opt-in header. |
+| `compiler_ids [Clang, AppleClang]` | Gates the CMake target. |
+| `compile_guards` | Defines the macro contract. |
+| `dataparallel_inference false` | Excludes the overlay from normal inference. |
+
+Use `vector::fixed` for the hardware fallback.
+
+Use `cast<bitcast>` at representation boundaries.
+
+Do not name `sse`, `avx2`, `avx512`, or `neon` in the fallback body.
+
+Dependency closure selects the concrete hardware extension.
+
+## 7. Add An Intrinsic Dialect Only When Needed
+
+Reuse an existing intrinsic style when possible.
+
+Add a new typed style when the composition rule differs.
+
+Example:
 
 ```text
-wasm_i32x4_add
-core::arch::wasm32::i32x4_add
+x86 operation-first:
+  _mm256_add_epi32
+
+Wasm lane-shape-first:
+  wasm_i32x4_add
+  core::arch::wasm32::i32x4_add
 ```
 
-That differs from the existing operation-first shape:
+The extension declares:
+
+```tsl
+intrinsic_style "wasm"
+```
+
+The backend intrinsic dialect interprets that value.
+
+Do not build intrinsic names in a project template.
+
+Do not rewrite raw primitive text.
+
+Verify names against the target toolchain.
+
+## 8. Add A Small Primitive Slice
+
+Start with operations that prove construction, memory, and arithmetic.
+
+For `wasm128`:
 
 ```text
-_mm256_add_epi32
+set_zero  set1  load  store  from_array  to_array  add  sub
 ```
-
-The right boundary is `tslc/src/tslc/backend/translation_common.py`, keyed by
-`intrinsic_style "wasm"` or an equivalent typed policy. Do not special-case
-Wasm intrinsic names in templates, primitive lowering, or raw string rewrites.
-
-Verify exact intrinsic names against toolchain headers or official target docs.
-For `wasm128`, untyped memory intrinsics use names such as `wasm_v128_load` and
-`wasm_v128_store` in C++.
-
-## 6. Add The First Primitive Slice
-
-Pick a small vertical slice that proves selection, lowering, rendering, build,
-and value-test execution.
-
-For `wasm128`, start with:
-
-- `set_zero`
-- `set1`
-- `load`
-- `store`
-- `from_array`
-- `to_array`
-- `add`
-- `sub`
 
 Start with a small type set:
 
-- `si32`
-- `ui32`
-- `f32`
+```text
+si32  ui32  f32
+```
 
-Every implementation body for the extension should declare the profile feature
-requirements:
+Gate each Wasm implementation:
 
 ```tsl
 requires [simd128]
+implementation:
+  tsil """
+    complete(intrin<add, build>(left, right));
+    """
 ```
 
-Prefer typed TSIL regions:
+Use typed regions:
 
-- `intrin<...>`
-- `call<primitive=...>(...)`
-- `complete(...)`
-- `cast<...>(...)`
-- existing memory/value helpers
+- `intrin<...>`;
+- `call<primitive=...>(...)`;
+- `cast<...>(...)`;
+- `complete(...)`.
 
-Avoid backend-specific raw string ladders. If a source form cannot be expressed,
-add the missing typed TSIL concept instead of hiding behavior in templates.
+Add a new TSIL concept when the existing vocabulary cannot express the intent.
 
-## 7. Add Verifier And Runner Support
+Do not hide semantics in a template.
 
-If the extension needs a non-native target or runtime, keep verifier support
-skip-safe and injectable.
+## 9. Connect Verification
 
-For WebAssembly SIMD:
+Non-native targets need explicit verifier facts.
 
-- add `wasmtime_path` to verifier configuration;
-- allow machine-profile runner kind `wasmtime`;
-- route C++ CTest execution through Wasmtime for `.wasm` binaries;
-- use a WASI CMake/cross-target path for C++;
-- use Rust target `wasm32-wasip1`;
-- set Rust target features with `RUSTFLAGS="-C target-feature=+simd128"`;
-- skip cleanly when WASI SDK, the Rust target, or Wasmtime is missing.
+For WebAssembly:
 
-The default devcontainer toolchain installs WASI SDK and Wasmtime, but verifier
-config should still accept explicit paths for local and CI setups.
+- accept an injectable Wasmtime path;
+- accept runner kind `wasmtime`;
+- build C++ for WASI;
+- build Rust for `wasm32-wasip1`;
+- enable Rust feature `+simd128`;
+- run generated Wasm binaries through Wasmtime.
 
-## 8. Add Focused Tests
+Missing tools must produce a deterministic skip or diagnostic.
 
-Test the new extension in layers.
+Do not make the default test suite depend on local hardware or network access.
 
-Catalog and selection tests should prove:
+## 10. Test Each Boundary
 
-- the machine profile loads with the expected family, features, and runner;
-- the target family routes only intended extension families plus universal
-  families;
-- `requires [...]` selects the new bodies only for capable profiles.
+| Boundary | Prove |
+| --- | --- |
+| Catalog | Extension and profile facts are typed correctly. |
+| Selection | `requires` admits only capable profiles. |
+| Backend | Headers, types, modules, and intrinsics are correct. |
+| Lowering | The first primitive slice lowers for C++ and Rust. |
+| Safety | Raw memory and intrinsic use keep the right safety state. |
+| Verifier | Target, flags, runner, and skip behavior are correct. |
 
-Backend tests should prove:
+The connection should look like this:
 
-- C++ headers and Rust architecture module metadata are promoted correctly;
-- register type spelling is correct;
-- intrinsic composition produces representative target names.
+```text
+wasm32-simd128 + simd128
+  -> selects wasm128 implementation
+  -> lowers intrin<add, build>
+  -> emits wasm_i32x4_add or core::arch::wasm32::i32x4_add
+  -> builds wasm32-wasip1
+  -> runs through Wasmtime
+```
 
-Lowering tests should prove:
-
-- each primitive in the first slice lowers for C++ and Rust;
-- memory and unsafe intrinsics keep the correct safety shape;
-- helper calls such as `from_array` and `to_array` compose through existing
-  primitives.
-
-Verifier tests should prove:
-
-- C++ cross-target configuration uses the right CMake target settings;
-- Rust uses the right target and target features;
-- value tests run through the configured runner;
-- missing runner/toolchain paths become deterministic diagnostics or skips.
-
-## 9. Generate A Smoke Project
-
-Generate a small project before broadening coverage:
+## 11. Generate A Smoke Project
 
 ```bash
 PYTHONPATH=tslc/src python -m tslc.cli \
@@ -268,35 +289,19 @@ PYTHONPATH=tslc/src python -m tslc.cli \
   --no-format
 ```
 
-Inspect the generated output for the new target facts:
+Inspect:
 
-- C++ includes the extension header, for example `wasm_simd128.h`;
-- C++ compile flags include target features, for example `-msimd128`;
-- Rust uses the expected target feature attribute;
-- generated profile headers register the new native SIMD type;
-- intrinsic names match the target dialect.
+- C++ target headers;
+- C++ target flags;
+- Rust target-feature attributes;
+- generated profile registration;
+- representative intrinsic names.
 
-When the toolchain is installed, run generated builds and value tests through
-the verifier with the appropriate runner configured.
+Use `./tslctmp/...` for output.
 
-## 10. Update Tooling And Documentation
+Do not commit generated smoke projects.
 
-If the target needs toolchain setup, update `.devcontainer/Dockerfile` or CI
-helpers in the same slice.
-
-For WebAssembly SIMD, the container needs:
-
-- WASI SDK for C++ `wasm32-wasip1` builds;
-- Rust target `wasm32-wasip1`;
-- Wasmtime for executing generated `.wasm` value-test binaries.
-
-Do not make tests depend unconditionally on host-specific hardware, installed
-runtimes, or network access. Hardware and runner detection must be injectable,
-skippable, or clearly gated.
-
-## 11. Verify In Layers
-
-Run focused Python checks first:
+## 12. Validate
 
 ```bash
 python -m compileall -q tslc/src/tslc
@@ -305,41 +310,32 @@ PYTHONPATH=tslc/src python -m pytest -q \
   tslc/tests/test_backend_target_capability.py \
   tslc/tests/test_select_and_lower.py \
   tslc/tests/test_build_verify_config.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests
 git diff --check
 ```
 
-Then run the full logic suite:
+Run generated builds when toolchains are available.
 
-```bash
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests
-```
+Keep runner and toolchain detection skippable.
 
-Use `./tslctmp/...` for normal generated output. If that path is not writable,
-create or choose another workspace-local scratch path, for example
-`./tslc-wasm-smoke`, and avoid committing generated output.
+## 13. Expand Deliberately
 
-## 12. Expand Coverage Deliberately
+Expand only after the vertical slice is stable.
 
-After the first vertical slice is stable, add more types and primitive families.
+Add types first.
 
-For `wasm128`, the next natural expansions are:
+Then add primitive families.
 
-- `si8`, `ui8`, `si16`, `ui16`;
-- `si64`, `ui64`, `f64`;
-- comparisons and masks;
-- shifts;
-- conversions;
-- min/max and other arithmetic.
+Update coverage baselines last.
 
-Only update coverage ratchets or baselines once generated behavior is stable and
-the build/value-test path is reliable.
+## Review Checklist
 
-Before finishing, check:
-
-- Could the next similar extension be added mostly through `tsldata`?
-- Did any Python code branch on an extension name instead of a typed capability?
-- Are unsupported cases represented as diagnostics or explicit deferred support?
-- Are templates only formatting already-decided render values?
-- Are generated outputs deterministic across runs?
-- Does the extension have source data, profile data, tests, toolchain support,
-  and a smoke-generation command?
+- Target-family routing is source data.
+- Machine-profile capabilities are explicit.
+- Extension metadata owns target facts.
+- Primitive bodies declare feature requirements.
+- Backend dialects own target spelling.
+- Templates only format decided values.
+- Missing tools skip cleanly.
+- Generated output is deterministic.
+- The next similar extension remains additive.
