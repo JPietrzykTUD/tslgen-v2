@@ -19,6 +19,7 @@ from tslc.backend.rust_type_params import (
     type_param_base_key_decls as _type_param_base_key_decls,
     type_param_decls as _type_param_decls,
     type_param_names as _type_param_names,
+    with_consistent_type_param_bounds as _with_consistent_type_param_bounds,
 )
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.backend.rust_translation import rust_raw_identifier
@@ -62,6 +63,7 @@ class RustBackend:
     def render_primitive_internal(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
     ) -> str:
+        specializations = _with_consistent_type_param_bounds(specializations)
         shape = specializations[0]
         if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
             shape.result_kind,
@@ -116,6 +118,7 @@ class RustBackend:
     def render_primitive_public(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
     ) -> str:
+        specializations = _with_consistent_type_param_bounds(specializations)
         shape = specializations[0]
         if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
             shape.result_kind,
@@ -141,6 +144,7 @@ class RustBackend:
         dispatch trait or implementation body.
         """
 
+        specializations = _with_consistent_type_param_bounds(specializations)
         shape = specializations[0]
         if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
             shape.result_kind,
@@ -580,7 +584,7 @@ class RustBackend:
         if not self._emit_target_features or not spec.required_features:
             return ()
         return tuple(
-            f'#[target_feature(enable = "{feature_spelling(feature, self._feature_alternatives)}")]'
+            f'#[target_feature(enable = "{feature_spelling(feature, self._feature_alternatives, backend_id="rust")}")]'
             for feature in sorted(spec.required_features)
         )
 

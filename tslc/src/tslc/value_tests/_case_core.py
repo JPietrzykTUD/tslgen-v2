@@ -24,12 +24,16 @@ def generic_golden_case(
     index: int,
     case: TestCase,
     specs: tuple[LoweredSpecialization, ...],
+    index_base_spelling: str | None = None,
 ) -> ValueTestCasePlan | None:
     if case.lanes is None or case.expected_rule is not None:
         return None
     base_spelling = _base_spelling(specs, case.type_tag)
     vector_inputs = _vector_inputs(case)
     if base_spelling is None or len(vector_inputs) != len(specs[0].param_kinds):
+        return None
+    has_index_vector = "vidx" in specs[0].param_kinds
+    if has_index_vector and (case.index_type is None or index_base_spelling is None):
         return None
     if len(case.expected) != case.lanes:
         return None
@@ -44,6 +48,9 @@ def generic_golden_case(
         vector_inputs=vector_inputs,
         expected=case.expected,
         generic_defaults=generic_defaults,
+        index_type_tag=case.index_type if has_index_vector else None,
+        index_base_spelling=index_base_spelling if has_index_vector else None,
+        index_lanes=case.lanes if has_index_vector else None,
     )
 
 

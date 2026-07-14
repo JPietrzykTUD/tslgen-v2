@@ -19,17 +19,36 @@ def _generic_golden(case: ValueTestCasePlan) -> str:
         f"    fn {case.function_name}() {{",
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
-    arg_names = []
-    for position, values in enumerate(case.inputs.vectors):
-        literals = rust_literal_list(values, case.type_tag)
-        lines.append(f"        let in{position}: [{case.base_spelling}; {case.lanes}] = [{literals}];")
+    has_index_vector = "vidx" in case.invocation.param_kinds
+    if has_index_vector:
+        index = case.index
+        if index is None or index.base_spelling is None or index.lanes is None:
+            raise ValueError("indexed Rust value test requires an index-vector layout")
         lines.append(
-            f"        let mut a{position}: <Vec as SimdVector>::RegisterType = "
-            "Default::default();"
+            f"        type Indices = Simd<{index.base_spelling}, Generic<{index.lanes}>>;"
         )
-        lines.append(f"        for i in 0..{case.lanes} {{ a{position}[i] = in{position}[i]; }}")
-        arg_names.append(f"a{position}")
-    template_args = ["Vec", *case.invocation.generic_defaults]
+        arg_names = append_call_args(lines, case)
+    else:
+        arg_names = []
+        for position, values in enumerate(case.inputs.vectors):
+            literals = rust_literal_list(values, case.type_tag)
+            lines.append(
+                f"        let in{position}: [{case.base_spelling}; {case.lanes}] = "
+                f"[{literals}];"
+            )
+            lines.append(
+                f"        let mut a{position}: <Vec as SimdVector>::RegisterType = "
+                "Default::default();"
+            )
+            lines.append(
+                f"        for i in 0..{case.lanes} {{ a{position}[i] = "
+                f"in{position}[i]; }}"
+            )
+            arg_names.append(f"a{position}")
+    template_args = ["Vec"]
+    if has_index_vector:
+        template_args.append("Indices")
+    template_args.extend(case.invocation.generic_defaults)
     template_args.extend("_" for _ in range(case.invocation.inferred_type_args))
     call = (
         f"{rust_raw_identifier(case.call_name)}"
@@ -349,7 +368,10 @@ def _compile_only(case: ValueTestCasePlan) -> str:
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
     args = append_call_args(lines, case)
-    call = f"{rust_raw_identifier(case.call_name)}::<Vec>({', '.join(args)})"
+    if case.invocation.result_kind == "usize" and case.invocation.param_kinds == ("ptr",):
+        call = f"unsafe {{ {rust_raw_identifier(case.call_name)}({', '.join(args)}) }}"
+    else:
+        call = f"{rust_raw_identifier(case.call_name)}::<Vec>({', '.join(args)})"
     if case.invocation.result_kind == "void":
         lines.append(f"        {call};")
     else:

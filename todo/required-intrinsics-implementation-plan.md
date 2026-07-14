@@ -20,7 +20,7 @@ The inventory uses these status rules:
   A literal use of the intrinsic inside another primitive is not public
   coverage.
 
-This produces **122 covered**, **61 partial**, and **8 missing** intrinsics. Each
+This produces **130 covered**, **61 partial**, and **0 missing** intrinsics. Each
 source-list intrinsic occurs in exactly one inventory section below.
 
 The exact Intel operand and result behavior was checked against the
@@ -30,6 +30,14 @@ behavior.
 
 ## Material changes from the previous inventory
 
+- The eight formerly missing spellings now have public contracts: `abs`,
+  `align_right_lanes`, `permute_lanes4`, `permute_lanes`, `permute_lanes2`, and
+  `random_step`.
+- The arithmetic and swizzle contracts cover every vector extension and all ten
+  datatypes through portable semantic implementations, with exact x86
+  specializations where the Intel operation matches. `random_step` is the
+  deliberate exception: it is x86-only, `ui64`-only, and feature-gated by
+  `rdrand` because a portable entropy fallback would change the contract.
 - Native mask AND, OR, and NOT are now covered by `mask_binary_and`,
   `mask_binary_or`, and `mask_binary_not`.
 - The merge-source vector expand shape is now covered by the current
@@ -44,11 +52,24 @@ behavior.
   tests, and body keep `left` on active mask lanes and add on inactive lanes.
   The required intrinsic adds on active lanes and takes an independent `src`
   for inactive lanes.
-- `tsldata/primitives/misc/swizzle.tsl` is empty. Intrinsics used privately by
-  another implementation, such as `_mm_shuffle_epi32` in a bit-count recipe,
-  therefore do not establish a public swizzle primitive.
+- `tsldata/primitives/misc/swizzle.tsl` now contains public, target-independent
+  lane-alignment and permutation primitives; the Intel spellings are
+  implementation choices rather than API names.
 
-## Covered inventory (122)
+## Public primitive naming decision
+
+An x86 intrinsic should normally be represented by a normal TSL primitive when
+it expresses a useful operation independent of x86. The public name therefore
+describes the operation (`abs`, `permute_lanes`, and so on), while an intrinsic
+such as `_mm512_permutexvar_epi32` is an exact specialization of that contract.
+Publishing `_mm*` names as primitives would expose register widths, Intel type
+spellings, and ISA-specific operand conventions in the cross-target API.
+
+The exception is a genuinely target-specific capability. `_rdrand64_step` is
+not an optimization of a deterministic portable operation, so `random_step`
+has an x86-only feature-gated contract and no fabricated fallback.
+
+## Covered inventory (130)
 
 These required intrinsics already have an exact public semantic mapping in the
 current corpus.
@@ -61,6 +82,7 @@ current corpus.
 - `div`: `_mm512_div_pd`, `_mm512_div_ps`.
 - `min`: `_mm512_min_epi64`, `_mm512_min_pd`, `_mm512_min_ps`.
 - `max`: `_mm512_max_epi64`, `_mm512_max_pd`, `_mm512_max_ps`.
+- `abs`: `_mm512_abs_epi64`.
 - `binary_and`: `_mm512_and_epi32`, `_mm512_and_epi64`,
   `_mm512_and_si512`.
 - `binary_andnot`: `_mm512_andnot_si512`.
@@ -128,6 +150,11 @@ current corpus.
 - `mask_binary_or`: `_mm512_kor`.
 - `mask_binary_not`: `_mm512_knot`.
 - `expand[mask=pass_through]`: `_mm512_mask_expand_epi32`.
+- `align_right_lanes`: `_mm512_alignr_epi32`, `_mm512_alignr_epi64`.
+- `permute_lanes4`: `_mm256_permute4x64_epi64`, `_mm_shuffle_epi32`.
+- `permute_lanes`: `_mm512_permutexvar_epi32`.
+- `permute_lanes2`: `_mm512_permutex2var_epi32`.
+- `random_step`: `_rdrand64_step`.
 
 ## Partial inventory and proposed primitives (61)
 
@@ -170,21 +197,22 @@ primitive has the exact operation shape.
 | `_mm_cvtsi32_si128`, `_mm_cvtsi64_si128` | `set_zero` plus `insert_value<0>` composes the value, but no scalar constructor promises zeroed upper lanes. | Add `set_low(value: s) -> v`; distinguish it from `set1`, which broadcasts. |
 | `_mm_loadl_epi64` | Masked load or `load_scalar` plus `set_low` can compose the result, but no load contract states that only the low lane is read and all upper lanes are zero. | Add `load_low(ptr, LaneCount=1) -> v` with unaligned access and zeroed upper lanes. |
 
-## Missing inventory and proposed primitives (8)
+## Missing inventory and proposed primitives (0)
 
-These operations need new public semantic vocabulary rather than another
-specialization of a current contract.
+No required intrinsic remains without a public semantic primitive contract.
 
-| Required intrinsic(s) | Missing semantic contract | Proposed primitive contract |
+## Closure of the formerly missing inventory (8)
+
+| Required intrinsic(s) | Implemented primitive contract | Coverage and verification |
 |---|---|---|
-| `_mm512_abs_epi64` | No unary arithmetic absolute-value primitive exists. | Add `abs(data) -> v` in the arithmetic family. Define signed-minimum behavior as the unchanged two's-complement magnitude bit pattern and test it explicitly. |
-| `_mm512_alignr_epi32`, `_mm512_alignr_epi64` | There is no concatenated cross-vector lane alignment primitive. | Add `align_right_lanes(left, right, count: sImm) -> v` in `misc/swizzle.tsl`, with operand order and out-of-range counts defined independently of Intel spelling. |
-| `_mm256_permute4x64_epi64`, `_mm_shuffle_epi32` | There is no public immediate-controlled lane permutation; `misc/swizzle.tsl` is empty. | Add `permute_lanes4(data, control: sImm) -> v`, applying each two-bit selector to a four-lane group. |
-| `_mm512_permutexvar_epi32` | There is no one-source indexed lane permutation. | Add `permute_lanes(data, indexes) -> v`, with index masking defined by the destination lane count. |
-| `_mm512_permutex2var_epi32` | There is no two-source indexed lane permutation. | Add `permute_lanes2(left, indexes, right) -> v`, with the source-select bit and lane-index bits defined in semantics. |
-| `_rdrand64_step` | The corpus has no nondeterministic hardware-entropy operation or status-plus-output-pointer contract. | Add x86-only `random_step(out: ptr) -> usize`, restricted initially to a `ui64` output. Return 0/1 success, provide no fake generic fallback, and use compile/contract tests rather than asserting randomness. |
+| `_mm512_abs_epi64` | `abs(data) -> v` | All vector extensions and all ten datatypes. Signed minimum retains its two's-complement bit pattern; floating-point absolute value clears the sign bit. Exact AVX-512 `si64` specialization plus portable fallbacks. |
+| `_mm512_alignr_epi32`, `_mm512_alignr_epi64` | `align_right_lanes(left, right, count: sImm) -> v` | All vector extensions and datatypes, with count reduced modulo the active lane count. Exact AVX-512 32/64-bit integral specializations plus portable fallbacks. |
+| `_mm256_permute4x64_epi64`, `_mm_shuffle_epi32` | `permute_lanes4(data, control: sImm) -> v` | All vector extensions and datatypes, operating independently on groups of at most four lanes. Exact matching x86 specializations plus portable fallbacks. |
+| `_mm512_permutexvar_epi32` | `permute_lanes(data, indexes) -> v` | All vector extensions and datatypes; signed or unsigned same-width integral index vectors are supported and indexes are reduced modulo lane count. Exact AVX-512 32-bit integral specialization plus portable fallbacks. |
+| `_mm512_permutex2var_epi32` | `permute_lanes2(left, indexes, right) -> v` | All vector extensions and datatypes; indexes address the concatenation of both sources modulo twice the lane count. Exact AVX-512 32-bit integral specialization plus portable fallbacks. |
+| `_rdrand64_step` | `random_step(out: ptr) -> usize` | Intentionally limited to x86 `ui64` profiles with the `rdrand` feature. Returns a 0/1 status and writes only on success; compile/contract tests avoid asserting randomness. |
 
-## Implementation sequence
+## Implementation sequence for the remaining partial inventory
 
 Keep each numbered item as a separate coherent slice. A slice is complete only
 when its declared contracts select, lower, render, and receive the applicable
@@ -211,18 +239,10 @@ generated checks; source declarations alone do not close an inventory row.
    64-bit values with 32-bit indices, including masked forms. Add tests that use
    all eight consumed low indices and poison the unused upper index lanes so an
    accidental 64-bit-index interpretation fails visibly.
-5. **Bit and arithmetic operations.** Add `abs`, widening even-lane multiply,
-   rotates, ternary logic, scalar TZC, reset-lowest-set-bit, and whole-register
-   test reductions. Keep unsigned bit-pattern behavior explicit at signed edge
-   values.
-6. **Swizzle family.** Populate `misc/swizzle.tsl` with immediate permutation,
-   indexed one/two-source permutation, and concatenated alignment. This should
-   be one small family with shared lane-index semantics, not independent raw
-   intrinsic recipes.
-7. **Hardware entropy policy.** Add `random_step` only after confirming that an
-   x86-only nondeterministic primitive is in product scope. Model its feature
-   gate and output side effect explicitly, skip unsupported extensions with a
-   structured reason, and do not invent deterministic portable behavior.
+5. **Remaining bit and arithmetic operations.** Add widening even-lane
+   multiply, rotates, ternary logic, scalar TZC, reset-lowest-set-bit, and
+   whole-register test reductions. Keep unsigned bit-pattern behavior explicit
+   at signed edge values.
 
 ## Validation and closure criteria
 

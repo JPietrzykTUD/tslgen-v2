@@ -111,19 +111,19 @@ CPP_SIGNATURE_TYPES = BackendSignatureTypes(
         ),
         "ptr": SignatureTypeForms(
             parameter="typename Vec::base_type *",
-            free="{base}",
+            free="{base} *",
         ),
         "ptr+": SignatureTypeForms(
             parameter="typename Vec::base_type *",
-            free="{base}",
+            free="{base} *",
         ),
         "cptr": SignatureTypeForms(
             parameter="typename Vec::base_type const *",
-            free="const {base}",
+            free="const {base} *",
         ),
         "cptr+": SignatureTypeForms(
             parameter="typename Vec::base_type const *",
-            free="const {base}",
+            free="const {base} *",
         ),
         "void": SignatureTypeForms(result="void", free="void"),
         "s[]": SignatureTypeForms(
@@ -180,13 +180,13 @@ RUST_SIGNATURE_TYPES = BackendSignatureTypes(
         "ptr": SignatureTypeForms(
             owner="*mut {owner}::BaseType",
             parameter="*mut {owner}::BaseType",
-            free="{base}",
+            free="*mut {base}",
             concrete="*mut {base}",
         ),
         "ptr+": SignatureTypeForms(
             owner="*mut {owner}::BaseType",
             parameter="*mut {owner}::BaseType",
-            free="{base}",
+            free="*mut {base}",
             concrete="*mut {base}",
         ),
         "cptr": SignatureTypeForms(

@@ -12,8 +12,28 @@ Status values:
 - `missing`: add a primitive or extend an existing primitive family.
 
 Reviewed against the current `tsldata/primitives/` corpus and the Intel
-Intrinsics Guide. Any intrinsic in the source list below that is not named in
-`Partial coverage` or `Missing coverage` is currently treated as `covered`.
+Intrinsics Guide on 2026-07-14. The 191 source-list intrinsics currently split
+into **130 covered**, **61 partial**, and **0 missing**. Every source-list entry
+is assigned exactly once below.
+
+Public TSL names describe operations rather than Intel spellings. The current
+`permute_lanes`, `permute_lanes2`, and `permute_lanes4` declarations are three
+different signatures, not three fundamentally separate primitive families:
+the one- and two-source indexed forms could be overloads of `permute_lanes`,
+and the immediate four-lane-group form could also share that source-family
+name. Its `sImm` control is already emitted as a C++ template argument or Rust
+const generic; moving it to `generic_params` would not add compile-time
+behavior. An attribute would be inappropriate because the control is a
+call-site operand with 256 values, not an orthogonal policy such as alignment
+or masking.
+
+`random_step` is intentionally different. It maps the required
+`_rdrand64_step`, so its output is only `ui64` and it is available only on
+64-bit x86 profiles with `rdrand`. Its current authored test is compile/contract
+coverage: RDRAND may legally report failure, so the test cannot demand a random
+value. The otherwise irrelevant `lane_count 2` and two-zero vector are test
+harness scaffolding used to materialize one mutable `ui64` pointee; they are not
+part of the primitive contract.
 
 ## Covered mapping
 
@@ -27,6 +47,7 @@ These required intrinsics already map to existing TSL primitive semantics.
 - `div`: `_mm512_div_pd`, `_mm512_div_ps`.
 - `min`: `_mm512_min_epi64`, `_mm512_min_pd`, `_mm512_min_ps`.
 - `max`: `_mm512_max_epi64`, `_mm512_max_pd`, `_mm512_max_ps`.
+- `abs`: `_mm512_abs_epi64`.
 - `binary_and`: `_mm512_and_epi32`, `_mm512_and_epi64`,
   `_mm512_and_si512`.
 - `binary_andnot`: `_mm512_andnot_si512`.
@@ -57,17 +78,18 @@ These required intrinsics already map to existing TSL primitive semantics.
   `_mm512_cvtepi32_epi64`, `_mm512_cvtepi8_epi32`,
   `_mm512_cvtepi8_epi64`, `_mm512_cvtepu16_epi32`,
   `_mm512_cvtepu8_epi32`.
-- `extract_value`: `_mm512_cvtsd_f64`, `_mm512_cvtss_f32`,
+- `extract_value` with the default low-lane index: `_mm512_cvtsd_f64`,
+  `_mm512_cvtss_f32`,
   `_mm_cvtsi128_si32`, `_mm_cvtsi128_si64`.
-- `load`: `_mm256_load_si256`, `_mm256_loadu_si256`,
+- `load[aligned=true|false]`: `_mm256_load_si256`, `_mm256_loadu_si256`,
   `_mm512_load_epi32`, `_mm512_load_epi64`, `_mm512_load_pd`,
   `_mm512_load_ps`, `_mm512_load_si512`, `_mm512_loadu_si512`,
   `_mm_load_si128`, `_mm_loadu_si128`.
-- `load[mask=pass_through]`: `_mm512_mask_loadu_epi32`.
-- `store`: `_mm512_store_epi32`, `_mm512_store_epi64`,
+- `load[aligned=false, mask=pass_through]`: `_mm512_mask_loadu_epi32`.
+- `store[aligned=true|false]`: `_mm512_store_epi32`, `_mm512_store_epi64`,
   `_mm512_store_pd`, `_mm512_store_ps`, `_mm512_store_si512`,
   `_mm512_storeu_si512`, `_mm_store_si128`.
-- `store[mask=pass_through]`: `_mm512_mask_storeu_epi32`.
+- `store[aligned=false, mask=pass_through]`: `_mm512_mask_storeu_epi32`.
 - `set_zero`: `_mm512_setzero_pd`, `_mm512_setzero_ps`,
   `_mm512_setzero_si512`.
 - `set_undef`: `_mm256_undefined_si256`, `_mm512_undefined_epi32`.
@@ -78,11 +100,11 @@ These required intrinsics already map to existing TSL primitive semantics.
   `_mm512_srlv_epi64`.
 - `lzc`: `_mm512_lzcnt_epi32`, `_mm512_lzcnt_epi64`.
 - `lzc_scalar`: `_lzcnt_u64`.
-- `popcnt`: `_mm_popcnt_u32`, `_mm_popcnt_u64`.
+- `popcnt`, including its scalar specialization: `_mm_popcnt_u32`,
+  `_mm_popcnt_u64`.
 - `to_integral`: `_mm512_mask2int`.
 - `mov[mask=pass_through]`: `_mm512_mask_mov_epi32`.
 - `blend`: `_mm512_mask_blend_epi32`.
-- `compress_store`: `_mm512_mask_compressstoreu_epi32`.
 - `gather`: `_mm512_i32gather_epi32`, `_mm512_i32gather_ps`,
   `_mm512_i64gather_epi64`.
 - `gather[mask=pass_through]`: `_mm512_mask_i32gather_epi32`,
@@ -90,6 +112,15 @@ These required intrinsics already map to existing TSL primitive semantics.
 - `scatter`: `_mm512_i32scatter_epi32`, `_mm512_i32scatter_ps`,
   `_mm512_i64scatter_epi64`.
 - `scatter[mask=zero]`: `_mm512_mask_i32scatter_ps`.
+- `mask_binary_and`: `_mm512_kand`.
+- `mask_binary_or`: `_mm512_kor`.
+- `mask_binary_not`: `_mm512_knot`.
+- `expand[mask=pass_through]`: `_mm512_mask_expand_epi32`.
+- `align_right_lanes`: `_mm512_alignr_epi32`, `_mm512_alignr_epi64`.
+- `permute_lanes4`: `_mm256_permute4x64_epi64`, `_mm_shuffle_epi32`.
+- `permute_lanes`: `_mm512_permutexvar_epi32`.
+- `permute_lanes2`: `_mm512_permutex2var_epi32`.
+- `random_step`: `_rdrand64_step`.
 
 ## Partial coverage
 

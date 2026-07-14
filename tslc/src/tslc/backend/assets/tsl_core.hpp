@@ -13,6 +13,10 @@
 #include <type_traits>
 #include <vector>
 
+#if defined(__x86_64__) || defined(_M_X64)
+#include <immintrin.h>
+#endif
+
 // Loop-unroll hint for `loop<backend, unroll>`. A no-op by default (a real
 // unroll pragma is compiler-specific and only a hint); kept as a macro so
 // generated bodies always compile.
@@ -319,6 +323,20 @@ struct reg_param<simd<T, generic<LANES>>> {
 // Scalar-core helpers used by emulated (loop) bodies. Grows one function at a time as the
 // primitives that call `helper<...>` land; `arith_add` is the reductions' accumulate step.
 namespace detail::helpers {
+#if defined(__x86_64__) || defined(_M_X64)
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((target("rdrnd")))
+#endif
+inline std::size_t random_step_u64(std::uint64_t* out) {
+    unsigned long long value = 0;
+    const int status = _rdrand64_step(&value);
+    if (status != 0) {
+        *out = static_cast<std::uint64_t>(value);
+    }
+    return status != 0 ? std::size_t{1} : std::size_t{0};
+}
+#endif
+
 template <class T>
 inline T arith_add(T a, T b) {
     if constexpr (std::is_integral_v<T>) {

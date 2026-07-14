@@ -77,6 +77,7 @@ translation cpp:
   helper_ctz "::tsl::detail::helpers::ctz({args})"
   helper_clz "::tsl::detail::helpers::clz({args})"
   helper_clz_recursive "::tsl::detail::helpers::clz_recursive{template}({args})"
+  helper_random_step_u64 "::tsl::detail::helpers::random_step_u64({args})"
   mask_none_lane_bitmask "0"
   mask_all_lane_bitmask "((LANES >= 64) ? std::uint64_t{~0ull} : ((std::uint64_t{1} << LANES) - 1ull))"
   mask_set_lane_bitmask "{name} |= (1ull << {index})"

@@ -36,12 +36,25 @@ building a C++ or Rust project.
   behavior.
 - Implement the language server in Python so it consumes `tslc` typed objects
   directly.
+- Implement the VS Code client in TypeScript against the standard VS Code and
+  language-client APIs. Compile and bundle its JavaScript for the VSIX; users
+  must not need Node.js, npm, or the TypeScript toolchain.
+- Generate the TextMate grammar's registered TSIL keyword inventory from the
+  compiler region registry during extension build and packaging. Do not keep a
+  second hand-maintained keyword list in TypeScript or JSON.
 - Use Language Server Protocol over stdio. Do not define a VS Code-only RPC
   protocol.
 - Prefer `pygls` and `lsprotocol` as optional editor dependencies after a small
   Python 3.14 compatibility spike. Do not hand-write JSON-RPC or LSP framing.
 - Keep editor dependencies out of the base compiler installation through an
   optional package extra.
+- Treat an external Python environment as an explicit contributor-preview
+  deployment mode, not an invisible Marketplace prerequisite. That environment
+  currently needs Python 3.14 or newer, as declared by the package, plus
+  `tslc[editor]`; it does not need the repository-wide `requirements.txt`.
+- For a polished public Marketplace release, make a self-contained,
+  platform-specific server package the primary path. Retain an explicit server
+  command and external Python installation as developer overrides.
 - Make the VS Code extension a thin client: language registration, process
   launch, configuration, syntax coloring, and command wiring only.
 - Start with full-corpus checking on a debounce. Add incremental compiler
@@ -259,6 +272,47 @@ tslc/src/tslc/
 
 Keep modules small and literal. Do not create request/result classes for every
 function. The first implementation should need only a few substantive types.
+
+## Proposed VS Code Package Shape
+
+Keep the TypeScript client in this repository but outside the Python package:
+
+```text
+editors/vscode-tsl/
+  package.json
+  src/
+    extension.ts
+    server.ts
+    configuration.ts
+  syntaxes/
+    tsl.tmLanguage.template.json
+  scripts/
+    generate-tsil-grammar.mjs
+  dist/                        # generated, not committed
+    extension.js
+    syntaxes/
+      tsl.tmLanguage.json
+  language-configuration.json
+  test/
+  esbuild.js
+  tsconfig.json
+```
+
+The Python language-server source remains under `tslc/src/tslc/lsp/`. If
+release packaging embeds frozen server executables, place or stage them under a
+clearly generated client path such as `editors/vscode-tsl/server/<target>/`.
+Those binaries are release artifacts, not another source tree and not a place
+for TSL semantics.
+
+The source-controlled TextMate template owns scopes and structural patterns,
+but not the registered TSIL keyword inventory. Before extension tests or
+packaging, `generate-tsil-grammar.mjs` invokes the exact compiler build being
+tested through `tslc list regions --format json`, regex-escapes its returned
+keywords, and substitutes a deterministic alternation into the template. The
+generated grammar is uncommitted package staging under `dist/`, not a manually
+edited source of truth. `package.json` points its grammar contribution at that
+staged file. Ordinary extension activation never regenerates or modifies
+installed files.
 
 ## Authoring Data Model
 
@@ -584,6 +638,21 @@ One `AuthoringWorkspace` owns:
 
 State mutation belongs in this small class. Compiler stages remain pure.
 
+### Reload Contract
+
+Changes to `.tsl` source and discovered configuration are workspace inputs and
+must be reflected by the normal document/file-watch and full-corpus recheck
+path. Changes to Python compiler code, including a newly registered TSIL
+keyword, require a language-server process restart because imported modules and
+registries are process state. Do not implement in-process Python module hot
+reloading.
+
+Expose a `TSL: Restart Language Server` client command for development and
+recovery. After restart, completion, hover, semantic tokens, inspection, and
+diagnostics read the current compiler registries. A packaged bundled server
+changes only when a new extension/server version is installed; an external
+server may be upgraded independently and then restarted.
+
 ### Document Synchronization
 
 Use incremental LSP document synchronization at the protocol boundary, but
@@ -697,7 +766,10 @@ Semantic coloring should distinguish:
 
 Do not claim to understand identifiers inside raw C++/Rust fragments. The VS
 Code TextMate grammar can provide immediate base coloring; semantic tokens add
-catalog-aware distinctions when the server is available.
+catalog-aware distinctions when the server is available. The packaged
+TextMate keyword alternation is generated from the region registry, while the
+running server remains authoritative when an explicitly configured external
+server is newer than the extension package.
 
 ### Commands And Code Actions
 
@@ -731,11 +803,19 @@ Update the root project map only when this directory is introduced.
 
 ### Responsibilities
 
+- use TypeScript for the client implementation and bundle the compiled
+  JavaScript into the published VSIX;
+- declare `"extensionKind": ["workspace"]` in `package.json` so the client and
+  server run beside the workspace in local, WSL, container, SSH, and Codespaces
+  scenarios;
 - register language ID `tsl` for `.tsl`;
-- provide a TextMate grammar and language configuration;
+- provide a TextMate grammar generated from a source-controlled structural
+  template plus the compiler-owned TSIL region inventory, and a hand-authored
+  language configuration;
 - locate or launch `tslc lsp --stdio`;
 - forward workspace configuration;
 - expose language-server commands in the command palette;
+- expose an explicit language-server restart command;
 - show a clear setup message when the editor extra is unavailable;
 - provide extension tests for activation and process launch.
 
@@ -753,13 +833,57 @@ Update the root project map only when this directory is introduced.
 Use this order:
 
 1. explicit `tsl.server.command` setting;
-2. the selected Python environment with `python -m tslc lsp --stdio`;
+2. the server executable bundled for the current extension-host platform, when
+   the installed extension contains one;
 3. `tslc` found on `PATH`;
-4. a setup diagnostic explaining how to install `tslc[editor]`.
+4. an explicitly configured Python environment with
+   `python -m tslc lsp --stdio`;
+5. a setup diagnostic explaining how to install `tslc[editor]` or configure a
+   server command.
+
+Prefer the `tslc` console script over an arbitrary discovered Python because
+the console script already belongs to an environment containing the matching
+package and optional dependencies. Do not silently depend on another VS Code
+extension's selected interpreter; integration with a Python-environment API may
+be additive, but `tsl.server.command` or a dedicated interpreter setting must
+remain sufficient.
 
 For this repository, the devcontainer can use the workspace Python environment
 and `PYTHONPATH=tslc/src` during development. Published clients should prefer an
-installed package.
+installed package during contributor previews and a bundled server for a
+polished Marketplace release.
+
+### Runtime And Distribution Contract
+
+The server runs in the environment hosting the workspace extension. For a
+local folder that is the local machine; for Dev Containers, WSL, Remote SSH,
+and Codespaces it is the corresponding remote workspace environment. Setup
+messages must describe that execution location instead of always telling the
+user to install Python "locally."
+
+Support two deliberate deployment levels:
+
+1. **Contributor preview:** the client launches an external `tslc` executable
+   or configured Python. The execution environment must have the
+   package-supported Python version (currently Python 3.14 or newer) and
+   `tslc[editor]` installed. The root `requirements.txt` is for repository CI,
+   tests, documentation, and build images; it is not an editor runtime
+   contract.
+2. **Marketplace release:** publish platform-specific VSIX packages containing
+   a self-contained server executable for each supported extension-host target.
+   Keep external command/Python overrides for development, unsupported targets,
+   and users who deliberately manage their own environment.
+
+Freezing and publishing the Python server introduces a platform matrix. Decide
+and test the supported Windows, macOS, glibc Linux, Alpine Linux, x64, and Arm64
+targets explicitly rather than claiming universal support. A browser-only web
+extension cannot spawn the Python server; it may provide syntax coloring alone,
+while Codespaces can run the workspace extension and server remotely.
+
+Do not run `pip`, download a runtime, or modify a user environment during
+ordinary activation. A separately invoked setup command may offer a managed
+installation only with explicit consent, clear destination and version
+information, offline failure behavior, and enterprise-safe configuration.
 
 ## Performance And Concurrency
 
@@ -945,8 +1069,13 @@ Work:
 - implement full-text document overlays and debounced checking;
 - publish parse/catalog/TSIL diagnostics;
 - implement document symbols;
-- create the VS Code client with `.tsl` registration and basic TextMate
-  coloring;
+- create the TypeScript VS Code client under `editors/vscode-tsl/` with `.tsl`
+  registration and basic TextMate coloring;
+- add a deterministic grammar-generation step that consumes
+  `tslc list regions --format json` from the compiler build under test and runs
+  before extension testing and packaging;
+- implement contributor-preview discovery for an explicit command, `tslc` on
+  `PATH`, and an explicitly configured Python interpreter;
 - add server launch configuration for the repository devcontainer;
 - ensure logs never use protocol stdout.
 
@@ -956,13 +1085,21 @@ Exit criteria:
 - an unsaved syntax or catalog error appears at the correct range;
 - fixing the error clears it without saving;
 - rapidly changing a document cannot publish stale diagnostics;
-- VS Code activation does not require YAML language mode.
+- VS Code activation does not require YAML language mode;
+- adding a region descriptor requires no hand edit to a TypeScript or TextMate
+  keyword list; restarting the server updates semantic features and rebuilding
+  the extension updates base TextMate coloring;
+- a missing external server produces one actionable `tslc[editor]` setup
+  message and does not try to install packages automatically.
 
 Validation:
 
 - Python unit tests for workspace state and overlay versioning;
 - protocol tests for initialize/open/change/diagnostics/shutdown;
 - VS Code extension activation test;
+- generated-grammar equality and reproducibility tests against the compiler
+  region registry;
+- TypeScript compile, bundle, and client process-launch tests;
 - manual smoke test against one primitive source and one extension source;
 - full Python suite.
 
@@ -1056,6 +1193,38 @@ Exit criteria:
 - every mutating code action is previewable and undoable;
 - performance targets are met or a measured follow-up is recorded.
 
+### Slice 9: Marketplace Runtime Packaging
+
+Goal: turn the contributor-preview client into an install-and-run extension on
+explicitly supported platforms.
+
+Work:
+
+- select and validate a Python freezing/embedding approach for the language
+  server without moving its source out of `tslc/src/tslc/lsp/`;
+- define the supported extension-host platform and architecture matrix;
+- build a self-contained `tslc lsp --stdio` executable for each target;
+- package platform-specific VSIX files with the matching server executable;
+- generate the packaged TextMate grammar from the same `tslc` build used for
+  the bundled server and fail packaging if their keyword inventories differ;
+- prefer the bundled executable while retaining explicit command, `tslc`, and
+  configured-Python overrides;
+- test local and remote workspace placement, startup, shutdown, version
+  reporting, and missing/unsupported-platform behavior;
+- automate executable and VSIX construction, checksums, and smoke tests in CI.
+
+Exit criteria:
+
+- installing a claimed platform-specific VSIX requires neither Python nor
+  Node.js/npm on the end-user machine or remote workspace host;
+- every published target passes an isolated startup/check/shutdown smoke test;
+- unsupported targets receive an accurate external-server setup path rather
+  than a misleading universal-support claim;
+- bundled and external servers report compatible `tslc`/protocol versions;
+- each VSIX contains the deterministic grammar generated from its bundled
+  server's region inventory;
+- ordinary activation performs no downloads or package installation.
+
 ## Test Strategy
 
 ### Pure Authoring Tests
@@ -1097,7 +1266,16 @@ Exit criteria:
 - missing-server setup message;
 - command registration;
 - syntax grammar fixture coverage;
-- extension shutdown terminates its server process.
+- the generated TextMate keyword set exactly equals the compiler's registered
+  TSIL keyword set and a second generation produces byte-identical output;
+- a synthetic registry addition reaches generated grammar output without a
+  TypeScript or grammar-template keyword edit;
+- extension shutdown terminates its server process;
+- TypeScript is compiled and the production extension bundle contains no
+  runtime dependency on a user-installed Node.js/npm toolchain;
+- local and remote workspace execution resolve the server on the correct side;
+- contributor-preview discovery and bundled-server discovery select the
+  documented command deterministically.
 
 ### Integration Tests
 
@@ -1107,7 +1285,9 @@ Exit criteria:
 - one malformed TSIL selector;
 - one profile-specific lowering check;
 - one metadata-audit edit preview;
-- installed wheel plus `tslc[editor]`, not only `PYTHONPATH` development.
+- installed wheel plus `tslc[editor]`, not only `PYTHONPATH` development;
+- one packaged self-contained server/VSIX smoke test for every declared
+  Marketplace target before that target is published.
 
 ## Validation Matrix
 
@@ -1128,8 +1308,7 @@ When packaging changes:
 ```bash
 python -m build --outdir tslctmp/dist tslc
 python -m pip install --force-reinstall \
-  ./tslctmp/dist/tslc-0.1.0a1-py3-none-any.whl \
-  pygls lsprotocol
+  "./tslctmp/dist/tslc-0.1.0a1-py3-none-any.whl[editor]"
 tslc --help
 tslc check
 tslc lsp --help
@@ -1141,6 +1320,14 @@ test whose behavior depends on shell glob expansion.
 
 Use a workspace-local virtual environment or cache under `tslctmp` for package
 smoke tests. Do not write dependency caches to `/tmp` in the devcontainer.
+
+Build and test the TypeScript client with its locked development dependencies,
+generate its TextMate grammar from `tslc list regions --format json`, then
+package the production JavaScript bundle. Node.js/npm and Python/`tslc` are
+build-time requirements for contributors and CI, not end-user prerequisites.
+When bundled server packaging lands, generate the grammar and server from the
+same compiler build, and automate per-target executable and VSIX construction
+in CI rather than building native release payloads during extension activation.
 
 The editor itself does not require generated C++/Rust build gates. Run those
 only when factoring the check boundary changes generation, selection, lowering,
@@ -1204,6 +1391,20 @@ Risk: completion or navigation invents a second language definition.
 Mitigation: derive vocabulary from typed catalog objects, registries, shared
 selector parsers, and parsed source. Test editor lists against registry keys.
 
+### Generated Grammar Drift
+
+Risk: a checked-in or independently maintained TextMate keyword regex drifts
+from the Python region registry, or a newer external server recognizes a
+keyword absent from the grammar packaged with an older client.
+
+Mitigation: keep only the structural grammar template as source, generate the
+registered keyword alternation from `tslc list regions --format json` during
+every extension test/package build, and test exact set equality plus
+byte-for-byte reproducibility. Build bundled servers and grammars from the same
+compiler version. Treat LSP semantic tokens as authoritative when an external
+server and the packaged base grammar differ; do not rewrite an installed
+grammar at runtime.
+
 ### LSP Dependency Churn
 
 Risk: `pygls` or `lsprotocol` changes APIs or lags the repository Python
@@ -1212,6 +1413,19 @@ version.
 Mitigation: keep transport isolated in `tslc/lsp`, pin compatible major ranges,
 test the optional extra in CI, and keep the pure authoring API independent of
 the LSP library.
+
+### Server Runtime And Packaging Friction
+
+Risk: an extension that silently assumes Python 3.14 plus `tslc[editor]` is
+already installed produces a poor Marketplace experience, while bundling a
+Python runtime creates a substantial platform and remote-host test matrix.
+
+Mitigation: state the external-runtime requirement for contributor previews,
+detect it with one actionable setup diagnostic, and never direct users to the
+root `requirements.txt`. Make a self-contained platform package the primary
+path before presenting the extension as install-and-run Marketplace tooling.
+Keep explicit external commands as an escape hatch and test local, WSL or
+container, SSH or Codespaces, and supported native targets separately.
 
 ### Formatter Pressure
 
@@ -1248,11 +1462,25 @@ Version 1 is complete when:
 - document symbols, primitive-call definitions, references, and hover work;
 - completion covers common outer fields, catalog names, primitive calls, and
   registered TSIL keywords;
+- the TextMate TSIL keyword inventory is reproducibly generated from the
+  compiler registry during extension packaging and contains no hand-maintained
+  duplicate list;
+- adding a registered TSIL keyword updates LSP semantic features after a server
+  restart and base TextMate coloring after an extension rebuild, without a
+  TypeScript client change;
 - the language server remains usable from non-VS-Code LSP clients;
 - no TSL semantics are duplicated in the VS Code extension;
+- the VS Code client source is TypeScript under `editors/vscode-tsl/`, while
+  the Python language-server source remains under `tslc/src/tslc/lsp/`;
 - no formatter claims support before lossless parsing exists;
 - the server meets the measured latency targets on the current corpus;
 - the base `tslc` installation does not require editor dependencies;
+- contributor-preview documentation requires only the package-supported Python
+  version (currently 3.14 or newer) plus `tslc[editor]`, never the
+  repository-wide `requirements.txt`;
+- any release advertised as a polished Marketplace installation includes a
+  tested self-contained server for each platform it claims to support, while
+  retaining explicit external-server overrides;
 - repository documentation explains setup, commands, limitations, and
   troubleshooting;
 - the full Python suite, mypy, packaging smoke test, client tests, and

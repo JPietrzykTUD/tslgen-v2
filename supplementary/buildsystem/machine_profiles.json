@@ -28,63 +28,63 @@
     },
     {
       "name": "avx2",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand",
       "runner": {"kind": "sde", "profile": "hsw"}
     },
     {
       "name": "knl",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd",
       "runner": {"kind": "sde", "profile": "future"}
     },
     {
       "name": "kml",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512_vpopcntdq",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512_vpopcntdq",
       "runner": {"kind": "sde", "profile": "future"}
     },
     {
       "name": "skylake",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw",
       "runner": {"kind": "sde", "profile": "skx"}
     },
     {
       "name": "skylake-oneapi",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw",
       "compile_modes": "oneapi_fpga",
       "auto_detect_gate": "oneapi_fpga",
       "runner": {"kind": "sde", "profile": "skx"}
     },
     {
       "name": "cannonlake",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512ifma avx512vbmi",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512ifma avx512vbmi",
       "runner": {"kind": "sde", "profile": "cnl"}
     },
     {
       "name": "cascadelake",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni",
       "runner": {"kind": "sde", "profile": "clx"}
     },
     {
       "name": "cascadelake-oneapi",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni",
       "compile_modes": "oneapi_fpga",
       "auto_detect_gate": "oneapi_fpga",
       "runner": {"kind": "sde", "profile": "clx"}
     },
     {
       "name": "cooperlake",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni avx512_bf16",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni avx512_bf16",
       "runner": {"kind": "sde", "profile": "cpx"}
     },
     {
       "name": "cooperlake-oneapi",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni avx512_bf16",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni avx512_bf16",
       "compile_modes": "oneapi_fpga",
       "auto_detect_gate": "oneapi_fpga",
       "runner": {"kind": "sde", "profile": "cpx"}
     },
     {
       "name": "icelake_rockerlake",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
       "runner": {"kind": "sde", "profile": "icl"},
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
@@ -94,7 +94,7 @@
     },
     {
       "name": "icelake_rockerlake-oneapi",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
       "runner": {"kind": "sde", "profile": "icl"},
       "compile_modes": "oneapi_fpga",
       "auto_detect_gate": "oneapi_fpga",
@@ -106,7 +106,7 @@
     },
     {
       "name": "tigerlake",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
       "runner": {"kind": "sde", "profile": "tgl"},
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
@@ -116,7 +116,7 @@
     },
     {
       "name": "zen4",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
       "runner": {"kind": "sde", "profile": "future"},
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
@@ -126,7 +126,7 @@
     },
     {
       "name": "sapphire_emerald_granite_rapids",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_fp16",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_fp16",
       "runner": {"kind": "sde", "profile": "spr"},
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
@@ -136,7 +136,7 @@
     },
     {
       "name": "sapphire_emerald_granite_rapids-oneapi",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_fp16",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_fp16",
       "runner": {"kind": "sde", "profile": "spr"},
       "compile_modes": "oneapi_fpga",
       "auto_detect_gate": "oneapi_fpga",
@@ -148,7 +148,7 @@
     },
     {
       "name": "zen5",
-      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
       "runner": {"kind": "sde", "profile": "future"},
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",

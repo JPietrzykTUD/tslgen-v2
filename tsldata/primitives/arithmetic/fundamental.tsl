@@ -930,3 +930,222 @@ prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
               )
             );
           """
+prim<v:=(v)> abs(data):
+  brief_description "Returns the lane-wise absolute value while preserving signed-minimum bit patterns."
+  detailed_description """
+    Clears the sign of each floating-point lane and computes the unsigned
+    two's-complement magnitude of each signed integer lane. Unsigned lanes are
+    unchanged. For the minimum signed integer, whose positive magnitude is not
+    representable in the same type, the original minimum bit pattern is
+    returned.
+    """
+  semantics """
+    input: register data
+    for each lane i:
+      if the lane type is unsigned:
+        result[i] = data[i]
+      else if the lane type is floating point:
+        result[i] = data[i] with its sign bit cleared
+      else:
+        bits = unsigned_bit_pattern(data[i])
+        result[i] = bit_pattern(data[i] < 0 ? 0 - bits : bits)
+    return result
+    """
+  tests:
+    - {tags [basic], type "ui8", case {inputs [[0, 1, 127, 255, 3, 5, 8, 13, 21, 34, 55, 89, 144, 200, 254, 255]], expected [0, 1, 127, 255, 3, 5, 8, 13, 21, 34, 55, 89, 144, 200, 254, 255]}}
+    - {tags [signed_min], type "si8", case {inputs [[0, -1, -128, 127, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6, -7, 7]], expected [0, 1, -128, 127, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]}}
+    - {tags [basic], type "ui16", case {inputs [[0, 1, 32767, 65535, 2, 3, 100, 500]], expected [0, 1, 32767, 65535, 2, 3, 100, 500]}}
+    - {tags [signed_min], type "si16", case {inputs [[0, -1, -32768, 32767, -2, 2, -1234, 1234]], expected [0, 1, -32768, 32767, 2, 2, 1234, 1234]}}
+    - {tags [basic], type "ui32", case {inputs [[0, 1, 2147483647, 4294967295, 2, 3, 100, 500]], expected [0, 1, 2147483647, 4294967295, 2, 3, 100, 500]}}
+    - {tags [signed_min], type "si32", case {inputs [[0, -1, -2147483648, 2147483647, -2, 2, -123456, 123456]], expected [0, 1, -2147483648, 2147483647, 2, 2, 123456, 123456]}}
+    - {tags [basic], type "ui64", case {inputs [[0, 18446744073709551615]], expected [0, 18446744073709551615]}}
+    - {tags [signed_min], type "si64", case {inputs [[-9223372036854775808, -7]], expected [-9223372036854775808, 7]}}
+    - {tags [float_sign], type "f32", case {inputs [[0.0, -0.0, -1.5, 2.25]], expected [0.0, 0.0, 1.5, 2.25]}}
+    - {tags [float_sign], type "f64", case {inputs [["-INFINITY", -0.0]], expected [INFINITY, 0.0]}}
+  impls:
+    scalar:
+      ui?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(data);"
+      si?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            var<const_infer>(bits, cast<bitcast>(UBase, data));
+            if (data < cast<static>(base::in, 0)) {
+              var<const_typed>(UBase, zero, 0);
+              complete(cast<bitcast>(base::in, cast<static>(UBase, op<sub>(zero, bits))));
+            }
+            complete(data);
+          """
+      f?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(SBase, base::signed_of(base::in));
+            var<const_infer>(bits, cast<bitcast>(UBase, data));
+            var<const_infer>(all_bits, cast<bitcast>(UBase, cast<static>(SBase, -1)));
+            complete(cast<bitcast>(base::in, bits & (all_bits >> 1)));
+          """
+    avx512:
+      si64:
+        requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<_mm512_abs_epi64>(data));"
+      ui?:
+        requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(data);"
+      si?:
+        requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+            var<infer>(result, lanes);
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+            }
+            complete(call<primitive=from_array[Vec]>(result));
+          """
+      f?:
+        requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+            var<infer>(result, lanes);
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+            }
+            complete(call<primitive=from_array[Vec]>(result));
+          """
+    [avx2, sse, neon, wasm128]:
+      ui?:
+        requires:
+          avx2 [avx]
+          sse [sse]
+          neon [neon]
+          sve [sve]
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(data);"
+      si?:
+        requires:
+          avx2 [avx]
+          sse [sse, sse2]
+          neon [neon]
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+            var<infer>(result, lanes);
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+            }
+            complete(call<primitive=from_array[Vec]>(result));
+          """
+      f?:
+        requires:
+          avx2 [avx]
+          sse:
+            f32 [sse]
+            f64 [sse, sse2]
+          neon [neon]
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+            var<infer>(result, lanes);
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+            }
+            complete(call<primitive=from_array[Vec]>(result));
+          """
+    sve:
+      ui?:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(data);"
+      [si?, f?]:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, input, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false]>(input, data);
+            loop<backend>(i, 0, lanes, 1) {
+              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(input[i]);
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+          """
+    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl]:
+      arith:
+        requires:
+          generic []
+          clang_v128 []
+          oneapi_fpga []
+          oneapi_fpga_rtl []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(data[i]);
+            }
+            complete(result);
+          """

@@ -843,6 +843,29 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
     )
     assert "tsl::plus<Vec>(v0, v1)" in cpp_source
 
+    cpp_permute_case = ValueTestCasePlan(
+        kind="generic_golden",
+        function_name="test_permute_lanes",
+        case_name="indexed",
+        call_name="permute_lanes",
+        type_tag="si32",
+        base_spelling="std::int32_t",
+        lanes=2,
+        vector_inputs=(("10", "20"), ("1", "0")),
+        expected=("20", "10"),
+        result_kind="v",
+        param_kinds=("v", "vidx"),
+        index_type_tag="ui32",
+        index_base_spelling="std::uint32_t",
+        index_lanes=2,
+    )
+    cpp_permute_source = render_cpp_values_runner(
+        ValueTestProfilePlan("cpp", "unit-profile", (cpp_permute_case,)),
+        render_assets,
+    )
+    assert "using Indices = tsl::simd<std::uint32_t, tsl::generic<2>>;" in cpp_permute_source
+    assert "tsl::permute_lanes<Vec, Indices>(v0, v1)" in cpp_permute_source
+
     guarded_cpp_case = ValueTestCasePlan(
         kind="generic_golden",
         function_name="test_clang_add",
@@ -973,6 +996,29 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         render_assets,
     )
     assert "r#mod::<Vec>(a0, a1)" in rust_source
+
+    rust_permute_case = ValueTestCasePlan(
+        kind="generic_golden",
+        function_name="test_permute_lanes",
+        case_name="indexed",
+        call_name="permute_lanes",
+        type_tag="si32",
+        base_spelling="i32",
+        lanes=2,
+        vector_inputs=(("10", "20"), ("1", "0")),
+        expected=("20", "10"),
+        result_kind="v",
+        param_kinds=("v", "vidx"),
+        index_type_tag="ui32",
+        index_base_spelling="u32",
+        index_lanes=2,
+    )
+    rust_permute_source = render_rust_values_file(
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_permute_case,)),),
+        render_assets,
+    )
+    assert "type Indices = Simd<u32, Generic<2>>;" in rust_permute_source
+    assert "permute_lanes::<Vec, Indices>(v0, v1)" in rust_permute_source
 
     rust_pointer_source = render_rust_values_file(
         (

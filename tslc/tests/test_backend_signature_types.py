@@ -43,6 +43,13 @@ def test_backend_emitters_own_signature_type_projections() -> None:
         == "__m128i"
     )
     assert rust_free_type("cptr", "*mut i32") == "*const i32"
+    assert CPP_SIGNATURE_TYPES.free_type("ptr", base="std::uint64_t") == (
+        "std::uint64_t *"
+    )
+    assert CPP_SIGNATURE_TYPES.free_type("cptr", base="std::uint64_t") == (
+        "const std::uint64_t *"
+    )
+    assert rust_free_type("ptr", "u64") == "*mut u64"
 
 
 def test_projection_reports_missing_required_fields() -> None:

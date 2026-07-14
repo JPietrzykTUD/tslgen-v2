@@ -137,15 +137,18 @@ def rust_vector_registrations(
     records: dict[tuple[str, str, str, str], RustVectorRegistration] = {}
     for specs in by_primitive.values():
         for spec in specs:
-            _record_rust_vector(
-                records,
-                extensions,
-                spec.extension_name,
-                spec.type_tag,
-                spec.base_type_spelling,
-                spec.register_spelling,
-                uses_sized_vector=spec.uses_sized_vector,
-            )
+            if not DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+                spec.result_kind, spec.param_kinds
+            ):
+                _record_rust_vector(
+                    records,
+                    extensions,
+                    spec.extension_name,
+                    spec.type_tag,
+                    spec.base_type_spelling,
+                    spec.register_spelling,
+                    uses_sized_vector=spec.uses_sized_vector,
+                )
             if spec.target is not None:
                 _record_rust_vector(
                     records,

@@ -158,7 +158,7 @@ def rust_target_features(
     if not capability.backend("rust").feature_flags:
         return ()
     return tuple(
-        f"+{feature_spelling(feature, profile.alternatives)}"
+        f"+{feature_spelling(feature, profile.alternatives, backend_id='rust')}"
         for feature in sorted(profile.features)
     )
 

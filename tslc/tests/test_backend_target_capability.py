@@ -4,6 +4,7 @@ from dataclasses import replace
 
 from tslc.backend.target_capability import (
     cpp_x86_register_helper,
+    feature_spelling,
     is_x86_register_extension,
     rust_arch_module,
     rust_extension_tag,
@@ -19,6 +20,12 @@ from tslc.backend.cpp_profile import (
 )
 from tslc.target_text import LoweredBody
 from tslc.backend.rust_vectors import rust_registrations
+
+
+def test_backend_specific_feature_spellings_are_typed() -> None:
+    assert feature_spelling("rdrand", {}, backend_id="cpp") == "rdrnd"
+    assert feature_spelling("rdrand", {}, backend_id="rust") == "rdrand"
+    assert feature_spelling("rdrand", {"rdrand": "custom"}, backend_id="cpp") == "custom"
 
 
 def test_x86_register_capabilities_derive_from_extension_facts(
@@ -181,6 +188,48 @@ def test_rust_registration_uses_source_tag_and_lowered_register(
     assert "const ELEMENT_COUNT: usize = 8;" in rendered
     assert "fn lane_count() -> usize { 8 }" in rendered
     assert "const ALIGN: usize = 32;" in rendered
+
+
+def test_rust_registration_ignores_free_function_scalar_register(
+    catalog: Catalog,
+) -> None:
+    extension = _custom_rust_extension(catalog, "x86_demo", "X86Demo")
+    vector = LoweredSpecialization(
+        backend_id="rust",
+        primitive_name="add",
+        source_primitive_name="add",
+        extension_name="x86_demo",
+        type_tag="ui64",
+        base_type_spelling="u64",
+        register_spelling="core::arch::x86_64::__m256i",
+        result_kind="v",
+        param_names=("left", "right"),
+        param_kinds=("v", "v"),
+        body=LoweredBody.from_text("return left;"),
+        vector_spelling="Simd<u64, X86Demo>",
+    )
+    free = LoweredSpecialization(
+        backend_id="rust",
+        primitive_name="random_step",
+        source_primitive_name="random_step",
+        extension_name="x86_demo",
+        type_tag="ui64",
+        base_type_spelling="u64",
+        register_spelling="u64",
+        result_kind="usize",
+        param_names=("out",),
+        param_kinds=("ptr",),
+        body=LoweredBody.from_text("return 0;"),
+    )
+
+    rendered = rust_registrations(
+        {"add": (vector,), "random_step": (free,)},
+        {"x86_demo": extension},
+    )
+
+    assert rendered.count("impl SimdVector for Simd<u64, X86Demo>") == 1
+    assert "type RegisterType = core::arch::x86_64::__m256i;" in rendered
+    assert "type RegisterType = u64;" not in rendered
 
 
 def _custom_rust_extension(catalog: Catalog, name: str, type_name: str):

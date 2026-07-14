@@ -69,10 +69,19 @@ class _FixedLaneModel(LaneModel):
     """Compile-time-fixed lanes: ``generic<N>``, register-indexed inputs, direct compare."""
 
     def open(self, case: ValueTestCasePlan) -> list[str]:
-        return [
+        lines = [
             f"int {case.function_name}() {{",
             f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
         ]
+        if "vidx" in case.invocation.param_kinds:
+            index = case.index
+            if index is None or index.base_spelling is None or index.lanes is None:
+                raise ValueError("indexed C++ value test requires an index-vector layout")
+            lines.append(
+                f"  using Indices = tsl::simd<{index.base_spelling}, "
+                f"tsl::generic<{index.lanes}>>;"
+            )
+        return lines
 
     def bind_call_args(self, lines: list[str], case: ValueTestCasePlan) -> list[str]:
         return append_call_args(lines, case)
@@ -195,7 +204,11 @@ def render_value_case(case: ValueTestCasePlan) -> str:
     model = lane_model_for(case)
     lines = model.open(case)
     args = model.bind_call_args(lines, case)
-    call = f"tsl::{case.call_name}<Vec>({', '.join(args)})"
+    template_args = ["Vec"]
+    if "vidx" in case.invocation.param_kinds:
+        template_args.append("Indices")
+    template_args.extend(case.invocation.generic_defaults)
+    call = f"tsl::{case.call_name}<{', '.join(template_args)}>({', '.join(args)})"
     model.append_result_check(lines, case, call)
     lines.append("}")
     return "\n".join(lines)

@@ -65,7 +65,10 @@ def _compile_only(case: ValueTestCasePlan) -> str:
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
     ]
     args = _append_call_args(lines, case)
-    call = f"tsl::{case.call_name}<Vec>({', '.join(args)})"
+    if case.invocation.result_kind == "usize" and case.invocation.param_kinds == ("ptr",):
+        call = f"tsl::{case.call_name}({', '.join(args)})"
+    else:
+        call = f"tsl::{case.call_name}<Vec>({', '.join(args)})"
     if case.invocation.result_kind == "void":
         lines.append(f"  {call};")
     else:
