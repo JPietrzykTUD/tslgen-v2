@@ -1500,6 +1500,103 @@ def test_value_test_case_plan_validates_kind_requirements() -> None:
         )
 
 
+def test_differential_cases_require_profile_scoped_round_trip_helpers() -> None:
+    primitive = Primitive(
+        "add",
+        "v:=(v,v)",
+        ("left", "right"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="basic",
+                type_tag="si32",
+                tags=("basic",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("vector", values=("4", "3", "2", "1")),
+                ),
+                expected=("5", "5", "5", "5"),
+            ),
+        ),
+    )
+    catalog = Catalog(
+        primitives=(primitive, *_harness_primitives()),
+        type_groups={},
+        extensions={
+            "sse": Extension(
+                "sse",
+                "sse",
+                "x86",
+                {},
+                {},
+                backend_supported={"cpp": True},
+                vector_bits=128,
+                default_test_target=True,
+            )
+        },
+        type_spellings={},
+        translations={},
+    )
+    add = _spec(
+        "add",
+        "add",
+        param_kinds=("v", "v"),
+        extension_name="sse",
+        uses_sized_vector=False,
+        lane_parameter=None,
+    )
+    lane_in = _spec(
+        "lane_in",
+        "lane_in",
+        param_kinds=("s[]",),
+        extension_name="sse",
+        uses_sized_vector=False,
+        lane_parameter=None,
+    )
+    lane_out = _spec(
+        "lane_out",
+        "lane_out",
+        param_kinds=("v",),
+        result_kind="s[]",
+        extension_name="sse",
+        uses_sized_vector=False,
+        lane_parameter=None,
+    )
+    planner = ValueTestPlanner(
+        catalog,
+        (CPP_VALUE_TEST_SUPPORT,),
+        fuzz=True,
+    )
+
+    missing_helpers = planner.plan(
+        (ValueTestBackendProfileInput("cpp", "sse", {"add": (add,)}),)
+    )
+    complete_helpers = planner.plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp",
+                "sse",
+                {
+                    "add": (add,),
+                    "lane_in": (lane_in,),
+                    "lane_out": (lane_out,),
+                },
+            ),
+        )
+    )
+
+    assert {case.kind for case in missing_helpers.profiles[0].cases} == {
+        "generic_golden"
+    }
+    assert {case.kind for case in complete_helpers.profiles[0].cases} == {
+        "differential",
+        "differential_fuzz",
+        "generic_golden",
+    }
+
+
 def test_wasm_rust_value_tests_render_native_differential_cases(
     data_root: Path,
     machine_profiles_path: Path,
@@ -2255,12 +2352,15 @@ def _spec(
     immediate: tuple[str, str] | None = None,
     mask_policy: str | None = None,
     axis: tuple[tuple[str, str], ...] = (),
+    extension_name: str = "generic",
+    uses_sized_vector: bool = True,
+    lane_parameter: str | None = "4",
 ) -> LoweredSpecialization:
     return LoweredSpecialization(
         backend_id="cpp",
         primitive_name=primitive_name,
         source_primitive_name=source_primitive_name,
-        extension_name="generic",
+        extension_name=extension_name,
         type_tag="si32",
         base_type_spelling="std::int32_t",
         register_spelling="std::int32_t[4]",
@@ -2268,8 +2368,8 @@ def _spec(
         param_names=tuple(f"p{i}" for i in range(len(param_kinds))),
         param_kinds=param_kinds,
         body=LoweredBody.from_text(""),
-        uses_sized_vector=True,
-        lane_parameter="4",
+        uses_sized_vector=uses_sized_vector,
+        lane_parameter=lane_parameter,
         axis=axis,
         immediate=immediate,
         mask_policy=mask_policy,

@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
 
+from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
 from tslc.pipeline import CoverageEntry, GenerationResult, SkippedEntry
 
@@ -59,6 +60,8 @@ class BackendProfileInventory:
 @dataclass(frozen=True, slots=True)
 class ProfileInventory:
     profile: str
+    architecture: str
+    target_feature_count: int
     shared_candidates: int
     backends: tuple[BackendProfileInventory, ...]
 
@@ -81,7 +84,8 @@ class CoverageInventory:
     backends: tuple[str, ...]
     type_tags: tuple[str, ...]
     primitive_count: int
-    primitive_declarations: int
+    source_declarations: int
+    catalog_variants: int
     signature_count: int
     implementation_count: int
     emitted_specializations: int
@@ -92,6 +96,7 @@ class CoverageInventory:
     mean_primitive_coverage_percent: float
     build_verified_primitives: int
     backend_parity: bool
+    backend_extensions: tuple[tuple[str, tuple[str, ...]], ...]
     profile_inventory: tuple[ProfileInventory, ...]
     primitives: tuple[PrimitiveInventory, ...]
     skip_reasons: tuple[tuple[str, int], ...]
@@ -121,13 +126,20 @@ def build_coverage_inventory(
     catalog: Catalog,
     result: GenerationResult,
     *,
-    profiles: tuple[str, ...],
+    machine_profiles: tuple[MachineProfile, ...],
     backends: tuple[str, ...],
     type_tags: tuple[str, ...],
     verified_primitives: frozenset[str] = frozenset(),
 ) -> CoverageInventory:
     """Fold finalized lowering outcomes into one backend-comparable inventory."""
 
+    ordered_profiles = tuple(
+        sorted(
+            machine_profiles,
+            key=lambda profile: _profile_sort_key(catalog, profile),
+        )
+    )
+    profiles = tuple(profile.name for profile in ordered_profiles)
     names = tuple(sorted({primitive.name for primitive in catalog.primitives}))
     signatures: dict[str, set[str]] = defaultdict(set)
     for primitive in catalog.primitives:
@@ -144,8 +156,10 @@ def build_coverage_inventory(
     shared = _shared_candidate_counts(profiles, backends, attempted)
 
     profile_inventory = tuple(
-        _profile_inventory(profile, backends, emitted, gaps, deferred, attempted, shared)
-        for profile in profiles
+        _profile_inventory(
+            profile, backends, emitted, gaps, deferred, attempted, shared
+        )
+        for profile in ordered_profiles
     )
     applicable = {
         (profile.profile, cell.backend)
@@ -211,7 +225,8 @@ def build_coverage_inventory(
         backends=backends,
         type_tags=type_tags,
         primitive_count=primitive_count,
-        primitive_declarations=len(catalog.primitives),
+        source_declarations=_source_declaration_count(catalog),
+        catalog_variants=len(catalog.primitives),
         signature_count=len(
             {(primitive.name, primitive.signature) for primitive in catalog.primitives}
         ),
@@ -240,6 +255,21 @@ def build_coverage_inventory(
         ),
         build_verified_primitives=len(set(names) & verified_primitives),
         backend_parity=_backend_parity(profiles, backends, emitted),
+        backend_extensions=tuple(
+            (
+                backend,
+                tuple(
+                    sorted(
+                        {
+                            extension
+                            for names_by_primitive in extensions[backend].values()
+                            for extension in names_by_primitive
+                        }
+                    )
+                ),
+            )
+            for backend in backends
+        ),
         profile_inventory=profile_inventory,
         primitives=primitive_inventory,
         skip_reasons=tuple(
@@ -301,7 +331,7 @@ def _shared_candidate_counts(
 
 
 def _profile_inventory(
-    profile: str,
+    profile: MachineProfile,
     backends: tuple[str, ...],
     emitted: _SlotCounts,
     gaps: _SlotCounts,
@@ -309,21 +339,58 @@ def _profile_inventory(
     attempted: _SlotCounts,
     shared: dict[str, Counter[_LogicalSlot]],
 ) -> ProfileInventory:
-    shared_candidates = sum(shared[profile].values())
+    shared_candidates = sum(shared[profile.name].values())
     cells = tuple(
         BackendProfileInventory(
             backend=backend,
-            emitted=sum(emitted.get((profile, backend), Counter()).values()),
-            attempted=sum(attempted.get((profile, backend), Counter()).values()),
+            emitted=sum(
+                emitted.get((profile.name, backend), Counter()).values()
+            ),
+            attempted=sum(
+                attempted.get((profile.name, backend), Counter()).values()
+            ),
             shared_candidates=shared_candidates,
-            coverage_gaps=sum(gaps.get((profile, backend), Counter()).values()),
+            coverage_gaps=sum(
+                gaps.get((profile.name, backend), Counter()).values()
+            ),
             policy_deferred=sum(
-                deferred.get((profile, backend), Counter()).values()
+                deferred.get((profile.name, backend), Counter()).values()
             ),
         )
         for backend in backends
     )
-    return ProfileInventory(profile, shared_candidates, cells)
+    return ProfileInventory(
+        profile=profile.name,
+        architecture=profile.family,
+        target_feature_count=len(profile.features),
+        shared_candidates=shared_candidates,
+        backends=cells,
+    )
+
+
+def _profile_sort_key(
+    catalog: Catalog, profile: MachineProfile
+) -> tuple[int, str, int, str]:
+    family = catalog.target_families.profile_family(profile.family)
+    family_order = family.sort_order if family is not None else 100
+    return (family_order, profile.family, len(profile.features), profile.name)
+
+
+def _source_declaration_count(catalog: Catalog) -> int:
+    identities: set[tuple[object, ...]] = set()
+    for index, primitive in enumerate(catalog.primitives):
+        source = primitive.header_source
+        if source is None:
+            identities.add(("catalog", index))
+            continue
+        identities.add(
+            (
+                source.start.path,
+                source.start.line,
+                source.start.column,
+            )
+        )
+    return len(identities)
 
 
 def _primitive_coverage_percent(

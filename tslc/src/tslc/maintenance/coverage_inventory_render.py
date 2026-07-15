@@ -66,17 +66,24 @@ def render_text(inventory: CoverageInventory) -> str:
         f"Backends: {', '.join(inventory.backends)}",
         f"Types: {', '.join(inventory.type_tags)}",
         "",
-        f"Distinct primitives: {inventory.primitive_count}",
-        f"Primitive declarations: {inventory.primitive_declarations}",
-        f"Distinct primitive signatures: {inventory.signature_count}",
+        f"Distinct primitive names: {inventory.primitive_count}",
+        f"Source primitive declarations: {inventory.source_declarations}",
+        f"Catalog primitive variants: {inventory.catalog_variants}",
+        f"Distinct primitive name/signature pairs: {inventory.signature_count}",
         f"Catalog implementation leaves: {inventory.implementation_count}",
         f"Emitted specializations: {inventory.emitted_specializations}",
         (
             "Average emitted specializations / primitive: "
             f"{inventory.average_specializations_per_primitive:.2f}"
         ),
-        f"Aggregate specialization coverage: {inventory.aggregate_coverage_percent:.1f}%",
-        f"Mean primitive coverage: {inventory.mean_primitive_coverage_percent:.1f}%",
+        (
+            "Aggregate shared specialization availability: "
+            f"{inventory.aggregate_coverage_percent:.1f}%"
+        ),
+        (
+            "Mean primitive shared availability: "
+            f"{inventory.mean_primitive_coverage_percent:.1f}%"
+        ),
         f"Coverage-gap slots: {inventory.coverage_gaps}",
         f"Policy-deferred slots: {inventory.policy_deferred}",
         f"Build-verified primitives: {inventory.build_verified_primitives}",
@@ -84,17 +91,33 @@ def render_text(inventory: CoverageInventory) -> str:
             "Backend specialization parity: "
             f"{'exact' if inventory.backend_parity else 'not exact'}"
         ),
+        "Emitted extensions by backend:",
+        *(
+            f"  {_backend_label(backend)}: {', '.join(extensions) or '—'}"
+            for backend, extensions in inventory.backend_extensions
+        ),
         "",
-        "Profile/backend specialization coverage",
+        "Profile/backend specialization availability",
         (
-            "Each cell is emitted/shared candidates. The denominator is the profile-wide "
-            "union across selected backends; — means the backend attempted no slot."
+            "Each cell shows shared availability and backend-local lowering success. "
+            "The shared denominator is the profile-wide union across selected backends; "
+            "— means the backend attempted no slot."
         ),
         "",
     ]
-    headers = ("profile", *(_backend_label(item) for item in inventory.backends))
+    headers = (
+        "architecture",
+        "profile",
+        "features",
+        *(_backend_label(item) for item in inventory.backends),
+    )
     rows = tuple(
-        (profile.profile, *(_cell_text(cell) for cell in profile.backends))
+        (
+            profile.architecture,
+            profile.profile,
+            str(profile.target_feature_count),
+            *(_cell_text(cell) for cell in profile.backends),
+        )
         for profile in inventory.profile_inventory
     )
     lines.extend(_text_table(headers, rows))
@@ -110,8 +133,9 @@ def render_json(inventory: CoverageInventory) -> str:
         },
         "corpus": {
             "primitives": inventory.primitive_count,
-            "primitive_declarations": inventory.primitive_declarations,
-            "primitive_signatures": inventory.signature_count,
+            "source_primitive_declarations": inventory.source_declarations,
+            "catalog_primitive_variants": inventory.catalog_variants,
+            "primitive_name_signature_pairs": inventory.signature_count,
             "implementation_leaves": inventory.implementation_count,
         },
         "specializations": {
@@ -119,10 +143,10 @@ def render_json(inventory: CoverageInventory) -> str:
             "average_per_primitive": round(
                 inventory.average_specializations_per_primitive, 6
             ),
-            "aggregate_coverage_percent": round(
+            "aggregate_shared_availability_percent": round(
                 inventory.aggregate_coverage_percent, 6
             ),
-            "mean_primitive_coverage_percent": round(
+            "mean_primitive_shared_availability_percent": round(
                 inventory.mean_primitive_coverage_percent, 6
             ),
             "coverage_gaps": inventory.coverage_gaps,
@@ -130,9 +154,15 @@ def render_json(inventory: CoverageInventory) -> str:
         },
         "build_verified_primitives": inventory.build_verified_primitives,
         "backend_parity": inventory.backend_parity,
+        "backend_extensions": {
+            backend: list(extensions)
+            for backend, extensions in inventory.backend_extensions
+        },
         "profiles": [
             {
                 "profile": profile.profile,
+                "architecture": profile.architecture,
+                "target_feature_count": profile.target_feature_count,
                 "shared_candidates": profile.shared_candidates,
                 "backends": [
                     {
@@ -176,10 +206,11 @@ def render_markdown(
     else:
         write("Generated by `tslc coverage inventory --format markdown`.\n")
     write("## Summary\n")
-    write(f"- **{inventory.primitive_count} distinct primitives** in the corpus.")
+    write(f"- **{inventory.primitive_count} distinct primitive names** in the corpus.")
     write(
-        f"- **{inventory.primitive_declarations} primitive declarations**, "
-        f"**{inventory.signature_count} distinct primitive signatures**, and "
+        f"- **{inventory.source_declarations} source primitive declarations**, "
+        f"**{inventory.catalog_variants} catalog primitive variants** after expansion, "
+        f"**{inventory.signature_count} distinct primitive name/signature pairs**, and "
         f"**{inventory.implementation_count} catalog implementation leaves**."
     )
     write(
@@ -188,9 +219,9 @@ def render_markdown(
         "on average."
     )
     write(
-        f"- **{inventory.aggregate_coverage_percent:.1f}% aggregate specialization "
-        f"coverage**; **{inventory.mean_primitive_coverage_percent:.1f}% mean "
-        "primitive coverage**."
+        f"- **{inventory.aggregate_coverage_percent:.1f}% aggregate shared "
+        f"specialization availability**; **{inventory.mean_primitive_coverage_percent:.1f}% "
+        "mean primitive shared availability**."
     )
     write(
         f"- **{inventory.build_verified_primitives} build-verified** "
@@ -211,13 +242,22 @@ def render_markdown(
         "probed profiles.\n"
     )
     write(
-        "Coverage percentages use the profile-wide union of logical specialization "
-        "candidates across selected backends. This makes backend availability "
+        "Emitted extensions by backend: "
+        + "; ".join(
+            f"**{_backend_label(backend)}**="
+            + ("/".join(extensions) or "—")
+            for backend, extensions in inventory.backend_extensions
+        )
+        + ".\n"
+    )
+    write(
+        "Shared-availability percentages use the profile-wide union of logical "
+        "specialization candidates across selected backends. This makes backend availability "
         "differences visible instead of giving each backend a smaller private denominator.\n"
     )
     write(
-        "Aggregate coverage weights every shared candidate; mean primitive coverage "
-        "weights every distinct corpus primitive equally.\n"
+        "Aggregate shared availability weights every shared candidate; mean primitive "
+        "shared availability weights every distinct corpus primitive equally.\n"
     )
     write(
         "> Caveat: emitted means selection, lowering, dependency closure, and emitted-name "
@@ -227,21 +267,24 @@ def render_markdown(
         f"`{', '.join(inventory.profiles)}`.\n"
     )
 
-    write("## Profile/backend specialization coverage\n")
+    write("## Profile/backend specialization availability\n")
     write(
-        "Each cell is `emitted / shared candidates (coverage)`. `—` means that "
-        "backend attempted no specialization for the profile. Candidates deferred by "
-        "every selected backend are excluded; deferred counts remain separately visible.\n"
+        "Each cell is `emitted / shared candidates (shared availability; local lowering "
+        "success)`. A low shared percentage can therefore describe an intentional "
+        "backend-specific extension set rather than a lowering failure. `—` means that "
+        "backend attempted no specialization for the profile. Candidates deferred by every "
+        "selected backend are excluded; deferred counts remain separately visible.\n"
     )
     write(
-        "| profile | "
+        "| architecture | profile | target features | "
         + " | ".join(_backend_label(item) for item in inventory.backends)
         + " |"
     )
-    write("|---|" + "---:|" * len(inventory.backends))
+    write("|---|---|---:|" + "---:|" * len(inventory.backends))
     for profile in inventory.profile_inventory:
         write(
-            f"| `{profile.profile}` | "
+            f"| `{profile.architecture}` | `{profile.profile}` | "
+            f"{profile.target_feature_count} | "
             + " | ".join(_cell_text(cell) for cell in profile.backends)
             + " |"
         )
@@ -270,7 +313,7 @@ def render_markdown(
 
     write("## Per-primitive table\n")
     write(
-        "| primitive | signatures | status | coverage | emitted | extensions by "
+        "| primitive | signatures | status | shared availability | emitted | extensions by "
         "backend | skipped slots | dominant gap |"
     )
     write("|---|---|---|---:|---:|---|---:|---|")
@@ -329,9 +372,11 @@ def _cell_text(cell: BackendProfileInventory) -> str:
         suffix = f" ({cell.policy_deferred} deferred)" if cell.policy_deferred else ""
         return f"—{suffix}"
     assert cell.coverage_percent is not None
+    assert cell.lowering_success_percent is not None
     return (
         f"{cell.emitted} / {cell.shared_candidates} "
-        f"({cell.coverage_percent:.1f}%)"
+        f"({cell.coverage_percent:.1f}% shared; "
+        f"{cell.lowering_success_percent:.1f}% local)"
     )
 
 

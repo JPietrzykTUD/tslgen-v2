@@ -199,6 +199,9 @@ def collect_inventory(
         return None, (
             f"unknown profile(s): {', '.join(unknown)}; known profiles: {known}",
         )
+    selected_profile_models = tuple(
+        loaded_profiles.profiles[name] for name in selected_profiles
+    )
 
     result = generate_project(
         sources,
@@ -214,7 +217,7 @@ def collect_inventory(
         build_coverage_inventory(
             catalog,
             result,
-            profiles=selected_profiles,
+            machine_profiles=selected_profile_models,
             backends=backends,
             type_tags=type_tags,
             verified_primitives=_build_verified_primitives(),

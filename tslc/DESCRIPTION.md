@@ -303,7 +303,9 @@ AVX-512/NEON/SVE code runs on hardware that lacks it.
   operationalize the charter's coverage-not-completeness rule. `tslc coverage
   inventory` is read-only by default and folds finalized lowering outcomes into
   one typed report with text, Markdown, and JSON renderers. Its profile/backend
-  percentages share a logical-candidate denominator, while explicit `--update`
+  shared-availability percentages use a logical-candidate denominator and are
+  shown beside backend-local lowering success. Profile rows use the typed
+  architecture order, then target-feature count and name. Explicit `--update`
   and `--check` modes own the canonical tracked Markdown evidence.
 - **Honest edges**: [support_policy.py](src/tslc/support_policy.py) centralizes
   what the compiler can emit today; some keyword forms are *recognized so a

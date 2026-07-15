@@ -139,8 +139,11 @@ tslc coverage inventory --check
 `coverage inventory` is read-only by default. It reports corpus totals and an
 emitted-specialization matrix for the configured profiles and backends; text,
 Markdown, and JSON formats use the same typed inventory. Each profile/backend
-percentage uses the profile-wide union of logical specialization candidates as
-its denominator, so backend availability differences remain visible.
+shared-availability percentage uses the profile-wide union of logical
+specialization candidates as its denominator, so backend availability
+differences remain visible; the same cell separately reports backend-local
+lowering success. Profiles are ordered by source-defined architecture order,
+then target-feature count, then name.
 
 `--update` rewrites the tracked canonical Markdown report and `--check` fails
 when that report is stale. Both maintenance modes use the repository's fixed

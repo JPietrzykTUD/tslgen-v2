@@ -83,16 +83,20 @@ prim<s[]:=v> to_array(a):
             """
     sse:
       ?i?:
-        requires [sse, sse2]
+        requires [sse]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [raw_memory]
         implementation:
           tsil """
-               var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
-               complete(tmp) ;
+            var<typed>(array_type<type(base::in), value(vector::length)>, result, value(uninit::array));
+            mem<copy>(
+              cast<reinterpret, type=ptr>(void, result.data()),
+              cast<reinterpret, type=const_ptr>(void, &a),
+              value(vector::length) * value(type::size_bytes(base::in))
+            );
+            complete(result);
             """
       f?:
         requires {f32 [sse], f64 [sse, sse2]}
@@ -268,10 +272,36 @@ prim<v:=s[]> from_array(data):
           tsil """
             complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
           """
-    [sse, avx2, avx512, neon, wasm128]:
+    sse:
+      ?i?:
+        requires [sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            var<typed>(vector::register, result, value(uninit::array));
+            mem<copy>(
+              cast<reinterpret, type=ptr>(void, &result),
+              cast<reinterpret, type=const_ptr>(void, data.as_ptr()),
+              value(vector::length) * value(type::size_bytes(base::in))
+            );
+            complete(result);
+          """
+      f?:
+        requires {f32 [sse], f64 [sse, sse2]}
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
+          """
+    [avx2, avx512, neon, wasm128]:
       arith:
         requires:
-          sse [sse]
           avx2 [avx]
           avx512 [avx512f]
           neon [neon]

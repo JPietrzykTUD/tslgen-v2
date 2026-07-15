@@ -77,6 +77,39 @@ def test_golden_value_tests_build_and_pass(
     _assert_value_tests_ran(report, backends=("cpp",))
 
 
+def test_sse_integer_differential_round_trip_builds_and_passes(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["abs"],
+        profiles=["sse"],
+        type_tags=("ui8", "ui16", "ui64"),
+        backends=("cpp", "rust"),
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    for backend in ("cpp", "rust"):
+        differential_types = {
+            case.type_tag
+            for profile in result.rendered.value_tests.profiles_for(backend)
+            for case in profile.cases
+            if case.call_name == "abs"
+            and case.differential is not None
+            and case.differential.hardware_extension == "sse"
+        }
+        assert differential_types == {"ui8", "ui16", "ui64"}
+
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify, run_value_tests=True)
+    _assert_value_tests_ran(report, backends=("cpp", "rust"))
+
+
 def test_neon_native_arithmetic_bitwise_extract_and_cast_value_tests_build_and_pass(
     data_root: Path,
     machine_profiles_path: Path,

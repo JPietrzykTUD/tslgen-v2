@@ -119,7 +119,12 @@ class ValueTestPlanner:
                         self._fuzz_context(backend, emitted_name, specs, harness)
                     )
                     cases.extend(
-                        self._supported_cases(fuzz_planned, backend, diagnostics)
+                        self._supported_cases(
+                            fuzz_planned,
+                            backend,
+                            profile.specializations,
+                            diagnostics,
+                        )
                     )
                 if not primitive.tests:
                     entry = ValueTestCoverageEntry(
@@ -164,7 +169,12 @@ class ValueTestPlanner:
                             )
                             for case in planned
                         )
-                    supported = self._supported_cases(planned, backend, diagnostics)
+                    supported = self._supported_cases(
+                        planned,
+                        backend,
+                        profile.specializations,
+                        diagnostics,
+                    )
                     cases.extend(supported)
                     entry = case_coverage(
                         backend=backend,
@@ -227,11 +237,14 @@ class ValueTestPlanner:
         self,
         cases: tuple[ValueTestCasePlan, ...],
         backend: ValueTestBackendSupport,
+        specializations: Mapping[str, tuple[LoweredSpecialization, ...]],
         diagnostics: list[Diagnostic],
     ) -> tuple[ValueTestCasePlan, ...]:
         supported: list[ValueTestCasePlan] = []
         for case in cases:
             if case.kind not in backend.case_kinds:
+                continue
+            if not _differential_harness_available(case, specializations):
                 continue
             planned = self._with_header_group(case, backend.backend_id, diagnostics)
             if planned is not None:
@@ -298,6 +311,32 @@ class ValueTestPlanner:
             header_group=next(iter(groups), None),
             required_compiler_features=compiler_features,
         )
+
+
+def _differential_harness_available(
+    case: ValueTestCasePlan,
+    specializations: Mapping[str, tuple[LoweredSpecialization, ...]],
+) -> bool:
+    differential = case.differential
+    if differential is None:
+        return True
+    helper_names = [differential.from_array_name]
+    if case.invocation.result_kind == "m":
+        if differential.to_integral_name is None:
+            return False
+        helper_names.append(differential.to_integral_name)
+    else:
+        if differential.to_array_name is None:
+            return False
+        helper_names.append(differential.to_array_name)
+    return all(
+        any(
+            spec.extension_name == differential.hardware_extension
+            and spec.type_tag == case.type_tag
+            for spec in specializations.get(helper_name, ())
+        )
+        for helper_name in helper_names
+    )
 
 
 def _duplicate_case_diagnostics(

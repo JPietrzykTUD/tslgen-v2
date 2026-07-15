@@ -47,3 +47,8 @@ CL_CONFIG_CPU_EMULATE_DEVICES=1 ./main.fpga_emu
 @RUST_ALGORITHM_HELPER_PLAN.md (DONE)
 @WASM_SUPPORT_PLAN.md (DONE)
 
+
+
+cast<reinterpret, type=const_ptr> --> cast<reinterpret, type=ptr, const=true>
+var<const_infer> --> var<infer, const=true>
+var<const_typed> --> var<typed, const=true>

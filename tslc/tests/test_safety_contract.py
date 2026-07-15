@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tslc._pipeline_closure import (
     _LoweredSlot,
     _profile_with_required_features,
@@ -665,7 +667,35 @@ def test_source_call_to_caller_unsafe_primitive_uses_local_unsafe(
     machine_profiles,
 ) -> None:
     selected = Selector().select_profile(
-        catalog, machine_profiles["sse2"], "to_array", ("si8",)
+        catalog, machine_profiles["sse2"], "to_array", ("f32",)
+    ).selected
+    slot = next(
+        item
+        for item in selected
+        if item.extension.isa_name == "sse" and item.type_tag == "f32"
+    )
+
+    lowered = Lowerer().lower(
+        slot,
+        catalog,
+        create_backend_dialect(catalog, "rust"),
+    ).specialization
+
+    assert lowered is not None
+    assert lowered.body.requires_unsafe is False
+    assert "MaybeUninit" in lowered.body_text
+    assert "unsafe { store::<Self, false, _>(tmp.data(), a) }" in lowered.body_text
+    assert not lowered.body_text.startswith("unsafe {")
+
+
+@pytest.mark.parametrize("primitive_name", ("from_array", "to_array"))
+def test_sse_integer_array_round_trip_contains_local_raw_memory_unsafe(
+    catalog: Catalog,
+    machine_profiles,
+    primitive_name: str,
+) -> None:
+    selected = Selector().select_profile(
+        catalog, machine_profiles["sse"], primitive_name, ("si8",)
     ).selected
     slot = next(
         item
@@ -680,10 +710,9 @@ def test_source_call_to_caller_unsafe_primitive_uses_local_unsafe(
     ).specialization
 
     assert lowered is not None
-    assert lowered.body.requires_unsafe is False
-    assert "MaybeUninit" in lowered.body_text
-    assert "unsafe { store::<Self, false, _>(tmp.data(), a) }" in lowered.body_text
-    assert not lowered.body_text.startswith("unsafe {")
+    assert lowered.body.requires_unsafe is True
+    assert lowered.body_text.startswith("unsafe {")
+    assert "crate::tsl_core::mem_copy" in lowered.body_text
 
 
 def test_implementation_variants_lower_and_render_as_detail_symbols() -> None:
