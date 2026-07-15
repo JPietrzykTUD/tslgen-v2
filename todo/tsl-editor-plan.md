@@ -57,9 +57,16 @@ building a C++ or Rust project.
   command and external Python installation as developer overrides.
 - Make the VS Code extension a thin client: language registration, process
   launch, configuration, syntax coloring, and command wiring only.
-- Start with full-corpus checking on a debounce. Add incremental compiler
-  caches only if measurements show that the simple implementation misses the
-  latency target.
+- Keep full-corpus catalog semantics, but cache parsed documents by normalized
+  path and source digest from the first LSP slice. Reparse only changed disk or
+  overlaid documents, then rebuild and validate the complete catalog on a
+  debounce.
+- Keep hover, navigation, symbols, and completion as lookups against the latest
+  successful in-memory index. They must not select, lower, render, or start a
+  compiler process.
+- Make concrete specialization explanation/preview an explicit, cancellable
+  command that runs in a child process and opens its result beside the source
+  editor. Never trigger concrete preview from hover or ordinary edits.
 - Never generate artifacts, invoke compilers, run target binaries, modify
   source files, or access the network from ordinary language-server requests.
 - Preserve the existing compiler CLI behavior while introducing a subcommand
@@ -75,6 +82,8 @@ building a C++ or Rust project.
 - No automatic repair of malformed TSL or nearly valid TSIL.
 - No compilation, emulation, benchmarking, or value-test execution on every
   editor change.
+- No automatic target-code rendering on hover, cursor movement, or ordinary
+  document synchronization.
 - No broad plugin framework for language-server features.
 - No requirement that contributors use VS Code.
 - No source formatter in the first release.
@@ -283,6 +292,7 @@ editors/vscode-tsl/
   src/
     extension.ts
     server.ts
+    preview.ts
     configuration.ts
   syntaxes/
     tsl.tmLanguage.template.json
@@ -347,6 +357,23 @@ An overlay replaces the loaded document with the same normalized path. It does
 not write the buffer to disk. Overlay application must be deterministic and
 must diagnose duplicate normalized paths.
 
+### Parsed Document State
+
+```python
+@dataclass(frozen=True, slots=True)
+class ParsedDocumentState:
+    path: Path
+    digest: str
+    document: ParsedOuterTslDocument | None
+    diagnostics: tuple[Diagnostic, ...]
+```
+
+This is workspace-owned cache state, not a process-global parser cache. A
+successful entry carries one parsed document; a failed entry carries its direct
+parse diagnostics so repeated requests for the same buffer version do not
+reparse it. Configuration or grammar-version changes invalidate the workspace
+cache as a unit.
+
 ### Check Result
 
 ```python
@@ -389,9 +416,19 @@ def check_documents(
     *,
     required_backends: tuple[str, ...],
 ) -> CheckResult: ...
+
+def check_parsed_documents(
+    parsed: OuterTslParseResult,
+    *,
+    required_backends: tuple[str, ...],
+) -> CheckResult: ...
 ```
 
-The implementation should reuse:
+`check_documents` parses every supplied document and delegates to
+`check_parsed_documents`. The language-server workspace parses only invalidated
+documents, deterministically merges its `ParsedDocumentState` values into one
+`OuterTslParseResult`, and calls the same parsed boundary. The implementation
+should reuse:
 
 1. `TslParser`;
 2. `CatalogBuilder`;
@@ -632,6 +669,8 @@ One `AuthoringWorkspace` owns:
 - normalized root and configuration;
 - disk-loaded source documents;
 - open-document overlays and LSP versions;
+- parsed documents and parse diagnostics keyed by normalized path and source
+  digest;
 - the latest successful catalog and index;
 - the latest check diagnostics;
 - an incrementing check generation used to discard stale results.
@@ -663,10 +702,13 @@ On change:
 
 1. apply the versioned text update;
 2. increment the workspace generation;
-3. debounce checking;
-4. cancel or logically supersede older pending work;
-5. run the pure authoring check outside the protocol event handler;
-6. publish only if the workspace generation and document versions still match.
+3. invalidate only the changed document's parsed value;
+4. debounce checking;
+5. cancel or logically supersede older pending work;
+6. parse changed documents, merge them with cached parsed documents, and run
+   complete catalog promotion and validation outside the protocol event
+   handler;
+7. publish only if the workspace generation and document versions still match.
 
 ### Diagnostics
 
@@ -679,9 +721,12 @@ The first LSP slice publishes:
 - configuration diagnostics attached to the workspace when no source location
   exists.
 
-Concrete profile/lowering diagnostics are enabled through a workspace setting
-or an explicit editor command because checking a full profile matrix on every
-keystroke may be expensive and may contain intentional partial-mode gaps.
+Concrete profile/lowering diagnostics are not part of ordinary document
+synchronization. Run them through an explicit editor command in a child
+process; workspace settings may provide default profile/type/backend choices
+but must not silently enable a full lowering matrix on every edit. This avoids
+expensive work and avoids presenting intentional partial-mode gaps as live
+source errors.
 
 ### Document Symbols
 
@@ -726,7 +771,8 @@ Hover content should be concise Markdown generated from typed facts:
 - TSIL region accepted forms and a short purpose statement.
 
 Long detailed documentation remains linked rather than copied into every
-hover.
+hover. Hover handlers query the latest successful `CatalogIndex`; they never
+run a check, select a slot, lower TSIL, or render target code.
 
 ### Completion
 
@@ -777,7 +823,7 @@ Initial commands:
 
 - check workspace;
 - check current primitive for a chosen profile/type/backend;
-- explain selected slot;
+- explain/preview a selected slot beside the current editor;
 - show catalog entry.
 
 Later code actions:
@@ -788,6 +834,37 @@ Later code actions:
 
 Every mutating action must show the exact workspace edit and use normal editor
 undo. The language server must not write source files directly.
+
+### Explicit Specialization Preview
+
+Concrete preview is deliberately separate from hover and continuous
+diagnostics. A `TSL: Preview Specialization` command prompts for or infers one
+primitive/profile/type/backend selection, launches `tslc explain` as a child
+process, and presents the explanation and lowered body in a read-only virtual
+document in an editor column beside the source. The command is available to
+user-defined keybindings; the extension should not claim a globally common
+default chord.
+
+The client owns process startup, progress, cancellation, stderr capture, and
+virtual-document refresh. Starting a new preview cancels an older preview for
+the same workspace. The language-server process stays responsive and does not
+perform the CPU-bound lowering work. Preview output identifies its selection
+and source/configuration digest so a result built from older saved input is
+visibly stale rather than silently authoritative.
+
+Preview executable discovery mirrors server discovery: an explicit preview
+command, the bundled `tslc` executable, `tslc` on `PATH`, or the explicitly
+configured Python environment. Do not try to derive an executable by rewriting
+an arbitrary `tsl.server.command`; require `tsl.preview.command` when the custom
+server command is not also a normal `tslc` CLI environment.
+
+The first implementation operates on saved workspace files and asks the user
+to save when the relevant buffer is dirty. A later slice may send an immutable
+overlay bundle to the child over stdin if unsaved preview proves valuable. Do
+not introduce temporary source-file writes or a persistent preview daemon for
+the initial implementation. Preview stops after compiler-owned explanation and
+lowering; it does not write a generated project or invoke a target compiler,
+formatter, linker, emulator, benchmark, or value test.
 
 ## VS Code Client
 
@@ -816,6 +893,8 @@ Update the root project map only when this directory is introduced.
 - forward workspace configuration;
 - expose language-server commands in the command palette;
 - expose an explicit language-server restart command;
+- launch, cancel, and display explicit concrete checks and specialization
+  previews without blocking the language server;
 - show a clear setup message when the editor extra is unavailable;
 - provide extension tests for activation and process launch.
 
@@ -825,7 +904,8 @@ Update the root project map only when this directory is introduced.
 - no independent diagnostics;
 - no YAML parser;
 - no intrinsic catalog;
-- no compiler or runner invocation;
+- no C++/Rust compiler, formatter, linker, runner, emulator, benchmark, or
+  generated-test invocation;
 - no source formatting until the compiler exposes a safe formatter.
 
 ### Server Discovery
@@ -889,21 +969,38 @@ information, offline failure behavior, and enterprise-safe configuration.
 
 ### Initial Targets
 
-- server initialization and first catalog diagnostics: under 2 seconds on the
-  current corpus in the devcontainer;
+- server initialization and first catalog diagnostics: under 2.5 seconds on
+  the current corpus in the devcontainer, with later startup work hidden behind
+  normal progress reporting if necessary;
 - debounced diagnostics after an edit: p95 under 750 ms;
 - hover, definition, symbols, and completion from the latest index: under 100
   ms;
+- an explicitly requested cold specialization preview: under 5 seconds for a
+  representative primitive/profile/type/backend slot, with immediate progress
+  indication and cancellation;
 - no unbounded growth in retained document versions or catalog snapshots.
 
 These are engineering targets, not compatibility contracts. Record a baseline
 before implementation and report deviations.
+
+The July 2026 optimized baseline on the audit host measured a five-sample
+fresh-process catalog-check median of 2.05 seconds and repeated full checks in
+one process around 1.84 seconds. Reusing parsed documents and reparsing the
+largest current source document measured about 0.40 seconds for parse, complete
+catalog rebuild, and validation. A cold representative `tslc explain` took
+about 4.26 seconds. These measurements justify parsed-document reuse for live
+diagnostics and a separate multi-second latency contract for explicit preview;
+they do not justify rendering from hover.
 
 ### Simple First Strategy
 
 - cache the compiled Lark parser as today;
 - reload disk documents only when their digest changes;
 - overlay open buffers;
+- cache each successful parsed document and its direct parse diagnostics by
+  normalized path and source digest;
+- reparse only changed documents while retaining the complete deterministic
+  parsed-document sequence;
 - rebuild the parsed catalog and index after a debounce;
 - reuse the last successful catalog for navigation while a malformed edit is
   being checked, but mark results as stale internally;
@@ -911,18 +1008,30 @@ before implementation and report deviations.
 
 ### Optimization Trigger
 
-Only add parsed-document or catalog incrementality if the measured p95 check
-time exceeds the target on the current corpus. Any cache must be keyed by
-normalized path and source digest, bounded to the workspace, deterministic, and
-invalidated when configuration or shared source data changes.
+The measured full-parse path exceeds the edit target, so parsed-document reuse
+is required in the first LSP slice. Keep catalog promotion and validation
+complete initially: the cached-document probe places that combined work within
+the target without inventing an incremental catalog model. Add catalog-level
+incrementality only if measured p95 remains above target after the real overlay
+and protocol path exists.
+
+Any cache must be keyed by normalized path and source digest, bounded to the
+workspace, deterministic, and invalidated when configuration or shared source
+data changes. Performance tests assert cache behavior and stable outputs, not
+portable wall-clock thresholds.
 
 Do not introduce a background daemon outside the editor-server lifetime in the
-first release.
+first release. An explicit preview child exists only for the duration of its
+user-requested command and is not shared with continuous diagnostics.
 
 ## Security And Failure Behavior
 
 - Treat source text and workspace configuration as untrusted input.
-- Do not execute commands derived from `.tsl` content.
+- Do not select executable paths or construct shell commands from `.tsl`
+  content. A validated catalog name may be passed as a direct argv value only
+  after an explicit preview command.
+- Construct preview argv directly from validated catalog/configuration choices;
+  never interpolate selections into a shell command.
 - Do not load Python modules named by workspace files.
 - Do not make network requests.
 - Restrict logs and scratch files to configured workspace-local `tslctmp`.
@@ -982,6 +1091,8 @@ Work:
 - factor catalog loading/checking from `_pipeline_inputs.py` into a public
   compiler-owned boundary;
 - add `SourceOverlay` application;
+- add workspace-scoped parsed-document reuse keyed by normalized path and
+  source digest;
 - add `CheckResult`;
 - keep generation behavior unchanged by making `_load_inputs` call the new
   boundary;
@@ -994,6 +1105,8 @@ Exit criteria:
 - the complete source corpus can be checked without machine profiles;
 - generation uses the same catalog-check path;
 - unsaved source text can replace one disk document in memory;
+- changing one document reparses that document while retaining cached parsed
+  values for unchanged corpus files;
 - existing compiler tests remain green.
 
 ### Slice 2: Ranged Diagnostics And `tslc check`
@@ -1066,7 +1179,8 @@ Work:
 - add optional editor dependencies;
 - implement stdio startup, initialize, shutdown, and exit;
 - implement workspace/config discovery;
-- implement full-text document overlays and debounced checking;
+- implement full-text document overlays, parsed-document reuse, and debounced
+  complete-catalog checking;
 - publish parse/catalog/TSIL diagnostics;
 - implement document symbols;
 - create the TypeScript VS Code client under `editors/vscode-tsl/` with `.tsl`
@@ -1085,6 +1199,7 @@ Exit criteria:
 - an unsaved syntax or catalog error appears at the correct range;
 - fixing the error clears it without saving;
 - rapidly changing a document cannot publish stale diagnostics;
+- unchanged documents are not reparsed after an overlay edit;
 - VS Code activation does not require YAML language mode;
 - adding a region descriptor requires no hand edit to a TypeScript or TextMate
   keyword list; restarting the server updates semantic features and rebuilding
@@ -1095,6 +1210,8 @@ Exit criteria:
 Validation:
 
 - Python unit tests for workspace state and overlay versioning;
+- parsed-document cache hit, invalidation, ordering, and malformed-document
+  tests;
 - protocol tests for initialize/open/change/diagnostics/shutdown;
 - VS Code extension activation test;
 - generated-grammar equality and reproducibility tests against the compiler
@@ -1113,6 +1230,8 @@ Work:
   inheritance, and supersession;
 - implement references for primitive calls and extension relationships;
 - implement concise typed hover content;
+- keep hover, navigation, and symbols on the latest successful index without
+  invoking the authoring checker or lowering;
 - use the last successful index while the current buffer is temporarily
   malformed;
 - add deterministic multi-definition behavior for overloaded primitive
@@ -1123,7 +1242,9 @@ Exit criteria:
 - navigation uses parsed/scanned typed facts rather than raw-text searches;
 - all returned locations are valid UTF-16 LSP positions;
 - hover and navigation complete within the latency target on the current
-  corpus.
+  corpus;
+- tests fail if a hover or navigation handler invokes checking, selection,
+  lowering, rendering, or process startup.
 
 ### Slice 6: Contextual Completion And Semantic Tokens
 
@@ -1148,7 +1269,7 @@ Exit criteria:
 - semantic coloring does not classify raw target-language identifiers as TSL
   symbols.
 
-### Slice 7: Concrete Slot Checks And Explain Integration
+### Slice 7: Concrete Slot Checks And Explicit Preview
 
 Goal: bring profile-specific lowering feedback into the author workflow without
 making every keystroke expensive.
@@ -1156,9 +1277,23 @@ making every keystroke expensive.
 Work:
 
 - add slot-aware options to `tslc check`;
-- add an LSP command to check the current primitive for a selected
-  profile/type/backend;
-- expose `explain` output in an editor output channel or virtual document;
+- add a client command that runs the slot-aware `tslc check` path in a child
+  process for the current primitive and selected profile/type/backend;
+- add `TSL: Preview Specialization` to the TypeScript client;
+- launch `tslc explain` in a cancellable child process rather than in the LSP
+  process;
+- make the explain/preview compiler request use `render_artifacts=False` so it
+  performs selection, lowering, and dependency closure without loading render
+  assets, planning tests/benchmarks, or constructing a generated project;
+- refactor the explain core to load/parse the corpus once and derive both its
+  narration and authoritative closure verdict from that same immutable input
+  snapshot rather than calling a second top-level generation load;
+- show progress immediately and present explanation/lowered body output in a
+  read-only virtual document beside the source editor;
+- require saved input for the initial preview and report a dirty-buffer setup
+  message instead of previewing stale disk content silently;
+- include the selection and source/configuration digest in preview output and
+  replace a prior preview only after the new result is ready;
 - reuse selector, lowerer, and dependency closure directly;
 - add workspace defaults for preferred authoring profiles without changing
   generation defaults;
@@ -1168,6 +1303,10 @@ Exit criteria:
 
 - an author can diagnose one concrete specialization without generating a
   project;
+- preview latency does not block diagnostics, hover, navigation, completion, or
+  server shutdown;
+- preview can be cancelled and a superseded child cannot replace a newer
+  virtual document;
 - the editor does not silently promote intentional partial-mode skips to
   source errors;
 - explain and check agree on selection and lowering outcomes.
@@ -1184,12 +1323,14 @@ Work:
 - expose doctor through an editor command;
 - adapt applicable `metadata_audit` suggestions into explicit workspace edits;
 - add help links and safe source actions for selected diagnostics;
-- measure the completed server and add caching only if targets are missed.
+- measure the completed server and add catalog-level incrementality only if
+  parsed-document reuse still misses the diagnostic target.
 
 Exit criteria:
 
 - doctor honors requested backends and CLI toolchain overrides;
-- no check or LSP request runs a compiler;
+- no authoring check or LSP request invokes a C++/Rust compiler, formatter,
+  linker, runner, emulator, benchmark, or generated test;
 - every mutating code action is previewable and undoable;
 - performance targets are met or a measured follow-up is recorded.
 
@@ -1232,6 +1373,9 @@ Exit criteria:
 - disk source loading and normalized overlay replacement;
 - parser errors from unsaved text;
 - catalog validation with the complete corpus and one changed document;
+- parsed-document cache reuse and invalidation by normalized path and digest;
+- deterministic merge ordering for cached, changed, added, and removed
+  documents;
 - no render-asset loading or artifact writes;
 - deterministic diagnostics and index ordering;
 - requested-path diagnostic filtering;
@@ -1256,6 +1400,8 @@ Exit criteria:
 - configuration reload;
 - diagnostics cleared on close or correction;
 - document symbols, hover, definition, references, and completion;
+- hover/navigation requests use the latest index without triggering a check or
+  lowering;
 - graceful behavior when optional dependencies/configuration are missing;
 - stdout contains protocol frames only.
 
@@ -1275,7 +1421,14 @@ Exit criteria:
   runtime dependency on a user-installed Node.js/npm toolchain;
 - local and remote workspace execution resolve the server on the correct side;
 - contributor-preview discovery and bundled-server discovery select the
-  documented command deterministically.
+  documented command deterministically;
+- preview executable discovery follows its documented explicit/bundled/PATH/
+  configured-Python order and never rewrites an arbitrary server command;
+- preview constructs argv without a shell, reports progress, captures stderr,
+  and opens a read-only virtual document beside the source;
+- cancellation, supersession, nonzero exit, dirty-buffer refusal, and extension
+  shutdown terminate the correct preview child without replacing a newer
+  result.
 
 ### Integration Tests
 
@@ -1284,6 +1437,10 @@ Exit criteria:
 - one extension inheritance chain;
 - one malformed TSIL selector;
 - one profile-specific lowering check;
+- explain/preview loads one immutable corpus snapshot, disables artifact
+  rendering, and does not construct a generated project;
+- one explicit specialization preview whose multi-second child process does not
+  delay a concurrent hover or document-diagnostic response;
 - one metadata-audit edit preview;
 - installed wheel plus `tslc[editor]`, not only `PYTHONPATH` development;
 - one packaged self-contained server/VSIX smoke test for every declared
@@ -1342,7 +1499,9 @@ Update documentation only as behavior lands:
   editor dependencies;
 - `docs/README.md`: link an authoring/editor guide;
 - new `docs/tsl-editor.md`: installation, VS Code and generic LSP setup,
-  configuration, commands, troubleshooting, and limitations;
+  configuration, commands, troubleshooting, limitations, the separation
+  between index-backed live features and saved-file explicit preview, preview
+  process discovery and cancellation, and user-defined keybinding setup;
 - `docs/add-primitive.md` and `docs/add-extension.md`: replace manual validation
   boilerplate with `tslc check` while retaining generated verification steps;
 - `tslc/DESCRIPTION.md`: add the authoring boundary only after it exists in the
@@ -1369,11 +1528,26 @@ hover summaries from the compiler-owned vocabulary.
 
 ### Full-Corpus Rebuild Latency
 
-Risk: rebuilding the complete catalog on each edit may feel slow.
+Risk: reparsing the complete corpus on each edit exceeds the measured live
+diagnostic target even after global parser and TSIL optimizations.
 
-Mitigation: measure first, debounce, cache disk documents by digest, discard
-stale results, and add parsed-document incrementality only after a measured
-failure.
+Mitigation: the measured trigger has fired. Debounce, cache parsed documents by
+normalized path and digest, reparse only changed overlays/disk documents,
+rebuild and validate the complete catalog, and discard stale results. Add an
+incremental catalog model only after the implemented LSP path demonstrates that
+this simpler boundary still misses the target.
+
+### Explicit Preview Latency And Staleness
+
+Risk: running concrete lowering in the language-server process blocks normal
+LSP requests, while a child process that reads disk can display stale output
+for an unsaved buffer or overwrite a newer preview after cancellation.
+
+Mitigation: preview only after an explicit user command, run `tslc explain` in
+a cancellable child process, require saved input initially, identify the
+selection and input/configuration digest in the result, and use request
+generations so superseded children cannot update the virtual document. Keep the
+previous successful preview visible until its replacement completes.
 
 ### Cascading Diagnostics During Syntax Errors
 
@@ -1446,9 +1620,11 @@ receives only generic body coloring.
 
 Risk: build/test commands become an implicit source-triggered execution path.
 
-Mitigation: ordinary LSP requests remain pure. Explicit user commands may open
-the existing terminal workflow, but the language server does not execute
-toolchains in the first release.
+Mitigation: ordinary LSP requests remain pure. The explicit preview command may
+launch compiler-owned `tslc explain` with direct argv construction, but it does
+not invoke target toolchains or write generated projects. Other explicit user
+commands may open the existing terminal workflow; source content never triggers
+execution.
 
 ## Acceptance Criteria For Version 1
 
@@ -1460,6 +1636,8 @@ Version 1 is complete when:
 - unsaved `.tsl` edits receive parser, catalog, and TSIL diagnostics in VS
   Code;
 - document symbols, primitive-call definitions, references, and hover work;
+- hover, navigation, symbols, and completion use the latest successful index
+  without checking, selecting, lowering, rendering, or starting a process;
 - completion covers common outer fields, catalog names, primitive calls, and
   registered TSIL keywords;
 - the TextMate TSIL keyword inventory is reproducibly generated from the
@@ -1468,6 +1646,11 @@ Version 1 is complete when:
 - adding a registered TSIL keyword updates LSP semantic features after a server
   restart and base TextMate coloring after an extension rebuild, without a
   TypeScript client change;
+- changed documents are reparsed from overlays while unchanged parsed corpus
+  documents are reused and complete catalog validation remains deterministic;
+- an author can explicitly preview one saved concrete specialization in a
+  cancellable child process and see its explanation/lowered body beside the
+  source without blocking the language server;
 - the language server remains usable from non-VS-Code LSP clients;
 - no TSL semantics are duplicated in the VS Code extension;
 - the VS Code client source is TypeScript under `editors/vscode-tsl/`, while

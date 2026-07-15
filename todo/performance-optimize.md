@@ -51,18 +51,21 @@ Fresh-process final measurements on the audit host:
 | `skylake,cascadelake` reuse | 36.78 s | 10.67 s | 451 MiB |
 | Default full request | not previously practical as a benchmark | 50.20 s | 1.55 GiB |
 
-Every final snapshot case (`focused`, `lowering-reuse`,
-`all-profiles-shapes`, `profile-diverse`, and the true combined `full`
-request) matches the original baseline exactly. The final ordinary Python suite
-passes with 1,647 tests and 69 expected default skips. The representative
-generated C++/Rust scalar+AVX2 matrix build passes all eight build commands.
+At the completion of the performance slices, every final snapshot case
+(`focused`, `lowering-reuse`, `all-profiles-shapes`, `profile-diverse`, and the
+true combined `full` request) matched the original baseline exactly. A
+subsequent design-review slice intentionally corrected the allocation ABI from
+`void**` / `*mut *mut c_void` to `void*` / `*mut c_void` and removed invalid
+pointer SIMD-policy mappings. Its fresh `focused` snapshot still matches the
+original baseline exactly; normalized `all-profiles-shapes` and true `full`
+snapshot diffs contain only those intended allocation signatures and
+pointer-policy removals.
 
-The broader explicit generated gate finishes with 60 passes and four existing
-full-corpus/allocation failures. Those failures are an unchanged generated ABI
-issue: allocation functions are declared as `void**` / `*mut *mut c_void` but
-their bodies return `void*` / `*mut c_void`. Exact final-to-original snapshots
-prove the performance work did not introduce or alter that output; correcting
-the pointer ABI belongs in a separate primitive/compiler slice.
+After that correction, the ordinary Python suite passes with 1,650 tests and
+69 expected default skips. The allocation-family and gather/scatter generated
+C++/Rust builds pass independently. A broad 64-case generated gate passed 63
+cases; its sole gather/scatter failure was not reproducible when rerun alone
+and occurred while a concurrent pytest process shared the configured basetemp.
 
 This plan turns the July 2026 performance audit into small, correctness-first
 compiler slices. Every optimization must preserve the current generated project
@@ -647,9 +650,10 @@ Implemented changes:
 - do not assume the graph is acyclic merely because source authoring rules
   prohibit cycles; retain a safe fixpoint behavior and deterministic order.
 
-Tests should cover chains, diamonds, multiple variants, unsafe propagation,
-feature unions, state joins, unresolved pruning cascades, and a defensive cycle.
-Run every snapshot case if this conditional slice is implemented.
+Focused tests cover chains, a shared-leaf diamond, multiple variants, unsafe
+propagation, feature unions, state joins, an unresolved reverse-dependency
+pruning cascade, and a defensive cycle. Run every snapshot case if this
+conditional slice is implemented.
 
 ### Slice 6: Make Full-Matrix Retention Practical If Caching Is Insufficient
 

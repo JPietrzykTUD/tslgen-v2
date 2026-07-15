@@ -190,9 +190,10 @@ requested primitives it resolves those lowered call facts
 ([lower/dependencies.py](src/tslc/lower/dependencies.py)), lowers callees, and
 **prunes to a fixpoint** any specialization whose callees aren't themselves
 emitted for the same `simd<type,ext>` (else the generated call wouldn't link).
-It also **propagates bottom-up** unsafe-ness and required target features
-through the live call graph
-([pipeline.py](src/tslc/pipeline.py), `_propagate_transitive_call_facts`).
+It also **propagates bottom-up** unsafe-ness, required target features, and
+implementation-state joins through the live call graph
+([_pipeline_closure.py](src/tslc/_pipeline_closure.py),
+`_propagate_transitive_call_facts`).
 
 After closure, constructing an
 [backend/emitted_profile.py](src/tslc/backend/emitted_profile.py) profile uses

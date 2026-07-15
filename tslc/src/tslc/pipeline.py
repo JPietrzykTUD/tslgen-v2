@@ -16,7 +16,6 @@ from typing import Literal
 from tslc._pipeline_closure import (
     _LoweredSlot,
     _profile_with_required_features,
-    _propagate_transitive_call_facts,
     _prune_unresolved,
 )
 from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
@@ -36,7 +35,7 @@ from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
-from tslc.lower.dependencies import CallDependency, CallDependencyOrigin
+from tslc.lower.dependencies import CallDependency
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer, LoweringResult
 from tslc.output.artifacts import ArtifactSet
 from tslc.render.project import RenderedProject, render_project

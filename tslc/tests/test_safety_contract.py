@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tslc._pipeline_closure import (
+    _LoweredSlot,
+    _profile_with_required_features,
+    _prune_unresolved,
+    _propagate_transitive_call_facts,
+)
 from tslc.backend.cpp import CppBackend
 from tslc.backend.rust import RustBackend
 from tslc.backend.registry import create_backend_dialect
@@ -14,17 +20,14 @@ from tslc.catalog.signatures import parse_signature
 from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import Diagnostic
-from tslc.lower.dependencies import CallDependency, VectorIdentity
+from tslc.lower.dependencies import (
+    CallDependency,
+    CallDependencyOrigin,
+    VectorIdentity,
+)
 from tslc.lower.implementation_state import ImplementationState
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
-from tslc.pipeline import (
-    CallDependencyOrigin,
-    _LoweredSlot,
-    _profile_with_required_features,
-    _pruned_reason,
-    _prune_unresolved,
-    _propagate_transitive_call_facts,
-)
+from tslc.pipeline import _pruned_reason
 from tslc.target_text import LoweredBody, RenderPlaceholder, render_sequence
 from tslc.select.selector import Selector
 from tslc.sources import SourceDocument, SourceLoader
@@ -234,6 +237,66 @@ def test_call_facts_propagate_bottom_up_recursively() -> None:
     assert root.spec.body.requires_unsafe is False
 
 
+def test_call_facts_propagate_through_shared_leaf_diamond() -> None:
+    leaf = _slot(
+        "leaf",
+        required_features=frozenset({"avx512f"}),
+        safety=ImplementationSafety(
+            internal_unsafe=True,
+            caller_unsafe=True,
+            reasons=frozenset({"raw_pointer"}),
+        ),
+        implementation_state=ImplementationState.FALLBACK,
+    )
+    leaf_dependency = CallDependency(
+        primitive="leaf",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    left = _slot(
+        "left",
+        required_features=frozenset({"avx2"}),
+        implementation_state=ImplementationState.COMPOSED,
+        callees=frozenset({leaf_dependency}),
+    )
+    right = _slot(
+        "right",
+        required_features=frozenset({"sse4_1"}),
+        implementation_state=ImplementationState.COMPOSED,
+        callees=frozenset({leaf_dependency}),
+    )
+    root = _slot(
+        "root",
+        implementation_state=ImplementationState.NATIVE,
+        callees=frozenset(
+            {
+                CallDependency(
+                    primitive="left",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                ),
+                CallDependency(
+                    primitive="right",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                ),
+            }
+        ),
+    )
+
+    _propagate_transitive_call_facts([root, left, right, leaf], frozenset())
+
+    assert left.spec.required_features == frozenset({"avx2", "avx512f"})
+    assert right.spec.required_features == frozenset({"sse4_1", "avx512f"})
+    assert root.spec.required_features == frozenset(
+        {"avx2", "sse4_1", "avx512f"}
+    )
+    for slot in (root, left, right):
+        assert slot.spec.safety.internal_unsafe is True
+        assert "unsafe_callee" in slot.spec.safety.reasons
+        assert slot.spec.implementation_state is ImplementationState.FALLBACK
+
+
 def test_call_facts_converge_through_cycles() -> None:
     left = _slot(
         "left",
@@ -438,6 +501,41 @@ def test_pruning_keeps_callers_while_an_equivalent_provider_remains() -> None:
     assert grouped["rust"]["caller"] == [caller.spec]
     assert grouped["rust"]["shift_like"] == [runtime.spec]
     assert pruned == [immediate]
+
+
+def test_pruning_cascades_through_reverse_dependencies() -> None:
+    missing = CallDependency(
+        primitive="missing",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    leaf = _slot("leaf", callees=frozenset({missing}))
+    leaf_dependency = CallDependency(
+        primitive="leaf",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    middle = _slot("middle", callees=frozenset({leaf_dependency}))
+    middle_dependency = CallDependency(
+        primitive="middle",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    root = _slot("root", callees=frozenset({middle_dependency}))
+
+    grouped, pruned = _prune_unresolved(
+        [root, middle, leaf],
+        frozenset(),
+    )
+
+    assert grouped == {}
+    assert pruned == [root, middle, leaf]
+    assert root.unresolved_callee is not None
+    assert root.unresolved_callee.dependency == middle_dependency
+    assert middle.unresolved_callee is not None
+    assert middle.unresolved_callee.dependency == leaf_dependency
+    assert leaf.unresolved_callee is not None
+    assert leaf.unresolved_callee.dependency == missing
 
 
 def test_render_profile_features_include_transitive_lowered_requirements() -> None:

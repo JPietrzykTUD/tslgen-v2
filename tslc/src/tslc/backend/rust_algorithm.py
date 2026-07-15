@@ -5,17 +5,17 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TypeGuard
 
-from tslc.backend.emitted_profile import used_type_specs
+from tslc.backend.emitted_profile import used_vector_type_specs
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
-from tslc.backend.target_capability import rust_extension_tag
-from tslc.catalog.model import Extension
-from tslc.compiler_assets import RenderAssets
-from tslc.lower.lowerer import LoweredSpecialization
 from tslc.backend.rust_facades import (
     rust_algorithm_primitive_facades,
     rust_public_function_names,
 )
 from tslc.backend.rust_vectors import RustVectorRegistration, rust_vector_registrations
+from tslc.backend.target_capability import rust_extension_tag
+from tslc.catalog.model import Extension
+from tslc.compiler_assets import RenderAssets
+from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
@@ -642,7 +642,7 @@ def _rust_algorithm_vector_mappings(
     fixed: dict[tuple[str, int], tuple[tuple[int, int, str], str]] = {}
     native: dict[str, tuple[tuple[int, int, str], str]] = {}
 
-    for ext_name, type_tag, base in used_type_specs(by_primitive):
+    for ext_name, type_tag, base in used_vector_type_specs(by_primitive):
         extension = extensions.get(ext_name)
         if not _rust_algorithm_vector_is_mappable(extension):
             continue

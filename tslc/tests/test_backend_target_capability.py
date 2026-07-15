@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from tslc.backend.emitted_profile import used_vector_type_specs
 from tslc.backend.target_capability import (
     cpp_x86_register_helper,
     feature_spelling,
@@ -230,6 +231,9 @@ def test_rust_registration_ignores_free_function_scalar_register(
     assert rendered.count("impl SimdVector for Simd<u64, X86Demo>") == 1
     assert "type RegisterType = core::arch::x86_64::__m256i;" in rendered
     assert "type RegisterType = u64;" not in rendered
+    assert used_vector_type_specs(
+        {"add": (vector,), "random_step": (free,)}
+    ) == (("x86_demo", "ui64", "u64"),)
 
 
 def _custom_rust_extension(catalog: Catalog, name: str, type_name: str):

@@ -569,11 +569,11 @@ def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:
     free function may call any wrapper regardless of emission order); `define=True` adds the body."""
 
     params = ", ".join(
-        f"{_free_kind_type(kind, spec.base_type_spelling)} {name}"
+        f"{_free_kind_type(kind, spec)} {name}"
         for name, kind in zip(spec.param_names, spec.param_kinds)
     )
     signature = (
-        f"inline {_free_kind_type(spec.result_kind, spec.base_type_spelling)} "
+        f"inline {_free_kind_type(spec.result_kind, spec)} "
         f"{spec.primitive_name}({params})"
     )
     doc = _cpp_doc(spec, context="C++ free function")
@@ -732,11 +732,15 @@ def _cpp_base_dispatch_key_tag(base_tag: str | None) -> str:
     return f"::tsl::detail::base_{base_tag}_tag"
 
 
-def _free_kind_type(kind: str, base_spelling: str) -> str:
+def _free_kind_type(kind: str, spec: LoweredSpecialization) -> str:
     """A free function's kind -> concrete type (no `Vec` projection). Pointer spellings
     carry their own mutability; `usize` is a size; `void` is no value."""
 
-    return CPP_SIGNATURE_TYPES.free_type(kind, base=base_spelling)
+    return CPP_SIGNATURE_TYPES.free_type(
+        kind,
+        base=spec.base_type_spelling,
+        base_type_tag=spec.type_tag,
+    )
 
 
 def _vector_type(spec: LoweredSpecialization) -> str:

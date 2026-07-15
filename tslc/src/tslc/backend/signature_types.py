@@ -17,6 +17,7 @@ class SignatureTypeForms:
     result: str | None = None
     parameter: str | None = None
     free: str | None = None
+    free_with_pointer_base: str | None = None
     owner: str | None = None
     concrete: str | None = None
 
@@ -43,8 +44,22 @@ class BackendSignatureTypes:
     def parameter_type(self, kind: str, **values: str | None) -> str:
         return self._project(kind, "parameter", **values)
 
-    def free_type(self, kind: str, **values: str | None) -> str:
-        return self._project(kind, "free", **values)
+    def free_type(
+        self,
+        kind: str,
+        *,
+        base_type_tag: str | None = None,
+        **values: str | None,
+    ) -> str:
+        forms = self._forms.get(kind)
+        form = (
+            "free_with_pointer_base"
+            if base_type_tag == "ptr"
+            and forms is not None
+            and forms.free_with_pointer_base is not None
+            else "free"
+        )
+        return self._project(kind, form, **values)
 
     def owner_type(self, kind: str, **values: str | None) -> str:
         return self._project(kind, "owner", **values)
@@ -112,18 +127,22 @@ CPP_SIGNATURE_TYPES = BackendSignatureTypes(
         "ptr": SignatureTypeForms(
             parameter="typename Vec::base_type *",
             free="{base} *",
+            free_with_pointer_base="{base}",
         ),
         "ptr+": SignatureTypeForms(
             parameter="typename Vec::base_type *",
             free="{base} *",
+            free_with_pointer_base="{base}",
         ),
         "cptr": SignatureTypeForms(
             parameter="typename Vec::base_type const *",
             free="const {base} *",
+            free_with_pointer_base="const {base}",
         ),
         "cptr+": SignatureTypeForms(
             parameter="typename Vec::base_type const *",
             free="const {base} *",
+            free_with_pointer_base="const {base}",
         ),
         "void": SignatureTypeForms(result="void", free="void"),
         "s[]": SignatureTypeForms(
@@ -181,24 +200,28 @@ RUST_SIGNATURE_TYPES = BackendSignatureTypes(
             owner="*mut {owner}::BaseType",
             parameter="*mut {owner}::BaseType",
             free="*mut {base}",
+            free_with_pointer_base="{base}",
             concrete="*mut {base}",
         ),
         "ptr+": SignatureTypeForms(
             owner="*mut {owner}::BaseType",
             parameter="*mut {owner}::BaseType",
             free="*mut {base}",
+            free_with_pointer_base="{base}",
             concrete="*mut {base}",
         ),
         "cptr": SignatureTypeForms(
             owner="*const {owner}::BaseType",
             parameter="*const {owner}::BaseType",
             free="*const {base}",
+            free_with_pointer_base="*const {base}",
             concrete="*const {base}",
         ),
         "cptr+": SignatureTypeForms(
             owner="*const {owner}::BaseType",
             parameter="*const {owner}::BaseType",
             free="*const {base}",
+            free_with_pointer_base="*const {base}",
             concrete="*const {base}",
         ),
         "void": SignatureTypeForms(owner="()", free="()", concrete="()"),
@@ -231,12 +254,21 @@ RUST_SIGNATURE_TYPES = BackendSignatureTypes(
 )
 
 
-def rust_free_type(kind: str, base_type: str) -> str:
+def rust_free_type(
+    kind: str,
+    base_type: str,
+    *,
+    base_type_tag: str | None = None,
+) -> str:
     """Project a free Rust kind, preserving constness of an existing raw pointer."""
 
     if kind in {"cptr", "cptr+"} and base_type.startswith("*mut "):
         base_type = base_type[len("*mut ") :]
-    return RUST_SIGNATURE_TYPES.free_type(kind, base=base_type)
+    return RUST_SIGNATURE_TYPES.free_type(
+        kind,
+        base=base_type,
+        base_type_tag=base_type_tag,
+    )
 
 
 __all__ = (

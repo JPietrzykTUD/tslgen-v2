@@ -11,6 +11,7 @@ from tslc.backend.emitted_names import finalize_emitted_names
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 if TYPE_CHECKING:
     from tslc.lower.lowerer import LoweredSpecialization
@@ -85,26 +86,30 @@ def used_extensions(
     return tuple(sorted(names))
 
 
-def used_type_specs(
+def used_vector_type_specs(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
 ) -> tuple[tuple[str, str, str], ...]:
-    """Used ``(extension, type_tag, base_spelling)`` facts, including targets."""
+    """Used vector-axis ``(extension, type_tag, base_spelling)`` facts, including targets."""
 
     facts: set[tuple[str, str, str]] = set()
     for specializations in by_primitive.values():
-        facts.update(
-            (spec.extension_name, spec.type_tag, spec.base_type_spelling)
-            for spec in specializations
-        )
-        facts.update(
-            (
-                spec.target.extension_isa,
-                spec.target.base_tag,
-                spec.target.base_spelling,
+        for spec in specializations:
+            if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+                spec.result_kind,
+                spec.param_kinds,
+            ):
+                continue
+            facts.add(
+                (spec.extension_name, spec.type_tag, spec.base_type_spelling)
             )
-            for spec in specializations
-            if spec.target
-        )
+            if spec.target is not None:
+                facts.add(
+                    (
+                        spec.target.extension_isa,
+                        spec.target.base_tag,
+                        spec.target.base_spelling,
+                    )
+                )
     return tuple(sorted(facts))
 
 
@@ -130,5 +135,5 @@ def _freeze_backend_specializations(
 __all__ = (
     "EmittedProfile",
     "used_extensions",
-    "used_type_specs",
+    "used_vector_type_specs",
 )

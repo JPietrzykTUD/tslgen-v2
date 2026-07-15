@@ -16,6 +16,7 @@ from pathlib import Path
 import sys
 from typing import Literal, TextIO, cast
 
+from tslc._pipeline_closure import _LoweredSlot, _prune_unresolved
 from tslc.backend.registry import create_backend_dialect, registered_backend_ids
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
@@ -27,10 +28,6 @@ from tslc.diagnostics import Diagnostic, has_errors
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import CallDependency
 from tslc.lower.lowerer import Lowerer
-from tslc.pipeline import (
-    _LoweredSlot,
-    _prune_unresolved,
-)
 from tslc.select.selector import SelectedImplementation, Selector
 from tslc.sources import SourceDocument, SourceLoader
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY

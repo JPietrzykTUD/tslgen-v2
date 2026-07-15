@@ -301,15 +301,6 @@ def _propagate_transitive_call_facts(
         )
 
 
-def _call_fact_key(
-    slot: _LoweredSlot,
-    split_names: frozenset[str],
-) -> _CallFactKey:
-    """A lowered-body identity for transitive call facts before emitted-name splits."""
-
-    return _call_fact_key_from_slot_key(slot, _slot_key(slot, split_names))
-
-
 def _call_fact_key_from_slot_key(
     slot: _LoweredSlot,
     slot_key: _SlotKey,

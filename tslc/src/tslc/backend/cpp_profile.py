@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from tslc.backend.cpp_validation import resolve_cpp_compile_guards
-from tslc.backend.emitted_profile import EmittedProfile, used_type_specs
+from tslc.backend.emitted_profile import EmittedProfile, used_vector_type_specs
 from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.target_capability import (
     cpp_x86_register_helper,
@@ -180,7 +180,7 @@ def _cpp_native_registration(
     lines: list[str] = []
     emitted = {
         ext
-        for ext, type_tag, _base in used_type_specs(by_primitive)
+        for ext, type_tag, _base in used_vector_type_specs(by_primitive)
         if (extension := extensions.get(ext)) is not None
         and not is_x86_register_extension(extension)
         and extension.direct_vector_register_type("cpp", type_tag) is not None
@@ -192,7 +192,7 @@ def _cpp_native_registration(
                 extensions.get(ext),
             )
         )
-    for ext, type_tag, base in used_type_specs(by_primitive):
+    for ext, type_tag, base in used_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
         if extension is None or is_x86_register_extension(extension):
             continue
@@ -343,7 +343,7 @@ def _cpp_inferred_simd_registrations(
 
     candidates: dict[tuple[str, int], tuple[tuple[int, int, str], str]] = {}
     native_candidates: dict[str, tuple[tuple[int, int, str], str]] = {}
-    for ext, type_tag, base in used_type_specs(by_primitive):
+    for ext, type_tag, base in used_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
         if extension is None or DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
             continue
@@ -400,7 +400,7 @@ def _cpp_compiler_builtin_fixed_registrations(
     """Expose an explicit fixed-lane policy for one compiler-builtin overlay."""
 
     candidates: dict[tuple[str, str, int], tuple[tuple[int, str], str]] = {}
-    for ext, type_tag, base in used_type_specs(by_primitive):
+    for ext, type_tag, base in used_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
         if (
             extension is None
