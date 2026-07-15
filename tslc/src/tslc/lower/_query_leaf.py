@@ -4,11 +4,24 @@ from __future__ import annotations
 
 import re
 
-from tslc.catalog.scalar_types import is_type_tag
-from tslc.lower._query_model import QueryValue, TextValue, TypeValue
+from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS, is_type_tag
+from tslc.lower._query_model import (
+    QueryLeafNamespaceDescriptor,
+    QueryValue,
+    TextValue,
+    TypeValue,
+)
 from tslc.lower.context import LoweringSession, SimdTypeParameterValue
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+DEFAULT_QUERY_LEAF_NAMESPACES = (
+    QueryLeafNamespaceDescriptor(
+        "scalar",
+        tuple(sorted(KNOWN_SCALAR_TYPE_TAGS)),
+        frozenset({"type"}),
+    ),
+)
 
 
 def resolve_query_leaf(head: str, context: LoweringSession) -> QueryValue | None:
@@ -42,8 +55,10 @@ def resolve_query_leaf(head: str, context: LoweringSession) -> QueryValue | None
     if is_type_tag(head):
         return TypeValue(head)
 
-    if head.startswith("scalar::"):
-        scalar_tag = head[len("scalar::") :]
+    scalar_namespace = DEFAULT_QUERY_LEAF_NAMESPACES[0]
+    scalar_prefix = f"{scalar_namespace.name}::"
+    if head.startswith(scalar_prefix):
+        scalar_tag = head[len(scalar_prefix) :]
         if is_type_tag(scalar_tag):
             return TypeValue(scalar_tag)
         backend = getattr(context.env, "backend", None)

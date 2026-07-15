@@ -151,9 +151,14 @@ raw target text. Region keywords, closed selector terms, selector keys,
 option-bag keys and closed option values come from the region descriptors;
 primitive names in `call<primitive=...>` and backend translation names for
 `cast`, `helper`, and `op` are projected from the current catalog. Completion
-stops at malformed shell text and open query or target-language identifiers
-instead of guessing. Selecting an item replaces only its active selector term
-or value.
+also follows the typed query registry through `base::`, `vector::`, `type::`,
+`generic::`, and the other registered namespaces. Terminal queries close the
+path, while typed argument roles filter continuations and offer only reliable
+primitive parameters, generic parameters, selector axes, extensions, and
+scalar query leaves. The same query lookup is used by open intrinsic build
+modifiers. Completion stops at malformed paths, comments/strings, and unknown
+target-language identifiers instead of guessing. Selecting an item replaces
+only its active selector term, query segment, or value.
 
 Hover, navigation, symbols, completion, and semantic tokens read the most
 recent successful catalog/index and parsed source snapshot. They do not check

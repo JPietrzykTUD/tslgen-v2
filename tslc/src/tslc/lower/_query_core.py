@@ -10,12 +10,20 @@ from tslc.catalog.scalar_types import (
     signed_of,
     unsigned_of,
 )
-from tslc.lower._query_model import BoolValue, QueryValue, TextValue, TypeValue
+from tslc.lower._query_model import (
+    BoolValue,
+    QueryValue,
+    TextValue,
+    TypeValue,
+    query_argument,
+    query_function,
+)
 from tslc.lower.context import LoweringSession
 
 
 class BaseInQuery:
     head = "base::in"
+    descriptor = query_function("type")
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -25,6 +33,10 @@ class BaseInQuery:
 
 class SignedOfQuery:
     head = "base::signed_of"
+    descriptor = query_function(
+        "type",
+        arguments=(query_argument("type"),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -38,6 +50,10 @@ class UnsignedOfQuery:
     """``base::unsigned_of(x)`` -> the same-width unsigned integer tag."""
 
     head = "base::unsigned_of"
+    descriptor = query_function(
+        "type",
+        arguments=(query_argument("type"),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -51,6 +67,14 @@ class TypeQuery:
     """``type(x)`` passthrough wrapper."""
 
     head = "type"
+    descriptor = query_function(
+        "type",
+        "text",
+        "bool",
+        "vector",
+        "simd_type",
+        arguments=(query_argument(),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -62,6 +86,14 @@ class ValueQuery:
     """``value(x)`` passthrough wrapper."""
 
     head = "value"
+    descriptor = query_function(
+        "type",
+        "text",
+        "bool",
+        "vector",
+        "simd_type",
+        arguments=(query_argument(),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -73,6 +105,18 @@ class SelectQuery:
     """``select(cond, then, else)`` -> one already-evaluated branch."""
 
     head = "select"
+    descriptor = query_function(
+        "type",
+        "text",
+        "bool",
+        "vector",
+        "simd_type",
+        arguments=(
+            query_argument("bool"),
+            query_argument(),
+            query_argument(),
+        ),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -90,6 +134,7 @@ class IntrinPrefixQuery:
     """``intrin::prefix`` -> the selected extension's backend intrinsic prefix."""
 
     head = "intrin::prefix"
+    descriptor = query_function("text")
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -104,6 +149,11 @@ class IntrinSuffixQuery:
     """``intrin::suffix(x)`` -> the composed intrinsic suffix fragment."""
 
     head = "intrin::suffix"
+    descriptor = query_function(
+        "text",
+        arguments=(query_argument("type", "text"),),
+        min_arguments=0,
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -128,6 +178,10 @@ class IsSameQuery:
     """``type::is_same(a, b)`` -> generation-time boolean."""
 
     head = "type::is_same"
+    descriptor = query_function(
+        "bool",
+        arguments=(query_argument("type"), query_argument("type")),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -144,6 +198,10 @@ class SizeBytesQuery:
     """``type::size_bytes(x)`` -> byte width of a type tag."""
 
     head = "type::size_bytes"
+    descriptor = query_function(
+        "text",
+        arguments=(query_argument("type"),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -157,6 +215,10 @@ class SizeBitsQuery:
     """``type::size_bits(x)`` -> bit width of a type tag."""
 
     head = "type::size_bits"
+    descriptor = query_function(
+        "text",
+        arguments=(query_argument("type"),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -170,6 +232,10 @@ class SameSizeQuery:
     """``type::same_size(a, b)`` -> whether two scalar tags have equal bit width."""
 
     head = "type::same_size"
+    descriptor = query_function(
+        "bool",
+        arguments=(query_argument("type"), query_argument("type")),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -186,6 +252,10 @@ class IsSignedQuery:
     """``type::is_signed(x)`` -> generation-time boolean."""
 
     head = "type::is_signed"
+    descriptor = query_function(
+        "bool",
+        arguments=(query_argument("type", "text"),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -204,6 +274,10 @@ class AttributeQuery:
     """``primitive::attribute(name)`` -> selected primitive attribute boolean."""
 
     head = "primitive::attribute"
+    descriptor = query_function(
+        "bool",
+        arguments=(query_argument("text", role="attribute"),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession

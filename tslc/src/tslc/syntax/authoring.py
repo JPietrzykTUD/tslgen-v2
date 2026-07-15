@@ -15,6 +15,7 @@ from tslc.syntax.ast import (
     ParsedFieldDeclaration,
     ParsedOuterTslDocument,
     ParsedPrimitiveDeclaration,
+    ParsedTslAttributeListValue,
     ParsedTslQuoteForm,
     ParsedTopLevelDeclaration,
     ParsedTopLevelDeclarationKind,
@@ -71,13 +72,20 @@ class AuthoringCursorContext:
     current_field: str | None
     existing_fields: tuple[str, ...]
     primitive_parameters: tuple[str, ...] = ()
+    primitive_attributes: tuple[str, ...] = ()
     generic_parameters: tuple[str, ...] = ()
+    generic_parameter_kinds: tuple[tuple[str, str], ...] = ()
     extension_selector: str | None = None
     type_selector: str | None = None
     tsil_region_keyword: str | None = None
     tsil_selector_start: int | None = None
     tsil_selector_prefix: str | None = None
     tsil_region_path: tuple[str, ...] = ()
+    tsil_argument_keyword: str | None = None
+    tsil_argument_selector: str | None = None
+    tsil_argument_start: int | None = None
+    tsil_argument_prefix: str | None = None
+    tsil_in_opaque_text: bool = False
     source: AuthoringContextSource = "lexical"
 
 
@@ -168,6 +176,11 @@ def authoring_cursor_context(
     tsil_selector_start: int | None = None
     tsil_selector_prefix: str | None = None
     tsil_region_path: tuple[str, ...] = ()
+    tsil_argument_keyword: str | None = None
+    tsil_argument_selector: str | None = None
+    tsil_argument_start: int | None = None
+    tsil_argument_prefix: str | None = None
+    tsil_in_opaque_text = False
     tsil_site = _tsil_payload_site(declaration, text, bounded_offset)
     if tsil_site is not None:
         payload_start, quote_form, context_source = tsil_site
@@ -184,6 +197,15 @@ def authoring_cursor_context(
         )
         prefix = tsil.prefix
         tsil_region_path = tsil.region_path
+        tsil_argument_keyword = tsil.argument_keyword
+        tsil_argument_selector = tsil.argument_selector
+        tsil_argument_start = (
+            None
+            if tsil.argument_start is None
+            else payload_start + tsil.argument_start
+        )
+        tsil_argument_prefix = tsil.argument_prefix
+        tsil_in_opaque_text = tsil.in_opaque_text
         if tsil.kind == "region-boundary":
             current_field = "$region-keyword"
             position_kind = "tsil-region-boundary"
@@ -218,10 +240,16 @@ def authoring_cursor_context(
 
     block_path = parent.path
     primitive_parameters: tuple[str, ...] = ()
+    primitive_attributes: tuple[str, ...] = ()
     generic_parameters: tuple[str, ...] = ()
+    generic_parameter_kinds: tuple[tuple[str, str], ...] = ()
     if isinstance(declaration, ParsedPrimitiveDeclaration):
         primitive_parameters = declaration.parameters
+        primitive_attributes = tuple(
+            attribute.key.text for attribute in declaration.attributes
+        )
         generic_parameters = _generic_parameter_names(declaration)
+        generic_parameter_kinds = _generic_parameter_kinds(declaration)
     extension_selector, type_selector = _implementation_selectors(block_path)
 
     return AuthoringCursorContext(
@@ -239,13 +267,20 @@ def authoring_cursor_context(
         current_field=current_field,
         existing_fields=tuple(field.key.text for field in parent.fields),
         primitive_parameters=primitive_parameters,
+        primitive_attributes=primitive_attributes,
         generic_parameters=generic_parameters,
+        generic_parameter_kinds=generic_parameter_kinds,
         extension_selector=extension_selector,
         type_selector=type_selector,
         tsil_region_keyword=tsil_region_keyword,
         tsil_selector_start=tsil_selector_start,
         tsil_selector_prefix=tsil_selector_prefix,
         tsil_region_path=tsil_region_path,
+        tsil_argument_keyword=tsil_argument_keyword,
+        tsil_argument_selector=tsil_argument_selector,
+        tsil_argument_start=tsil_argument_start,
+        tsil_argument_prefix=tsil_argument_prefix,
+        tsil_in_opaque_text=tsil_in_opaque_text,
         source=context_source,
     )
 
@@ -523,6 +558,51 @@ def _generic_parameter_names(
         if field.field.key.text == "generic_params"
         for child in field.field.children
     )
+
+
+def _generic_parameter_kinds(
+    declaration: ParsedPrimitiveDeclaration,
+) -> tuple[tuple[str, str], ...]:
+    result: list[tuple[str, str]] = []
+    for field in declaration.fields:
+        if field.field.key.text != "generic_params":
+            continue
+        for parameter in field.field.children:
+            kind = next(
+                (
+                    child.value.text
+                    for child in parameter.children
+                    if child.key.text == "kind"
+                    and isinstance(child.value, ParsedTslScalarValue)
+                ),
+                None,
+            )
+            if kind is None and isinstance(
+                parameter.value,
+                ParsedTslAttributeListValue,
+            ):
+                kind = next(
+                    (
+                        attribute.value.text
+                        for attribute in parameter.value.attributes
+                        if attribute.key.text == "kind"
+                        and isinstance(attribute.value, ParsedTslScalarValue)
+                    ),
+                    None,
+                )
+            if kind is None and isinstance(parameter.value, ParsedTslMapValue):
+                kind = next(
+                    (
+                        entry.value.text
+                        for entry in parameter.value.entries
+                        if entry.key.text == "kind"
+                        and isinstance(entry.value, ParsedTslScalarValue)
+                    ),
+                    None,
+                )
+            if kind is not None:
+                result.append((parameter.key.text, kind))
+    return tuple(result)
 
 
 def _implementation_selectors(

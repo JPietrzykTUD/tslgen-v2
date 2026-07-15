@@ -116,7 +116,10 @@ class QueryEvaluator:
 
         function = self._functions.get(term.head)
         if function is not None:
-            return function.apply(tuple(evaluated_args), context)
+            args = tuple(evaluated_args)
+            if not function.descriptor.accepts(args):
+                return None
+            return function.apply(args, context)
         if not term.args:
             return self.resolve_leaf(term.head, context)
         return None

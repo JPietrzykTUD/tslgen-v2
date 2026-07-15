@@ -147,6 +147,33 @@ def test_tsil_cursor_does_not_leak_regions_into_raw_text(body: str) -> None:
     assert tsil_cursor_context(body, len(body)).kind == "raw"
 
 
+def test_tsil_cursor_reports_only_the_innermost_open_region_arguments() -> None:
+    direct = tsil_cursor_context("complete(base::s", len("complete(base::s"))
+    nested = tsil_cursor_context(
+        "complete(value(base::s",
+        len("complete(value(base::s"),
+    )
+    block = tsil_cursor_context(
+        "if<generation>(flag) { target",
+        len("if<generation>(flag) { target"),
+    )
+
+    assert direct.argument_keyword == "complete"
+    assert direct.argument_selector == ""
+    assert direct.argument_prefix == "base::s"
+    assert direct.argument_start == len("complete(")
+    assert nested.argument_keyword == "value"
+    assert nested.argument_prefix == "base::s"
+    assert block.argument_keyword is None
+
+
+def test_tsil_cursor_marks_opaque_text_inside_registered_arguments() -> None:
+    context = tsil_cursor_context("complete(/* base::", len("complete(/* base::"))
+
+    assert context.argument_keyword == "complete"
+    assert context.in_opaque_text is True
+
+
 def test_tsil_keyword_documentation_matches_registered_surface() -> None:
     documentation = (
         Path(__file__).resolve().parents[2] / "docs" / "tsil-keywords.md"

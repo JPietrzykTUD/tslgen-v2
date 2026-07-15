@@ -68,6 +68,11 @@ from tslc.ir.region_registry import (
     TsilSelectorOptionDescriptor,
     TsilSelectorTermDescriptor,
 )
+from tslc.lower._query_model import QueryValueKind
+from tslc.lower.query_authoring import (
+    DEFAULT_QUERY_AUTHORING_INDEX,
+    QueryScopeSymbol,
+)
 from tslc.syntax.authoring import AuthoringCursorContext, AuthoringTextRange
 
 
@@ -161,12 +166,21 @@ def authoring_completions(
     if context.current_field == "$region-shell":
         return _tsil_shell_completions(context, catalog)
     if context.current_field == "$region-keyword":
-        return _values(
+        queries = _tsil_argument_completions(context, catalog)
+        query_cursor = (
+            None
+            if context.tsil_argument_prefix is None
+            else DEFAULT_QUERY_AUTHORING_INDEX.cursor(context.tsil_argument_prefix)
+        )
+        if query_cursor is not None and "::" in query_cursor.prefix:
+            return queries
+        regions = _values(
             context,
             TSIL_REGION_KEYWORDS,
             kind="keyword",
             detail="TSIL region",
         )
+        return _merge_completions((*regions, *queries))
     if context.current_field == "$primitive_signature":
         return _values(
             context,
@@ -177,6 +191,9 @@ def authoring_completions(
 
     if context.declaration_kind is None:
         return _top_level(context)
+
+    if context.position_kind == "tsil-raw":
+        return _tsil_argument_completions(context, catalog)
 
     if context.position_kind in {"scalar-value", "list-value"}:
         return _value_completions(context, catalog, target_features)
@@ -194,6 +211,155 @@ def authoring_completions(
         detail=detail,
         commit_characters=(":",) if kind == "field" else (),
     )
+
+
+def _tsil_argument_completions(
+    context: AuthoringCursorContext,
+    catalog: Catalog,
+) -> tuple[AuthoringCompletion, ...]:
+    argument_prefix = context.tsil_argument_prefix
+    argument_start = context.tsil_argument_start
+    if (
+        argument_prefix is None
+        or argument_start is None
+        or context.tsil_in_opaque_text
+    ):
+        return ()
+    return _query_completions(context, catalog, argument_prefix, argument_start)
+
+
+def _query_completions(
+    context: AuthoringCursorContext,
+    catalog: Catalog,
+    expression_prefix: str,
+    expression_start: int,
+) -> tuple[AuthoringCompletion, ...]:
+    candidates = DEFAULT_QUERY_AUTHORING_INDEX.complete(
+        expression_prefix,
+        _query_scope_symbols(context, catalog),
+    )
+    kind_by_candidate: dict[str, AuthoringCompletionKind] = {
+        "function": "function",
+        "namespace": "class",
+        "type": "type",
+        "value": "value",
+    }
+    return tuple(
+        AuthoringCompletion(
+            label=candidate.label,
+            kind=kind_by_candidate[candidate.kind],
+            replacement_range=AuthoringTextRange(
+                expression_start + candidate.replacement_start,
+                context.offset,
+            ),
+            insert_text=candidate.insert_text,
+            detail=candidate.detail,
+            commit_characters=candidate.commit_characters,
+        )
+        for candidate in candidates
+    )
+
+
+def _query_scope_symbols(
+    context: AuthoringCursorContext,
+    catalog: Catalog,
+) -> tuple[QueryScopeSymbol, ...]:
+    symbols: list[QueryScopeSymbol] = [
+        QueryScopeSymbol(
+            parameter,
+            frozenset({"text"}),
+            "primitive parameter",
+        )
+        for parameter in context.primitive_parameters
+    ]
+    primitives = (
+        ()
+        if context.declaration_name is None
+        else catalog.primitives_named(context.declaration_name, unmasked=False)
+    )
+    generic_kinds = {
+        parameter.name: parameter.kind
+        for primitive in primitives
+        for parameter in primitive.generic_params
+    }
+    generic_kinds.update(context.generic_parameter_kinds)
+    for name in context.generic_parameters:
+        kind = generic_kinds.get(name)
+        query_kinds: frozenset[QueryValueKind] = (
+            frozenset({"simd_type"})
+            if kind == "simd_type"
+            else frozenset({"text"})
+        )
+        detail = "generic parameter" if kind is None else f"generic parameter ({kind})"
+        symbols.append(QueryScopeSymbol(name, query_kinds, detail))
+
+    attribute_names = {
+        *context.primitive_attributes,
+        *(key for primitive in primitives for key in primitive.attribute_keys),
+        *(key for primitive in primitives for key in primitive.attributes),
+    }
+    symbols.extend(
+        QueryScopeSymbol(
+            attribute,
+            frozenset({"text"}),
+            "primitive selector axis",
+            role="attribute",
+        )
+        for attribute in sorted(attribute_names)
+    )
+    for primitive in primitives:
+        if primitive.result_target is None:
+            continue
+        dimension, name = primitive.result_target
+        symbols.append(
+            QueryScopeSymbol(
+                name,
+                frozenset({"type"}) if dimension == "base" else frozenset({"text"}),
+                f"primitive {dimension} selector axis",
+            )
+        )
+    for name, extension in catalog.extensions.items():
+        symbols.append(
+            QueryScopeSymbol(
+                name,
+                frozenset({"text"}),
+                "extension",
+                role="extension",
+            )
+        )
+        if extension.isa_name != name:
+            symbols.append(
+                QueryScopeSymbol(
+                    extension.isa_name,
+                    frozenset({"text"}),
+                    "extension ISA",
+                    role="extension",
+                )
+            )
+    unique = {
+        (symbol.name, symbol.detail, symbol.role): symbol for symbol in symbols
+    }
+    return tuple(
+        sorted(
+            unique.values(),
+            key=lambda symbol: (symbol.name, symbol.detail, symbol.role),
+        )
+    )
+
+
+def _merge_completions(
+    completions: Iterable[AuthoringCompletion],
+) -> tuple[AuthoringCompletion, ...]:
+    unique = {
+        (
+            completion.label,
+            completion.detail,
+            completion.replacement_range.start,
+            completion.insert_text,
+        ): completion
+        for completion in completions
+    }
+    return tuple(sorted(unique.values(), key=_completion_key))
 
 
 def _tsil_shell_completions(
@@ -294,6 +460,7 @@ def _selector_term_completions(
         )
     return _selector_bag_completions(
         context,
+        catalog,
         spec,
         current,
         token_start,
@@ -302,6 +469,7 @@ def _selector_term_completions(
 
 def _selector_bag_completions(
     context: AuthoringCursorContext,
+    catalog: Catalog,
     spec: TsilSelectorTermDescriptor,
     current: str,
     token_start: int,
@@ -342,15 +510,32 @@ def _selector_bag_completions(
                 )
             )
         return tuple(records)
+    option_key = key.strip()
     option_descriptor = next(
-        (candidate for candidate in spec.options if candidate.name == key.strip()),
+        (candidate for candidate in spec.options if candidate.name == option_key),
         None,
     )
+    if (
+        option_descriptor is None
+        and option_key.startswith("immediate(")
+        and option_key.endswith(")")
+    ):
+        option_descriptor = next(
+            (candidate for candidate in spec.options if candidate.name == "immediate"),
+            None,
+        )
     if option_descriptor is None:
         return ()
     value_leading = len(value) - len(value.lstrip())
     value_prefix = value.strip()
     value_start = option_start + option.index("=") + 1 + value_leading
+    if option_descriptor.open_value:
+        return _query_completions(
+            context,
+            catalog,
+            value_prefix,
+            value_start,
+        )
     return _shell_values(
         option_descriptor.values,
         prefix=value_prefix,

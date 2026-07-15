@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from types import MappingProxyType
 from typing import Literal
@@ -61,6 +61,11 @@ class TsilCursorContext:
     selector_start: int | None = None
     selector_prefix: str | None = None
     region_path: tuple[str, ...] = ()
+    argument_keyword: str | None = None
+    argument_selector: str | None = None
+    argument_start: int | None = None
+    argument_prefix: str | None = None
+    in_opaque_text: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -978,7 +983,11 @@ def _tsil_cursor_in_prefix(
         opaque_end = _skip_opaque(prefix, index)
         if opaque_end is not None:
             if opaque_end >= n:
-                return _raw_cursor(base_offset + n, region_path)
+                return _raw_cursor(
+                    base_offset + n,
+                    region_path,
+                    in_opaque_text=True,
+                )
             index = opaque_end
             continue
 
@@ -1032,6 +1041,7 @@ def _tsil_region_cursor(
     region_path: tuple[str, ...],
 ) -> tuple[TsilCursorContext | None, int | None]:
     position = _skip_ws(prefix, after_keyword)
+    selector_text = ""
     if position < len(prefix) and prefix[position] == "<":
         selector_start = position + 1
         close = _match_bracket(prefix, position, "<", ">")
@@ -1048,18 +1058,29 @@ def _tsil_region_cursor(
                 ),
                 None,
             )
+        selector_text = prefix[selector_start:close]
         position = _skip_ws(prefix, close + 1)
 
     if position >= len(prefix) or prefix[position] != "(":
         return None, None
     close = _match_bracket(prefix, position, "(", ")")
     if close is None:
+        argument_start = position + 1
+        context = _tsil_cursor_in_prefix(
+            prefix[argument_start:],
+            base_offset + argument_start,
+            (*region_path, keyword),
+        )
+        if context.kind != "region-shell" and context.argument_keyword is None:
+            context = replace(
+                context,
+                argument_keyword=keyword,
+                argument_selector=selector_text,
+                argument_start=base_offset + argument_start,
+                argument_prefix=prefix[argument_start:],
+            )
         return (
-            _tsil_cursor_in_prefix(
-                prefix[position + 1 :],
-                base_offset + position + 1,
-                (*region_path, keyword),
-            ),
+            context,
             None,
         )
 
@@ -1199,8 +1220,16 @@ def _is_region_boundary(prefix: str) -> bool:
 def _raw_cursor(
     offset: int,
     region_path: tuple[str, ...],
+    *,
+    in_opaque_text: bool = False,
 ) -> TsilCursorContext:
-    return TsilCursorContext("raw", offset, offset, region_path=region_path)
+    return TsilCursorContext(
+        "raw",
+        offset,
+        offset,
+        region_path=region_path,
+        in_opaque_text=in_opaque_text,
+    )
 
 
 __all__ = (

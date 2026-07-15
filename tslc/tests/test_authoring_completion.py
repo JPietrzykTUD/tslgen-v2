@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -369,12 +370,125 @@ def test_inline_tsl_escapes_do_not_hide_later_tsil_completion(
     }
 
 
+def test_typed_query_paths_complete_and_stop_at_terminal_or_invalid_paths(
+    catalog: Catalog,
+) -> None:
+    text, records = _tsil_completion_case(catalog, "complete(base::s")
+    signed = next(record for record in records if record.label == "signed_of")
+
+    assert text[signed.replacement_range.start : signed.replacement_range.end] == "s"
+    assert signed.detail == "TSIL query (type) → type"
+    assert "select" not in {record.label for record in records}
+
+    scalar_labels = _tsil_labels(
+        catalog,
+        "complete(type::is_same(base::in, scalar::s",
+    )
+    assert {"si8", "si16", "si32", "si64"} <= scalar_labels
+    assert "signed_of" not in scalar_labels
+
+    assert _tsil_labels(catalog, "complete(vector::length") == set()
+    assert _tsil_labels(catalog, "complete(vector::bogus") == set()
+
+
+def test_query_completion_uses_primitive_generic_and_selector_scope(
+    catalog: Catalog,
+) -> None:
+    opener = (
+        "prim<v:=v>[aligned=*] scoped_probe(data):\n"
+        "  generic_params:\n"
+        "    IndexVec {kind simd_type}\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      arith:\n"
+        "        implementation:\n"
+        '          tsil """'
+    )
+    baseline = opener + "\n            complete(data);\n          \"\"\"\n"
+
+    def records(body: str) -> tuple[AuthoringCompletion, ...]:
+        edited = opener + "\n            " + body
+        context = authoring_cursor_context(
+            _parsed(baseline),
+            _PATH,
+            edited,
+            len(edited),
+        )
+        return authoring_completions(context, catalog)
+
+    parameter = next(record for record in records("complete(da") if record.label == "data")
+    generic = next(
+        record
+        for record in records("complete(generic::length(In")
+        if record.label == "IndexVec"
+    )
+    attribute = next(
+        record
+        for record in records("complete(primitive::attribute(al")
+        if record.label == "aligned"
+    )
+
+    assert parameter.detail == "primitive parameter"
+    assert generic.detail == "generic parameter (simd_type)"
+    assert attribute.detail == "primitive selector axis"
+
+
+def test_parameter_completion_requires_reliable_primitive_scope(
+    catalog: Catalog,
+) -> None:
+    opener = (
+        "prim<v:=v> local_probe(local_value):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      arith:\n"
+        "        implementation:\n"
+        '          tsil """'
+    )
+    baseline = opener + "\n            complete(local_value);\n          \"\"\"\n"
+    edited = opener + "\n            complete(local_"
+    context = authoring_cursor_context(
+        _parsed(baseline),
+        _PATH,
+        edited,
+        len(edited),
+    )
+
+    assert "local_value" in {
+        record.label for record in authoring_completions(context, catalog)
+    }
+    unreliable = replace(
+        context,
+        declaration_name=None,
+        primitive_parameters=(),
+        primitive_attributes=(),
+        generic_parameters=(),
+    )
+    assert "local_value" not in {
+        record.label for record in authoring_completions(unreliable, catalog)
+    }
+
+
+def test_intrinsic_build_query_values_use_the_same_typed_query_index(
+    catalog: Catalog,
+) -> None:
+    for body in (
+        "intrin<name, build[suffix=base::s",
+        "intrin<name, build[immediate(2)=base::s",
+    ):
+        text, records = _tsil_completion_case(catalog, body)
+        signed = next(record for record in records if record.label == "signed_of")
+
+        assert text[signed.replacement_range.start : signed.replacement_range.end] == "s"
+        assert signed.detail == "TSIL query (type) → type"
+
+
 @pytest.mark.parametrize(
     "body",
     (
         "target_identifier ",
         "complete(target_identifier ",
         'complete("cal',
+        "complete(/* cal",
         "// cal",
         "call<bogus, a",
         "call<primitive=add, unknown[x",

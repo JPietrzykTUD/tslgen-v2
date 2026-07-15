@@ -76,7 +76,13 @@ registry-backed
 completion records with replacement ranges, snippets, details, and stable
 ordering for the LSP adapter. Region-shell terms and option bags come from the
 same authoring descriptors as registered region keywords, while catalog-backed
-providers supply primitive and backend-translation names. Failed document
+providers supply primitive and backend-translation names. Typed query
+completion is a pure projection of the evaluator function descriptors and
+closed leaf namespaces in
+[lower/query_authoring.py](src/tslc/lower/query_authoring.py); lexical scanner
+facts delimit registered region arguments without classifying raw C++ or Rust,
+and parsed primitive facts supply only reliable parameter, generic-parameter,
+and selector-axis names. Failed document
 parses retain that document's
 last valid parsed structure without replacing current diagnostics. The
 editor-neutral pygls transport is in `lsp/`; an initially invalid overlay uses

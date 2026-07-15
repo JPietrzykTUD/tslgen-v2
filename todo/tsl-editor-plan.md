@@ -21,10 +21,11 @@ only unfinished behavior. When a slice meets its exit criteria, remove that
 slice rather than preserving a completion log here. Git history and tests are
 the completion record.
 
-Parsed outer-language context, catalog completion, and descriptor-driven TSIL
-region-shell completion are now part of the working baseline. The next product
-milestone continues **authoring depth** with query-aware TSIL completion,
-deeper navigation, semantic highlighting, and safe source actions.
+Parsed outer-language context, catalog completion, descriptor-driven TSIL
+region-shell completion, typed query-path completion, and reliable
+primitive/generic/selector scope are now part of the working baseline. The
+next product milestone continues **authoring depth** with deeper navigation,
+semantic highlighting, and safe source actions.
 A self-contained Marketplace distribution is a later release gate and is
 deliberately separated from authoring behavior.
 
@@ -33,8 +34,6 @@ deliberately separated from authoring behavior.
 An author editing an incomplete `.tsl` document should be able to discover the
 language without memorizing compiler internals:
 
-- TSIL completion understands region shells, queries, and the current
-  primitive's scope without interpreting raw target-language text;
 - symbols, definitions, references, and semantic tokens cover the same typed
   declarations and selectors;
 - an explicit explorer analysis can explain the lowered implementation state
@@ -74,7 +73,6 @@ These constraints apply to every slice in this plan:
 
 | Area | Remaining behavior | Main owner |
 | --- | --- | --- |
-| TSIL expression completion | Type/value query roots and continuations, primitive parameters, generic parameters, and named axes | Typed TSIL query rules and primitive scope |
 | Symbols/navigation/tokens | More declaration kinds, nested branches, list selectors, target axes, field/parameter/query token classes | Catalog index and LSP feature adapters |
 | Explorer analysis | Explicit, cancellable lowering verdicts, transitive dependencies, and final implementation state cached by concrete context | Lowering/dependency closure and explorer command boundary |
 | Safe actions | Convert exact compiler suggestions into version-checked `WorkspaceEdit` actions | Diagnostics/audit API and LSP code actions |
@@ -82,40 +80,14 @@ These constraints apply to every slice in this plan:
 
 ## Ordered Slices
 
-The slices are ordered by authoring dependency. Slices 1 and 2 build on the
-delivered parsed cursor and TSIL region context. Slice 3 is the direct follow-up
-to the catalog explorer and may proceed independently once its
-lowering-provenance vocabulary is defined. Slice 4 should wait until
-source-span behavior is stable. Slice 5 is a separate release track and must
-not block the authoring-depth milestone.
+The slices are ordered by authoring dependency. Slice 1 builds on the delivered
+parsed cursor, TSIL region context, and query vocabulary. Slice 2 is the direct
+follow-up to the catalog explorer and may proceed independently once its
+lowering-provenance vocabulary is defined. Slice 3 should wait until source-span
+behavior is stable. Slice 4 is a separate release track and must not block the
+authoring-depth milestone.
 
-### Slice 1: TSIL Queries And Primitive Scope
-
-**Goal:** expression completion exposes compiler-known query paths and names in
-the current primitive without attempting target-language analysis.
-
-**Work:**
-
-- Complete supported query roots such as type, value, base, vector, scalar, and
-  generic concepts from the typed query model actually accepted by lowering.
-- After each root/segment, offer only valid continuations and close the
-  completion path when the query is terminal.
-- Complete current primitive parameters, generic parameters, and named
-  selector axes where their role is unambiguous.
-- Attach concise type/role detail so same-named values can be distinguished.
-- Reuse lowering/query descriptors rather than encoding accepted paths in the
-  LSP adapter.
-
-**Exit criteria:**
-
-- Tests cover each supported root, valid continuation, terminal path, and
-  representative invalid continuation.
-- Parameter completion changes with the enclosing primitive and is absent when
-  no reliable primitive scope exists.
-- Raw C++/Rust identifiers are never offered or classified by this feature.
-- Completion remains a pure lookup against precomputed catalog/query facts.
-
-### Slice 2: Symbols, Navigation, And Semantic-Token Depth
+### Slice 1: Symbols, Navigation, And Semantic-Token Depth
 
 **Goal:** structural browsing and highlighting cover the same declarations and
 references recognized by the authoring model.
@@ -144,7 +116,7 @@ references recognized by the authoring model.
   classify raw target code as TSL semantics.
 - Existing primitive-call and extension navigation remains regression covered.
 
-### Slice 3: Explorer Concrete Analysis
+### Slice 2: Explorer Concrete Analysis
 
 **Goal:** enrich the catalog explorer with authoritative lowering and transitive
 dependency facts behind an explicit, cached analysis boundary.
@@ -186,7 +158,7 @@ dependency facts behind an explicit, cached analysis boundary.
 - Cancelling or failing analysis leaves the last valid catalog explorer usable.
 - No automatic edit, hover, selection, or refresh triggers concrete analysis.
 
-### Slice 4: Safe Compiler-Owned Code Actions
+### Slice 3: Safe Compiler-Owned Code Actions
 
 **Goal:** expose exact, source-located compiler suggestions as deliberate,
 undoable editor edits.
@@ -215,7 +187,7 @@ undoable editor edits.
 - VS Code integration tests prove edits are previewable/undoable and ordinary
   diagnostics remain non-mutating.
 
-### Slice 5: Self-Contained Marketplace Runtime
+### Slice 4: Self-Contained Marketplace Runtime
 
 **Goal:** make a public VS Code installation work without a separately managed
 Python or `tslc[editor]` environment.
@@ -317,7 +289,7 @@ catalog reconstruction before designing incremental promotion.
 
 ## Authoring-Depth Milestone Acceptance
 
-The authoring-depth milestone is complete when Slices 1 through 4 satisfy their
+The authoring-depth milestone is complete when Slices 1 through 3 satisfy their
 exit criteria and all of the following hold:
 
 - completion is correct at top level, nested catalog blocks, TSIL boundaries,
@@ -336,7 +308,7 @@ exit criteria and all of the following hold:
 - focused Python, LSP, extension, and performance checks pass.
 
 Self-contained Marketplace distribution is accepted separately through Slice
-6 and must not be claimed merely because contributor installation works.
+4 and must not be claimed merely because contributor installation works.
 
 ## Active Risks And Mitigations
 
@@ -358,5 +330,5 @@ Self-contained Marketplace distribution is accepted separately through Slice
   complete slot and corpus digest, label analyzed versus lookup facts, and
   invalidate rather than recompute implicitly after edits.
 - **Bundled Python multiplies platform and release risk.** Keep it isolated in
-  Slice 5, use a declared support matrix, build reproducibly, and retain the
+  Slice 4, use a declared support matrix, build reproducibly, and retain the
   external runtime only as an explicit override.

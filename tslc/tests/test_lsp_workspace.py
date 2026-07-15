@@ -500,6 +500,20 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
         ),
     )
     primitive_calls = {item.label for item in primitive_call_completion.items}
+    query_continuations = _completion_labels(
+        snapshot,
+        "prim<v:=v> x(data):\n  impls:\n    scalar:\n      arith:\n"
+        '        implementation:\n          tsil "complete(base::s',
+        "prim<v:=v> x(data):\n  impls:\n    scalar:\n      arith:\n"
+        '        implementation:\n          tsil "complete(base::in);"\n',
+    )
+    primitive_scope = _completion_labels(
+        snapshot,
+        "prim<v:=v> x(data):\n  impls:\n    scalar:\n      arith:\n"
+        '        implementation:\n          tsil "complete(da',
+        "prim<v:=v> x(data):\n  impls:\n    scalar:\n      arith:\n"
+        '        implementation:\n          tsil "complete(data);"\n',
+    )
     required_features = _completion_labels(
         snapshot,
         "prim<v:=v> x(v):\n"
@@ -550,6 +564,9 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
     } <= implementation_fields
     assert "si32" not in implementation_fields
     assert "add" in primitive_calls
+    assert "signed_of" in query_continuations
+    assert "select" not in query_continuations
+    assert "data" in primitive_scope
     add_completion = next(
         item for item in primitive_call_completion.items if item.label == "add"
     )
