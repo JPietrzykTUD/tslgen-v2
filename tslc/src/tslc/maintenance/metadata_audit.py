@@ -16,6 +16,7 @@ from pathlib import Path
 import sys
 from typing import Literal, TextIO, cast
 
+from tslc._pipeline_closure import _LoweredSlot, _prune_unresolved
 from tslc.backend.registry import create_backend_dialect, registered_backend_ids
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
@@ -27,10 +28,6 @@ from tslc.diagnostics import Diagnostic, has_errors
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import CallDependency
 from tslc.lower.lowerer import Lowerer
-from tslc.pipeline import (
-    _LoweredSlot,
-    _prune_unresolved,
-)
 from tslc.select.selector import SelectedImplementation, Selector
 from tslc.sources import SourceDocument, SourceLoader
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
@@ -199,7 +196,7 @@ def interactive_apply(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="python -m tslc.maintenance.metadata_audit",
+        prog="tslc audit metadata",
         description="Audit and optionally apply TSL safety/requires metadata suggestions.",
     )
     parser.add_argument("--sources", nargs="+", required=True)
@@ -409,17 +406,19 @@ def _requires_suggestions(
             if primitive_name in processed:
                 continue
             processed.add(primitive_name)
-            selected = selector.select_profile(
-                inputs.catalog, profile, primitive_name, type_tags
-            )
-            for selected_slot in selected.selected:
-                body_segments = scan(
-                    selected_slot.implementation.body_text,
-                    source=selected_slot.implementation.body_source,
+            for backend in backends:
+                selected = selector.select_profile(
+                    inputs.catalog,
+                    profile,
+                    primitive_name,
+                    type_tags,
+                    backend_id=backend,
                 )
-                lowered_any = False
-                slot_dependencies: set[CallDependency] = set()
-                for backend in backends:
+                for selected_slot in selected.selected:
+                    body_segments = scan(
+                        selected_slot.implementation.body_text,
+                        source=selected_slot.implementation.body_source,
+                    )
                     lowered = lowerer.lower(
                         selected_slot,
                         inputs.catalog,
@@ -442,11 +441,8 @@ def _requires_suggestions(
                             ),
                         )
                     )
-                    slot_dependencies.update(callees)
-                    lowered_any = True
-                if lowered_any:
                     dependency_names = sorted(
-                        {dependency.primitive for dependency in slot_dependencies}
+                        {dependency.primitive for dependency in callees}
                     )
                     for dependency_name in dependency_names:
                         if (

@@ -1,3 +1,0 @@
-pub const ACTIVE_PROFILE: &str = "{profile_name}";
-pub const ACTIVE_PROFILE_FAMILY: &str = "{family}";
-

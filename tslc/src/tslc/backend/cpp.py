@@ -51,6 +51,48 @@ class CppBackend:
         *every* primitive before any specialization body, so a body may call any
         other primitive's wrapper (``::tsl::set1<Vec>(...)``) regardless of order."""
 
+        selectors = self.render_variant_selectors(primitive_name, specializations)
+        implementations = self.render_implementation_declarations(
+            primitive_name, specializations
+        )
+        wrappers = self.render_wrappers(primitive_name, specializations)
+        return "\n\n".join(
+            part for part in (selectors, implementations, wrappers) if part
+        )
+
+    def render_variant_selectors(
+        self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
+    ) -> str:
+        """Render the stable default selector before an optional policy include."""
+
+        variants = _variant_names(specializations)
+        shape = specializations[0]
+        if not variants or DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind,
+            shape.param_kinds,
+        ):
+            return ""
+        enum_values = ",\n".join(
+            ("    default_", *(f"    {name}" for name in variants))
+        )
+        return (
+            "namespace detail::variants {\n"
+            f"enum class {variant_enum_name(primitive_name)} {{\n"
+            f"{enum_values},\n"
+            "};\n\n"
+            f"template <{', '.join(_selector_template_params(shape, specializations))}>\n"
+            f"struct {variant_selector_name(primitive_name)} {{\n"
+            f"    static constexpr auto value = "
+            f"{variant_enum_name(primitive_name)}::default_;\n"
+            "};\n"
+            "}  // namespace detail::variants"
+        )
+
+    def render_implementation_declarations(
+        self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
+    ) -> str:
+        """Render detail implementation templates and their state query."""
+
         shape = specializations[0]  # all share the same signature shape + axis keys
         if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
             shape.result_kind,
@@ -88,9 +130,20 @@ class CppBackend:
             "}  // namespace detail::primitives"
             + "\n\n"
             + _implementation_state_query(primitive_name, specializations)
-            + "\n\n"
-            + self._wrapper(primitive_name, specializations)
         )
+
+    def render_wrappers(
+        self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
+    ) -> str:
+        """Render the public wrapper after policy specializations are visible."""
+
+        shape = specializations[0]
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind,
+            shape.param_kinds,
+        ):
+            return ""
+        return self._wrapper(primitive_name, specializations)
 
     def render_definitions(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -259,10 +312,27 @@ class CppBackend:
         signature = _wrapper_signature(specializations)
         doc = _cpp_doc(specializations[0], context="C++ wrapper", concrete=False)
         prefix = f"{doc}\n" if doc else ""
+        variants = _variant_names(specializations)
+        selector = (
+            f"    using selector = ::tsl::detail::variants::"
+            f"{variant_selector_name(primitive_name)}<{signature.selector_args}>;\n"
+            if variants
+            else ""
+        )
+        variant_dispatch = "".join(
+            "    if constexpr (selector::value == "
+            f"::tsl::detail::variants::{variant_enum_name(primitive_name)}::{name}) {{\n"
+            f"        return ::tsl::detail::primitives::{_impl_name(primitive_name, name)}"
+            f"<{signature.impl_args}>::apply({signature.argument_names});\n"
+            "    }\n"
+            for name in variants
+        )
         vector_wrapper = (
             prefix
             + f"template <{', '.join(signature.template_params)}>\n"
             f"inline {signature.result_type} {primitive_name}({signature.params}) {{\n"
+            f"{selector}"
+            f"{variant_dispatch}"
             f"    return ::tsl::detail::primitives::{_impl_name(primitive_name)}"
             f"<{signature.impl_args}>::apply("
             f"{signature.argument_names});\n"
@@ -300,6 +370,7 @@ class _WrapperSignature:
     params: str
     argument_names: str
     impl_args: str
+    selector_args: str
     result_type: str
 
 
@@ -348,6 +419,10 @@ def _wrapper_signature(
         + (f", {shape.immediate[0]}" if shape.immediate is not None else "")
         + "".join(f", {name}" for name, _, _ in shape.generic_params)
     )
+    selector_parameter_types = tuple(f"Arg{i}" for i in varying)
+    selector_args = impl_args + "".join(
+        f", {parameter_type}" for parameter_type in selector_parameter_types
+    )
     # The wrapper's result projects through the caller-bound `ToVec` param.
     result_type = (
         "typename ToVec::register_type"
@@ -359,8 +434,25 @@ def _wrapper_signature(
         params=params,
         argument_names=names,
         impl_args=impl_args,
+        selector_args=selector_args,
         result_type=result_type,
     )
+
+
+def _selector_template_params(
+    shape: LoweredSpecialization,
+    specializations: tuple[LoweredSpecialization, ...],
+) -> tuple[str, ...]:
+    params = ["class Vec"]
+    if shape.target is not None:
+        params.append("class ToVec")
+    params.extend(f"class {param.name}" for param in shape.type_params)
+    params.extend(f"bool {_axis_name(key)}" for key, _ in shape.axis)
+    if shape.immediate is not None:
+        params.append(f"{shape.immediate[1]} {shape.immediate[0]}")
+    params.extend(f"{typ} {name}" for name, typ, _ in shape.generic_params)
+    params.extend(f"class Arg{index}" for index in varying_positions(specializations))
+    return tuple(params)
 
 
 def _dataparallel_primitive_facade_wrapper(
@@ -477,11 +569,11 @@ def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:
     free function may call any wrapper regardless of emission order); `define=True` adds the body."""
 
     params = ", ".join(
-        f"{_free_kind_type(kind, spec.base_type_spelling)} {name}"
+        f"{_free_kind_type(kind, spec)} {name}"
         for name, kind in zip(spec.param_names, spec.param_kinds)
     )
     signature = (
-        f"inline {_free_kind_type(spec.result_kind, spec.base_type_spelling)} "
+        f"inline {_free_kind_type(spec.result_kind, spec)} "
         f"{spec.primitive_name}({params})"
     )
     doc = _cpp_doc(spec, context="C++ free function")
@@ -521,14 +613,61 @@ def _implementation_state_query(
         params.append(f"{typ} {name}")
         query_args.append(f"value_arg<{name}>")
         impl_args.append(name)
-    return (
+    variants = _variant_names(specializations)
+    varying = varying_positions(specializations)
+    if variants:
+        selector_params = tuple(f"Arg{index}" for index in varying)
+        selector = (
+            f"detail::variants::{variant_selector_name(primitive_name)}"
+            f"<{', '.join((*impl_args, *selector_params))}>"
+        )
+        variant_states = "".join(
+            f"        if constexpr ({selector}::value == "
+            f"detail::variants::{variant_enum_name(primitive_name)}::{name}) {{\n"
+            f"            return detail::primitives::{_impl_name(primitive_name, name)}"
+            f"<{', '.join(impl_args)}>::implementation_state;\n"
+            "        }\n"
+            for name in variants
+        )
+        value_body = (
+            "    static constexpr implementation_state selected_value() {\n"
+            f"{variant_states}"
+            f"        return detail::primitives::{_impl_name(primitive_name)}"
+            f"<{', '.join(impl_args)}>::implementation_state;\n"
+            "    }\n"
+            "    static constexpr implementation_state value = selected_value();\n"
+        )
+    else:
+        value_body = (
+            "    static constexpr implementation_state value = "
+            f"detail::primitives::{_impl_name(primitive_name)}"
+            f"<{', '.join(impl_args)}>::implementation_state;\n"
+        )
+    query = (
         f"template <{', '.join(params)}>\n"
         f"struct implementation_state_of<{', '.join(query_args)}> {{\n"
-        f"    static constexpr implementation_state value = "
-        f"detail::primitives::{_impl_name(primitive_name)}"
-        f"<{', '.join(impl_args)}>::implementation_state;\n"
+        f"{value_body}"
         f"}};"
     )
+    if not variants or not varying:
+        return query
+    default_query = (
+        f"template <{', '.join(params)}>\n"
+        f"struct implementation_state_of<{', '.join(query_args)}> {{\n"
+        "    static constexpr implementation_state value = "
+        f"detail::primitives::{_impl_name(primitive_name)}"
+        f"<{', '.join(impl_args)}>::implementation_state;\n"
+        "};"
+    )
+    overload_params = (*params, *(f"class {name}" for name in selector_params))
+    overload_query_args = (*query_args, *selector_params)
+    overload_query = (
+        f"template <{', '.join(overload_params)}>\n"
+        f"struct implementation_state_of<{', '.join(overload_query_args)}> {{\n"
+        f"{value_body}"
+        "};"
+    )
+    return default_query + "\n\n" + overload_query
 
 
 def _group_implementation_state(
@@ -551,9 +690,23 @@ def _cpp_implementation_state(state: ImplementationState) -> str:
 
 
 def _impl_name(primitive_name: str, variant_name: str | None = None) -> str:
+    return implementation_name(primitive_name, variant_name)
+
+
+def implementation_name(
+    primitive_name: str, variant_name: str | None = None
+) -> str:
     if variant_name is None:
         return f"{primitive_name}_impl"
     return f"{primitive_name}_impl_{variant_name}"
+
+
+def variant_enum_name(primitive_name: str) -> str:
+    return f"{primitive_name}_variant"
+
+
+def variant_selector_name(primitive_name: str) -> str:
+    return f"{primitive_name}_selector"
 
 
 def _specialized_base_type_params(
@@ -579,11 +732,15 @@ def _cpp_base_dispatch_key_tag(base_tag: str | None) -> str:
     return f"::tsl::detail::base_{base_tag}_tag"
 
 
-def _free_kind_type(kind: str, base_spelling: str) -> str:
+def _free_kind_type(kind: str, spec: LoweredSpecialization) -> str:
     """A free function's kind -> concrete type (no `Vec` projection). Pointer spellings
     carry their own mutability; `usize` is a size; `void` is no value."""
 
-    return CPP_SIGNATURE_TYPES.free_type(kind, base=base_spelling)
+    return CPP_SIGNATURE_TYPES.free_type(
+        kind,
+        base=spec.base_type_spelling,
+        base_type_tag=spec.type_tag,
+    )
 
 
 def _vector_type(spec: LoweredSpecialization) -> str:

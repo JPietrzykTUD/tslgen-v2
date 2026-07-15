@@ -10,14 +10,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import NewType, TypeVar
+from typing import Literal, TypeVar
 
 from tslc.diagnostics import SourceSpan
 from tslc.catalog.target_families import TargetFamilyCatalog
 
-TypeTag = NewType("TypeTag", str)
-BackendId = NewType("BackendId", str)
-ExtensionName = NewType("ExtensionName", str)
 _K = TypeVar("_K")
 _V = TypeVar("_V")
 _InnerK = TypeVar("_InnerK")
@@ -144,6 +141,24 @@ class Implementation:
 
 
 @dataclass(frozen=True, slots=True)
+class PrimitiveBenchmarkOperandDomain:
+    """A semantic timing-input restriction for one declared primitive operand."""
+
+    parameter: str
+    domain: Literal["nonzero", "shift_count"]
+    source: SourceSpan | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveBenchmarkSpec:
+    """Source-authored workload facts that cannot be inferred from a signature."""
+
+    latency_chain: str | None = None
+    operand_domains: tuple[PrimitiveBenchmarkOperandDomain, ...] = ()
+    source: SourceSpan | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Primitive:
     name: str
     signature: str
@@ -179,6 +194,10 @@ class Primitive:
     # Value-correctness cases authored in the `tests:` block. Consumed by the test-generation
     # render stage (golden anchor against the generic software reference); empty when none.
     tests: tuple["TestCase", ...] = ()
+    # Optional benchmark workload facts. Timing protocol, generated values, and candidate
+    # selection are compiler-owned; source data only names semantic wiring that is ambiguous
+    # from the signature, such as the operand carrying a latency dependency.
+    benchmark: PrimitiveBenchmarkSpec = field(default_factory=PrimitiveBenchmarkSpec)
     # Human-authored documentation metadata. These fields are carried as raw text for future
     # documentation rendering; they are not lowered, evaluated, or used as compiler semantics.
     brief_description: str | None = None
@@ -297,10 +316,10 @@ class TestCase:
     ``name`` and ``lanes`` are promoted facts: source tests author semantic ``tags`` and
     optionally ``id``/``lane_count``; catalog promotion derives the stable case name and the lane
     count. ``expected`` holds per-lane literal tokens (a store case's ``expected`` instead models
-    the destination buffer and may exceed ``lanes``); ``expected_rule`` (e.g. ``"popcnt"``) names a
-    computed oracle in place of literal expected. ``role`` is normally ``"value"``; ``"compile"``
-    means the case intentionally checks that the callable instantiates without asserting a
-    deterministic runtime value.
+    the destination buffer and may exceed ``lanes``); ``expected_rule`` (e.g. ``"popcnt"`` or
+    ``"status_pointer"``) names a computed oracle in place of literal expected. ``role`` is
+    normally ``"value"``; ``"compile"`` means the case intentionally checks that the callable
+    instantiates without asserting a deterministic runtime value.
 
     Optional axes pin a case to one specialization or carry operand metadata: ``extension`` (a
     specific subject extension), ``to_type``/``to_extension`` (representation-change targets),
@@ -346,6 +365,8 @@ class MaskPolicy:
     - ``"comparison_lane_vector"`` (compiler vectors): the mask is the exact
       lane vector produced by comparing two data registers. It has the data
       vector's lane count and lane width with all-ones / all-zeros truth values.
+    - ``"boolean_lane_vector"`` (Clang compiler vectors): the mask is a dense
+      ``bool ext_vector_type`` with one boolean element per data lane.
     - ``"exact_lane_bitmask"`` (sized generic-like vectors): the mask is an
       integer-like bitset with exactly one bit per lane; backend spellings may
       name a lane-parameterized type such as ``ac_int<LANES, false>``.
@@ -422,6 +443,10 @@ class BackendExtensionMetadata:
     header_group: str | None = None
     # CMake compiler IDs that expose this opt-in header group.
     compiler_ids: tuple[str, ...] = ()
+    # Optional compiler feature-test names required by this extension. The
+    # backend owns their concrete preprocessor spelling and guards only the
+    # declarations/cases that need them.
+    compiler_features: tuple[str, ...] = ()
     # None inherits/defaults to true. Compiler-vector overlays set this false so
     # dataparallel::native/fixed<N> continue to resolve to the hardware substrate.
     dataparallel_inference: bool | None = None
@@ -431,6 +456,11 @@ class BackendExtensionMetadata:
     def __post_init__(self) -> None:
         object.__setattr__(self, "compile_guards", tuple(self.compile_guards))
         object.__setattr__(self, "compiler_ids", tuple(self.compiler_ids))
+        object.__setattr__(
+            self,
+            "compiler_features",
+            tuple(sorted(set(self.compiler_features))),
+        )
 
     @property
     def participates_in_dataparallel_inference(self) -> bool:

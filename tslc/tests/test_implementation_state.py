@@ -10,6 +10,7 @@ from tslc.catalog.model import (
     Primitive,
 )
 from tslc.catalog.signatures import parse_signature
+from tslc.catalog.target_families import ExtensionFamilyCapability
 from tslc.ir.region_registry import TSIL_REGION_KEYWORDS
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region
@@ -255,6 +256,10 @@ def _selected(
             imask_policy=imask_policy or ImaskPolicy(),
         ),
         type_tag="si32",
+        extension_family_capability=ExtensionFamilyCapability(
+            family,
+            implementation_fallback=family == "scalar",
+        ),
     )
 
 

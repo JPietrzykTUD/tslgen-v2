@@ -147,6 +147,12 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
                   tsl::dataparallel::clang_fixed<4>, float>;
               using WideVec = tsl::dataparallel::simd_for_t<
                   tsl::dataparallel::clang_fixed<64>, std::uint8_t>;
+#if __has_feature(ext_vector_type_boolean)
+              using BoolVec = tsl::dataparallel::simd_for_t<
+                  tsl::dataparallel::clang_fixed<
+                      4, tsl::dataparallel::clang_mask::boolean_vector>,
+                  std::int32_t>;
+#endif
               Vec::register_type left = {1, 2, 3, 4};
               Vec::register_type right = {4, 3, 2, 1};
               auto sum = tsl::add<Vec>(left, right);
@@ -165,6 +171,18 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
               auto float_equal = tsl::equal<FloatVec>(float_left, float_right);
               constexpr std::uint64_t wide_bits = 0x8000000000000001ull;
               auto wide = tsl::to_mask<WideVec>(wide_bits);
+#if __has_feature(ext_vector_type_boolean)
+              BoolVec::register_type bool_left = {1, 2, 3, 4};
+              BoolVec::register_type bool_right = {1, 0, 3, 0};
+              auto bool_equal = tsl::equal<BoolVec>(bool_left, bool_right);
+              auto bool_odd = tsl::to_mask<BoolVec>(
+                  static_cast<BoolVec::imask_type>(0b1010));
+              auto bool_both = tsl::mask_binary_and<BoolVec>(bool_equal, bool_odd);
+              auto bool_either = tsl::mask_binary_or<BoolVec>(bool_equal, bool_odd);
+              auto bool_different = tsl::mask_binary_xor<BoolVec>(bool_equal, bool_odd);
+              auto bool_inverted = tsl::mask_binary_not<BoolVec>(bool_equal);
+              auto bool_blended = tsl::blend<BoolVec>(bool_odd, bool_left, bool_right);
+#endif
               return sum[0] == 5 && sum[3] == 5 &&
                              tsl::hadd<Vec>(sum) == 20 &&
                              tsl::to_integral<Vec>(equal) == 0b0101 &&
@@ -178,6 +196,16 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
                              tsl::mask_population_count<Vec>(odd) == 2 &&
                              tsl::to_integral<FloatVec>(float_equal) == 0b0101 &&
                              tsl::to_integral<WideVec>(wide) == wide_bits &&
+#if __has_feature(ext_vector_type_boolean)
+                             tsl::to_integral<BoolVec>(bool_equal) == 0b0101 &&
+                             tsl::to_integral<BoolVec>(bool_odd) == 0b1010 &&
+                             tsl::to_integral<BoolVec>(bool_both) == 0 &&
+                             tsl::to_integral<BoolVec>(bool_either) == 0b1111 &&
+                             tsl::to_integral<BoolVec>(bool_different) == 0b1111 &&
+                             tsl::to_integral<BoolVec>(bool_inverted) == 0b1010 &&
+                             bool_blended[0] == 1 && bool_blended[1] == 0 &&
+                             bool_blended[2] == 3 && bool_blended[3] == 0 &&
+#endif
                              blended[0] == 1 && blended[1] == 0 &&
                              blended[2] == 3 && blended[3] == 0
                          ? 0

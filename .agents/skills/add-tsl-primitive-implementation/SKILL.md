@@ -1,6 +1,6 @@
 ---
 name: add-tsl-primitive-implementation
-description: Add, complete, or refactor a specialization of an existing TSL primitive. Use when Codex is asked to add an implementation body for a specific extension, profile, type group, or backend; replace scattered intrinsic recipes with semantic TSL-primitive composition; close a missing coverage slot; or fix generated build/value-test gaps in existing primitive source data.
+description: Add, complete, or refactor a specialization of an existing TSL primitive. Use when asked to add an implementation body for a specific extension, profile, type group, or backend; replace scattered intrinsic recipes with semantic TSL-primitive composition; close a missing coverage slot; or fix generated build/value-test gaps in existing primitive source data.
 ---
 
 # Add TSL Primitive Implementation
@@ -15,7 +15,10 @@ description: Add, complete, or refactor a specialization of an existing TSL prim
 
 ## Workflow
 
-1. Read `AGENTS.md`, `PLANS.md`, `tslc/CHARTER.md`, the target primitive source file, and the closest existing implementations for the same primitive family and extension family.
+1. Read `AGENTS.md`, `CHARTER.md`, `PLANS.md`, `tsldata/AGENTS.md`,
+   `tslc/AGENTS.md`, `tslc/CHARTER.md`, the target primitive source file, and
+   the closest existing implementations for the same primitive family and
+   extension family.
 2. Identify the exact coverage gap: primitive, signature shape, attributes, mask policy, extension/profile, data type or type group, backend, and failing render/build/value evidence.
 3. Define the supported matrix from current catalog data, support policy, generated profiles, and existing backend capabilities. Aim to cover every supported extension/profile and data type, but produce explicit diagnostics or skips for unsupported combinations rather than pretending they work.
 4. Choose the implementation strategy in this priority order:
@@ -74,7 +77,7 @@ rg -n "prim<.* NAME|NAME\\(" tsldata/primitives tslc/tests
 ./dev.sh explain --primitive NAME --profile PROFILE --type TYPE --backend cpp
 ./dev.sh dump --stage lowered --primitive NAME --profile PROFILE --type TYPE --backend cpp
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog_validation.py
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower.py tslc/tests/test_lower_text.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower*.py tslc/tests/test_lower_text.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
 ./dev.sh build --primitives NAME --profiles PROFILE --backends cpp,rust

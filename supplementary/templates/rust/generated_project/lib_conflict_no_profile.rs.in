@@ -1,2 +1,0 @@
-#[cfg(not(any({feature_conditions})))]
-compile_error!("exactly one TSL profile feature must be enabled");

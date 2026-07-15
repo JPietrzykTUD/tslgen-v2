@@ -13,6 +13,7 @@ from tslc.value_tests._case_core import (
     reduction_case,
     scalar_result_case,
     scalar_vector_case,
+    status_pointer_case,
     vector_to_array_case,
 )
 from tslc.value_tests._case_memory import (
@@ -118,6 +119,7 @@ def default_value_test_patterns(
         ),
         _simple(memory_copy_case, "void", ("ptr", "cptr", "s", "s"), support=support),
         _PointerFreePattern(),
+        _simple(status_pointer_case, "usize", ("ptr",), support=support),
         _simple(scalar_pointer_load_case, "s", ("cptr",), support=support, allow_axis=True),
         _simple(reduction_case, "s", ("v",), support=support),
         _IndexedScalarPattern(),

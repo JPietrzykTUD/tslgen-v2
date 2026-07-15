@@ -33,6 +33,7 @@ def generate_project(
     test_harness: bool = False,
     value_test_warnings: bool = False,
     value_test_fuzz: bool = False,
+    render_artifacts: bool = True,
 ) -> GenerationResult:
     """Run the full compiler pipeline and return in-memory artifacts.
 
@@ -55,6 +56,7 @@ def generate_project(
         test_harness=test_harness,
         value_test_warnings=value_test_warnings,
         value_test_fuzz=value_test_fuzz,
+        render_artifacts=render_artifacts,
     )
     return generate(request)
 

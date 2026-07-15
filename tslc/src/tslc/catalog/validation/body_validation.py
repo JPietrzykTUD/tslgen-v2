@@ -361,6 +361,29 @@ def _validate_no_selector_region(
     )
 
 
+def _validate_array_region(
+    primitive_name: str,
+    region: Region,
+    diagnostics: list[Diagnostic],
+) -> None:
+    if (
+        region.selector_text.strip() == "set"
+        and len(split_arg_groups(region.body)) == 3
+    ):
+        return
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-BODY-BAD-ARRAY",
+            message=(
+                f"primitive {primitive_name!r}: array element assignment must be "
+                "`array<set>(array, index, value)`"
+            ),
+            source=region.source,
+        )
+    )
+
+
 def _validate_select_expr_region(
     primitive_name: str,
     region: Region,
@@ -391,6 +414,7 @@ def _segments_text(segments: tuple[Segment, ...]) -> str:
 ShellValidator = Callable[[str, Region, list[Diagnostic]], None]
 
 _SHELL_VALIDATORS: dict[str, ShellValidator] = {
+    "array_set": _validate_array_region,
     "call_selector": _validate_call_region,
     "cast_selector": _validate_cast_region,
     "helper_selector": _validate_helper_region,

@@ -1,0 +1,33 @@
+description "Hardware entropy operations"
+
+prim<usize:=(ptr)> random_step(out):
+  brief_description "Attempts one x86 hardware-random step into a 64-bit output."
+  detailed_description """
+    Executes one RDRAND step on supported x86 profiles. Returns one when the
+    hardware produced a value and writes that value to `out`; returns zero and
+    leaves `out` unchanged when the hardware reports that no value is ready.
+    This primitive is deliberately restricted to `ui64` and has no portable or
+    deterministic fallback.
+    """
+  semantics """
+    input: mutable pointer out to one ui64 value
+    attempt one hardware random step
+    if successful:
+      write the produced ui64 value to out
+      return 1
+    otherwise:
+      leave out unchanged
+      return 0
+    """
+  tests:
+    - {tags [x86, contract], type "ui64", expected_rule "status_pointer", case {inputs [0], expected []}}
+  impls:
+    [avx512, avx2, sse]:
+      ui64:
+        requires [rdrand]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil "complete(helper<random_step_u64>(out));"

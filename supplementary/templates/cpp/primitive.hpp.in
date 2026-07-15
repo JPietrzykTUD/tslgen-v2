@@ -1,7 +1,0 @@
-#pragma once
-{includes}
-
-{namespace_open}
-{primitive_declarations}
-{primitive_definitions}
-{namespace_close}

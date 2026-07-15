@@ -31,6 +31,7 @@ ParsedTopLevelDeclarationKind = Literal[
     "field",
 ]
 ParsedPrimitiveFieldKind = Literal[
+    "benchmarks",
     "brief_description",
     "detailed_description",
     "generic_params",

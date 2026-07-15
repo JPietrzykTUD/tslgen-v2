@@ -1,6 +1,0 @@
-#include <tsl.hpp>
-
-int main() {{
-  return tsl::active_profile[0] == '\0';
-}}
-

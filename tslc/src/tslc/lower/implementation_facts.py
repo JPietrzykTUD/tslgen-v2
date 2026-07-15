@@ -63,7 +63,7 @@ class ImplementationStateFacts:
     def implementation_state(
         self, selected: "SelectedImplementation"
     ) -> ImplementationState:
-        if selected.extension.family in {"scalar", "generic_like"}:
+        if selected.extension_family_capability.implementation_fallback:
             return ImplementationState.FALLBACK
         if self.fallback:
             return ImplementationState.FALLBACK

@@ -37,7 +37,7 @@ prim<im:=(im,im)> test_imask(mask, position):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(vector::imask), mask<test, imask>(mask, position)));"
+          tsil "complete(cast<static>(vector::imask, mask<test, imask>(mask, position)));"
 prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
   brief_description "Inserts one integral mask value into another at the supplied bit position."
   detailed_description """

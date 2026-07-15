@@ -15,6 +15,7 @@ from tslc.output.verify_model import VerifyBackend
 
 if TYPE_CHECKING:
     from tslc.backend.emitted_profile import EmittedProfile
+    from tslc.benchmark.model import BenchmarkProjectPlan
     from tslc.backend.translation import BackendDialect
     from tslc.catalog.model import Catalog, Extension
     from tslc.compiler_assets import RenderAssets
@@ -34,6 +35,13 @@ VerifyProfileRenderer = Callable[
 ]
 TestArtifactRenderer = Callable[
     ["ValueTestProjectPlan", "RenderAssets", str], list["Artifact"]
+]
+BenchmarkArtifactRenderer = Callable[
+    ["BenchmarkProjectPlan", "RenderAssets", str], list["Artifact"]
+]
+BenchmarkPlanBuilder = Callable[
+    ["Catalog", tuple["EmittedProfile", ...], "ValueTestProjectPlan"],
+    "BenchmarkProjectPlan",
 ]
 DocumentationFormatterFactory = Callable[[], "BackendDocumentationFormatter"]
 ValueTestSupportFactory = Callable[[], "ValueTestBackendSupport"]
@@ -87,6 +95,15 @@ def _no_profile_diagnostics(
     return ()
 
 
+def _no_benchmark_artifacts(
+    plan: BenchmarkProjectPlan,
+    assets: RenderAssets,
+    media_type: str,
+) -> list[Artifact]:
+    del plan, assets, media_type
+    return []
+
+
 @dataclass(frozen=True, slots=True)
 class BackendCapability:
     backend_id: str
@@ -99,6 +116,8 @@ class BackendCapability:
     test_renderer: TestArtifactRenderer
     verify_driver_factory: VerifyDriverFactory
     documentation_formatter_factory: DocumentationFormatterFactory
+    benchmark_plan_builder: BenchmarkPlanBuilder | None = None
+    benchmark_renderer: BenchmarkArtifactRenderer = _no_benchmark_artifacts
     helper_manifest: BackendHelperManifest = EMPTY_HELPER_MANIFEST
     profile_validator: ProfileValidator = _no_profile_diagnostics
     generated_format: GeneratedFormatSpec | None = None
@@ -123,6 +142,23 @@ class BackendCapability:
         assets: RenderAssets,
     ) -> list[Artifact]:
         return self.test_renderer(plan, assets, self.artifact_media_type)
+
+    def render_benchmark_artifacts(
+        self,
+        plan: BenchmarkProjectPlan,
+        assets: RenderAssets,
+    ) -> list[Artifact]:
+        return self.benchmark_renderer(plan, assets, self.artifact_media_type)
+
+    def plan_benchmarks(
+        self,
+        catalog: Catalog,
+        profiles: tuple[EmittedProfile, ...],
+        value_tests: ValueTestProjectPlan,
+    ) -> BenchmarkProjectPlan | None:
+        if self.benchmark_plan_builder is None:
+            return None
+        return self.benchmark_plan_builder(catalog, profiles, value_tests)
 
     def documentation_formatter(self) -> BackendDocumentationFormatter:
         return self.documentation_formatter_factory()

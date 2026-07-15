@@ -27,6 +27,7 @@ from tslc.value_tests._render_rust_core import (
     _reduction,
     _scalar_result,
     _scalar_vector,
+    _status_pointer,
     _vector_to_array,
 )
 from tslc.value_tests._render_rust_memory import (
@@ -78,6 +79,7 @@ def _render_case(case: ValueTestCasePlan) -> str:
 RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
     backend_id="rust",
     supports_differential=True,
+    overload_inference_placeholders=1,
     case_renderers={
         "array_to_vector": _array_to_vector,
         "broadcast": _broadcast,
@@ -110,6 +112,7 @@ RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "scalar_result": _scalar_result,
         "scalar_vector": _scalar_vector,
         "store": _store,
+        "status_pointer": _status_pointer,
         "stream": _stream,
         "vector_to_array": _vector_to_array,
     },

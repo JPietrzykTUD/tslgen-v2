@@ -7,13 +7,24 @@ from collections.abc import Mapping
 from tslc.catalog.model import Extension
 
 _CPP_X86_HELPER_WIDTHS = frozenset({128, 256, 512})
+_BACKEND_FEATURE_SPELLINGS: Mapping[str, Mapping[str, str]] = {
+    "cpp": {"rdrand": "rdrnd"},
+}
 
 
-def feature_spelling(feature: str, alternatives: Mapping[str, str]) -> str:
+def feature_spelling(
+    feature: str,
+    alternatives: Mapping[str, str],
+    *,
+    backend_id: str | None = None,
+) -> str:
     """Return a compiler target-feature spelling from a source feature name."""
 
     if feature in alternatives:
         return alternatives[feature]
+    backend_spelling = _BACKEND_FEATURE_SPELLINGS.get(backend_id or "", {}).get(feature)
+    if backend_spelling is not None:
+        return backend_spelling
     if feature.startswith("sse4_"):
         return "sse4." + feature[len("sse4_") :]
     if feature.startswith("avx512_"):

@@ -10,6 +10,7 @@ from tslc.backend.target_capability import (
     rust_extension_tag,
 )
 from tslc.catalog.model import Catalog, Extension
+from tslc.lane_count import LaneCount
 from tslc.target_text import (
     RenderContext,
     RenderField,
@@ -51,6 +52,13 @@ class _RustTypes:
 
     def scalar_spelling(self, type_tag: str) -> str | None:
         return common.scalar_spelling(self.catalog, self.backend_id, type_tag)
+
+    def render_lane_count(self, count: LaneCount) -> str | None:
+        if count.value is not None:
+            return str(count.value)
+        if count.is_scaled:
+            return None
+        return count.symbol
 
     def vector_type_spelling(self, base_spelling: str, extension_name: str) -> str:
         extension = common.extension_for_isa(self.catalog, extension_name)
@@ -387,7 +395,6 @@ def _has_top_level_comma(text: str) -> bool:
 class RustBackendDialect:
     catalog: Catalog
     backend_id: str = field(default="rust", init=False)
-    supports_sized_vector_lane_expressions: bool = field(default=False, init=False)
     types: _RustTypes = field(init=False)
     intrinsics: _RustIntrinsics = field(init=False)
     templates: _RustTemplates = field(init=False)

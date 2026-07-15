@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import re
 from pathlib import Path
 
@@ -12,8 +13,9 @@ from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacadeKind,
     classify_dataparallel_primitive_facade,
 )
+from tslc.backend.rust import RustBackend
 from tslc.diagnostics import has_errors
-from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam
 from tslc.lower.target_vectors import TargetVector
 from tslc.target_text import LoweredBody
 
@@ -78,6 +80,39 @@ def _facade_spec(
         body=LoweredBody.from_text(""),
         axis=axis,
         target=target,
+    )
+
+
+def test_rust_impls_share_type_parameter_bounds_across_native_and_fallback_bodies() -> None:
+    common = LoweredSpecialization(
+        backend_id="rust",
+        primitive_name="permute_lanes",
+        source_primitive_name="permute_lanes",
+        extension_name="avx2",
+        type_tag="si32",
+        base_type_spelling="i32",
+        register_spelling="core::arch::x86_64::__m256i",
+        result_kind="v",
+        param_names=("data", "indexes"),
+        param_kinds=("v", "vidx"),
+        body=LoweredBody.from_text("return data;"),
+        vector_spelling="Simd<i32, Avx2>",
+        type_params=(LoweredTypeParam("IndicesType", bounds=("to_array",)),),
+    )
+    native = replace(
+        common,
+        extension_name="avx512",
+        register_spelling="core::arch::x86_64::__m512i",
+        vector_spelling="Simd<i32, Avx512>",
+        type_params=(LoweredTypeParam("IndicesType"),),
+    )
+
+    rendered = RustBackend().render_primitive("permute_lanes", (common, native))
+
+    assert rendered.count("IndicesType: StaticSimdVector + To_arrayImpl") == 3
+    assert (
+        "IndicesType: StaticSimdVector + detail::primitives::To_arrayImpl"
+        in rendered
     )
 
 

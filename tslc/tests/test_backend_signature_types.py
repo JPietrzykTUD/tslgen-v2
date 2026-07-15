@@ -43,6 +43,48 @@ def test_backend_emitters_own_signature_type_projections() -> None:
         == "__m128i"
     )
     assert rust_free_type("cptr", "*mut i32") == "*const i32"
+    assert CPP_SIGNATURE_TYPES.free_type("ptr", base="std::uint64_t") == (
+        "std::uint64_t *"
+    )
+    assert CPP_SIGNATURE_TYPES.free_type("cptr", base="std::uint64_t") == (
+        "const std::uint64_t *"
+    )
+    assert rust_free_type("ptr", "u64") == "*mut u64"
+
+
+def test_free_pointer_projection_does_not_add_a_second_pointer_layer() -> None:
+    assert (
+        CPP_SIGNATURE_TYPES.free_type(
+            "ptr",
+            base="void *",
+            base_type_tag="ptr",
+        )
+        == "void *"
+    )
+    assert (
+        CPP_SIGNATURE_TYPES.free_type(
+            "cptr",
+            base="void *",
+            base_type_tag="ptr",
+        )
+        == "const void *"
+    )
+    assert (
+        rust_free_type(
+            "ptr",
+            "*mut core::ffi::c_void",
+            base_type_tag="ptr",
+        )
+        == "*mut core::ffi::c_void"
+    )
+    assert (
+        rust_free_type(
+            "cptr",
+            "*mut core::ffi::c_void",
+            base_type_tag="ptr",
+        )
+        == "*const core::ffi::c_void"
+    )
 
 
 def test_projection_reports_missing_required_fields() -> None:

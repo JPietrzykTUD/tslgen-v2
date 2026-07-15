@@ -4,6 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from tslc._pipeline_closure import (
+    _LoweredSlot,
+    _profile_with_required_features,
+    _prune_unresolved,
+    _propagate_transitive_call_facts,
+)
 from tslc.backend.cpp import CppBackend
 from tslc.backend.rust import RustBackend
 from tslc.backend.registry import create_backend_dialect
@@ -14,17 +22,14 @@ from tslc.catalog.signatures import parse_signature
 from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import Diagnostic
-from tslc.lower.dependencies import CallDependency, VectorIdentity
+from tslc.lower.dependencies import (
+    CallDependency,
+    CallDependencyOrigin,
+    VectorIdentity,
+)
 from tslc.lower.implementation_state import ImplementationState
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
-from tslc.pipeline import (
-    CallDependencyOrigin,
-    _LoweredSlot,
-    _profile_with_required_features,
-    _pruned_reason,
-    _prune_unresolved,
-    _propagate_transitive_call_facts,
-)
+from tslc.pipeline import _pruned_reason
 from tslc.target_text import LoweredBody, RenderPlaceholder, render_sequence
 from tslc.select.selector import Selector
 from tslc.sources import SourceDocument, SourceLoader
@@ -117,9 +122,12 @@ def test_caller_unsafe_callees_transitively_require_internal_unsafe() -> None:
             }
         ),
     )
+    cached_base_spec = caller.spec
 
     _propagate_transitive_call_facts([caller, callee], frozenset())
 
+    assert caller.spec is not cached_base_spec
+    assert cached_base_spec.safety == ImplementationSafety()
     assert caller.spec.safety.caller_unsafe is False
     assert caller.spec.safety.internal_unsafe is True
     assert "unsafe_callee" in caller.spec.safety.reasons
@@ -145,6 +153,42 @@ def test_transitive_safety_keeps_runtime_and_immediate_overloads_distinct() -> N
     assert runtime.spec.body.requires_unsafe is False
     assert immediate.spec.body.requires_unsafe is True
     assert immediate.spec.body_text == "unsafe { return data; }"
+
+
+def test_call_facts_include_every_body_behind_one_dependency_key() -> None:
+    runtime = _slot(
+        "callee",
+        required_features=frozenset({"avx2"}),
+    )
+    immediate = _slot(
+        "callee",
+        required_features=frozenset({"avx512f"}),
+        safety=ImplementationSafety(
+            internal_unsafe=True,
+            reasons=frozenset({"intrinsic"}),
+        ),
+        implementation_state=ImplementationState.FALLBACK,
+        param_kinds=("v", "sImm"),
+        immediate=("shift", "u32"),
+    )
+    caller = _slot(
+        "caller",
+        callees=frozenset(
+            {
+                CallDependency(
+                    primitive="callee",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                )
+            }
+        ),
+    )
+
+    _propagate_transitive_call_facts([caller, runtime, immediate], frozenset())
+
+    assert caller.spec.required_features == frozenset({"avx2", "avx512f"})
+    assert caller.spec.safety.internal_unsafe is True
+    assert caller.spec.implementation_state is ImplementationState.FALLBACK
 
 
 def test_call_facts_propagate_bottom_up_recursively() -> None:
@@ -193,6 +237,108 @@ def test_call_facts_propagate_bottom_up_recursively() -> None:
     assert "unsafe_callee" in root.spec.safety.reasons
     assert middle.spec.body.requires_unsafe is False
     assert root.spec.body.requires_unsafe is False
+
+
+def test_call_facts_propagate_through_shared_leaf_diamond() -> None:
+    leaf = _slot(
+        "leaf",
+        required_features=frozenset({"avx512f"}),
+        safety=ImplementationSafety(
+            internal_unsafe=True,
+            caller_unsafe=True,
+            reasons=frozenset({"raw_pointer"}),
+        ),
+        implementation_state=ImplementationState.FALLBACK,
+    )
+    leaf_dependency = CallDependency(
+        primitive="leaf",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    left = _slot(
+        "left",
+        required_features=frozenset({"avx2"}),
+        implementation_state=ImplementationState.COMPOSED,
+        callees=frozenset({leaf_dependency}),
+    )
+    right = _slot(
+        "right",
+        required_features=frozenset({"sse4_1"}),
+        implementation_state=ImplementationState.COMPOSED,
+        callees=frozenset({leaf_dependency}),
+    )
+    root = _slot(
+        "root",
+        implementation_state=ImplementationState.NATIVE,
+        callees=frozenset(
+            {
+                CallDependency(
+                    primitive="left",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                ),
+                CallDependency(
+                    primitive="right",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                ),
+            }
+        ),
+    )
+
+    _propagate_transitive_call_facts([root, left, right, leaf], frozenset())
+
+    assert left.spec.required_features == frozenset({"avx2", "avx512f"})
+    assert right.spec.required_features == frozenset({"sse4_1", "avx512f"})
+    assert root.spec.required_features == frozenset(
+        {"avx2", "sse4_1", "avx512f"}
+    )
+    for slot in (root, left, right):
+        assert slot.spec.safety.internal_unsafe is True
+        assert "unsafe_callee" in slot.spec.safety.reasons
+        assert slot.spec.implementation_state is ImplementationState.FALLBACK
+
+
+def test_call_facts_converge_through_cycles() -> None:
+    left = _slot(
+        "left",
+        required_features=frozenset({"sse2"}),
+        callees=frozenset(
+            {
+                CallDependency(
+                    primitive="right",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                )
+            }
+        ),
+    )
+    right = _slot(
+        "right",
+        required_features=frozenset({"avx2"}),
+        safety=ImplementationSafety(
+            internal_unsafe=True,
+            reasons=frozenset({"intrinsic"}),
+        ),
+        callees=frozenset(
+            {
+                CallDependency(
+                    primitive="left",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                )
+            }
+        ),
+    )
+
+    _propagate_transitive_call_facts([left, right], frozenset())
+
+    expected_features = frozenset({"sse2", "avx2"})
+    assert left.spec.required_features == expected_features
+    assert right.spec.required_features == expected_features
+    assert left.spec.safety.internal_unsafe is True
+    assert right.spec.safety.internal_unsafe is True
+    assert "unsafe_callee" in left.spec.safety.reasons
 
 
 def test_call_facts_propagate_implementation_state_bottom_up() -> None:
@@ -288,6 +434,27 @@ def test_pruned_variant_dependency_keeps_variant_origin() -> None:
     )
 
 
+def test_pruning_chooses_first_unresolved_dependency_deterministically() -> None:
+    blend = CallDependency(
+        primitive="blend",
+        mask_policy=None,
+        source=VectorIdentity("si16", "avx512"),
+    )
+    less_than = CallDependency(
+        primitive="less_than",
+        mask_policy=None,
+        source=VectorIdentity("si16", "avx512"),
+    )
+    caller = _slot("caller", callees=frozenset({less_than, blend}))
+
+    grouped, pruned = _prune_unresolved([caller], frozenset())
+
+    assert grouped == {}
+    assert pruned == [caller]
+    assert caller.unresolved_callee is not None
+    assert caller.unresolved_callee.dependency == blend
+
+
 def test_pruning_one_overload_keeps_live_sibling() -> None:
     runtime = _slot("shift_like")
     dependency = CallDependency(
@@ -306,6 +473,71 @@ def test_pruning_one_overload_keeps_live_sibling() -> None:
 
     assert grouped["rust"]["shift_like"] == [runtime.spec]
     assert pruned == [immediate]
+
+
+def test_pruning_keeps_callers_while_an_equivalent_provider_remains() -> None:
+    dependency = CallDependency(
+        primitive="shift_like",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    runtime = _slot("shift_like")
+    missing = CallDependency(
+        primitive="missing",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    immediate = _slot(
+        "shift_like",
+        param_kinds=("v", "sImm"),
+        immediate=("shift", "u32"),
+        callees=frozenset({missing}),
+    )
+    caller = _slot("caller", callees=frozenset({dependency}))
+
+    grouped, pruned = _prune_unresolved(
+        [caller, runtime, immediate],
+        frozenset(),
+    )
+
+    assert grouped["rust"]["caller"] == [caller.spec]
+    assert grouped["rust"]["shift_like"] == [runtime.spec]
+    assert pruned == [immediate]
+
+
+def test_pruning_cascades_through_reverse_dependencies() -> None:
+    missing = CallDependency(
+        primitive="missing",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    leaf = _slot("leaf", callees=frozenset({missing}))
+    leaf_dependency = CallDependency(
+        primitive="leaf",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    middle = _slot("middle", callees=frozenset({leaf_dependency}))
+    middle_dependency = CallDependency(
+        primitive="middle",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    root = _slot("root", callees=frozenset({middle_dependency}))
+
+    grouped, pruned = _prune_unresolved(
+        [root, middle, leaf],
+        frozenset(),
+    )
+
+    assert grouped == {}
+    assert pruned == [root, middle, leaf]
+    assert root.unresolved_callee is not None
+    assert root.unresolved_callee.dependency == middle_dependency
+    assert middle.unresolved_callee is not None
+    assert middle.unresolved_callee.dependency == leaf_dependency
+    assert leaf.unresolved_callee is not None
+    assert leaf.unresolved_callee.dependency == missing
 
 
 def test_render_profile_features_include_transitive_lowered_requirements() -> None:
@@ -435,7 +667,35 @@ def test_source_call_to_caller_unsafe_primitive_uses_local_unsafe(
     machine_profiles,
 ) -> None:
     selected = Selector().select_profile(
-        catalog, machine_profiles["sse2"], "to_array", ("si8",)
+        catalog, machine_profiles["sse2"], "to_array", ("f32",)
+    ).selected
+    slot = next(
+        item
+        for item in selected
+        if item.extension.isa_name == "sse" and item.type_tag == "f32"
+    )
+
+    lowered = Lowerer().lower(
+        slot,
+        catalog,
+        create_backend_dialect(catalog, "rust"),
+    ).specialization
+
+    assert lowered is not None
+    assert lowered.body.requires_unsafe is False
+    assert "MaybeUninit" in lowered.body_text
+    assert "unsafe { store::<Self, false, _>(tmp.data(), a) }" in lowered.body_text
+    assert not lowered.body_text.startswith("unsafe {")
+
+
+@pytest.mark.parametrize("primitive_name", ("from_array", "to_array"))
+def test_sse_integer_array_round_trip_contains_local_raw_memory_unsafe(
+    catalog: Catalog,
+    machine_profiles,
+    primitive_name: str,
+) -> None:
+    selected = Selector().select_profile(
+        catalog, machine_profiles["sse"], primitive_name, ("si8",)
     ).selected
     slot = next(
         item
@@ -450,10 +710,9 @@ def test_source_call_to_caller_unsafe_primitive_uses_local_unsafe(
     ).specialization
 
     assert lowered is not None
-    assert lowered.body.requires_unsafe is False
-    assert "MaybeUninit" in lowered.body_text
-    assert "unsafe { store::<Self, false, _>(tmp.data(), a) }" in lowered.body_text
-    assert not lowered.body_text.startswith("unsafe {")
+    assert lowered.body.requires_unsafe is True
+    assert lowered.body_text.startswith("unsafe {")
+    assert "crate::tsl_core::mem_copy" in lowered.body_text
 
 
 def test_implementation_variants_lower_and_render_as_detail_symbols() -> None:
@@ -503,7 +762,10 @@ def test_implementation_variants_lower_and_render_as_detail_symbols() -> None:
     assert "struct id_impl<" in cpp_source
     assert "struct id_impl_alt<" in cpp_source
     assert "::tsl::detail::primitives::id_impl<" in cpp_source
-    assert "::tsl::detail::primitives::id_impl_alt<" not in cpp_source
+    assert "enum class id_variant" in cpp_source
+    assert "id_variant::default_" in cpp_source
+    assert "::tsl::detail::primitives::id_impl_alt<" in cpp_source
+    assert "if constexpr (selector::value" in cpp_source
 
     rust_source = RustBackend().render_primitive("id", (rust,))
     assert "pub trait IdImpl" in rust_source

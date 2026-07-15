@@ -2,9 +2,45 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from tslc.backend.rust_names import rust_primitive_trait_name
 from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+
+
+def with_consistent_type_param_bounds(
+    specializations: tuple[LoweredSpecialization, ...],
+) -> tuple[LoweredSpecialization, ...]:
+    """Give every Rust impl the public trait's complete type-parameter bounds.
+
+    Different implementation bodies can call different primitives through the
+    same SIMD type parameter. Rust requires every implementation of the shared
+    trait to repeat all bounds from that trait's type-parameter declaration,
+    including native implementations that do not use a portable fallback's
+    dependency themselves.
+    """
+
+    bounds_by_name: dict[str, list[str]] = {}
+    for spec in specializations:
+        for param in spec.type_params:
+            merged = bounds_by_name.setdefault(param.name, [])
+            for bound in param.bounds:
+                if bound not in merged:
+                    merged.append(bound)
+
+    if not bounds_by_name:
+        return specializations
+    return tuple(
+        replace(
+            spec,
+            type_params=tuple(
+                replace(param, bounds=tuple(bounds_by_name[param.name]))
+                for param in spec.type_params
+            ),
+        )
+        for spec in specializations
+    )
 
 
 def type_param_decls(

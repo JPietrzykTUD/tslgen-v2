@@ -1,13 +1,17 @@
 ---
 name: add-tsil-region
-description: Add a TSIL keyword region to tslc. Use when Codex is asked to recognize a new TSIL keyword, validate region shell syntax, lower a new body island, support nested TSIL regions, or replace raw implementation text with typed TSIL semantics.
+description: Add a TSIL keyword region to tslc. Use when asked to recognize a new TSIL keyword, validate region shell syntax, lower a new body island, support nested TSIL regions, or replace raw implementation text with typed TSIL semantics.
 ---
 
 # Add TSIL Region
 
 ## Workflow
 
-1. Read `AGENTS.md`, `PLANS.md`, `tslc/CHARTER.md`, and the existing `tslc/src/tslc/ir/`, `catalog/validation/body_validation.py`, and `lower/region_handlers/` patterns.
+1. Read `AGENTS.md`, `CHARTER.md`, `PLANS.md`, `tslc/AGENTS.md`,
+   `tslc/CHARTER.md`, and the existing `tslc/src/tslc/ir/`,
+   `tslc/src/tslc/catalog/validation/body_validation.py`, and
+   `tslc/src/tslc/lower/region_handlers/` patterns. Read `tsldata/AGENTS.md`
+   when source bodies are in scope.
 2. Define the exact accepted source forms and nearby malformed forms before editing.
 3. Add the keyword to the region descriptor/registry path so scanning, validation, and lowerer registration share one source of truth.
 4. Keep scanning lexical: delimiters, nesting, spans, and recursive segments only. Do not add expression semantics to the scanner.
@@ -26,6 +30,6 @@ description: Add a TSIL keyword region to tslc. Use when Codex is asked to recog
 
 ```bash
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_tsil_scan.py
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_lower_text.py tslc/tests/test_select_and_lower.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_lower_text.py tslc/tests/test_select_and_lower*.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_safety_contract.py
 ```

@@ -24,6 +24,10 @@ def cpp_target(profile: VerifyProfile, config: BuildVerifierConfig) -> str | Non
     return config.toolchain("cpp").target or profile.target
 
 
+def cpp_linker(config: BuildVerifierConfig) -> str | None:
+    return config.toolchain("cpp").linker
+
+
 def cmake_cross_emulator(
     profile: VerifyProfile,
     config: BuildVerifierConfig,
@@ -174,6 +178,7 @@ __all__ = (
     "cmake_cross_emulator",
     "cpp_compiler_accepts_explicit_target",
     "cpp_environment",
+    "cpp_linker",
     "cpp_target",
     "effective_cpp_compiler",
 )

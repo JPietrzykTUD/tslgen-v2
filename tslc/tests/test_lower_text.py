@@ -5,6 +5,14 @@ from __future__ import annotations
 from tslc.ir.scan import scan
 from tslc.ir.region_syntax import split_arg_groups
 from tslc.ir.text import split_selector_terms
+from tslc.lower.raw_text import render_raw_text
+from tslc.target_text import render_text
+
+
+def test_raw_target_text_is_verbatim() -> None:
+    source = '// Alias\n"Alias" + \'Alias\' + \'a + Alias'
+
+    assert render_text(render_raw_text(source)) == source
 
 
 def test_split_selector_terms_keeps_build_modifiers_together() -> None:

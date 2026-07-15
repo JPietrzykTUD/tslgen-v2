@@ -1,13 +1,14 @@
 # Planning And Execution Guide
 
-This file is the lightweight planning protocol for active `tslc/` work. It
-replaces the old milestone-era workflow. Use it to keep changes small,
-reviewable, and pointed at working compiler behavior.
+This is the repository-wide planning protocol for active `tslc` work. It keeps
+changes small, reviewable, and directed at working compiler behavior without
+requiring milestone logs or ceremonial plan documents.
 
 ## What Counts As A Slice
 
-A slice is one coherent change that a reviewer can understand without reading a
-historical milestone log. Good slices usually do one of these:
+A slice is one coherent change that a reviewer can understand and validate
+without reconstructing a larger historical plan. Good slices usually do one of
+these:
 
 - make one source-data form parse, validate, lower, render, or verify;
 - add one backend or backend capability boundary;
@@ -16,142 +17,83 @@ historical milestone log. Good slices usually do one of these:
 - remove one obsolete dependency or simplify one boundary;
 - strengthen one extension point with focused tests.
 
-Avoid slices that mix unrelated parser, catalog, lowering, backend, docs, and
-cleanup work. If a change is hard to name in one sentence, split it.
+A vertical slice may cross parser, catalog, lowering, backend, rendering, and
+source-data directories when those edits deliver one behavior. Avoid mixing
+unrelated feature work, documentation cleanup, and refactoring. If the result
+is hard to name in one sentence, split it.
 
-## Planning Checklist
+## Before Editing
+
+Read the root `AGENTS.md`, this file, `CHARTER.md`, and every applicable nested
+`AGENTS.md`. For compiler design work, also read `tslc/CHARTER.md` and the
+relevant part of `tslc/DESCRIPTION.md`. Use an applicable task skill when one is
+available.
 
 Before substantial implementation, write down or hold in working memory:
 
 - **Goal**: the user-visible behavior or cleanup result.
-- **Scope**: files/modules likely to change.
-- **Out of scope**: adjacent tempting work to leave alone.
-- **Boundary**: parser, catalog, validation, selection, IR/TSIL, lowering,
-  backend, rendering, output, verification, maintenance, or docs.
+- **Scope**: the source, compiler, assets, tests, and docs likely to change.
+- **Out of scope**: adjacent work to leave alone.
+- **Boundary**: the stages that own the behavior.
 - **Data model**: domain objects or typed records involved.
 - **Extension point**: what future backend/primitive/region becomes easier.
 - **Validation**: exact tests and commands to run.
-- **Risk**: likely regressions, nondeterminism, or diagnostic gaps.
+- **Risk**: likely regressions, nondeterminism, diagnostic gaps, or unavailable
+  toolchains.
 
-For tiny mechanical changes, this can be a mental checklist. For broad changes,
-state the plan before editing.
+For tiny mechanical changes, this may remain a mental checklist. State the plan
+before editing when a change crosses boundaries, changes a contract, or could
+expand into a broad rewrite.
 
 ## Execution Loop
 
-1. Read the relevant current guidance: `AGENTS.md`, this file, and the nearest
-   `tslc/` package docs.
-2. Inspect the local code before deciding the design.
-3. Make the smallest change that completes the slice.
-4. Add or update tests at the same boundary as the behavior.
-5. Run targeted validation.
-6. Broaden validation when the change crosses module boundaries.
-7. Update root/package guidance only when behavior or workflow changed.
-8. Report the result, validation, and meaningful follow-ups.
+1. Inspect current code, source data, tests, and documentation before deciding
+   the design.
+2. Make the smallest change that completes the named slice.
+3. Add or update tests at the same boundary as the behavior.
+4. Run the smallest focused validation that can fail for the intended reason.
+5. Broaden validation when the change crosses stages or affects generated
+   artifacts.
+6. Re-read the diff for scope, ownership, diagnostics, and determinism.
+7. Update guidance only when behavior, workflow, or architecture changed.
+8. Report the result, validation, limitations, and meaningful follow-ups.
 
-Use top-level `docs/` for human-authored project documentation only, not
-workflow or prompt machinery. Historical prompt machinery is retired.
+The charters and applicable `AGENTS.md` files own architecture invariants. Task
+skills own detailed feature procedures and command lists. Do not reproduce
+those documents in a plan.
 
-## Architecture Pressure Checks
+## Choosing Validation
 
-Use these checks before adding new concepts.
+Use the command matrix in the applicable nested `AGENTS.md` or task skill.
+Select validation proportionally:
 
-### Maintainability Check
+- Documentation-only changes: check links and paths, run focused documentation
+  tests when generated-documentation behavior or tooling is involved, and run
+  `git diff --check`.
+- Source-data changes: run catalog validation plus the selection/lowering or
+  generated checks for the affected behavior.
+- Compiler logic changes: run `compileall` and focused pytest at the owning
+  boundary; run mypy when typed models, protocols, or public signatures change.
+- Cross-stage compiler changes: broaden to the full Python suite.
+- Generated layout, backend codegen, verification, or executable value-test
+  changes: run the opt-in generated build/value gates for the smallest useful
+  primitive/profile/backend matrix.
+- Hardware-specific checks: use injectable runners or explicit skips when the
+  required hardware or emulator is unavailable.
 
-- Can a reader understand, debug, and safely change this behavior by following
-  a small number of clearly owned modules?
-- Does this change shorten the next read/debug/change path, or merely
-  redistribute complexity behind new names?
-- Are helper layers, facades, compatibility wrappers, string conventions, and
-  duplicated facts necessary and locally owned?
-- Would a future maintainer know where this behavior lives without searching
-  unrelated parser, catalog, lowering, backend, render, and verification code?
-
-### Extension Point Check
-
-- Would adding the next backend, primitive, source field, or TSIL region mostly
-  add code in one focused area?
-- If the next similar feature would require edits across scattered classifiers,
-  validators, renderers, policy branches, and string special cases, is there a
-  weak or missing extension point that should be fixed first?
-- If this slice is cross-cutting because it introduces a typed boundary, will it
-  reduce the number of unrelated locations the next similar feature must touch?
-- Are supported cases declared through typed capabilities, descriptors, or
-  policies rather than scattered string literals?
-- Are unsupported cases diagnosed before rendering or writing artifacts?
-- Is there a test proving that future IDs or cases can be admitted additively?
-
-### Domain Model Check
-
-- Is this value a real domain concept, or just a wrapper around another value?
-- Can it be immutable?
-- Does it carry only the provenance needed for diagnostics?
-- Can downstream code consume typed fields instead of raw dictionaries?
-
-### TSIL Body Check
-
-- Is the accepted source form exact and documented by tests?
-- Are malformed nearby forms diagnosed rather than repaired?
-- Does scanning use the shared recursive segment/region boundary?
-- Does lowering produce typed values before backend rendering?
-- Are raw-text assumptions explicit?
-
-### Backend And Rendering Check
-
-- Are semantic decisions complete before templates run?
-- Are backend capabilities explicit and validated?
-- Does artifact writing only write already-rendered artifacts?
-- Would a backend with different expression syntax fail clearly instead of
-  receiving accidental raw text?
-
-### Determinism Check
-
-- Are filesystem traversal and maps sorted at boundaries?
-- Are diagnostics emitted in stable order?
-- Are artifacts and manifests deterministic across repeated runs?
-- Do tests avoid host CPU feature assumptions?
-
-## Validation Matrix
-
-Choose the smallest useful validation first:
-
-- Parser/catalog/validation:
-  `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py`
-- TSIL scanning/lowering:
-  `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_lower_text.py tslc/tests/test_select_and_lower.py`
-- Target-text/backend/render model:
-  `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_render_model.py tslc/tests/test_generation_conditionals.py`
-- Output/verification/config:
-  `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify_config.py tslc/tests/test_output_format.py`
-- Documentation maintenance:
-  `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_maintenance_documentation.py`
-- Full Python logic suite:
-  `PYTHONPATH=tslc/src python -m pytest -q tslc/tests`
-- Generated build/value pytest gates:
-  `PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py`
-
-Always consider:
-
-```bash
-python -m compileall -q tslc/src/tslc
-(cd tslc && python -m mypy)
-git diff --check
-```
-
-Generated build/value-test gates are opt-in and expensive; run them when the slice
-touches generated project layout, backend codegen, verification, or value-test
-planning.
+Always run `git diff --check`. Treat a skipped generated case as an explicit
+verification gap to report, not as proof of success.
 
 ## Review Packet
 
 For a non-trivial change, the final report should make review cheap:
 
-- what changed;
-- why it belongs in this slice;
-- files touched;
+- what changed and why it belongs in the slice;
+- files or ownership boundaries touched;
 - tests added or changed;
 - commands run and results;
-- known limitations;
-- follow-ups that should not be hidden in the current change.
+- known limitations or skipped verification;
+- follow-ups intentionally excluded from the slice.
 
 ## Stop Conditions
 
@@ -161,19 +103,8 @@ Stop and ask or report a blocker when:
 - a backend contract cannot be inferred from typed data or current assets;
 - a proposed abstraction depends mostly on guessed future needs;
 - a test would require unavailable hardware without an injectable substitute;
-- the slice starts turning into a broad rewrite;
-- deleting historical evidence would remove the only copy of active behavior or
-  generated baseline data.
-
-## Cleanup Policy
-
-Cleanup is valuable when it reduces active complexity. It should still be
-scoped:
-
-- remove retired dependencies from active code and workflow;
-- keep generated baselines such as `coverage/baseline.json` and
-  `coverage/primitive-coverage-inventory.md`;
-- preserve `supplementary/docs/`; it contains generated-TSL documentation
-  assets;
-- do not mix large deletion-only cleanup with semantic generator changes unless
-  the deletion is necessary for the slice.
+- the slice is turning into a broad rewrite without a clear delivered behavior;
+- completion requires deleting the only active evidence or baseline for current
+  behavior;
+- completion requires a product, public-corpus, or compatibility decision that
+  the user has not authorized.

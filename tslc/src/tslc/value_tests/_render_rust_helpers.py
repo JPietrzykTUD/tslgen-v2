@@ -30,6 +30,31 @@ def append_call_args(lines: list[str], case: ValueTestCasePlan) -> list[str]:
             )
             args.append(f"v{vector_index}")
             vector_index += 1
+        elif kind == "vidx":
+            index = case.index
+            if (
+                index is None
+                or index.type_tag is None
+                or index.base_spelling is None
+                or index.lanes is None
+            ):
+                raise ValueError("indexed Rust value test requires an index-vector layout")
+            values = case.inputs.vectors[vector_index]
+            literals = rust_literal_list(values, index.type_tag)
+            lines.append(
+                f"        let in{vector_index}: [{index.base_spelling}; {index.lanes}] = "
+                f"[{literals}];"
+            )
+            lines.append(
+                f"        let mut v{vector_index}: <Indices as SimdVector>::RegisterType = "
+                "Default::default();"
+            )
+            lines.append(
+                f"        for i in 0..{index.lanes} {{ v{vector_index}[i] = "
+                f"in{vector_index}[i]; }}"
+            )
+            args.append(f"v{vector_index}")
+            vector_index += 1
         elif kind == "m":
             lines.append(
                 f"        let m{mask_index}: <Vec as SimdVector>::MaskType = "
@@ -56,6 +81,17 @@ def append_call_args(lines: list[str], case: ValueTestCasePlan) -> list[str]:
             )
             args.append(f"s{scalar_index}")
             scalar_index += 1
+        elif kind in {"ptr", "cptr"}:
+            values = case.inputs.vectors[vector_index]
+            initial = rust_literal(values[0], case.type_tag) if values else "Default::default()"
+            mutability = "mut " if kind == "ptr" else ""
+            lines.append(
+                f"        let {mutability}pointed{vector_index}: {case.base_spelling} = "
+                f"{initial};"
+            )
+            pointer = "&mut " if kind == "ptr" else "&"
+            args.append(f"{pointer}pointed{vector_index}")
+            vector_index += 1
         else:
             raise ValueError(f"unsupported Rust value-test argument kind {kind!r}")
     return args

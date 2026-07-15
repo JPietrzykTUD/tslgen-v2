@@ -12,15 +12,29 @@ from tslc.catalog.validation._schema_common import (
 )
 from tslc.catalog.validation.source_spans import child, children, field_text, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
-from tslc.syntax.ast import ParsedTslField
+from tslc.syntax.ast import ParsedTslField, ParsedTslListValue, ParsedTslScalarValue
 
 _KNOWN_TARGET_FAMILIES_FIELDS = frozenset(
-    {"known_extension_families", "universal_extension_families", "profile_families"}
+    {
+        "extension_family_capabilities",
+        "known_extension_families",
+        "universal_extension_families",
+        "profile_families",
+    }
+)
+_KNOWN_EXTENSION_FAMILY_FIELDS = frozenset(
+    {
+        "free_function_owner",
+        "implementation_fallback",
+        "index_vector_register",
+        "requires_declared_vector_register",
+    }
 )
 _KNOWN_PROFILE_FAMILY_FIELDS = frozenset(
     {
         "backends",
         "extension_families",
+        "native_without_runner",
         "runner_kinds",
         "sort_order",
     }
@@ -58,6 +72,45 @@ def validate_target_families(
             )
 
     profiles = child(field, "profile_families")
+    extension_families = child(field, "extension_family_capabilities")
+    known_extension_families = _scalar_list_values(
+        child(field, "known_extension_families")
+    )
+    diagnose_duplicate_fields(
+        children(extension_families),
+        diagnostics,
+        label="extension family capability",
+    )
+    for extension_family in children(extension_families):
+        owner = f"extension family {extension_family.key.text!r}"
+        if (
+            known_extension_families
+            and extension_family.key.text not in known_extension_families
+        ):
+            invalid_enum(
+                diagnostics,
+                extension_family,
+                owner,
+                sorted(known_extension_families),
+            )
+        extension_fields = children(extension_family)
+        validate_known_fields(
+            extension_fields,
+            _KNOWN_EXTENSION_FAMILY_FIELDS,
+            diagnostics,
+            owner=owner,
+        )
+        diagnose_duplicate_fields(
+            extension_fields,
+            diagnostics,
+            label=f"{owner} field",
+        )
+        _validate_boolean_fields(
+            extension_family,
+            _KNOWN_EXTENSION_FAMILY_FIELDS,
+            diagnostics,
+            owner,
+        )
     diagnose_duplicate_fields(
         children(profiles),
         diagnostics,
@@ -89,6 +142,12 @@ def validate_target_families(
                         source=source_span(list_field.source),
                     )
                 )
+        _validate_boolean_fields(
+            profile,
+            frozenset({"native_without_runner"}),
+            diagnostics,
+            f"profile family {profile.key.text!r}",
+        )
         backends = child(profile, "backends")
         backend_fields = children(backends)
         validate_backend_key_fields(
@@ -126,3 +185,31 @@ def validate_target_families(
                     f"{owner} feature_flags {value!r}",
                     sorted(KNOWN_BOOLEAN_VALUES),
                 )
+
+
+def _validate_boolean_fields(
+    owner_field: ParsedTslField,
+    names: frozenset[str],
+    diagnostics: list[Diagnostic],
+    owner: str,
+) -> None:
+    for name in names:
+        boolean_field = child(owner_field, name)
+        value = field_text(boolean_field)
+        if boolean_field is not None and value not in KNOWN_BOOLEAN_VALUES:
+            invalid_enum(
+                diagnostics,
+                boolean_field,
+                f"{owner} {name} {value!r}",
+                sorted(KNOWN_BOOLEAN_VALUES),
+            )
+
+
+def _scalar_list_values(field: ParsedTslField | None) -> frozenset[str]:
+    if field is None or not isinstance(field.value, ParsedTslListValue):
+        return frozenset()
+    return frozenset(
+        item.text
+        for item in field.value.items
+        if isinstance(item, ParsedTslScalarValue)
+    )

@@ -1,21 +1,27 @@
 from __future__ import annotations
 
 import ast
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+import tslc.pipeline as pipeline_module
 from tslc.api import generate_project
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
+    BackendExtensionMetadata,
     Catalog,
+    Extension,
+    ExtensionMetadata,
     ParamTypeRule,
     Primitive,
     TestArg as TslTestArg,
     TestCase as TslTestCase,
 )
 from tslc.compiler_assets import RenderAssets
+from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.backend.emitted_names import finalize_emitted_names
 from tslc.target_text import LoweredBody
@@ -31,6 +37,7 @@ from tslc.value_tests import (
 from tslc.value_tests.model import (
     DEFAULT_VALUE_TEST_CASE_CAPABILITIES,
     DEFAULT_VALUE_TEST_CASE_KINDS,
+    ValueTestBackendSupport,
     ValueTestCasePlan as _ValueTestCasePlan,
     ValueTestCoverageEntry,
     ValueTestDifferential,
@@ -41,6 +48,7 @@ from tslc.value_tests.model import (
     ValueTestInvocation,
     ValueTestMemory,
     ValueTestProfilePlan,
+    ValueTestProjectPlan,
     ValueTestRepresentation,
     ValueTestScalable,
     ValueTestTarget,
@@ -155,6 +163,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
             else None
         ),
         header_group=values.pop("header_group", None),
+        required_compiler_features=values.pop("required_compiler_features", ()),
     )
     assert not values, f"unhandled fixture fields: {sorted(values)}"
     return plan
@@ -285,6 +294,65 @@ def test_planner_selects_authored_tests_by_source_signature() -> None:
         (case.call_name, case.case_name)
         for case in plan.profiles_for("cpp")[0].cases
     ] == [("shift", "runtime"), ("shift_imm", "immediate")]
+
+
+def test_status_pointer_case_checks_runtime_contract_for_both_backends() -> None:
+    primitive = Primitive(
+        "random_step",
+        "usize:=(ptr)",
+        ("out",),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="random_step_ui64_contract",
+                type_tag="ui64",
+                tags=("contract",),
+                inputs=(TslTestArg("scalar", scalar="0"),),
+                expected=(),
+                expected_rule="status_pointer",
+            ),
+        ),
+    )
+    cpp_spec = replace(
+        _spec(
+            "random_step",
+            "random_step",
+            param_kinds=("ptr",),
+            result_kind="usize",
+        ),
+        type_tag="ui64",
+        base_type_spelling="std::uint64_t",
+    )
+    rust_spec = replace(
+        cpp_spec,
+        backend_id="rust",
+        base_type_spelling="u64",
+        register_spelling="u64",
+    )
+    plan = ValueTestPlanner(
+        _catalog(primitive, *_harness_primitives()),
+        _VALUE_TEST_SUPPORTS,
+    ).plan(
+        _inputs(
+            _profile(
+                cpp={"random_step": (cpp_spec,)},
+                rust={"random_step": (rust_spec,)},
+            )
+        )
+    )
+
+    assert plan.diagnostics == ()
+    assert {entry.status for entry in plan.coverage} == {"emitted"}
+    cpp_case = plan.profiles_for("cpp")[0].cases[0]
+    rust_case = plan.profiles_for("rust")[0].cases[0]
+    assert cpp_case.kind == rust_case.kind == "status_pointer"
+    cpp_source = CPP_VALUE_TEST_RENDERER.render_case(cpp_case)
+    rust_source = RUST_VALUE_TEST_RENDERER.render_case(rust_case)
+    assert "const std::size_t status = tsl::random_step(&value);" in cpp_source
+    assert "status == 0 && value != before" in cpp_source
+    assert "let status = unsafe { random_step(&mut value) };" in rust_source
+    assert "if status == 0" in rust_source
 
 
 def test_different_arity_leading_mask_form_gets_portable_emitted_name() -> None:
@@ -532,6 +600,51 @@ def test_simple_shape_patterns_are_not_ordered_by_first_overload() -> None:
     ] == [
         ("store", "basic", ("false",))
     ]
+
+
+def test_overload_inference_placeholders_are_backend_capability_driven() -> None:
+    primitive = Primitive(
+        "store",
+        "void:=(ptr,v)",
+        ("ptr", "data"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="basic",
+                type_tag="si32",
+                tags=("basic",),
+                lanes=4,
+                inputs=(TslTestArg("vector", values=("1", "2", "3", "4")),),
+                expected=("1", "2", "3", "4"),
+                attrs={"aligned": "false"},
+            ),
+        ),
+    )
+    scalar_overload = _spec(
+        "store", "store", result_kind="void", param_kinds=("ptr", "s")
+    )
+    vector_overload = _spec(
+        "store", "store", result_kind="void", param_kinds=("ptr", "v")
+    )
+    support = ValueTestBackendSupport(
+        backend_id="future",
+        case_kinds=CPP_VALUE_TEST_SUPPORT.case_kinds,
+        overload_inference_placeholders=2,
+    )
+
+    plan = ValueTestPlanner(
+        _catalog(primitive, *_harness_primitives()),
+        (support,),
+    ).plan(
+        (
+            ValueTestBackendProfileInput(
+                "future", "unit", {"store": (scalar_overload, vector_overload)}
+            ),
+        )
+    )
+
+    assert plan.profiles_for("future")[0].cases[0].invocation.inferred_type_args == 2
 
 
 def test_lane_list_value_tests_are_planned_and_rendered(
@@ -790,6 +903,29 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
     )
     assert "tsl::plus<Vec>(v0, v1)" in cpp_source
 
+    cpp_permute_case = ValueTestCasePlan(
+        kind="generic_golden",
+        function_name="test_permute_lanes",
+        case_name="indexed",
+        call_name="permute_lanes",
+        type_tag="si32",
+        base_spelling="std::int32_t",
+        lanes=2,
+        vector_inputs=(("10", "20"), ("1", "0")),
+        expected=("20", "10"),
+        result_kind="v",
+        param_kinds=("v", "vidx"),
+        index_type_tag="ui32",
+        index_base_spelling="std::uint32_t",
+        index_lanes=2,
+    )
+    cpp_permute_source = render_cpp_values_runner(
+        ValueTestProfilePlan("cpp", "unit-profile", (cpp_permute_case,)),
+        render_assets,
+    )
+    assert "using Indices = tsl::simd<std::uint32_t, tsl::generic<2>>;" in cpp_permute_source
+    assert "tsl::permute_lanes<Vec, Indices>(v0, v1)" in cpp_permute_source
+
     guarded_cpp_case = ValueTestCasePlan(
         kind="generic_golden",
         function_name="test_clang_add",
@@ -803,12 +939,15 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         result_kind="v",
         param_kinds=("v", "v"),
         header_group="clang",
+        required_compiler_features=("ext_vector_type_boolean",),
     )
     guarded_source = render_cpp_values_runner(
         ValueTestProfilePlan("cpp", "unit-profile", (guarded_cpp_case,)),
         render_assets,
     )
     assert guarded_source.count("#if defined(TSL_ENABLE_CLANG)") == 2
+    assert guarded_source.count("#if defined(__has_feature)") == 2
+    assert guarded_source.count("#  if __has_feature(ext_vector_type_boolean)") == 2
 
     cpp_indexed_case = ValueTestCasePlan(
         kind="indexed_load",
@@ -917,6 +1056,29 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         render_assets,
     )
     assert "r#mod::<Vec>(a0, a1)" in rust_source
+
+    rust_permute_case = ValueTestCasePlan(
+        kind="generic_golden",
+        function_name="test_permute_lanes",
+        case_name="indexed",
+        call_name="permute_lanes",
+        type_tag="si32",
+        base_spelling="i32",
+        lanes=2,
+        vector_inputs=(("10", "20"), ("1", "0")),
+        expected=("20", "10"),
+        result_kind="v",
+        param_kinds=("v", "vidx"),
+        index_type_tag="ui32",
+        index_base_spelling="u32",
+        index_lanes=2,
+    )
+    rust_permute_source = render_rust_values_file(
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_permute_case,)),),
+        render_assets,
+    )
+    assert "type Indices = Simd<u32, Generic<2>>;" in rust_permute_source
+    assert "permute_lanes::<Vec, Indices>(v0, v1)" in rust_permute_source
 
     rust_pointer_source = render_rust_values_file(
         (
@@ -1338,6 +1500,103 @@ def test_value_test_case_plan_validates_kind_requirements() -> None:
         )
 
 
+def test_differential_cases_require_profile_scoped_round_trip_helpers() -> None:
+    primitive = Primitive(
+        "add",
+        "v:=(v,v)",
+        ("left", "right"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="basic",
+                type_tag="si32",
+                tags=("basic",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("vector", values=("4", "3", "2", "1")),
+                ),
+                expected=("5", "5", "5", "5"),
+            ),
+        ),
+    )
+    catalog = Catalog(
+        primitives=(primitive, *_harness_primitives()),
+        type_groups={},
+        extensions={
+            "sse": Extension(
+                "sse",
+                "sse",
+                "x86",
+                {},
+                {},
+                backend_supported={"cpp": True},
+                vector_bits=128,
+                default_test_target=True,
+            )
+        },
+        type_spellings={},
+        translations={},
+    )
+    add = _spec(
+        "add",
+        "add",
+        param_kinds=("v", "v"),
+        extension_name="sse",
+        uses_sized_vector=False,
+        lane_parameter=None,
+    )
+    lane_in = _spec(
+        "lane_in",
+        "lane_in",
+        param_kinds=("s[]",),
+        extension_name="sse",
+        uses_sized_vector=False,
+        lane_parameter=None,
+    )
+    lane_out = _spec(
+        "lane_out",
+        "lane_out",
+        param_kinds=("v",),
+        result_kind="s[]",
+        extension_name="sse",
+        uses_sized_vector=False,
+        lane_parameter=None,
+    )
+    planner = ValueTestPlanner(
+        catalog,
+        (CPP_VALUE_TEST_SUPPORT,),
+        fuzz=True,
+    )
+
+    missing_helpers = planner.plan(
+        (ValueTestBackendProfileInput("cpp", "sse", {"add": (add,)}),)
+    )
+    complete_helpers = planner.plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp",
+                "sse",
+                {
+                    "add": (add,),
+                    "lane_in": (lane_in,),
+                    "lane_out": (lane_out,),
+                },
+            ),
+        )
+    )
+
+    assert {case.kind for case in missing_helpers.profiles[0].cases} == {
+        "generic_golden"
+    }
+    assert {case.kind for case in complete_helpers.profiles[0].cases} == {
+        "differential",
+        "differential_fuzz",
+        "generic_golden",
+    }
+
+
 def test_wasm_rust_value_tests_render_native_differential_cases(
     data_root: Path,
     machine_profiles_path: Path,
@@ -1400,6 +1659,19 @@ def test_opt_in_clang_overlays_get_guarded_differential_targets(
     )
     assert clang_cases
     assert all(case.header_group == "clang" for case in clang_cases)
+    bool_cases = tuple(
+        case
+        for case in clang_cases
+        if case.differential is not None
+        and case.differential.hardware_extension.endswith("_bool")
+    )
+    comparison_cases = tuple(case for case in clang_cases if case not in bool_cases)
+    assert bool_cases
+    assert all(
+        case.required_compiler_features == ("ext_vector_type_boolean",)
+        for case in bool_cases
+    )
+    assert all(not case.required_compiler_features for case in comparison_cases)
 
     values_source = next(
         artifact.content
@@ -1407,7 +1679,108 @@ def test_opt_in_clang_overlays_get_guarded_differential_targets(
         if artifact.logical_path == "cpp/tests/values_avx2.cpp"
     )
     assert "#if defined(TSL_ENABLE_CLANG)" in values_source
+    assert "#  if __has_feature(ext_vector_type_boolean)" in values_source
     assert "using Hw = tsl::simd<int32_t, tsl::clang_v256>;" in values_source
+
+
+def test_incompatible_value_test_header_groups_are_diagnosed() -> None:
+    first = Extension(
+        "first",
+        "first",
+        "unit",
+        {},
+        {},
+        backend_supported={"cpp": True},
+        metadata=ExtensionMetadata(
+            backend={
+                "cpp": BackendExtensionMetadata(header_group="first_group")
+            }
+        ),
+        source=SourceSpan(Path("extensions.tsl"), 10, 1, 10, 6),
+    )
+    second = Extension(
+        "second",
+        "second",
+        "unit",
+        {},
+        {},
+        backend_supported={"cpp": True},
+        metadata=ExtensionMetadata(
+            backend={
+                "cpp": BackendExtensionMetadata(header_group="second_group")
+            }
+        ),
+        source=SourceSpan(Path("extensions.tsl"), 20, 1, 20, 7),
+    )
+    catalog = Catalog(
+        primitives=(),
+        type_groups={},
+        extensions={"first": first, "second": second},
+        type_spellings={},
+        translations={},
+    )
+    planner = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,))
+    case = ValueTestCasePlan(
+        "compile_only",
+        "test_conflicting_headers",
+        "conflicting_headers",
+        "unit",
+        "si32",
+        "std::int32_t",
+        4,
+        result_kind="v",
+        source_extension="first",
+        target_extension="second",
+    )
+    diagnostics: list[Diagnostic] = []
+
+    planned = planner._with_header_group(case, "cpp", diagnostics)
+
+    assert planned is None
+    assert diagnostics == [
+        Diagnostic(
+            severity="error",
+            code="TSL-VALUE-TEST-INCOMPATIBLE-HEADER-GROUPS",
+            message=(
+                "cpp value-test case 'test_conflicting_headers' spans incompatible "
+                "header groups ['first_group', 'second_group'] through extensions "
+                "['first', 'second']"
+            ),
+            location=first.source.start if first.source is not None else None,
+        )
+    ]
+
+
+def test_value_test_planning_error_prevents_project_rendering(
+    data_root: Path,
+    machine_profiles_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    planning_error = Diagnostic(
+        severity="error",
+        code="TSL-VALUE-TEST-UNIT-ERROR",
+        message="unit planning failure",
+    )
+    monkeypatch.setattr(
+        pipeline_module._GenerationSession,
+        "_plan_value_tests",
+        lambda self, profiles: ValueTestProjectPlan(  # noqa: ARG005
+            profiles=(), diagnostics=(planning_error,)
+        ),
+    )
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add"],
+        profiles=["scalar"],
+        type_tags=("si32",),
+        backends=("rust",),
+    )
+
+    assert result.rendered is None
+    assert result.artifacts.artifacts == ()
+    assert planning_error in result.diagnostics
 
 
 def test_scalable_tiling_is_gated_on_corpus_cross_lane_fact() -> None:
@@ -1979,12 +2352,15 @@ def _spec(
     immediate: tuple[str, str] | None = None,
     mask_policy: str | None = None,
     axis: tuple[tuple[str, str], ...] = (),
+    extension_name: str = "generic",
+    uses_sized_vector: bool = True,
+    lane_parameter: str | None = "4",
 ) -> LoweredSpecialization:
     return LoweredSpecialization(
         backend_id="cpp",
         primitive_name=primitive_name,
         source_primitive_name=source_primitive_name,
-        extension_name="generic",
+        extension_name=extension_name,
         type_tag="si32",
         base_type_spelling="std::int32_t",
         register_spelling="std::int32_t[4]",
@@ -1992,8 +2368,8 @@ def _spec(
         param_names=tuple(f"p{i}" for i in range(len(param_kinds))),
         param_kinds=param_kinds,
         body=LoweredBody.from_text(""),
-        uses_sized_vector=True,
-        lane_parameter="4",
+        uses_sized_vector=uses_sized_vector,
+        lane_parameter=lane_parameter,
         axis=axis,
         immediate=immediate,
         mask_policy=mask_policy,

@@ -17,10 +17,11 @@ from tslc.backend.helper_requirements import (
     RUST_HELPER_MANIFEST,
 )
 from tslc.backend.rust_capability import RUST_BACKEND
+from tslc.benchmark.model import EMPTY_BENCHMARK_PROJECT_PLAN
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.validation import validate_catalog
-from tslc.compiler_assets import RenderAssets
+from tslc.compiler_assets import RenderAssets, load_default_render_assets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile
@@ -30,6 +31,7 @@ from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.target_text import LoweredBody
+from tslc.value_tests.model import ValueTestProjectPlan
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -37,12 +39,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 def test_pipeline_facade_keeps_input_and_closure_boundaries() -> None:
     assert pipeline.generate.__module__ == "tslc.pipeline"
     assert pipeline._load_inputs.__module__ == "tslc._pipeline_inputs"
+    assert pipeline._LoweringCache.__module__ == "tslc._pipeline_lowering_cache"
     assert pipeline._LoweredSlot.__module__ == "tslc._pipeline_closure"
     assert pipeline._prune_unresolved.__module__ == "tslc._pipeline_closure"
-    assert (
-        pipeline._propagate_transitive_call_facts.__module__
-        == "tslc._pipeline_closure"
-    )
     assert pipeline._profile_with_required_features.__module__ == "tslc._pipeline_closure"
 
 
@@ -50,6 +49,44 @@ def test_cpp_project_renderer_has_focused_owned_modules() -> None:
     assert cpp_project.cpp_artifacts.__module__ == "tslc.render.cpp_project"
     assert cpp_profile._cpp_registration.__module__ == "tslc.backend.cpp_profile"
     assert cpp_build.cpp_flags.__module__ == "tslc.render.cpp_build"
+
+
+def test_render_assets_have_one_packaged_source_of_truth() -> None:
+    assets = load_default_render_assets()
+    assert {
+        "cpp_benchmark.cpp.tmpl",
+        "cpp_dispatch.hpp.tmpl",
+        "cpp_dispatch_algorithm_include.hpp",
+        "cpp_dispatch_case.hpp.tmpl",
+        "cpp_dispatch_overlay.hpp.tmpl",
+        "cpp_documentation.hpp.tmpl",
+        "cpp_profile_header.hpp.tmpl",
+        "cpp_profile_metadata.hpp.tmpl",
+        "cpp_primitive_tags.hpp.tmpl",
+        "cpp_smoke.cpp.tmpl",
+        "rust_documentation.rs.tmpl",
+        "rust_lib.rs.tmpl",
+        "rust_lib_profile.rs.tmpl",
+        "rust_primitive_tags.rs.tmpl",
+        "rust_profile_module.rs.tmpl",
+        "rust_profile_metadata.rs.tmpl",
+        "rust_smoke.rs",
+    } <= assets.files.keys()
+    assert "int main(int argc, char** argv)" in assets.text(
+        "cpp_benchmark.cpp.tmpl"
+    )
+    assert "namespace tsl::profiles::@{profile_namespace}" in assets.text(
+        "cpp_profile_metadata.hpp.tmpl"
+    )
+    for retired_tree in (
+        "supplementary/buildsystem/cpp",
+        "supplementary/buildsystem/rust",
+        "supplementary/helpers",
+        "supplementary/templates",
+    ):
+        assert not any(
+            path.is_file() for path in (_REPO_ROOT / retired_tree).rglob("*")
+        )
 
 
 def test_backend_closure_seed_primitives_are_capability_owned() -> None:
@@ -82,6 +119,57 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
         "store",
         "to_array",
     )
+
+
+def test_backend_capability_owns_optional_benchmark_planning(catalog) -> None:
+    calls: list[str] = []
+
+    def plan_benchmarks(catalog, profiles, value_tests):  # noqa: ANN001
+        del catalog, profiles, value_tests
+        calls.append("future")
+        return EMPTY_BENCHMARK_PROJECT_PLAN
+
+    future = BackendCapability(
+        backend_id="future",
+        root_path="future",
+        artifact_media_type="text/future",
+        dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
+        project_renderer=lambda profiles, assets, media_type: [],
+        verify_profiles=lambda profiles: (),
+        value_test_support_factory=lambda: None,  # type: ignore[return-value]
+        test_renderer=lambda plan, assets, media_type: [],
+        verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        documentation_formatter_factory=_FakeDocumentationFormatter,
+        benchmark_plan_builder=plan_benchmarks,
+    )
+
+    planned = future.plan_benchmarks(catalog, (), ValueTestProjectPlan(profiles=()))
+
+    assert planned is EMPTY_BENCHMARK_PROJECT_PLAN
+    assert calls == ["future"]
+
+
+def test_neutral_planners_do_not_branch_on_registered_backend_names() -> None:
+    pipeline_tree = ast.parse(
+        (_REPO_ROOT / "tslc/src/tslc/pipeline.py").read_text()
+    )
+    value_planner_tree = ast.parse(
+        (_REPO_ROOT / "tslc/src/tslc/value_tests/planner.py").read_text()
+    )
+
+    pipeline_literals = {
+        node.value
+        for node in ast.walk(pipeline_tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    value_planner_literals = {
+        node.value
+        for node in ast.walk(value_planner_tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+
+    assert "cpp" not in pipeline_literals
+    assert "rust" not in value_planner_literals
 
 
 def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) -> None:

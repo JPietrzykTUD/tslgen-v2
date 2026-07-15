@@ -19,6 +19,7 @@ from tslc.backend.rust_type_params import (
     type_param_base_key_decls as _type_param_base_key_decls,
     type_param_decls as _type_param_decls,
     type_param_names as _type_param_names,
+    with_consistent_type_param_bounds as _with_consistent_type_param_bounds,
 )
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.backend.rust_translation import rust_raw_identifier
@@ -62,6 +63,7 @@ class RustBackend:
     def render_primitive_internal(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
     ) -> str:
+        specializations = _with_consistent_type_param_bounds(specializations)
         shape = specializations[0]
         if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
             shape.result_kind,
@@ -116,6 +118,7 @@ class RustBackend:
     def render_primitive_public(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
     ) -> str:
+        specializations = _with_consistent_type_param_bounds(specializations)
         shape = specializations[0]
         if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
             shape.result_kind,
@@ -141,6 +144,7 @@ class RustBackend:
         dispatch trait or implementation body.
         """
 
+        specializations = _with_consistent_type_param_bounds(specializations)
         shape = specializations[0]
         if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
             shape.result_kind,
@@ -580,7 +584,7 @@ class RustBackend:
         if not self._emit_target_features or not spec.required_features:
             return ()
         return tuple(
-            f'#[target_feature(enable = "{feature_spelling(feature, self._feature_alternatives)}")]'
+            f'#[target_feature(enable = "{feature_spelling(feature, self._feature_alternatives, backend_id="rust")}")]'
             for feature in sorted(spec.required_features)
         )
 
@@ -591,18 +595,18 @@ def _free_function(spec: LoweredSpecialization, *, backend: RustBackend) -> str:
     already applied by the lowered body (raw pointer / allocation access)."""
 
     params = ", ".join(
-        f"{name}: {_free_kind_type(kind, spec.base_type_spelling)}"
+        f"{name}: {_free_kind_type(kind, spec)}"
         for name, kind in zip(spec.param_names, spec.param_kinds)
     )
     ret_clause = (
         ""
         if spec.result_kind == "void"
-        else f" -> {_free_kind_type(spec.result_kind, spec.base_type_spelling)}"
+        else f" -> {_free_kind_type(spec.result_kind, spec)}"
     )
     ret_type = (
         "()"
         if spec.result_kind == "void"
-        else _free_kind_type(spec.result_kind, spec.base_type_spelling)
+        else _free_kind_type(spec.result_kind, spec)
     )
     unsafe_prefix = _unsafe_prefix(spec.safety.caller_unsafe)
     function_name = rust_raw_identifier(spec.primitive_name)
@@ -696,13 +700,13 @@ def _documentation_overloaded_wrapper(
 
 def _documentation_free_function(spec: LoweredSpecialization) -> str:
     params = ", ".join(
-        f"{name}: {_free_kind_type(kind, spec.base_type_spelling)}"
+        f"{name}: {_free_kind_type(kind, spec)}"
         for name, kind in zip(spec.param_names, spec.param_kinds)
     )
     result = (
         ""
         if spec.result_kind == "void"
-        else f" -> {_free_kind_type(spec.result_kind, spec.base_type_spelling)}"
+        else f" -> {_free_kind_type(spec.result_kind, spec)}"
     )
     doc = _rust_doc(spec, context="Rust documentation facade")
     return (
@@ -757,18 +761,18 @@ def _free_function_variant(
     if body is None:
         return ""
     params = ", ".join(
-        f"{name}: {_free_kind_type(kind, spec.base_type_spelling)}"
+        f"{name}: {_free_kind_type(kind, spec)}"
         for name, kind in zip(spec.param_names, spec.param_kinds)
     )
     ret_clause = (
         ""
         if spec.result_kind == "void"
-        else f" -> {_free_kind_type(spec.result_kind, spec.base_type_spelling)}"
+        else f" -> {_free_kind_type(spec.result_kind, spec)}"
     )
     ret_type = (
         "()"
         if spec.result_kind == "void"
-        else _free_kind_type(spec.result_kind, spec.base_type_spelling)
+        else _free_kind_type(spec.result_kind, spec)
     )
     unsafe_prefix = _unsafe_prefix(spec.safety.caller_unsafe)
     function_name = rust_raw_identifier(
@@ -827,11 +831,15 @@ def _unsafe_call(call: str, enabled: bool) -> str:
     return f"unsafe {{ {call} }}" if enabled else call
 
 
-def _free_kind_type(kind: str, base_spelling: str) -> str:
+def _free_kind_type(kind: str, spec: LoweredSpecialization) -> str:
     """A free function's kind -> concrete Rust type (no `Self` projection). Pointer spellings
     carry their own mutability; `usize` is a size; `void` is unit."""
 
-    return rust_free_type(kind, base_spelling)
+    return rust_free_type(
+        kind,
+        spec.base_type_spelling,
+        base_type_tag=spec.type_tag,
+    )
 
 
 def _impl_generic_parts(shape: LoweredSpecialization) -> tuple[list[str], list[str]]:

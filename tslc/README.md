@@ -10,11 +10,12 @@ small compiler pipeline:
 sources -> parse -> catalog -> select -> scan body -> lower -> finalize/validate/plan -> render -> write -> verify
 ```
 
-- **`sources`** reads `.tsl` files (the only filesystem-read boundary).
+- **`sources`** owns `.tsl` source-document reads; compiler assets and explicit
+  configuration have their own loading boundaries.
 - **`syntax`** parses outer declarations + TSIL body envelopes (Lark, ported).
 - **`catalog`** promotes the parse tree into a typed, immutable domain model.
-- **`select`** chooses an implementation for an explicit `Target`
-  (backend × extension × type), expanding type groups and extension fallbacks.
+- **`select`** chooses implementations for one machine profile and registered backend,
+  producing explicit extension × type slots while expanding type groups and fallbacks.
 - **`ir`** models a TSIL body as a recursive sequence of `[raw text | region]`
   segments — *not* an abstract syntax tree. Raw target-language text passes
   through verbatim; only recognized TSIL keyword islands are lowered.
@@ -23,30 +24,40 @@ sources -> parse -> catalog -> select -> scan body -> lower -> finalize/validate
 - **`backend`** owns target-language type projection, helper requirements,
   emitted profiles, pre-render validation, and C++/Rust function emission.
 - **`value_tests`** plans executable cases from finalized emitted names.
+- **`benchmark`** plans optional typed variant measurements and policy data.
 - **`render`/`output`** assemble and write the `generated/{cpp,rust}/...` tree,
   consuming already-decided semantics, then build-verify it with local toolchains.
 
-See [CHARTER.md](CHARTER.md) for the design rules this project holds itself to.
+See the repository [charter](../CHARTER.md) and compiler
+[charter](CHARTER.md) for the design rules this project holds itself to.
 
 ## Quick start
 
 ```bash
-cd tslc
-python -m mypy
-python -m pytest -q
+# Run from the repository root.
+python -m compileall -q tslc/src/tslc
+(cd tslc && python -m mypy)
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests
 # Generated C++/Rust build/value gates are opt-in:
-python -m pytest -q --run-generated-builds tests/test_build_verify.py tests/test_value_tests.py
+PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
 # Write scratch/output under the workspace (./tslctmp), not /tmp: on WSL the
 # container overlay (which backs /tmp) only grows the VHDX and never shrinks.
-python -m tslc.cli --sources ../tsldata \
-  --machine-profiles ../supplementary/buildsystem/machine_profiles.json \
-  --primitives add,sub --profiles scalar,avx2 \
-  --output-root ./tslctmp/generated --verify
+python -m pip install -e ./tslc
+tslc check
+tslc list primitives
+tslc generate --primitives add,sub --profiles scalar,avx2
+tslc build --primitives add,sub --profiles scalar,avx2
 
 # Build and run generated value tests.
 # The CLI prints captured ctest/cargo test output for the test steps.
-python -m tslc.cli --sources ../tsldata \
-  --machine-profiles ../supplementary/buildsystem/machine_profiles.json \
-  --primitives add,sub --profiles avx2 --backends cpp \
-  --output-root ./tslctmp/value-tests --test
+tslc test --primitives add,sub --profiles avx2 --backends cpp
 ```
+
+The repository `tslc.toml` supplies source, machine-profile, backend, and
+workspace-output defaults. `PYTHONPATH=tslc/src python -m tslc ...` exposes the
+same commands without installation. See the full
+[command-line tools guide](../docs/tslc-cli.md) for `check --watch`, JSON
+diagnostics, catalog discovery, `doctor`, inspection, audits, and exit codes.
+
+Contributor instructions for compiler changes live in
+[`AGENTS.md`](AGENTS.md), in addition to the repository instructions.

@@ -607,8 +607,8 @@ extension scalar:
 # opt-in profile header. They deliberately do not participate in
 # dataparallel::native/fixed<N> inference: those policies remain the bridge to
 # the hardware-backed extension selected by the enclosing machine profile.
-# Their mask type is Clang's exact vector-comparison result; compact boolean
-# mask variants remain deferred until target-specific benchmarks justify them.
+# The default mask type is Clang's exact vector-comparison result. Additive
+# boolean-vector variants below expose the dense one-bit-per-lane alternative.
 extension clang_v128:
   extension_name "clang_v128"
   inherits "generic"
@@ -708,6 +708,41 @@ extension clang_v512:
       cpp "float __attribute__((ext_vector_type(16)))"
     f64:
       cpp "double __attribute__((ext_vector_type(8)))"
+
+# Additive Clang boolean-mask overlays. Their data registers and most primitive
+# bodies are inherited from the corresponding comparison-vector extension;
+# representation-specific conversions may override that shared path. Keeping
+# both identities lets one generated project compile and benchmark both mask
+# contracts without changing the established clang_v* ABI.
+extension clang_v128_bool:
+  extension_name "clang_v128_bool"
+  inherits "clang_v128"
+  native_sort_order 10
+  default_test_target true
+  cpp:
+    compiler_features [ext_vector_type_boolean]
+  mask_type_policy:
+    kind "boolean_lane_vector"
+
+extension clang_v256_bool:
+  extension_name "clang_v256_bool"
+  inherits "clang_v256"
+  native_sort_order 10
+  default_test_target true
+  cpp:
+    compiler_features [ext_vector_type_boolean]
+  mask_type_policy:
+    kind "boolean_lane_vector"
+
+extension clang_v512_bool:
+  extension_name "clang_v512_bool"
+  inherits "clang_v512"
+  native_sort_order 10
+  default_test_target true
+  cpp:
+    compiler_features [ext_vector_type_boolean]
+  mask_type_policy:
+    kind "boolean_lane_vector"
 
 extension generic:
   extension_name "generic"

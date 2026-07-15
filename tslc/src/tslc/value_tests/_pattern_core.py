@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.scalar_types import normalize_scalar_tag
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import SupportPolicy
 from tslc.value_tests._case_conversion import differential_cases, differential_fuzz_cases
@@ -36,17 +37,33 @@ class _GenericGoldenPattern(_BasePattern):
         return (
             spec.result_kind in ("v", "m")
             and bool(spec.param_kinds)
-            and all(kind == "v" for kind in spec.param_kinds)
+            and all(kind in ("v", "vidx") for kind in spec.param_kinds)
+            and spec.param_kinds.count("vidx") <= 1
             and spec.target is None
             and spec.mask_policy is None
             and not spec.axis
             and spec.immediate is None
-            and not spec.type_params
+            and (
+                not spec.type_params
+                or (
+                    spec.param_kinds.count("vidx") == 1
+                    and len(spec.type_params) == 1
+                )
+            )
         )
 
     def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        index_base_spelling = None
+        if "vidx" in context.specs[0].param_kinds and context.case.index_type is not None:
+            index_base_spelling = context.catalog.type_spellings.get(
+                context.backend.backend_id, {}
+            ).get(normalize_scalar_tag(context.case.index_type))
         plan = generic_golden_case(
-            context.emitted_name, context.index, context.case, context.specs
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
+            index_base_spelling,
         )
         if plan is None:
             return ()
@@ -73,7 +90,11 @@ class _GenericGoldenPattern(_BasePattern):
                 context.backend,
             )
         )
-        if context.backend.supports_differential and context.harness.round_trip_ready:
+        if (
+            "vidx" not in context.specs[0].param_kinds
+            and context.backend.supports_differential
+            and context.harness.round_trip_ready
+        ):
             plans.extend(
                 differential_cases(
                     context.emitted_name,
@@ -90,7 +111,10 @@ class _GenericGoldenPattern(_BasePattern):
         """Random-input differential cases for this primitive — independent of authored tests, so
         even an untested all-vector primitive gets a runtime hardware-vs-generic sweep."""
 
-        if not (context.backend.supports_differential and context.harness.round_trip_ready):
+        if (
+            "vidx" in context.specs[0].param_kinds
+            or not (context.backend.supports_differential and context.harness.round_trip_ready)
+        ):
             return ()
         return tuple(
             differential_fuzz_cases(

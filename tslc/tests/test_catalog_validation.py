@@ -132,6 +132,129 @@ def test_primitive_documentation_fields_are_accepted_and_promoted() -> None:
     assert "return data" in (primitive.semantics or "")
 
 
+def test_benchmark_latency_chain_is_typed_primitive_metadata() -> None:
+    source = _base_source().replace(
+        "  impls:\n",
+        "  benchmarks:\n"
+        "    latency_chain data\n"
+        "    operand_domains:\n"
+        "      data nonzero\n"
+        "  impls:\n",
+    )
+    document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+    diagnostics = (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=("cpp", "rust")),
+    )
+
+    assert diagnostics == ()
+    primitive = result.catalog.primitive("id")
+    assert primitive is not None
+    assert primitive.benchmark.latency_chain == "data"
+    assert [
+        (operand.parameter, operand.domain)
+        for operand in primitive.benchmark.operand_domains
+    ] == [("data", "nonzero")]
+
+
+@pytest.mark.parametrize(
+    ("benchmarks", "code"),
+    (
+        ('  benchmarks "latency"\n', "TSL-CATALOG-BENCHMARKS-NOT-MAP"),
+        (
+            "  benchmarks:\n    latency_chain missing\n",
+            "TSL-CATALOG-BENCHMARK-BAD-LATENCY-CHAIN",
+        ),
+        (
+            "  benchmarks:\n    workload arbitrary_cpp\n",
+            "TSL-CATALOG-UNKNOWN-FIELD",
+        ),
+        (
+            '  benchmarks:\n    operand_domains "nonzero"\n',
+            "TSL-CATALOG-BENCHMARK-OPERAND-DOMAINS-NOT-MAP",
+        ),
+        (
+            "  benchmarks:\n    operand_domains:\n      missing nonzero\n",
+            "TSL-CATALOG-BENCHMARK-BAD-OPERAND",
+        ),
+        (
+            "  benchmarks:\n    operand_domains:\n      data arbitrary\n",
+            "TSL-CATALOG-BENCHMARK-BAD-OPERAND-DOMAIN",
+        ),
+    ),
+)
+def test_benchmark_metadata_rejects_untyped_or_unknown_forms(
+    benchmarks: str,
+    code: str,
+) -> None:
+    source = _base_source().replace("  impls:\n", benchmarks + "  impls:\n")
+
+    assert any(diagnostic.code == code for diagnostic in _diagnostics(source))
+
+
+def test_benchmark_operand_domain_rejects_non_vector_parameter() -> None:
+    source = _base_source().replace(
+        "prim<v:=v> id(data):\n  impls:\n",
+        "prim<v:=(v,s)> id(data, divisor):\n"
+        "  benchmarks:\n"
+        "    operand_domains:\n"
+        "      divisor nonzero\n"
+        "  impls:\n",
+    )
+
+    assert any(
+        diagnostic.code == "TSL-CATALOG-BENCHMARK-BAD-OPERAND"
+        for diagnostic in _diagnostics(source)
+    )
+
+
+def test_shift_count_operand_domain_accepts_scalar_parameter() -> None:
+    source = _base_source().replace(
+        "prim<v:=v> id(data):\n  impls:\n",
+        "prim<v:=(v,s)> id(data, count):\n"
+        "  benchmarks:\n"
+        "    operand_domains:\n"
+        "      count shift_count\n"
+        "  impls:\n",
+    )
+    document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+
+    assert (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=("cpp", "rust")),
+    ) == ()
+    primitive = result.catalog.primitive("id")
+    assert primitive is not None
+    assert [
+        (operand.parameter, operand.domain)
+        for operand in primitive.benchmark.operand_domains
+    ] == [("count", "shift_count")]
+
+
+def test_shift_count_operand_domain_rejects_immediate_parameter() -> None:
+    source = _base_source().replace(
+        "prim<v:=v> id(data):\n  impls:\n",
+        "prim<v:=(v,sImm)> id(data, count):\n"
+        "  benchmarks:\n"
+        "    operand_domains:\n"
+        "      count shift_count\n"
+        "  impls:\n",
+    )
+
+    assert any(
+        diagnostic.code == "TSL-CATALOG-BENCHMARK-BAD-OPERAND"
+        for diagnostic in _diagnostics(source)
+    )
+
+
 def test_implementation_variants_are_accepted_and_promoted() -> None:
     source = _base_source().replace(
         "        implementation:\n"
@@ -646,9 +769,13 @@ def test_invalid_enum_like_values_are_diagnosed() -> None:
         "target_families:\n"
         "  known_extension_families [scalar]\n"
         "  universal_extension_families [scalar]\n"
+        "  extension_family_capabilities:\n"
+        "    scalar:\n"
+        "      implementation_fallback sometimes\n"
         "  profile_families:\n"
         "    generic:\n"
         "      extension_families []\n"
+        "      native_without_runner sometimes\n"
         "types:\n"
         "  ints {types [si32]}\n"
         "extension scalar:\n"
@@ -671,6 +798,8 @@ def test_invalid_enum_like_values_are_diagnosed() -> None:
     messages = [d.message for d in diagnostics if d.code == "TSL-CATALOG-INVALID-ENUM"]
     assert any("family" in message for message in messages)
     assert any("mask_type_policy" in message for message in messages)
+    assert any("implementation_fallback" in message for message in messages)
+    assert any("native_without_runner" in message for message in messages)
 
 
 def test_target_family_data_makes_new_extension_family_additive() -> None:
@@ -1032,6 +1161,38 @@ def test_malformed_mask_body_region_is_diagnosed(body: str) -> None:
 
     diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-MASK-SELECTOR")
     assert "malformed mask selector" in diagnostic.message
+
+
+def test_array_set_body_region_is_accepted_with_nested_index() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            'tsil "complete(data);"',
+            (
+                'tsil "array<set>(lanes, '
+                'cast<static>(type(scalar::size), 0), data); complete(data);"'
+            ),
+        )
+    )
+
+    assert diagnostics == ()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "array<get>(lanes, 0, data); complete(data);",
+        "array<set>(lanes, 0); complete(data);",
+        "array<set>(lanes, 0, data, extra); complete(data);",
+        "array(lanes, 0, data); complete(data);",
+    ],
+)
+def test_malformed_array_body_region_is_diagnosed(body: str) -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace('tsil "complete(data);"', f'tsil "{body}"')
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-ARRAY")
+    assert "array<set>(array, index, value)" in diagnostic.message
 
 
 @pytest.mark.parametrize(

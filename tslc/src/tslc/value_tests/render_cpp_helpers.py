@@ -26,6 +26,28 @@ def append_call_args(lines: list[str], case: ValueTestCasePlan) -> list[str]:
             )
             args.append(f"v{vector_index}")
             vector_index += 1
+        elif kind == "vidx":
+            index = case.index
+            if (
+                index is None
+                or index.type_tag is None
+                or index.base_spelling is None
+                or index.lanes is None
+            ):
+                raise ValueError("indexed C++ value test requires an index-vector layout")
+            values = case.inputs.vectors[vector_index]
+            literals = cpp_literal_list(values, index.type_tag)
+            lines.append(
+                f"  static const {index.base_spelling} in{vector_index}[{index.lanes}] = "
+                f"{{{literals}}};"
+            )
+            lines.append(f"  typename Indices::register_type v{vector_index};")
+            lines.append(
+                f"  for (std::size_t i = 0; i < {index.lanes}; ++i) "
+                f"v{vector_index}[i] = in{vector_index}[i];"
+            )
+            args.append(f"v{vector_index}")
+            vector_index += 1
         elif kind == "m":
             lines.append(
                 f"  typename Vec::mask_type m{mask_index} = "
@@ -53,6 +75,15 @@ def append_call_args(lines: list[str], case: ValueTestCasePlan) -> list[str]:
             )
             args.append(f"s{scalar_index}")
             scalar_index += 1
+        elif kind in {"ptr", "cptr"}:
+            values = case.inputs.vectors[vector_index]
+            initial = cpp_literal(values[0], case.type_tag) if values else "{}"
+            qualifier = "const " if kind == "cptr" else ""
+            lines.append(
+                f"  {qualifier}{case.base_spelling} pointed{vector_index} = {initial};"
+            )
+            args.append(f"&pointed{vector_index}")
+            vector_index += 1
         elif kind == "o":
             lines.append(f"  std::string out{position};")
             args.append(f"out{position}")

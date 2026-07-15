@@ -48,7 +48,7 @@ _STAGES = ("catalog", "segments", "selection", "lowered")
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="tslc-stage-dump",
+        prog="tslc inspect",
         description="Dump one pipeline stage (catalog/segments/selection/lowered) as text or JSON.",
     )
     parser.add_argument("--stage", required=True, choices=_STAGES)
@@ -131,7 +131,14 @@ def run(
         else sorted({p.name for p in catalog.primitives})
     )
     if stage == "selection":
-        return _dump_selection(catalog, machine_profile, primitive_names, types, extension)
+        return _dump_selection(
+            catalog,
+            machine_profile,
+            backend,
+            primitive_names,
+            types,
+            extension,
+        )
     return _dump_lowered(
         catalog, machine_profile, backend, primitive_names, types, extension
     )
@@ -290,6 +297,7 @@ def _dump_segments(
 def _dump_selection(
     catalog: Catalog,
     machine_profile: MachineProfile,
+    backend: str,
     primitive_names: Sequence[str],
     types: tuple[str, ...],
     extension: str | None,
@@ -298,7 +306,13 @@ def _dump_selection(
     lines: list[str] = [f"# selection for profile {machine_profile.name}"]
     slots_json: list[dict] = []
     for name in primitive_names:
-        selection = selector.select_profile(catalog, machine_profile, name, types)
+        selection = selector.select_profile(
+            catalog,
+            machine_profile,
+            name,
+            types,
+            backend_id=backend,
+        )
         for slot in selection.selected:
             if extension is not None and slot.extension.isa_name != extension:
                 continue
@@ -349,7 +363,13 @@ def _dump_lowered(
     lines: list[str] = [f"# lowered for {machine_profile.name} / {backend}"]
     specs_json: list[dict] = []
     for name in primitive_names:
-        selection = selector.select_profile(catalog, machine_profile, name, types)
+        selection = selector.select_profile(
+            catalog,
+            machine_profile,
+            name,
+            types,
+            backend_id=backend,
+        )
         for slot in selection.selected:
             if extension is not None and slot.extension.isa_name != extension:
                 continue

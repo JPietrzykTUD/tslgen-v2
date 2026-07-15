@@ -25,6 +25,10 @@ prim<s:=v> hadd(vec):
     - {tags [edge, wrap, sse], extension "sse", type "si8", lane_count 16, case {inputs [[-128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -127]], expected 1}}
     - {tags [edge, wrap, sse], extension "sse", type "si16", lane_count 8, case {inputs [[32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767]], expected -8}}
     - {tags [edge, wrap, avx2], extension "avx2", type "ui8", lane_count 32, case {inputs [[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]], expected 224}}
+    - {tags [avx2], extension "avx2", type "si8", lane_count 32, case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected 32}}
+    - {tags [avx2], extension "avx2", type "si16", lane_count 16, case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected 16}}
+    - {tags [avx2], extension "avx2", type "ui16", lane_count 16, case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected 16}}
+    - {tags [avx2], extension "avx2", type "ui32", lane_count 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 36}}
     - {tags [edge, wrap, avx512], extension "avx512", type "ui16", lane_count 32, case {inputs [[65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]], expected 65504}}
     - {tags [neon, direct], extension "neon", type "si8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected 16}}
     - {tags [neon, direct], extension "neon", type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 36}}
@@ -53,9 +57,9 @@ prim<s:=v> hadd(vec):
           # lane fallback without spilling through an array.
           tsil """
             #if __has_builtin(__builtin_reduce_in_order_fadd)
-              complete(__builtin_reduce_in_order_fadd(vec, cast<static>(type(base::in), 0)));
+              complete(__builtin_reduce_in_order_fadd(vec, cast<static>(base::in, 0)));
             #else
-              var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+              var<typed>(base::in, result, cast<static>(base::in, 0));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 result = helper<arith_add>(result, vec[value(i)]);
               }
@@ -70,7 +74,7 @@ prim<s:=v> hadd(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(base::in), intrin<svaddv, build>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "complete(cast<static>(base::in, intrin<svaddv, build>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
         safety:
@@ -114,7 +118,7 @@ prim<s:=v> hadd(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(base::in), intrin<reduce_add, build[suffix=base::signed_of(base::in)]>(vec)));"
+          tsil "complete(cast<static>(base::in, intrin<reduce_add, build[suffix=base::signed_of(base::in)]>(vec)));"
       f?:
         requires [avx512f]
         safety:
@@ -132,7 +136,7 @@ prim<s:=v> hadd(vec):
         implementation:
           tsil """
             var<const_infer>(sums, intrin<_mm512_sad_epu8>(vec, call<primitive=set_zero[Vec]>()));
-            complete(cast<static>(type(base::in), intrin<_mm512_reduce_add_epi64>(sums)));
+            complete(cast<static>(base::in, intrin<_mm512_reduce_add_epi64>(sums)));
           """
       [si16, ui16]:
         requires [avx512bw, avx512f]
@@ -144,9 +148,9 @@ prim<s:=v> hadd(vec):
           tsil """
             var<const_infer>(pair_sums, intrin<_mm512_madd_epi16>(
               vec,
-              call<primitive=set1[Vec]>(cast<static>(type(base::in), 1))
+              call<primitive=set1[Vec]>(cast<static>(base::in, 1))
             ));
-            complete(cast<static>(type(base::in), intrin<_mm512_reduce_add_epi32>(pair_sums)));
+            complete(cast<static>(base::in, intrin<_mm512_reduce_add_epi32>(pair_sums)));
           """
     [avx2_vl, sse_vl]:
       [si16, ui16]:
@@ -156,7 +160,7 @@ prim<s:=v> hadd(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(base::in), intrin<reduce_add, build[suffix=base::signed_of(base::in)]>(vec)));"
+          tsil "complete(cast<static>(base::in, intrin<reduce_add, build[suffix=base::signed_of(base::in)]>(vec)));"
     avx2:
       ?i?:
         requires [avx2]
@@ -166,13 +170,22 @@ prim<s:=v> hadd(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as_extension(sse)));
+            let<type>(HalfVec, vector::as_extension(sse));
             var<const_infer>(folded, call<primitive=add[HalfVec]>(
               call<primitive=extract[Vec, sse, 0]>(vec),
               call<primitive=extract[Vec, sse, 1]>(vec)
             ));
             complete(call<primitive=@self[HalfVec]>(folded));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, vector::as_extension(generic));
+              var<const_infer>(generic_vec, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(vec)
+              ));
+              complete(call<primitive=@self[GenericVec]>(generic_vec));
+            """
       f?:
         requires [avx2]
         safety:
@@ -181,7 +194,7 @@ prim<s:=v> hadd(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as_extension(sse)));
+            let<type>(HalfVec, vector::as_extension(sse));
             var<const_infer>(folded, call<primitive=add[HalfVec]>(
               call<primitive=extract[Vec, sse, 0]>(vec),
               call<primitive=extract[Vec, sse, 1]>(vec)
@@ -197,7 +210,7 @@ prim<s:=v> hadd(vec):
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            var<typed>(base::in, result, cast<static>(base::in, 0));
             loop<backend>(i, 0, value(vector::length), 1) {
               result = helper<arith_add>(result, values[i]);
             }
@@ -212,10 +225,10 @@ prim<s:=v> hadd(vec):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(SumVec, type(vector::as_base(ui64)));
+            let<type>(SumVec, vector::as_base(ui64));
             var<infer>(temp, intrin<_mm_sad_epu8>(vec, call<primitive=set_zero[Vec]>()));
             temp = call<primitive=add[SumVec]>(temp, intrin<_mm_unpackhi_epi64>(temp, temp));
-            complete(cast<static>(type(base::in), call<primitive=extract_value[SumVec, 0]>(temp)));
+            complete(cast<static>(base::in, call<primitive=extract_value[SumVec, 0]>(temp)));
           """
       [si16, ui16]:
         requires [sse2]
@@ -225,14 +238,14 @@ prim<s:=v> hadd(vec):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(SumVec, type(vector::as_base(si32)));
+            let<type>(SumVec, vector::as_base(si32));
             var<infer>(temp, intrin<_mm_madd_epi16>(
               vec,
-              call<primitive=set1[Vec]>(cast<static>(type(base::in), 1))
+              call<primitive=set1[Vec]>(cast<static>(base::in, 1))
             ));
             temp = call<primitive=add[SumVec]>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = call<primitive=add[SumVec]>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type(base::in), call<primitive=extract_value[SumVec, 0]>(temp)));
+            complete(cast<static>(base::in, call<primitive=extract_value[SumVec, 0]>(temp)));
           """
       [si32, ui32]:
         requires [sse2]
@@ -245,7 +258,7 @@ prim<s:=v> hadd(vec):
             var<infer>(temp, vec);
             temp = call<primitive=add[Vec]>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = call<primitive=add[Vec]>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
+            complete(cast<static>(base::in, call<primitive=extract_value[Vec, 0]>(temp)));
           """
       [si64, ui64]:
         requires [sse2]
@@ -259,7 +272,7 @@ prim<s:=v> hadd(vec):
               vec,
               intrin<_mm_unpackhi_epi64>(vec, vec)
             ));
-            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
+            complete(cast<static>(base::in, call<primitive=extract_value[Vec, 0]>(temp)));
           """
       f32:
         requires [sse2]
@@ -269,7 +282,7 @@ prim<s:=v> hadd(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             var<const_infer>(pair02, call<primitive=add[ScalarVec]>(
               call<primitive=extract_value[Vec, 0]>(vec),
               call<primitive=extract_value[Vec, 2]>(vec)
@@ -288,7 +301,7 @@ prim<s:=v> hadd(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             complete(call<primitive=add[ScalarVec]>(
               call<primitive=extract_value[Vec, 0]>(vec),
               call<primitive=extract_value[Vec, 1]>(vec)
@@ -303,7 +316,7 @@ prim<s:=v> hadd(vec):
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            var<typed>(base::in, result, cast<static>(base::in, 0));
             loop<backend>(i, 0, value(vector::length), 1) {
               result = helper<arith_add>(result, values[i]);
             }
@@ -320,7 +333,7 @@ prim<s:=v> hadd(vec):
           # KNL/KML lack AVX-512BW. Addition modulo the lane width is associative,
           # so fold corresponding lanes from four SSE2 quarters before reducing once.
           tsil """
-            let<type>(QuarterVec, type(vector::as_extension(sse)));
+            let<type>(QuarterVec, vector::as_extension(sse));
             var<infer>(folded, call<primitive=extract[Vec, sse, 0]>(vec));
             folded = call<primitive=add[QuarterVec]>(
               folded,
@@ -350,7 +363,7 @@ prim<s:=v> hadd(vec):
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            var<typed>(base::in, result, cast<static>(base::in, 0));
             loop<backend>(i, 0, value(vector::length), 1) {
               result = helper<arith_add>(result, values[i]);
             }
@@ -376,7 +389,7 @@ prim<s:=v> hadd(vec):
           reasons []
         implementation:
           tsil """
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            var<typed>(base::in, result, cast<static>(base::in, 0));
             loop<backend>(i, 0, value(vector::length), 1) {
               result = helper<arith_add>(result, vec[i]);
             }
@@ -411,6 +424,13 @@ prim<s:=v> hmax(vec):
     - {tags [neon, direct], extension "neon", type "ui32", case {inputs [[0, 1, 4294967295, 42]], expected 4294967295}}
     - {tags [neon, direct, edge], extension "neon", type "si64", case {inputs [[-9223372036854775808, 9223372036854775807]], expected 9223372036854775807}}
     - {tags [neon, direct, edge], extension "neon", type "ui64", case {inputs [[0, 18446744073709551615]], expected 18446744073709551615}}
+    - {tags [avx2], extension "avx2", type "si8", lane_count 32, case {inputs [[-16, -15, -14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected 15}}
+    - {tags [avx2], extension "avx2", type "ui8", lane_count 32, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]], expected 31}}
+    - {tags [avx2], extension "avx2", type "si16", lane_count 16, case {inputs [[-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7]], expected 7}}
+    - {tags [avx2], extension "avx2", type "ui16", lane_count 16, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected 15}}
+    - {tags [avx2], extension "avx2", type "ui32", lane_count 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7]], expected 7}}
+    - {tags [avx2], extension "avx2", type "si64", lane_count 4, case {inputs [[-2, -1, 0, 1]], expected 1}}
+    - {tags [avx2], extension "avx2", type "ui64", lane_count 4, case {inputs [[0, 1, 2, 3]], expected 3}}
   impls:
     clang_v128:
       arith:
@@ -429,7 +449,7 @@ prim<s:=v> hmax(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(base::in), intrin<svmaxv, build>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "complete(cast<static>(base::in, intrin<svmaxv, build>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
         safety:
@@ -455,7 +475,7 @@ prim<s:=v> hmax(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             var<const_infer>(left, call<primitive=extract_value[Vec, 0]>(vec));
             var<const_infer>(right, call<primitive=extract_value[Vec, 1]>(vec));
             complete(call<primitive=max[ScalarVec]>(left, right));
@@ -469,7 +489,7 @@ prim<s:=v> hmax(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             var<infer>(result, call<primitive=extract_value[Vec, 0]>(vec));
             loop<generation, scoped>(i, 1, value(vector::length), 1) {
               result = call<primitive=max[ScalarVec]>(
@@ -487,7 +507,7 @@ prim<s:=v> hmax(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(base::in), intrin<reduce_max, build>(vec)));"
+          tsil "complete(cast<static>(base::in, intrin<reduce_max, build>(vec)));"
       f?:
         requires [avx512f]
         safety:
@@ -504,7 +524,7 @@ prim<s:=v> hmax(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as_extension(avx2)));
+            let<type>(HalfVec, vector::as_extension(avx2));
             var<const_infer>(lo, call<primitive=extract[Vec, avx2, 0]>(vec));
             var<const_infer>(hi, call<primitive=extract[Vec, avx2, 1]>(vec));
             complete(call<primitive=hmax[HalfVec]>(call<primitive=max[HalfVec]>(lo, hi)));
@@ -517,7 +537,7 @@ prim<s:=v> hmax(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(QuarterVec, type(vector::as_extension(sse)));
+            let<type>(QuarterVec, vector::as_extension(sse));
             var<infer>(folded, call<primitive=extract[Vec, sse, 0]>(vec));
             folded = call<primitive=max[QuarterVec]>(
               folded,
@@ -541,7 +561,7 @@ prim<s:=v> hmax(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(base::in), intrin<reduce_max, build>(vec)));"
+          tsil "complete(cast<static>(base::in, intrin<reduce_max, build>(vec)));"
     avx2:
       ?i?:
         requires [avx2]
@@ -551,13 +571,22 @@ prim<s:=v> hmax(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as_extension(sse)));
+            let<type>(HalfVec, vector::as_extension(sse));
             var<const_infer>(folded, call<primitive=max[HalfVec]>(
               call<primitive=extract[Vec, sse, 0]>(vec),
               call<primitive=extract[Vec, sse, 1]>(vec)
             ));
             complete(call<primitive=@self[HalfVec]>(folded));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, vector::as_extension(generic));
+              var<const_infer>(generic_vec, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(vec)
+              ));
+              complete(call<primitive=@self[GenericVec]>(generic_vec));
+            """
       f?:
         requires [avx2]
         safety:
@@ -566,7 +595,7 @@ prim<s:=v> hmax(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as_extension(sse)));
+            let<type>(HalfVec, vector::as_extension(sse));
             var<const_infer>(folded, call<primitive=max[HalfVec]>(
               call<primitive=extract[Vec, sse, 0]>(vec),
               call<primitive=extract[Vec, sse, 1]>(vec)
@@ -587,7 +616,7 @@ prim<s:=v> hmax(vec):
             temp = call<primitive=max[Vec]>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = call<primitive=max[Vec]>(temp, intrin<_mm_srli_si128>(temp, 2));
             temp = call<primitive=max[Vec]>(temp, intrin<_mm_srli_si128>(temp, 1));
-            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
+            complete(cast<static>(base::in, call<primitive=extract_value[Vec, 0]>(temp)));
           """
       [si16, ui16]:
         requires [sse2]
@@ -601,7 +630,7 @@ prim<s:=v> hmax(vec):
             temp = call<primitive=max[Vec]>(temp, intrin<_mm_srli_si128>(temp, 8));
             temp = call<primitive=max[Vec]>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = call<primitive=max[Vec]>(temp, intrin<_mm_srli_si128>(temp, 2));
-            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
+            complete(cast<static>(base::in, call<primitive=extract_value[Vec, 0]>(temp)));
           """
       [si32, ui32]:
         requires [sse2]
@@ -614,7 +643,7 @@ prim<s:=v> hmax(vec):
             var<infer>(temp, vec);
             temp = call<primitive=max[Vec]>(temp, intrin<_mm_srli_si128>(temp, 8));
             temp = call<primitive=max[Vec]>(temp, intrin<_mm_srli_si128>(temp, 4));
-            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
+            complete(cast<static>(base::in, call<primitive=extract_value[Vec, 0]>(temp)));
           """
       [si64, ui64]:
         requires [sse2]
@@ -626,7 +655,7 @@ prim<s:=v> hmax(vec):
           tsil """
             var<infer>(temp, vec);
             temp = call<primitive=max[Vec]>(temp, intrin<_mm_srli_si128>(temp, 8));
-            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
+            complete(cast<static>(base::in, call<primitive=extract_value[Vec, 0]>(temp)));
           """
       f32:
         requires [sse2]
@@ -636,7 +665,7 @@ prim<s:=v> hmax(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             var<const_infer>(pair02, call<primitive=max[ScalarVec]>(
               call<primitive=extract_value[Vec, 0]>(vec),
               call<primitive=extract_value[Vec, 2]>(vec)
@@ -655,7 +684,7 @@ prim<s:=v> hmax(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             complete(call<primitive=max[ScalarVec]>(
               call<primitive=extract_value[Vec, 0]>(vec),
               call<primitive=extract_value[Vec, 1]>(vec)
@@ -740,6 +769,13 @@ prim<s:=v> hmin(vec):
     - {tags [neon, direct], extension "neon", type "ui32", case {inputs [[0, 1, 4294967295, 42]], expected 0}}
     - {tags [neon, direct, edge], extension "neon", type "si64", case {inputs [[-9223372036854775808, 9223372036854775807]], expected -9223372036854775808}}
     - {tags [neon, direct, edge], extension "neon", type "ui64", case {inputs [[0, 18446744073709551615]], expected 0}}
+    - {tags [avx2], extension "avx2", type "si8", lane_count 32, case {inputs [[-16, -15, -14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected -16}}
+    - {tags [avx2], extension "avx2", type "ui8", lane_count 32, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]], expected 0}}
+    - {tags [avx2], extension "avx2", type "si16", lane_count 16, case {inputs [[-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7]], expected -8}}
+    - {tags [avx2], extension "avx2", type "ui16", lane_count 16, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected 0}}
+    - {tags [avx2], extension "avx2", type "ui32", lane_count 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7]], expected 0}}
+    - {tags [avx2], extension "avx2", type "si64", lane_count 4, case {inputs [[-2, -1, 0, 1]], expected -2}}
+    - {tags [avx2], extension "avx2", type "ui64", lane_count 4, case {inputs [[0, 1, 2, 3]], expected 0}}
   impls:
     clang_v128:
       arith:
@@ -758,7 +794,7 @@ prim<s:=v> hmin(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(base::in), intrin<svminv, build>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "complete(cast<static>(base::in, intrin<svminv, build>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
         safety:
@@ -784,7 +820,7 @@ prim<s:=v> hmin(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             var<const_infer>(left, call<primitive=extract_value[Vec, 0]>(vec));
             var<const_infer>(right, call<primitive=extract_value[Vec, 1]>(vec));
             complete(call<primitive=min[ScalarVec]>(left, right));
@@ -798,7 +834,7 @@ prim<s:=v> hmin(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             var<infer>(result, call<primitive=extract_value[Vec, 0]>(vec));
             loop<generation, scoped>(i, 1, value(vector::length), 1) {
               result = call<primitive=min[ScalarVec]>(
@@ -816,7 +852,7 @@ prim<s:=v> hmin(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(base::in), intrin<reduce_min, build>(vec)));"
+          tsil "complete(cast<static>(base::in, intrin<reduce_min, build>(vec)));"
       f?:
         requires [avx512f]
         safety:
@@ -833,7 +869,7 @@ prim<s:=v> hmin(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as_extension(avx2)));
+            let<type>(HalfVec, vector::as_extension(avx2));
             var<const_infer>(lo, call<primitive=extract[Vec, avx2, 0]>(vec));
             var<const_infer>(hi, call<primitive=extract[Vec, avx2, 1]>(vec));
             complete(call<primitive=hmin[HalfVec]>(call<primitive=min[HalfVec]>(lo, hi)));
@@ -846,7 +882,7 @@ prim<s:=v> hmin(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(QuarterVec, type(vector::as_extension(sse)));
+            let<type>(QuarterVec, vector::as_extension(sse));
             var<infer>(folded, call<primitive=extract[Vec, sse, 0]>(vec));
             folded = call<primitive=min[QuarterVec]>(
               folded,
@@ -870,7 +906,7 @@ prim<s:=v> hmin(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(base::in), intrin<reduce_min, build>(vec)));"
+          tsil "complete(cast<static>(base::in, intrin<reduce_min, build>(vec)));"
     avx2:
       ?i?:
         requires [avx2]
@@ -880,13 +916,22 @@ prim<s:=v> hmin(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as_extension(sse)));
+            let<type>(HalfVec, vector::as_extension(sse));
             var<const_infer>(folded, call<primitive=min[HalfVec]>(
               call<primitive=extract[Vec, sse, 0]>(vec),
               call<primitive=extract[Vec, sse, 1]>(vec)
             ));
             complete(call<primitive=@self[HalfVec]>(folded));
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, vector::as_extension(generic));
+              var<const_infer>(generic_vec, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(vec)
+              ));
+              complete(call<primitive=@self[GenericVec]>(generic_vec));
+            """
       f?:
         requires [avx2]
         safety:
@@ -895,7 +940,7 @@ prim<s:=v> hmin(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(HalfVec, type(vector::as_extension(sse)));
+            let<type>(HalfVec, vector::as_extension(sse));
             var<const_infer>(folded, call<primitive=min[HalfVec]>(
               call<primitive=extract[Vec, sse, 0]>(vec),
               call<primitive=extract[Vec, sse, 1]>(vec)
@@ -916,7 +961,7 @@ prim<s:=v> hmin(vec):
             temp = call<primitive=min[Vec]>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = call<primitive=min[Vec]>(temp, intrin<_mm_srli_si128>(temp, 2));
             temp = call<primitive=min[Vec]>(temp, intrin<_mm_srli_si128>(temp, 1));
-            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
+            complete(cast<static>(base::in, call<primitive=extract_value[Vec, 0]>(temp)));
           """
       [si16, ui16]:
         requires [sse2]
@@ -930,7 +975,7 @@ prim<s:=v> hmin(vec):
             temp = call<primitive=min[Vec]>(temp, intrin<_mm_srli_si128>(temp, 8));
             temp = call<primitive=min[Vec]>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = call<primitive=min[Vec]>(temp, intrin<_mm_srli_si128>(temp, 2));
-            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
+            complete(cast<static>(base::in, call<primitive=extract_value[Vec, 0]>(temp)));
           """
       [si32, ui32]:
         requires [sse2]
@@ -943,7 +988,7 @@ prim<s:=v> hmin(vec):
             var<infer>(temp, vec);
             temp = call<primitive=min[Vec]>(temp, intrin<_mm_srli_si128>(temp, 8));
             temp = call<primitive=min[Vec]>(temp, intrin<_mm_srli_si128>(temp, 4));
-            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
+            complete(cast<static>(base::in, call<primitive=extract_value[Vec, 0]>(temp)));
           """
       [si64, ui64]:
         requires [sse2]
@@ -955,7 +1000,7 @@ prim<s:=v> hmin(vec):
           tsil """
             var<infer>(temp, vec);
             temp = call<primitive=min[Vec]>(temp, intrin<_mm_srli_si128>(temp, 8));
-            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
+            complete(cast<static>(base::in, call<primitive=extract_value[Vec, 0]>(temp)));
           """
       f32:
         requires [sse2]
@@ -965,7 +1010,7 @@ prim<s:=v> hmin(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             var<const_infer>(pair02, call<primitive=min[ScalarVec]>(
               call<primitive=extract_value[Vec, 0]>(vec),
               call<primitive=extract_value[Vec, 2]>(vec)
@@ -984,7 +1029,7 @@ prim<s:=v> hmin(vec):
           reasons []
         implementation:
           tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
+            let<type>(ScalarVec, vector::as_extension(scalar));
             complete(call<primitive=min[ScalarVec]>(
               call<primitive=extract_value[Vec, 0]>(vec),
               call<primitive=extract_value[Vec, 1]>(vec)
@@ -1074,7 +1119,7 @@ prim<s:=(m,v)> hadd(mask, vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(base::in), intrin<svaddv, build>(mask, vec)));"
+          tsil "complete(cast<static>(base::in, intrin<svaddv, build>(mask, vec)));"
       f?:
         requires [sve]
         safety:
@@ -1091,7 +1136,7 @@ prim<s:=(m,v)> hadd(mask, vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(base::in), intrin<mask_reduce_add, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
+          tsil "complete(cast<static>(base::in, intrin<mask_reduce_add, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
       f?:
         requires [avx512f]
         safety:
@@ -1108,7 +1153,7 @@ prim<s:=(m,v)> hadd(mask, vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(base::in), intrin<mask_reduce_add, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
+          tsil "complete(cast<static>(base::in, intrin<mask_reduce_add, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
     clang_v128:
       arith:
         requires []
@@ -1201,13 +1246,13 @@ prim<s:=(m,v)> hadd(mask, vec):
           # AVX-512F without BW: split the predicate into four SSE2 lane masks,
           # zero inactive lanes, then use the existing register-only quarter fold.
           tsil """
-            let<type>(QuarterVec, type(vector::as_extension(sse)));
-            let<type>(QuarterImask, type(select(
-              value(type::is_same(type(base::in), si8)),
+            let<type>(QuarterVec, vector::as_extension(sse));
+            let<type>(QuarterImask, select(
+              type::is_same(base::in, si8),
               ui16,
-              select(value(type::is_same(type(base::in), ui8)), ui16, ui8)
-            )));
-            var<const_typed>(type(scalar::size), quarter_lanes, 128 / value(type::size_bits(base::in)));
+              select(type::is_same(base::in, ui8), ui16, ui8)
+            ));
+            var<const_typed>(scalar::size, quarter_lanes, 128 / value(type::size_bits(base::in)));
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(m0, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar)));
             var<const_infer>(m1, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar >> quarter_lanes)));
@@ -1246,7 +1291,7 @@ prim<s:=(m,v)> hadd(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            var<typed>(base::in, result, cast<static>(base::in, 0));
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, i)) {
                 result = helper<arith_add>(result, values[i]);
@@ -1266,7 +1311,7 @@ prim<s:=(m,v)> hadd(mask, vec):
             if (mask) {
               complete(vec);
             }
-            complete(cast<static>(type(base::in), 0));
+            complete(cast<static>(base::in, 0));
           """
     [generic, clang_v128, oneapi_fpga]:
       arith:
@@ -1281,7 +1326,7 @@ prim<s:=(m,v)> hadd(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            var<typed>(base::in, result, cast<static>(base::in, 0));
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, i)) {
                 result = helper<arith_add>(result, vec[i]);
@@ -1334,9 +1379,9 @@ prim<s:=(m,v)> hmax(mask, vec):
         implementation:
           tsil """
             if (call<primitive=mask_population_count[Vec]>(mask) == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
-            complete(cast<static>(type(base::in), intrin<svmaxv, build>(mask, vec)));
+            complete(cast<static>(base::in, intrin<svmaxv, build>(mask, vec)));
           """
       f?:
         requires [sve]
@@ -1347,7 +1392,7 @@ prim<s:=(m,v)> hmax(mask, vec):
         implementation:
           tsil """
             if (call<primitive=mask_population_count[Vec]>(mask) == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
             complete(intrin<svmaxv, build>(mask, vec));
           """
@@ -1362,9 +1407,9 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
-            complete(cast<static>(type(base::in), intrin<mask_reduce_max, build>(mask, vec)));
+            complete(cast<static>(base::in, intrin<mask_reduce_max, build>(mask, vec)));
           """
       f?:
         requires [avx512f]
@@ -1376,7 +1421,7 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
             complete(intrin<mask_reduce_max, build>(mask, vec));
           """
@@ -1393,23 +1438,23 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
-            let<type>(QuarterVec, type(vector::as_extension(sse)));
-            let<type>(QuarterImask, type(select(
-              value(type::is_same(type(base::in), si8)),
+            let<type>(QuarterVec, vector::as_extension(sse));
+            let<type>(QuarterImask, select(
+              type::is_same(base::in, si8),
               ui16,
-              select(value(type::is_same(type(base::in), ui8)), ui16, ui8)
-            )));
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            var<typed>(type(base::in), sentinel, cast<static>(type(base::in), 0));
-            if<generation>(type::is_signed(type(base::in))) {
+              select(type::is_same(base::in, ui8), ui16, ui8)
+            ));
+            let<type>(UBase, base::unsigned_of(base::in));
+            var<typed>(base::in, sentinel, cast<static>(base::in, 0));
+            if<generation>(type::is_signed(base::in)) {
               sentinel = cast<static>(
-                type(base::in),
+                base::in,
                 (cast<static>(UBase, 1)) << (value(type::size_bits(base::in)) - 1)
               );
             }
-            var<const_typed>(type(scalar::size), quarter_lanes, 128 / value(type::size_bits(base::in)));
+            var<const_typed>(scalar::size, quarter_lanes, 128 / value(type::size_bits(base::in)));
             var<const_infer>(m0, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar)));
             var<const_infer>(m1, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar >> quarter_lanes)));
             var<const_infer>(m2, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar >> (2 * quarter_lanes))));
@@ -1448,9 +1493,9 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
-            complete(cast<static>(type(base::in), intrin<mask_reduce_max, build>(mask, vec)));
+            complete(cast<static>(base::in, intrin<mask_reduce_max, build>(mask, vec)));
           """
     wasm128:
       arith:
@@ -1462,8 +1507,8 @@ prim<s:=(m,v)> hmax(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, value(i))) {
                 var<const_infer>(current, call<primitive=extract_value[Vec, i]>(vec));
@@ -1487,8 +1532,8 @@ prim<s:=(m,v)> hmax(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, value(i))) {
                 var<const_infer>(current, vec[value(i)]);
@@ -1512,8 +1557,8 @@ prim<s:=(m,v)> hmax(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, value(i))) {
                 var<const_infer>(current, call<primitive=extract_value[Vec, i]>(vec));
@@ -1537,9 +1582,9 @@ prim<s:=(m,v)> hmax(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
-            let<type>(HalfVec, type(vector::as_extension(sse)));
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
+            let<type>(HalfVec, vector::as_extension(sse));
             var<const_infer>(lo, call<primitive=extract[Vec, sse, 0]>(vec));
             var<const_infer>(hi, call<primitive=extract[Vec, sse, 1]>(vec));
             loop<generation, scoped>(i, 0, 4, 1) {
@@ -1575,9 +1620,9 @@ prim<s:=(m,v)> hmax(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
-            let<type>(HalfVec, type(vector::as_extension(sse)));
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
+            let<type>(HalfVec, vector::as_extension(sse));
             var<const_infer>(lo, call<primitive=extract[Vec, sse, 0]>(vec));
             var<const_infer>(hi, call<primitive=extract[Vec, sse, 1]>(vec));
             loop<generation, scoped>(i, 0, 2, 1) {
@@ -1614,8 +1659,8 @@ prim<s:=(m,v)> hmax(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<generation, scoped>(i, 0, 4, 1) {
               if (mask<test, imask>(mask_scalar, value(i))) {
                 var<const_infer>(current, call<primitive=extract_value[Vec, i]>(vec));
@@ -1638,8 +1683,8 @@ prim<s:=(m,v)> hmax(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<generation, scoped>(i, 0, 2, 1) {
               if (mask<test, imask>(mask_scalar, value(i))) {
                 var<const_infer>(current, call<primitive=extract_value[Vec, i]>(vec));
@@ -1666,12 +1711,12 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            if<generation>(type::is_signed(type(base::in))) {
+            let<type>(UBase, base::unsigned_of(base::in));
+            if<generation>(type::is_signed(base::in)) {
               var<const_infer>(sentinel, cast<static>(
-                type(base::in),
+                base::in,
                 (cast<static>(UBase, 1)) << (value(type::size_bits(base::in)) - 1)
               ));
               complete(call<primitive=hmax[Vec]>(call<primitive=blend[Vec]>(
@@ -1702,8 +1747,8 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, i)) {
                 if (found == 0) {
@@ -1728,7 +1773,7 @@ prim<s:=(m,v)> hmax(mask, vec):
             if (mask) {
               complete(vec);
             }
-            complete(cast<static>(type(base::in), 0));
+            complete(cast<static>(base::in, 0));
           """
     [generic, clang_v128, oneapi_fpga]:
       arith:
@@ -1743,8 +1788,8 @@ prim<s:=(m,v)> hmax(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, i)) {
                 if (found == 0) {
@@ -1802,9 +1847,9 @@ prim<s:=(m,v)> hmin(mask, vec):
         implementation:
           tsil """
             if (call<primitive=mask_population_count[Vec]>(mask) == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
-            complete(cast<static>(type(base::in), intrin<svminv, build>(mask, vec)));
+            complete(cast<static>(base::in, intrin<svminv, build>(mask, vec)));
           """
       f?:
         requires [sve]
@@ -1815,7 +1860,7 @@ prim<s:=(m,v)> hmin(mask, vec):
         implementation:
           tsil """
             if (call<primitive=mask_population_count[Vec]>(mask) == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
             complete(intrin<svminv, build>(mask, vec));
           """
@@ -1830,9 +1875,9 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
-            complete(cast<static>(type(base::in), intrin<mask_reduce_min, build>(mask, vec)));
+            complete(cast<static>(base::in, intrin<mask_reduce_min, build>(mask, vec)));
           """
       f?:
         requires [avx512f]
@@ -1844,7 +1889,7 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
             complete(intrin<mask_reduce_min, build>(mask, vec));
           """
@@ -1861,23 +1906,23 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
-            let<type>(QuarterVec, type(vector::as_extension(sse)));
-            let<type>(QuarterImask, type(select(
-              value(type::is_same(type(base::in), si8)),
+            let<type>(QuarterVec, vector::as_extension(sse));
+            let<type>(QuarterImask, select(
+              type::is_same(base::in, si8),
               ui16,
-              select(value(type::is_same(type(base::in), ui8)), ui16, ui8)
-            )));
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            var<typed>(type(base::in), sentinel, mask<lane_true>());
-            if<generation>(type::is_signed(type(base::in))) {
+              select(type::is_same(base::in, ui8), ui16, ui8)
+            ));
+            let<type>(UBase, base::unsigned_of(base::in));
+            var<typed>(base::in, sentinel, mask<lane_true>());
+            if<generation>(type::is_signed(base::in)) {
               sentinel = cast<static>(
-                type(base::in),
+                base::in,
                 ((cast<static>(UBase, 1)) << (value(type::size_bits(base::in)) - 1)) - cast<static>(UBase, 1)
               );
             }
-            var<const_typed>(type(scalar::size), quarter_lanes, 128 / value(type::size_bits(base::in)));
+            var<const_typed>(scalar::size, quarter_lanes, 128 / value(type::size_bits(base::in)));
             var<const_infer>(m0, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar)));
             var<const_infer>(m1, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar >> quarter_lanes)));
             var<const_infer>(m2, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar >> (2 * quarter_lanes))));
@@ -1916,9 +1961,9 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
-            complete(cast<static>(type(base::in), intrin<mask_reduce_min, build>(mask, vec)));
+            complete(cast<static>(base::in, intrin<mask_reduce_min, build>(mask, vec)));
           """
     wasm128:
       arith:
@@ -1930,8 +1975,8 @@ prim<s:=(m,v)> hmin(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, value(i))) {
                 var<const_infer>(current, call<primitive=extract_value[Vec, i]>(vec));
@@ -1955,8 +2000,8 @@ prim<s:=(m,v)> hmin(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, value(i))) {
                 var<const_infer>(current, vec[value(i)]);
@@ -1980,8 +2025,8 @@ prim<s:=(m,v)> hmin(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, value(i))) {
                 var<const_infer>(current, call<primitive=extract_value[Vec, i]>(vec));
@@ -2005,9 +2050,9 @@ prim<s:=(m,v)> hmin(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
-            let<type>(HalfVec, type(vector::as_extension(sse)));
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
+            let<type>(HalfVec, vector::as_extension(sse));
             var<const_infer>(lo, call<primitive=extract[Vec, sse, 0]>(vec));
             var<const_infer>(hi, call<primitive=extract[Vec, sse, 1]>(vec));
             loop<generation, scoped>(i, 0, 4, 1) {
@@ -2043,9 +2088,9 @@ prim<s:=(m,v)> hmin(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
-            let<type>(HalfVec, type(vector::as_extension(sse)));
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
+            let<type>(HalfVec, vector::as_extension(sse));
             var<const_infer>(lo, call<primitive=extract[Vec, sse, 0]>(vec));
             var<const_infer>(hi, call<primitive=extract[Vec, sse, 1]>(vec));
             loop<generation, scoped>(i, 0, 2, 1) {
@@ -2082,8 +2127,8 @@ prim<s:=(m,v)> hmin(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<generation, scoped>(i, 0, 4, 1) {
               if (mask<test, imask>(mask_scalar, value(i))) {
                 var<const_infer>(current, call<primitive=extract_value[Vec, i]>(vec));
@@ -2106,8 +2151,8 @@ prim<s:=(m,v)> hmin(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<generation, scoped>(i, 0, 2, 1) {
               if (mask<test, imask>(mask_scalar, value(i))) {
                 var<const_infer>(current, call<primitive=extract_value[Vec, i]>(vec));
@@ -2134,12 +2179,12 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type(base::in), 0));
+              complete(cast<static>(base::in, 0));
             }
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            if<generation>(type::is_signed(type(base::in))) {
+            let<type>(UBase, base::unsigned_of(base::in));
+            if<generation>(type::is_signed(base::in)) {
               var<const_infer>(sentinel, cast<static>(
-                type(base::in),
+                base::in,
                 ((cast<static>(UBase, 1)) << (value(type::size_bits(base::in)) - 1)) - cast<static>(UBase, 1)
               ));
               complete(call<primitive=hmin[Vec]>(call<primitive=blend[Vec]>(
@@ -2170,8 +2215,8 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, i)) {
                 if (found == 0) {
@@ -2196,7 +2241,7 @@ prim<s:=(m,v)> hmin(mask, vec):
             if (mask) {
               complete(vec);
             }
-            complete(cast<static>(type(base::in), 0));
+            complete(cast<static>(base::in, 0));
           """
     [generic, clang_v128, oneapi_fpga]:
       arith:
@@ -2211,8 +2256,8 @@ prim<s:=(m,v)> hmin(mask, vec):
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
-            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            var<typed>(type(scalar::size), found, 0);
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, i)) {
                 if (found == 0) {

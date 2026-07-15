@@ -10,6 +10,7 @@ from tslc.output._verify_common import missing_executable
 from tslc.output._verify_cpp_config import (
     cmake_cross_emulator,
     cpp_environment,
+    cpp_linker,
     cpp_target,
     cpp_compiler_accepts_explicit_target,
     effective_cpp_compiler,
@@ -212,6 +213,9 @@ def _cpp_configure_args(
     target = cpp_target(profile, config)
     if target is not None:
         args.extend(_cpp_cross_target_cmake_args(target, compiler))
+    linker = cpp_linker(config)
+    if linker is not None:
+        args.append(f"-DCMAKE_LINKER={linker}")
     cross_emulator = cmake_cross_emulator(profile, config)
     if cross_emulator:
         args.append(f"-DCMAKE_CROSSCOMPILING_EMULATOR={';'.join(cross_emulator)}")

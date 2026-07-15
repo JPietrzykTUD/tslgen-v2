@@ -52,6 +52,12 @@ jobs:
             "tslctmp/ci-logs/coverage-ratchet/ratchet.log" \
             bash dev.sh ratchet
 
+      - name: Run benchmark coverage ratchet
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/coverage-ratchet/benchmark-ratchet.log" \
+            bash dev.sh benchmark-ratchet
+
       - name: Upload coverage ratchet logs
         if: always()
         uses: actions/upload-artifact@v7

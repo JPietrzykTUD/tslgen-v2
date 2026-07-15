@@ -535,6 +535,17 @@ pub mod detail {
     pub mod helpers {
     use super::super::*;
 
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "rdrand")]
+    pub unsafe fn random_step_u64(out: *mut u64) -> usize {
+        let mut value = 0u64;
+        let status = unsafe { core::arch::x86_64::_rdrand64_step(&mut value) };
+        if status != 0 {
+            unsafe { *out = value };
+        }
+        if status != 0 { 1 } else { 0 }
+    }
+
     pub fn arith_add<T: LaneArith>(a: T, b: T) -> T {
         a.tsl_add(b)
     }

@@ -1,0 +1,69 @@
+# Repository Charter
+
+This charter defines the repository-wide contract for `tslgen-v99`. The
+compiler-specific contract in [`tslc/CHARTER.md`](tslc/CHARTER.md) refines it;
+neither document is a substitute for current source data, tests, or generated
+artifact evidence.
+
+## 1. This Repository Delivers A Source-Driven Compiler
+
+The product is the whole path from authored `.tsl` data through `tslc` to
+deterministic, compilable, testable C++ and Rust artifacts. Compiler code,
+source data, reusable inputs, tests, and coverage evidence are parts of one
+system rather than independent projects.
+
+## 2. Current Evidence Is The Source Of Truth
+
+Active behavior is justified by `tsldata/`, `supplementary/`, compiler code,
+tests, package documentation, and generated artifacts that build and run.
+Historical plans, local caches, and undocumented assumptions do not override
+that evidence.
+
+## 3. Changes Are Coherent Vertical Slices
+
+A backend, primitive, source shape, TSIL feature, diagnostic, or verification
+improvement may cross top-level directories. Keep one observable behavior per
+slice, with tests at the boundaries it changes. Directory layout expresses
+ownership; it must not force partial features or duplicate policy.
+
+## 4. Maintainability Is A Product Requirement
+
+A maintainer should be able to understand, debug, and safely change one
+behavior by following a small number of clearly owned modules. Prefer direct
+control flow, literal names, typed domain vocabulary, and small extension
+points. Avoid handoff wrappers, compatibility layers, scattered string
+classifiers, and speculative frameworks that do not deliver compiler behavior.
+
+Shared knowledge should have one owner. Small local repetition is acceptable
+when it keeps unlike concepts independent and clearer than a premature
+abstraction.
+
+## 5. Extensibility Means Additive, Honest Change
+
+The next similar backend, primitive, or TSIL region should mostly add focused
+data, handlers, capabilities, assets, and tests. If it repeatedly requires
+editing unrelated stages, strengthen the missing boundary rather than adding
+another special case.
+
+Unsupported combinations remain explicit through structured diagnostics or
+deterministic coverage skips. Progress is measured by supported combinations
+that compile and verify, not by claims of completeness.
+
+## 6. Output And Diagnostics Are Reproducible
+
+Source discovery, selection, diagnostics, artifacts, manifests, generated
+tests, and maintenance reports use stable ordering. Diagnostics are written for
+the TSL author or maintainer who can act on them and preserve source locations
+where practical.
+
+Generated trees, build directories, test scratch, and configurable caches live
+under `./tslctmp`. Source-controlled documentation and baselines are durable
+project evidence; scratch output is not.
+
+## 7. Documentation Has Clear Ownership
+
+Root documentation explains the repository and cross-tree workflow.
+`tslc/` documentation owns the compiler contract, architecture, and quick
+start. Top-level `docs/` contains human-authored maintainer guides.
+`supplementary/docs/` contains inputs used to build generated TSL
+documentation. Keep these roles distinct.

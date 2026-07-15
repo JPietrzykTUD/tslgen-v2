@@ -216,6 +216,9 @@ _CASE_REQUIREMENTS = {
         required_facts=frozenset({ValueTestFact.MEMORY_LENGTH}),
         vector_inputs_match_lanes=True,
     ),
+    "status_pointer": ValueTestCaseRequirements(
+        scalar_inputs="one", required_facts=_RESULT
+    ),
     "stream": ValueTestCaseRequirements(
         expected="one",
         vector_inputs="one",
@@ -256,4 +259,3 @@ DEFAULT_VALUE_TEST_CASE_KINDS = frozenset(
 DEFAULT_VALUE_TEST_CASE_REQUIREMENTS = _case_requirements(
     DEFAULT_VALUE_TEST_CASE_CAPABILITIES
 )
-

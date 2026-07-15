@@ -162,7 +162,7 @@ def test_lowerer_handler_diagnostic_has_region_source_location() -> None:
     )
 
     diagnostic = lowered.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-UNRESOLVED-QUERY-REGION"
+    assert diagnostic.code == "TSL-LOWER-UNRESOLVED-VALUE-QUERY"
     assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 15, 26)
 
 

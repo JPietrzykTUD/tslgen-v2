@@ -16,6 +16,7 @@ from tslc.catalog.validation._schema_common import (
 from tslc.catalog.validation._schema_implementation import (
     validate_implementation_safety,
 )
+from tslc.catalog.validation._schema_benchmarks import validate_benchmarks
 from tslc.catalog.validation._schema_tests import validate_tests
 from tslc.catalog.validation.requires_validation import validate_requires
 from tslc.catalog.validation.source_spans import (
@@ -39,6 +40,7 @@ _BASE_WIDTH_CONSTRAINT_RE = re.compile(
 )
 _KNOWN_PRIMITIVE_FIELDS = frozenset(
     {
+        "benchmarks",
         "brief_description",
         "cross_lane",
         "detailed_description",
@@ -94,6 +96,7 @@ def validate_primitive(
     _validate_param_types(declaration, diagnostics)
     validate_implementation_safety(declaration, diagnostics)
     _validate_return_type(declaration, diagnostics)
+    validate_benchmarks(declaration, diagnostics)
     validate_tests(declaration, diagnostics)
     validate_requires(declaration, diagnostics)
 

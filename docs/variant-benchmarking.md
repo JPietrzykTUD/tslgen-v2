@@ -1,0 +1,409 @@
+# Variant Benchmarking And Autotuning
+
+Generated C++ projects can benchmark implementation variants.
+
+The feature is opt-in.
+
+Normal generation does not run benchmarks.
+
+Normal builds keep the authored default variant.
+
+## The Word `key` Has Three Meanings
+
+Do not treat every benchmark key as one open dictionary.
+
+| Name | Owned by | Shape | Purpose |
+| --- | --- | --- | --- |
+| Source field name | TSL author | Closed vocabulary | Adds a missing workload fact. |
+| `SpecializationKey` | Compiler | Frozen typed record | Identifies one selectable specialization. |
+| `stable_id` | Compiler | Derived string | Names that specialization in reports and policies. |
+
+The source vocabulary is fixed.
+
+The compiler record is fixed.
+
+Neither one is an arbitrary set of strings.
+
+## Source Benchmark Vocabulary
+
+A primitive may contain one `benchmarks:` map.
+
+The map accepts exactly two fields:
+
+| Field | Value | Meaning |
+| --- | --- | --- |
+| `latency_chain` | Declared vector parameter name | Feed the result into this operand for latency timing. |
+| `operand_domains` | Parameter-to-domain map | Restrict generated timing inputs. |
+
+`operand_domains` accepts exactly two domain values:
+
+| Domain | Valid parameter kind | Generated values |
+| --- | --- | --- |
+| `nonzero` | Vector | Bounded values that exclude zero. |
+| `shift_count` | Vector or scalar | Values bounded by the element bit width. |
+
+The compiler definitions are closed sets:
+
+```python
+_KNOWN_BENCHMARK_FIELDS = frozenset({
+    "latency_chain",
+    "operand_domains",
+})
+
+_KNOWN_OPERAND_DOMAINS = frozenset({
+    "nonzero",
+    "shift_count",
+})
+```
+
+The definitions live in
+`tslc/src/tslc/catalog/validation/_schema_benchmarks.py`.
+
+Unknown fields are errors.
+
+Unknown domains are errors.
+
+Duplicate fields are errors.
+
+Undeclared parameter names are errors.
+
+## Source Examples
+
+### Latency dependency
+
+`mul` needs an explicit dependency operand.
+
+```tsl
+prim<v:=(v,v)> mul(factor1, factor2):
+  benchmarks:
+    latency_chain factor2
+```
+
+The result becomes the next `factor1` value.
+
+```text
+result_0 = mul(input_0, input_1)
+result_1 = mul(input_2, result_0)
+result_2 = mul(input_3, result_1)
+```
+
+`latency_chain` is valid only when:
+
+- the primitive returns a vector;
+- the named parameter is declared;
+- the named parameter is a vector.
+
+### Nonzero divisor
+
+```tsl
+prim<v:=(v,v)> mod(dividend, divisor):
+  benchmarks:
+    latency_chain dividend
+    operand_domains:
+      divisor nonzero
+```
+
+The compiler selects `bounded_nonzero` for `divisor`.
+
+It selects `bounded_random` for `dividend`.
+
+### Shift counts
+
+```tsl
+prim<v:=(v,s)> shift_left(data, shift):
+  benchmarks:
+    latency_chain data
+    operand_domains:
+      shift shift_count
+```
+
+The compiler selects `bounded_shift_count` for `shift`.
+
+## What Stays Out Of TSL Source
+
+Do not author benchmark functions in `.tsl` files.
+
+Do not author C++ setup code there.
+
+The compiler owns:
+
+- seeds;
+- batch sizes;
+- timing rounds;
+- candidate order;
+- mask densities;
+- memory setup;
+- correctness checks;
+- statistical rules;
+- scenario identifiers.
+
+Add a source fact only when the signature cannot express it safely.
+
+## Typed Promotion
+
+Validated source becomes frozen catalog data:
+
+```python
+@dataclass(frozen=True, slots=True)
+class PrimitiveBenchmarkOperandDomain:
+    parameter: str
+    domain: Literal["nonzero", "shift_count"]
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveBenchmarkSpec:
+    latency_chain: str | None
+    operand_domains: tuple[PrimitiveBenchmarkOperandDomain, ...]
+```
+
+Downstream benchmark code consumes these objects.
+
+It does not consume raw source maps.
+
+## Scenario Inference
+
+`tslc.benchmark.scenarios` combines the signature with the typed benchmark facts.
+
+| Specialization shape | Scenarios |
+| --- | --- |
+| Fixed vector result with vector inputs | Independent throughput. Latency when the dependency is known. |
+| Vector plus scalar result | Independent throughput. Latency only when the vector operand is declared. |
+| Vector plus immediate result | Independent throughput and dependency latency for each authored immediate. |
+| `(cptr, vidx, sImm) -> v` | Hot-L1 throughput for each scale and index type. |
+| Integral mask to mask | Sparse, balanced, and dense throughput. |
+| Vector comparison to mask | Independent throughput only. |
+| Single-vector reduction to scalar | Independent throughput only. |
+
+Examples:
+
+```text
+v := (v, v) + latency_chain right
+  -> throughput_independent
+  -> latency_dependency_chain
+
+s := (v)
+  -> throughput_independent
+  -> no fabricated vector latency chain
+
+m := (v, v)
+  -> throughput_independent
+  -> no fabricated mask-to-vector chain
+```
+
+Other memory shapes are unsupported.
+
+Masked reductions are unsupported.
+
+Scalable specializations are unsupported.
+
+Caller-unsafe specializations are unsupported.
+
+The coverage report records the reason.
+
+## Specialization Identity
+
+The generated manifest contains a field named `key`.
+
+That value is a serialized `SpecializationKey`.
+
+It is not the source `benchmarks:` map.
+
+It is not a `set` or `frozenset`.
+
+It is a frozen dataclass with ordered fields:
+
+```python
+SpecializationKey(
+    backend_id="cpp",
+    profile_name="avx2",
+    primitive_name="mul",
+    source_primitive_name="mul",
+    extension_name="avx2",
+    type_tag="si32",
+    result_kind="v",
+    param_kinds=("v", "v"),
+    lanes=8,
+)
+```
+
+The full record can also carry:
+
+- target type and target extension;
+- boolean axes;
+- an immediate value;
+- generic values;
+- SIMD type bindings;
+- overload positions;
+- header group.
+
+`canonical_fields()` returns these values in a fixed order.
+
+That ordered tuple is the policy identity.
+
+## IDs And Hashes
+
+The compiler derives a readable `stable_id`:
+
+```text
+avx2_mul_avx2_si32_<12 hex characters>
+```
+
+The suffix hashes `SpecializationKey.canonical_fields()`.
+
+Candidates have separate IDs:
+
+```text
+default
+generic_fallback
+another_authored_variant
+```
+
+`default` always comes first.
+
+Other candidate IDs come from authored variant names.
+
+Scenario IDs are compiler-owned:
+
+```text
+throughput_independent
+latency_dependency_chain
+throughput_hot_l1
+mask_sparse
+mask_balanced
+mask_dense
+```
+
+The manifest hash covers:
+
+- protocol version;
+- profile facts;
+- specialization keys and stable IDs;
+- candidate IDs and body hashes;
+- scenarios;
+- correctness cases;
+- required features.
+
+A changed identity produces a changed manifest hash.
+
+## Planning Flow
+
+```text
+primitive signature + benchmarks block + authored tests + lowered variants
+  -> typed correctness cases
+  -> typed timing scenarios
+  -> candidate set
+  -> manifest
+  -> generated C++ benchmark tool
+  -> JSONL results
+  -> validated policy
+  -> compile-time variant selection
+```
+
+Every candidate must pass authored expected-value cases before timing.
+
+Value-test tags do not decide benchmark eligibility.
+
+Focused primitive generation stays focused.
+
+Omit `--primitives` to benchmark the full catalog.
+
+## Coverage Gate
+
+Run the corpus audit:
+
+```bash
+./dev.sh benchmark-ratchet
+```
+
+The audit checks:
+
+- selected variant slots reach planning;
+- dependency closure keeps those slots;
+- correctness data exists;
+- a typed scenario exists;
+- emitted candidates match coverage identity.
+
+The audit writes `coverage/benchmark-shape-inventory.md`.
+
+Refresh an intentional baseline change with:
+
+```bash
+./dev.sh benchmark-ratchet --update
+```
+
+Run generated benchmark tests with:
+
+```bash
+PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds \
+  -m generated_build tslc/tests/test_benchmark_variants.py
+```
+
+The ARM emulation check is functional only.
+
+Its timings never create a consumed policy.
+
+## Report Only
+
+```bash
+cmake -S generated/cpp -B build/tsl-report \
+  -DTSL_PROFILE=auto \
+  -DTSL_BUILD_TESTS=OFF \
+  -DTSL_BUILD_BENCHMARKS=ON
+cmake --build build/tsl-report --target tsl_benchmark_report
+```
+
+This writes `tsl_variant_results.jsonl`.
+
+It does not change wrapper selection.
+
+## One-Build Autotune
+
+```bash
+cmake -S generated/cpp -B build/tsl-tuned \
+  -DTSL_PROFILE=auto \
+  -DTSL_AUTOTUNE_VARIANTS=ON
+cmake --build build/tsl-tuned
+```
+
+The build creates:
+
+```text
+build/tsl-tuned/tsl/generated/tsl_variant_policy_autotuned.hpp
+```
+
+Consumer code selects the winner with `if constexpr`.
+
+There is no runtime dispatch.
+
+Autotune is native-only.
+
+It requires a single-config CMake generator.
+
+An inconclusive result keeps the authored default.
+
+## Reuse A Policy
+
+```bash
+cmake -S generated/cpp -B build/tsl-policy \
+  -DTSL_PROFILE=auto \
+  -DTSL_VARIANT_POLICY_FILE=/absolute/path/to/tsl_variant_policy.json
+cmake --build build/tsl-policy
+```
+
+The tool validates:
+
+- the candidate manifest;
+- the profile;
+- compiler and tune context;
+- CPU identity.
+
+A stale policy fails.
+
+A foreign policy fails.
+
+Use `TSL_BENCHMARK_COMPILE_OPTIONS` for relevant private code-generation flags.
+
+Benchmark and consumer flags must match.
+
+`TSL_BENCHMARK_ROUNDS` and `TSL_BENCHMARK_MINIMUM_SAMPLE_NS` support short harness checks.
+
+Keep the defaults for production tuning unless measurements justify a change.

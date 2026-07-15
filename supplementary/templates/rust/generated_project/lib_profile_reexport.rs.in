@@ -1,2 +1,0 @@
-#[cfg(feature = "{rust_feature}")]
-pub use profiles::{rust_module}::*;

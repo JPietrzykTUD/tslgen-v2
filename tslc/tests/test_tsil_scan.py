@@ -5,6 +5,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
+import tslc.ir.scan as scan_module
 from tslc.catalog.validation.body_validation import _SHELL_VALIDATORS
 from tslc.diagnostics import SourceSpan
 from tslc.ir.region_registry import (
@@ -15,6 +18,9 @@ from tslc.ir.region_registry import (
 from tslc.ir.scan import (
     KEYWORDS,
     STRUCTURAL_REGION_BODY_SHAPES,
+    _SCAN_CACHE_SIZE,
+    _SourceMap,
+    _cached_scan,
     find_malformed_regions,
     scan,
 )
@@ -47,6 +53,7 @@ def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
     )
     assert region_shell_validator("call") == "call_selector"
     assert region_shell_validator("mask") == "mask_selector"
+    assert region_shell_validator("array") == "array_set"
     assert region_shell_validator("var") == "var_selector"
     assert region_shell_validator("type") == "no_selector"
     assert region_shell_validator("value") == "no_selector"
@@ -131,6 +138,21 @@ def test_select_expr_arguments_recurse() -> None:
     assert any(
         isinstance(segment, Region) and segment.keyword == "call"
         for segment in select.body
+    )
+
+
+def test_array_set_arguments_recurse() -> None:
+    region = scan(
+        "array<set>(lanes, cast<static>(type(scalar::size), Index), value);"
+    )[0]
+
+    assert isinstance(region, Region)
+    assert region.keyword == "array"
+    assert region.selector_text == "set"
+    assert region.has_statement_terminator
+    assert any(
+        isinstance(segment, Region) and segment.keyword == "cast"
+        for segment in region.body
     )
 
 
@@ -231,6 +253,100 @@ def test_scan_carries_nested_source_spans() -> None:
     intrinsic = next(segment for segment in emit.body if isinstance(segment, Region))
     assert intrinsic.keyword == "intrin"
     assert intrinsic.source == SourceSpan(Path("body.tsl"), 11, 5, 11, 36)
+
+
+def test_source_map_matches_linear_span_oracle_at_every_offset() -> None:
+    source = SourceSpan(Path("body.tsl"), 10, 5, 20, 1)
+    for text in ("", "one line", "one\ntwo", "one\ntwo\n", "αβ\nγδ\n"):
+        source_map = _SourceMap.create(text, source)
+        for offset in range(len(text) + 1):
+            line = source.line
+            column = source.column
+            for character in text[:offset]:
+                if character == "\n":
+                    line += 1
+                    column = 1
+                else:
+                    column += 1
+            assert source_map.line_column(offset) == (line, column)
+
+
+def test_scan_cache_reuses_exact_immutable_result() -> None:
+    source = SourceSpan(Path("body.tsl"), 10, 5, 10, 30)
+    _cached_scan.cache_clear()
+
+    first = scan("complete(value);", source=source)
+    second = scan("complete(value);", source=source)
+
+    assert first is second
+    assert _cached_scan.cache_info().hits == 1
+    _cached_scan.cache_clear()
+
+
+def test_scan_cache_key_includes_text_and_source_span() -> None:
+    first_source = SourceSpan(Path("body.tsl"), 10, 5, 10, 30)
+    second_source = SourceSpan(Path("body.tsl"), 11, 5, 11, 30)
+    _cached_scan.cache_clear()
+
+    first = scan("complete(value);", source=first_source)
+    different_source = scan("complete(value);", source=second_source)
+    different_text = scan("complete(other);", source=first_source)
+
+    assert first is not different_source
+    assert first is not different_text
+    assert first[0].source != different_source[0].source
+    assert _cached_scan.cache_info().misses == 3
+    _cached_scan.cache_clear()
+
+
+def test_scan_cache_invokes_uncached_scanner_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    uncached = scan_module._scan_uncached
+
+    def counted(text: str, source: SourceSpan | None):
+        nonlocal calls
+        calls += 1
+        return uncached(text, source)
+
+    monkeypatch.setattr(scan_module, "_scan_uncached", counted)
+    _cached_scan.cache_clear()
+
+    scan("complete(value);")
+    scan("complete(value);")
+
+    assert calls == 1
+    _cached_scan.cache_clear()
+
+
+def test_scan_cache_is_bounded_and_eviction_preserves_results() -> None:
+    _cached_scan.cache_clear()
+    expected = scan("complete(first);")
+    for index in range(_SCAN_CACHE_SIZE):
+        scan(f"complete(value_{index});")
+    before = _cached_scan.cache_info()
+
+    after_eviction = scan("complete(first);")
+    after = _cached_scan.cache_info()
+
+    assert before.maxsize == _SCAN_CACHE_SIZE
+    assert before.currsize == _SCAN_CACHE_SIZE
+    assert after.misses == before.misses + 1
+    assert after_eviction == expected
+    _cached_scan.cache_clear()
+
+
+def test_malformed_region_source_span_remains_exact() -> None:
+    source = SourceSpan(Path("body.tsl"), 10, 5, 12, 1)
+
+    malformed = find_malformed_regions(
+        "raw\n  call<primitive=missing>",
+        source=source,
+    )
+
+    assert len(malformed) == 1
+    assert malformed[0].source == SourceSpan(Path("body.tsl"), 11, 3, 11, 26)
 
 
 def _joined(segments) -> str:

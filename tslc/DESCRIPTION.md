@@ -45,11 +45,19 @@ sources + compiler assets → parse → catalog → select → scan body → low
 | **lower** | [lower/](src/tslc/lower/) | Walk segments, resolve queries/intrinsics → `LoweredSpecialization` |
 | **backend** | [backend/](src/tslc/backend/) | Own target type projection, helper manifests, emitted profiles, validation, and C++/Rust function text |
 | **value tests** | [value_tests/](src/tslc/value_tests/) | Plan executable cases from finalized emitted names |
+| **benchmark** | [benchmark/](src/tslc/benchmark/) | Plan explicit implementation-variant measurements and render the optional C++ benchmark/policy tool |
 | **render** | [render/](src/tslc/render/) | Format validated profiles and prebuilt test plans into headers/modules, dispatch, CMake/Cargo, and docs |
 | **output** | [output/](src/tslc/output/) | Write the file tree; build-verify with real toolchains (incl. SDE/QEMU emulation) |
 
-Entry points: [cli.py](src/tslc/cli.py) (`python -m tslc.cli`) and
-[api.py](src/tslc/api.py).
+Entry points: [cli.py](src/tslc/cli.py) (installed as `tslc`, also
+`python -m tslc`) and [api.py](src/tslc/api.py). The CLI discovers repository
+defaults through [project_config.py](src/tslc/project_config.py). Catalog-only
+author validation is a separate boundary in
+[authoring.py](src/tslc/authoring.py): `tslc check` stops after parse, catalog
+promotion, invariants, and TSIL shell validation unless explicit slot filters
+request selection and lowering. Catalog `list`/`show` and `doctor` consume the
+same typed catalog, backend registry, machine-profile projection, and verifier
+drivers rather than maintaining parallel compiler knowledge.
 
 ## The input language (two nested languages)
 
@@ -79,6 +87,12 @@ prim<v:=(v,v)> add(left, right):
 - **Extension fallback**: extensions form `inherits` chains (e.g. `avx2_vl →
   avx2`); an active variant can explicitly `supersedes` another extension while
   still borrowing fallback bodies from its inheritance chain.
+- **Target-family capabilities**: `target_families:` owns behavioral roles for
+  source-named extension families—fallback classification, free-function
+  ownership, declared-register requirements, and index-vector support—and for
+  profile families, including whether a profile runs natively without an
+  emulator. Selection, lowering, translation, and verification consume those
+  typed roles instead of recognizing family-name strings.
 - **Fixed-width SVE**: `sve128`/`sve256`/`sve512` inherit scalable `sve` bodies
   but supersede `sve` in their fixed profiles, so one profile emits one SVE
   model. The fixed width is a compile mode (`sve_vector_bits_N`) plus C++ flags
@@ -92,15 +106,21 @@ prim<v:=(v,v)> add(left, right):
   inference. Consumers explicitly request one with
   `dataparallel::simd_for_t<clang_fixed<N>, T>`, where `N` is the lane count;
   the guarded overlay maps the resulting bit width to the corresponding
-  `clang_v128`/`clang_v256`/`clang_v512` extension. A body that needs a hardware
+  `clang_v128`/`clang_v256`/`clang_v512` extension. The default uses Clang's
+  comparison-result vector as its mask. Consumers may instead request the
+  dense boolean-vector representation with
+  `clang_fixed<N, clang_mask::boolean_vector>` when Clang reports
+  `__has_feature(ext_vector_type_boolean)`. The generated data vector is the
+  same; only the mask contract changes. A body that needs a hardware
   implementation uses the typed `vector::fixed` query, which dependency closure
   resolves concretely while C++ renders
   `dataparallel::simd_for_t<fixed<N>, T>`. Their `comparison_lane_vector` mask
   policy derives `mask_type` from Clang's exact vector-comparison result. Direct
   mask operations retain all-one/all-zero lane semantics, while
   `to_integral`/`to_mask` form the representation-safe bridge to hardware masks;
-  mask objects are never assumed bit-cast-compatible. Compact Clang boolean
-  masks are deferred until benchmarks justify explicit target-feature variants.
+  mask objects are never assumed bit-cast-compatible. The dense boolean mask is
+  not assumed to map to a hardware predicate register, and its explicit policy
+  keeps that performance choice benchmarkable without changing the default.
   Rust does not emit these
   compiler-builtin extensions: stable Rust's SIMD surface is the
   architecture-specific `core::arch`, while its analogous portable
@@ -123,6 +143,13 @@ recursive `tuple[Segment, ...]`:
 - **`Region`** — a recognized keyword island whose `<...>` shell is parsed by
   syntax-only helpers in [ir/region_syntax.py](src/tslc/ir/region_syntax.py) and
   whose `(...)` payload is recursively scanned.
+
+`let<type>(Name, ...)` creates a typed lowering binding rather than a target-language
+declaration. TSIL-owned type positions resolve it directly, for example
+`cast<static>(Name, value)` or `var<typed>(Name, local, init)`. Use `type(Name)` only
+to insert its spelling into otherwise raw target text. A bare `Name` inside `RawText`
+is ordinary target text and is never searched or rewritten, including in comments,
+literals, and Rust lifetimes.
 
 The descriptor registry
 ([ir/region_registry.py](src/tslc/ir/region_registry.py)) is the lexical source
@@ -163,9 +190,10 @@ requested primitives it resolves those lowered call facts
 ([lower/dependencies.py](src/tslc/lower/dependencies.py)), lowers callees, and
 **prunes to a fixpoint** any specialization whose callees aren't themselves
 emitted for the same `simd<type,ext>` (else the generated call wouldn't link).
-It also **propagates bottom-up** unsafe-ness and required target features
-through the live call graph
-([pipeline.py](src/tslc/pipeline.py), `_propagate_transitive_call_facts`).
+It also **propagates bottom-up** unsafe-ness, required target features, and
+implementation-state joins through the live call graph
+([_pipeline_closure.py](src/tslc/_pipeline_closure.py),
+`_propagate_transitive_call_facts`).
 
 After closure, constructing an
 [backend/emitted_profile.py](src/tslc/backend/emitted_profile.py) profile uses
@@ -183,8 +211,9 @@ Backends differ idiomatically (a `BackendDialect`,
 spellings, intrinsic composition, call syntax, and unsafe framing). The
 [backend registry](src/tslc/backend/registry.py) owns each backend's dialect
 factory, artifact media type and renderers, documentation formatter, validation,
-helper manifest, value-test support, verification adapter, and post-generation
-formatting/documentation specs. Signature type
+helper manifest, value-test support, optional benchmark planner and renderer,
+verification adapter, and
+post-generation formatting/documentation specs. Signature type
 projection machinery and the concrete C++/Rust projection tables are co-located
 in [backend/signature_types.py](src/tslc/backend/signature_types.py), then shared
 by function emitters and documentation formatting. They are backend-owned facts,
@@ -192,6 +221,11 @@ not registry capabilities. Backend-neutral variant/body facts live in
 [backend/primitive_rendering.py](src/tslc/backend/primitive_rendering.py);
 language documentation assembly and Rust type-parameter/state-query spelling
 live in focused sibling modules rather than the function emitters.
+
+Sized-vector lane arithmetic crosses that boundary as a typed `LaneCount`.
+C++ renders scaled symbolic counts as constant expressions; stable Rust rejects
+them before target text is produced unless selection has monomorphized the
+count. Neutral lowering never constructs a C++ or Rust lane-count expression.
 
 - **C++** — `*_impl<Vec>` struct partial-specializations + wrapper function
   templates ([backend/cpp.py](src/tslc/backend/cpp.py)).
@@ -205,10 +239,35 @@ live in focused sibling modules rather than the function emitters.
 A static substrate ships as assets
 ([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),
 [tsl_core.rs](src/tslc/backend/assets/tsl_core.rs)) defining `simd<T,Ext>` /
-`SimdVector` and helpers. Backend target-text values use
+`SimdVector` and helpers. Whole-file scaffolding and stable profile metadata
+also live there as named templates; Python renderers supply only finalized,
+typed holes and dynamic declarations. Backend target-text values use
 [target_text.py](src/tslc/target_text.py); [render/](src/tslc/render/) only formats
-finalized, validated profiles and prebuilt value-test plans into a per-profile
-project with a top-level dispatch header/module.
+finalized, validated profiles, prebuilt value-test plans, and prebuilt
+benchmark plans into a per-profile project with a top-level dispatch
+header/module.
+
+The optional [benchmark/](src/tslc/benchmark/) stage consumes finalized C++
+specializations and authored value-test facts. It plans every explicitly
+coexisting named variant in the emitted primitive/dependency closure, emits
+structured skip coverage for unsupported signature shapes, and renders a
+standalone native benchmark/policy tool. Value-test tags do not control
+benchmark admission. Workload semantics are resolved in
+[benchmark/scenarios.py](src/tslc/benchmark/scenarios.py) before rendering:
+pure-register scenarios carry
+their operand generators and dependency parameter, vector-plus-scalar scenarios
+keep the scalar input independent, immediate scenarios carry an authored
+concrete value, indexed-load scenarios carry a SIMD index binding and bounded
+hot-L1 memory contract, vector-to-scalar reduction scenarios carry an
+independent input generator, vector-input mask-result scenarios carry their
+operand generators, and integral-mask conversion scenarios carry exact
+active-lane counts. A primitive uses the
+validated `benchmarks.latency_chain` catalog fact only when its latency operand
+is ambiguous; `benchmarks.operand_domains` can constrain a compatible vector or
+scalar operand to a validated domain such as `nonzero` or `shift_count`. Source
+data never embeds benchmark C++. The generated CMake project runs the tool only
+through explicit report, policy, or autotune options;
+ordinary generation and builds retain the authored default.
 
 ## Differential value tests
 
@@ -223,6 +282,9 @@ components
 [case-kind capabilities](src/tslc/value_tests/case_capabilities.py) validate
 those facts through the focused
 [case plan](src/tslc/value_tests/case_plan.py) before rendering. The
+`status_pointer` case kind validates nondeterministic status-plus-output
+contracts by checking the status domain and failure-path output preservation,
+without inventing vector lanes or a deterministic success value. The
 array↔register round-trip uses auto-discovered "harness primitives"
 (`from_array`, `to_array`,
 `to_integral`, found by signature shape in
@@ -238,7 +300,13 @@ AVX-512/NEON/SVE code runs on hardware that lacks it.
   be lowered yet is *recorded as a skip*, not a failure; `strict` mode promotes
   skips to errors. [coverage.py](src/tslc/coverage.py) and
   [maintenance/](src/tslc/maintenance/) (e.g. `coverage_inventory`)
-  operationalize the charter's coverage-not-completeness rule.
+  operationalize the charter's coverage-not-completeness rule. `tslc coverage
+  inventory` is read-only by default and folds finalized lowering outcomes into
+  one typed report with text, Markdown, and JSON renderers. Its profile/backend
+  shared-availability percentages use a logical-candidate denominator and are
+  shown beside backend-local lowering success. Profile rows use the typed
+  architecture order, then target-feature count and name. Explicit `--update`
+  and `--check` modes own the canonical tracked Markdown evidence.
 - **Honest edges**: [support_policy.py](src/tslc/support_policy.py) centralizes
   what the compiler can emit today; some keyword forms are *recognized so a
   body skips cleanly* rather than leaking through as raw text.

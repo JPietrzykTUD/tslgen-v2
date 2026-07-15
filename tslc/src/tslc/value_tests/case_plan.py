@@ -47,6 +47,10 @@ class ValueTestCasePlan:
     # ``clang`` for compiler-builtin overlay extensions). The runner guards
     # such cases and the build emits a matching opt-in value-test target.
     header_group: str | None = None
+    # Backend compiler capabilities required by this case. C++ renders these
+    # through feature-test guards so an optional extension representation does
+    # not disable other cases in the same header group.
+    required_compiler_features: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         self._validate_common_fields()
@@ -81,6 +85,17 @@ class ValueTestCasePlan:
         if self.header_group is not None and not self.header_group:
             raise ValueError(
                 f"value-test case {self.function_name!r} header_group must be non-empty"
+            )
+        if any(not feature for feature in self.required_compiler_features):
+            raise ValueError(
+                f"value-test case {self.function_name!r} compiler features must be non-empty"
+            )
+        if tuple(sorted(set(self.required_compiler_features))) != (
+            self.required_compiler_features
+        ):
+            raise ValueError(
+                f"value-test case {self.function_name!r} compiler features must be "
+                "sorted and unique"
             )
 
     def _validate_required_facts(

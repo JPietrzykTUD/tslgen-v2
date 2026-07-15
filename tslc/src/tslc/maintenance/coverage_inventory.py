@@ -1,33 +1,35 @@
 #!/usr/bin/env python3
-"""Regenerate coverage/primitive-coverage-inventory.md.
+"""Inspect coverage or maintain the canonical primitive coverage report.
 
-Drives the compiler over every primitive in ``tsldata/`` across the canonical
-profile set and registered backends, cross-references the build-verified set parsed
-from ``tslc/tests/test_build_verify.py``, and writes the coverage table.
-
-Run from the repository with ``tslc/src`` on ``PYTHONPATH``:
-
-    PYTHONPATH=tslc/src python -m tslc.maintenance.coverage_inventory
-
-Lowering-only (no compilation); takes ~1 minute. "lowers" is NOT a compile
-guarantee — only build-verified primitives are confirmed to compile.
+The default command is read-only and reports the configured corpus, profiles,
+types, and backends. ``--update`` and ``--check`` deliberately use the stable
+repository-wide canonical probe so the committed report remains reproducible.
 """
 
 from __future__ import annotations
 
+import argparse
 import ast
-import re
-import sys
-from collections import Counter, defaultdict
 from pathlib import Path
+import sys
 
-from tslc.api import generate_project
+from tslc.api import _ARITH_TYPE_TAGS, generate_project
+from tslc.authoring import check_catalog
 from tslc.backend.registry import registered_backend_ids
-from tslc.catalog.builder import CatalogBuilder
-from tslc.compiler_assets import load_default_tsl_grammar
-from tslc.diagnostics import has_errors
-from tslc.sources import SourceLoader
-from tslc.syntax.parser import TslParser
+from tslc.catalog.machine_profiles import load_machine_profiles_checked
+from tslc.diagnostics import Diagnostic, has_errors
+from tslc.maintenance.coverage_inventory_report import (
+    CoverageInventory,
+    build_coverage_inventory,
+    skip_category,
+)
+from tslc.maintenance.coverage_inventory_render import (
+    render_json,
+    render_markdown,
+    render_text,
+)
+from tslc.project_config import ProjectConfig, load_project_config
+
 
 PROFILES = ("scalar", "sse2", "avx", "avx2", "skylake", "icelake_rockerlake")
 
@@ -47,7 +49,7 @@ _OUT = _REPO_ROOT / "coverage" / "primitive-coverage-inventory.md"
 
 
 def _has_skip_decorator(fn: ast.FunctionDef) -> bool:
-    """True if the test is decorated `@pytest.mark.skip[(...)]` (so it does not verify)."""
+    """Return whether a test function is explicitly skipped."""
 
     for decorator in fn.decorator_list:
         target = decorator.func if isinstance(decorator, ast.Call) else decorator
@@ -58,10 +60,10 @@ def _has_skip_decorator(fn: ast.FunctionDef) -> bool:
     return False
 
 
-def _build_verified_primitives() -> set[str]:
-    """Primitives named in a ``primitives=[...]`` list of a NON-skipped build-verify test."""
+def _build_verified_primitives() -> frozenset[str]:
+    """Primitive names covered by at least one non-skipped generated build test."""
 
-    tree = ast.parse(_BUILD_TEST.read_text())
+    tree = ast.parse(_BUILD_TEST.read_text(encoding="utf-8"))
     verified: set[str] = set()
     for fn in tree.body:
         if not isinstance(fn, ast.FunctionDef) or _has_skip_decorator(fn):
@@ -72,252 +74,242 @@ def _build_verified_primitives() -> set[str]:
                 and node.arg == "primitives"
                 and isinstance(node.value, ast.List)
             ):
-                verified |= {
-                    el.value
-                    for el in node.value.elts
-                    if isinstance(el, ast.Constant)
-                    and isinstance(el.value, str)
-                }
-    return verified
+                verified.update(
+                    element.value
+                    for element in node.value.elts
+                    if isinstance(element, ast.Constant)
+                    and isinstance(element.value, str)
+                )
+    return frozenset(verified)
 
 
-def _category(reason: str) -> str:
-    """Collapse a raw skip reason into a short, stable category label."""
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="tslc coverage inventory",
+        description="Inspect configured specialization coverage.",
+    )
+    parser.add_argument("--config", help="path to tslc.toml (discovered by default)")
+    parser.add_argument("--sources", nargs="+", help="complete corpus roots")
+    parser.add_argument("--machine-profiles", help="path to machine_profiles.json")
+    parser.add_argument("--profiles", help="comma-separated profile names")
+    parser.add_argument("--backends", help="comma-separated backend IDs")
+    parser.add_argument("--types", help="comma-separated scalar type tags")
+    parser.add_argument(
+        "--format", choices=("text", "markdown", "json"), default="text"
+    )
+    actions = parser.add_mutually_exclusive_group()
+    actions.add_argument(
+        "--update",
+        action="store_true",
+        help="rewrite the canonical tracked Markdown report",
+    )
+    actions.add_argument(
+        "--check",
+        action="store_true",
+        help="fail if the canonical tracked Markdown report is stale",
+    )
+    parser.add_argument(
+        "--output",
+        help="tracked report path for --update or --check",
+    )
+    args = parser.parse_args(argv)
 
-    if reason.startswith("pruned:"):
-        return "pruned (closure)"
-    if "generic vector (LANES-sized target)" in reason:
-        return "generic-vector repr-change (deferred)"
-    if reason.startswith("could not resolve type<"):
-        return "unresolved type query"
-    if reason.startswith("could not resolve value<"):
-        return "unresolved value query"
-    if reason.startswith("could not resolve pointer cast"):
-        return "unresolved pointer-cast type"
-    if "is policy-deferred for scalable vector extension" in reason:
-        match = re.search(r"signature '([^']+)'", reason)
-        return f"policy-deferred scalable signature {match.group(1) if match else ''}".strip()
-    if "uses an unsupported kind" in reason:
-        match = re.search(r"signature '([^']+)'", reason)
-        return f"unsupported signature kind {match.group(1) if match else ''}".strip()
-    if "has no top-level complete" in reason or "has no top-level emit_return" in reason:
-        return "no top-level complete"
-    if reason.startswith("call type-args"):
-        return "call type-args (bare-ext/index)"
-    if reason.startswith("unsupported mask<test>"):
-        return "unsupported mask<test>"
-    return reason[:40]
+    sources: tuple[Path, ...]
+    profiles: tuple[str, ...] | None
+    maintenance_mode = args.update or args.check
+    if maintenance_mode:
+        _reject_custom_canonical_scope(args, parser)
+        sources = (_DATA_ROOT,)
+        machine_profiles = _PROFILES_PATH
+        profiles = PROFILES
+        backends = registered_backend_ids()
+        type_tags = _ARITH_TYPE_TAGS
+    else:
+        if args.output is not None:
+            parser.error("--output requires --update or --check")
+        try:
+            project = load_project_config(args.config)
+            sources, machine_profiles, backends = _configured_scope(args, project)
+            profiles = _csv(args.profiles) if args.profiles else None
+            type_tags = _csv(args.types) if args.types else _ARITH_TYPE_TAGS
+        except ValueError as exc:
+            parser.error(str(exc))
 
-
-_CATEGORY_NOTES = {
-    "pruned (closure)": (
-        "Dependency-closure dropped a body whose callee is unavailable in that "
-        "profile. **Structural, not a defect** — expected behavior."
-    ),
-    "generic-vector repr-change (deferred)": (
-        "`cast`/`reinterpret` on the `simd<T, generic<LANES>>` vector "
-        "(LANES-sized target). Known deferred slice."
-    ),
-    "unresolved type query": (
-        "A `type(...)` query is not yet evaluated (e.g. "
-        "`vector::offset_base`, `vector::mask_underlying_t`, `vector::transform(...)`). "
-        "See the per-primitive table for current owners."
-    ),
-    "unresolved value query": (
-        "A `value(...)` query is not yet evaluated (e.g. "
-        "`type::size_bytes(...)`). Blocks to_integral/to_mask generic paths "
-        "and arithmetic fallback bodies."
-    ),
-    "unresolved pointer-cast type": (
-        "`cast<reinterpret>` to a `vector::mask_underlying_t` pointer not resolved."
-    ),
-    "no top-level complete": (
-        "Body has no top-level `complete(...)` (where-clause / switch-bodied "
-        "forms) — not lowerable yet; see the per-primitive table for current "
-        "owners."
-    ),
-    "call type-args (bare-ext/index)": (
-        "Unsupported `call<primitive=...>[...]` type-argument shape. Simple vector "
-        "aliases, extension names, and decimal index constants are supported."
-    ),
-    "unsupported mask<test>": (
-        "`mask<test>` on the `native_predicate_by_lanes` (avx512 `__mmaskN`) "
-        "representation."
-    ),
-    "unsupported signature kind": (
-        "Unsupported signature kind: variadic `set` (`v:=s...`) and `to_ostream` "
-        "(`o:=(o,v,s)`)."
-    ),
-    "policy-deferred scalable signature": (
-        "Selected scalable-vector slot whose fixed-lane `s[]` or `lanes<s>` "
-        "signature is intentionally deferred until the typed scalable array/"
-        "lane-list contract is designed."
-    ),
-}
-
-
-def main() -> int:
-    catalog = CatalogBuilder().build(
-        TslParser(load_default_tsl_grammar()).parse(SourceLoader().load_dir(_DATA_ROOT).documents)
-    ).catalog
-    if catalog is None:
-        print("ERROR: catalog promotion failed", file=sys.stderr)
+    inventory, errors = collect_inventory(
+        sources=sources,
+        machine_profiles=machine_profiles,
+        profiles=profiles,
+        backends=backends,
+        type_tags=type_tags,
+    )
+    if inventory is None:
+        for error in errors:
+            print(error, file=sys.stderr)
         return 1
-    names = sorted({p.name for p in catalog.primitives})
-    backend_ids = registered_backend_ids()
-    sigs: dict[str, set[str]] = defaultdict(set)
-    for primitive in catalog.primitives:
-        sigs[primitive.name].add(primitive.signature)
 
-    verified = _build_verified_primitives()
+    if args.check or args.update:
+        output = Path(args.output) if args.output else _OUT
+        rendered = render_markdown(inventory, tracked=True)
+        if args.check:
+            current = output.read_text(encoding="utf-8") if output.is_file() else None
+            if current != rendered:
+                print(f"coverage inventory is stale: {output}", file=sys.stderr)
+                return 1
+            print(f"coverage inventory is current: {_display_path(output)}")
+            return 0
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered, encoding="utf-8")
+        print(f"wrote {_display_path(output)}")
+        return 0
+
+    renderer = {
+        "text": render_text,
+        "markdown": render_markdown,
+        "json": render_json,
+    }[args.format]
+    print(renderer(inventory), end="")
+    return 0
+
+
+def collect_inventory(
+    *,
+    sources: tuple[Path, ...],
+    machine_profiles: Path,
+    profiles: tuple[str, ...] | None,
+    backends: tuple[str, ...],
+    type_tags: tuple[str, ...],
+) -> tuple[CoverageInventory | None, tuple[str, ...]]:
+    """Load configured inputs, run lowering only, and calculate the inventory."""
+
+    catalog_result = check_catalog(sources, backends=backends)
+    if catalog_result.catalog is None or has_errors(catalog_result.diagnostics):
+        return None, _diagnostic_lines(catalog_result.diagnostics)
+    catalog = catalog_result.catalog
+    loaded_profiles = load_machine_profiles_checked(
+        machine_profiles, catalog.target_families
+    )
+    if has_errors(loaded_profiles.diagnostics):
+        return None, _diagnostic_lines(loaded_profiles.diagnostics)
+    selected_profiles = (
+        profiles if profiles is not None else tuple(sorted(loaded_profiles.profiles))
+    )
+    unknown = tuple(name for name in selected_profiles if name not in loaded_profiles.profiles)
+    if unknown:
+        known = ", ".join(sorted(loaded_profiles.profiles))
+        return None, (
+            f"unknown profile(s): {', '.join(unknown)}; known profiles: {known}",
+        )
+    selected_profile_models = tuple(
+        loaded_profiles.profiles[name] for name in selected_profiles
+    )
+
     result = generate_project(
-        [_DATA_ROOT],
-        machine_profiles_path=_PROFILES_PATH,
-        primitives=names,
-        profiles=list(PROFILES),
-        backends=backend_ids,
+        sources,
+        machine_profiles_path=machine_profiles,
+        profiles=selected_profiles,
+        type_tags=type_tags,
+        backends=backends,
+        render_artifacts=False,
     )
     if has_errors(result.diagnostics):
-        for diagnostic in result.diagnostics:
-            if diagnostic.severity == "error":
-                print(f"ERROR {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
-        return 1
-
-    coverage_by_backend: dict[str, dict[str, set[str]]] = {
-        backend_id: defaultdict(set) for backend_id in backend_ids
-    }
-    skips: Counter[str] = Counter()
-    reasons: dict[str, Counter[str]] = defaultdict(Counter)
-    for coverage_entry in result.coverage:
-        coverage_by_backend[coverage_entry.backend][coverage_entry.primitive].add(
-            coverage_entry.extension
-        )
-    for skipped_entry in result.skipped:
-        skips[skipped_entry.primitive] += 1
-        reasons[skipped_entry.primitive][skipped_entry.reason] += 1
-
-    def status(name: str) -> str:
-        emitted = any(coverage[name] for coverage in coverage_by_backend.values())
-        if name in verified:
-            return "VERIFIED"
-        if emitted and skips[name] == 0:
-            return "lowers"
-        if emitted:
-            return "partial"
-        return "NONE"
-
-    tier = {s: [n for n in names if status(n) == s] for s in ("VERIFIED", "lowers", "partial", "NONE")}
-    total_emitted = len(result.coverage)
-    total_skipped = len(result.skipped)
-    histogram: Counter[str] = Counter()
-    for skipped_entry in result.skipped:
-        histogram[_category(skipped_entry.reason)] += 1
-    backend_label = "/".join(backend_ids)
-    parity = all(
-        len({frozenset(coverage[name]) for coverage in coverage_by_backend.values()}) <= 1
-        for name in names
+        return None, _diagnostic_lines(result.diagnostics)
+    return (
+        build_coverage_inventory(
+            catalog,
+            result,
+            machine_profiles=selected_profile_models,
+            backends=backends,
+            type_tags=type_tags,
+            verified_primitives=_build_verified_primitives(),
+        ),
+        (),
     )
 
-    out: list[str] = []
-    w = out.append
-    _OUT.parent.mkdir(parents=True, exist_ok=True)
 
-    w("# Primitive Coverage Inventory\n")
-    w("Generated by `tslc.maintenance.coverage_inventory`. **Regenerate** with")
-    w(
-        "`PYTHONPATH=tslc/src python -m tslc.maintenance.coverage_inventory`; "
-        "do not hand-edit (it rewrites this file).\n"
+def _configured_scope(
+    args: argparse.Namespace,
+    project: ProjectConfig | None,
+) -> tuple[tuple[Path, ...], Path, tuple[str, ...]]:
+    sources = (
+        tuple(Path(item) for item in args.sources)
+        if args.sources
+        else project.sources
+        if project is not None
+        else (_DATA_ROOT,)
     )
-    w("## Summary\n")
-    w(f"- **{len(names)} distinct primitives** in `tsldata/`.")
-    w(f"- **{len(tier['VERIFIED'])} build-verified** (compile in {backend_label} via "
-      "`tslc/tests/test_build_verify.py`).")
-    w(f"- **{len(tier['lowers'])} lower cleanly but are not build-verified** "
-      "(codegen succeeds, 0 skips; compilation unconfirmed).")
-    w(f"- **{len(tier['partial'])} partial** (emit for some extension/type slots, skip others).")
-    w(f"- **{len(tier['NONE'])} emit nothing** under the probed profiles.")
-    w(f"- **{total_emitted} / {total_emitted + total_skipped} "
-      "(profile×backend×ext×type) slots lower**; **0 errors**.")
-    if parity:
-        w(f"- **{backend_label} parity is exact**: every primitive emits the identical "
-          "extension set for every registered backend.\n")
-    else:
-        w(f"- **{backend_label} parity differs** for at least one primitive.\n")
-    w("Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen "
-      "clean, 0 skips, no build test; **partial** = some slots lower, some skip; "
-      "**NONE** = nothing emitted.\n")
-    w(f"> Caveat: \"lowers\" means the generator produced {backend_label} text without "
-      "diagnostics — it is *not* a compile guarantee. Only **VERIFIED** primitives are "
-      "confirmed to compile. The probe uses the 10 arith type tags (si/ui 8-64, "
-      f"f32/f64) across profiles `{', '.join(PROFILES)}`.\n")
-
-    w("## Tiers\n")
-    w(f"### Build-verified ({len(tier['VERIFIED'])}) — compile in {backend_label}\n")
-    w(", ".join(f"`{n}`" for n in tier["VERIFIED"]) + "\n")
-    w(f"### Lower but not build-verified ({len(tier['lowers'])}) — codegen clean, "
-      "compilation unconfirmed\n")
-    w(", ".join(f"`{n}`" for n in tier["lowers"]) + "\n")
-    w(f"### Partial ({len(tier['partial'])}) — some slots lower, some skip\n")
-    w(", ".join(f"`{n}`" for n in tier["partial"]) + "\n")
-    w(f"### Emit nothing ({len(tier['NONE'])})\n")
-    w(", ".join(f"`{n}`" for n in tier["NONE"]) + "\n")
-
-    w("## Per-primitive table\n")
-    w("| primitive | signatures | status | extensions by backend | skipped slots | dominant gap |")
-    w("|---|---|---|---|--:|---|")
-    for name in names:
-        exts = "; ".join(
-            f"{backend_id}="
-            + ("/".join(sorted(coverage_by_backend[backend_id][name])) or "—")
-            for backend_id in backend_ids
-        )
-        signatures = " ".join(f"`{s}`" for s in sorted(sigs[name]))
-        dominant = (
-            _category(reasons[name].most_common(1)[0][0]) if reasons[name] else "—"
-        )
-        w(f"| `{name}` | {signatures} | {status(name)} | {exts} | {skips[name]} | {dominant} |")
-    w("")
-
-    w("## Skip-reason taxonomy (what blocks the gaps)\n")
-    w("> Skip counts are candidate specialization slots "
-      "(`profile×backend×extension×type`), not primitives. A primitive can be "
-      "**VERIFIED** while still listing skipped slots when another profile/type/"
-      "extension variant is deliberately pruned or deferred.\n")
-    w("| skips | category | meaning / action |")
-    w("|--:|---|---|")
-    for category, count in histogram.most_common():
-        key = "unsupported signature kind" if category.startswith("unsupported signature kind") else category
-        w(f"| {count} | {category} | {_CATEGORY_NOTES.get(key, '')} |")
-    w("")
-    w("### NONE primitives — why nothing emits\n")
-    if not tier["NONE"]:
-        w("No primitives are currently in the NONE tier; every primitive emits at "
-          "least one slot under the probed profiles.\n")
-    else:
-        for name in tier["NONE"]:
-            signatures = " ".join(f"`{s}`" for s in sorted(sigs[name]))
-            if reasons[name]:
-                category = _category(reasons[name].most_common(1)[0][0])
-                key = (
-                    "unsupported signature kind"
-                    if category.startswith("unsupported signature kind")
-                    else category
-                )
-                note = _CATEGORY_NOTES.get(key, "")
-                suffix = f": {category}. {note}" if note else f": {category}."
-            else:
-                suffix = "."
-            w(f"- `{name}` ({signatures}){suffix}")
-        w("")
-
-    _OUT.write_text("\n".join(out))
-    print(f"wrote {_OUT.relative_to(_REPO_ROOT)}")
-    print(
-        f"  {len(names)} primitives: {len(tier['VERIFIED'])} verified, "
-        f"{len(tier['lowers'])} lowers, {len(tier['partial'])} partial, "
-        f"{len(tier['NONE'])} none; {total_emitted}/{total_emitted + total_skipped} slots"
+    machine_profiles = (
+        Path(args.machine_profiles)
+        if args.machine_profiles
+        else project.machine_profiles
+        if project is not None
+        else _PROFILES_PATH
     )
-    return 0
+    backends = (
+        _csv(args.backends)
+        if args.backends
+        else project.backends
+        if project is not None
+        else registered_backend_ids()
+    )
+    if not sources:
+        raise ValueError("no corpus configured; pass --sources or create tslc.toml")
+    if not backends:
+        raise ValueError("at least one backend is required")
+    return sources, machine_profiles, backends
+
+
+def _reject_custom_canonical_scope(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    custom = tuple(
+        option
+        for option, value in (
+            ("--config", args.config),
+            ("--sources", args.sources),
+            ("--machine-profiles", args.machine_profiles),
+            ("--profiles", args.profiles),
+            ("--backends", args.backends),
+            ("--types", args.types),
+        )
+        if value is not None
+    )
+    if custom:
+        parser.error(
+            f"{'/'.join(custom)} cannot be combined with --update or --check; "
+            "tracked reports use the canonical repository scope"
+        )
+    if args.format != "text":
+        parser.error("--format cannot be combined with --update or --check")
+
+
+def _csv(value: str) -> tuple[str, ...]:
+    items = tuple(item.strip() for item in value.split(",") if item.strip())
+    if not items:
+        raise ValueError("comma-separated option must contain at least one value")
+    return items
+
+
+def _diagnostic_lines(diagnostics: tuple[Diagnostic, ...]) -> tuple[str, ...]:
+    return tuple(
+        f"{diagnostic.severity.upper()} {diagnostic.code}: {diagnostic.message}"
+        for diagnostic in diagnostics
+        if diagnostic.severity == "error"
+    )
+
+
+def _display_path(path: Path) -> Path:
+    try:
+        return path.relative_to(_REPO_ROOT)
+    except ValueError:
+        return path
+
+
+__all__ = (
+    "PROFILES",
+    "collect_inventory",
+    "main",
+    "skip_category",
+)
 
 
 if __name__ == "__main__":

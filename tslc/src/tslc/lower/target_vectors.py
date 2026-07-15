@@ -8,6 +8,7 @@ from tslc.backend import translation_common
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.model import RESULT_DIM_BASE, Catalog
 from tslc.diagnostics import Diagnostic
+from tslc.lane_count import LaneCount
 from tslc.lower._diagnostics import (
     implementation_source,
     lowering_error_diagnostic,
@@ -102,9 +103,18 @@ def _resolve_sized_target(
         return _no_target_base_type(selected, backend)
     scope.bind_target_type_symbol(alias, to_target)
     scope.bind_target_type_symbol("ToType", to_target)
-    lane_parameter, windowing = _sized_target_lane_parameter(
+    lane_count, windowing = _sized_target_lane_parameter(
         selected, to_target, support
     )
+    lane_parameter = backend.types.render_lane_count(lane_count)
+    if lane_parameter is None:
+        return lowering_skip_diagnostic(
+            "TSL-LOWER-SIZED-WIDTH-CHANGE",
+            f"sized-vector windowing convert ({selected.type_tag} -> {to_target}) "
+            f"needs lane-count arithmetic unsupported by backend "
+            f"{backend.backend_id!r}; skipped pending unroll",
+            source=implementation_source(selected),
+        )
     register_spelling = backend.types.target_register_spelling(
         to_target,
         selected.extension.isa_name,
@@ -235,13 +245,13 @@ def _sized_target_lane_parameter(
     selected: SelectedImplementation,
     to_target: str,
     support: SupportPolicy,
-) -> tuple[str, bool]:
+) -> tuple[LaneCount, bool]:
     """Lane parameter for sized target vectors, including width-changing windows."""
 
     windowing = "direction" in selected.primitive.attributes
     if selected.concrete_lanes is not None:
         return (
-            str(
+            LaneCount.fixed(
                 support.windowed_lane_count(
                     selected.type_tag, to_target, selected.concrete_lanes
                 )
@@ -257,7 +267,9 @@ def _sized_target_lane_parameter(
             ),
             windowing,
         )
-    return support.size_parameter_name(selected.extension), windowing
+    return LaneCount.symbolic(
+        support.size_parameter_name(selected.extension)
+    ), windowing
 
 
 def _no_target_base_type(

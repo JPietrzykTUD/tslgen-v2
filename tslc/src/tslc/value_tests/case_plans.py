@@ -24,6 +24,7 @@ from tslc.value_tests._case_core import (
     reduction_case,
     scalar_result_case,
     scalar_vector_case,
+    status_pointer_case,
     vector_to_array_case,
 )
 from tslc.value_tests._case_memory import (
@@ -73,6 +74,7 @@ __all__ = (
     "scalar_pointer_load_case",
     "scalar_result_case",
     "scalar_vector_case",
+    "status_pointer_case",
     "store_case",
     "stream_case",
     "vector_to_array_case",

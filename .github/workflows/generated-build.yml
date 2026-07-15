@@ -133,3 +133,55 @@ jobs:
           path: tslctmp/ci-logs/generated-build-${{ matrix.profile_shard.name }}
           if-no-files-found: ignore
           retention-days: 14
+
+  generated-benchmarks:
+    name: Generated benchmarks (x86 policy and ARM smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - ci-image
+
+    env:
+      TSLC_CI_IMAGE: ${{ needs['ci-image'].outputs.image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-benchmarks/docker-pull.log" \
+            docker pull "${TSLC_CI_IMAGE}"
+
+      - name: Build and execute generated benchmark paths
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-benchmarks/tests.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -e TSLC_QEMU_AARCH64="/usr/bin/qemu-aarch64" \
+              -- \
+              bash -lc '
+                set -e
+                trap "rm -rf tslctmp/pytest" EXIT
+                PYTHONPATH=tslc/src python -m pytest -q \
+                  --run-generated-builds \
+                  -m generated_build \
+                  tslc/tests/test_benchmark_variants.py
+              '
+
+      - name: Upload generated benchmark logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-logs-generated-benchmarks
+          path: tslctmp/ci-logs/generated-benchmarks
+          if-no-files-found: ignore
+          retention-days: 14

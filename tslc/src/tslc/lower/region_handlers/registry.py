@@ -8,6 +8,7 @@ from types import MappingProxyType
 
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS
 from tslc.lower.implementation_facts import RegionImplementationEffect
+from tslc.lower.region_handlers.arrays import ArrayLowerer
 from tslc.lower.region_handlers.calls import CallLowerer
 from tslc.lower.region_handlers.casts import CastLowerer
 from tslc.lower.region_handlers.control import (
@@ -51,6 +52,7 @@ REGION_LOWERING_REGISTRATIONS: tuple[RegionLoweringRegistration, ...] = (
     RegionLoweringRegistration("mask", MaskLowerer, _EFFECT.COMPOSITION),
     RegionLoweringRegistration("mem", MemLowerer, _EFFECT.COMPOSITION),
     RegionLoweringRegistration("lanes", LanesLowerer, _EFFECT.COMPOSITION),
+    RegionLoweringRegistration("array", ArrayLowerer, _EFFECT.COMPOSITION),
     RegionLoweringRegistration("io", IoLowerer, _EFFECT.COMPOSITION),
     RegionLoweringRegistration("cast", CastLowerer, _EFFECT.COMPOSITION),
     RegionLoweringRegistration("call", CallLowerer, _EFFECT.CALL),

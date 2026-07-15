@@ -1,117 +1,168 @@
 # Adding A TSIL Keyword Region
 
-This guide describes how to add a new TSIL keyword region to `tslc`.
+Use this guide for a new recognized TSIL region.
 
-TSIL bodies are not parsed as C++, Rust, or a general target-language AST.
-They are scanned into raw target text plus recognized keyword regions. A new
-keyword should therefore have three clearly separated parts:
+Use [TSIL keyword regions](tsil-keywords.md) for the current reference.
 
-- lexical recognition: the scanner can identify the region boundary;
-- source-shell validation: malformed source shapes become diagnostics;
-- lowering: a focused handler turns the region into backend-specific text using
-  typed lowering context and backend translation templates.
+## The TSIL Model
 
-Keep those responsibilities separate. The scanner should not learn expression
-semantics, validation should not perform backend lowering, and renderers should
-not re-parse TSIL.
+TSIL is not a C++ or Rust AST.
 
-## When To Add A Keyword
+The scanner produces two segment kinds:
 
-Add a TSIL keyword when a source-body operation has shared compiler semantics
-that should be typed, validated, or backend-neutral.
+```text
+implementation body
+  -> RawText
+  -> Region(keyword, selector, child segments)
+```
+
+Raw target text passes through.
+
+A recognized region receives typed validation and focused lowering.
+
+## When To Add A Region
+
+Add a region when source intent needs shared compiler semantics.
 
 Good reasons:
 
-- the same raw target-language pattern appears in several primitives;
-- C++ and Rust need different spellings for the same source intent;
-- the source form needs diagnostics before backend rendering;
-- a future backend should add one translation rule instead of editing many
-  primitive bodies.
+- C++ and Rust need different spellings;
+- several primitives repeat the same semantic pattern;
+- malformed source needs an early diagnostic;
+- a future backend should add one translation rule.
 
-Do not add a keyword only to rename raw syntax. If the expression is genuinely
-portable target text and does not need compiler knowledge, raw text is fine.
+Keep raw text when it is portable and needs no compiler knowledge.
+
+Do not add a region only to rename target syntax.
+
+## The Three Owned Layers
+
+| Layer | Owner | Responsibility |
+| --- | --- | --- |
+| Recognition | `ir/region_registry.py` and scanner | Find region boundaries. |
+| Shell validation | `catalog/validation/body_validation.py` | Reject malformed source shape. |
+| Lowering | `lower/region_handlers/` | Resolve semantics and backend spelling. |
+
+The layers connect in one direction:
+
+```text
+descriptor
+  -> scanner Region
+  -> shell validator
+  -> RegionLowerer
+  -> backend translation or syntax dialect
+  -> render-ready text
+```
+
+The scanner must not resolve types.
+
+Validation must not emit backend code.
+
+Renderers must not scan TSIL again.
 
 ## Running Example: `helper`
 
-The helper region accepts:
+Source:
 
 ```tsil
 helper<arith_add>(left, right)
-helper<clz_recursive, type(base::in), type(vector::offset_base)::apply>(data)
 ```
 
-The source selector is a backend-neutral helper id, not a C++ namespace or Rust
-module path. Lowering maps `helper<arith_add>` to a backend translation template
-named `helper_arith_add`. C++ currently renders that template as
-`::tsl::detail::helpers::arith_add(...)`; Rust renders it as
-`crate::tsl_core::detail::helpers::arith_add(...)`.
+The selector is a semantic helper ID.
 
-That design keeps primitive source data independent from backend namespaces and
-lets primitive implementation internals move under `detail::primitives`
-without breaking raw helper calls.
+It is not a C++ namespace.
 
-## Step 1: Define The Source Contract
+It is not a Rust module path.
 
-Before editing code, write down the exact accepted forms.
+Lowered C++:
 
-For a call-shaped region, decide:
+```cpp
+::tsl::detail::helpers::arith_add(left, right)
+```
 
-- keyword name;
-- selector syntax, if any;
-- argument syntax and arity;
-- whether nested TSIL regions are valid inside arguments;
-- whether the region behaves as an expression or statement;
-- malformed nearby forms that must diagnose.
+Lowered Rust:
 
-For a block-shaped region, also decide:
+```rust
+crate::tsl_core::detail::helpers::arith_add(left, right)
+```
 
-- block shape: `if`, `loop`, or `switch`;
-- selector meanings;
-- required body or arm structure;
-- whether else/arm blocks are allowed.
+## 1. Define The Source Contract
 
-Prefer one literal, documented spelling. Avoid compatibility aliases unless the
-project explicitly needs them.
+Write exact accepted forms.
 
-## Step 2: Register The Region Descriptor
+For a call region, define:
 
-Add the keyword to:
+- keyword;
+- selector grammar;
+- argument grammar;
+- arity;
+- expression or statement behavior;
+- nested-region behavior;
+- malformed nearby forms.
+
+For a block region, also define:
+
+- block shape;
+- body structure;
+- optional branches or arms.
+
+Example contract:
+
+```text
+helper<IDENTIFIER>(ARGUMENTS)
+helper<IDENTIFIER, TEMPLATE_ARGUMENT, ...>(ARGUMENTS)
+```
+
+Prefer one spelling.
+
+Do not add aliases without a compatibility requirement.
+
+## 2. Register The Descriptor
+
+Edit:
 
 ```text
 tslc/src/tslc/ir/region_registry.py
 ```
 
-Use `TsilRegionDescriptor`:
+Add one descriptor:
 
 ```python
 TsilRegionDescriptor("helper", shell_validator="helper_selector")
 ```
 
-The descriptor is the lexical source of truth consumed by scanner, validation,
-and lowering registry code.
-
-Choose `body_shape` only when the region is not a normal call-shaped region:
+Use a body shape only for structural regions:
 
 ```python
 TsilRegionDescriptor("loop", body_shape="loop_block")
 TsilRegionDescriptor("switch", body_shape="switch_block")
 ```
 
-Keep this layer lexical. It owns keyword names, body shape, and the shell
-validator id. It must not import lowering handlers, catalog values, or backend
-code.
+The descriptor tuple is the closed keyword vocabulary.
 
-## Step 3: Add Source-Shell Validation
+It drives:
 
-If the keyword has structured selector or argument syntax that can be checked
-without backend semantics, add validation in:
+- `TSIL_REGION_KEYWORDS`;
+- scanner recognition;
+- shell-validator lookup;
+- lowerer registration checks;
+- documentation tests.
+
+The descriptor owns lexical facts only.
+
+It must not import catalog or backend code.
+
+## 3. Add Shell Validation
+
+Edit:
 
 ```text
 tslc/src/tslc/catalog/validation/body_validation.py
 ```
 
-For `helper`, the validator checks that the first selector term is an
-identifier:
+Validate source shape only.
+
+Example:
 
 ```python
 def _validate_helper_region(
@@ -120,120 +171,113 @@ def _validate_helper_region(
     diagnostics: list[Diagnostic],
 ) -> None:
     terms = split_selector_terms(region.selector_text)
-    if terms and _IDENTIFIER.fullmatch(terms[0].strip()) is not None:
+    if terms and _IDENTIFIER.fullmatch(terms[0].strip()):
         return
     diagnostics.append(...)
 ```
 
-Then register it in `_SHELL_VALIDATORS` under the same id declared in
-`region_registry.py`:
+Register the same validator ID:
 
 ```python
-"helper_selector": _validate_helper_region,
+_SHELL_VALIDATORS = {
+    "helper_selector": _validate_helper_region,
+    # ...
+}
 ```
 
-Validation should:
+A validator should:
 
-- produce structured `Diagnostic` values;
-- include the primitive name and bad selector text when useful;
-- use `region.source` for source location;
-- check source shape only, not backend support;
-- avoid silently repairing malformed source.
+- return structured diagnostics;
+- include source location;
+- name the primitive and bad selector when useful;
+- reject malformed source;
+- avoid source repair;
+- avoid backend checks.
 
-Unsupported backend semantics belong in lowering diagnostics, not catalog
-validation.
+Backend support belongs to lowering.
 
-## Step 4: Add A Focused Lowerer
+## 4. Add A Focused Lowerer
 
-Create a handler under:
+Create a file under:
 
 ```text
 tslc/src/tslc/lower/region_handlers/
 ```
 
-For `helper`, the file is:
-
-```text
-tslc/src/tslc/lower/region_handlers/helpers.py
-```
-
-A lowerer implements the `RegionLowerer` protocol:
+Implement `RegionLowerer`:
 
 ```python
 class HelperLowerer:
     keyword = "helper"
 
     def lower(
-        self, region: Region, context: LoweringSession, render: RenderBody
+        self,
+        region: Region,
+        context: LoweringSession,
+        render: RenderBody,
     ) -> RenderField:
         ...
 ```
 
-Use the passed `render` callback to recurse into child segments. Do not scan
-raw implementation bodies from scratch outside the shared segment boundary.
+The lowerer owns only its keyword contract.
 
-Common helpers:
+Use the `render` callback for child segments.
 
-- `split_selector_terms(...)` for comma-separated selector terms;
-- `_split_arg_groups(...)` for comma-separated region arguments;
-- `scan(...)` only for selector fragments that are themselves TSIL-capable
-  expressions, as `helper` does for template arguments;
-- `trimmed_text(...)` and `render_text(...)` for normalized render fields.
+Do not rescan the full implementation body.
 
-Lowering should:
+Useful shared helpers:
 
-- parse only the keyword's own source contract;
-- ask `context.env.backend.templates` for backend spellings;
-- return `region.full_text` after recording a skip when unsupported;
-- use `context.effects.skip(...)` for unsupported or malformed lowered cases;
-- preserve deterministic output.
+- `split_selector_terms(...)`;
+- `_split_arg_groups(...)`;
+- `trimmed_text(...)`;
+- `render_text(...)`.
 
-For `helper`, unsupported backend templates become:
+Use `scan(...)` only for a selector fragment that explicitly allows nested TSIL.
+
+Handle unsupported backend semantics explicitly:
 
 ```python
 context.effects.skip(
     "TSL-LOWER-UNSUPPORTED-HELPER",
-    f"unsupported helper<{name}> for backend ...",
+    f"unsupported helper<{name}> for backend {backend_id}",
     source=region.source,
 )
 return region.full_text
 ```
 
-## Step 5: Register The Lowerer
+Keep output deterministic.
 
-Add the lowerer to:
+## 5. Register The Lowerer
+
+Edit:
 
 ```text
 tslc/src/tslc/lower/region_handlers/registry.py
 ```
-
-Import the class and add it to `_REGION_LOWERER_FACTORIES`:
 
 ```python
 from tslc.lower.region_handlers.helpers import HelperLowerer
 
 _REGION_LOWERER_FACTORIES = {
     "helper": HelperLowerer,
-    ...
+    # ...
 }
 ```
 
-The registry builds `DEFAULT_REGION_LOWERERS` from
-`DEFAULT_TSIL_REGION_DESCRIPTORS`, so a descriptor without a lowerer means the
-scanner can see the keyword but lowering will not handle it.
+Every descriptor must have one lowerer registration.
 
-## Step 6: Add Backend Translation Templates
+Tests compare both vocabularies.
 
-If the lowerer emits backend-specific text, add templates to the backend
-translation data:
+## 6. Add Backend Spelling
+
+Use translation data for simple spelling differences:
 
 ```text
 tsldata/detail/lang/translate_cpp.tsl
 tsldata/detail/lang/translate_rust.tsl
 ```
 
-For `helper`, the lowerer turns `helper<arith_add>(...)` into the template key
-`helper_arith_add`, so each backend declares:
+Example:
 
 ```tsl
 translation cpp:
@@ -243,174 +287,136 @@ translation rust:
   helper_arith_add "crate::tsl_core::detail::helpers::arith_add({args})"
 ```
 
-Use translation data for spelling differences. Do not bake C++ namespaces, Rust
-modules, intrinsic prefixes, or syntax details into primitive source bodies
-when a backend template can own them.
+The lowerer maps:
 
-## Step 7: Add Runtime Assets When Needed
+```text
+helper<arith_add>(...)
+  -> translation key helper_arith_add
+  -> backend text
+```
 
-If a template refers to generated-library helper code, add the helper to the
-appropriate static assets under:
+Use a backend syntax dialect for structured syntax.
+
+Do not embed C++ namespaces in primitive source.
+
+Do not embed Rust module paths in primitive source.
+
+## 7. Add Runtime Assets When Needed
+
+Backend-owned helper code lives under:
 
 ```text
 tslc/src/tslc/backend/assets/
 ```
 
-For `helper`, the slice added or moved C++ helpers under:
+Example ownership:
 
 ```cpp
 namespace tsl::detail::helpers {
-...
+  // C++ helper implementation
 }
 ```
-
-and Rust helpers under:
 
 ```rust
 pub mod detail {
     pub mod helpers {
-        ...
+        // Rust helper implementation
     }
 }
 ```
 
-Keep helper assets backend-owned. Primitive bodies should say
-`helper<arith_add>(...)`, not `::tsl::detail::helpers::arith_add(...)`.
+Keep these assets as explicit files.
 
-## Step 8: Migrate Source Data
+Do not bury them as Python string constants.
 
-Update primitive bodies under:
+## 8. Migrate Source Data
 
-```text
-tsldata/primitives/
+Edit bodies under `tsldata/primitives/`.
+
+Before:
+
+```cpp
+::tsl::detail::helpers::arith_add(left, right)
 ```
 
-Use the new keyword only where it captures the source intent better than raw
-text. The `helper` slice replaced raw `detail::arith_mul(...)`,
-`detail::arith_rem(...)`, `detail::popcount(...)`, `detail::clz(...)`, and
-similar calls with backend-neutral `helper<...>(...)` forms.
+After:
 
-This is also where architecture guards become useful. If a new keyword replaces
-an old raw spelling, add or run an `rg` check proving the old spelling is gone
-from production source data.
-
-## Step 9: Update Documentation
-
-Update:
-
-```text
-docs/tsil-keywords.md
+```tsil
+helper<arith_add>(left, right)
 ```
+
+Use `rg` to find old raw spellings.
+
+Migrate only forms covered by the new semantic contract.
+
+## 9. Update The Reference
+
+Edit [TSIL keyword regions](tsil-keywords.md).
+
+Add the section in descriptor order.
 
 Include:
 
-- syntax;
-- intended use;
-- how validation works;
-- how lowering chooses backend templates;
-- notable unsupported cases.
+- exact syntax;
+- fixed selector vocabulary when one exists;
+- validation rules;
+- lowering ownership;
+- one TSIL example;
+- one C++ expansion;
+- one Rust expansion;
+- unsupported cases.
 
-Keep `docs/tsil-keywords.md` as the inventory. Use this file as the process
-guide.
+## 10. Test The Boundaries
 
-## Step 10: Add Tests At The Right Boundaries
+Scanner and validation tests:
 
-A good keyword slice usually needs tests in several layers.
+- recognize valid syntax;
+- diagnose malformed syntax;
+- preserve nested regions;
+- preserve source locations.
 
-Scanner and validation:
+Lowering tests:
 
-- valid region is recognized;
-- malformed shell produces a catalog diagnostic;
-- nested regions remain nested segments;
-- source locations are preserved where practical.
+- render accepted forms;
+- recurse into child regions;
+- diagnose unsupported forms;
+- keep deterministic output.
 
-Lowering:
+Generated tests:
 
-- accepted form lowers to the expected backend template output;
-- unsupported selector/backend template produces a lowering skip;
-- malformed lowered form does not silently pass through as if supported;
-- child expressions are rendered recursively.
+- contain the intended C++ spelling;
+- contain the intended Rust spelling;
+- include required runtime assets;
+- build when emitted code changed.
 
-Backend/render:
-
-- generated C++ and Rust output contain the intended spelling;
-- backend-specific assets are shipped;
-- wrappers/templates do not re-parse TSIL.
-
-Generated build tests:
-
-- run when the keyword affects emitted code or static assets;
-- include both C++ and Rust if both backends receive templates.
-
-For the `helper` slice, tests were updated around specialization output,
-generation conditionals, safety contracts, and generated build coverage because
-the keyword also moved primitive implementations into backend detail modules.
-
-Useful focused commands:
+Run focused checks:
 
 ```bash
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_tsil_scan.py
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_lower_text.py tslc/tests/test_select_and_lower.py
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_generation_conditionals.py
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_safety_contract.py
-```
-
-When generated code or assets changed:
-
-```bash
-PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
-```
-
-Always consider:
-
-```bash
+PYTHONPATH=tslc/src python -m pytest -q \
+  tslc/tests/test_tsil_scan.py \
+  tslc/tests/test_lower_text.py \
+  tslc/tests/test_select_and_lower.py
 python -m compileall -q tslc/src/tslc
 git diff --check
 ```
 
+Run generated builds when code or assets changed:
+
+```bash
+PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds \
+  tslc/tests/test_build_verify.py \
+  tslc/tests/test_value_tests.py
+```
+
 ## Review Checklist
 
-Before calling the slice done, check:
-
-- the accepted source syntax is documented and exact;
-- malformed nearby source produces diagnostics;
-- the scanner only owns lexical region boundaries;
-- the lowerer is small and keyword-specific;
-- backend spelling lives in translation data or backend assets;
-- primitive source data is backend-neutral where possible;
-- renderers format already-lowered values and do not parse TSIL;
-- unsupported cases are explicit skips or diagnostics;
-- iteration and generated output stay deterministic;
-- adding the next similar keyword would follow the same owned path.
-
-## Common Mistakes
-
-Putting backend paths in `tsldata`:
-
-- Bad: `::tsl::detail::helpers::arith_add(left, right)`
-- Better: `helper<arith_add>(left, right)`
-
-Doing semantic work in the scanner:
-
-- Bad: scanner validates selector meaning or resolves types.
-- Better: scanner identifies `Region`; validation checks shell; lowerer resolves
-  typed context and backend support.
-
-Skipping shell validation:
-
-- Bad: malformed `keyword<,>(...)` reaches render as raw text.
-- Better: catalog validation emits a source-located diagnostic before
-  selection/lowering.
-
-Adding renderer logic:
-
-- Bad: C++/Rust project renderers inspect raw TSIL to decide what to emit.
-- Better: lowerers and backend translation produce render-ready text before
-  project rendering.
-
-Overgeneralizing the first slice:
-
-- Bad: create a plugin registry or broad expression IR for one keyword.
-- Better: add one descriptor, one validator if needed, one lowerer, backend
-  templates, focused tests, and split only when a second real slice proves the
-  pressure.
+- The source grammar is exact.
+- The descriptor owns only lexical facts.
+- Validation owns only source shape.
+- The lowerer is keyword-specific.
+- Backend spelling lives in backend-owned data or code.
+- Runtime assets are explicit files.
+- Primitive source stays backend-neutral.
+- Unsupported forms produce diagnostics or skips.
+- Renderers do not parse TSIL.
+- The next similar region follows the same path.

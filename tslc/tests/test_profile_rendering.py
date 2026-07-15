@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -67,6 +68,39 @@ def test_backend_selection_is_honored(data_root: Path, machine_profiles_path: Pa
     assert [b.backend_id for b in cpp_only.rendered.verify.backends] == ["cpp"]
 
 
+def test_representative_project_shape_is_byte_stable(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["add"],
+        profiles=["scalar", "avx2"],
+        backends=["cpp", "rust"],
+    )
+    expected = {
+        "cpp/CMakeLists.txt": "c6f3f365c803d2c1ba6d4b5c7004c758ed973929b5b296288029b991e0686443",
+        "cpp/docs/input/tsl_api_docs.hpp": "f683b6488ef843ccb05a2efa206d59acf1957f9108745f89b8c9df65a7b4d5f7",
+        "cpp/include/tsl.hpp": "e1cec8bf3ad693875e8ecb00d59fbe344b82023a1834010738d4330fb4e1bf5d",
+        "cpp/include/tsl_primitives.hpp": "6eaab8876343ace059044e6156a08ff5b10873f18b161328733ae3d5cdb03ba6",
+        "cpp/include/tsl_scalar.hpp": "c01eef76df6f19e1a9603f82c31feed205ea4c69ae23fb9ec5387fdf29763d77",
+        "cpp/tests/smoke_scalar.cpp": "50356e924e55f6e36a486f6335993f2a6010bf5c4ba89d06836dd8a40d96a018",
+        "rust/Cargo.toml": "9eba8ca48fc7f7a5b21606b0843be9415fab94e55f6e06d368aa48df3174f80b",
+        "rust/src/lib.rs": "a9e11a552173055897ea59e25a1c7063358d1f406a3357ab926adf2d2b64b249",
+        "rust/src/tsl_documentation.rs": "13e6f2279a23f5af8873f4803c969af2abd5de74344303a8fc634d4b121e6b89",
+        "rust/src/tsl_scalar.rs": "653123ec41463d2f98419ce71191e2651c4d6dae8ecb2a509b6fa8db810067cf",
+        "rust/tests/smoke.rs": "2ee72716a94e44fae4dedb3fd789f3fbfc1092ff5726e2ca1ac267f4aa64e4c3",
+    }
+    actual = {
+        artifact.logical_path: sha256(artifact.content.encode()).hexdigest()
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path in expected
+    }
+
+    assert actual == expected
+
+
 def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     data_root: Path, machine_profiles_path: Path
 ) -> None:
@@ -96,15 +130,37 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     assert "struct clang_v128 {};" in overlay
     assert "struct clang_v256 {};" in overlay
     assert "struct clang_v512 {};" in overlay
+    assert "struct clang_v128_bool {};" in overlay
+    assert "struct clang_v256_bool {};" in overlay
+    assert "struct clang_v512_bool {};" in overlay
     assert "using mask_type = decltype(register_type{} == register_type{});" in overlay
+    assert "using mask_type = bool __attribute__((ext_vector_type(4)));" in overlay
     assert "struct clang_fixed" in overlay
+    assert "namespace clang_mask" in overlay
+    assert "struct comparison_vector {};" in overlay
+    assert "struct boolean_vector {};" in overlay
     assert "tsl::dataparallel::clang_fixed<N> requires N > 0" in overlay
-    assert "struct simd_for<clang_fixed<4>, int32_t>" in overlay
+    assert (
+        "struct simd_for<clang_fixed<4, clang_mask::comparison_vector>, int32_t>"
+        in overlay
+    )
     assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v128>;" in overlay
-    assert "struct simd_for<clang_fixed<8>, int32_t>" in overlay
+    assert (
+        "struct simd_for<clang_fixed<8, clang_mask::comparison_vector>, int32_t>"
+        in overlay
+    )
     assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v256>;" in overlay
-    assert "struct simd_for<clang_fixed<16>, int32_t>" in overlay
+    assert (
+        "struct simd_for<clang_fixed<16, clang_mask::comparison_vector>, int32_t>"
+        in overlay
+    )
     assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v512>;" in overlay
+    assert (
+        "struct simd_for<clang_fixed<4, clang_mask::boolean_vector>, int32_t>"
+        in overlay
+    )
+    assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v128_bool>;" in overlay
+    assert "#if __has_feature(ext_vector_type_boolean)" in overlay
     assert "#if defined(__clang__) && __clang__ == 1" in overlay
     assert "return (left + right);" in overlay
     assert "return __builtin_reduce_add(vec);" in overlay
@@ -378,6 +434,10 @@ def test_neon_profile_registers_native_simd_types(
     by_path = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
 
     cpp = by_path["cpp/include/tsl_neon.hpp"]
+    assert "namespace tsl::profiles::neon" in cpp
+    assert 'inline constexpr char const* name = "neon";' in cpp
+    assert 'inline constexpr char const* family = "aarch64";' in cpp
+    assert "active_profile = profiles::neon::name" in cpp
     assert "#include <arm_neon.h>" in cpp
     assert "struct neon {};" in cpp
     assert "struct simd<int32_t, neon>" in cpp
@@ -388,6 +448,8 @@ def test_neon_profile_registers_native_simd_types(
     assert "return vaddq_s32(left, right);" in cpp
 
     rust = by_path["rust/src/tsl_neon.rs"]
+    assert 'pub const ACTIVE_PROFILE: &str = "neon";' in rust
+    assert 'pub const ACTIVE_PROFILE_FAMILY: &str = "aarch64";' in rust
     assert "use core::arch::aarch64::*;" in rust
     assert "pub struct Neon;" in rust
     assert "impl SimdVector for Simd<i32, Neon>" in rust

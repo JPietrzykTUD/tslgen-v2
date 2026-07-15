@@ -1,0 +1,14 @@
+namespace tsl::profiles::@{profile_namespace} {
+
+inline constexpr char const* name = @{profile_name};
+inline constexpr char const* family = @{profile_family};
+
+}  // namespace tsl::profiles::@{profile_namespace}
+
+namespace tsl {
+
+inline constexpr char const* active_profile = profiles::@{profile_namespace}::name;
+inline constexpr char const* active_profile_family =
+    profiles::@{profile_namespace}::family;
+
+}  // namespace tsl

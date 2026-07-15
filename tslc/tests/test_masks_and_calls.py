@@ -34,7 +34,7 @@ def _scalar_spec(catalog, machine_profiles, primitive, backend, type_tag="si32")
     return Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend)).specialization
 
 
-def _lowered_for_body(catalog, machine_profiles, body):
+def _lowering_for_body(catalog, machine_profiles, body):
     slot = next(
         selected
         for selected in Selector()
@@ -47,11 +47,15 @@ def _lowered_for_body(catalog, machine_profiles, body):
         slot,
         implementation=replace(slot.implementation, body_text=body),
     )
-    lowered = Lowerer().lower(
+    return Lowerer().lower(
         selected,
         catalog,
         create_backend_dialect(catalog, "cpp"),
     )
+
+
+def _lowered_for_body(catalog, machine_profiles, body):
+    lowered = _lowering_for_body(catalog, machine_profiles, body)
     assert lowered.specialization is not None, lowered.diagnostics
     return lowered.specialization
 
@@ -162,6 +166,46 @@ def test_lowering_records_dependencies_after_resolving_type_aliases(
             )
         }
     )
+
+
+def test_typed_region_arguments_resolve_direct_type_aliases(
+    catalog: Catalog, machine_profiles
+) -> None:
+    body = """
+      let<type>(UnsignedT, base::unsigned_of(base::in));
+      var<typed>(UnsignedT, scalar_value, cast<static>(UnsignedT, 0));
+      var<runtime_array>(UnsignedT, scratch, value(vector::length));
+      if<generation>(type::is_same(UnsignedT, ui32)) {
+        complete(cast<bitcast>(base::in, scalar_value));
+      } else<generation> {
+        complete(right);
+      }
+    """
+
+    lowered = _lowered_for_body(catalog, machine_profiles, body)
+
+    assert "uint32_t scalar_value = static_cast<uint32_t>(0);" in lowered.body_text
+    assert "std::vector<uint32_t> scratch_storage" in lowered.body_text
+    assert "return ::tsl::bit_cast<int32_t>(scalar_value);" in lowered.body_text
+    assert "UnsignedT" not in lowered.body_text
+
+
+def test_contextual_type_slot_rejects_non_type_query_value(
+    catalog: Catalog, machine_profiles
+) -> None:
+    lowered = _lowering_for_body(
+        catalog,
+        machine_profiles,
+        """
+          let<type>(NotAType, type::is_same(base::in, si32));
+          complete(left);
+        """,
+    )
+
+    assert lowered.specialization is None
+    assert [diagnostic.code for diagnostic in lowered.diagnostics] == [
+        "TSL-LOWER-UNRESOLVED-LET-TYPE"
+    ]
 
 
 def test_lowering_dependency_facts_use_shared_query_functions(
@@ -293,7 +337,14 @@ def test_dependency_closure_pulls_concrete_callee_source_types(
         (entry.primitive, entry.extension, entry.type_tag)
         for entry in result.coverage
     }
-    for extension in ("clang_v128", "clang_v256", "clang_v512"):
+    for extension in (
+        "clang_v128",
+        "clang_v256",
+        "clang_v512",
+        "clang_v128_bool",
+        "clang_v256_bool",
+        "clang_v512_bool",
+    ):
         assert ("shift_left", extension, "si32") in coverage
         assert ("reinterpret", extension, "ui32") in coverage
     assert not any(

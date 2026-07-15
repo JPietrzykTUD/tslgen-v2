@@ -71,7 +71,7 @@ _DEFAULT_PROFILES = _REPO_ROOT / "supplementary" / "buildsystem" / "machine_prof
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="tslc-explain",
+        prog="tslc explain",
         description="Explain why one primitive/profile/backend/extension/type slot compiles.",
     )
     parser.add_argument("--primitive", required=True, help="primitive name, e.g. add")
@@ -149,14 +149,24 @@ def explain(
     out.blank()
 
     selector = Selector()
-    selection = selector.select_profile(catalog, machine_profile, primitive, (type_tag,))
+    selection = selector.select_profile(
+        catalog,
+        machine_profile,
+        primitive,
+        (type_tag,),
+        backend_id=backend,
+    )
     for warning in selection.diagnostics:
         out.line(f"  selection note [{warning.code}]: {warning.message}")
     if selection.diagnostics:
         out.blank()
 
     # The extensions actually emitted for this profile (and the requested filter, if any).
-    emitted_extensions = selector._emit_extensions(catalog, machine_profile)
+    emitted_extensions = [
+        name
+        for name in selector._emit_extensions(catalog, machine_profile)
+        if catalog.extensions[name].supports_backend(backend)
+    ]
     selected_slots = [
         slot
         for slot in selection.selected

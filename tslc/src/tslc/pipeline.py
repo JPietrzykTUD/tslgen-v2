@@ -16,18 +16,26 @@ from typing import Literal
 from tslc._pipeline_closure import (
     _LoweredSlot,
     _profile_with_required_features,
-    _propagate_transitive_call_facts,
     _prune_unresolved,
 )
 from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
+from tslc._pipeline_lowering_cache import _LoweringCache
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.registry import backend_capabilities, registered_backend_ids
+from tslc.benchmark.model import EMPTY_BENCHMARK_PROJECT_PLAN
+from tslc.benchmark.model import BenchmarkProjectPlan
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import RESULT_DIM_EXTENSION, Catalog, Extension
+from tslc.catalog.model import (
+    BOOLEAN_WILDCARD_ATTRIBUTES,
+    RESULT_DIM_EXTENSION,
+    Catalog,
+    Extension,
+)
 from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
+from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
-from tslc.lower.dependencies import CallDependency, CallDependencyOrigin
+from tslc.lower.dependencies import CallDependency
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer, LoweringResult
 from tslc.output.artifacts import ArtifactSet
 from tslc.render.project import RenderedProject, render_project
@@ -35,7 +43,6 @@ from tslc.select.selector import (
     SelectedImplementation,
     Selector,
 )
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.value_tests import (
     ValueTestBackendProfileInput,
     ValueTestPlanner,
@@ -69,6 +76,9 @@ class GenerationRequest:
     # specialization against the generic scalar reference over many random inputs. Opt-in (adds
     # build/run cost); requires the test harness so the generated code can round-trip registers.
     value_test_fuzz: bool = False
+    # Authoring checks reuse selection and lowering but stop before test planning,
+    # benchmarking, render-asset loading, and artifact rendering.
+    render_artifacts: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +88,12 @@ class CoverageEntry:
     primitive: str
     extension: str
     type_tag: str
+    source_primitive_name: str = ""
+    result_kind: str = ""
+    param_kinds: tuple[str, ...] = ()
+    mask_policy: str | None = None
+    axis: tuple[tuple[str, str], ...] = ()
+    variant_names: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,7 +106,14 @@ class SkippedEntry:
     extension: str
     type_tag: str
     reason: str
+    diagnostics: tuple[Diagnostic, ...] = ()
     status: SkipStatus = "coverage_gap"
+    source_primitive_name: str = ""
+    result_kind: str = ""
+    param_kinds: tuple[str, ...] = ()
+    mask_policy: str | None = None
+    axis: tuple[tuple[str, str], ...] = ()
+    variant_names: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +156,15 @@ class _GenerationSession:
         self.selector = Selector()
         self.lowerer = Lowerer()
         self.backends = backend_capabilities(request.backends)
+        self.dialects = {
+            capability.backend_id: capability.create_dialect(inputs.catalog)
+            for capability in self.backends
+        }
+        self.lowering_cache = _LoweringCache(
+            self.lowerer,
+            inputs.catalog,
+            self.dialects,
+        )
         self.type_tags = _sorted_type_tags(request.type_tags)
         self.diagnostics = diagnostics
         self.coverage: list[CoverageEntry] = []
@@ -170,21 +202,47 @@ class _GenerationSession:
                 self.diagnostics, self.coverage, self.skipped
             )
 
+        if not self.request.render_artifacts:
+            return _result_without_artifacts(
+                self.diagnostics, self.coverage, self.skipped
+            )
+
         value_tests = (
             self._plan_value_tests(emitted_profiles)
             if emitted_profiles
             else ValueTestProjectPlan(profiles=())
         )
-        self.diagnostics.extend(
+        value_test_diagnostics = tuple(
             diagnostic
             for diagnostic in value_tests.diagnostics
             if self.request.value_test_warnings or diagnostic.severity == "error"
         )
+        self.diagnostics.extend(value_test_diagnostics)
+        benchmarks = _merge_benchmark_plans(
+            tuple(
+                plan
+                for capability in self.backends
+                if (
+                    plan := capability.plan_benchmarks(
+                        self.inputs.catalog, emitted_profiles, value_tests
+                    )
+                )
+                is not None
+            )
+        )
+        self.diagnostics.extend(benchmarks.diagnostics)
+        if has_errors((*value_test_diagnostics, *benchmarks.diagnostics)):
+            return _result_without_artifacts(
+                self.diagnostics, self.coverage, self.skipped
+            )
+        if self.inputs.render_assets is None:
+            raise AssertionError("render assets were not loaded for generation")
         rendered = (
             render_project(
                 emitted_profiles,
                 self.request.backends,
                 value_tests,
+                benchmarks,
                 assets=self.inputs.render_assets,
             )
             if self.emitted_profiles
@@ -317,33 +375,30 @@ class _GenerationSession:
         backend_ids: frozenset[str],
     ) -> tuple[list["_LoweredSlot"], tuple[tuple[str, str, str], ...]]:
         catalog = self.inputs.catalog
-        selection = self.selector.select_profile(
-            catalog, profile, primitive, type_tags
-        )
-        self.diagnostics.extend(selection.diagnostics)
         lowered_slots: list[_LoweredSlot] = []
         discovered_dependencies: set[tuple[str, str, str]] = set()
 
-        for slot in selection.selected:
-            _record_render_extensions(catalog, selected_extensions, slot)
-            body_segments = scan(
-                slot.implementation.body_text,
-                source=slot.implementation.body_source,
+        for capability in self.backends:
+            backend = capability.backend_id
+            if backend not in backend_ids:
+                continue
+            selection = self.selector.select_profile(
+                catalog,
+                profile,
+                primitive,
+                type_tags,
+                backend_id=backend,
             )
-            for capability in self.backends:
-                backend = capability.backend_id
-                if backend not in backend_ids:
-                    continue
-                if not slot.extension.supports_backend(backend):
-                    # Backend support is an extension admission fact, not a
-                    # lowering coverage attempt. Direct Lowerer use still
-                    # diagnoses an unsupported extension/backend pair.
-                    continue
-                dialect = capability.create_dialect(catalog)
-                lowered = self.lowerer.lower(
+            self.diagnostics.extend(selection.diagnostics)
+            for slot in selection.selected:
+                _record_render_extensions(catalog, selected_extensions, slot)
+                body_segments = scan(
+                    slot.implementation.body_text,
+                    source=slot.implementation.body_source,
+                )
+                lowered = self.lowering_cache.lower(
                     slot,
-                    catalog,
-                    dialect,
+                    backend,
                     body_segments=body_segments,
                 )
                 self._record_lowering_diagnostics(
@@ -387,18 +442,30 @@ class _GenerationSession:
         entry = _lowering_skipped_entry(profile_name, backend, primitive, slot, lowered)
         self.skipped.append(entry)
         if self.request.mode == "strict" and entry.status == "coverage_gap":
-            self.diagnostics.extend(
-                _strict_lowering_diagnostics(entry, lowered.diagnostics)
-            )
+            self.diagnostics.extend(_strict_lowering_diagnostics(entry))
 
     def _record_pruned_skip(self, profile_name: str, slot: "_LoweredSlot") -> None:
+        reason = _pruned_reason(slot)
+        diagnostic = Diagnostic(
+            severity="info",
+            code="TSL-PIPELINE-PRUNED-SPECIALIZATION",
+            message=reason,
+            location=slot.spec.source.start if slot.spec.source is not None else None,
+        )
         entry = SkippedEntry(
             profile=profile_name,
             backend=slot.backend,
             primitive=slot.spec.primitive_name,
             extension=slot.spec.extension_name,
             type_tag=slot.spec.type_tag,
-            reason=_pruned_reason(slot),
+            reason=reason,
+            diagnostics=(diagnostic,),
+            source_primitive_name=slot.spec.source_primitive_name,
+            result_kind=slot.spec.result_kind,
+            param_kinds=slot.spec.param_kinds,
+            mask_policy=slot.spec.mask_policy,
+            axis=slot.spec.axis,
+            variant_names=slot.spec.variant_names,
         )
         self.skipped.append(entry)
         if self.request.mode == "strict":
@@ -417,6 +484,12 @@ class _GenerationSession:
                 primitive=slot.spec.primitive_name,
                 extension=slot.spec.extension_name,
                 type_tag=slot.spec.type_tag,
+                source_primitive_name=slot.spec.source_primitive_name,
+                result_kind=slot.spec.result_kind,
+                param_kinds=slot.spec.param_kinds,
+                mask_policy=slot.spec.mask_policy,
+                axis=slot.spec.axis,
+                variant_names=slot.spec.variant_names,
             )
             for slot in lowered_specs
             if slot not in pruned
@@ -500,6 +573,7 @@ def _lowering_skipped_entry(
     slot: SelectedImplementation,
     lowered: LoweringResult,
 ) -> SkippedEntry:
+    shape = parse_signature(slot.primitive.signature)
     return SkippedEntry(
         profile=profile_name,
         backend=backend,
@@ -507,7 +581,20 @@ def _lowering_skipped_entry(
         extension=slot.extension.name,
         type_tag=slot.type_tag,
         reason=next((d.message for d in lowered.diagnostics), "unsupported body"),
+        diagnostics=lowered.diagnostics,
         status=_skip_status(lowered.diagnostics),
+        source_primitive_name=slot.primitive.name,
+        result_kind="" if shape is None else shape.result_kind,
+        param_kinds=() if shape is None else shape.param_kinds,
+        mask_policy=slot.primitive.attributes.get("mask"),
+        axis=tuple(
+            (key, slot.primitive.attributes[key])
+            for key in sorted(slot.primitive.attributes)
+            if key in BOOLEAN_WILDCARD_ATTRIBUTES
+        ),
+        variant_names=tuple(
+            variant.name for variant in slot.implementation.variants
+        ),
     )
 
 
@@ -521,10 +608,12 @@ def _has_strict_skips(skipped: list[SkippedEntry]) -> bool:
     return any(entry.status == "coverage_gap" for entry in skipped)
 
 
-def _strict_lowering_diagnostics(
-    entry: SkippedEntry, diagnostics: tuple[Diagnostic, ...]
-) -> tuple[Diagnostic, ...]:
-    coverage_gaps = tuple(d for d in diagnostics if d.severity == "info")
+def _strict_lowering_diagnostics(entry: SkippedEntry) -> tuple[Diagnostic, ...]:
+    coverage_gaps = tuple(
+        diagnostic
+        for diagnostic in entry.diagnostics
+        if diagnostic.severity == "info"
+    )
     if not coverage_gaps:
         return (
             _strict_skip_diagnostic(
@@ -589,6 +678,18 @@ def _requested_primitives(
     return tuple(sorted({primitive.name for primitive in catalog.primitives}))
 
 
+def _merge_benchmark_plans(
+    plans: tuple[BenchmarkProjectPlan, ...],
+) -> BenchmarkProjectPlan:
+    if not plans:
+        return EMPTY_BENCHMARK_PROJECT_PLAN
+    return BenchmarkProjectPlan(
+        profiles=tuple(profile for plan in plans for profile in plan.profiles),
+        diagnostics=tuple(diagnostic for plan in plans for diagnostic in plan.diagnostics),
+        coverage=tuple(entry for plan in plans for entry in plan.coverage),
+    )
+
+
 def _finalize(
     by_primitive: dict[str, list[LoweredSpecialization]],
 ) -> dict[str, tuple[LoweredSpecialization, ...]]:
@@ -617,7 +718,7 @@ def _expand_requested_profiles(
     return tuple(sorted(names))
 
 
-def _coverage_key(entry: CoverageEntry) -> tuple[str, str, str, str, int, str]:
+def _coverage_key(entry: CoverageEntry) -> tuple[object, ...]:
     return (
         entry.profile,
         entry.primitive,
@@ -625,10 +726,16 @@ def _coverage_key(entry: CoverageEntry) -> tuple[str, str, str, str, int, str]:
         entry.extension,
         _TYPE_ORDER.get(entry.type_tag, 99),
         entry.type_tag,
+        entry.source_primitive_name,
+        entry.result_kind,
+        entry.param_kinds,
+        entry.mask_policy or "",
+        entry.axis,
+        entry.variant_names,
     )
 
 
-def _skipped_key(entry: SkippedEntry) -> tuple[str, str, str, str, int, str]:
+def _skipped_key(entry: SkippedEntry) -> tuple[object, ...]:
     return (
         entry.profile,
         entry.primitive,
@@ -636,6 +743,12 @@ def _skipped_key(entry: SkippedEntry) -> tuple[str, str, str, str, int, str]:
         entry.extension,
         _TYPE_ORDER.get(entry.type_tag, 99),
         entry.type_tag,
+        entry.source_primitive_name,
+        entry.result_kind,
+        entry.param_kinds,
+        entry.mask_policy or "",
+        entry.axis,
+        entry.variant_names,
     )
 
 

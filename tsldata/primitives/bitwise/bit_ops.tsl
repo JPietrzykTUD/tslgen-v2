@@ -52,10 +52,10 @@ prim<v:=(v,v)> binary_and(left, right):
           reasons []
         implementation:
           tsil """
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left));
-              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<base::unsigned_of(base::in)>]>(left));
+              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<base::unsigned_of(base::in)>]>(right));
               var<const_infer>(ures, ua & ub);
-              complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<base::unsigned_of(base::in)>, Vec]>(ures));
             """
     [generic, oneapi_fpga]:
       arith:
@@ -70,7 +70,7 @@ prim<v:=(v,v)> binary_and(left, right):
           tsil """
               var<init_register>(result);
               loop<backend, unroll>(i, 0, value(vector::length), 1)  {
-                result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(left[i], right[i]);
               }
               complete(result);
             """
@@ -93,7 +93,7 @@ prim<v:=(v,v)> binary_and(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::signed_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::signed_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec]>(
@@ -175,7 +175,7 @@ prim<v:=(v,v)> binary_and(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec]>(
@@ -215,7 +215,7 @@ prim<v:=(v,v)> binary_and(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec]>(
@@ -265,10 +265,10 @@ prim<v:=(v,v)> binary_andnot(left, right):
           reasons []
         implementation:
           tsil """
-            var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left));
-            var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right));
+            var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<base::unsigned_of(base::in)>]>(left));
+            var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<base::unsigned_of(base::in)>]>(right));
             var<const_infer>(ures, op<bit_negate>(ua) & ub);
-            complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
+            complete(call<primitive=reinterpret[Vec<base::unsigned_of(base::in)>, Vec]>(ures));
           """
     [generic, oneapi_fpga]:
       arith:
@@ -283,7 +283,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
           tsil """
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1)  {
-              result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(left[i], right[i]);
+              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(left[i], right[i]);
             }
             complete(result);
           """
@@ -382,7 +382,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec]>(
@@ -422,7 +422,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec]>(
@@ -486,10 +486,10 @@ prim<v:=(v,v)> binary_or(left, right):
           reasons []
         implementation:
           tsil """
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left));
-              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<base::unsigned_of(base::in)>]>(left));
+              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<base::unsigned_of(base::in)>]>(right));
               var<const_infer>(ures, ua | ub);
-              complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<base::unsigned_of(base::in)>, Vec]>(ures));
             """
     [generic, oneapi_fpga]:
       arith:
@@ -504,7 +504,7 @@ prim<v:=(v,v)> binary_or(left, right):
           tsil """
               var<init_register>(result);
               loop<backend, unroll>(i, 0, value(vector::length), 1)  {
-                result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(left[i], right[i]);
               }
               complete(result);
             """
@@ -527,7 +527,7 @@ prim<v:=(v,v)> binary_or(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::signed_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::signed_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec]>(
@@ -609,7 +609,7 @@ prim<v:=(v,v)> binary_or(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec]>(
@@ -649,7 +649,7 @@ prim<v:=(v,v)> binary_or(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec]>(
@@ -713,10 +713,10 @@ prim<v:=(v,v)> binary_xor(left, right):
           reasons []
         implementation:
           tsil """
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left));
-              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<base::unsigned_of(base::in)>]>(left));
+              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<base::unsigned_of(base::in)>]>(right));
               var<const_infer>(ures, ua ^ ub);
-              complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<base::unsigned_of(base::in)>, Vec]>(ures));
             """
     [generic, oneapi_fpga]:
       arith:
@@ -731,7 +731,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           tsil """
               var<init_register>(result);
               loop<backend, unroll>(i, 0, value(vector::length), 1)  {
-                result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(left[i], right[i]);
               }
               complete(result);
             """
@@ -754,7 +754,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::signed_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::signed_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec]>(
@@ -836,7 +836,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec]>(
@@ -876,7 +876,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec]>(
@@ -1007,9 +1007,9 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_and[type(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_and[vector::as_extension(scalar)]>(left[i], right[i]);
               } else {
-                result[i] = call<primitive=set_zero[type(vector::as_extension(scalar))]>();
+                result[i] = call<primitive=set_zero[vector::as_extension(scalar)]>();
               }
             }
             complete(result);
@@ -1112,7 +1112,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec], attrs[mask=zero]>(
@@ -1171,7 +1171,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_and[type(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_and[vector::as_extension(scalar)]>(left[i], right[i]);
               } else {
                 result[i] = left[i];
               }
@@ -1278,7 +1278,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec], attrs[mask=pass_through]>(
@@ -1338,9 +1338,9 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_andnot[type(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_andnot[vector::as_extension(scalar)]>(left[i], right[i]);
               } else {
-                result[i] = call<primitive=set_zero[type(vector::as_extension(scalar))]>();
+                result[i] = call<primitive=set_zero[vector::as_extension(scalar)]>();
               }
             }
             complete(result);
@@ -1443,7 +1443,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec], attrs[mask=zero]>(
@@ -1503,7 +1503,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_andnot[type(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_andnot[vector::as_extension(scalar)]>(left[i], right[i]);
               } else {
                 result[i] = left[i];
               }
@@ -1638,9 +1638,9 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_or[type(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_or[vector::as_extension(scalar)]>(left[i], right[i]);
               } else {
-                result[i] = call<primitive=set_zero[type(vector::as_extension(scalar))]>();
+                result[i] = call<primitive=set_zero[vector::as_extension(scalar)]>();
               }
             }
             complete(result);
@@ -1743,7 +1743,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec], attrs[mask=zero]>(
@@ -1802,7 +1802,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_or[type(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_or[vector::as_extension(scalar)]>(left[i], right[i]);
               } else {
                 result[i] = left[i];
               }
@@ -1909,7 +1909,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec], attrs[mask=pass_through]>(
@@ -1968,9 +1968,9 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_xor[type(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_xor[vector::as_extension(scalar)]>(left[i], right[i]);
               } else {
-                result[i] = call<primitive=set_zero[type(vector::as_extension(scalar))]>();
+                result[i] = call<primitive=set_zero[vector::as_extension(scalar)]>();
               }
             }
             complete(result);
@@ -2073,7 +2073,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec], attrs[mask=zero]>(
@@ -2132,7 +2132,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_xor[type(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_xor[vector::as_extension(scalar)]>(left[i], right[i]);
               } else {
                 result[i] = left[i];
               }
@@ -2239,7 +2239,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec], attrs[mask=pass_through]>(
@@ -2303,12 +2303,12 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_xor[type(vector::as_extension(scalar))]>(
+                result[i] = call<primitive=binary_xor[vector::as_extension(scalar)]>(
                   data[i],
-                  call<primitive=set1[type(vector::as_extension(scalar))]>(mask<lane_true>())
+                  call<primitive=set1[vector::as_extension(scalar)]>(mask<lane_true>())
                 );
               } else {
-                result[i] = call<primitive=set_zero[type(vector::as_extension(scalar))]>();
+                result[i] = call<primitive=set_zero[vector::as_extension(scalar)]>();
               }
             }
             complete(result);
@@ -2421,7 +2421,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec], attrs[mask=zero]>(
@@ -2484,9 +2484,9 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_xor[type(vector::as_extension(scalar))]>(
+                result[i] = call<primitive=binary_xor[vector::as_extension(scalar)]>(
                   data[i],
-                  call<primitive=set1[type(vector::as_extension(scalar))]>(mask<lane_true>())
+                  call<primitive=set1[vector::as_extension(scalar)]>(mask<lane_true>())
                 );
               } else {
                 result[i] = data[i];
@@ -2604,7 +2604,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
           reasons []
         implementation:
           tsil """
-            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
             complete(
               call<primitive=reinterpret[BitVec, Vec]>(
                 call<primitive=@self[BitVec], attrs[mask=pass_through]>(

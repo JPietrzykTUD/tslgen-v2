@@ -87,6 +87,7 @@ class ValueTestBackendSupport:
     backend_id: str
     case_kinds: frozenset[str]
     supports_differential: bool = False
+    overload_inference_placeholders: int = 0
 
 
 @dataclass(frozen=True, slots=True)

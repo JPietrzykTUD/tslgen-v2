@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from tslc.backend import translation_common as common
 from tslc.catalog.model import Catalog, Extension
+from tslc.lane_count import LaneCount
 from tslc.target_text import RenderField, RenderText, literal_text, render_sequence
 
 
@@ -16,6 +17,14 @@ class _CppTypes:
 
     def scalar_spelling(self, type_tag: str) -> str | None:
         return common.scalar_spelling(self.catalog, self.backend_id, type_tag)
+
+    def render_lane_count(self, count: LaneCount) -> str:
+        if count.value is not None:
+            return str(count.value)
+        assert count.symbol is not None
+        if not count.is_scaled:
+            return count.symbol
+        return f"({count.symbol} * {count.multiplier} / {count.divisor})"
 
     def vector_type_spelling(self, base_spelling: str, extension_name: str) -> str:
         return f"tsl::simd<{base_spelling}, tsl::{extension_name}>"
@@ -271,7 +280,6 @@ class _CppSyntax:
 class CppBackendDialect:
     catalog: Catalog
     backend_id: str = field(default="cpp", init=False)
-    supports_sized_vector_lane_expressions: bool = field(default=True, init=False)
     types: _CppTypes = field(init=False)
     intrinsics: _CppIntrinsics = field(init=False)
     templates: _CppTemplates = field(init=False)

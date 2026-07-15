@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from tslc.backend.rust import RustBackend
 from tslc.backend.emitted_profile import (
@@ -75,6 +76,11 @@ def rust_artifacts(
         content = assets.fill(
             "rust_profile_module.rs.tmpl",
             arch_use=arch_use,
+            profile_metadata=assets.fill(
+                "rust_profile_metadata.rs.tmpl",
+                profile_name=json.dumps(slug(emitted_profile.profile.name)),
+                profile_family=json.dumps(emitted_profile.profile.family),
+            ).rstrip(),
             registrations=registrations,
             bodies=bodies,
             algorithm=rust_algorithm_module(
@@ -89,11 +95,13 @@ def rust_artifacts(
             )
         )
 
-    artifacts.append(text("rust/src/lib.rs", _rust_lib(profiles), media_type=media_type))
+    artifacts.append(
+        text("rust/src/lib.rs", _rust_lib(profiles, assets), media_type=media_type)
+    )
     artifacts.append(
         text(
             "rust/src/tsl_documentation.rs",
-            _rust_documentation_module(profiles),
+            _rust_documentation_module(profiles, assets),
             media_type=media_type,
         )
     )
@@ -107,7 +115,7 @@ def rust_artifacts(
     artifacts.append(
         text(
             "rust/tests/smoke.rs",
-            "#[test]\nfn smoke() {\n    assert!(true);\n}\n",
+            assets.text("rust_smoke.rs"),
             media_type=media_type,
         )
     )
@@ -116,19 +124,29 @@ def rust_artifacts(
 
 def rust_verify_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[VerifyProfile, ...]:
     return tuple(
-        VerifyProfile(
-            profile_name=slug(emitted_profile.profile.name),
-            file_stem=slug(emitted_profile.profile.name),
-            family=emitted_profile.profile.family,
-            compile_modes=emitted_profile.profile.compile_modes,
-            target_features=rust_target_features(
-                emitted_profile.profile, emitted_profile.profile_family
-            ),
-            target=rust_target(emitted_profile.profile, emitted_profile.profile_family),
-            linker=rust_linker(emitted_profile.profile, emitted_profile.profile_family),
-            runner=_verify_runner(emitted_profile.profile),
-        )
+        rust_verify_profile(emitted_profile.profile, emitted_profile.profile_family)
         for emitted_profile in profiles
+    )
+
+
+def rust_verify_profile(
+    profile: MachineProfile,
+    capability: ProfileFamilyCapability | None = None,
+) -> VerifyProfile:
+    """Project a source machine profile into verifier-owned Rust facts."""
+
+    return VerifyProfile(
+        profile_name=slug(profile.name),
+        file_stem=slug(profile.name),
+        family=profile.family,
+        native_without_runner=(
+            capability.native_without_runner if capability is not None else False
+        ),
+        compile_modes=profile.compile_modes,
+        target_features=rust_target_features(profile, capability),
+        target=rust_target(profile, capability),
+        linker=rust_linker(profile, capability),
+        runner=_verify_runner(profile),
     )
 
 
@@ -140,7 +158,7 @@ def rust_target_features(
     if not capability.backend("rust").feature_flags:
         return ()
     return tuple(
-        f"+{feature_spelling(feature, profile.alternatives)}"
+        f"+{feature_spelling(feature, profile.alternatives, backend_id='rust')}"
         for feature in sorted(profile.features)
     )
 
@@ -190,50 +208,33 @@ def _verify_runner(profile: MachineProfile) -> VerifyRunner | None:
     )
 
 
-def _rust_lib(profiles: tuple[EmittedProfile, ...]) -> str:
+def _rust_lib(
+    profiles: tuple[EmittedProfile, ...],
+    assets: RenderAssets,
+) -> str:
     # `non_upper_case_globals` is allowed so an `sImm` immediate can keep its corpus name
     # as a lowercase const-generic, matching the body that uses it.
-    lines = [
-        "#![allow(dead_code)]",
-        "#![allow(non_camel_case_types)]",
-        "#![allow(non_upper_case_globals)]",
-        "",
-        "pub mod tsl_core;",
-        "pub mod tsl_algorithm;",
-        "#[doc(hidden)]",
-        "pub mod tsl_test_core;",
-        "pub use tsl_algorithm::dataparallel;",
-        "",
-        "#[cfg(doc)]",
-        "#[doc(hidden)]",
-        "pub mod tsl_documentation;",
-        "#[cfg(doc)]",
-        '#[doc = "Profile-neutral union of generated primitive APIs."]',
-        "#[doc(inline)]",
-        "pub use crate::tsl_documentation as profile;",
-        "",
-    ]
-    primitive_tags = _rust_primitive_tags(profiles)
-    if primitive_tags:
-        lines.extend([primitive_tags, ""])
+    primitive_tags = _rust_primitive_tags(profiles, assets)
     profile_slugs = tuple(slug(emitted_profile.profile.name) for emitted_profile in profiles)
-    for profile_slug in profile_slugs:
-        lines.append(f'#[cfg(feature = "{profile_slug}")]')
-        lines.append("#[doc(hidden)]")
-        lines.append(f"pub mod tsl_{profile_slug};")
-        lines.append(
-            f"#[cfg(all(not(doc), {_rust_selected_profile_cfg(profile_slug, profile_slugs)}))]"
-        )
-        lines.append(
-            '#[doc = "API and vector types for the selected generated machine profile."]'
-        )
-        lines.append("#[doc(inline)]")
-        lines.append(f"pub use crate::tsl_{profile_slug} as profile;")
-        lines.append("")
-    return "\n".join(lines)
+    profile_modules = "\n\n".join(
+        assets.fill(
+            "rust_lib_profile.rs.tmpl",
+            profile_slug=profile_slug,
+            selected_profile_cfg=_rust_selected_profile_cfg(profile_slug, profile_slugs),
+        ).rstrip()
+        for profile_slug in profile_slugs
+    )
+    return assets.fill(
+        "rust_lib.rs.tmpl",
+        primitive_tags=(f"{primitive_tags}\n\n" if primitive_tags else ""),
+        profile_modules=profile_modules,
+    )
 
 
-def _rust_documentation_module(profiles: tuple[EmittedProfile, ...]) -> str:
+def _rust_documentation_module(
+    profiles: tuple[EmittedProfile, ...],
+    assets: RenderAssets,
+) -> str:
     """Render one architecture-neutral rustdoc facade from all emitted profiles."""
 
     by_primitive: dict[str, list[LoweredSpecialization]] = {}
@@ -250,16 +251,16 @@ def _rust_documentation_module(profiles: tuple[EmittedProfile, ...]) -> str:
         )
         for primitive_name in sorted(by_primitive)
     )
-    header = "\n".join(
-        (
-            "#![allow(unused_variables)]",
-            "use crate::tsl_core::*;",
-        )
+    return assets.fill(
+        "rust_documentation.rs.tmpl",
+        bodies=f"\n\n{bodies}" if bodies else "",
     )
-    return f"{header}\n\n{bodies}\n" if bodies else f"{header}\n"
 
 
-def _rust_primitive_tags(profiles: tuple[EmittedProfile, ...]) -> str:
+def _rust_primitive_tags(
+    profiles: tuple[EmittedProfile, ...],
+    assets: RenderAssets,
+) -> str:
     names = sorted(
         {
             primitive
@@ -269,13 +270,13 @@ def _rust_primitive_tags(profiles: tuple[EmittedProfile, ...]) -> str:
     )
     if not names:
         return ""
-    lines = [
-        "#[doc(hidden)]",
-        "pub mod primitive {",
-        *(f"    pub struct {rust_primitive_tag_name(name)};" for name in names),
-        "}",
-    ]
-    return "\n".join(lines)
+    declarations = "\n".join(
+        f"    pub struct {rust_primitive_tag_name(name)};" for name in names
+    )
+    return assets.fill(
+        "rust_primitive_tags.rs.tmpl",
+        declarations=f"\n{declarations}",
+    ).rstrip()
 
 
 def _rust_selected_profile_cfg(profile_slug: str, profile_slugs: tuple[str, ...]) -> str:

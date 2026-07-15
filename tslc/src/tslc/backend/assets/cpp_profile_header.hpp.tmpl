@@ -1,7 +1,18 @@
 #pragma once
 @{includes}
+@{profile_metadata}
 namespace tsl {
 
-@{registrations}@{bodies}
+@{registrations}@{selectors}
+
+}  // namespace tsl
+
+#if defined(TSL_HAS_AUTOTUNED_VARIANT_POLICY)
+#  include <tsl/generated/tsl_variant_policy_autotuned.hpp>
+#endif
+
+namespace tsl {
+
+@{bodies}
 
 }  // namespace tsl

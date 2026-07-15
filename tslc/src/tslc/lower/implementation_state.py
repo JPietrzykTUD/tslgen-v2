@@ -40,7 +40,7 @@ def infer_direct_implementation_state(
 ) -> ImplementationState:
     """Infer the direct state of one source body before call-graph propagation."""
 
-    if selected.extension.family in {"scalar", "generic_like"}:
+    if selected.extension_family_capability.implementation_fallback:
         return ImplementationState.FALLBACK
 
     facts = ImplementationStateFacts()

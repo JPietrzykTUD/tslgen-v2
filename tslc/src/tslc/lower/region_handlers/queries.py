@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from tslc.ir.segments import Region
-from tslc.lower.context import LoweringSession, VectorValue
-from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
-from tslc.lower.region_handlers.common import _vector_spelling
+from tslc.lower.context import LoweringSession
+from tslc.lower.queries import QueryEvaluator
+from tslc.lower.region_handlers.common import _type_value_spelling
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.target_text import RenderField
+
 
 class QueryRegionLowerer:
     """``type(x)`` / ``value(x)`` in raw expression position -> the evaluated
@@ -25,18 +26,16 @@ class QueryRegionLowerer:
     ) -> RenderField:
         del render
         value = self._evaluator.evaluate(region.full_text, context)
-        if isinstance(value, TextValue):
-            return value.text
-        if isinstance(value, TypeValue):
-            spelling = context.env.backend.types.scalar_spelling(value.type_tag)
-            if spelling is not None:
-                return spelling
-        if isinstance(value, VectorValue):  # e.g. `type(vector::as_base(ToBase))`
-            spelling = _vector_spelling(value, context)
+        if value is not None:
+            spelling = _type_value_spelling(value, context)
             if spelling is not None:
                 return spelling
         context.effects.skip(
-            "TSL-LOWER-UNRESOLVED-QUERY-REGION",
+            (
+                "TSL-LOWER-UNRESOLVED-TYPE-QUERY"
+                if region.keyword == "type"
+                else "TSL-LOWER-UNRESOLVED-VALUE-QUERY"
+            ),
             f"could not resolve {region.keyword}<...> region: {region.full_text!r}",
             source=region.source,
         )

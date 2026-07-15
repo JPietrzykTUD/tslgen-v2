@@ -30,6 +30,7 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
     TsilRegionDescriptor("mask", shell_validator="mask_selector"),
     TsilRegionDescriptor("mem"),
     TsilRegionDescriptor("lanes"),
+    TsilRegionDescriptor("array", shell_validator="array_set"),
     TsilRegionDescriptor("io"),
     TsilRegionDescriptor("cast", shell_validator="cast_selector"),
     TsilRegionDescriptor("call", shell_validator="call_selector"),

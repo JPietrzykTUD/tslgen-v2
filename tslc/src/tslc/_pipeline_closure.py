@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, replace
 
 from tslc.catalog.machine_profiles import MachineProfile
@@ -10,6 +11,7 @@ from tslc.lower.dependencies import (
     CallDependency,
     CallDependencyOrigin,
     VectorIdentity,
+    dependency_sort_key,
 )
 from tslc.lower.implementation_state import combine_implementation_states
 from tslc.lower.lowerer import LoweredSpecialization
@@ -24,6 +26,21 @@ class _LoweredSlot:
     unresolved_callee: "CallDependencyOrigin | None" = None
 
 
+type _SlotKey = tuple[
+    str,
+    str,
+    str | None,
+    VectorIdentity,
+    VectorIdentity | None,
+]
+type _CallFactKey = tuple[
+    _SlotKey,
+    tuple[str, ...],
+    tuple[str, str] | None,
+    tuple[tuple[str, str, str], ...],
+]
+
+
 def _prune_unresolved(
     slots: list[_LoweredSlot],
     split_names: frozenset[str] = frozenset(),
@@ -36,35 +53,78 @@ def _prune_unresolved(
     satisfy bare calls that lower to that one emitted specialization.
     """
 
-    valid = set(slots)
-    changed = True
-    while changed:
-        changed = False
-        available = {_slot_key(slot, split_names) for slot in valid}
-        for slot in slots:
-            if slot not in valid:
+    slot_keys = tuple(_slot_key(slot, split_names) for slot in slots)
+    available: dict[_SlotKey, int] = {}
+    for slot_key in slot_keys:
+        available[slot_key] = available.get(slot_key, 0) + 1
+
+    dependency_items: list[tuple[tuple[CallDependency, _SlotKey], ...]] = []
+    dependents: dict[_SlotKey, list[int]] = {}
+    for index, slot in enumerate(slots):
+        items = tuple(
+            (dependency, _dependency_key(slot, dependency, split_names))
+            for dependency in sorted(slot.callees, key=dependency_sort_key)
+        )
+        dependency_items.append(items)
+        for _dependency, dependency_key in items:
+            dependents.setdefault(dependency_key, []).append(index)
+
+    invalid = [False] * len(slots)
+    candidates = list(range(len(slots)))
+    while candidates:
+        removed: list[int] = []
+        for index in candidates:
+            if invalid[index]:
                 continue
+            missing = next(
+                (
+                    dependency
+                    for dependency, dependency_key in dependency_items[index]
+                    if available.get(dependency_key, 0) == 0
+                ),
+                None,
+            )
+            if missing is None:
+                continue
+            slot = slots[index]
             origins = {
                 origin.dependency: origin for origin in slot.callee_origins
             }
-            for dependency in slot.callees:
-                resolved = _dependency_key(slot, dependency, split_names)
-                if resolved not in available:
-                    slot.unresolved_callee = origins.get(
-                        dependency,
-                        CallDependencyOrigin(dependency, "implementation"),
-                    )
-                    valid.discard(slot)
-                    changed = True
-                    break
+            slot.unresolved_callee = origins.get(
+                missing,
+                CallDependencyOrigin(missing, "implementation"),
+            )
+            invalid[index] = True
+            removed.append(index)
 
-    live_slots = [slot for slot in slots if slot in valid]
+        if not removed:
+            break
+
+        unavailable_keys: set[_SlotKey] = set()
+        for index in removed:
+            slot_key = slot_keys[index]
+            available[slot_key] -= 1
+            if available[slot_key] == 0:
+                unavailable_keys.add(slot_key)
+        candidates = sorted(
+            {
+                dependent
+                for slot_key in unavailable_keys
+                for dependent in dependents.get(slot_key, ())
+                if not invalid[dependent]
+            }
+        )
+
+    live_slots = [slot for index, slot in enumerate(slots) if not invalid[index]]
+    # Full generation retains earlier profiles while closing the next one, so
+    # release pruning indexes before constructing the propagation graph.
+    del available, candidates, dependency_items, dependents, slot_keys
     _propagate_transitive_call_facts(live_slots, split_names)
 
     grouped: dict[str, dict[str, list[LoweredSpecialization]]] = {}
     pruned: list[_LoweredSlot] = []
-    for slot in slots:
-        if slot in valid:
+    for index, slot in enumerate(slots):
+        if not invalid[index]:
             grouped.setdefault(slot.backend, {}).setdefault(
                 slot.spec.primitive_name, []
             ).append(slot.spec)
@@ -99,7 +159,7 @@ def _policy_of(
 def _slot_key(
     slot: _LoweredSlot,
     split_names: frozenset[str],
-) -> tuple[str, str, str | None, VectorIdentity, VectorIdentity | None]:
+) -> _SlotKey:
     spec = slot.spec
     return (
         slot.backend,
@@ -118,7 +178,7 @@ def _dependency_key(
     slot: _LoweredSlot,
     dependency: CallDependency,
     split_names: frozenset[str],
-) -> tuple[str, str, str | None, VectorIdentity, VectorIdentity | None]:
+) -> _SlotKey:
     return (
         slot.backend,
         dependency.primitive,
@@ -141,120 +201,115 @@ def _propagate_transitive_call_facts(
     same live dependency graph so query APIs report composed/fallback callees.
     """
 
-    safety_by_key = {
-        _call_fact_key(slot, split_names): slot.spec.safety for slot in slots
-    }
-    features_by_key = {
-        _call_fact_key(slot, split_names): slot.spec.required_features for slot in slots
-    }
-    state_by_key = {
-        _call_fact_key(slot, split_names): slot.spec.implementation_state
-        for slot in slots
-    }
-    dependency_targets: dict[
-        tuple[str, str, str | None, VectorIdentity, VectorIdentity | None],
-        list[tuple[
-            tuple[str, str, str | None, VectorIdentity, VectorIdentity | None],
-            tuple[str, ...],
-            tuple[str, str] | None,
-            tuple[tuple[str, str, str], ...],
-        ]],
-    ] = {}
-    for slot in slots:
-        dependency_targets.setdefault(_slot_key(slot, split_names), []).append(
-            _call_fact_key(slot, split_names)
-        )
-    changed = True
-    while changed:
-        changed = False
-        for slot in slots:
-            slot_key = _call_fact_key(slot, split_names)
-            safety = safety_by_key[slot_key]
-            features = features_by_key[slot_key]
-            state = state_by_key[slot_key]
-            propagated = safety
-            propagated_features = features
-            propagated_state = state
-            for dependency in sorted(
-                slot.callees,
-                key=lambda dependency: (
-                    dependency.primitive,
-                    dependency.mask_policy or "",
-                    dependency.source.base_tag,
-                    dependency.source.extension_isa,
-                    dependency.target.base_tag if dependency.target is not None else "",
-                    dependency.target.extension_isa
-                    if dependency.target is not None
-                    else "",
-                ),
-            ):
-                for dependency_fact_key in dependency_targets.get(
-                    _dependency_key(slot, dependency, split_names), []
-                ):
-                    dependency_safety = safety_by_key[dependency_fact_key]
-                    if (
-                        dependency_safety.internal_unsafe
-                        or dependency_safety.caller_unsafe
-                    ):
-                        propagated = propagated.merge(
-                            ImplementationSafety(
-                                internal_unsafe=True,
-                                reasons=dependency_safety.reasons
-                                | frozenset({"unsafe_callee"}),
-                            )
-                        )
-                    dependency_features = features_by_key[dependency_fact_key]
-                    if not dependency_features <= propagated_features:
-                        propagated_features = propagated_features | dependency_features
-                    dependency_state = state_by_key[dependency_fact_key]
-                    joined_state = combine_implementation_states(
-                        [propagated_state, dependency_state]
-                    )
-                    if joined_state != propagated_state:
-                        propagated_state = joined_state
-            if (
-                propagated != safety
-                or propagated_features != features
-                or propagated_state != state
-            ):
-                safety_by_key[slot_key] = propagated
-                features_by_key[slot_key] = propagated_features
-                state_by_key[slot_key] = propagated_state
-                changed = True
+    slot_keys = tuple(_slot_key(slot, split_names) for slot in slots)
+    fact_keys = tuple(
+        _call_fact_key_from_slot_key(slot, slot_key)
+        for slot, slot_key in zip(slots, slot_keys, strict=True)
+    )
+    fact_ids: dict[_CallFactKey, int] = {}
+    slot_fact_ids: list[int] = []
+    safety: list[ImplementationSafety] = []
+    features: list[frozenset[str]] = []
+    states = []
+    for slot, fact_key in zip(slots, fact_keys, strict=True):
+        fact_id = fact_ids.get(fact_key)
+        if fact_id is None:
+            fact_id = len(fact_ids)
+            fact_ids[fact_key] = fact_id
+            safety.append(slot.spec.safety)
+            features.append(slot.spec.required_features)
+            states.append(slot.spec.implementation_state)
+        else:
+            # Match the previous fact-map construction when duplicate lowered
+            # body identities occur: the last slot supplies the direct facts.
+            safety[fact_id] = slot.spec.safety
+            features[fact_id] = slot.spec.required_features
+            states[fact_id] = slot.spec.implementation_state
+        slot_fact_ids.append(fact_id)
+    fact_count = len(fact_ids)
+    del fact_ids, fact_keys
 
-    for slot in slots:
-        slot_key = _call_fact_key(slot, split_names)
-        safety = safety_by_key[slot_key]
-        features = features_by_key[slot_key]
-        state = state_by_key[slot_key]
+    dependency_targets: dict[_SlotKey, list[int]] = {}
+    for slot_key, fact_id in zip(slot_keys, slot_fact_ids, strict=True):
+        targets = dependency_targets.setdefault(slot_key, [])
+        if not targets or targets[-1] != fact_id:
+            targets.append(fact_id)
+
+    callers_by_callee: dict[int, list[int]] = {}
+    for slot, caller_id in zip(slots, slot_fact_ids, strict=True):
+        for dependency in sorted(slot.callees, key=dependency_sort_key):
+            dependency_key = _dependency_key(slot, dependency, split_names)
+            for callee_id in dependency_targets.get(dependency_key, ()):
+                callers = callers_by_callee.setdefault(callee_id, [])
+                if not callers or callers[-1] != caller_id:
+                    callers.append(caller_id)
+
+    del dependency_targets, slot_keys
+    queue = deque(range(fact_count))
+    queued = [True] * fact_count
+    while queue:
+        callee_id = queue.popleft()
+        queued[callee_id] = False
+        callee_safety = safety[callee_id]
+        callee_features = features[callee_id]
+        callee_state = states[callee_id]
+        for caller_id in callers_by_callee.get(callee_id, ()):
+            caller_safety = safety[caller_id]
+            propagated_safety = caller_safety
+            if callee_safety.internal_unsafe or callee_safety.caller_unsafe:
+                propagated_safety = caller_safety.merge(
+                    ImplementationSafety(
+                        internal_unsafe=True,
+                        reasons=callee_safety.reasons
+                        | frozenset({"unsafe_callee"}),
+                    )
+                )
+            caller_features = features[caller_id]
+            propagated_features = caller_features | callee_features
+            caller_state = states[caller_id]
+            propagated_state = combine_implementation_states(
+                (caller_state, callee_state)
+            )
+            if (
+                propagated_safety == caller_safety
+                and propagated_features == caller_features
+                and propagated_state == caller_state
+            ):
+                continue
+            safety[caller_id] = propagated_safety
+            features[caller_id] = propagated_features
+            states[caller_id] = propagated_state
+            if not queued[caller_id]:
+                queue.append(caller_id)
+                queued[caller_id] = True
+
+    for slot, fact_id in zip(slots, slot_fact_ids, strict=True):
+        propagated_safety = safety[fact_id]
+        propagated_features = features[fact_id]
+        propagated_state = states[fact_id]
         if (
-            safety == slot.spec.safety
-            and features == slot.spec.required_features
-            and state == slot.spec.implementation_state
+            propagated_safety == slot.spec.safety
+            and propagated_features == slot.spec.required_features
+            and propagated_state == slot.spec.implementation_state
         ):
             continue
         slot.spec = replace(
             slot.spec,
-            safety=safety,
-            required_features=features,
-            implementation_state=state,
+            safety=propagated_safety,
+            required_features=propagated_features,
+            implementation_state=propagated_state,
         )
 
 
-def _call_fact_key(
+def _call_fact_key_from_slot_key(
     slot: _LoweredSlot,
-    split_names: frozenset[str],
-) -> tuple[
-    tuple[str, str, str | None, VectorIdentity, VectorIdentity | None],
-    tuple[str, ...],
-    tuple[str, str] | None,
-    tuple[tuple[str, str, str], ...],
-]:
-    """A lowered-body identity for transitive call facts before emitted-name splits."""
+    slot_key: _SlotKey,
+) -> _CallFactKey:
+    """Build a call-fact key from an already-computed emitted-slot identity."""
 
     spec = slot.spec
     return (
-        _slot_key(slot, split_names),
+        slot_key,
         spec.param_kinds,
         spec.immediate,
         spec.generic_params,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Protocol
 
 from tslc.ir.text import split_head_arg, split_top_level
@@ -39,18 +40,25 @@ class QueryTerm:
 
 class QueryParser:
     def parse(self, text: str) -> QueryTerm | None:
-        text = text.strip()
-        split = split_head_arg(text)
-        if split is None:
-            return QueryTerm(head=text, args=())
-        head_text, arg_text = split
-        args: list[QueryTerm] = []
-        for piece in split_top_level(arg_text):
-            parsed = self.parse(piece)
-            if parsed is None:
-                return None
-            args.append(parsed)
-        return QueryTerm(head=head_text.strip(), args=tuple(args))
+        return _cached_parse_query(text.strip())
+
+
+_QUERY_PARSE_CACHE_SIZE = 512
+
+
+@lru_cache(maxsize=_QUERY_PARSE_CACHE_SIZE)
+def _cached_parse_query(text: str) -> QueryTerm | None:
+    split = split_head_arg(text)
+    if split is None:
+        return QueryTerm(head=text, args=())
+    head_text, arg_text = split
+    args: list[QueryTerm] = []
+    for piece in split_top_level(arg_text):
+        parsed = _cached_parse_query(piece.strip())
+        if parsed is None:
+            return None
+        args.append(parsed)
+    return QueryTerm(head=head_text.strip(), args=tuple(args))
 
 
 class QueryFunction(Protocol):

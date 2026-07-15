@@ -22,16 +22,28 @@ _CMAKE_CXX_FEATURE_FLAG_COMPILERS = "GNU,Clang,AppleClang,IntelLLVM"
 
 def cpp_verify_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[VerifyProfile, ...]:
     return tuple(
-        VerifyProfile(
-            profile_name=slug(emitted_profile.profile.name),
-            file_stem=slug(emitted_profile.profile.name),
-            family=emitted_profile.profile.family,
-            compile_modes=emitted_profile.profile.compile_modes,
-            flags=cpp_flags(emitted_profile.profile, emitted_profile.profile_family),
-            target=cpp_target(emitted_profile.profile, emitted_profile.profile_family),
-            runner=_verify_runner(emitted_profile.profile),
-        )
+        cpp_verify_profile(emitted_profile.profile, emitted_profile.profile_family)
         for emitted_profile in profiles
+    )
+
+
+def cpp_verify_profile(
+    profile: MachineProfile,
+    capability: ProfileFamilyCapability | None = None,
+) -> VerifyProfile:
+    """Project a source machine profile into verifier-owned C++ facts."""
+
+    return VerifyProfile(
+        profile_name=slug(profile.name),
+        file_stem=slug(profile.name),
+        family=profile.family,
+        native_without_runner=(
+            capability.native_without_runner if capability is not None else False
+        ),
+        compile_modes=profile.compile_modes,
+        flags=cpp_flags(profile, capability),
+        target=cpp_target(profile, capability),
+        runner=_verify_runner(profile),
     )
 
 
@@ -45,7 +57,7 @@ def cpp_flags(
         return profile.flags_for_backend("cpp")
     return (
         *(
-            f"-m{feature_spelling(feature, profile.alternatives)}"
+            f"-m{feature_spelling(feature, profile.alternatives, backend_id='cpp')}"
             for feature in sorted(profile.features)
         ),
         *profile.flags_for_backend("cpp"),
@@ -424,7 +436,7 @@ def _x86_profile_detection_source(
     guards: Sequence[BackendCompileGuard] = (),
 ) -> str:
     checks = [
-        f'__builtin_cpu_supports("{feature_spelling(feature, profile.alternatives)}")'
+        f'__builtin_cpu_supports("{feature_spelling(feature, profile.alternatives, backend_id="cpp")}")'
         for feature in sorted(profile.features)
     ]
     if guards:

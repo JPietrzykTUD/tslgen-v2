@@ -46,6 +46,7 @@ KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
     {
         "arch_module",
         "compile_guards",
+        "compiler_features",
         "compiler_ids",
         "dataparallel_inference",
         "header_group",
@@ -62,6 +63,7 @@ _KNOWN_MASK_POLICY_KINDS = frozenset(
         "native_predicate",
         "native_predicate_by_lanes",
         "comparison_lane_vector",
+        "boolean_lane_vector",
     }
 )
 _KNOWN_IMASK_POLICY_KINDS = frozenset(

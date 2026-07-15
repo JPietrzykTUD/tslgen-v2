@@ -16,7 +16,14 @@ Modes:
   ./${self} document-site
                        rebuild only the docs website from existing generated docs/data
   ./${self} explain    diagnose ONE primitive/profile/backend/ext/type slot (no compiler needed)
+  ./${self} check      validate the complete TSL corpus without rendering
+  ./${self} doctor     probe selected backend/profile toolchains and runners
+  ./${self} list       list catalog entries
+  ./${self} show       describe one catalog entry
+  ./${self} audit      audit source metadata
   ./${self} ratchet    coverage regression gate vs the committed baseline   (no compiler needed)
+  ./${self} benchmark-ratchet
+                       require complete variant benchmark coverage/inventory (no compiler needed)
   ./${self} dump       dump one pipeline stage (catalog/segments/selection/lowered) (no compiler)
 
 Extra flags pass through after generator modes; document-site honors --output-root
@@ -27,11 +34,11 @@ and --backends for the existing tree, e.g.:
   ./${self} test    --profiles skylake --primitives add,convert_up
   ./${self} explain --primitive add --profile avx2 --type si32 --backend cpp
   ./${self} ratchet --update
+  ./${self} benchmark-ratchet --update
   ./${self} dump    --stage segments --primitive add
 
-generate/build/test/document drive \`python -m tslc.cli\`; document-site rebuilds
-the website from an existing output tree; explain/ratchet/dump
-drive the \`tslc.maintenance\` tools directly and need no toolchain.
+generate/build/test and authoring tools drive the unified \`python -m tslc\`
+surface; document-site rebuilds the website from an existing output tree.
 
 Env knobs (build/test only): TSLC_OUTPUT_ROOT TSLC_SOURCES TSLC_MACHINE_PROFILES
   TSLC_BACKENDS TSLC_SDE TSLC_QEMU_AARCH64 TSLC_WASMTIME TSLC_VERIFY_JOBS
@@ -47,9 +54,9 @@ EOF
 mode="build"
 if (( $# > 0 )); then
   case "$1" in
-    generate|build|test|document|document-site|explain|ratchet|dump) mode="$1"; shift ;;
+    generate|build|test|document|document-site|explain|check|doctor|list|show|audit|ratchet|benchmark-ratchet|dump) mode="$1"; shift ;;
     -h|--help|help) usage; exit 0 ;;
-    *) echo "usage: $0 [generate|build|test|document|document-site|explain|ratchet|dump] [extra flags...]" >&2; exit 2 ;;
+    *) echo "usage: $0 [generate|build|test|document|document-site|explain|check|doctor|list|show|audit|ratchet|benchmark-ratchet|dump] [extra flags...]" >&2; exit 2 ;;
   esac
 fi
 extra_args=("$@")
@@ -59,6 +66,15 @@ has_cli_flag() {
   local arg
   for arg in "${extra_args[@]}"; do
     [[ "$arg" == "$flag" ]] && return 0
+  done
+  return 1
+}
+
+has_cli_assignment() {
+  local flag="$1"
+  local arg
+  for arg in "${extra_args[@]}"; do
+    [[ "$arg" == "$flag" || "$arg" == "$flag"=* ]] && return 0
   done
   return 1
 }
@@ -108,11 +124,17 @@ summary_file="${TSLC_SUMMARY_FILE:-}"
 
 export PYTHONPATH="tslc/src${PYTHONPATH:+:$PYTHONPATH}"
 
-# Pure / lowering-only modes: no toolchain, no build scratch — drive the maintenance tool and exit.
+# Focused authoring/maintenance modes do not enter generated-project workflows.
 case "$mode" in
-  explain) exec python -m tslc.maintenance.explain "${extra_args[@]}" ;;
-  ratchet) exec python -m tslc.maintenance.coverage_ratchet "${extra_args[@]}" ;;
-  dump)    exec python -m tslc.maintenance.stage_dump "${extra_args[@]}" ;;
+  explain) exec python -m tslc explain "${extra_args[@]}" ;;
+  check)   exec python -m tslc check "${extra_args[@]}" ;;
+  doctor)  exec python -m tslc doctor "${extra_args[@]}" ;;
+  list)    exec python -m tslc list "${extra_args[@]}" ;;
+  show)    exec python -m tslc show "${extra_args[@]}" ;;
+  audit)   exec python -m tslc audit metadata "${extra_args[@]}" ;;
+  ratchet) exec python -m tslc coverage ratchet "${extra_args[@]}" ;;
+  benchmark-ratchet) exec python -m tslc.maintenance.benchmark_coverage "${extra_args[@]}" ;;
+  dump)    exec python -m tslc inspect "${extra_args[@]}" ;;
 esac
 
 mkdir -p tslctmp
@@ -161,59 +183,40 @@ if [[ "$mode" == "document-site" ]]; then
   exit 0
 fi
 
-# Fail fast with a clear message if a compiling mode has no working toolchain.
+# Fail fast through the verifier-owned backend/profile-aware preflight.
 if [[ "$mode" == "build" || "$mode" == "test" ]]; then
-  python - <<'PY'
-from __future__ import annotations
-
-import os
-from pathlib import Path
-import shlex
-import shutil
-import subprocess
-import sys
-
-
-def fail(message: str) -> None:
-    print(f"ERROR: {message}", file=sys.stderr)
-    raise SystemExit(1)
-
-
-def run_preflight(name: str, command: list[str]) -> None:
-    completed = subprocess.run(command, capture_output=True, text=True, check=False)
-    if completed.returncode != 0:
-        detail = completed.stderr.strip() or completed.stdout.strip()
-        suffix = f": {detail}" if detail else ""
-        fail(f"{name} compiler preflight failed with exit code {completed.returncode}{suffix}")
-
-
-preflight_root = Path("tslctmp/toolchain-preflight")
-preflight_root.mkdir(parents=True, exist_ok=True)
-
-cxx = shlex.split(os.environ.get("CXX", "c++")) or ["c++"]
-if shutil.which(cxx[0]) is None:
-    fail(f"C++ compiler {cxx[0]} not found")
-cpp_source = preflight_root / "tslc_verify.cpp"
-cpp_source.write_text("int main() { return 0; }\n", encoding="utf-8")
-run_preflight(
-    "C++",
-    [*cxx, "-x", "c++", "-std=c++17", "-c", str(cpp_source), "-o", str(preflight_root / "tslc_verify.o")],
-)
-
-rustc = os.environ.get("RUSTC", "rustc").strip() or "rustc"
-if shutil.which(rustc) is None:
-    fail(f"Rust compiler {rustc} not found")
-rust_source = preflight_root / "tslc_verify.rs"
-rust_source.write_text("fn main() {}\n", encoding="utf-8")
-run_preflight(
-    "Rust",
-    [rustc, "--edition=2021", str(rust_source), "-o", str(preflight_root / "tslc_verify_rust")],
-)
-PY
+  doctor=(
+    python -m tslc doctor
+    --sources "$sources"
+    --machine-profiles "$machine_profiles"
+    --backends "$(effective_cli_value --backends "$backends")"
+  )
+  effective_profiles="$(effective_cli_value --profiles "")"
+  [[ -n "$effective_profiles" ]] && doctor+=( --profiles "$effective_profiles" )
+  [[ "$mode" == "test" ]] && doctor+=( --run )
+  for (( i = 0; i < ${#extra_args[@]}; i++ )); do
+    arg="${extra_args[$i]}"
+    case "$arg" in
+      --compiler|--target|--linker|--runner)
+        if (( i + 1 < ${#extra_args[@]} )); then
+          doctor+=( "$arg" "${extra_args[$((i + 1))]}" )
+          ((i+=1))
+        fi
+        ;;
+      --compiler=*|--target=*|--linker=*|--runner=*) doctor+=( "$arg" ) ;;
+    esac
+  done
+  if ! has_cli_assignment --runner; then
+    [[ -e "$sde" ]] && doctor+=( --runner "sde=$sde" )
+    [[ -e "$qemu" ]] && doctor+=( --runner "qemu-aarch64=$qemu" )
+    [[ -e "$wasmtime" ]] && doctor+=( --runner "wasmtime=$wasmtime" )
+  fi
+  "${doctor[@]}"
 fi
 
 cli=(
-  python -m tslc.cli
+  python -m tslc
+  "$([[ "$mode" == "document" ]] && printf generate || printf '%s' "$mode")"
   --sources "$sources"
   --machine-profiles "$machine_profiles"
   --backends "$backends"
@@ -223,14 +226,15 @@ if [[ -n "$summary_file" ]] && ! has_cli_flag --summary-file; then
   cli+=( --summary-file "$summary_file" )
 fi
 case "$mode" in
-  build) cli+=( --verify ) ;;
   test)
     cli+=( --test --value-test-warnings )
     # Pass the runners only when present, so annotated profiles run rather than fail on a
     # missing binary; absent ones are skipped by the verify step.
-    [[ -e "$sde" ]] && cli+=( --runner "sde=$sde" )
-    [[ -e "$qemu" ]] && cli+=( --runner "qemu-aarch64=$qemu" )
-    [[ -e "$wasmtime" ]] && cli+=( --runner "wasmtime=$wasmtime" )
+    if ! has_cli_assignment --runner; then
+      [[ -e "$sde" ]] && cli+=( --runner "sde=$sde" )
+      [[ -e "$qemu" ]] && cli+=( --runner "qemu-aarch64=$qemu" )
+      [[ -e "$wasmtime" ]] && cli+=( --runner "wasmtime=$wasmtime" )
+    fi
     ;;
 esac
 (( ${#extra_args[@]} )) && cli+=( "${extra_args[@]}" )

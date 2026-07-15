@@ -1,56 +1,74 @@
-# Adding A Primitive To `tsldata`
+# Adding A Primitive
 
-This guide is the human checklist for adding or changing a TSL primitive. It is
-written from the `gather_narrow_partial` slice, but the rules are general.
+Add primitives in `tsldata/primitives/`.
 
-The design goal is simple: a new primitive should mostly be source data plus
-focused typed compiler support when the current compiler vocabulary is missing a
-real concept. Avoid primitive-name branches in Python.
+Keep primitive behavior in source data.
 
-## 1. Name The Contract
+Change `tslc` only when the compiler lacks a real typed concept.
 
-Before editing, write down the primitive contract in plain language.
+## 1. Define The Contract
 
-- What does the primitive compute?
-- What is the signature, for example `v:=(v,v)` or `v:=(cptr,vidx,sImm)`?
-- Which parameters are compile-time axes, such as immediate values, target
-  types, target extensions, or SIMD type parameters?
-- Which lanes are meaningful in the result?
-- Is the primitive lane-local or cross-lane?
-- Is it safe for the caller, or does it dereference raw pointers, use uninit
-  memory, or rely on target intrinsics?
+Write the contract before the implementation.
 
-If the name needs to carry unusual semantics, prefer a literal name over a short
-but surprising one. For example, `gather_narrow_partial` says that the loaded
-element type is narrower than the index vector type and that only part of the
-result is filled.
+Record:
 
-## 2. Find The Existing Family
+- the operation;
+- the signature;
+- parameter names;
+- generic axes;
+- lane behavior;
+- safety requirements;
+- supported types and extensions.
 
-Start in the closest existing file under `tsldata/primitives/`.
-
-Look for:
-
-- neighboring signatures;
-- existing generic parameters;
-- existing `requires` shape;
-- existing tests and tags;
-- existing safety declarations;
-- existing helper primitives that should be reused through
-  `call<primitive=...>(...)`.
-
-Keep the primitive in source data when possible. Only change `tslc` when the new
-shape needs a typed compiler concept that is missing.
-
-## 3. Add Source Documentation
-
-Every new primitive should carry source-owned documentation fields:
+Example:
 
 ```tsl
-brief_description "One short sentence."
+prim<v:=(v,v)> add(left, right):
+```
+
+The signature connects source names to typed parameter kinds:
+
+```text
+v := (v, v)
+       |  |
+       |  +-- right: vector
+       +----- left: vector
+
+result: vector
+```
+
+Use a literal name.
+
+Do not hide unusual behavior behind a generic name.
+
+## 2. Choose The Source File
+
+Find the closest family under `tsldata/primitives/`.
+
+Copy its local structure.
+
+Check nearby primitives for:
+
+- signature style;
+- `generic_params`;
+- `requires` maps;
+- safety declarations;
+- tests;
+- reusable primitive calls.
+
+Use `call<primitive=...>(...)` for reusable generated operations.
+
+Do not add a Python branch for one primitive name.
+
+## 3. Add Documentation
+
+Use all three source fields:
+
+```tsl
+brief_description "Adds corresponding vector lanes."
 detailed_description """
-  A fuller user-facing explanation. Keep indentation readable in the source.
-  Describe special behavior, edge cases, and backend-dependent semantics.
+  Each output lane depends on the matching input lanes.
+  Overflow follows the selected lane type.
   """
 semantics """
   input: register left, register right
@@ -60,36 +78,57 @@ semantics """
   """
 ```
 
-Use `brief_description` for a short API sentence. Use
-`detailed_description` for user-facing details. Use `semantics` as a raw,
-non-interpreted listing for the operation.
+| Field | Purpose |
+| --- | --- |
+| `brief_description` | One API sentence. |
+| `detailed_description` | User-visible details and edge cases. |
+| `semantics` | A direct operation listing. |
 
-Do not add renderer-only text to these fields.
+These fields are source-owned text.
+
+They do not control lowering.
 
 ## 4. Declare Generic Axes
 
-Use `generic_params` for type or value axes that are part of the API:
+Use `generic_params` for public type or value axes.
 
 ```tsl
 generic_params:
-  IndicesType {kind simd_type, base_types [?i64]}
-  N {kind int, default 1}
+  IndicesType:
+    kind simd_type
+    constraints:
+      base_types [?i64]
+  N:
+    kind int
+    default 1
 ```
 
-Keep constraints source-owned when they are part of the primitive contract. For
-example, a SIMD type parameter can declare `base_types` when the primitive only
-accepts index vectors with specific scalar bases.
+The compiler derives behavior from `kind`.
 
-Avoid hard-coding parameter names in Python. If compiler support needs to know
-which generic parameters are SIMD types, derive that from `generic_params`.
+It must not infer a generic kind from the parameter name.
 
-## 5. Write Tests As Data
+Keep source constraints in the source contract.
 
-The `tests:` block is authored source, not generated output. Prefer one
-fundamental `basic` case per supported scalar type, plus corner cases when the
-primitive has them.
+## 5. Add Benchmark Facts Only When Needed
 
-Use typed test fields for semantic axes:
+Most workload behavior comes from the signature.
+
+Use `benchmarks:` only for missing semantic facts.
+
+```tsl
+benchmarks:
+  latency_chain data
+  operand_domains:
+    divisor nonzero
+```
+
+The field and domain vocabularies are closed.
+
+See [Variant benchmarking and autotuning](variant-benchmarking.md).
+
+## 6. Add Tests As Data
+
+Author expected values in `tests:`.
 
 ```tsl
 tests:
@@ -98,78 +137,120 @@ tests:
            expected [100, 104, 0, 0]}}
 ```
 
-Common fields:
+Common axes:
 
-- `type`: result/source scalar type tag for the main `Vec`;
-- `to_type`: target scalar type for representation-changing primitives;
-- `to_extension`: target extension for extension-changing primitives;
-- `index`: compile-time lane or segment index;
-- `index_type`: scalar type tag for a `vidx` input when it differs from `type`;
-- `scale`, `offset`, `src_offset`, `dst_offset`, `alignment`;
-- `attrs`: authored attribute values for wildcard attributes;
-- `role "compile"` for deterministic compile-only cases.
+| Field | Meaning |
+| --- | --- |
+| `type` | Main vector scalar type. |
+| `to_type` | Target scalar type. |
+| `to_extension` | Target extension. |
+| `index` | Compile-time lane or segment index. |
+| `index_type` | Scalar type of a `vidx` input. |
+| `scale` | Compile-time scale. |
+| `offset` | Offset axis. |
+| `src_offset` | Source offset. |
+| `dst_offset` | Destination offset. |
+| `alignment` | Alignment axis. |
+| `attrs` | Values for wildcard attributes. |
+| `role "compile"` | Compile-only case. |
 
-Do not encode renderer function names in tests. Test names are derived from the
-primitive name and typed axes.
+Start with one `basic` case for each supported scalar type.
 
-## 6. Fill The Extension Matrix
+Add edge cases for unusual semantics.
 
-For each implementation group, make the support contract explicit:
+Do not put renderer function names in source tests.
+
+The planner derives generated test names from typed axes.
+
+## 7. Add Implementations
+
+Make support explicit for each extension and type group.
 
 ```tsl
 impls:
-  [avx512, avx2, sse, neon, generic]:
-    [bword, dword]:
+  [avx2, sse, neon, generic]:
+    [dword]:
       requires:
-        avx512:
-          bword [avx512f, avx512bw]
-          dword [avx512f]
         avx2 [avx, avx2]
         sse [sse, sse2]
         neon [neon]
         generic []
       safety:
         internal_unsafe true
-        caller_unsafe true
-        reasons [raw_pointer]
+        caller_unsafe false
+        reasons [intrinsic]
       implementation:
-        tsil "..."
+        tsil """
+          complete(intrin<add, build>(left, right));
+          """
 ```
 
 Prefer this order:
 
-1. Direct intrinsic implementation when it is clear and better.
-2. Composition through existing primitives when it preserves semantics.
-3. Small new helper primitive when a reusable operation is missing.
-4. Generic fallback through existing primitives and typed TSIL regions.
+1. Use a direct intrinsic.
+2. Compose existing primitives.
+3. Add a small reusable helper primitive.
+4. Use a generic typed-TSIL fallback.
 
-Do not make `tslc` know that a primitive name is special. Selection should be
-driven by signatures, type groups, requirements, safety, generic parameters, and
-extension metadata.
+Selection uses typed facts:
 
-## 7. Add Compiler Support Only For Missing Concepts
+```text
+signature + type group + extension + requires + generic axes + safety
+  -> selected implementation
+```
 
-If source parsing, validation, lowering, value tests, or rendering cannot express
-the primitive, add the smallest typed boundary.
+Selection must not depend on a primitive-name branch in Python.
 
-Typical places:
+## 8. Add Compiler Support Only For A Missing Concept
 
-- `tslc/src/tslc/catalog/model.py`: add a frozen domain field.
-- `tslc/src/tslc/catalog/test_promotion.py`: promote parsed source to the typed
-  field.
-- `tslc/src/tslc/catalog/validation/`: validate accepted source fields and
-  diagnose malformed nearby forms.
-- `tslc/src/tslc/lower/`: lower new typed facts or TSIL regions.
-- `tslc/src/tslc/value_tests/`: plan typed value-test cases and render only
-  already-decided values.
-- `tslc/tests/`: prove the new boundary with focused tests.
+Use the smallest typed boundary.
 
-Keep raw dictionaries and parser shapes at the edge. Downstream code should
-consume typed objects.
+| Need | Owner |
+| --- | --- |
+| New source field | Parser and catalog validation. |
+| New domain fact | Frozen catalog model. |
+| New shared body semantics | Typed TSIL region. |
+| New backend spelling | Backend translation or asset. |
+| New test shape | Typed value-test planner. |
 
-## 8. Verify In Layers
+Typical paths:
 
-Start with focused Python checks:
+```text
+tslc/src/tslc/catalog/model.py
+tslc/src/tslc/catalog/validation/
+tslc/src/tslc/lower/
+tslc/src/tslc/value_tests/
+tslc/tests/
+```
+
+Keep raw dictionaries at parsing boundaries.
+
+Use frozen typed values downstream.
+
+Do not repair malformed source silently.
+
+Emit a source-located diagnostic.
+
+## 9. Check The Full Connection
+
+```text
+primitive source
+  -> catalog validation
+  -> typed Primitive
+  -> implementation selection
+  -> TSIL scanning and lowering
+  -> backend render model
+  -> generated wrapper
+  -> generated value test
+```
+
+Inspect at least one C++ artifact.
+
+Inspect at least one Rust artifact.
+
+## 10. Validate
+
+Run focused checks:
 
 ```bash
 python -m compileall -q tslc/src/tslc
@@ -180,47 +261,36 @@ PYTHONPATH=tslc/src python -m pytest -q \
 git diff --check
 ```
 
-Then generate the primitive across the selected profiles and backends:
+Generate both backends:
 
 ```bash
-PYTHONPATH=tslc/src python -m tslc.cli \
-  --sources tsldata \
+./dev.sh generate \
   --primitives PRIMITIVE_NAME \
-  --machine-profiles supplementary/buildsystem/machine_profiles.json \
-  --backends cpp,rust \
-  --output-root ./tslctmp/TEST \
-  --value-test-warnings
+  --profiles scalar \
+  --backends cpp,rust
 ```
 
-When the slice touches generated build or executable value tests, run the
-generated test path too:
+Build and run generated tests when output behavior changed:
 
 ```bash
-PYTHONPATH=tslc/src python -m tslc.cli \
-  --sources tsldata \
+./dev.sh test \
   --primitives PRIMITIVE_NAME \
-  --machine-profiles supplementary/buildsystem/machine_profiles.json \
-  --backends cpp,rust \
-  --output-root ./tslctmp/TEST \
-  --test \
-  --value-test-warnings
+  --profiles scalar,avx2 \
+  --backends cpp,rust
 ```
 
-Use `--runner sde=/path/to/sde64` or
-`--runner qemu-aarch64=/path/to/qemu-aarch64` only when testing profiles that
-need an emulator.
+Use `./tslctmp/...` for scratch output.
 
-## 9. Review The Boundary
+Use an emulator only for a profile that requires one.
 
-Before finishing, check:
+## Review Checklist
 
-- Could the next similar primitive be added mostly through `tsldata`?
-- Did any Python code branch on a primitive name or extension name?
-- Are unsupported cases represented as diagnostics or explicit deferred support?
-- Are value-test renderers formatting plans rather than inspecting the catalog?
-- Are diagnostics deterministic and source-located where practical?
-- Does the primitive have documentation, tests, safety, requirements, and
-  extension coverage?
-
-If the answer to any of these is no, fix the boundary before adding more source
-data.
+- The signature matches the parameter names.
+- Documentation states special semantics.
+- Tests cover supported types and edge cases.
+- Requirements match the target features.
+- Safety is explicit.
+- Unsupported cases produce diagnostics or skips.
+- Python does not branch on the primitive name.
+- Renderers only format planned values.
+- The next similar primitive remains mostly source data.

@@ -74,13 +74,13 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
           reasons []
         implementation:
           tsil """
-               let<type>(Base, type(base::in));
-               let<type>(DataVec, type(vector::as_base(Base)));
+               let<type>(Base, base::in);
+               let<type>(DataVec, vector::as_base(Base));
                var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
                var<runtime_array>(Base, values, lanes);
                call<primitive=store[Vec], attrs[aligned=false]>(values, data);
                var<const_infer>(modifier, cast<static>(si32, ostream_modifier));
-               var<const_infer>(bits, sizeof(Base) * 8);
+               var<const_infer>(bits, sizeof(type(Base)) * 8);
                var<const_infer>(fmt_base, (modifier == 16) ? 16u : (modifier == 8) ? 8u : (modifier == 0) ? 2u : 10u);
                loop<backend>(lane, 0, lanes, 1) {
                  var<infer>(value, static_cast<std::uint64_t>(values[lanes - 1 - lane]));

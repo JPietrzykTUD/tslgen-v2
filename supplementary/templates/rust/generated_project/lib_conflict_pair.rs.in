@@ -1,2 +1,0 @@
-#[cfg(all(feature = "{left_rust_feature}", feature = "{right_rust_feature}"))]
-compile_error!("exactly one TSL profile feature must be enabled");

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Extend TSLC Verification"
+  short_description: "Add toolchains, runners, and generated verification."
+  default_prompt: "Use $extend-tslc-verification to add or change a generated-build toolchain, runner, or verification path."

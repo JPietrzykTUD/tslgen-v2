@@ -18,6 +18,7 @@ from tslc.value_tests._render_cpp_core import (
     _reduction,
     _scalar_result,
     _scalar_vector,
+    _status_pointer,
     _vector_to_array,
 )
 from tslc.value_tests._render_cpp_conversion import (
@@ -94,6 +95,7 @@ CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "scalable_masked_mask_result": render_mask_case,
         "scalable_masked": render_value_case,
         "store": _store,
+        "status_pointer": _status_pointer,
         "stream": _stream,
         "vector_to_array": _vector_to_array,
     },

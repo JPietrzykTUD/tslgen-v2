@@ -1,17 +1,23 @@
 ---
 name: add-tslc-backend
-description: Add a backend or backend capability to tslc. Use when Codex is asked to introduce a new generated language/backend, register backend IDs or capabilities, add backend-specific type/value/intrinsic translation, add backend render assets, or make backend support additive and validated.
+description: Add a backend or backend capability to tslc. Use when asked to introduce a new generated language/backend, register backend IDs or capabilities, add backend-specific type/value/intrinsic translation, add backend render assets, or make backend support additive and validated.
 ---
 
 # Add TSLC Backend
 
 ## Workflow
 
-1. Read `AGENTS.md`, `PLANS.md`, `tslc/CHARTER.md`, and the existing `tslc/src/tslc/backend/`, `render/`, `output/`, and `supplementary/` patterns.
+1. Read `AGENTS.md`, `CHARTER.md`, `PLANS.md`, `tslc/AGENTS.md`,
+   `tslc/CHARTER.md`, and the existing `tslc/src/tslc/backend/`,
+   `tslc/src/tslc/render/`, `tslc/src/tslc/output/`, relevant
+   `tsldata/detail/`, and `supplementary/` patterns.
 2. Define the backend ID, supported profiles/extensions, type spellings, intrinsic/value translations, generated project layout, and verification story.
 3. Add backend capabilities through the existing backend registry/support-policy boundary. Do not scatter hardcoded backend ID lists.
 4. Add typed translation/render values before templates. Templates may format decided values only.
-5. Place static files, templates, helpers, and docs assets under `supplementary/` in the existing layout.
+5. Place packaged backend static files, templates, and helpers under
+   `tslc/src/tslc/backend/assets/`. Keep generated-documentation inputs under
+   `supplementary/docs/` and machine-profile configuration under
+   `supplementary/buildsystem/`.
 6. Diagnose unsupported capability combinations before rendering or artifact writing.
 7. Add focused tests for registration, capability validation, rendering, deterministic artifacts, and verifier configuration.
 

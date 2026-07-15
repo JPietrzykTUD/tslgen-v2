@@ -54,6 +54,9 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
             "tsl_core.rs": "// injected core\n",
             "tsl_algorithm.rs": "// injected algorithm\n",
             "rust_cargo.toml.tmpl": "[features]\n@{features}\n",
+            "rust_documentation.rs.tmpl": "// injected docs@{bodies}\n",
+            "rust_lib.rs.tmpl": "// injected lib\n@{primitive_tags}@{profile_modules}",
+            "rust_smoke.rs": "// injected smoke\n",
         }
     )
 
@@ -64,7 +67,10 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
 
     assert rendered["rust/src/tsl_core.rs"] == "// injected core\n"
     assert rendered["rust/src/tsl_algorithm.rs"] == "// injected algorithm\n"
+    assert rendered["rust/src/lib.rs"] == "// injected lib\n"
+    assert rendered["rust/src/tsl_documentation.rs"] == "// injected docs\n"
     assert rendered["rust/rustfmt.toml"] == "# injected rustfmt\n"
+    assert rendered["rust/tests/smoke.rs"] == "// injected smoke\n"
     assert 'default = ["scalar"]' in rendered["rust/Cargo.toml"]
 
 
