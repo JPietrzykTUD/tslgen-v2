@@ -9,6 +9,8 @@ from tslc.pivot.model import (
     PivotDefinition,
     PivotDocument,
     PivotExportResult,
+    PivotLanguage,
+    PivotProjection,
     PivotSkip,
 )
 
@@ -17,6 +19,8 @@ __all__ = (
     "PivotDocument",
     "PivotExportRequest",
     "PivotExportResult",
+    "PivotLanguage",
+    "PivotProjection",
     "PivotSkip",
     "export_pivot",
 )

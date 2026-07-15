@@ -170,10 +170,14 @@ tslc export pivot \
   --primitives add,sub \
   --profiles avx2 \
   --types si8,si32 \
+  --language cpp,rust \
   --output-root ./tslctmp/pivot
 ```
 
-The command writes one deterministic YAML document per supported callable.
+`--language` is required and accepts `cpp`, `rust`, or both as a comma-separated
+list. The command writes one deterministic YAML document per supported callable
+under `<output-root>/<language>/`; a combined export therefore writes sibling
+`cpp/` and `rust/` trees.
 Each definition contains a concrete `isa`, `dtype`, parameter/result
 `signature`, and a `direct` instruction list. The final list entry assigns the
 `complete(...)` value to the document's `output` name. Supported primitive
@@ -185,6 +189,11 @@ definitions. Here `N` is the lane count for the definition's `dtype`, not its
 bit width. These definitions use the compiler-owned fixed-vector spelling and
 render a call to the generated TSL primitive; for example, 256-bit `int32`
 uses `fixed<8>`.
+
+Rust uses the corresponding generated `dataparallel::Fixed<N>` and `VectorFor`
+mapping and calls the selected `tsl::profile` primitive. Concrete Rust intrinsic
+definitions use the existing Rust backend spellings and are intended for the
+unsafe target-feature context owned by the PIVOT consumer.
 
 PIVOT currently accepts only concrete value-producing, straight-line
 specializations. Standard TSIL lowering first expands resolvable generation-time

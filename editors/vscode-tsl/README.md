@@ -14,7 +14,8 @@ tslc check
 It provides unsaved-buffer diagnostics, symbols, definition/reference
 navigation, hover, completion, semantic highlighting, generated TextMate
 coloring, concrete saved-file preview, slot checking, and backend-aware doctor.
-There is intentionally no formatter in Version 1.
+It also provides a compiler-backed primitive scaffolding action. There is
+intentionally no formatter in Version 1.
 
 From the repository root, `./dev.sh editor-install` refreshes the generated
 TSIL keyword grammar, bootstraps locked npm dependencies when they are absent
@@ -31,6 +32,7 @@ Commands:
 - `TSL: Check Concrete Specialization`
 - `TSL: Preview Specialization`
 - `TSL: Doctor`
+- `TSL: Add New Primitive`
 
 Use `tsl.server.command`/`tsl.server.args` for an explicit server,
 `tsl.preview.command` for an explicit full compiler, or `tsl.python` for a
@@ -46,6 +48,14 @@ when they belong to the current matrix. Check passes the selected extension to
 flow and labels its result with that context; its actual toolchain probe remains
 profile/backend scoped because extension and scalar type do not change tool
 availability.
+
+**TSL: Add New Primitive** is available from the command palette and the TSL
+editor context menu. It presents the distinct signature shapes from the current
+typed catalog, shows the corpus-derived default parameter names, then asks for
+the new primitive name. The language server validates the name and produces a
+declaration/documentation skeleton; the client appends it to the open buffer,
+focuses the empty brief description, and leaves the edit under normal editor
+undo. It does not invent an implementation body.
 
 Preview requires a saved source and runs `tslc preview` in a cancellable child.
 It displays the actual C++ or Rust specialization fragment from the normal

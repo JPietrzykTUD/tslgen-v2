@@ -16,6 +16,7 @@ suite("TSL extension", () => {
     assert.ok(commands.includes("tsl.previewSpecialization"));
     assert.ok(commands.includes("tsl.checkSlot"));
     assert.ok(commands.includes("tsl.doctor"));
+    assert.ok(commands.includes("tsl.addPrimitive"));
 
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     assert.ok(root);
@@ -66,6 +67,22 @@ suite("TSL extension", () => {
     assert.ok(implementationLabels.has("safety"));
     assert.ok(implementationLabels.has("implementation"));
     assert.ok(!implementationLabels.has("si32"));
+
+    const originalLength = document.getText().length;
+    await vscode.commands.executeCommand<void>("tsl.addPrimitive", {
+      signature: "v:=(v,v)",
+      name: "extension_host_scaffold",
+    });
+    assert.match(
+      document.getText().slice(originalLength),
+      /prim<v:=\(v,v\)> extension_host_scaffold\(left, right\):/,
+    );
+    const scaffoldEditor = vscode.window.activeTextEditor;
+    assert.equal(scaffoldEditor?.document.uri.toString(), uri.toString());
+    assert.equal(scaffoldEditor.selection.active.character, 21);
+    await vscode.commands.executeCommand("undo");
+    assert.equal(document.getText().length, originalLength);
+    assert.equal(document.isDirty, false);
 
     const briefStart = document.positionAt(document.getText().indexOf("brief_description"));
     await sourceEditor.edit((edit) =>

@@ -38,6 +38,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("tsl.previewSpecialization", previewSpecialization),
     vscode.commands.registerCommand("tsl.checkSlot", checkSlot),
     vscode.commands.registerCommand("tsl.doctor", doctor),
+    vscode.commands.registerCommand("tsl.addPrimitive", addNewPrimitive),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (
         event.affectsConfiguration("tsl.server.command") ||
@@ -221,6 +222,155 @@ async function doctor(): Promise<void> {
     return;
   }
   await previewManager.doctor(compiler, cwd, profile, backend, slot);
+}
+
+interface PrimitiveShapeChoice {
+  readonly signature: string;
+  readonly parameters: readonly string[];
+  readonly declarations: number;
+}
+
+interface PrimitiveScaffoldResponse {
+  readonly insertText: string;
+  readonly focusOffset: number;
+  readonly documentVersion: number | null;
+  readonly error: string | null;
+}
+
+interface AddPrimitiveOptions {
+  readonly signature?: string;
+  readonly name?: string;
+}
+
+async function addNewPrimitive(options?: AddPrimitiveOptions): Promise<void> {
+  const editor = activeTslEditor();
+  if (!editor) {
+    return;
+  }
+  const running = client;
+  if (!running) {
+    void vscode.window.showErrorMessage(
+      "The TSL language server must be running to scaffold a primitive.",
+    );
+    return;
+  }
+  let choices: { readonly shapes: readonly PrimitiveShapeChoice[] };
+  try {
+    choices = await running.sendRequest<{
+      readonly shapes: readonly PrimitiveShapeChoice[];
+    }>("tsl/primitiveScaffoldChoices", {});
+  } catch (error) {
+    showScaffoldRequestError("load primitive shapes", error);
+    return;
+  }
+  if (!choices.shapes.length) {
+    void vscode.window.showErrorMessage(
+      "No primitive signature shapes are available in the current TSL catalog.",
+    );
+    return;
+  }
+  const selectedShape = options?.signature
+    ? choices.shapes.find((shape) => shape.signature === options.signature)
+    : (
+        await vscode.window.showQuickPick(
+          choices.shapes.map((shape) => ({
+            label: shape.signature,
+            description: `(${shape.parameters.join(", ")})`,
+            detail:
+              `${String(shape.declarations)} existing declaration` +
+              (shape.declarations === 1 ? "" : "s"),
+            shape,
+          })),
+          {
+            title: "TSL primitive shape",
+            placeHolder: "Select an available signature shape",
+            matchOnDescription: true,
+            matchOnDetail: true,
+          },
+        )
+      )?.shape;
+  if (!selectedShape) {
+    if (options?.signature) {
+      void vscode.window.showErrorMessage(
+        `Primitive signature shape '${options.signature}' is not available.`,
+      );
+    }
+    return;
+  }
+
+  let prompt = `Name for prim<${selectedShape.signature}>`;
+  let candidate = "";
+  let suppliedName = options?.name;
+  while (true) {
+    const name =
+      suppliedName ??
+      (await vscode.window.showInputBox({
+        title: "TSL primitive name",
+        prompt,
+        value: candidate,
+        ignoreFocusOut: true,
+        validateInput: (value) =>
+          value.trim() ? undefined : "A name is required.",
+      }));
+    suppliedName = undefined;
+    if (name === undefined) {
+      return;
+    }
+    let scaffold: PrimitiveScaffoldResponse;
+    try {
+      scaffold = await running.sendRequest<PrimitiveScaffoldResponse>(
+        "tsl/primitiveScaffold",
+        {
+          textDocument: { uri: editor.document.uri.toString() },
+          signature: selectedShape.signature,
+          name,
+        },
+      );
+    } catch (error) {
+      showScaffoldRequestError("create the primitive scaffold", error);
+      return;
+    }
+    if (scaffold.error) {
+      prompt = scaffold.error;
+      candidate = name.trim();
+      continue;
+    }
+    if (scaffold.documentVersion !== editor.document.version) {
+      void vscode.window.showWarningMessage(
+        "The TSL document changed while creating the scaffold; run Add New Primitive again.",
+      );
+      return;
+    }
+    const insertionOffset = editor.document.getText().length;
+    const inserted = await editor.edit((edit) => {
+      edit.insert(editor.document.positionAt(insertionOffset), scaffold.insertText);
+    });
+    if (!inserted) {
+      void vscode.window.showErrorMessage("Could not insert the primitive scaffold.");
+      return;
+    }
+    const focused = await vscode.window.showTextDocument(editor.document, {
+      preserveFocus: false,
+      preview: false,
+    });
+    const focus = focused.document.positionAt(
+      insertionOffset + scaffold.focusOffset,
+    );
+    focused.selection = new vscode.Selection(focus, focus);
+    focused.revealRange(
+      new vscode.Range(focus, focus),
+      vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+    );
+    return;
+  }
+}
+
+function showScaffoldRequestError(action: string, error: unknown): void {
+  output?.error(`Could not ${action}: ${String(error)}`);
+  output?.show(true);
+  void vscode.window.showErrorMessage(
+    `Could not ${action}. See the TSL output channel for details.`,
+  );
 }
 
 function activeTslEditor(): vscode.TextEditor | undefined {

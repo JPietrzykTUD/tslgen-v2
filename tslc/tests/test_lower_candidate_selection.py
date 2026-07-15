@@ -11,6 +11,12 @@ from _select_lower_backend_support import (
 )
 
 
+def _assert_generation_expanded(body: str) -> None:
+    assert "loop<" not in body
+    assert "for " not in body
+    assert "[0]" in body
+
+
 @pytest.mark.parametrize(
     ("extension_name", "type_tag", "expected_body"),
     (
@@ -49,7 +55,7 @@ def test_clang_vector_abs_uses_elementwise_builtin_and_keeps_fallback(
     assert [variant.name for variant in lowered.variant_bodies] == [
         "scalar_lanes_fallback"
     ]
-    assert "for (" in lowered.variant_bodies[0].body_text
+    _assert_generation_expanded(lowered.variant_bodies[0].body_text)
 
 
 @pytest.mark.parametrize(
@@ -260,7 +266,11 @@ def test_non_x86_abs_uses_native_intrinsics_and_keeps_fallback(
         assert [variant.name for variant in lowered.variant_bodies] == [
             "scalar_lanes_fallback"
         ]
-        assert "for " in lowered.variant_bodies[0].body_text
+        fallback_body = lowered.variant_bodies[0].body_text
+        if extension_name == "sve":
+            assert "for " in fallback_body
+        else:
+            _assert_generation_expanded(fallback_body)
 
 
 @pytest.mark.parametrize(
@@ -318,7 +328,11 @@ def test_align_right_lanes_prefers_native_cross_lane_operations(
         assert [variant.name for variant in lowered.variant_bodies] == [
             "scalar_lanes_fallback"
         ]
-        assert "for " in lowered.variant_bodies[0].body_text
+        fallback_body = lowered.variant_bodies[0].body_text
+        if extension_name == "sve":
+            assert "for " in fallback_body
+        else:
+            _assert_generation_expanded(fallback_body)
 
 
 @pytest.mark.parametrize(
@@ -396,7 +410,11 @@ def test_runtime_permute_and_table_lookup_prefer_native_operations(
     assert [variant.name for variant in lowered.variant_bodies] == [
         "scalar_lanes_fallback"
     ]
-    assert "for " in lowered.variant_bodies[0].body_text
+    fallback_body = lowered.variant_bodies[0].body_text
+    if extension_name == "sve256":
+        assert "for " in fallback_body
+    else:
+        _assert_generation_expanded(fallback_body)
 
 
 @pytest.mark.parametrize(
@@ -447,7 +465,7 @@ def test_immediate_permute_lanes_prefers_native_operations(
     assert [variant.name for variant in lowered.variant_bodies] == [
         "scalar_lanes_fallback"
     ]
-    assert "for " in lowered.variant_bodies[0].body_text
+    _assert_generation_expanded(lowered.variant_bodies[0].body_text)
 
 
 def test_sse41_to_mask_fast_paths_win_over_portable_fallback(

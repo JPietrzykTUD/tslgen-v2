@@ -78,7 +78,8 @@ Opening a `.tsl` file activates:
 - **TSL: Restart Language Server**;
 - **TSL: Check Concrete Specialization**;
 - **TSL: Preview Specialization**;
-- **TSL: Doctor**.
+- **TSL: Doctor**;
+- **TSL: Add New Primitive**.
 
 Completion inside simple and scoped `requires [...]` lists offers target-feature
 tokens from the configured machine profiles and catalog requirements, rather
@@ -92,6 +93,17 @@ new diagnostics describe the malformed overlay. If the first document arrives
 already invalid, the server seeds catalog facts and definitions from the valid
 saved corpus and combines them with any parseable occurrence spans in the
 overlay, so navigation does not begin empty.
+
+**TSL: Add New Primitive** is a guided, compiler-backed source edit. Its first
+QuickPick contains the distinct primitive signature shapes in the current
+catalog. Each entry includes default parameter names chosen from the most
+common complete parameter tuple already authored for that shape, with stable
+tie-breaking. After the name prompt, the server rejects malformed or duplicate
+names and returns a syntactically valid declaration/documentation scaffold.
+The client appends it to the active `.tsl` buffer, focuses the empty
+`brief_description`, reveals the insertion, and keeps the whole operation
+undoable. The scaffold deliberately omits `impls`: target behavior cannot be
+inferred safely from a signature and name.
 
 Concrete preview is deliberately explicit and saved-file-only. Select a
 primitive name or place the cursor after its declaration, invoke **TSL: Preview

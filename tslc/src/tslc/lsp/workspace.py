@@ -154,6 +154,11 @@ class AuthoringWorkspace:
         except (OSError, UnicodeDecodeError):
             return None
 
+    def document_version(self, path: Path) -> int | None:
+        with self._lock:
+            opened = self._documents.get(path.resolve())
+            return None if opened is None else opened.version
+
     def check(self, generation: int | None = None) -> WorkspaceSnapshot | None:
         """Check one generation; return None if it was superseded."""
 

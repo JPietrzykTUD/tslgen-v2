@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.output.artifacts import ArtifactSet
+
+
+class PivotLanguage(str, Enum):
+    CPP = "cpp"
+    RUST = "rust"
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +32,7 @@ class PivotDocument:
 
 @dataclass(frozen=True, slots=True)
 class PivotSkip:
+    language: PivotLanguage
     profile: str
     primitive: str
     extension: str
@@ -35,16 +42,30 @@ class PivotSkip:
 
 
 @dataclass(frozen=True, slots=True)
-class PivotExportResult:
-    artifacts: ArtifactSet
+class PivotProjection:
+    language: PivotLanguage
     documents: tuple[PivotDocument, ...]
     skipped: tuple[PivotSkip, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PivotExportResult:
+    artifacts: ArtifactSet
+    projections: tuple[PivotProjection, ...]
     diagnostics: tuple[Diagnostic, ...]
+
+    @property
+    def skipped(self) -> tuple[PivotSkip, ...]:
+        return tuple(
+            skip for projection in self.projections for skip in projection.skipped
+        )
 
 
 __all__ = (
     "PivotDefinition",
     "PivotDocument",
     "PivotExportResult",
+    "PivotLanguage",
+    "PivotProjection",
     "PivotSkip",
 )

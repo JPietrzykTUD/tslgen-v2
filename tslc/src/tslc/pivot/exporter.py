@@ -10,7 +10,7 @@ from tslc.catalog.machine_profiles import load_machine_profiles_checked
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.diagnostics import Diagnostic, has_errors, sort_diagnostics
 from tslc.output.artifacts import Artifact, ArtifactSet
-from tslc.pivot.model import PivotExportResult
+from tslc.pivot.model import PivotExportResult, PivotLanguage, PivotProjection
 from tslc.pivot.planner import PivotPlanner
 from tslc.pivot.profiles import profiles_for_distinct_feature_sets
 from tslc.pivot.render_yaml import render_pivot_yaml
@@ -20,6 +20,7 @@ from tslc.pivot.render_yaml import render_pivot_yaml
 class PivotExportRequest:
     source_paths: tuple[Path, ...]
     machine_profiles_path: Path
+    languages: tuple[PivotLanguage, ...]
     primitives: tuple[str, ...] | None = None
     profiles: tuple[str, ...] | None = None
     type_tags: tuple[str, ...] = DEFAULT_SCALAR_TYPE_TAGS
@@ -32,9 +33,21 @@ def export_pivot(request: PivotExportRequest) -> PivotExportResult:
     ordinary generation session, register a backend, or render a generated project.
     """
 
+    languages = tuple(sorted(set(request.languages), key=lambda item: item.value))
+    if not languages:
+        return _empty(
+            [
+                Diagnostic(
+                    severity="error",
+                    code="TSL-PIVOT-NO-LANGUAGES",
+                    message="PIVOT export requires at least one language",
+                )
+            ]
+        )
+
     catalog_inputs, diagnostics = load_catalog_inputs(
         request.source_paths,
-        required_backends=("cpp",),
+        required_backends=tuple(language.value for language in languages),
     )
     if catalog_inputs is None:
         return _empty(diagnostics)
@@ -68,26 +81,38 @@ def export_pivot(request: PivotExportRequest) -> PivotExportResult:
     if has_errors(diagnostics):
         return _empty(diagnostics)
 
-    plan = PivotPlanner(catalog_inputs.catalog).plan(
-        profiles_for_distinct_feature_sets(tuple(profiles)),
-        primitive_names=request.primitives,
-        type_tags=request.type_tags,
-    )
-    all_diagnostics = sort_diagnostics((*diagnostics, *plan.diagnostics))
+    selected_profiles = profiles_for_distinct_feature_sets(tuple(profiles))
+    projections: list[PivotProjection] = []
+    plan_diagnostics: list[Diagnostic] = []
+    for language in languages:
+        plan = PivotPlanner(catalog_inputs.catalog, language).plan(
+            selected_profiles,
+            primitive_names=request.primitives,
+            type_tags=request.type_tags,
+        )
+        plan_diagnostics.extend(plan.diagnostics)
+        projections.append(
+            PivotProjection(
+                language=language,
+                documents=plan.documents,
+                skipped=plan.skipped,
+            )
+        )
+    all_diagnostics = sort_diagnostics((*diagnostics, *plan_diagnostics))
     artifacts = ArtifactSet.create(
         tuple(
             Artifact(
-                logical_path=f"{document.name}.yaml",
+                logical_path=f"{projection.language.value}/{document.name}.yaml",
                 content=render_pivot_yaml(document),
                 media_type="application/yaml",
             )
-            for document in plan.documents
+            for projection in projections
+            for document in projection.documents
         )
     )
     return PivotExportResult(
         artifacts=artifacts,
-        documents=plan.documents,
-        skipped=plan.skipped,
+        projections=tuple(projections),
         diagnostics=all_diagnostics,
     )
 
@@ -95,8 +120,7 @@ def export_pivot(request: PivotExportRequest) -> PivotExportResult:
 def _empty(diagnostics: list[Diagnostic]) -> PivotExportResult:
     return PivotExportResult(
         artifacts=ArtifactSet.create(()),
-        documents=(),
-        skipped=(),
+        projections=(),
         diagnostics=sort_diagnostics(diagnostics),
     )
 

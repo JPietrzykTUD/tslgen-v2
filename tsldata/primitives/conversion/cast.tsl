@@ -1282,8 +1282,8 @@ prim<v:=v>[cast=convert] cast(data):
                 let<type>(OutBase, base::generic(OutVec));
                 var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                 var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                loop<backend>(i, 0, value(vector::length), 1) {
-                  result[i] = cast<static>(OutBase, values[i]);
+                loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                  result[value(i)] = cast<static>(OutBase, values[value(i)]);
                 }
                 complete(call<primitive=from_array[OutVec]>(result));
               """
@@ -1303,8 +1303,8 @@ prim<v:=v>[cast=convert] cast(data):
                 let<type>(OutBase, base::generic(OutVec));
                 var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                 var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                loop<backend>(i, 0, value(vector::length), 1) {
-                  result[i] = cast<static>(OutBase, values[i]);
+                loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                  result[value(i)] = cast<static>(OutBase, values[value(i)]);
                 }
                 complete(call<primitive=from_array[OutVec]>(result));
               """

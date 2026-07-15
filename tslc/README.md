@@ -49,6 +49,7 @@ tslc generate --primitives add,sub --profiles scalar,avx2
 tslc build --primitives add,sub --profiles scalar,avx2
 tslc preview --primitive add --profile avx2 --type si32 --backend cpp
 tslc export pivot --primitives add --profiles avx2 --types si32 \
+  --language cpp,rust \
   --output-root ./tslctmp/pivot
 
 # Build and run generated value tests.
@@ -64,7 +65,8 @@ diagnostics, catalog discovery, `doctor`, inspection, audits, and exit codes.
 
 PIVOT YAML is an explicit corpus export, not a registered compiler backend.
 `tslc export pivot` has its own subset planner, lowering policy, renderer, and
-output root; invoking it does not enter or modify ordinary C++/Rust generation.
+output root. Its required language selection writes YAML below `cpp/` and/or
+`rust/`; invoking it does not enter or modify ordinary C++/Rust generation.
 
 Install the optional editor server without the repository-wide requirements:
 

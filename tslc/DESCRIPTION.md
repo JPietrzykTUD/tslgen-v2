@@ -71,8 +71,12 @@ catalog facts and definitions while retaining parseable overlay occurrence
 spans. [lsp/specialization_context.py](src/tslc/lsp/specialization_context.py)
 combines the parsed cursor scope with the real selector to expose valid
 `(profile, extension, type)` slots to editor clients without duplicating source
-parsing or compatibility rules in TypeScript. The TypeScript VS Code client
-contains no compiler semantics.
+parsing or compatibility rules in TypeScript.
+[lsp/primitive_scaffold.py](src/tslc/lsp/primitive_scaffold.py) likewise owns
+catalog-backed primitive-shape discovery, default parameter-name selection,
+name validation, and source scaffolding; the client only presents choices and
+applies the returned edit. The TypeScript VS Code client contains no compiler
+semantics.
 Concrete preview runs `tslc preview` as a separate saved-file child. It uses
 one loaded input snapshot for selection, lowering, and dependency closure, then
 passes the requested emitted specialization through the registered backend's
@@ -82,7 +86,8 @@ remains the detailed selection/lowering diagnostic view.
 
 The [PIVOT exporter](src/tslc/pivot/) is a sibling projection rather than a
 registered backend. `tslc export pivot` reuses the immutable catalog, profile
-selection, standard TSIL region lowerers, and C++ intrinsic/type translation,
+selection, standard TSIL region lowerers, and the selected C++ or Rust
+intrinsic/type translation,
 but replaces call lowering to retain typed sites for recursive inlining and
 validates the resulting lowered body for straight-line dataflow. Generation-time
 control therefore expands normally; only constructs that survive lowering are
@@ -99,7 +104,8 @@ deterministic cover of selected corpus implementations, so a feature set that
 adds no implementation is not lowered or rendered. The exporter
 does not construct a normal generation request, enter the generation session,
 register a backend, render a generated project, or affect default C++/Rust
-output.
+output. Its required comma-separated `--language` selection writes independent
+YAML trees below `<output-root>/cpp/` and/or `<output-root>/rust/`.
 
 ## The input language (two nested languages)
 

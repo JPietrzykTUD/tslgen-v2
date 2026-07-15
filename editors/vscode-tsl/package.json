@@ -26,7 +26,8 @@
     "onCommand:tsl.restartServer",
     "onCommand:tsl.checkSlot",
     "onCommand:tsl.previewSpecialization",
-    "onCommand:tsl.doctor"
+    "onCommand:tsl.doctor",
+    "onCommand:tsl.addPrimitive"
   ],
   "contributes": {
     "languages": [
@@ -65,8 +66,21 @@
       {
         "command": "tsl.doctor",
         "title": "TSL: Doctor"
+      },
+      {
+        "command": "tsl.addPrimitive",
+        "title": "TSL: Add New Primitive"
       }
     ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "tsl.addPrimitive",
+          "when": "editorLangId == tsl",
+          "group": "1_modification@10"
+        }
+      ]
+    },
     "configuration": {
       "title": "TSL",
       "properties": {

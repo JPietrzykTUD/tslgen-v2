@@ -13,7 +13,7 @@ from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
 from tslc.ir.scan import scan
 from tslc.lower.lowerer import Lowerer
-from tslc.pivot import PivotExportRequest, export_pivot
+from tslc.pivot import PivotExportRequest, PivotLanguage, export_pivot
 from tslc.pivot._lowering import PivotCallCapture, pivot_region_lowerers
 from tslc.pivot.model import PivotDefinition, PivotDocument
 from tslc.pivot.planner import _contributing_indexes
@@ -27,6 +27,7 @@ def _export_add(data_root: Path, machine_profiles_path: Path):
         PivotExportRequest(
             source_paths=_expand_sources((data_root,)),
             machine_profiles_path=machine_profiles_path,
+            languages=(PivotLanguage.CPP,),
             primitives=("add",),
             profiles=("avx2",),
             type_tags=("si8",),
@@ -89,7 +90,9 @@ def test_leaf_specializations_render_concrete_pivot_yaml(
     result = _export_add(data_root, machine_profiles_path)
 
     assert result.diagnostics == ()
-    document = next(item for item in result.documents if item.name == "add")
+    document = next(
+        item for item in result.projections[0].documents if item.name == "add"
+    )
     by_isa = {definition.isa: definition for definition in document.definitions}
 
     assert document.inputs == ("left", "right")
@@ -125,7 +128,7 @@ def test_leaf_specializations_render_concrete_pivot_yaml(
     artifact = next(
         item
         for item in result.artifacts.artifacts
-        if item.logical_path == "add.yaml"
+        if item.logical_path == "cpp/add.yaml"
     )
     assert artifact.content.startswith('name: "add"\ninput:\n')
     assert '  - isa: "sse2"\n    dtype: "int8"\n' in artifact.content
@@ -140,13 +143,16 @@ def test_tsl_fixed_512_definition_uses_lane_count_not_bit_width(
         PivotExportRequest(
             source_paths=_expand_sources((data_root,)),
             machine_profiles_path=machine_profiles_path,
+            languages=(PivotLanguage.CPP,),
             primitives=("add",),
             profiles=("skylake",),
             type_tags=("si8",),
         )
     )
 
-    document = next(item for item in result.documents if item.name == "add")
+    document = next(
+        item for item in result.projections[0].documents if item.name == "add"
+    )
     definition = next(
         item for item in document.definitions if item.isa == "tsl_512"
     )
@@ -158,6 +164,60 @@ def test_tsl_fixed_512_definition_uses_lane_count_not_bit_width(
     )
 
 
+def test_rust_projection_uses_backend_intrinsics_and_fixed_vector_for(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = export_pivot(
+        PivotExportRequest(
+            source_paths=_expand_sources((data_root,)),
+            machine_profiles_path=machine_profiles_path,
+            languages=(PivotLanguage.RUST,),
+            primitives=("add",),
+            profiles=("avx2",),
+            type_tags=("si8",),
+        )
+    )
+
+    assert result.diagnostics == ()
+    projection = result.projections[0]
+    assert projection.language is PivotLanguage.RUST
+    document = next(item for item in projection.documents if item.name == "add")
+    by_isa = {definition.isa: definition for definition in document.definitions}
+    assert by_isa["avx2"].signature == (
+        ("left", "core::arch::x86_64::__m256i"),
+        ("right", "core::arch::x86_64::__m256i"),
+        ("res", "core::arch::x86_64::__m256i"),
+    )
+    assert by_isa["avx2"].direct == (
+        "res = core::arch::x86_64::_mm256_add_epi8(left, right);",
+    )
+    fixed = (
+        "<tsl::dataparallel::Fixed<32> as "
+        "tsl::tsl_algorithm::VectorFor<tsl::profile::algo::Profile, i8>>::Vec"
+    )
+    assert by_isa["tsl_256"].signature == (
+        ("left", f"<{fixed} as tsl::tsl_core::SimdVector>::RegisterType"),
+        ("right", f"<{fixed} as tsl::tsl_core::SimdVector>::RegisterType"),
+        ("res", f"<{fixed} as tsl::tsl_core::SimdVector>::RegisterType"),
+    )
+    assert by_isa["tsl_256"].direct == (
+        f"res = tsl::profile::add::<{fixed}>(left, right);",
+    )
+    artifact = next(
+        item
+        for item in result.artifacts.artifacts
+        if item.logical_path == "rust/add.yaml"
+    )
+    assert 'left: "core::arch::x86_64::__m256i"' in artifact.content
+    maskz = next(item for item in projection.documents if item.name == "add_maskz")
+    maskz_avx2 = next(item for item in maskz.definitions if item.isa == "avx2")
+    assert maskz_avx2.direct[0].startswith("let __pivot_tmp_")
+    assert "_mm256_add_epi8(left, right)" in "\n".join(maskz_avx2.direct)
+    assert "__tslc_pivot_call_" not in "\n".join(maskz_avx2.direct)
+    assert maskz_avx2.direct[-1].startswith("res = ")
+
+
 def test_tsl_call_definition_remains_when_plain_body_contains_a_cast(
     data_root: Path,
     machine_profiles_path: Path,
@@ -166,13 +226,16 @@ def test_tsl_call_definition_remains_when_plain_body_contains_a_cast(
         PivotExportRequest(
             source_paths=_expand_sources((data_root,)),
             machine_profiles_path=machine_profiles_path,
+            languages=(PivotLanguage.CPP,),
             primitives=("set1",),
             profiles=("avx2",),
             type_tags=("si8",),
         )
     )
 
-    document = next(item for item in result.documents if item.name == "set1")
+    document = next(
+        item for item in result.projections[0].documents if item.name == "set1"
+    )
     assert {item.isa for item in document.definitions} == {
         "scalar",
         "tsl_128",
@@ -191,7 +254,9 @@ def test_primitive_calls_are_recursively_inlined_into_direct_flow(
     machine_profiles_path: Path,
 ) -> None:
     result = _export_add(data_root, machine_profiles_path)
-    document = next(item for item in result.documents if item.name == "add_maskz")
+    document = next(
+        item for item in result.projections[0].documents if item.name == "add_maskz"
+    )
     definition = next(item for item in document.definitions if item.isa == "avx2")
 
     direct = "\n".join(definition.direct)
@@ -310,7 +375,7 @@ def test_pivot_export_does_not_mutate_normal_generation(
     pivot = _export_add(data_root, machine_profiles_path)
     after = generate_project((data_root,), **kwargs)
 
-    assert pivot.documents
+    assert pivot.projections[0].documents
     assert registered_backend_ids() == ("cpp", "rust")
     assert before.artifacts.digest_manifest() == after.artifacts.digest_manifest()
     assert before.coverage == after.coverage
@@ -339,13 +404,15 @@ def test_explicit_export_command_writes_only_pivot_artifacts(
             "avx2",
             "--types",
             "si8",
+            "--language",
+            "cpp,rust",
             "--output-root",
             str(output),
         ]
     )
 
     assert status == 0
-    assert (output / "add.yaml").is_file()
-    assert not (output / "cpp").exists()
-    assert not (output / "rust").exists()
-    assert "exported 3 PIVOT YAML files" in capsys.readouterr().out
+    assert (output / "cpp" / "add.yaml").is_file()
+    assert (output / "rust" / "add.yaml").is_file()
+    assert not (output / "add.yaml").exists()
+    assert "exported 6 PIVOT YAML files for cpp,rust" in capsys.readouterr().out

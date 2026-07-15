@@ -1015,8 +1015,8 @@ prim<v:=(v)> abs(data):
           scalar_lanes_fallback:
             tsil """
               var<init_register>(result);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(data[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(data[value(i)]);
               }
               complete(result);
             """
@@ -1035,8 +1035,8 @@ prim<v:=(v)> abs(data):
               reasons []
             tsil """
               var<init_register>(result);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(data[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(data[value(i)]);
               }
               complete(result);
             """
@@ -1054,8 +1054,8 @@ prim<v:=(v)> abs(data):
             tsil """
               var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
               var<infer>(result, lanes);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -1072,8 +1072,8 @@ prim<v:=(v)> abs(data):
             tsil """
               var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
               var<infer>(result, lanes);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -1095,8 +1095,8 @@ prim<v:=(v)> abs(data):
           tsil """
             var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
             var<infer>(result, lanes);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
@@ -1125,8 +1125,8 @@ prim<v:=(v)> abs(data):
             tsil """
               var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
               var<infer>(result, lanes);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -1144,8 +1144,8 @@ prim<v:=(v)> abs(data):
             tsil """
               var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
               var<infer>(result, lanes);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -1171,8 +1171,8 @@ prim<v:=(v)> abs(data):
             tsil """
               var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
               var<infer>(result, lanes);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -1201,8 +1201,8 @@ prim<v:=(v)> abs(data):
             tsil """
               var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
               var<infer>(result, lanes);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -1220,8 +1220,8 @@ prim<v:=(v)> abs(data):
             tsil """
               var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
               var<infer>(result, lanes);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -1252,8 +1252,8 @@ prim<v:=(v)> abs(data):
             tsil """
               var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
               var<infer>(result, lanes);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -1273,8 +1273,8 @@ prim<v:=(v)> abs(data):
             tsil """
               var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
               var<infer>(result, lanes);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -1304,8 +1304,8 @@ prim<v:=(v)> abs(data):
           tsil """
             var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
             var<infer>(result, lanes);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
@@ -1326,8 +1326,8 @@ prim<v:=(v)> abs(data):
             tsil """
               var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
               var<infer>(result, lanes);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -1347,8 +1347,8 @@ prim<v:=(v)> abs(data):
             tsil """
               var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
               var<infer>(result, lanes);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -1369,8 +1369,8 @@ prim<v:=(v)> abs(data):
             tsil """
               var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
               var<infer>(result, lanes);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -1390,8 +1390,8 @@ prim<v:=(v)> abs(data):
             tsil """
               var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
               var<infer>(result, lanes);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                result[value(i)] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[value(i)]);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """

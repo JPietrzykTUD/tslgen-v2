@@ -22,6 +22,10 @@ from tslc.lsp.features import (
     semantic_tokens,
 )
 from tslc.lsp.positions import path_to_uri, source_position, uri_to_path
+from tslc.lsp.primitive_scaffold import (
+    primitive_scaffold,
+    primitive_shape_choices,
+)
 from tslc.lsp.specialization_context import specialization_context
 from tslc.lsp.workspace import AuthoringWorkspace, WorkspaceSnapshot
 
@@ -30,6 +34,8 @@ SERVER_VERSION = "0.1.0"
 _DEBOUNCE_SECONDS = 0.15
 _INDEX_WAIT_SECONDS = 5.0
 SPECIALIZATION_CONTEXT_METHOD = "tsl/specializationContext"
+PRIMITIVE_SCAFFOLD_CHOICES_METHOD = "tsl/primitiveScaffoldChoices"
+PRIMITIVE_SCAFFOLD_METHOD = "tsl/primitiveScaffold"
 
 
 @dataclass(slots=True)
@@ -287,6 +293,51 @@ def create_server(
         )
         return context.payload()
 
+    @server.feature(PRIMITIVE_SCAFFOLD_CHOICES_METHOD)
+    async def primitive_scaffold_choices_request(
+        params: Any,
+    ) -> dict[str, object]:
+        del params
+        workspace = await _workspace_with_index(state)
+        if workspace is None or workspace.latest.catalog is None:
+            return {"shapes": []}
+        return {
+            "shapes": [
+                choice.payload()
+                for choice in primitive_shape_choices(workspace.latest.catalog)
+            ]
+        }
+
+    @server.feature(PRIMITIVE_SCAFFOLD_METHOD)
+    async def primitive_scaffold_request(params: Any) -> dict[str, object]:
+        workspace = await _workspace_with_index(state)
+        if workspace is None or workspace.latest.catalog is None:
+            return _primitive_scaffold_error("the TSL catalog is not available")
+        uri = _document_uri(params)
+        path = uri_to_path(uri) if uri is not None else None
+        text = workspace.document_text(path) if path is not None else None
+        signature = _field(params, "signature")
+        name = _field(params, "name")
+        if path is None or text is None:
+            return _primitive_scaffold_error("the target TSL document is not available")
+        if not isinstance(signature, str) or not isinstance(name, str):
+            return _primitive_scaffold_error(
+                "primitive scaffold requires string signature and name values",
+                document_version=workspace.document_version(path),
+            )
+        try:
+            scaffold = primitive_scaffold(
+                workspace.latest.catalog,
+                text,
+                signature=signature,
+                name=name,
+            )
+        except ValueError as exc:
+            return _primitive_scaffold_error(
+                str(exc), document_version=workspace.document_version(path)
+            )
+        return scaffold.payload(document_version=workspace.document_version(path))
+
     @server.feature(types.SHUTDOWN)
     def shutdown(*args: object) -> None:
         del args
@@ -407,6 +458,17 @@ def _field(value: Any, *names: str) -> Any:
     return None
 
 
+def _primitive_scaffold_error(
+    message: str, *, document_version: int | None = None
+) -> dict[str, object]:
+    return {
+        "insertText": "",
+        "focusOffset": 0,
+        "documentVersion": document_version,
+        "error": message,
+    }
+
+
 def _path_option(options: dict[str, Any], name: str) -> Path | None:
     value = options.get(name)
     return Path(value).resolve() if isinstance(value, str) and value else None
@@ -443,6 +505,8 @@ def _show_setup_error(server: LanguageServer, state: _ServerState) -> None:
 
 
 __all__ = (
+    "PRIMITIVE_SCAFFOLD_CHOICES_METHOD",
+    "PRIMITIVE_SCAFFOLD_METHOD",
     "SERVER_NAME",
     "SERVER_VERSION",
     "SPECIALIZATION_CONTEXT_METHOD",

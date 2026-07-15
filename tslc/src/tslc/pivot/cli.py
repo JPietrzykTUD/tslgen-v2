@@ -11,7 +11,7 @@ from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.output.writer import write_artifacts
 from tslc.pivot.exporter import PivotExportRequest, export_pivot
-from tslc.pivot.model import PivotSkip
+from tslc.pivot.model import PivotLanguage, PivotSkip
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -48,9 +48,14 @@ def main(argv: list[str] | None = None) -> int:
         help="comma-separated scalar type tags",
     )
     parser.add_argument(
+        "--language",
+        required=True,
+        help="comma-separated output languages: cpp,rust",
+    )
+    parser.add_argument(
         "--output-root",
         required=True,
-        help="dedicated directory for PIVOT YAML files",
+        help="root directory for per-language PIVOT YAML trees",
     )
     parser.add_argument(
         "--strict",
@@ -64,10 +69,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    try:
+        languages = _languages(args.language)
+    except ValueError as exc:
+        parser.error(str(exc))
+
     result = export_pivot(
         PivotExportRequest(
             source_paths=_expand_sources(tuple(Path(path) for path in args.sources)),
             machine_profiles_path=Path(args.machine_profiles),
+            languages=languages,
             primitives=_split_optional(args.primitives),
             profiles=_split_optional(args.profiles),
             type_tags=_split(args.types),
@@ -86,9 +97,17 @@ def main(argv: list[str] | None = None) -> int:
         print(format_diagnostic(diagnostic), file=sys.stderr)
     if has_errors(report.diagnostics):
         return 1
+    file_count = sum(len(item.documents) for item in result.projections)
+    definition_count = sum(
+        len(document.definitions)
+        for item in result.projections
+        for document in item.documents
+    )
     print(
-        f"exported {len(result.documents)} PIVOT YAML files with "
-        f"{sum(len(document.definitions) for document in result.documents)} definitions; "
+        f"exported {file_count} "
+        "PIVOT YAML files for "
+        f"{','.join(item.language.value for item in result.projections)} with "
+        f"{definition_count} definitions; "
         f"skipped {len(result.skipped)} specializations"
     )
     return 0
@@ -102,6 +121,16 @@ def _split_optional(value: str | None) -> tuple[str, ...] | None:
     return None if value is None else _split(value)
 
 
+def _languages(value: str) -> tuple[PivotLanguage, ...]:
+    names = _split(value)
+    if not names:
+        raise ValueError("--language requires at least one language")
+    unknown = sorted(set(names) - {item.value for item in PivotLanguage})
+    if unknown:
+        raise ValueError(f"unsupported PIVOT language(s): {', '.join(unknown)}")
+    return tuple(PivotLanguage(name) for name in dict.fromkeys(names))
+
+
 def _format_skip(skip: PivotSkip) -> str:
     location = (
         ""
@@ -109,7 +138,7 @@ def _format_skip(skip: PivotSkip) -> str:
         else f" at {skip.source.path}:{skip.source.line}:{skip.source.column}"
     )
     return (
-        f"[pivot-skip] {skip.profile}/{skip.primitive}<"
+        f"[pivot-skip] {skip.language.value}/{skip.profile}/{skip.primitive}<"
         f"{skip.extension},{skip.type_tag}>: {skip.reason}{location}"
     )
 

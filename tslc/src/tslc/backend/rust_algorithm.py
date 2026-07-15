@@ -644,9 +644,9 @@ def _rust_algorithm_vector_mappings(
 
     for ext_name, type_tag, base in used_vector_type_specs(by_primitive):
         extension = extensions.get(ext_name)
-        if not _rust_algorithm_vector_is_mappable(extension):
+        if extension is None:
             continue
-        lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
+        lane_count = rust_dataparallel_fixed_lane_count(extension, type_tag)
         if lane_count is None:
             continue
         preference = (
@@ -689,6 +689,16 @@ def _rust_algorithm_vector_is_mappable(
     if extension.family == "generic_like":
         return False
     return extension.supports_backend("rust")
+
+
+def rust_dataparallel_fixed_lane_count(
+    extension: Extension, type_tag: str
+) -> int | None:
+    """Return the concrete ``Fixed<N>`` lane count admitted by Rust VectorFor."""
+
+    if not _rust_algorithm_vector_is_mappable(extension):
+        return None
+    return DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
 
 
 def _rust_algorithm_vector_type(extension: Extension, base: str) -> str:

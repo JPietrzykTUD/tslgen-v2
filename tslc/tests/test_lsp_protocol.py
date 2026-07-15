@@ -172,6 +172,40 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         client.send(
             {
                 "jsonrpc": "2.0",
+                "id": 12,
+                "method": "tsl/primitiveScaffoldChoices",
+                "params": {},
+            }
+        )
+        shape_response = client.read_until(lambda item: item.get("id") == 12)
+        shapes = shape_response["result"]["shapes"]
+        binary_shape = next(
+            shape for shape in shapes if shape["signature"] == "v:=(v,v)"
+        )
+        assert binary_shape["parameters"] == ["left", "right"]
+
+        client.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 13,
+                "method": "tsl/primitiveScaffold",
+                "params": {
+                    "textDocument": {"uri": path.as_uri()},
+                    "signature": "v:=(v,v)",
+                    "name": "editor_scaffold_probe",
+                },
+            }
+        )
+        scaffold_response = client.read_until(lambda item: item.get("id") == 13)
+        scaffold = scaffold_response["result"]
+        assert scaffold["error"] is None
+        assert scaffold["documentVersion"] == 1
+        assert "editor_scaffold_probe(left, right)" in scaffold["insertText"]
+        assert scaffold["insertText"][scaffold["focusOffset"] - 1 : scaffold["focusOffset"] + 1] == '""'
+
+        client.send(
+            {
+                "jsonrpc": "2.0",
                 "method": "textDocument/didChange",
                 "params": {
                     "textDocument": {"uri": path.as_uri(), "version": 2},

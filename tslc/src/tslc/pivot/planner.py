@@ -1,4 +1,4 @@
-"""Plan strict PIVOT dataflow definitions from selected C++ corpus slots."""
+"""Plan strict PIVOT dataflow definitions from selected backend corpus slots."""
 
 from __future__ import annotations
 
@@ -6,7 +6,10 @@ import re
 from dataclasses import dataclass
 
 from tslc.backend.cpp_profile import cpp_dataparallel_fixed_lane_count
-from tslc.backend.cpp_translation import CppBackendDialect
+from tslc.backend.registry import create_backend_dialect
+from tslc.backend.rust_algorithm import rust_dataparallel_fixed_lane_count
+from tslc.backend.rust_translation import rust_raw_identifier
+from tslc.backend.translation import BackendDialect
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import BOOLEAN_WILDCARD_ATTRIBUTES, Catalog
 from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER, scalar_bit_width_or_default
@@ -20,7 +23,7 @@ from tslc.pivot._lowering import (
     PivotCallSite,
     pivot_region_lowerers,
 )
-from tslc.pivot.model import PivotDefinition, PivotDocument, PivotSkip
+from tslc.pivot.model import PivotDefinition, PivotDocument, PivotLanguage, PivotSkip
 from tslc.select.selector import SelectedImplementation, Selector
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.target_text import render_text
@@ -44,12 +47,18 @@ _IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _SIMPLE_VALUE_RE = re.compile(
     r"(?:[A-Za-z_][A-Za-z0-9_]*|[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+))"
 )
-_INFERRED_LOCAL_RE = re.compile(
+_CPP_INFERRED_LOCAL_RE = re.compile(
     r"^(?:auto(?:\s+const)?|const\s+auto)\s+([A-Za-z_][A-Za-z0-9_]*)\s*="
 )
-_CONTROL_FLOW_WORD_RE = re.compile(
+_RUST_INFERRED_LOCAL_RE = re.compile(
+    r"^let(?:\s+mut)?\s+([A-Za-z_][A-Za-z0-9_]*)\s*="
+)
+_CPP_CONTROL_FLOW_WORD_RE = re.compile(
     r"\b(?:if|else|for|while|do|switch|case|default|goto|try|catch|throw|"
     r"co_await|co_yield)\b"
+)
+_RUST_CONTROL_FLOW_WORD_RE = re.compile(
+    r"\b(?:if|else|for|while|loop|match|break|continue|return\s+Err)\b"
 )
 _NAMED_CAST_RE = re.compile(
     r"\b(?:static_cast|reinterpret_cast|const_cast|dynamic_cast)\b"
@@ -99,10 +108,13 @@ class _PivotUnsupported(ValueError):
 class PivotPlanner:
     """Select and lower PIVOT independently of the ordinary generation session."""
 
-    def __init__(self, catalog: Catalog) -> None:
+    def __init__(self, catalog: Catalog, language: PivotLanguage) -> None:
         self.catalog = catalog
+        self.language = language
         self.selector = Selector()
-        self.dialect = CppBackendDialect(catalog)
+        self.dialect: BackendDialect = create_backend_dialect(
+            catalog, language.value
+        )
         self.standard_lowerer = Lowerer()
         self._call_capture = PivotCallCapture()
         self._pivot_lowerer = Lowerer(
@@ -165,7 +177,7 @@ class PivotPlanner:
                     profile,
                     primitive_name,
                     requested_types,
-                    backend_id="cpp",
+                    backend_id=self.language.value,
                 )
                 diagnostics.extend(selection.diagnostics)
                 selected_slots.extend(selection.selected)
@@ -181,6 +193,7 @@ class PivotPlanner:
                     slot_definitions.append(self._definition(profile, slot))
                 except _PivotUnsupported as exc:
                     skip = PivotSkip(
+                        language=self.language,
                         profile=profile.name,
                         primitive=callable_name,
                         extension=slot.extension.isa_name,
@@ -201,6 +214,7 @@ class PivotPlanner:
                 existing = documents.get(callable_name)
                 if existing is not None and existing[0] != inputs:
                     skip = PivotSkip(
+                        language=self.language,
                         profile=profile.name,
                         primitive=callable_name,
                         extension=slot.extension.isa_name,
@@ -276,10 +290,15 @@ class PivotPlanner:
         signature = tuple(
             (
                 name,
-                _concrete_type(kind, spec, slot),
+                _concrete_type(self.language, kind, spec, slot),
             )
             for name, kind in zip(slot.primitive.parameters, shape.param_kinds)
-        ) + ((_OUTPUT_NAME, _concrete_type(shape.result_kind, spec, slot)),)
+        ) + (
+            (
+                _OUTPUT_NAME,
+                _concrete_type(self.language, shape.result_kind, spec, slot),
+            ),
+        )
         return PivotDefinition(
             isa=_isa_label(slot),
             dtype=_DTYPE.get(slot.type_tag, slot.type_tag),
@@ -308,9 +327,7 @@ class PivotPlanner:
         self, slot: SelectedImplementation
     ) -> PivotDefinition | None:
         shape = _eligible_shape(slot)
-        lane_count = cpp_dataparallel_fixed_lane_count(
-            slot.extension, slot.type_tag
-        )
+        lane_count = _fixed_lane_count(self.language, slot)
         vector_bits = slot.extension.vector_bits
         if lane_count is None or vector_bits not in (128, 256, 512):
             return None
@@ -319,21 +336,34 @@ class PivotPlanner:
         if result.specialization is None:
             return None
         spec = result.specialization
-        vector = self.dialect.types.fixed_vector_spelling(
-            spec.base_type_spelling, lane_count
+        vector = _fixed_vector_spelling(
+            self.language,
+            self.dialect,
+            spec.base_type_spelling,
+            lane_count,
         )
+        if vector is None:
+            return None
         signature = tuple(
-            (name, _fixed_type(kind, vector, spec.base_type_spelling))
+            (
+                name,
+                _fixed_type(self.language, kind, vector, spec.base_type_spelling),
+            )
             for name, kind in zip(slot.primitive.parameters, shape.param_kinds)
         ) + (
             (
                 _OUTPUT_NAME,
-                _fixed_type(shape.result_kind, vector, spec.base_type_spelling),
+                _fixed_type(
+                    self.language,
+                    shape.result_kind,
+                    vector,
+                    spec.base_type_spelling,
+                ),
             ),
         )
         call = render_text(
             self.dialect.syntax.render_call(
-                _callable_name(slot),
+                _fixed_callable_name(self.language, _callable_name(slot)),
                 ", ".join(slot.primitive.parameters),
                 vec_override=vector,
             )
@@ -372,10 +402,14 @@ class PivotPlanner:
             )
 
         lowered = self._lower(slot)
-        body = lowered.spec.body_text.strip()
-        _validate_body_text(body, slot.implementation.body_source)
+        body = _prepare_body(
+            self.language,
+            lowered.spec.body_text,
+            slot.implementation.body_source,
+        )
+        _validate_body_text(self.language, body, slot.implementation.body_source)
         statements = _split_statements(body, slot.implementation.body_source)
-        local_renames = _local_renames(statements, allocator)
+        local_renames = _local_renames(self.language, statements, allocator)
         bindings = {
             name: _binding_expression(value)
             for name, value in zip(slot.primitive.parameters, actual_args)
@@ -412,7 +446,7 @@ class PivotPlanner:
                         slot.implementation.body_source,
                     )
                 assignment = (
-                    f"auto {destination} = {expression};"
+                    f"{_declaration_prefix(self.language)} {destination} = {expression};"
                     if declare_destination
                     else f"{destination} = {expression};"
                 )
@@ -424,7 +458,11 @@ class PivotPlanner:
                     "PIVOT supports return only through the final complete(...) region",
                     slot.implementation.body_source,
                 )
-            _validate_statement(stripped, slot.implementation.body_source)
+            _validate_statement(
+                self.language,
+                stripped,
+                slot.implementation.body_source,
+            )
             output.append(f"{stripped};")
 
         if shape.result_kind != "void" and not saw_return:
@@ -499,7 +537,7 @@ class PivotPlanner:
                 profile,
                 dependency.primitive,
                 (dependency.source.base_tag,),
-                backend_id="cpp",
+                backend_id=self.language.value,
             )
             selected = selection.selected
             self._callee_selections[selection_key] = selected
@@ -622,6 +660,7 @@ def _eligible_shape(slot: SelectedImplementation) -> SignatureShape:
 
 
 def _concrete_type(
+    language: PivotLanguage,
     kind: str,
     spec: LoweredSpecialization,
     slot: SelectedImplementation,
@@ -629,7 +668,7 @@ def _concrete_type(
     if kind == "s":
         return spec.base_type_spelling
     if kind == "usize":
-        return "std::size_t"
+        return "std::size_t" if language is PivotLanguage.CPP else "usize"
     register = spec.native_register_spelling
     if spec.register_is_base:
         register = spec.base_type_spelling
@@ -641,7 +680,7 @@ def _concrete_type(
         )
     if kind == "v":
         return register
-    mask = _mask_type(slot, register)
+    mask = _mask_type(language, slot, register)
     if kind == "m":
         return mask
     if kind == "im":
@@ -649,14 +688,33 @@ def _concrete_type(
             return mask
         lanes = DEFAULT_SUPPORT_POLICY.lane_count(slot.extension, slot.type_tag) or 1
         width = 8 if lanes <= 8 else 16 if lanes <= 16 else 32 if lanes <= 32 else 64
-        return f"std::uint{width}_t"
+        return f"std::uint{width}_t" if language is PivotLanguage.CPP else f"u{width}"
     raise _PivotUnsupported(
         f"PIVOT has no concrete type projection for signature kind {kind!r}",
         slot.primitive.signature_source,
     )
 
 
-def _fixed_type(kind: str, vector: str, base: str) -> str:
+def _fixed_type(
+    language: PivotLanguage,
+    kind: str,
+    vector: str,
+    base: str,
+) -> str:
+    if language is PivotLanguage.RUST:
+        if kind == "v":
+            return f"<{vector} as tsl::tsl_core::SimdVector>::RegisterType"
+        if kind == "m":
+            return f"<{vector} as tsl::tsl_core::SimdVector>::MaskType"
+        if kind == "im":
+            return f"<{vector} as tsl::tsl_core::SimdVector>::ImaskType"
+        if kind == "s":
+            return base
+        if kind == "usize":
+            return "usize"
+        raise _PivotUnsupported(
+            f"PIVOT has no Rust fixed-policy type projection for signature kind {kind!r}"
+        )
     if kind == "v":
         return f"typename {vector}::register_type"
     if kind == "m":
@@ -672,13 +730,18 @@ def _fixed_type(kind: str, vector: str, base: str) -> str:
     )
 
 
-def _mask_type(slot: SelectedImplementation, register: str) -> str:
+def _mask_type(
+    language: PivotLanguage,
+    slot: SelectedImplementation,
+    register: str,
+) -> str:
+    backend_id = language.value
     policy = slot.extension.mask_policy
     if policy.kind == "native_predicate":
-        return policy.spelling("cpp") or register
+        return policy.spelling(backend_id) or register
     if policy.kind == "native_predicate_by_lanes":
         lanes = slot.extension.vector_bits // scalar_bit_width_or_default(slot.type_tag)
-        spelling = policy.spelling_for_lanes("cpp", max(8, lanes))
+        spelling = policy.spelling_for_lanes(backend_id, max(8, lanes))
         if spelling is None:
             raise _PivotUnsupported(
                 f"PIVOT has no concrete native mask for {lanes} lanes",
@@ -695,7 +758,57 @@ def _mask_type(slot: SelectedImplementation, register: str) -> str:
     return register
 
 
-def _validate_body_text(text: str, source: SourceSpan | None) -> None:
+def _fixed_lane_count(
+    language: PivotLanguage,
+    slot: SelectedImplementation,
+) -> int | None:
+    if language is PivotLanguage.CPP:
+        return cpp_dataparallel_fixed_lane_count(slot.extension, slot.type_tag)
+    return rust_dataparallel_fixed_lane_count(slot.extension, slot.type_tag)
+
+
+def _fixed_vector_spelling(
+    language: PivotLanguage,
+    dialect: BackendDialect,
+    base: str,
+    lanes: int,
+) -> str | None:
+    if language is PivotLanguage.CPP:
+        return dialect.types.fixed_vector_spelling(base, lanes)
+    return (
+        f"<tsl::dataparallel::Fixed<{lanes}> as "
+        f"tsl::tsl_algorithm::VectorFor<tsl::profile::algo::Profile, {base}>>::Vec"
+    )
+
+
+def _fixed_callable_name(language: PivotLanguage, name: str) -> str:
+    if language is PivotLanguage.CPP:
+        return name
+    return f"tsl::profile::{rust_raw_identifier(name)}"
+
+
+def _prepare_body(
+    language: PivotLanguage,
+    text: str,
+    source: SourceSpan | None,
+) -> str:
+    body = text.strip()
+    if language is not PivotLanguage.RUST or not body.startswith("unsafe"):
+        return body
+    match = re.match(r"unsafe\s*\{", body)
+    if match is None:
+        return body
+    close = _matching_brace(body, match.end() - 1)
+    if close != len(body) - 1:
+        raise _PivotUnsupported("PIVOT body contains a residual unsafe block", source)
+    return body[match.end() : close].strip()
+
+
+def _validate_body_text(
+    language: PivotLanguage,
+    text: str,
+    source: SourceSpan | None,
+) -> None:
     if not text:
         raise _PivotUnsupported("PIVOT body is empty", source)
     if "#" in text:
@@ -704,24 +817,48 @@ def _validate_body_text(text: str, source: SourceSpan | None) -> None:
         raise _PivotUnsupported("PIVOT body contains a comment", source)
     if '"' in text or "'" in text:
         raise _PivotUnsupported("PIVOT body contains a literal string", source)
-    if _CONTROL_FLOW_WORD_RE.search(text):
+    control = (
+        _CPP_CONTROL_FLOW_WORD_RE
+        if language is PivotLanguage.CPP
+        else _RUST_CONTROL_FLOW_WORD_RE
+    )
+    if control.search(text):
         raise _PivotUnsupported("PIVOT body contains residual control flow", source)
-    if _NAMED_CAST_RE.search(text) or _C_STYLE_CAST_RE.search(text):
+    if language is PivotLanguage.CPP:
+        contains_cast = (
+            _NAMED_CAST_RE.search(text) is not None
+            or _C_STYLE_CAST_RE.search(text) is not None
+        )
+    else:
+        contains_cast = re.search(r"\bas\b", text) is not None
+    if contains_cast:
         raise _PivotUnsupported("PIVOT body contains a cast", source)
     if "{" in text or "}" in text:
         raise _PivotUnsupported("PIVOT body contains a residual block", source)
     if "?" in text:
         raise _PivotUnsupported("PIVOT body contains a conditional expression", source)
-    if "::tsl::" in text or "typename Vec::" in text or re.search(r"\bLANES\b", text):
+    if language is PivotLanguage.CPP:
+        unresolved = (
+            "::tsl::" in text
+            or "typename Vec::" in text
+            or re.search(r"\bLANES\b", text) is not None
+        )
+    else:
+        unresolved = "Self::" in text or "crate::" in text or "super::" in text
+    if unresolved:
         raise _PivotUnsupported(
             "PIVOT body contains an unresolved generated-library construct", source
         )
 
 
-def _validate_statement(statement: str, source: SourceSpan | None) -> None:
+def _validate_statement(
+    language: PivotLanguage,
+    statement: str,
+    source: SourceSpan | None,
+) -> None:
     if not statement:
         raise _PivotUnsupported("PIVOT body contains an empty statement", source)
-    _validate_body_text(statement, source)
+    _validate_body_text(language, statement, source)
 
 
 def _split_statements(text: str, source: SourceSpan | None) -> tuple[str, ...]:
@@ -753,14 +890,25 @@ def _split_statements(text: str, source: SourceSpan | None) -> tuple[str, ...]:
 
 
 def _local_renames(
-    statements: tuple[str, ...], allocator: _NameAllocator
+    language: PivotLanguage,
+    statements: tuple[str, ...],
+    allocator: _NameAllocator,
 ) -> dict[str, str]:
+    pattern = (
+        _CPP_INFERRED_LOCAL_RE
+        if language is PivotLanguage.CPP
+        else _RUST_INFERRED_LOCAL_RE
+    )
     result: dict[str, str] = {}
     for statement in statements:
-        match = _INFERRED_LOCAL_RE.match(statement.strip())
+        match = pattern.match(statement.strip())
         if match is not None:
             result.setdefault(match.group(1), allocator.allocate("local"))
     return result
+
+
+def _declaration_prefix(language: PivotLanguage) -> str:
+    return "auto" if language is PivotLanguage.CPP else "let"
 
 
 def _replace_identifiers(text: str, replacements: dict[str, str]) -> str:
@@ -799,6 +947,19 @@ def _matching_close(text: str, open_index: int) -> int | None:
         if char == "(":
             depth += 1
         elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
+def _matching_brace(text: str, open_index: int) -> int | None:
+    depth = 0
+    for index in range(open_index, len(text)):
+        char = text[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
             depth -= 1
             if depth == 0:
                 return index
@@ -927,6 +1088,7 @@ def _dtype_order(dtype: str) -> int:
 def _skip_key(skip: PivotSkip) -> tuple[object, ...]:
     source = skip.source
     return (
+        skip.language.value,
         skip.primitive,
         skip.profile,
         skip.extension,
@@ -942,6 +1104,7 @@ def _skip_identity(skip: PivotSkip) -> tuple[object, ...]:
     """Identify one unsupported corpus specialization independent of profile aliases."""
 
     return (
+        skip.language.value,
         skip.primitive,
         skip.extension,
         skip.type_tag,
