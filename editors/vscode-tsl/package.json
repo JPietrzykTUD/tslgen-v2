@@ -103,18 +103,18 @@
         },
         "tsl.preview.type": {
           "type": "string",
-          "default": "si32",
-          "description": "Preferred scalar type for concrete preview."
+          "default": "",
+          "description": "Fixed scalar type for concrete commands. When empty, cursor context or a filtered QuickPick selects the type."
         },
         "tsl.preview.extension": {
           "type": "string",
           "default": "",
-          "description": "Concrete extension for preview. When empty, Preview Specialization presents the extensions reported by tslc."
+          "description": "Fixed extension for concrete commands. When empty, cursor context or a profile-filtered QuickPick selects the extension."
         },
         "tsl.preview.backend": {
           "type": "string",
           "default": "cpp",
-          "description": "Preferred backend for concrete preview."
+          "description": "Backend for concrete Preview, Check, and Doctor commands."
         }
       }
     }
@@ -123,7 +123,7 @@
     "clean": "node scripts/clean.mjs",
     "generate:grammar": "node scripts/generate-grammar.mjs",
     "check:grammar": "node scripts/check-grammar.mjs",
-    "compile": "npm run generate:grammar && tsc -p tsconfig.json && node esbuild.mjs",
+    "compile": "npm run clean && npm run generate:grammar && tsc -p tsconfig.json && node esbuild.mjs",
     "test:unit": "tsc -p tsconfig.json && mocha 'dist/test/*.test.js' && node --test test/grammar.test.mjs",
     "test:integration": "npm run compile && node scripts/run-integration.mjs",
     "test": "npm run check:grammar && npm run compile && npm run test:unit",

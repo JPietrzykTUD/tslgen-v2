@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from tslc.backend.cpp_profile import cpp_dataparallel_fixed_lane_count
 from tslc.backend.cpp_translation import CppBackendDialect
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import BOOLEAN_WILDCARD_ATTRIBUTES, Catalog
@@ -22,6 +23,7 @@ from tslc.pivot._lowering import (
 from tslc.pivot.model import PivotDefinition, PivotDocument, PivotSkip
 from tslc.select.selector import SelectedImplementation, Selector
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+from tslc.target_text import render_text
 
 _OUTPUT_NAME = "res"
 _SUPPORTED_KINDS = frozenset({"v", "s", "m", "im", "usize"})
@@ -72,6 +74,12 @@ class _LoweredPivotBody:
     call_sites: tuple[PivotCallSite, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _SelectedProfile:
+    profile: MachineProfile
+    slots: tuple[SelectedImplementation, ...]
+
+
 @dataclass(slots=True)
 class _NameAllocator:
     next_value: int = 0
@@ -95,6 +103,23 @@ class PivotPlanner:
         self.catalog = catalog
         self.selector = Selector()
         self.dialect = CppBackendDialect(catalog)
+        self.standard_lowerer = Lowerer()
+        self._call_capture = PivotCallCapture()
+        self._pivot_lowerer = Lowerer(
+            region_lowerers=pivot_region_lowerers(self._call_capture)
+        )
+        self._lowered: dict[
+            tuple[object, ...], _LoweredPivotBody | _PivotUnsupported
+        ] = {}
+        self._leaf_definitions: dict[
+            tuple[object, ...], PivotDefinition | _PivotUnsupported
+        ] = {}
+        self._fixed_definitions: dict[
+            tuple[object, ...], PivotDefinition | None | _PivotUnsupported
+        ] = {}
+        self._callee_selections: dict[
+            tuple[object, ...], tuple[SelectedImplementation, ...]
+        ] = {}
 
     def plan(
         self,
@@ -115,7 +140,7 @@ class PivotPlanner:
             )
         )
         documents: dict[str, tuple[tuple[str, ...], set[PivotDefinition]]] = {}
-        skipped: list[PivotSkip] = []
+        skipped: dict[tuple[object, ...], PivotSkip] = {}
         diagnostics: list[Diagnostic] = []
 
         known_primitives = {primitive.name for primitive in self.catalog.primitives}
@@ -129,7 +154,9 @@ class PivotPlanner:
                     )
                 )
 
+        selected_profiles: list[_SelectedProfile] = []
         for profile in sorted(profiles, key=lambda item: item.name):
+            selected_slots: list[SelectedImplementation] = []
             for primitive_name in requested_primitives:
                 if primitive_name not in known_primitives:
                     continue
@@ -141,42 +168,55 @@ class PivotPlanner:
                     backend_id="cpp",
                 )
                 diagnostics.extend(selection.diagnostics)
-                for slot in selection.selected:
-                    try:
-                        callable_name, definition = self._definition(profile, slot)
-                    except _PivotUnsupported as exc:
-                        skipped.append(
-                            PivotSkip(
-                                profile=profile.name,
-                                primitive=_callable_name(slot),
-                                extension=slot.extension.isa_name,
-                                type_tag=slot.type_tag,
-                                reason=str(exc),
-                                source=exc.source or slot.implementation.body_source,
-                            )
-                        )
-                        continue
-                    inputs = tuple(slot.primitive.parameters)
-                    existing = documents.get(callable_name)
-                    if existing is not None and existing[0] != inputs:
-                        skipped.append(
-                            PivotSkip(
-                                profile=profile.name,
-                                primitive=callable_name,
-                                extension=slot.extension.isa_name,
-                                type_tag=slot.type_tag,
-                                reason=(
-                                    "PIVOT schema cannot combine callable overloads with "
-                                    "different input names"
-                                ),
-                                source=slot.primitive.signature_source,
-                            )
-                        )
-                        continue
-                    if existing is None:
-                        documents[callable_name] = (inputs, {definition})
-                    else:
-                        existing[1].add(definition)
+                selected_slots.extend(selection.selected)
+            selected_profiles.append(_SelectedProfile(profile, tuple(selected_slots)))
+
+        contributing_profiles = _contributing_profiles(tuple(selected_profiles))
+        for selected_profile in contributing_profiles:
+            profile = selected_profile.profile
+            for slot in selected_profile.slots:
+                callable_name = _callable_name(slot)
+                slot_definitions: list[PivotDefinition] = []
+                try:
+                    slot_definitions.append(self._definition(profile, slot))
+                except _PivotUnsupported as exc:
+                    skip = PivotSkip(
+                        profile=profile.name,
+                        primitive=callable_name,
+                        extension=slot.extension.isa_name,
+                        type_tag=slot.type_tag,
+                        reason=str(exc),
+                        source=exc.source or slot.implementation.body_source,
+                    )
+                    skipped.setdefault(_skip_identity(skip), skip)
+                try:
+                    tsl_definition = self._tsl_fixed_definition(slot)
+                except _PivotUnsupported:
+                    tsl_definition = None
+                if tsl_definition is not None:
+                    slot_definitions.append(tsl_definition)
+                if not slot_definitions:
+                    continue
+                inputs = tuple(slot.primitive.parameters)
+                existing = documents.get(callable_name)
+                if existing is not None and existing[0] != inputs:
+                    skip = PivotSkip(
+                        profile=profile.name,
+                        primitive=callable_name,
+                        extension=slot.extension.isa_name,
+                        type_tag=slot.type_tag,
+                        reason=(
+                            "PIVOT schema cannot combine callable overloads with "
+                            "different input names"
+                        ),
+                        source=slot.primitive.signature_source,
+                    )
+                    skipped.setdefault(_skip_identity(skip), skip)
+                    continue
+                if existing is None:
+                    documents[callable_name] = (inputs, set(slot_definitions))
+                else:
+                    existing[1].update(slot_definitions)
 
         planned_documents = tuple(
             PivotDocument(
@@ -190,7 +230,7 @@ class PivotPlanner:
         )
         return PivotPlan(
             documents=planned_documents,
-            skipped=tuple(sorted(skipped, key=_skip_key)),
+            skipped=tuple(sorted(skipped.values(), key=_skip_key)),
             diagnostics=sort_diagnostics(diagnostics),
         )
 
@@ -198,7 +238,30 @@ class PivotPlanner:
         self,
         profile: MachineProfile,
         slot: SelectedImplementation,
-    ) -> tuple[str, PivotDefinition]:
+    ) -> PivotDefinition:
+        _eligible_shape(slot)
+        key = _slot_key(slot)
+        lowered = self._lower(slot)
+        if lowered.call_sites:
+            return self._build_definition(profile, slot)
+        cached = self._leaf_definitions.get(key)
+        if cached is not None:
+            if isinstance(cached, _PivotUnsupported):
+                raise cached
+            return cached
+        try:
+            definition = self._build_definition(profile, slot)
+        except _PivotUnsupported as exc:
+            self._leaf_definitions[key] = exc
+            raise
+        self._leaf_definitions[key] = definition
+        return definition
+
+    def _build_definition(
+        self,
+        profile: MachineProfile,
+        slot: SelectedImplementation,
+    ) -> PivotDefinition:
         shape = _eligible_shape(slot)
         allocator = _NameAllocator()
         direct, spec = self._emit_slot(
@@ -217,14 +280,69 @@ class PivotPlanner:
             )
             for name, kind in zip(slot.primitive.parameters, shape.param_kinds)
         ) + ((_OUTPUT_NAME, _concrete_type(shape.result_kind, spec, slot)),)
-        return (
-            _callable_name(slot),
-            PivotDefinition(
-                isa=_isa_label(slot),
-                dtype=_DTYPE.get(slot.type_tag, slot.type_tag),
-                signature=signature,
-                direct=direct,
+        return PivotDefinition(
+            isa=_isa_label(slot),
+            dtype=_DTYPE.get(slot.type_tag, slot.type_tag),
+            signature=signature,
+            direct=direct,
+        )
+
+    def _tsl_fixed_definition(
+        self, slot: SelectedImplementation
+    ) -> PivotDefinition | None:
+        key = _slot_key(slot)
+        if key in self._fixed_definitions:
+            cached = self._fixed_definitions[key]
+            if isinstance(cached, _PivotUnsupported):
+                raise cached
+            return cached
+        try:
+            definition = self._build_tsl_fixed_definition(slot)
+        except _PivotUnsupported as exc:
+            self._fixed_definitions[key] = exc
+            raise
+        self._fixed_definitions[key] = definition
+        return definition
+
+    def _build_tsl_fixed_definition(
+        self, slot: SelectedImplementation
+    ) -> PivotDefinition | None:
+        shape = _eligible_shape(slot)
+        lane_count = cpp_dataparallel_fixed_lane_count(
+            slot.extension, slot.type_tag
+        )
+        vector_bits = slot.extension.vector_bits
+        if lane_count is None or vector_bits not in (128, 256, 512):
+            return None
+
+        result = self.standard_lowerer.lower(slot, self.catalog, self.dialect)
+        if result.specialization is None:
+            return None
+        spec = result.specialization
+        vector = self.dialect.types.fixed_vector_spelling(
+            spec.base_type_spelling, lane_count
+        )
+        signature = tuple(
+            (name, _fixed_type(kind, vector, spec.base_type_spelling))
+            for name, kind in zip(slot.primitive.parameters, shape.param_kinds)
+        ) + (
+            (
+                _OUTPUT_NAME,
+                _fixed_type(shape.result_kind, vector, spec.base_type_spelling),
             ),
+        )
+        call = render_text(
+            self.dialect.syntax.render_call(
+                _callable_name(slot),
+                ", ".join(slot.primitive.parameters),
+                vec_override=vector,
+            )
+        ).strip()
+        return PivotDefinition(
+            isa=f"tsl_{vector_bits}",
+            dtype=_DTYPE.get(slot.type_tag, slot.type_tag),
+            signature=signature,
+            direct=(f"{_OUTPUT_NAME} = {call};",),
         )
 
     def _emit_slot(
@@ -367,16 +485,27 @@ class PivotPlanner:
         argument_count: int,
     ) -> SelectedImplementation:
         dependency = site.dependency
-        selection = self.selector.select_profile(
-            self.catalog,
-            profile,
+        selection_key = (
+            profile.family,
+            profile.features,
+            profile.compile_modes,
             dependency.primitive,
-            (dependency.source.base_tag,),
-            backend_id="cpp",
+            dependency.source.base_tag,
         )
+        selected = self._callee_selections.get(selection_key)
+        if selected is None:
+            selection = self.selector.select_profile(
+                self.catalog,
+                profile,
+                dependency.primitive,
+                (dependency.source.base_tag,),
+                backend_id="cpp",
+            )
+            selected = selection.selected
+            self._callee_selections[selection_key] = selected
         attrs = dict(site.attrs)
         candidates = []
-        for candidate in selection.selected:
+        for candidate in selected:
             if candidate.extension.isa_name != dependency.source.extension_isa:
                 continue
             if candidate.primitive.attributes.get("mask") != dependency.mask_policy:
@@ -402,13 +531,27 @@ class PivotPlanner:
         return candidates[0]
 
     def _lower(self, slot: SelectedImplementation) -> _LoweredPivotBody:
-        capture = PivotCallCapture()
-        lowerer = Lowerer(region_lowerers=pivot_region_lowerers(capture))
+        key = _slot_key(slot)
+        cached = self._lowered.get(key)
+        if cached is not None:
+            if isinstance(cached, _PivotUnsupported):
+                raise cached
+            return cached
+        try:
+            lowered = self._lower_uncached(slot)
+        except _PivotUnsupported as exc:
+            self._lowered[key] = exc
+            raise
+        self._lowered[key] = lowered
+        return lowered
+
+    def _lower_uncached(self, slot: SelectedImplementation) -> _LoweredPivotBody:
+        self._call_capture.reset()
         segments = scan(
             slot.implementation.body_text,
             source=slot.implementation.body_source,
         )
-        result = lowerer.lower(
+        result = self._pivot_lowerer.lower(
             slot,
             self.catalog,
             self.dialect,
@@ -428,7 +571,10 @@ class PivotPlanner:
                 slot.implementation.body_source,
             )
             raise _PivotUnsupported(reason, source)
-        return _LoweredPivotBody(result.specialization, tuple(capture.sites))
+        return _LoweredPivotBody(
+            result.specialization,
+            tuple(self._call_capture.sites),
+        )
 
 
 def _eligible_shape(slot: SelectedImplementation) -> SignatureShape:
@@ -507,6 +653,22 @@ def _concrete_type(
     raise _PivotUnsupported(
         f"PIVOT has no concrete type projection for signature kind {kind!r}",
         slot.primitive.signature_source,
+    )
+
+
+def _fixed_type(kind: str, vector: str, base: str) -> str:
+    if kind == "v":
+        return f"typename {vector}::register_type"
+    if kind == "m":
+        return f"typename {vector}::mask_type"
+    if kind == "im":
+        return f"typename {vector}::imask_type"
+    if kind == "s":
+        return base
+    if kind == "usize":
+        return "std::size_t"
+    raise _PivotUnsupported(
+        f"PIVOT has no fixed-policy type projection for signature kind {kind!r}"
     )
 
 
@@ -674,12 +836,75 @@ def _slot_key(slot: SelectedImplementation) -> tuple[object, ...]:
     return (
         slot.primitive.name,
         slot.primitive.signature,
+        tuple(slot.primitive.parameters),
         slot.extension.isa_name,
         slot.type_tag,
         slot.to_target,
         slot.primitive.attributes.get("mask"),
         tuple(sorted(slot.primitive.attributes.items())),
+        slot.implementation.extension,
+        slot.implementation.source_order,
+        slot.implementation.body_text,
+        tuple(sorted(slot.required_features)),
+        slot.concrete_lanes,
+        tuple(
+            (binding.param_name, binding.base_tag)
+            for binding in slot.simd_type_base_bindings
+        ),
+        (
+            None
+            if slot.fixed_fallback_extension is None
+            else slot.fixed_fallback_extension.isa_name
+        ),
     )
+
+
+def _contributing_profiles(
+    selections: tuple[_SelectedProfile, ...],
+) -> tuple[_SelectedProfile, ...]:
+    """Choose a deterministic cover of distinct selected corpus implementations."""
+
+    identities: dict[tuple[object, ...], int] = {}
+    coverage: list[frozenset[int]] = []
+    for selection in selections:
+        covered: set[int] = set()
+        for slot in selection.slots:
+            key = _slot_key(slot)
+            identity = identities.get(key)
+            if identity is None:
+                identity = len(identities)
+                identities[key] = identity
+            covered.add(identity)
+        coverage.append(frozenset(covered))
+
+    indexes = _contributing_indexes(tuple(coverage))
+    return tuple(selections[index] for index in indexes)
+
+
+def _contributing_indexes(
+    coverage: tuple[frozenset[int], ...],
+) -> tuple[int, ...]:
+    """Greedily cover all implementations; every retained set adds new coverage."""
+
+    remaining = set().union(*coverage) if coverage else set()
+    candidates = set(range(len(coverage)))
+    selected: list[int] = []
+    while remaining:
+        best = min(
+            candidates,
+            key=lambda index: (
+                -len(coverage[index] & remaining),
+                -len(coverage[index]),
+                index,
+            ),
+        )
+        added = coverage[best] & remaining
+        if not added:
+            break
+        selected.append(best)
+        remaining.difference_update(added)
+        candidates.remove(best)
+    return tuple(selected)
 
 
 def _definition_key(definition: PivotDefinition) -> tuple[object, ...]:
@@ -710,6 +935,18 @@ def _skip_key(skip: PivotSkip) -> tuple[object, ...]:
         skip.reason,
         source.path.as_posix() if source is not None else "",
         source.line if source is not None else 0,
+    )
+
+
+def _skip_identity(skip: PivotSkip) -> tuple[object, ...]:
+    """Identify one unsupported corpus specialization independent of profile aliases."""
+
+    return (
+        skip.primitive,
+        skip.extension,
+        skip.type_tag,
+        skip.reason,
+        skip.source,
     )
 
 

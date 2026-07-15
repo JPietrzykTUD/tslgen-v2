@@ -202,6 +202,27 @@ def test_clang_overlay_declares_primitive_missing_from_hardware_profile(
     assert overlay.index(declaration) < overlay.index(specialization)
 
 
+def test_base_header_declares_variant_defined_only_by_clang_overlay(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["permute_lanes"],
+        profiles=["wasm32-simd128"],
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    by = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
+
+    base = by["cpp/include/tsl_wasm32_simd128.hpp"]
+    overlay = by["cpp/include/tsl_wasm32_simd128_clang.hpp"]
+
+    assert "scalar_lanes_fallback," in base
+    assert "struct permute_lanes_imm_impl_scalar_lanes_fallback;" in base
+    assert "struct permute_lanes_imm_impl_scalar_lanes_fallback<" in overlay
+
+
 def test_profile_name_sanitized_to_valid_identifiers(
     data_root: Path, machine_profiles_path: Path
 ) -> None:

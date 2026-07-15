@@ -83,6 +83,7 @@ def render_preview(
         primitives=(primitive,),
         profiles=(profile,),
         type_tags=(type_tag,),
+        extensions=(extension,) if extension is not None else None,
         backends=(backend,),
         render_artifacts=False,
     )

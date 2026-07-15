@@ -5,18 +5,17 @@ import {
   type ServerOptions,
 } from "vscode-languageclient/node";
 
-import { listExtensions, listProfiles } from "./catalog";
 import {
   discoverCompiler,
   discoverServer,
-  type CommandSpec,
   type DiscoveryOptions,
 } from "./discovery";
 import {
   PreviewDocumentProvider,
   PreviewManager,
   selectConcreteSlot,
-  selectProfile,
+  selectContextProfile,
+  type SpecializationContext,
   workspaceCwd,
 } from "./preview";
 
@@ -133,25 +132,22 @@ async function previewSpecialization(): Promise<void> {
     );
     return;
   }
+  const backend = vscode.workspace
+    .getConfiguration("tsl", editor.document.uri)
+    .get<string>("preview.backend", "cpp");
+  const context = await requestSpecializationContext(editor, backend);
+  if (!context) {
+    return;
+  }
+  const slot = await selectConcreteSlot(editor, context);
+  if (!slot) {
+    return;
+  }
   const compiler = await compilerCommand(editor.document.uri);
   if (!compiler) {
     return;
   }
   const cwd = workspaceCwd(editor.document);
-  const configuration = vscode.workspace.getConfiguration("tsl", editor.document.uri);
-  const configuredProfile = nonEmpty(configuration.get<string>("preview.profile"));
-  const configuredExtension = nonEmpty(configuration.get<string>("preview.extension"));
-  const [profiles, extensions] = await Promise.all([
-    configuredProfile ? undefined : loadCatalogChoices("profiles", compiler, cwd),
-    configuredExtension ? undefined : loadCatalogChoices("extensions", compiler, cwd),
-  ]);
-  if ((!configuredProfile && !profiles) || (!configuredExtension && !extensions)) {
-    return;
-  }
-  const slot = await selectConcreteSlot(editor, { profiles, extensions });
-  if (!slot) {
-    return;
-  }
   await previewManager.preview(compiler, cwd, slot);
 }
 
@@ -166,26 +162,22 @@ async function checkSlot(): Promise<void> {
     );
     return;
   }
+  const backend = vscode.workspace
+    .getConfiguration("tsl", editor.document.uri)
+    .get<string>("preview.backend", "cpp");
+  const context = await requestSpecializationContext(editor, backend);
+  if (!context) {
+    return;
+  }
+  const slot = await selectConcreteSlot(editor, context);
+  if (!slot) {
+    return;
+  }
   const compiler = await compilerCommand(editor.document.uri);
   if (!compiler) {
     return;
   }
   const cwd = workspaceCwd(editor.document);
-  const configuredProfile = nonEmpty(
-    vscode.workspace
-      .getConfiguration("tsl", editor.document.uri)
-      .get<string>("preview.profile"),
-  );
-  const profiles = configuredProfile
-    ? undefined
-    : await loadCatalogChoices("profiles", compiler, cwd);
-  if (!configuredProfile && !profiles) {
-    return;
-  }
-  const slot = await selectConcreteSlot(editor, { profiles });
-  if (!slot) {
-    return;
-  }
   await previewManager.check(compiler, cwd, slot);
 }
 
@@ -200,6 +192,24 @@ async function doctor(): Promise<void> {
     return;
   }
   const configuration = vscode.workspace.getConfiguration("tsl", uri);
+  const backend = configuration.get<string>("preview.backend", "cpp");
+  const contextualEditor =
+    editor?.document.languageId === "tsl" ? editor : undefined;
+  const context = await requestSpecializationContext(contextualEditor, backend);
+  if (!context) {
+    return;
+  }
+  const slot =
+    contextualEditor && context.primitive
+      ? await selectConcreteSlot(contextualEditor, context)
+      : undefined;
+  if (contextualEditor && context.primitive && !slot) {
+    return;
+  }
+  const profile = slot?.profile ?? (await selectContextProfile(uri, context));
+  if (!profile) {
+    return;
+  }
   const compiler = await compilerCommand(uri);
   if (!compiler) {
     return;
@@ -210,19 +220,7 @@ async function doctor(): Promise<void> {
   if (!cwd) {
     return;
   }
-  const configuredProfile = nonEmpty(configuration.get<string>("preview.profile"));
-  const profiles = configuredProfile
-    ? undefined
-    : await loadCatalogChoices("profiles", compiler, cwd);
-  if (!configuredProfile && !profiles) {
-    return;
-  }
-  const profile = configuredProfile || (profiles ? await selectProfile(profiles) : undefined);
-  if (!profile) {
-    return;
-  }
-  const backend = configuration.get<string>("preview.backend", "cpp");
-  await previewManager.doctor(compiler, cwd, profile, backend);
+  await previewManager.doctor(compiler, cwd, profile, backend, slot);
 }
 
 function activeTslEditor(): vscode.TextEditor | undefined {
@@ -234,28 +232,35 @@ function activeTslEditor(): vscode.TextEditor | undefined {
   return editor;
 }
 
-async function loadCatalogChoices(
-  kind: "profiles" | "extensions",
-  compiler: CommandSpec,
-  cwd: string,
-): Promise<readonly string[] | undefined> {
-  const itemName = kind === "profiles" ? "profiles" : "extensions";
+async function requestSpecializationContext(
+  editor: vscode.TextEditor | undefined,
+  backend: string,
+): Promise<SpecializationContext | undefined> {
+  const running = client;
+  if (!running) {
+    void vscode.window.showErrorMessage(
+      "The TSL language server must be running to resolve specialization context.",
+    );
+    return undefined;
+  }
   try {
-    return await vscode.window.withProgress(
+    return await running.sendRequest<SpecializationContext>(
+      "tsl/specializationContext",
       {
-        location: vscode.ProgressLocation.Notification,
-        title: `Loading TSL ${itemName}`,
+        backend,
+        ...(editor
+          ? {
+              textDocument: { uri: editor.document.uri.toString() },
+              position: editor.selection.active,
+            }
+          : {}),
       },
-      () =>
-        kind === "profiles"
-          ? listProfiles(compiler, cwd)
-          : listExtensions(compiler, cwd),
     );
   } catch (error) {
-    output?.error(`Could not load TSL ${itemName}: ${String(error)}`);
+    output?.error(`Could not resolve TSL specialization context: ${String(error)}`);
     output?.show(true);
     void vscode.window.showErrorMessage(
-      `Could not load ${itemName} from tslc. See the TSL output channel for details.`,
+      "Could not resolve specialization context. See the TSL output channel for details.",
     );
     return undefined;
   }
@@ -273,9 +278,10 @@ async function compilerCommand(uri: vscode.Uri) {
   });
   if (!compiler) {
     void vscode.window.showErrorMessage(
-      "A full tslc command is required for preview. Install tslc[editor], add tslc " +
-        "to PATH, configure tsl.preview.command, or configure tsl.python. The extension " +
-        "will not rewrite an arbitrary language-server command.",
+      "A full tslc command is required for Preview, Check, and Doctor. " +
+        "Install tslc[editor], add tslc to PATH, configure tsl.preview.command, " +
+        "or configure tsl.python. The extension will not rewrite an arbitrary " +
+        "language-server command.",
     );
   }
   return compiler;

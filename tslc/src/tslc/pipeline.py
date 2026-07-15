@@ -62,6 +62,7 @@ class GenerationRequest:
     primitives: tuple[str, ...] | None
     profiles: tuple[str, ...] | None
     type_tags: tuple[str, ...]
+    extensions: tuple[str, ...] | None = None
     backends: tuple[str, ...] = _DEFAULT_BACKENDS
     mode: GenerationMode = "partial"
     # Pull the value-test harness primitives (vector<->array round-trip and mask normalization)
@@ -305,12 +306,12 @@ class _GenerationSession:
         selected_extensions: dict[str, Extension] = {}
         all_backend_ids = frozenset(capability.backend_id for capability in self.backends)
         worklist = [
-            (primitive, self.type_tags, all_backend_ids)
+            (primitive, self.type_tags, all_backend_ids, self.request.extensions)
             for primitive in _requested_primitives(self.request, self.inputs.catalog)
         ]
         if self.request.test_harness:
             worklist.extend(
-                (name, self.type_tags, all_backend_ids)
+                (name, self.type_tags, all_backend_ids, None)
                 for name in (
                     self.inputs.test_harness.from_array,
                     self.inputs.test_harness.to_array,
@@ -320,19 +321,22 @@ class _GenerationSession:
                 )
                 if name is not None
             )
-        for capability in self.backends:
-            worklist.extend(
-                (name, self.type_tags, frozenset({capability.backend_id}))
-                for name in capability.closure_seed_primitives(self.inputs.catalog)
-            )
-        processed: dict[tuple[str, str], set[str]] = {}
+        if self.request.render_artifacts or self.request.extensions is None:
+            for capability in self.backends:
+                worklist.extend(
+                    (name, self.type_tags, frozenset({capability.backend_id}), None)
+                    for name in capability.closure_seed_primitives(self.inputs.catalog)
+                )
+        processed: dict[tuple[str, str, tuple[str, ...] | None], set[str]] = {}
         while worklist:
-            primitive, requested_types, target_backends = worklist.pop(0)
+            primitive, requested_types, target_backends, extensions = worklist.pop(0)
+            scope = tuple(extensions) if extensions is not None else None
             for backend in sorted(target_backends):
                 remaining_types = tuple(
                     type_tag
                     for type_tag in requested_types
-                    if backend not in processed.get((primitive, type_tag), set())
+                    if backend
+                    not in processed.get((primitive, type_tag, scope), set())
                 )
                 if not remaining_types:
                     continue
@@ -343,21 +347,29 @@ class _GenerationSession:
                     remaining_types,
                     selected_extensions,
                     frozenset({backend}),
+                    extensions,
                 )
                 for type_tag in remaining_types:
-                    processed.setdefault((primitive, type_tag), set()).add(backend)
+                    processed.setdefault((primitive, type_tag, scope), set()).add(backend)
                 lowered_specs.extend(primitive_slots)
-                for dependency_primitive, dependency_type, dependency_backend in (
-                    discovered_dependencies
-                ):
+                for (
+                    dependency_primitive,
+                    dependency_type,
+                    dependency_extension,
+                    dependency_backend,
+                ) in discovered_dependencies:
+                    dependency_scope = (
+                        (dependency_extension,) if extensions is not None else None
+                    )
                     if dependency_backend not in processed.get(
-                        (dependency_primitive, dependency_type), set()
+                        (dependency_primitive, dependency_type, dependency_scope), set()
                     ):
                         worklist.append(
                             (
                                 dependency_primitive,
                                 (dependency_type,),
                                 frozenset({dependency_backend}),
+                                dependency_scope,
                             )
                         )
 
@@ -391,10 +403,11 @@ class _GenerationSession:
         type_tags: tuple[str, ...],
         selected_extensions: dict[str, Extension],
         backend_ids: frozenset[str],
-    ) -> tuple[list["_LoweredSlot"], tuple[tuple[str, str, str], ...]]:
+        extensions: tuple[str, ...] | None,
+    ) -> tuple[list["_LoweredSlot"], tuple[tuple[str, str, str, str], ...]]:
         catalog = self.inputs.catalog
         lowered_slots: list[_LoweredSlot] = []
-        discovered_dependencies: set[tuple[str, str, str]] = set()
+        discovered_dependencies: set[tuple[str, str, str, str]] = set()
 
         for capability in self.backends:
             backend = capability.backend_id
@@ -409,6 +422,12 @@ class _GenerationSession:
             )
             self.diagnostics.extend(selection.diagnostics)
             for slot in selection.selected:
+                if (
+                    extensions is not None
+                    and slot.extension.name not in extensions
+                    and slot.extension.isa_name not in extensions
+                ):
+                    continue
                 _record_render_extensions(catalog, selected_extensions, slot)
                 body_segments = scan(
                     slot.implementation.body_text,
@@ -437,7 +456,12 @@ class _GenerationSession:
                     )
                 )
                 discovered_dependencies.update(
-                    (dependency.primitive, dependency.source.base_tag, backend)
+                    (
+                        dependency.primitive,
+                        dependency.source.base_tag,
+                        dependency.source.extension_isa,
+                        backend,
+                    )
                     for dependency in callees
                     if catalog.primitives_named(dependency.primitive, unmasked=False)
                 )

@@ -408,8 +408,13 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
                 cast<static>(scalar::size, count) % lanes
               ))
             ));
-            var<const_infer>(table, intrin<svcreate2, build[suffix=base::in]>(right, left));
-            complete(intrin<svtbl2, build[suffix=base::in]>(table, indexes));
+            var<const_infer>(from_right, intrin<svtbl, build[suffix=base::in]>(right, indexes));
+            var<const_infer>(left_indexes, call<primitive=sub[IndexVec]>(
+              indexes,
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, lanes))
+            ));
+            var<const_infer>(from_left, intrin<svtbl, build[suffix=base::in]>(left, left_indexes));
+            complete(call<primitive=binary_or[Vec]>(from_right, from_left));
           """
         variants:
           scalar_lanes_fallback:
@@ -1060,7 +1065,7 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
           tsil """
             let<type>(IndexVec, vector::as_base(ui8));
             var<const_infer>(normalized, call<primitive=binary_and[IndexVec]>(
-              call<primitive=reinterpret[IndicesType, IndexVec]>(indexes),
+              cast<bitcast>(register::generic(IndexVec), indexes),
               call<primitive=set1[IndexVec]>(15)
             ));
             complete(intrin<vqtbl1q, build[suffix=base::in]>(data, normalized));
@@ -1091,10 +1096,10 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
           tsil """
             let<type>(IndexVec, vector::as_base(ui8));
             var<const_infer>(normalized, call<primitive=binary_and[IndexVec]>(
-              call<primitive=reinterpret[IndicesType, IndexVec]>(indexes),
+              cast<bitcast>(register::generic(IndexVec), indexes),
               call<primitive=set1[IndexVec]>(15)
             ));
-            complete(intrin<i8x16_swizzle>(data, normalized));
+            complete(intrin<i8x16_swizzle, build[suffix=""]>(data, normalized));
           """
         variants:
           scalar_lanes_fallback:
@@ -1383,7 +1388,7 @@ prim<v:=(v,vidx,v)> table_lookup(left, indexes, right):
           tsil """
             let<type>(IndexVec, vector::as_base(ui8));
             var<const_infer>(normalized, call<primitive=binary_and[IndexVec]>(
-              call<primitive=reinterpret[IndicesType, IndexVec]>(indexes),
+              cast<bitcast>(register::generic(IndexVec), indexes),
               call<primitive=set1[IndexVec]>(31)
             ));
             var<const_infer>(from_left, intrin<vqtbl1q, build[suffix=base::in]>(left, normalized));
@@ -1422,16 +1427,16 @@ prim<v:=(v,vidx,v)> table_lookup(left, indexes, right):
           tsil """
             let<type>(IndexVec, vector::as_base(ui8));
             var<const_infer>(normalized, call<primitive=binary_and[IndexVec]>(
-              call<primitive=reinterpret[IndicesType, IndexVec]>(indexes),
+              cast<bitcast>(register::generic(IndexVec), indexes),
               call<primitive=set1[IndexVec]>(31)
             ));
-            var<const_infer>(from_left, intrin<i8x16_swizzle>(left, normalized));
+            var<const_infer>(from_left, intrin<i8x16_swizzle, build[suffix=""]>(left, normalized));
             var<const_infer>(right_indexes, call<primitive=sub[IndexVec]>(
               normalized,
               call<primitive=set1[IndexVec]>(16)
             ));
-            var<const_infer>(from_right, intrin<i8x16_swizzle>(right, right_indexes));
-            complete(intrin<v128_or>(from_left, from_right));
+            var<const_infer>(from_right, intrin<i8x16_swizzle, build[suffix=""]>(right, right_indexes));
+            complete(intrin<v128_or, build[suffix=""]>(from_left, from_right));
           """
         variants:
           scalar_lanes_fallback:
@@ -1465,8 +1470,13 @@ prim<v:=(v,vidx,v)> table_lookup(left, indexes, right):
               call<primitive=reinterpret[IndicesType, IndexVec]>(indexes),
               call<primitive=set1[IndexVec]>(cast<static>(IndexBase, 2 * value(vector::length) - 1))
             ));
-            var<const_infer>(table, intrin<svcreate2, build[suffix=base::in]>(left, right));
-            complete(intrin<svtbl2, build[suffix=base::in]>(table, normalized));
+            var<const_infer>(from_left, intrin<svtbl, build[suffix=base::in]>(left, normalized));
+            var<const_infer>(right_indexes, call<primitive=sub[IndexVec]>(
+              normalized,
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, value(vector::length)))
+            ));
+            var<const_infer>(from_right, intrin<svtbl, build[suffix=base::in]>(right, right_indexes));
+            complete(call<primitive=binary_or[Vec]>(from_left, from_right));
           """
         variants:
           scalar_lanes_fallback:

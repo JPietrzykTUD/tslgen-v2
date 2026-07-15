@@ -35,6 +35,9 @@ class PivotCallSite:
 class PivotCallCapture:
     sites: list[PivotCallSite] = field(default_factory=list)
 
+    def reset(self) -> None:
+        self.sites.clear()
+
     def add(
         self,
         dependency: CallDependency,

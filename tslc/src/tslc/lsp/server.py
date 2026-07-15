@@ -21,13 +21,15 @@ from tslc.lsp.features import (
     reference_locations,
     semantic_tokens,
 )
-from tslc.lsp.positions import path_to_uri, uri_to_path
+from tslc.lsp.positions import path_to_uri, source_position, uri_to_path
+from tslc.lsp.specialization_context import specialization_context
 from tslc.lsp.workspace import AuthoringWorkspace, WorkspaceSnapshot
 
 SERVER_NAME = "tslc"
 SERVER_VERSION = "0.1.0"
 _DEBOUNCE_SECONDS = 0.15
 _INDEX_WAIT_SECONDS = 5.0
+SPECIALIZATION_CONTEXT_METHOD = "tsl/specializationContext"
 
 
 @dataclass(slots=True)
@@ -249,6 +251,42 @@ def create_server(
         text = workspace.document_text(path) or ""
         return semantic_tokens(workspace.latest.index, path, text)
 
+    @server.feature(SPECIALIZATION_CONTEXT_METHOD)
+    async def specialization_context_request(params: Any) -> dict[str, object]:
+        workspace = await _workspace_with_index(state)
+        if workspace is None or workspace.latest.catalog is None:
+            return {
+                "primitive": None,
+                "extension": None,
+                "type": None,
+                "contextualExtensions": [],
+                "contextualTypes": [],
+                "profiles": [],
+                "slots": [],
+            }
+        uri = _document_uri(params)
+        position = _position(params)
+        path = uri_to_path(uri) if uri is not None else None
+        text = workspace.document_text(path) if path is not None else None
+        line, column = (
+            source_position(text, position)
+            if text is not None and position is not None
+            else (None, None)
+        )
+        backend = _field(params, "backend")
+        selected_backend = backend if isinstance(backend, str) else "cpp"
+        context = await asyncio.to_thread(
+            specialization_context,
+            workspace.latest.catalog,
+            workspace.latest.parsed,
+            workspace.config.profiles,
+            backend=selected_backend,
+            path=path,
+            line=line,
+            column=column,
+        )
+        return context.payload()
+
     @server.feature(types.SHUTDOWN)
     def shutdown(*args: object) -> None:
         del args
@@ -337,6 +375,38 @@ def _options(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _document_uri(params: Any) -> str | None:
+    document = _field(params, "textDocument", "text_document")
+    if document is None:
+        return None
+    uri = _field(document, "uri")
+    return uri if isinstance(uri, str) else None
+
+
+def _position(params: Any) -> types.Position | None:
+    value = _field(params, "position")
+    if value is None:
+        return None
+    line = _field(value, "line")
+    character = _field(value, "character")
+    if not isinstance(line, int) or not isinstance(character, int):
+        return None
+    return types.Position(line=line, character=character)
+
+
+def _field(value: Any, *names: str) -> Any:
+    if isinstance(value, dict):
+        for name in names:
+            if name in value:
+                return value[name]
+        return None
+    for name in names:
+        result = getattr(value, name, None)
+        if result is not None:
+            return result
+    return None
+
+
 def _path_option(options: dict[str, Any], name: str) -> Path | None:
     value = options.get(name)
     return Path(value).resolve() if isinstance(value, str) and value else None
@@ -372,4 +442,9 @@ def _show_setup_error(server: LanguageServer, state: _ServerState) -> None:
     )
 
 
-__all__ = ("SERVER_NAME", "SERVER_VERSION", "create_server")
+__all__ = (
+    "SERVER_NAME",
+    "SERVER_VERSION",
+    "SPECIALIZATION_CONTEXT_METHOD",
+    "create_server",
+)

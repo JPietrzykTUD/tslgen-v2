@@ -68,7 +68,11 @@ snapshot. Symbols, references, hover, completion, and semantic tokens are pure
 projections of the latest successful index. The editor-neutral pygls transport
 is in `lsp/`; an initially invalid overlay uses the valid saved corpus for
 catalog facts and definitions while retaining parseable overlay occurrence
-spans. The TypeScript VS Code client contains no compiler semantics.
+spans. [lsp/specialization_context.py](src/tslc/lsp/specialization_context.py)
+combines the parsed cursor scope with the real selector to expose valid
+`(profile, extension, type)` slots to editor clients without duplicating source
+parsing or compatibility rules in TypeScript. The TypeScript VS Code client
+contains no compiler semantics.
 Concrete preview runs `tslc preview` as a separate saved-file child. It uses
 one loaded input snapshot for selection, lowering, and dependency closure, then
 passes the requested emitted specialization through the registered backend's
@@ -82,7 +86,17 @@ selection, standard TSIL region lowerers, and C++ intrinsic/type translation,
 but replaces call lowering to retain typed sites for recursive inlining and
 validates the resulting lowered body for straight-line dataflow. Generation-time
 control therefore expands normally; only constructs that survive lowering are
-rejected. It produces standalone YAML artifacts and
+rejected. For fixed-width C++ vectors participating in dataparallel inference,
+the projection also emits width-labelled `tsl_128`/`tsl_256`/`tsl_512`
+definitions whose calls and `fixed<N>` vector types use the existing C++
+dialect, with `N` resolved as the scalar-type-specific lane count. It produces
+standalone YAML artifacts. Multiple requested machine profiles (including the
+implicit all-profiles case) are first projected to distinct target-family and
+hardware-feature-set combinations, with compiler modes combined within each
+combination. This avoids repeating the same PIVOT selection for profile aliases
+without changing ordinary generation. From those combinations it retains a
+deterministic cover of selected corpus implementations, so a feature set that
+adds no implementation is not lowered or rendered. The exporter
 does not construct a normal generation request, enter the generation session,
 register a backend, render a generated project, or affect default C++/Rust
 output.

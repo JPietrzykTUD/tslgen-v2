@@ -32,6 +32,12 @@ _KNOWN_TARGET_CONSTRAINT_FIELDS = frozenset(
 )
 
 
+def known_implementation_selector_fields() -> frozenset[str]:
+    """Return the metadata keys accepted beneath an implementation selector."""
+
+    return _KNOWN_SELECTOR_METADATA_FIELDS
+
+
 def validate_implementation_safety(
     declaration: ParsedPrimitiveDeclaration,
     diagnostics: list[Diagnostic],

@@ -11,6 +11,7 @@ from types import MappingProxyType
 from tslc.authoring import CheckResult, ParsedDocumentCache, SourceOverlay, check_catalog
 from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.machine_profiles import (
+    MachineProfile,
     load_machine_profiles_checked,
     target_feature_names,
 )
@@ -18,6 +19,7 @@ from tslc.catalog.model import Catalog
 from tslc.catalog_index import CatalogIndex, build_catalog_index
 from tslc.diagnostics import Diagnostic
 from tslc.project_config import ProjectConfig, discover_config, load_project_config
+from tslc.syntax.ast import OuterTslParseResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +30,7 @@ class AuthoringConfig:
     backends: tuple[str, ...]
     preferred_profiles: tuple[str, ...] = ()
     target_features: tuple[str, ...] = ()
+    profiles: Mapping[str, MachineProfile] = MappingProxyType({})
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +49,7 @@ class WorkspaceSnapshot:
     source_paths: tuple[Path, ...]
     versions: Mapping[Path, int | None]
     target_features: tuple[str, ...] = ()
+    parsed: OuterTslParseResult | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "versions", MappingProxyType(dict(self.versions)))
@@ -92,6 +96,7 @@ class AuthoringWorkspace:
             if project is not None
             else _layout_profiles(root)
         )
+        profiles = _configured_profiles(selected_profiles)
         return cls(
             AuthoringConfig(
                 root=root,
@@ -103,7 +108,8 @@ class AuthoringWorkspace:
                 preferred_profiles=(
                     project.authoring_profiles if project is not None else ()
                 ),
-                target_features=_configured_target_features(selected_profiles),
+                target_features=target_feature_names(profiles),
+                profiles=profiles,
             )
         )
 
@@ -227,6 +233,7 @@ class AuthoringWorkspace:
                 paths,
                 versions,
                 self.config.target_features,
+                result.parsed,
             )
             self._latest = snapshot
             return snapshot
@@ -247,10 +254,10 @@ def _layout_profiles(root: Path) -> Path | None:
     return candidate if candidate.is_file() else None
 
 
-def _configured_target_features(path: Path | None) -> tuple[str, ...]:
+def _configured_profiles(path: Path | None) -> Mapping[str, MachineProfile]:
     if path is None:
-        return ()
-    return target_feature_names(load_machine_profiles_checked(path).profiles)
+        return MappingProxyType({})
+    return load_machine_profiles_checked(path).profiles
 
 
 __all__ = (

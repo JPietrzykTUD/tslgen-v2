@@ -10,6 +10,9 @@ from typing import Literal
 from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.model import Catalog
 from tslc.catalog.validation._schema_extensions import known_extension_fields
+from tslc.catalog.validation._schema_implementation import (
+    known_implementation_selector_fields,
+)
 from tslc.catalog.validation._schema_primitives import KNOWN_PRIMITIVE_FIELDS
 from tslc.ir.region_registry import TSIL_REGION_KEYWORDS
 
@@ -19,6 +22,7 @@ CompletionKind = Literal[
     "extension-field",
     "implementation-extension",
     "implementation-type-group",
+    "implementation-field",
     "target-feature",
     "primitive-call",
     "region-keyword",
@@ -78,7 +82,11 @@ def completion_context(text: str, offset: int) -> CompletionContext:
         if impl_indent is not None and indent > impl_indent:
             if indent <= impl_indent + 2:
                 return CompletionContext("implementation-extension", prefix)
-            return CompletionContext("implementation-type-group", prefix)
+            if indent <= impl_indent + 4:
+                return CompletionContext("implementation-type-group", prefix)
+            if indent <= impl_indent + 6:
+                return CompletionContext("implementation-field", prefix)
+            return CompletionContext("none", prefix)
         if indent >= 2:
             return CompletionContext("primitive-field", prefix)
     if top_kind == "extension" and indent >= 2:
@@ -101,6 +109,8 @@ def completion_values(
         values = catalog.extensions.keys()
     elif context.kind == "implementation-type-group":
         values = catalog.type_groups.keys()
+    elif context.kind == "implementation-field":
+        values = known_implementation_selector_fields()
     elif context.kind == "target-feature":
         values = {*target_features, *_catalog_target_features(catalog)}
     elif context.kind == "primitive-call":

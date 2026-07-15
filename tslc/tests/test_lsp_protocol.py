@@ -137,6 +137,38 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         definitions = client.read_until(lambda item: item.get("id") == 10)["result"]
         assert definitions
 
+        context_line = next(
+            index
+            for index, line in enumerate(text.splitlines())
+            if index > 120 and 'tsil "complete(intrin<add, build>(left, right));"' in line
+        )
+        context_character = text.splitlines()[context_line].index("complete")
+        client.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 11,
+                "method": "tsl/specializationContext",
+                "params": {
+                    "backend": "cpp",
+                    "textDocument": {"uri": path.as_uri()},
+                    "position": {
+                        "line": context_line,
+                        "character": context_character,
+                    },
+                },
+            }
+        )
+        context_response = client.read_until(lambda item: item.get("id") == 11)
+        assert "result" in context_response, context_response
+        context = context_response["result"]
+        assert context["primitive"] == "add"
+        assert context["extension"] == "sse"
+        assert context["type"] == "f32"
+        assert any(
+            slot["extension"] == "sse" and slot["type"] == "f32"
+            for slot in context["slots"]
+        )
+
         client.send(
             {
                 "jsonrpc": "2.0",

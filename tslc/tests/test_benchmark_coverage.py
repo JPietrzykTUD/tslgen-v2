@@ -222,10 +222,13 @@ def test_shape_inventory_is_deterministic_and_marks_default_only_shapes(
     assert "not applicable" in first
     assert "inactive-authored-shape" in first
     special_cases = {entry.name: entry for entry in audit.special_cases}
+    sized = special_cases["sized-vector implementation"]
+    assert sized.variant_declarations == 0
+    assert sized.status == "not applicable"
+
     for name in (
-        "sized-vector implementation",
         "scalable-vector implementation",
         "opt-in compiler header implementation",
     ):
-        assert special_cases[name].variant_declarations == 0
-        assert special_cases[name].status == "not applicable"
+        assert special_cases[name].variant_declarations > 0
+        assert special_cases[name].status == "gap"

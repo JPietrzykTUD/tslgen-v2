@@ -857,18 +857,17 @@ globally common default chord. `tslc explain` remains a separate CLI diagnostic
 for candidate ranking, TSIL scanning, lowering, dependency closure, and the
 emission verdict.
 
-Profile and extension selection are catalog-backed rather than free-form
-prompts. Unless a fixed `tsl.preview.profile` is configured, Preview, Check,
-and Doctor run `tslc list profiles --format json` through the discovered
-compiler command and show every returned profile in a searchable VS Code
-quick-pick, with `scalar` first when available. Unless a fixed
-`tsl.preview.extension` is configured, Preview similarly runs
-`tslc list extensions --format json`; the chosen profile is placed first when
-it is also an extension. Preview starts both catalog queries concurrently when
-both selectors are required. This keeps catalog ownership in `tslc`,
-automatically reflects newly added values, and leaves explicit settings
-available for unattended extension-host tests and users who always target the
-same slot.
+Concrete selection is cursor- and catalog-backed rather than a sequence of
+unfiltered prompts. The language server combines the parsed
+primitive/implementation scope at the cursor with `Selector.select_profile` to
+return the valid `(profile, extension, type)` matrix for the configured backend.
+The client selects profile first, filters extension choices by that profile,
+then filters type choices by both. A single source-scoped extension or concrete
+type is reused automatically; a type group constrains but does not prematurely
+collapse the type picker. Explicit settings are accepted only when valid in the
+remaining matrix. This keeps syntax and compatibility ownership in `tslc` and
+lets new profiles, extensions, types, inheritance, activation, and requirements
+flow into the editor without TypeScript changes.
 
 The client owns process startup, progress, cancellation, stderr capture, and
 virtual-document refresh. Starting a new preview cancels an older preview for
@@ -1311,11 +1310,12 @@ Work:
 - add a client command that runs the slot-aware `tslc check` path in a child
   process for the current primitive and selected profile/type/backend;
 - add `TSL: Preview Specialization` to the TypeScript client;
-- populate the Preview and Check profile quick-picks from
-  `tslc list profiles --format json`, with `tsl.preview.profile` as a fixed
-  override;
-- populate its extension quick-pick from `tslc list extensions --format json`,
-  with `tsl.preview.extension` as a fixed override;
+- add a language-server specialization-context request backed by parsed cursor
+  scope and the real selector matrix;
+- resolve Preview and Check in profile -> compatible extension -> compatible
+  type order, reusing exact cursor dimensions and filtering every QuickPick;
+- pass the chosen extension through the concrete `tslc check` contract while
+  leaving dependency closure free to select required supporting extensions;
 - add `tslc preview` and launch it in a cancellable child process rather than
   doing selection, lowering, or rendering in the LSP process;
 - make preview reuse the non-project generation path (`render_artifacts=False`)
@@ -1357,8 +1357,10 @@ Work:
 - replace the unconditional `dev.sh` preflight with the shared report or normal
   verifier preflight;
 - expose doctor through an editor command;
-- populate Doctor's profile quick-pick from `tslc list profiles --format json`,
-  with `tsl.preview.profile` as a fixed override;
+- use the full specialization selection flow for Doctor inside a primitive and
+  label the result with the chosen extension/type context, while stating that
+  its toolchain readiness probe is profile/backend scoped; retain a
+  workspace-level profile QuickPick outside primitives;
 - adapt applicable `metadata_audit` suggestions into explicit workspace edits;
 - add help links and safe source actions for selected diagnostics;
 - measure the completed server and add catalog-level incrementality only if

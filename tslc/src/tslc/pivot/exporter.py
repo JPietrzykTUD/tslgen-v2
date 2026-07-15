@@ -12,6 +12,7 @@ from tslc.diagnostics import Diagnostic, has_errors, sort_diagnostics
 from tslc.output.artifacts import Artifact, ArtifactSet
 from tslc.pivot.model import PivotExportResult
 from tslc.pivot.planner import PivotPlanner
+from tslc.pivot.profiles import profiles_for_distinct_feature_sets
 from tslc.pivot.render_yaml import render_pivot_yaml
 
 
@@ -68,7 +69,7 @@ def export_pivot(request: PivotExportRequest) -> PivotExportResult:
         return _empty(diagnostics)
 
     plan = PivotPlanner(catalog_inputs.catalog).plan(
-        tuple(profiles),
+        profiles_for_distinct_feature_sets(tuple(profiles)),
         primitive_names=request.primitives,
         type_tags=request.type_tags,
     )

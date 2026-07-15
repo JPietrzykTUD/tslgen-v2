@@ -282,7 +282,7 @@ def test_non_x86_abs_uses_native_intrinsics_and_keeps_fallback(
             "__builtin_shufflevector",
             ("cpp",),
         ),
-        ("sve", "sve", "si32", "svtbl2_s32", ("cpp",)),
+        ("sve", "sve", "si32", "svtbl_s32", ("cpp",)),
     ),
 )
 def test_align_right_lanes_prefers_native_cross_lane_operations(
@@ -360,7 +360,7 @@ def test_align_right_lanes_prefers_native_cross_lane_operations(
             "ui8",
             "i8x16_swizzle",
         ),
-        ("table_lookup", "sve256", "sve256", "si32", "svtbl2_s32"),
+        ("table_lookup", "sve256", "sve256", "si32", "svtbl_s32"),
     ),
 )
 def test_runtime_permute_and_table_lookup_prefer_native_operations(

@@ -17,6 +17,7 @@ from tslc.lsp.features import (
     semantic_tokens,
 )
 from tslc.lsp.positions import source_position, span_to_range
+from tslc.lsp.specialization_context import specialization_context
 from tslc.lsp.workspace import AuthoringWorkspace
 
 
@@ -61,6 +62,65 @@ def test_workspace_reuses_unchanged_documents_and_suppresses_stale_results(
     assert fixed.diagnostics == ()
     assert workspace.cache.last_reparsed == (path.resolve(),)
     assert workspace.cache.index_cache.last_reindexed == (path.resolve(),)
+
+
+def test_specialization_context_uses_cursor_scope_and_selector_slots(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    path = data_root / "primitives" / "arithmetic" / "fundamental.tsl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+
+    exact_line = next(
+        index
+        for index, line in enumerate(lines, 1)
+        if index > 120 and 'tsil "complete(intrin<add, build>(left, right));"' in line
+    )
+    exact = specialization_context(
+        snapshot.catalog,
+        snapshot.parsed,
+        workspace.config.profiles,
+        backend="cpp",
+        path=path,
+        line=exact_line,
+        column=lines[exact_line - 1].index("complete") + 1,
+    )
+
+    assert exact.primitive == "add"
+    assert exact.extension == "sse"
+    assert exact.type_tag == "f32"
+    assert any(
+        slot.extension == "sse" and slot.type_tag == "f32"
+        for slot in exact.slots
+    )
+
+    group_line = 84
+    grouped = specialization_context(
+        snapshot.catalog,
+        snapshot.parsed,
+        workspace.config.profiles,
+        backend="cpp",
+        path=path,
+        line=group_line,
+        column=15,
+    )
+
+    assert grouped.primitive == "add"
+    assert grouped.extension == "avx512"
+    assert grouped.type_tag is None
+    assert grouped.contextual_types == (
+        "si8",
+        "si16",
+        "si32",
+        "si64",
+        "ui8",
+        "ui16",
+        "ui32",
+        "ui64",
+    )
 
 
 def test_navigation_hover_completion_and_tokens_use_latest_index(
@@ -122,6 +182,10 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
         snapshot,
         "prim<v:=v> x(v):\n  impls:\n    scalar:\n      ari",
     )
+    implementation_fields = _completion_labels(
+        snapshot,
+        "prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        ",
+    )
     primitive_calls = _completion_labels(
         snapshot,
         'prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        implementation:\n          tsil "complete(call<primitive=ad',
@@ -156,6 +220,14 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
     assert "brief_description" in outer
     assert "scalar" in extensions
     assert "arith" in type_groups
+    assert {
+        "implementation",
+        "requires",
+        "safety",
+        "unroll_variants",
+        "variants",
+    } <= implementation_fields
+    assert "si32" not in implementation_fields
     assert "add" in primitive_calls
     assert "avx512_fp16" in required_features
     assert "avx512_fp16" in nested_required_features

@@ -37,14 +37,21 @@ Use `tsl.server.command`/`tsl.server.args` for an explicit server,
 Python environment containing `tslc[editor]`. Otherwise the extension searches
 for `tslc` on the extension-host `PATH`.
 
-The preview command requires a saved source and runs `tslc preview` in a
-cancellable child. It displays the actual C++ or Rust specialization fragment
-from the normal backend primitive renderer without writing a project or
-invoking a toolchain. Preview, Check, and Doctor load every available profile
-from the current compiler catalog and present a searchable dropdown when
-`tsl.preview.profile` is empty. Preview does the same for extensions when
-`tsl.preview.extension` is empty. Ordinary hover and diagnostics never lower or
-render a specialization, invoke toolchains, or start preview processes.
+The concrete commands use the language server's parsed cursor scope and real
+selector matrix. A concrete extension or scalar type at the cursor is reused;
+missing values are chosen through searchable QuickPicks filtered in order by
+profile, extension, and type. Explicit settings remain valid overrides only
+when they belong to the current matrix. Check passes the selected extension to
+`tslc check`. Inside a primitive, Doctor uses the same full concrete selection
+flow and labels its result with that context; its actual toolchain probe remains
+profile/backend scoped because extension and scalar type do not change tool
+availability.
+
+Preview requires a saved source and runs `tslc preview` in a cancellable child.
+It displays the actual C++ or Rust specialization fragment from the normal
+backend primitive renderer without writing a project or invoking a toolchain.
+Ordinary hover and diagnostics never lower or render a specialization, invoke
+toolchains, or start preview processes.
 
 See `docs/tsl-editor.md` in the repository for architecture, development,
 performance evidence, remote setup, installation updates, and troubleshooting.

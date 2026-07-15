@@ -95,15 +95,27 @@ overlay, so navigation does not begin empty.
 
 Concrete preview is deliberately explicit and saved-file-only. Select a
 primitive name or place the cursor after its declaration, invoke **TSL: Preview
-Specialization**, and choose/configure a concrete profile. Preview, Check, and
-Doctor obtain all profile names from `tslc list profiles --format json` and
-present them in a searchable VS Code quick-pick unless `tsl.preview.profile`
-supplies a fixed profile. `scalar` is placed first when available. Unless
-`tsl.preview.extension` supplies a fixed extension, Preview likewise obtains
-all extension names from `tslc list extensions --format json` and presents
-them in a quick-pick, with the selected profile first when it is also an
-extension. Profile and extension catalog queries run concurrently when Preview
-needs both. The client launches
+Specialization**, and complete only the slot dimensions not already established
+by the cursor or explicit settings. The client requests a compiler-owned
+specialization context from the language server. That response combines the
+parsed primitive/implementation selector scope at the cursor with the real
+selector's valid `(profile, extension, type)` matrix for the configured backend.
+
+Selection proceeds in dependency order: profile first, then only extensions
+valid for that profile, then only types valid for that profile and extension.
+A single extension or concrete type established by the cursor wins over a
+setting and skips its picker. A multi-type selector such as `?i?` constrains the
+type QuickPick to its concrete members but does not silently choose one.
+Configured profile/extension/type values are accepted only when present in the
+remaining matrix; stale values produce a warning and a filtered QuickPick.
+Check passes all four concrete dimensions to `tslc check`. Inside a primitive,
+Doctor uses the same concrete selection flow and labels its result with the
+chosen primitive/profile/extension/type/backend context. The actual toolchain
+probe remains profile/backend-scoped because extension and scalar type do not
+change compiler/linker/runner availability. Outside a primitive, Doctor falls
+back to its workspace-level profile QuickPick.
+
+The client launches
 `tslc preview` as a cancellable child, shows progress, and opens its immutable
 result in a read-only `tsl-preview:` document beside the source. A newer
 preview cancels and supersedes an older child without allowing stale output to
@@ -135,9 +147,10 @@ Preview/check/doctor use `tsl.preview.command`, then the same bundled/PATH/
 configured-Python order. The client never parses a command as a shell string
 and does not reinterpret an arbitrary custom server command as a full compiler.
 Useful slot settings are `tsl.preview.profile`, `tsl.preview.extension`,
-`tsl.preview.type`, and `tsl.preview.backend`. The profile and extension
-settings are fixed overrides; leaving them empty enables the catalog-backed
-quick-picks.
+`tsl.preview.type`, and `tsl.preview.backend`. The first three are explicit
+selections when valid in the current context; leaving them empty enables
+cursor inference and filtered QuickPicks. The default type is empty rather than
+silently forcing `si32`.
 
 The client contains no TSIL keyword list. During `npm run compile` and package
 creation, `scripts/generate-grammar.mjs` calls `tslc list regions --format json`

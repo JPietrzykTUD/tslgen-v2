@@ -10,6 +10,7 @@ import pytest
 
 from tslc import cli
 from tslc import check_cli
+from tslc.api import generate_project
 from tslc.authoring import check_catalog
 from tslc.doctor import diagnose
 from tslc.maintenance import coverage_inventory
@@ -58,6 +59,8 @@ def test_slot_check_lowers_without_rendering(
             "avx2",
             "--backend",
             "cpp",
+            "--extension",
+            "avx2",
             "--type",
             "si32",
             "--format",
@@ -72,16 +75,41 @@ def test_slot_check_lowers_without_rendering(
     assert payload["skipped"] == []
 
 
+def test_slot_check_extension_filter_keeps_dependency_closure_concrete(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        (data_root,),
+        machine_profiles_path=machine_profiles_path,
+        primitives=("add",),
+        profiles=("avx2",),
+        type_tags=("si32",),
+        extensions=("avx2",),
+        backends=("cpp",),
+        render_artifacts=False,
+    )
+
+    assert result.diagnostics == ()
+    assert result.skipped == ()
+    assert result.coverage
+    assert {entry.extension for entry in result.coverage} == {"avx2"}
+    assert {entry.type_tag for entry in result.coverage} == {"si32"}
+    assert any(entry.source_primitive_name == "add" for entry in result.coverage)
+
+
 def test_slot_check_strict_mode_is_explicit(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     modes: list[str] = []
+    extensions: list[object] = []
 
     def fake_generate(*args: object, **kwargs: object) -> object:
         del args
         modes.append(str(kwargs["generation_mode"]))
+        extensions.append(kwargs["extensions"])
         return SimpleNamespace(diagnostics=(), coverage=(), skipped=())
 
     monkeypatch.setattr(check_cli, "generate_project", fake_generate)
@@ -91,6 +119,8 @@ def test_slot_check_strict_mode_is_explicit(
         "--machine-profiles",
         str(tmp_path / "profiles.json"),
         "--profile",
+        "scalar",
+        "--extension",
         "scalar",
         "--format",
         "json",
@@ -102,6 +132,7 @@ def test_slot_check_strict_mode_is_explicit(
     capsys.readouterr()
 
     assert modes == ["partial", "strict"]
+    assert extensions == [["scalar"], ["scalar"]]
 
 
 def test_catalog_list_and_show_have_stable_json(

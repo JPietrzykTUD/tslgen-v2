@@ -14,6 +14,8 @@ suite("TSL extension", () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes("tsl.restartServer"));
     assert.ok(commands.includes("tsl.previewSpecialization"));
+    assert.ok(commands.includes("tsl.checkSlot"));
+    assert.ok(commands.includes("tsl.doctor"));
 
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     assert.ok(root);
@@ -44,6 +46,26 @@ suite("TSL extension", () => {
 
     const hovers = await waitForHover(uri, new vscode.Position(line, character));
     assert.ok(hovers.length > 0);
+
+    const implementationFieldLine = document
+      .getText()
+      .split(/\r?\n/)
+      .findIndex((value) => value.trim() === "requires [sse]");
+    assert.ok(implementationFieldLine >= 0);
+    const implementationCompletions = await vscode.commands.executeCommand<
+      vscode.CompletionList
+    >(
+      "vscode.executeCompletionItemProvider",
+      uri,
+      new vscode.Position(implementationFieldLine, 8),
+    );
+    const implementationLabels = new Set(
+      implementationCompletions.items.map((item) => item.label.toString()),
+    );
+    assert.ok(implementationLabels.has("requires"));
+    assert.ok(implementationLabels.has("safety"));
+    assert.ok(implementationLabels.has("implementation"));
+    assert.ok(!implementationLabels.has("si32"));
 
     const briefStart = document.positionAt(document.getText().indexOf("brief_description"));
     await sourceEditor.edit((edit) =>
@@ -84,6 +106,33 @@ suite("TSL extension", () => {
     await configuration.update("preview.backend", "cpp", true);
     assert.ok(
       (await waitForHover(uri, new vscode.Position(line, character))).length > 0,
+    );
+    await vscode.commands.executeCommand<void>("tsl.checkSlot");
+    const checkEditor = vscode.window.activeTextEditor;
+    assert.equal(checkEditor?.document.uri.scheme, "tsl-preview");
+    assert.match(checkEditor.document.getText(), /ok: checked \d+ lowered slot/);
+
+    const reopenedSourceEditor = await vscode.window.showTextDocument(document);
+    reopenedSourceEditor.selection = new vscode.Selection(
+      line,
+      character,
+      line,
+      character + "add".length,
+    );
+    await vscode.commands.executeCommand<void>("tsl.doctor");
+    const doctorEditor = vscode.window.activeTextEditor;
+    assert.equal(doctorEditor?.document.uri.scheme, "tsl-preview");
+    assert.match(
+      doctorEditor.document.getText(),
+      /Selection context: add<si32> \(avx2\/avx2\/cpp\)/,
+    );
+
+    const previewSourceEditor = await vscode.window.showTextDocument(document);
+    previewSourceEditor.selection = new vscode.Selection(
+      line,
+      character,
+      line,
+      character + "add".length,
     );
     const preview = vscode.commands.executeCommand<void>("tsl.previewSpecialization");
     const hoverStarted = Date.now();

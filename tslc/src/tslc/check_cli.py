@@ -37,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--primitive", action="append", default=[])
     parser.add_argument("--profile", action="append", default=[])
     parser.add_argument("--backend", action="append", default=[])
+    parser.add_argument("--extension", action="append", default=[])
     parser.add_argument("--type", action="append", dest="type_tags", default=[])
     parser.add_argument("--format", choices=("text", "json"), default="text")
     parser.add_argument(
@@ -116,7 +117,13 @@ def _settings(args: argparse.Namespace, config: ProjectConfig | None) -> _Settin
 
 
 def _slot_requested(args: argparse.Namespace) -> bool:
-    return bool(args.primitive or args.profile or args.backend or args.type_tags)
+    return bool(
+        args.primitive
+        or args.profile
+        or args.backend
+        or args.extension
+        or args.type_tags
+    )
 
 
 def _run_once(settings: _Settings, args: argparse.Namespace) -> int:
@@ -130,6 +137,7 @@ def _run_once(settings: _Settings, args: argparse.Namespace) -> int:
             primitives=args.primitive or None,
             profiles=args.profile or None,
             type_tags=args.type_tags or DEFAULT_SCALAR_TYPE_TAGS,
+            extensions=args.extension or None,
             backends=settings.backends,
             generation_mode="strict" if args.strict else "partial",
             render_artifacts=False,

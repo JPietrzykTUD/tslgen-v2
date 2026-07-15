@@ -16,6 +16,8 @@ from tslc.lower.lowerer import Lowerer
 from tslc.pivot import PivotExportRequest, export_pivot
 from tslc.pivot._lowering import PivotCallCapture, pivot_region_lowerers
 from tslc.pivot.model import PivotDefinition, PivotDocument
+from tslc.pivot.planner import _contributing_indexes
+from tslc.pivot.profiles import profiles_for_distinct_feature_sets
 from tslc.pivot.render_yaml import render_pivot_yaml
 from tslc.select.selector import Selector
 
@@ -30,6 +32,54 @@ def _export_add(data_root: Path, machine_profiles_path: Path):
             type_tags=("si8",),
         )
     )
+
+
+def test_profiles_are_projected_to_distinct_hardware_feature_sets() -> None:
+    common = {
+        "family": "demo",
+        "features": frozenset({"feature_a"}),
+        "alternatives": {},
+    }
+    projected = profiles_for_distinct_feature_sets(
+        (
+            MachineProfile(name="plain", **common),
+            MachineProfile(
+                name="mode_b",
+                compile_modes=frozenset({"mode_b"}),
+                **common,
+            ),
+            MachineProfile(
+                name="other_features",
+                family="demo",
+                features=frozenset({"feature_a", "feature_b"}),
+                alternatives={},
+            ),
+            MachineProfile(
+                name="other_family",
+                family="other",
+                features=frozenset({"feature_a"}),
+                alternatives={},
+            ),
+        )
+    )
+
+    assert len(projected) == 3
+    merged = next(item for item in projected if item.name == "mode_b+plain")
+    assert merged.features == frozenset({"feature_a"})
+    assert merged.compile_modes == frozenset({"mode_b"})
+
+
+def test_only_feature_sets_that_add_an_implementation_are_retained() -> None:
+    indexes = _contributing_indexes(
+        (
+            frozenset({1, 2}),
+            frozenset({2, 3}),
+            frozenset({1, 2, 3}),
+            frozenset({4}),
+        )
+    )
+
+    assert indexes == (2, 3)
 
 
 def test_leaf_specializations_render_concrete_pivot_yaml(
@@ -51,6 +101,22 @@ def test_leaf_specializations_render_concrete_pivot_yaml(
     )
     assert by_isa["sse2"].direct == ("res = _mm_add_epi8(left, right);",)
     assert by_isa["avx2"].direct == ("res = _mm256_add_epi8(left, right);",)
+    fixed_16 = (
+        "::tsl::dataparallel::simd_for_t<"
+        "::tsl::dataparallel::fixed<16>, int8_t>"
+    )
+    assert by_isa["tsl_128"].signature == (
+        ("left", f"typename {fixed_16}::register_type"),
+        ("right", f"typename {fixed_16}::register_type"),
+        ("res", f"typename {fixed_16}::register_type"),
+    )
+    assert by_isa["tsl_128"].direct == (
+        f"res = ::tsl::add<{fixed_16}>(left, right);",
+    )
+    assert "tsl_256" in by_isa
+    # Compiler-vector overlays deliberately do not participate in fixed<N>
+    # inference, so their 512-bit spelling must not create a TSL fixed alias.
+    assert "tsl_512" not in by_isa
     assert all(
         definition.direct[-1].startswith("res = ")
         for definition in by_isa.values()
@@ -64,6 +130,60 @@ def test_leaf_specializations_render_concrete_pivot_yaml(
     assert artifact.content.startswith('name: "add"\ninput:\n')
     assert '  - isa: "sse2"\n    dtype: "int8"\n' in artifact.content
     assert '      - "res = _mm_add_epi8(left, right);"\n' in artifact.content
+
+
+def test_tsl_fixed_512_definition_uses_lane_count_not_bit_width(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = export_pivot(
+        PivotExportRequest(
+            source_paths=_expand_sources((data_root,)),
+            machine_profiles_path=machine_profiles_path,
+            primitives=("add",),
+            profiles=("skylake",),
+            type_tags=("si8",),
+        )
+    )
+
+    document = next(item for item in result.documents if item.name == "add")
+    definition = next(
+        item for item in document.definitions if item.isa == "tsl_512"
+    )
+    assert "fixed<64>" in definition.signature[0][1]
+    assert "fixed<512>" not in definition.signature[0][1]
+    assert definition.direct == (
+        "res = ::tsl::add<::tsl::dataparallel::simd_for_t<"
+        "::tsl::dataparallel::fixed<64>, int8_t>>(left, right);",
+    )
+
+
+def test_tsl_call_definition_remains_when_plain_body_contains_a_cast(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = export_pivot(
+        PivotExportRequest(
+            source_paths=_expand_sources((data_root,)),
+            machine_profiles_path=machine_profiles_path,
+            primitives=("set1",),
+            profiles=("avx2",),
+            type_tags=("si8",),
+        )
+    )
+
+    document = next(item for item in result.documents if item.name == "set1")
+    assert {item.isa for item in document.definitions} == {
+        "scalar",
+        "tsl_128",
+        "tsl_256",
+    }
+    assert any(
+        skip.primitive == "set1"
+        and skip.extension == "avx2"
+        and "contains a cast" in skip.reason
+        for skip in result.skipped
+    )
 
 
 def test_primitive_calls_are_recursively_inlined_into_direct_flow(

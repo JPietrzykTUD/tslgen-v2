@@ -122,7 +122,7 @@ Use `./dev.sh` for generated-project workflows:
 
 ```bash
 ./dev.sh check
-./dev.sh check --primitive add --profile avx2 --backend cpp --type si32
+./dev.sh check --primitive add --profile avx2 --extension avx2 --backend cpp --type si32
 ./dev.sh list primitives
 ./dev.sh show extension avx2
 ./dev.sh doctor --profile avx2 --backend cpp

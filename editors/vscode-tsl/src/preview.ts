@@ -12,9 +12,20 @@ export interface ConcreteSlot {
   readonly extension: string;
 }
 
-export interface SlotChoices {
-  readonly profiles?: readonly string[];
-  readonly extensions?: readonly string[];
+export interface SpecializationSlotChoice {
+  readonly profile: string;
+  readonly extension: string;
+  readonly type: string;
+}
+
+export interface SpecializationContext {
+  readonly primitive: string | null;
+  readonly extension: string | null;
+  readonly type: string | null;
+  readonly contextualExtensions: readonly string[];
+  readonly contextualTypes: readonly string[];
+  readonly profiles: readonly string[];
+  readonly slots: readonly SpecializationSlotChoice[];
 }
 
 export class PreviewDocumentProvider implements vscode.TextDocumentContentProvider {
@@ -67,7 +78,8 @@ export class PreviewManager implements vscode.Disposable {
         "--extension",
         slot.extension,
       ],
-      `TSL Preview: ${slot.primitive}<${slot.type}> (${slot.profile}/${slot.backend})`,
+      `TSL Preview: ${slot.primitive}<${slot.type}> ` +
+        `(${slot.profile}/${slot.extension}/${slot.backend})`,
       "preview",
       slot.backend === "rust" ? "rs" : "hpp",
     );
@@ -91,8 +103,11 @@ export class PreviewManager implements vscode.Disposable {
         slot.type,
         "--backend",
         slot.backend,
+        "--extension",
+        slot.extension,
       ],
-      `TSL Check: ${slot.primitive}<${slot.type}> (${slot.profile}/${slot.backend})`,
+      `TSL Check: ${slot.primitive}<${slot.type}> ` +
+        `(${slot.profile}/${slot.extension}/${slot.backend})`,
       "check",
     );
   }
@@ -102,13 +117,25 @@ export class PreviewManager implements vscode.Disposable {
     cwd: string,
     profile: string,
     backend: string,
+    slot?: ConcreteSlot,
   ): Promise<void> {
+    const title = slot
+      ? `TSL Doctor: ${slot.primitive}<${slot.type}> ` +
+        `(${slot.profile}/${slot.extension}/${slot.backend})`
+      : `TSL Doctor: ${profile}/${backend}`;
+    const scope = slot
+      ? `Selection context: ${slot.primitive}<${slot.type}> ` +
+        `(${slot.profile}/${slot.extension}/${slot.backend})\n` +
+        "Toolchain readiness is determined by profile and backend.\n\n"
+      : "";
     await this.run(
       compiler,
       cwd,
       ["doctor", "--profile", profile, "--backend", backend],
-      `TSL Doctor: ${profile}/${backend}`,
+      title,
       "doctor",
+      "txt",
+      scope,
     );
   }
 
@@ -125,6 +152,7 @@ export class PreviewManager implements vscode.Disposable {
     title: string,
     kind: string,
     suffix = "txt",
+    contentPrefix = "",
   ): Promise<void> {
     this.generation += 1;
     const generation = this.generation;
@@ -172,7 +200,10 @@ export class PreviewManager implements vscode.Disposable {
       path: `/${kind}/${encodeURIComponent(title)}.${suffix}`,
       query: `generation=${generation}`,
     });
-    this.provider.set(uri, result.stdout || `${title}: no output\n`);
+    this.provider.set(
+      uri,
+      contentPrefix + (result.stdout || `${title}: no output\n`),
+    );
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, {
       viewColumn: vscode.ViewColumn.Beside,
@@ -184,53 +215,81 @@ export class PreviewManager implements vscode.Disposable {
 
 export async function selectConcreteSlot(
   editor: vscode.TextEditor,
-  choices: SlotChoices = {},
+  context: SpecializationContext,
 ): Promise<ConcreteSlot | undefined> {
-  const primitive =
-    (await primitiveAt(editor)) ??
-    (await vscode.window.showInputBox({
-      title: "TSL primitive",
-      prompt: "Primitive to check or preview",
-      validateInput: required,
-    }));
+  const primitive = context.primitive;
   if (!primitive) {
+    void vscode.window.showErrorMessage(
+      "Place the cursor inside a primitive declaration before selecting a specialization.",
+    );
     return undefined;
   }
   const configuration = vscode.workspace.getConfiguration("tsl", editor.document.uri);
-  const configuredProfile = configuration.get<string>("preview.profile")?.trim();
-  const profile =
-    configuredProfile ||
-    (choices.profiles ? await selectProfile(choices.profiles) : undefined);
+  let candidates = context.slots.filter(
+    (slot) =>
+      (!context.contextualExtensions.length ||
+        context.contextualExtensions.includes(slot.extension)) &&
+      (!context.contextualTypes.length || context.contextualTypes.includes(slot.type)),
+  );
+  if (!candidates.length) {
+    void vscode.window.showErrorMessage(
+      `No ${configuration.get<string>("preview.backend", "cpp")} specialization ` +
+        "matches the implementation scope at the cursor.",
+    );
+    return undefined;
+  }
+  const profile = await selectValue(
+    "profile",
+    unique(candidates.map((slot) => slot.profile)),
+    configuration.get<string>("preview.profile"),
+    undefined,
+    "scalar",
+  );
   if (!profile) {
     return undefined;
   }
-  const type = configuration.get<string>("preview.type", "si32");
-  const backend = configuration.get<string>("preview.backend", "cpp");
-  const configuredExtension = configuration.get<string>("preview.extension")?.trim();
-  const extension =
-    configuredExtension ||
-    (choices.extensions
-      ? await vscode.window.showQuickPick(
-          prefer(choices.extensions, profile),
-          {
-            title: "TSL extension",
-            placeHolder: "Select an extension from the current tslc catalog",
-          },
-        )
-      : profile);
+  candidates = candidates.filter((slot) => slot.profile === profile);
+  const extension = await selectValue(
+    "extension",
+    unique(candidates.map((slot) => slot.extension)),
+    configuration.get<string>("preview.extension"),
+    context.extension,
+  );
   if (!extension) {
     return undefined;
   }
+  candidates = candidates.filter((slot) => slot.extension === extension);
+  const type = await selectValue(
+    "type",
+    unique(candidates.map((slot) => slot.type)),
+    configuration.get<string>("preview.type"),
+    context.type,
+  );
+  if (!type) {
+    return undefined;
+  }
+  const backend = configuration.get<string>("preview.backend", "cpp");
   return { primitive, profile, type, backend, extension };
 }
 
-export async function selectProfile(
-  availableProfiles: readonly string[],
+export async function selectContextProfile(
+  uri: vscode.Uri,
+  context: SpecializationContext,
 ): Promise<string | undefined> {
-  return vscode.window.showQuickPick(prefer(availableProfiles, "scalar"), {
-    title: "TSL profile",
-    placeHolder: "Select a profile from the current tslc catalog",
-  });
+  let profiles = context.profiles;
+  if (context.primitive) {
+    const scoped = context.slots.filter(
+      (slot) =>
+        (!context.contextualExtensions.length ||
+          context.contextualExtensions.includes(slot.extension)) &&
+        (!context.contextualTypes.length || context.contextualTypes.includes(slot.type)),
+    );
+    profiles = unique(scoped.map((slot) => slot.profile));
+  }
+  const configured = vscode.workspace
+    .getConfiguration("tsl", uri)
+    .get<string>("preview.profile");
+  return selectValue("profile", profiles, configured, undefined, "scalar");
 }
 
 export function workspaceCwd(document: vscode.TextDocument): string {
@@ -240,34 +299,44 @@ export function workspaceCwd(document: vscode.TextDocument): string {
   );
 }
 
-async function primitiveAt(editor: vscode.TextEditor): Promise<string | undefined> {
-  if (!editor.selection.isEmpty) {
-    const selected = editor.document.getText(editor.selection).trim();
-    if (selected) {
-      return selected;
-    }
+async function selectValue(
+  kind: "profile" | "extension" | "type",
+  values: readonly string[],
+  configured: string | undefined,
+  contextual?: string | null,
+  defaultValue?: string,
+): Promise<string | undefined> {
+  if (contextual && values.includes(contextual)) {
+    return contextual;
   }
-  const symbols = await vscode.commands.executeCommand<
-    Array<vscode.DocumentSymbol | vscode.SymbolInformation>
-  >("vscode.executeDocumentSymbolProvider", editor.document.uri);
-  const position = editor.selection.active;
-  const candidates = (symbols ?? [])
-    .filter((symbol) => symbol.kind === vscode.SymbolKind.Function)
-    .map((symbol) => ({
-      name: symbol.name,
-      range: symbol instanceof vscode.DocumentSymbol ? symbol.range : symbol.location.range,
-    }))
-    .filter(({ range }) => range.start.isBeforeOrEqual(position))
-    .sort((left, right) => right.range.start.compareTo(left.range.start));
-  return candidates[0]?.name;
+  const selected = configured?.trim();
+  if (selected && values.includes(selected)) {
+    return selected;
+  }
+  if (!values.length) {
+    void vscode.window.showErrorMessage(`No valid TSL ${kind}s are available.`);
+    return undefined;
+  }
+  if (selected) {
+    void vscode.window.showWarningMessage(
+      `Configured TSL ${kind} '${selected}' is not valid in this context; choose another.`,
+    );
+  }
+  return vscode.window.showQuickPick(prefer(values, defaultValue), {
+    title: `TSL ${kind}`,
+    placeHolder: `Select a ${kind} valid for the current specialization`,
+  });
 }
 
-function required(value: string): string | undefined {
-  return value.trim() ? undefined : "A value is required.";
+function unique(values: readonly string[]): readonly string[] {
+  return [...new Set(values)];
 }
 
-function prefer(values: readonly string[], preferred: string): readonly string[] {
-  if (!values.includes(preferred)) {
+function prefer(
+  values: readonly string[],
+  preferred: string | undefined,
+): readonly string[] {
+  if (!preferred || !values.includes(preferred)) {
     return values;
   }
   return [preferred, ...values.filter((value) => value !== preferred)];

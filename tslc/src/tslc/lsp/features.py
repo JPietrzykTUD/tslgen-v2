@@ -242,7 +242,7 @@ def _symbol_kind(kind: SymbolKind) -> types.SymbolKind:
 
 
 def _completion_kind(kind: str) -> types.CompletionItemKind:
-    if kind in {"primitive-field", "extension-field"}:
+    if kind in {"primitive-field", "extension-field", "implementation-field"}:
         return types.CompletionItemKind.Field
     if kind == "primitive-call":
         return types.CompletionItemKind.Function
