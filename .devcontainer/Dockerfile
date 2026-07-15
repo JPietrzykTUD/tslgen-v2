@@ -17,9 +17,7 @@ RUN apt-get update -y && \
     git curl gnupg xz-utils unzip pkg-config ca-certificates nodejs npm jq \
     python3 python3-pip python3-venv \
     qemu-user qemu-user-binfmt \
-    # tslc-editor
-    xvfb libgtk-3-0t64 libnss3 libasound2t64 libxssl libsecret-1-0 fonts-liberation && \ 
-    # tslc-editor end
+    xvfb libgtk-3-0t64 libnss3 libasound2t64 libxss1 libsecret-1-0 fonts-liberation && \
     python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip setuptools wheel && \
     apt-get clean && rm -rf /var/lib/apt/lists/*

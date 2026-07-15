@@ -76,6 +76,15 @@ normal primitive renderer. It does not load project render assets, plan tests
 or benchmarks, write a generated project, or invoke a toolchain. `tslc explain`
 remains the detailed selection/lowering diagnostic view.
 
+The [PIVOT exporter](src/tslc/pivot/) is a sibling projection rather than a
+registered backend. `tslc export pivot` reuses the immutable catalog, profile
+selection, and C++ intrinsic/type translation, but owns a separate strict
+lowering configuration that rejects non-dataflow constructs and recursively
+inlines supported primitive calls. It produces standalone YAML artifacts and
+does not construct a normal generation request, enter the generation session,
+register a backend, render a generated project, or affect default C++/Rust
+output.
+
 ## The input language (two nested languages)
 
 ### 1. The outer TSL data language

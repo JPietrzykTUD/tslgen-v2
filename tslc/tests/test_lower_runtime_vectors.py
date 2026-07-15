@@ -101,7 +101,7 @@ def test_sve_byte_gather_keeps_runtime_fallback_without_invalid_native_load(
 
 
 @pytest.mark.parametrize("masked", [False, True])
-def test_sve_scatter_uses_runtime_index_and_predicate_storage(
+def test_sve_scatter_prefers_native_indexed_store_with_runtime_fallback(
     catalog: Catalog,
     machine_profiles,
     masked: bool,
@@ -119,11 +119,21 @@ def test_sve_scatter_uses_runtime_index_and_predicate_storage(
     ).specialization
 
     assert lowered is not None
+    assert "svst1_scatter_index" in lowered.body_text
+    assert "if constexpr (scale == 4)" in lowered.body_text
+    assert "IndicesType::extension_type" in lowered.body_text
     assert "index_lanes" in lowered.body_text
     assert "idx_array_storage" in lowered.body_text
     assert "val_array_storage" in lowered.body_text
     assert ("active_array_storage" in lowered.body_text) is masked
-    assert "svst1_scatter" not in lowered.body_text
+    assert [variant.name for variant in lowered.variant_bodies] == [
+        "scalar_lanes_fallback"
+    ]
+    fallback = lowered.variant_bodies[0].body_text
+    assert "svst1_scatter" not in fallback
+    assert "idx_array_storage" in fallback
+    assert "val_array_storage" in fallback
+    assert ("active_array_storage" in fallback) is masked
 
 
 def test_simd_type_base_specialization_expands_gather_narrow_slots(

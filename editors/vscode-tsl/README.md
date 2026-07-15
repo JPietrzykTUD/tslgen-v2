@@ -16,11 +16,12 @@ navigation, hover, completion, semantic highlighting, generated TextMate
 coloring, concrete saved-file preview, slot checking, and backend-aware doctor.
 There is intentionally no formatter in Version 1.
 
-From the repository root, `./dev.sh editor-install` runs the grammar/unit and
-real extension-host checks, packages the VSIX, and force-installs it through
-the `code` CLI. Set `CODE_BIN=code-insiders` when appropriate, then reload the
-VS Code window. From this directory, the equivalent command is
-`npm run install:local`; `npm run package:verified` stops after packaging.
+From the repository root, `./dev.sh editor-install` refreshes the generated
+TSIL keyword grammar, runs the grammar/unit and real extension-host checks,
+packages the VSIX, and force-installs it through the `code` CLI. Set
+`CODE_BIN=code-insiders` when appropriate, then reload the VS Code window. From
+this directory, the equivalent command is `npm run install:local`;
+`npm run package:verified` stops after packaging.
 
 Commands:
 

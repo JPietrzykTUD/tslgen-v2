@@ -52,10 +52,12 @@ force-install workflow, use one command from the repository root:
 ./dev.sh editor-install
 ```
 
-This uses the `code` CLI by default; set `CODE_BIN=code-insiders` (or an
-absolute CLI path) when needed. It finishes by asking you to reload the VS Code
-window. `npm run package:verified` performs the same verification and packaging
-without installing the VSIX.
+This first regenerates the compiler-owned TSIL keyword inventory, then uses the
+`code` CLI by default; set `CODE_BIN=code-insiders` (or an absolute CLI path)
+when needed. It finishes by asking you to reload the VS Code window.
+`npm run package:verified` performs the same regeneration, verification, and
+packaging without installing the VSIX. The standalone `npm test` remains a
+strict stale-generated-file check for CI.
 
 Because the preview VSIX does not bundle Python, install
 `tslc[editor]` on the remote/workspace side when using SSH, WSL, or a

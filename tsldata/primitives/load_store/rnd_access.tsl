@@ -1762,12 +1762,50 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(Base, base::in);
             let<type>(DataVec, vector::as_base(Base));
             let<type>(IndexBase, base::generic(IndicesType));
+            if constexpr (
+              std::is_same_v<typename IndicesType::extension_type, typename Vec::extension_type> &&
+              sizeof(type(IndexBase)) == sizeof(type(Base))
+            ) {
+              switch<compile>(scale) {
+                4 => {
+                  if<generation>(
+                    type::is_same(base::in, si32) ||
+                    type::is_same(base::in, ui32) ||
+                    type::is_same(base::in, f32)
+                  ) {
+                    intrin<svst1_scatter_index>(
+                      call<primitive=mask_true[Vec]>(),
+                      base_ptr,
+                      index,
+                      a
+                    );
+                    return;
+                  }
+                }
+                8 => {
+                  if<generation>(
+                    type::is_same(base::in, si64) ||
+                    type::is_same(base::in, ui64) ||
+                    type::is_same(base::in, f64)
+                  ) {
+                    intrin<svst1_scatter_index>(
+                      call<primitive=mask_true[Vec]>(),
+                      base_ptr,
+                      index,
+                      a
+                    );
+                    return;
+                  }
+                }
+                _ => {}
+              }
+            }
             var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
             var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
             var<runtime_array>(Base, val_array, lanes);
@@ -1778,6 +1816,25 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
               *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
             }
           """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe true
+              reasons [raw_pointer]
+            tsil """
+              let<type>(Base, base::in);
+              let<type>(DataVec, vector::as_base(Base));
+              let<type>(IndexBase, base::generic(IndicesType));
+              var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
+              var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
+              var<runtime_array>(Base, val_array, lanes);
+              var<runtime_array>(IndexBase, idx_array, index_lanes);
+              call<primitive=store[Vec], attrs[aligned=false]>(val_array, a);
+              call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
+              loop<backend>(i, 0, lanes, 1) {
+                *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+              }
+            """
     clang_v128:
       arith:
         requires []
@@ -2211,12 +2268,40 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(Base, base::in);
             let<type>(DataVec, vector::as_base(Base));
             let<type>(IndexBase, base::generic(IndicesType));
+            if constexpr (
+              std::is_same_v<typename IndicesType::extension_type, typename Vec::extension_type> &&
+              sizeof(type(IndexBase)) == sizeof(type(Base))
+            ) {
+              switch<compile>(scale) {
+                4 => {
+                  if<generation>(
+                    type::is_same(base::in, si32) ||
+                    type::is_same(base::in, ui32) ||
+                    type::is_same(base::in, f32)
+                  ) {
+                    intrin<svst1_scatter_index>(mask, base_ptr, index, a);
+                    return;
+                  }
+                }
+                8 => {
+                  if<generation>(
+                    type::is_same(base::in, si64) ||
+                    type::is_same(base::in, ui64) ||
+                    type::is_same(base::in, f64)
+                  ) {
+                    intrin<svst1_scatter_index>(mask, base_ptr, index, a);
+                    return;
+                  }
+                }
+                _ => {}
+              }
+            }
             var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
             var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
             var<runtime_array>(Base, val_array, lanes);
@@ -2236,6 +2321,34 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               }
             }
           """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe true
+              reasons [raw_pointer]
+            tsil """
+              let<type>(Base, base::in);
+              let<type>(DataVec, vector::as_base(Base));
+              let<type>(IndexBase, base::generic(IndicesType));
+              var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
+              var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
+              var<runtime_array>(Base, val_array, lanes);
+              var<runtime_array>(IndexBase, idx_array, index_lanes);
+              var<runtime_array>(Base, active_array, lanes);
+              call<primitive=store[Vec], attrs[aligned=false]>(val_array, a);
+              call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
+              var<const_infer>(active, call<primitive=blend[Vec]>(
+                mask,
+                call<primitive=set_zero[Vec]>(),
+                call<primitive=set1[Vec]>(cast<static>(Base, 1))
+              ));
+              call<primitive=store[Vec], attrs[aligned=false]>(active_array, active);
+              loop<backend>(i, 0, lanes, 1) {
+                if (active_array[i] != cast<static>(Base, 0)) {
+                  *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+                }
+              }
+            """
     [generic, oneapi_fpga]:
       arith:
         requires:

@@ -15,6 +15,7 @@ case "${1:-}" in
 esac
 
 cd "${extension_root}"
+npm run generate:grammar
 npm test
 if command -v xvfb-run >/dev/null 2>&1; then
   xvfb-run -a npm run test:integration

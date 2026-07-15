@@ -159,6 +159,34 @@ Missing run support is always reported, but affects the exit status only with
 `--run`. Missing build prerequisites or a failed compiler/target preflight
 produce exit status 1.
 
+## Export PIVOT YAML
+
+PIVOT export is an explicit path, separate from normal backend generation:
+
+```bash
+tslc export pivot \
+  --primitives add,sub \
+  --profiles avx2 \
+  --types si8,si32 \
+  --output-root ./tslctmp/pivot
+```
+
+The command writes one deterministic YAML document per supported callable.
+Each definition contains a concrete `isa`, `dtype`, parameter/result
+`signature`, and a `direct` instruction list. The final list entry assigns the
+`complete(...)` value to the document's `output` name. Supported primitive
+calls are recursively inlined into the same list.
+
+PIVOT currently accepts only concrete value-producing, straight-line
+specializations. Control flow, pragmas, casts, loops, unsupported TSIL regions,
+unresolved target-library constructs, scalable/sized vectors, and call graphs
+that cannot be resolved exactly are reported as skips. Use `--show-skips` to
+print them, or `--strict` to make any skip fail the command.
+
+This command does not register PIVOT as a backend or run the ordinary
+generation/render pipeline. It has a dedicated output root and cannot create
+or alter generated C++/Rust projects.
+
 ## Preview, explain, inspect, audit, and coverage
 
 ```bash

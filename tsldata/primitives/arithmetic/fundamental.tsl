@@ -1284,7 +1284,6 @@ prim<v:=(v)> abs(data):
           avx2 [avx]
           sse [sse]
           neon [neon]
-          sve [sve]
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -1292,12 +1291,11 @@ prim<v:=(v)> abs(data):
           reasons []
         implementation:
           tsil "complete(data);"
+    [avx2, sse]:
       si?:
         requires:
           avx2 [avx]
           sse [sse, sse2]
-          neon [neon]
-          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1311,24 +1309,92 @@ prim<v:=(v)> abs(data):
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
-    [neon, wasm128]:
+    neon:
+      si?:
+        requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<vabsq, build[suffix=base::in]>(data));"
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
       f?:
-        requires:
-          neon [neon]
-          wasm128 [simd128]
+        requires [neon]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
-          tsil """
-            var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
-            var<infer>(result, lanes);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
-            }
-            complete(call<primitive=from_array[Vec]>(result));
-          """
+          tsil "complete(intrin<vabsq, build[suffix=base::in]>(data));"
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    wasm128:
+      si?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<abs, build[suffix=base::in]>(data));"
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      f?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<abs, build[suffix=base::in]>(data));"
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
     sve:
       ui?:
         requires [sve]
@@ -1341,26 +1407,31 @@ prim<v:=(v)> abs(data):
       [si?, f?]:
         requires [sve]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
-          tsil """
-            let<type>(Base, base::in);
-            var<const_infer>(lanes, value(vector::runtime_length));
-            var<runtime_array>(Base, input, lanes);
-            var<runtime_array>(Base, result, lanes);
-            call<primitive=store[Vec], attrs[aligned=false]>(input, data);
-            loop<backend>(i, 0, lanes, 1) {
-              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(input[i]);
-            }
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
-          """
-    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl]:
+          tsil "complete(intrin<svabs, build[suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data));"
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              let<type>(Base, base::in);
+              var<const_infer>(lanes, value(vector::runtime_length));
+              var<runtime_array>(Base, input, lanes);
+              var<runtime_array>(Base, result, lanes);
+              call<primitive=store[Vec], attrs[aligned=false]>(input, data);
+              loop<backend>(i, 0, lanes, 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(input[i]);
+              }
+              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            """
+    [generic, oneapi_fpga, oneapi_fpga_rtl]:
       arith:
         requires:
           generic []
-          clang_v128 []
           oneapi_fpga []
           oneapi_fpga_rtl []
         safety:
