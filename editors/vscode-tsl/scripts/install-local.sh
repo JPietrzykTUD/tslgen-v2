@@ -15,6 +15,22 @@ case "${1:-}" in
 esac
 
 cd "${extension_root}"
+
+needs_node_dependencies=false
+for binary in tsc mocha esbuild vsce; do
+  if [[ ! -x "node_modules/.bin/${binary}" ]]; then
+    needs_node_dependencies=true
+    break
+  fi
+done
+if [[ ! -f node_modules/.package-lock.json || package-lock.json -nt node_modules/.package-lock.json ]]; then
+  needs_node_dependencies=true
+fi
+if [[ "${needs_node_dependencies}" == true ]]; then
+  echo "Installing locked VS Code extension dependencies..."
+  npm ci
+fi
+
 npm run generate:grammar
 npm test
 if command -v xvfb-run >/dev/null 2>&1; then
