@@ -73,6 +73,23 @@ def test_valid_tiny_catalog_has_no_validation_diagnostics() -> None:
     assert _diagnostics(_base_source()) == ()
 
 
+def test_implementation_selector_rejects_unknown_scalar_metadata() -> None:
+    source = _base_source().replace(
+        "        implementation:\n",
+        '        hello: "test"\n'
+        "        implementation:\n",
+    )
+
+    diagnostics = _diagnostics(source)
+
+    assert any(
+        diagnostic.code == "TSL-CATALOG-UNKNOWN-FIELD"
+        and "'hello'" in diagnostic.message
+        and "implementation selector 'ints'" in diagnostic.message
+        for diagnostic in diagnostics
+    )
+
+
 def test_target_constraint_relations_are_validated() -> None:
     source = _base_source().replace(
         "prim<v:=v> id(data):\n"

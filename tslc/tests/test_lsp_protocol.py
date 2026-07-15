@@ -81,6 +81,13 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
     )
     client = _LspClient(process)
     try:
+        call_line = next(
+            index
+            for index, line in enumerate(text.splitlines())
+            if "call<primitive=mov" in line
+        )
+        call_character = text.splitlines()[call_line].index("mov")
+        call_position = {"line": call_line, "character": call_character}
         client.send(
             {
                 "jsonrpc": "2.0",
@@ -116,11 +123,19 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
                 },
             }
         )
-        valid = client.read_until(
-            lambda item: item.get("method") == "textDocument/publishDiagnostics"
-            and item["params"]["uri"] == path.as_uri()
+        client.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 10,
+                "method": "textDocument/definition",
+                "params": {
+                    "textDocument": {"uri": path.as_uri()},
+                    "position": call_position,
+                },
+            }
         )
-        assert valid["params"]["diagnostics"] == []
+        definitions = client.read_until(lambda item: item.get("id") == 10)["result"]
+        assert definitions
 
         client.send(
             {
@@ -168,26 +183,6 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         symbols = client.read_until(lambda item: item.get("id") == 4)["result"]
         assert any(item["name"] == "add" for item in symbols)
 
-        call_line = next(
-            index
-            for index, line in enumerate(text.splitlines())
-            if "call<primitive=mov" in line
-        )
-        call_character = text.splitlines()[call_line].index("mov")
-        position = {"line": call_line, "character": call_character}
-        client.send(
-            {
-                "jsonrpc": "2.0",
-                "id": 5,
-                "method": "textDocument/definition",
-                "params": {
-                    "textDocument": {"uri": path.as_uri()},
-                    "position": position,
-                },
-            }
-        )
-        definitions = client.read_until(lambda item: item.get("id") == 5)["result"]
-        assert definitions
         client.send(
             {
                 "jsonrpc": "2.0",
@@ -195,7 +190,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
                 "method": "textDocument/references",
                 "params": {
                     "textDocument": {"uri": path.as_uri()},
-                    "position": position,
+                    "position": call_position,
                     "context": {"includeDeclaration": True},
                 },
             }

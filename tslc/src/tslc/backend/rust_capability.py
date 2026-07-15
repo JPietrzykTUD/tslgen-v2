@@ -14,6 +14,7 @@ from tslc.backend.capability import (
 )
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
 from tslc.backend.rust_translation import RustBackendDialect
+from tslc.backend.rust import RustBackend
 from tslc.backend.rust_validation import validate_rust_profiles
 from tslc.catalog.model import Catalog
 from tslc.output._verify_rust import (
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
     from tslc.output.verify_drivers import VerifyBackendDriver
     from tslc.output.verify_model import VerifyProfile
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
+    from tslc.lower.lowerer import LoweredSpecialization
 
 
 def create_rust_dialect(catalog: Catalog) -> BackendDialect:
@@ -68,6 +70,20 @@ def create_rust_verify_driver() -> VerifyBackendDriver:
     return _create_rust_verify_driver()
 
 
+def rust_primitive_preview(
+    profile: EmittedProfile,
+    primitive_name: str,
+    specializations: tuple[LoweredSpecialization, ...],
+) -> str:
+    family = profile.profile_family
+    return RustBackend(
+        feature_alternatives=profile.profile.alternatives,
+        emit_target_features=(
+            family.backend("rust").feature_flags if family is not None else True
+        ),
+    ).render_primitive(primitive_name, specializations)
+
+
 RUST_BACKEND = BackendCapability(
     backend_id="rust",
     root_path="rust",
@@ -81,6 +97,7 @@ RUST_BACKEND = BackendCapability(
     documentation_formatter_factory=rust_documentation_formatter,
     helper_manifest=RUST_HELPER_MANIFEST,
     profile_validator=validate_rust_profiles,
+    primitive_preview_renderer=rust_primitive_preview,
     generated_format=GeneratedFormatSpec(
         executable="rustfmt",
         label="rust",

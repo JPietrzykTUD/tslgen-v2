@@ -145,7 +145,11 @@ def completions(
     if snapshot.catalog is None:
         return types.CompletionList(is_incomplete=False, items=[])
     context = completion_context(text, position_offset(text, position))
-    values = completion_values(context, snapshot.catalog)
+    values = completion_values(
+        context,
+        snapshot.catalog,
+        target_features=snapshot.target_features,
+    )
     items = [
         types.CompletionItem(
             label=value,

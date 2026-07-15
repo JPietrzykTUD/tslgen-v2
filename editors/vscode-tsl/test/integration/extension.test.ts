@@ -97,8 +97,14 @@ suite("TSL extension", () => {
 
     const previewEditor = vscode.window.activeTextEditor;
     assert.equal(previewEditor?.document.uri.scheme, "tsl-preview");
+    assert.equal(previewEditor?.document.languageId, "cpp");
+    assert.match(
+      previewEditor.document.getText(),
+      /tslc rendered specialization preview/,
+    );
     assert.match(previewEditor.document.getText(), /input snapshot: sha256:/);
-    assert.match(previewEditor.document.getText(), /VERDICT: COMPILES/);
+    assert.match(previewEditor.document.getText(), /namespace detail::primitives/);
+    assert.doesNotMatch(previewEditor.document.getText(), /VERDICT: COMPILES/);
     assert.ok(
       vscode.window.visibleTextEditors.some(
         (editor) => editor.document.uri.toString() === uri.toString(),

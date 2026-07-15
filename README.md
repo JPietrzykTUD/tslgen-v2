@@ -1,11 +1,11 @@
-# tslgen-v99
+# tslgen-v2
 
-[![Python Logic](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/python.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/python.yml)
-[![Generated Build](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/generated-build.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/generated-build.yml)
-[![Generated Value Tests](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/generated-values.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/generated-values.yml)
-[![Generated Package](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/generated-package.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/generated-package.yml)
-[![Coverage Ratchet](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/coverage-ratchet.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/coverage-ratchet.yml)
-[![Docs](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/docs.yml)
+[![Python Logic](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/python.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/python.yml)
+[![Generated Build](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-build.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-build.yml)
+[![Generated Value Tests](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-values.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-values.yml)
+[![Generated Package](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-package.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-package.yml)
+[![Coverage Ratchet](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/coverage-ratchet.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/coverage-ratchet.yml)
+[![Docs](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/docs.yml)
 
 This repository contains `tslc`, a Python compiler for the TSL data language,
 plus the authored source data, packaged compiler assets, generated-documentation

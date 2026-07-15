@@ -47,6 +47,9 @@ DocumentationFormatterFactory = Callable[[], "BackendDocumentationFormatter"]
 ValueTestSupportFactory = Callable[[], "ValueTestBackendSupport"]
 VerifyDriverFactory = Callable[[], "VerifyBackendDriver"]
 ProfileValidator = Callable[[tuple["EmittedProfile", ...]], tuple["Diagnostic", ...]]
+PrimitivePreviewRenderer = Callable[
+    ["EmittedProfile", str, tuple["LoweredSpecialization", ...]], str
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +107,15 @@ def _no_benchmark_artifacts(
     return []
 
 
+def _unsupported_primitive_preview(
+    profile: EmittedProfile,
+    primitive_name: str,
+    specializations: tuple[LoweredSpecialization, ...],
+) -> str:
+    del profile, primitive_name, specializations
+    raise ValueError("this backend does not support specialization preview")
+
+
 @dataclass(frozen=True, slots=True)
 class BackendCapability:
     backend_id: str
@@ -120,6 +132,9 @@ class BackendCapability:
     benchmark_renderer: BenchmarkArtifactRenderer = _no_benchmark_artifacts
     helper_manifest: BackendHelperManifest = EMPTY_HELPER_MANIFEST
     profile_validator: ProfileValidator = _no_profile_diagnostics
+    primitive_preview_renderer: PrimitivePreviewRenderer = (
+        _unsupported_primitive_preview
+    )
     generated_format: GeneratedFormatSpec | None = None
     generated_documentation: GeneratedDocumentationSpec | None = None
 
@@ -185,6 +200,16 @@ class BackendCapability:
         self, profiles: tuple[EmittedProfile, ...]
     ) -> tuple[Diagnostic, ...]:
         return self.profile_validator(profiles)
+
+    def render_primitive_preview(
+        self,
+        profile: EmittedProfile,
+        primitive_name: str,
+        specializations: tuple[LoweredSpecialization, ...],
+    ) -> str:
+        return self.primitive_preview_renderer(
+            profile, primitive_name, specializations
+        )
 
 
 __all__ = [

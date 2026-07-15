@@ -287,6 +287,23 @@ def load_machine_profiles_checked(
     )
 
 
+def target_feature_names(
+    profiles: Mapping[str, MachineProfile],
+) -> tuple[str, ...]:
+    """Return the author-facing feature tokens accepted by ``requires`` clauses."""
+
+    return tuple(
+        sorted(
+            {
+                feature
+                for profile in profiles.values()
+                for feature in profile.features
+                if feature != _NO_SIMD
+            }
+        )
+    )
+
+
 def _object_fields(
     obj: _JsonObject,
     path: Path,

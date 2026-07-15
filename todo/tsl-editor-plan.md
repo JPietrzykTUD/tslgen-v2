@@ -6,7 +6,9 @@ Version 1 implemented as a contributor preview on 2026-07-15. The VS Code
 client deliberately uses the documented external `tslc[editor]` runtime and is
 not advertised as a self-contained Marketplace release; the conditional
 platform-bundling requirement therefore remains a future release gate rather
-than a Version 1 claim.
+than a Version 1 claim. The preview contract was subsequently corrected to
+show backend-rendered C++ or Rust rather than re-labeling the `tslc explain`
+decision trace as a preview.
 
 This document describes an authoring toolchain for the current `.tsl` source
 language and `tslc` compiler. It is intentionally separate from the historical
@@ -68,9 +70,10 @@ building a C++ or Rust project.
 - Keep hover, navigation, symbols, and completion as lookups against the latest
   successful in-memory index. They must not select, lower, render, or start a
   compiler process.
-- Make concrete specialization explanation/preview an explicit, cancellable
-  command that runs in a child process and opens its result beside the source
-  editor. Never trigger concrete preview from hover or ordinary edits.
+- Make concrete specialization preview an explicit, cancellable command that
+  runs in a child process and opens backend-rendered source beside the editor.
+  Keep `tslc explain` as a separate diagnostic view. Never trigger either from
+  hover or ordinary edits.
 - Never generate artifacts, invoke compilers, run target binaries, modify
   source files, or access the network from ordinary language-server requests.
 - Preserve the existing compiler CLI behavior while introducing a subcommand
@@ -589,6 +592,7 @@ tslc generate
 tslc check
 tslc build
 tslc test
+tslc preview
 tslc explain
 tslc dump
 tslc list
@@ -827,7 +831,8 @@ Initial commands:
 
 - check workspace;
 - check current primitive for a chosen profile/type/backend;
-- explain/preview a selected slot beside the current editor;
+- preview a selected slot beside the current editor, with `tslc explain`
+  available separately for the decision trace;
 - show catalog entry.
 
 Later code actions:
@@ -843,11 +848,23 @@ undo. The language server must not write source files directly.
 
 Concrete preview is deliberately separate from hover and continuous
 diagnostics. A `TSL: Preview Specialization` command prompts for or infers one
-primitive/profile/type/backend selection, launches `tslc explain` as a child
-process, and presents the explanation and lowered body in a read-only virtual
-document in an editor column beside the source. The command is available to
-user-defined keybindings; the extension should not claim a globally common
-default chord.
+primitive/profile/type/backend selection, launches `tslc preview` as a child
+process, and presents the backend-rendered C++ or Rust specialization fragment
+in a read-only virtual document in an editor column beside the source. The
+virtual URI uses a backend-appropriate suffix for syntax coloring. The command
+is available to user-defined keybindings; the extension should not claim a
+globally common default chord. `tslc explain` remains a separate CLI diagnostic
+for candidate ranking, TSIL scanning, lowering, dependency closure, and the
+emission verdict.
+
+Extension selection is catalog-backed rather than a free-form prompt. Unless a
+fixed `tsl.preview.extension` is configured, the client runs
+`tslc list extensions --format json` through the same discovered compiler
+command and shows every returned extension in a searchable VS Code quick-pick.
+The profile is placed first when it is also an extension. This keeps catalog
+ownership in `tslc`, automatically reflects newly added extensions, and leaves
+the explicit setting available for unattended extension-host tests and users
+who always preview the same slot.
 
 The client owns process startup, progress, cancellation, stderr capture, and
 virtual-document refresh. Starting a new preview cancels an older preview for
@@ -866,9 +883,13 @@ The first implementation operates on saved workspace files and asks the user
 to save when the relevant buffer is dirty. A later slice may send an immutable
 overlay bundle to the child over stdin if unsaved preview proves valuable. Do
 not introduce temporary source-file writes or a persistent preview daemon for
-the initial implementation. Preview stops after compiler-owned explanation and
-lowering; it does not write a generated project or invoke a target compiler,
-formatter, linker, emulator, benchmark, or value test.
+the initial implementation. Preview performs compiler-owned selection,
+lowering, dependency closure, and emitted-name finalization, then calls the
+registered backend's normal primitive renderer for only the requested emitted
+specialization. It does not load full-project render assets, write a generated
+project, or invoke a target compiler, formatter, linker, emulator, benchmark,
+or value test. The returned fragment is for inspection and is not promised to
+be a standalone translation unit.
 
 ## VS Code Client
 
@@ -992,9 +1013,11 @@ fresh-process catalog-check median of 2.05 seconds and repeated full checks in
 one process around 1.84 seconds. Reusing parsed documents and reparsing the
 largest current source document measured about 0.40 seconds for parse, complete
 catalog rebuild, and validation. A cold representative `tslc explain` took
-about 4.26 seconds. These measurements justify parsed-document reuse for live
-diagnostics and a separate multi-second latency contract for explicit preview;
-they do not justify rendering from hover.
+about 4.26 seconds before the focused render-preview command existed. `tslc preview`
+retains the same multi-second child-process latency contract while
+adding only focused primitive rendering. These measurements justify
+parsed-document reuse for live diagnostics and a separate latency contract for
+explicit preview; they do not justify rendering from hover.
 
 ### Simple First Strategy
 
@@ -1284,16 +1307,18 @@ Work:
 - add a client command that runs the slot-aware `tslc check` path in a child
   process for the current primitive and selected profile/type/backend;
 - add `TSL: Preview Specialization` to the TypeScript client;
-- launch `tslc explain` in a cancellable child process rather than in the LSP
-  process;
-- make the explain/preview compiler request use `render_artifacts=False` so it
-  performs selection, lowering, and dependency closure without loading render
-  assets, planning tests/benchmarks, or constructing a generated project;
-- refactor the explain core to load/parse the corpus once and derive both its
-  narration and authoritative closure verdict from that same immutable input
-  snapshot rather than calling a second top-level generation load;
-- show progress immediately and present explanation/lowered body output in a
-  read-only virtual document beside the source editor;
+- populate its extension quick-pick from `tslc list extensions --format json`,
+  with `tsl.preview.extension` as a fixed override;
+- add `tslc preview` and launch it in a cancellable child process rather than
+  doing selection, lowering, or rendering in the LSP process;
+- make preview reuse the non-project generation path (`render_artifacts=False`)
+  for one immutable input snapshot, then expose finalized emitted profiles so
+  it can call the registered backend's normal primitive renderer without
+  loading project render assets or planning tests/benchmarks;
+- keep `tslc explain` as the detailed decision trace and do not label its
+  narration as rendered preview output;
+- show progress immediately and present backend-rendered source in a read-only
+  virtual document with C++ or Rust syntax coloring beside the source editor;
 - require saved input for the initial preview and report a dirty-buffer setup
   message instead of previewing stale disk content silently;
 - include the selection and source/configuration digest in preview output and
@@ -1313,7 +1338,7 @@ Exit criteria:
   virtual document;
 - the editor does not silently promote intentional partial-mode skips to
   source errors;
-- explain and check agree on selection and lowering outcomes.
+- preview, explain, and check agree on selection and lowering outcomes.
 
 ### Slice 8: Doctor And Safe Code Actions
 
@@ -1441,8 +1466,8 @@ Exit criteria:
 - one extension inheritance chain;
 - one malformed TSIL selector;
 - one profile-specific lowering check;
-- explain/preview loads one immutable corpus snapshot, disables artifact
-  rendering, and does not construct a generated project;
+- preview loads one immutable corpus snapshot, disables project-artifact
+  rendering, and invokes only the requested backend primitive renderer;
 - one explicit specialization preview whose multi-second child process does not
   delay a concurrent hover or document-diagnostic response;
 - one metadata-audit edit preview;
@@ -1547,7 +1572,7 @@ Risk: running concrete lowering in the language-server process blocks normal
 LSP requests, while a child process that reads disk can display stale output
 for an unsaved buffer or overwrite a newer preview after cancellation.
 
-Mitigation: preview only after an explicit user command, run `tslc explain` in
+Mitigation: preview only after an explicit user command, run `tslc preview` in
 a cancellable child process, require saved input initially, identify the
 selection and input/configuration digest in the result, and use request
 generations so superseded children cannot update the virtual document. Keep the
@@ -1625,8 +1650,9 @@ receives only generic body coloring.
 Risk: build/test commands become an implicit source-triggered execution path.
 
 Mitigation: ordinary LSP requests remain pure. The explicit preview command may
-launch compiler-owned `tslc explain` with direct argv construction, but it does
-not invoke target toolchains or write generated projects. Other explicit user
+launch compiler-owned `tslc preview` with direct argv construction; that
+command invokes a backend primitive renderer but does not invoke target
+toolchains or write generated projects. Other explicit user
 commands may open the existing terminal workflow; source content never triggers
 execution.
 
@@ -1653,8 +1679,8 @@ Version 1 is complete when:
 - changed documents are reparsed from overlays while unchanged parsed corpus
   documents are reused and complete catalog validation remains deterministic;
 - an author can explicitly preview one saved concrete specialization in a
-  cancellable child process and see its explanation/lowered body beside the
-  source without blocking the language server;
+  cancellable child process and see its backend-rendered C++ or Rust fragment
+  beside the source without blocking the language server;
 - the language server remains usable from non-VS-Code LSP clients;
 - no TSL semantics are duplicated in the VS Code extension;
 - the VS Code client source is TypeScript under `editors/vscode-tsl/`, while
@@ -1678,11 +1704,12 @@ Version 1 is complete when:
 The completion audit on 2026-07-15 produced the following results on the
 repository devcontainer:
 
-- full Python suite: 1,673 passed and 70 explicitly gated generated-build or
+- full Python suite: 1,678 passed and 70 explicitly gated generated-build or
   generated-value-test cases skipped;
-- mypy: 226 source files checked with no issues;
-- isolated authoring latency: 2.261 s cold check, 0.634 s changed-document p95,
-  0.139 ms hover p95, and 2.759 s cold explicit preview;
+- mypy: 227 source files checked with no issues;
+- isolated authoring latency after focused rendered preview was added: 2.305 s
+  cold check, 0.637 s changed-document p95, 0.138 ms hover p95, and 2.724 s
+  cold explicit preview;
 - TypeScript/client tests: six Mocha tests and two generated-grammar tests
   passed, including synthetic registry propagation and byte reproducibility;
 - real VS Code 1.128 extension-host test: activation, unsaved parser/catalog/

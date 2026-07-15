@@ -66,10 +66,15 @@ reparses changed buffers and reuses unchanged documents; a per-document
 fragments before deterministic full-catalog validation publishes a new
 snapshot. Symbols, references, hover, completion, and semantic tokens are pure
 projections of the latest successful index. The editor-neutral pygls transport
-is in `lsp/`; the TypeScript VS Code client contains no compiler semantics.
-Concrete preview runs `tslc explain` as a separate saved-file child with
-rendering disabled, using one loaded input snapshot for narration and the
-authoritative dependency-closure verdict.
+is in `lsp/`; an initially invalid overlay uses the valid saved corpus for
+catalog facts and definitions while retaining parseable overlay occurrence
+spans. The TypeScript VS Code client contains no compiler semantics.
+Concrete preview runs `tslc preview` as a separate saved-file child. It uses
+one loaded input snapshot for selection, lowering, and dependency closure, then
+passes the requested emitted specialization through the registered backend's
+normal primitive renderer. It does not load project render assets, plan tests
+or benchmarks, write a generated project, or invoke a toolchain. `tslc explain`
+remains the detailed selection/lowering diagnostic view.
 
 ## The input language (two nested languages)
 

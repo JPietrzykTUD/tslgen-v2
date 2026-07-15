@@ -123,6 +123,7 @@ class GenerationResult:
     diagnostics: tuple[Diagnostic, ...]
     coverage: tuple[CoverageEntry, ...]
     skipped: tuple[SkippedEntry, ...] = ()
+    emitted_profiles: tuple[EmittedProfile, ...] = ()
 
 
 def generate(request: GenerationRequest) -> GenerationResult:
@@ -202,19 +203,19 @@ class _GenerationSession:
 
         if has_errors(backend_diagnostics):
             return _result_without_artifacts(
-                self.diagnostics, self.coverage, self.skipped
+                self.diagnostics, self.coverage, self.skipped, emitted_profiles
             )
 
         if self.request.mode == "strict" and (
             _has_strict_skips(self.skipped) or has_errors(self.diagnostics)
         ):
             return _result_without_artifacts(
-                self.diagnostics, self.coverage, self.skipped
+                self.diagnostics, self.coverage, self.skipped, emitted_profiles
             )
 
         if not self.request.render_artifacts:
             return _result_without_artifacts(
-                self.diagnostics, self.coverage, self.skipped
+                self.diagnostics, self.coverage, self.skipped, emitted_profiles
             )
 
         value_tests = (
@@ -243,7 +244,7 @@ class _GenerationSession:
         self.diagnostics.extend(benchmarks.diagnostics)
         if has_errors((*value_test_diagnostics, *benchmarks.diagnostics)):
             return _result_without_artifacts(
-                self.diagnostics, self.coverage, self.skipped
+                self.diagnostics, self.coverage, self.skipped, emitted_profiles
             )
         if self.inputs.render_assets is None:
             raise AssertionError("render assets were not loaded for generation")
@@ -259,7 +260,14 @@ class _GenerationSession:
             else None
         )
         artifacts = rendered.artifacts if rendered is not None else ArtifactSet.create(())
-        return _result(artifacts, rendered, self.diagnostics, self.coverage, self.skipped)
+        return _result(
+            artifacts,
+            rendered,
+            self.diagnostics,
+            self.coverage,
+            self.skipped,
+            emitted_profiles,
+        )
 
     def _plan_value_tests(
         self, profiles: tuple[EmittedProfile, ...]
@@ -766,8 +774,16 @@ def _result_without_artifacts(
     diagnostics: list[Diagnostic],
     coverage: list[CoverageEntry],
     skipped: list[SkippedEntry],
+    emitted_profiles: tuple[EmittedProfile, ...] = (),
 ) -> GenerationResult:
-    return _result(ArtifactSet.create(()), None, diagnostics, coverage, skipped)
+    return _result(
+        ArtifactSet.create(()),
+        None,
+        diagnostics,
+        coverage,
+        skipped,
+        emitted_profiles,
+    )
 
 
 def _result(
@@ -776,6 +792,7 @@ def _result(
     diagnostics: list[Diagnostic],
     coverage: list[CoverageEntry],
     skipped: list[SkippedEntry],
+    emitted_profiles: tuple[EmittedProfile, ...] = (),
 ) -> GenerationResult:
     return GenerationResult(
         artifacts=artifacts,
@@ -783,6 +800,7 @@ def _result(
         diagnostics=sort_diagnostics(diagnostics),
         coverage=tuple(sorted(coverage, key=_coverage_key)),
         skipped=tuple(sorted(skipped, key=_skipped_key)),
+        emitted_profiles=emitted_profiles,
     )
 
 

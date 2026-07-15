@@ -47,6 +47,7 @@ tslc check
 tslc list primitives
 tslc generate --primitives add,sub --profiles scalar,avx2
 tslc build --primitives add,sub --profiles scalar,avx2
+tslc preview --primitive add --profile avx2 --type si32 --backend cpp
 
 # Build and run generated value tests.
 # The CLI prints captured ctest/cargo test output for the test steps.

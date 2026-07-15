@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.executable,
         "-m",
         "tslc",
-        "explain",
+        "preview",
         "--primitive",
         args.primitive,
         "--profile",

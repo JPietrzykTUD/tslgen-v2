@@ -38,6 +38,10 @@ loaded sources/assets -> parse -> catalog -> select -> scan TSIL -> lower
 - `tslc/src/tslc/authoring.py` owns catalog-only validation; it must not load
   machine profiles or render assets. `check_cli.py` may opt into the ordinary
   selection/lowering pipeline but must stop before planning and rendering.
+- `tslc/src/tslc/maintenance/render_preview.py` may reuse selection, lowering,
+  dependency closure, emitted-name finalization, and a registered backend's
+  primitive renderer. It must not load project render assets, write artifacts,
+  or invoke generated-code toolchains.
 - `tslc/src/tslc/project_config.py` owns discovered `tslc.toml` defaults.
   `cli.py` owns installed command routing and legacy flat-generation
   compatibility; focused commands keep testable cores outside the router.

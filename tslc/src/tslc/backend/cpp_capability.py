@@ -13,6 +13,7 @@ from tslc.backend.capability import (
     GeneratedFormatSpec,
 )
 from tslc.backend.cpp_translation import CppBackendDialect
+from tslc.backend.cpp import CppBackend
 from tslc.benchmark.planner import CppBenchmarkPlanner
 from tslc.benchmark.render_cpp import cpp_benchmark_artifacts
 from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     from tslc.output.verify_model import VerifyProfile
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
     from tslc.benchmark.model import BenchmarkProjectPlan
+    from tslc.lower.lowerer import LoweredSpecialization
 
 
 def create_cpp_dialect(catalog: Catalog) -> BackendDialect:
@@ -80,6 +82,15 @@ def create_cpp_verify_driver() -> VerifyBackendDriver:
     return _create_cpp_verify_driver()
 
 
+def cpp_primitive_preview(
+    profile: EmittedProfile,
+    primitive_name: str,
+    specializations: tuple[LoweredSpecialization, ...],
+) -> str:
+    del profile
+    return CppBackend().render_primitive(primitive_name, specializations)
+
+
 CPP_BACKEND = BackendCapability(
     backend_id="cpp",
     root_path="cpp",
@@ -95,6 +106,7 @@ CPP_BACKEND = BackendCapability(
     benchmark_renderer=cpp_benchmark_artifacts,
     helper_manifest=CPP_HELPER_MANIFEST,
     profile_validator=validate_cpp_profiles,
+    primitive_preview_renderer=cpp_primitive_preview,
     generated_format=GeneratedFormatSpec(
         executable="clang-format",
         label="cpp",

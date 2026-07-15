@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Lock, RLock
 from types import MappingProxyType
 
 from tslc.authoring import CheckResult, ParsedDocumentCache, SourceOverlay, check_catalog
 from tslc.backend.registry import registered_backend_ids
+from tslc.catalog.machine_profiles import (
+    load_machine_profiles_checked,
+    target_feature_names,
+)
 from tslc.catalog.model import Catalog
-from tslc.catalog_index import CatalogIndex
+from tslc.catalog_index import CatalogIndex, build_catalog_index
 from tslc.diagnostics import Diagnostic
 from tslc.project_config import ProjectConfig, discover_config, load_project_config
 
@@ -23,6 +27,7 @@ class AuthoringConfig:
     machine_profiles_path: Path | None
     backends: tuple[str, ...]
     preferred_profiles: tuple[str, ...] = ()
+    target_features: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +45,7 @@ class WorkspaceSnapshot:
     diagnostics: tuple[Diagnostic, ...]
     source_paths: tuple[Path, ...]
     versions: Mapping[Path, int | None]
+    target_features: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "versions", MappingProxyType(dict(self.versions)))
@@ -56,7 +62,9 @@ class AuthoringWorkspace:
         self._documents: dict[Path, OpenDocument] = {}
         self._generation = 0
         self._closed = False
-        self._latest = WorkspaceSnapshot(0, None, None, (), (), {})
+        self._latest = WorkspaceSnapshot(
+            0, None, None, (), (), {}, config.target_features
+        )
 
     @classmethod
     def from_root(
@@ -77,23 +85,25 @@ class AuthoringWorkspace:
             raise ValueError(
                 f"no TSL corpus configured under {root}; create tslc.toml or provide source roots"
             )
+        selected_profiles = (
+            machine_profiles_path.resolve()
+            if machine_profiles_path is not None
+            else project.machine_profiles
+            if project is not None
+            else _layout_profiles(root)
+        )
         return cls(
             AuthoringConfig(
                 root=root,
                 source_roots=tuple(path.resolve() for path in configured_sources),
-                machine_profiles_path=(
-                    machine_profiles_path.resolve()
-                    if machine_profiles_path is not None
-                    else project.machine_profiles
-                    if project is not None
-                    else _layout_profiles(root)
-                ),
+                machine_profiles_path=selected_profiles,
                 backends=backends or (
                     project.backends if project is not None else registered_backend_ids()
                 ),
                 preferred_profiles=(
                     project.authoring_profiles if project is not None else ()
                 ),
+                target_features=_configured_target_features(selected_profiles),
             )
         )
 
@@ -157,6 +167,30 @@ class AuthoringWorkspace:
                 overlays=overlays,
                 cache=self.cache,
             )
+            if result.index is None and self.latest.index is None and overlays:
+                # A server can first see a workspace through an already-dirty buffer.
+                # Preserve its overlay diagnostics, but seed navigation from the valid
+                # saved corpus so definition/hover do not start empty.
+                baseline = check_catalog(
+                    config.source_roots,
+                    backends=config.backends,
+                    cache=self.cache,
+                )
+                if baseline.index is not None:
+                    result = replace(
+                        result,
+                        catalog=baseline.catalog,
+                        index=(
+                            build_catalog_index(
+                                baseline.catalog,
+                                result.parsed,
+                                cache=self.cache.index_cache,
+                            )
+                            if baseline.catalog is not None
+                            and result.parsed is not None
+                            else baseline.index
+                        ),
+                    )
             return self._accept(requested, result)
 
     def close(self) -> None:
@@ -192,6 +226,7 @@ class AuthoringWorkspace:
                 result.diagnostics,
                 paths,
                 versions,
+                self.config.target_features,
             )
             self._latest = snapshot
             return snapshot
@@ -210,6 +245,12 @@ def _layout_sources(root: Path) -> tuple[Path, ...]:
 def _layout_profiles(root: Path) -> Path | None:
     candidate = root / "supplementary" / "buildsystem" / "machine_profiles.json"
     return candidate if candidate.is_file() else None
+
+
+def _configured_target_features(path: Path | None) -> tuple[str, ...]:
+    if path is None:
+        return ()
+    return target_feature_names(load_machine_profiles_checked(path).profiles)
 
 
 __all__ = (

@@ -45,7 +45,19 @@ npm run package                       # writes ../../tslctmp/tsl-language-suppor
 ```
 
 Install the resulting VSIX with VS Code's **Extensions: Install from VSIX…**
-command. Because the preview VSIX does not bundle Python, install
+command. For the complete grammar/unit test, extension-host test, package, and
+force-install workflow, use one command from the repository root:
+
+```bash
+./dev.sh editor-install
+```
+
+This uses the `code` CLI by default; set `CODE_BIN=code-insiders` (or an
+absolute CLI path) when needed. It finishes by asking you to reload the VS Code
+window. `npm run package:verified` performs the same verification and packaging
+without installing the VSIX.
+
+Because the preview VSIX does not bundle Python, install
 `tslc[editor]` on the remote/workspace side when using SSH, WSL, or a
 devcontainer. The extension is declared as a workspace extension so the server
 and explicit preview process see the same files as the compiler.
@@ -63,21 +75,36 @@ Opening a `.tsl` file activates:
 - **TSL: Preview Specialization**;
 - **TSL: Doctor**.
 
+Completion inside simple and scoped `requires [...]` lists offers target-feature
+tokens from the configured machine profiles and catalog requirements, rather
+than implementation type groups.
+
 Hover, navigation, symbols, completion, and semantic tokens read the most
 recent successful `CatalogIndex`. They do not check the corpus, select or lower
 a specialization, render artifacts, or start a process. If the current buffer
 is malformed, those features continue from the last successful index while
-new diagnostics describe the malformed overlay.
+new diagnostics describe the malformed overlay. If the first document arrives
+already invalid, the server seeds catalog facts and definitions from the valid
+saved corpus and combines them with any parseable occurrence spans in the
+overlay, so navigation does not begin empty.
 
 Concrete preview is deliberately explicit and saved-file-only. Select a
 primitive name or place the cursor after its declaration, invoke **TSL: Preview
-Specialization**, and choose/configure a concrete profile. The client launches
-`tslc explain` as a cancellable child, shows progress, and opens its immutable
+Specialization**, and choose/configure a concrete profile. Unless
+`tsl.preview.extension` supplies a fixed extension, the client obtains all
+extension names from `tslc list extensions --format json` and presents them in
+a searchable dropdown, with the selected profile first when it is also an
+extension. The client launches
+`tslc preview` as a cancellable child, shows progress, and opens its immutable
 result in a read-only `tsl-preview:` document beside the source. A newer
 preview cancels and supersedes an older child without allowing stale output to
-replace the newer result. Explain loads one corpus snapshot, performs
-selection, lowering, and dependency closure with artifact rendering disabled,
-and includes the concrete selection plus an input digest in its output.
+replace the newer result. Preview loads one corpus snapshot, performs
+selection, lowering, and dependency closure, and sends the requested emitted
+specialization through the normal backend primitive renderer. The result is an
+actual C++ or Rust fragment with the concrete selection and input digest; no
+project assets are loaded, no generated project is written, and no compiler or
+runner is invoked. Use `tslc explain` separately when the selection and
+lowering decision trace is more useful than rendered code.
 
 There is no formatter in Version 1. The outer parser is not lossless, so the
 server intentionally advertises no formatting capability.
@@ -121,10 +148,10 @@ On 2026-07-15 in the repository devcontainer, the 42-file corpus measured:
 
 | Operation | Result | Version 1 target |
 | --- | ---: | ---: |
-| Initial complete check/index | 2.261 s | under 2.5 s |
-| Changed-document check, p95 | 0.632 s | under 0.750 s |
-| Index-backed hover, p95 | 0.144 ms | under 100 ms |
-| Cold saved specialization preview | 2.730 s | under 5 s |
+| Initial complete check/index | 2.305 s | under 2.5 s |
+| Changed-document check, p95 | 0.637 s | under 0.750 s |
+| Index-backed hover, p95 | 0.138 ms | under 100 ms |
+| Cold saved rendered specialization preview | 2.724 s | under 5 s |
 
 These are development targets, not portable wall-clock test assertions. The
 probe reparses each changed overlay, reuses unchanged parsed documents and

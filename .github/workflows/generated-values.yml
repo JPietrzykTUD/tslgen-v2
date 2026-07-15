@@ -4,6 +4,8 @@ on:
   pull_request:
   merge_group:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:

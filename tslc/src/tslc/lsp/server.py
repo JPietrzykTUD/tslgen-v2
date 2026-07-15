@@ -27,6 +27,7 @@ from tslc.lsp.workspace import AuthoringWorkspace, WorkspaceSnapshot
 SERVER_NAME = "tslc"
 SERVER_VERSION = "0.1.0"
 _DEBOUNCE_SECONDS = 0.15
+_INDEX_WAIT_SECONDS = 5.0
 
 
 @dataclass(slots=True)
@@ -41,6 +42,7 @@ class _ServerState:
     source_roots: tuple[Path, ...] | None = None
     machine_profiles_path: Path | None = None
     backends: tuple[str, ...] | None = None
+    index_ready: asyncio.Event = field(default_factory=asyncio.Event)
 
 
 def create_server(
@@ -66,6 +68,7 @@ def create_server(
         state.source_roots = sources
         state.machine_profiles_path = profiles
         state.backends = backends
+        state.index_ready.clear()
         try:
             state.workspace = AuthoringWorkspace.from_root(
                 selected_root,
@@ -104,6 +107,7 @@ def create_server(
             return
         for document in documents:
             replacement.open(document.path, document.text, document.version)
+        state.index_ready.clear()
         state.workspace = replacement
         state.setup_error = None
         state.shown_setup_error = False
@@ -161,8 +165,10 @@ def create_server(
         await _check_and_publish(server, state, generation)
 
     @server.feature(types.TEXT_DOCUMENT_DOCUMENT_SYMBOL)
-    def symbols(params: types.DocumentSymbolParams) -> list[types.DocumentSymbol]:
-        workspace = state.workspace
+    async def symbols(
+        params: types.DocumentSymbolParams,
+    ) -> list[types.DocumentSymbol]:
+        workspace = await _workspace_with_index(state)
         if workspace is None:
             return []
         path = uri_to_path(params.text_document.uri)
@@ -170,8 +176,10 @@ def create_server(
         return list(document_symbols(workspace.latest.index, path, text))
 
     @server.feature(types.TEXT_DOCUMENT_DEFINITION)
-    def definition(params: types.DefinitionParams) -> list[types.Location]:
-        workspace = state.workspace
+    async def definition(
+        params: types.DefinitionParams,
+    ) -> list[types.Location]:
+        workspace = await _workspace_with_index(state)
         if workspace is None:
             return []
         path = uri_to_path(params.text_document.uri)
@@ -183,8 +191,10 @@ def create_server(
         )
 
     @server.feature(types.TEXT_DOCUMENT_REFERENCES)
-    def references(params: types.ReferenceParams) -> list[types.Location]:
-        workspace = state.workspace
+    async def references(
+        params: types.ReferenceParams,
+    ) -> list[types.Location]:
+        workspace = await _workspace_with_index(state)
         if workspace is None:
             return []
         path = uri_to_path(params.text_document.uri)
@@ -201,8 +211,8 @@ def create_server(
         )
 
     @server.feature(types.TEXT_DOCUMENT_HOVER)
-    def hover_request(params: types.HoverParams) -> types.Hover | None:
-        workspace = state.workspace
+    async def hover_request(params: types.HoverParams) -> types.Hover | None:
+        workspace = await _workspace_with_index(state)
         if workspace is None:
             return None
         path = uri_to_path(params.text_document.uri)
@@ -213,8 +223,10 @@ def create_server(
         types.TEXT_DOCUMENT_COMPLETION,
         types.CompletionOptions(trigger_characters=["<", "=", ","]),
     )
-    def completion_request(params: types.CompletionParams) -> types.CompletionList:
-        workspace = state.workspace
+    async def completion_request(
+        params: types.CompletionParams,
+    ) -> types.CompletionList:
+        workspace = await _workspace_with_index(state)
         if workspace is None:
             return types.CompletionList(is_incomplete=False, items=[])
         path = uri_to_path(params.text_document.uri)
@@ -227,10 +239,10 @@ def create_server(
             token_types=list(SEMANTIC_TOKEN_TYPES), token_modifiers=[]
         ),
     )
-    def semantic_tokens_request(
+    async def semantic_tokens_request(
         params: types.SemanticTokensParams,
     ) -> types.SemanticTokens:
-        workspace = state.workspace
+        workspace = await _workspace_with_index(state)
         if workspace is None:
             return types.SemanticTokens(data=[])
         path = uri_to_path(params.text_document.uri)
@@ -240,10 +252,22 @@ def create_server(
     @server.feature(types.SHUTDOWN)
     def shutdown(*args: object) -> None:
         del args
+        state.index_ready.set()
         if state.workspace is not None:
             state.workspace.close()
 
     return server
+
+
+async def _workspace_with_index(state: _ServerState) -> AuthoringWorkspace | None:
+    workspace = state.workspace
+    if workspace is None or workspace.latest.index is not None:
+        return workspace
+    try:
+        await asyncio.wait_for(state.index_ready.wait(), timeout=_INDEX_WAIT_SECONDS)
+    except TimeoutError:
+        pass
+    return state.workspace
 
 
 async def _check_and_publish(
@@ -272,6 +296,8 @@ def _publish(
     workspace = state.workspace
     if workspace is None:
         return
+    if snapshot.index is not None:
+        state.index_ready.set()
     grouped = diagnostics_by_path(snapshot)
     current_paths = set(grouped) | set(snapshot.versions)
     paths = current_paths | state.published_paths

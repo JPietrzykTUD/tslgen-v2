@@ -80,6 +80,18 @@ tslc check --primitive add --profile avx2 --backend cpp --type si32
 Unsupported selected slots are reported separately and do not fail the
 default partial check. Add `--strict` when every requested slot must lower.
 
+Render one concrete specialization fragment with the registered backend's
+normal primitive renderer, without constructing or writing a project:
+
+```bash
+tslc preview --primitive add --profile avx2 --type si32 --backend cpp --extension avx2
+```
+
+The output is backend source for inspection, not a standalone translation
+unit. It includes the concrete selection and input-snapshot digest. Use
+`tslc explain` for the detailed candidate-ranking, TSIL, lowering, dependency,
+and verdict trace.
+
 Use the focused catalog commands before writing selectors or invoking
 `explain`:
 
@@ -147,9 +159,10 @@ Missing run support is always reported, but affects the exit status only with
 `--run`. Missing build prerequisites or a failed compiler/target preflight
 produce exit status 1.
 
-## Explain, inspect, audit, and coverage
+## Preview, explain, inspect, audit, and coverage
 
 ```bash
+tslc preview --primitive add --profile avx2 --type si32 --backend cpp
 tslc explain --primitive add --profile avx2 --type si32 --backend cpp
 tslc inspect --stage lowered --primitive add --profile avx2 --type si32 --backend cpp
 tslc audit metadata

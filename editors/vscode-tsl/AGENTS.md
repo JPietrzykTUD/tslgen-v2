@@ -26,3 +26,7 @@ npm test
 xvfb-run -a npm run test:integration
 npm run package
 ```
+
+Use `npm run package:verified` for the combined unit/integration/package gate,
+or `./dev.sh editor-install` from the repository root to run that gate and
+force-install the resulting VSIX through the configured `CODE_BIN`/`code` CLI.

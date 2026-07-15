@@ -19,6 +19,7 @@ CompletionKind = Literal[
     "extension-field",
     "implementation-extension",
     "implementation-type-group",
+    "target-feature",
     "primitive-call",
     "region-keyword",
     "cast-selector",
@@ -28,6 +29,8 @@ CompletionKind = Literal[
 _CALL_CONTEXT = re.compile(r"call\s*<\s*primitive\s*=\s*(@?[A-Za-z0-9_]*)$")
 _SELECTOR_CONTEXT = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*<([^>]*)$")
 _WORD_SUFFIX = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)?$")
+_REQUIRES_LIST_CONTEXT = re.compile(r"\brequires\s*:?\s*\[([^\]]*)$")
+_OPEN_LIST_CONTEXT = re.compile(r"\[([^\]]*)$")
 VAR_SELECTORS = (
     "infer",
     "const_infer",
@@ -64,7 +67,10 @@ def completion_context(text: str, offset: int) -> CompletionContext:
     if _inside_tsil(text, offset):
         return CompletionContext("region-keyword", prefix)
 
-    lines = before.splitlines()
+    lines = before.split("\n")
+    feature_prefix = _requires_feature_prefix(lines)
+    if feature_prefix is not None:
+        return CompletionContext("target-feature", feature_prefix)
     top_kind = _nearest_top_level_kind(lines)
     indent = len(line) - len(line.lstrip(" "))
     if top_kind == "primitive":
@@ -80,7 +86,12 @@ def completion_context(text: str, offset: int) -> CompletionContext:
     return CompletionContext("none", prefix)
 
 
-def completion_values(context: CompletionContext, catalog: Catalog) -> tuple[str, ...]:
+def completion_values(
+    context: CompletionContext,
+    catalog: Catalog,
+    *,
+    target_features: Iterable[str] = (),
+) -> tuple[str, ...]:
     values: Iterable[str]
     if context.kind == "primitive-field":
         values = KNOWN_PRIMITIVE_FIELDS
@@ -90,6 +101,8 @@ def completion_values(context: CompletionContext, catalog: Catalog) -> tuple[str
         values = catalog.extensions.keys()
     elif context.kind == "implementation-type-group":
         values = catalog.type_groups.keys()
+    elif context.kind == "target-feature":
+        values = {*target_features, *_catalog_target_features(catalog)}
     elif context.kind == "primitive-call":
         values = {primitive.name for primitive in catalog.primitives}
     elif context.kind == "region-keyword":
@@ -107,6 +120,55 @@ def completion_values(context: CompletionContext, catalog: Catalog) -> tuple[str
     else:
         values = ()
     return tuple(sorted(value for value in values if value.startswith(context.prefix)))
+
+
+def _requires_feature_prefix(lines: list[str]) -> str | None:
+    line = lines[-1]
+    direct = _REQUIRES_LIST_CONTEXT.search(line)
+    if direct is not None:
+        return _list_item_prefix(direct.group(1))
+    nested = _OPEN_LIST_CONTEXT.search(line)
+    if nested is None or not _inside_requires_map(lines):
+        return None
+    return _list_item_prefix(nested.group(1))
+
+
+def _list_item_prefix(contents: str) -> str | None:
+    candidate = contents.rsplit(",", 1)[-1].strip()
+    return candidate if re.fullmatch(r"[A-Za-z0-9_]*", candidate) else None
+
+
+def _inside_requires_map(lines: list[str]) -> bool:
+    current_indent = len(lines[-1]) - len(lines[-1].lstrip(" "))
+    for index in range(len(lines) - 2, -1, -1):
+        line = lines[index]
+        if line.strip() != "requires:":
+            continue
+        requires_indent = len(line) - len(line.lstrip(" "))
+        if requires_indent >= current_indent:
+            continue
+        return all(
+            not candidate.strip()
+            or len(candidate) - len(candidate.lstrip(" ")) > requires_indent
+            for candidate in lines[index + 1 : -1]
+        )
+    return False
+
+
+def _catalog_target_features(catalog: Catalog) -> frozenset[str]:
+    activation = {
+        feature
+        for extension in catalog.extensions.values()
+        for feature in extension.active_when.target_features
+    }
+    requirements = {
+        feature
+        for primitive in catalog.primitives
+        for implementation in primitive.implementations
+        for clause in implementation.requirements
+        for feature in clause.flags
+    }
+    return frozenset(activation | requirements)
 
 
 def _nearest_top_level_kind(lines: list[str]) -> Literal["primitive", "extension"] | None:

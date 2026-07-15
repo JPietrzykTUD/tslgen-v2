@@ -5,6 +5,7 @@ import {
   type ServerOptions,
 } from "vscode-languageclient/node";
 
+import { listExtensions } from "./catalog";
 import { discoverCompiler, discoverServer, type DiscoveryOptions } from "./discovery";
 import {
   PreviewDocumentProvider,
@@ -126,12 +127,25 @@ async function previewSpecialization(): Promise<void> {
     );
     return;
   }
-  const slot = await selectConcreteSlot(editor);
   const compiler = await compilerCommand(editor.document.uri);
-  if (!slot || !compiler) {
+  if (!compiler) {
     return;
   }
-  await previewManager.preview(compiler, workspaceCwd(editor.document), slot);
+  const cwd = workspaceCwd(editor.document);
+  const configuredExtension = vscode.workspace
+    .getConfiguration("tsl", editor.document.uri)
+    .get<string>("preview.extension");
+  const availableExtensions = configuredExtension
+    ? undefined
+    : await loadExtensionChoices(compiler, cwd);
+  if (!configuredExtension && !availableExtensions) {
+    return;
+  }
+  const slot = await selectConcreteSlot(editor, availableExtensions);
+  if (!slot) {
+    return;
+  }
+  await previewManager.preview(compiler, cwd, slot);
 }
 
 async function checkSlot(): Promise<void> {
@@ -190,6 +204,28 @@ function activeTslEditor(): vscode.TextEditor | undefined {
     return undefined;
   }
   return editor;
+}
+
+async function loadExtensionChoices(
+  compiler: NonNullable<Awaited<ReturnType<typeof compilerCommand>>>,
+  cwd: string,
+): Promise<readonly string[] | undefined> {
+  try {
+    return await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Loading TSL extensions",
+      },
+      () => listExtensions(compiler, cwd),
+    );
+  } catch (error) {
+    output?.appendLine(`Could not load TSL extensions: ${String(error)}`);
+    output?.show(true);
+    void vscode.window.showErrorMessage(
+      "Could not load extensions from tslc. See the TSL output channel for details.",
+    );
+    return undefined;
+  }
 }
 
 async function compilerCommand(uri: vscode.Uri) {

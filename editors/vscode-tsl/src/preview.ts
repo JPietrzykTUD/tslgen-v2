@@ -50,7 +50,7 @@ export class PreviewManager implements vscode.Disposable {
       compiler,
       cwd,
       [
-        "explain",
+        "preview",
         "--primitive",
         slot.primitive,
         "--profile",
@@ -64,6 +64,7 @@ export class PreviewManager implements vscode.Disposable {
       ],
       `TSL Preview: ${slot.primitive}<${slot.type}> (${slot.profile}/${slot.backend})`,
       "preview",
+      slot.backend === "rust" ? "rs" : "hpp",
     );
   }
 
@@ -118,6 +119,7 @@ export class PreviewManager implements vscode.Disposable {
     args: readonly string[],
     title: string,
     kind: string,
+    suffix = "txt",
   ): Promise<void> {
     this.generation += 1;
     const generation = this.generation;
@@ -159,7 +161,7 @@ export class PreviewManager implements vscode.Disposable {
     }
     const uri = vscode.Uri.from({
       scheme: "tsl-preview",
-      path: `/${kind}/${encodeURIComponent(title)}.txt`,
+      path: `/${kind}/${encodeURIComponent(title)}.${suffix}`,
       query: `generation=${generation}`,
     });
     this.provider.set(uri, result.stdout || `${title}: no output\n`);
@@ -174,6 +176,7 @@ export class PreviewManager implements vscode.Disposable {
 
 export async function selectConcreteSlot(
   editor: vscode.TextEditor,
+  availableExtensions?: readonly string[],
 ): Promise<ConcreteSlot | undefined> {
   const primitive =
     (await primitiveAt(editor)) ??
@@ -198,7 +201,21 @@ export async function selectConcreteSlot(
   }
   const type = configuration.get<string>("preview.type", "si32");
   const backend = configuration.get<string>("preview.backend", "cpp");
-  const extension = configuration.get<string>("preview.extension") || profile;
+  const configuredExtension = configuration.get<string>("preview.extension");
+  const extension =
+    configuredExtension ||
+    (availableExtensions
+      ? await vscode.window.showQuickPick(
+          prefer(availableExtensions, profile),
+          {
+            title: "TSL extension",
+            placeHolder: "Select an extension from the current tslc catalog",
+          },
+        )
+      : profile);
+  if (!extension) {
+    return undefined;
+  }
   return { primitive, profile, type, backend, extension };
 }
 
@@ -233,4 +250,11 @@ async function primitiveAt(editor: vscode.TextEditor): Promise<string | undefine
 
 function required(value: string): string | undefined {
   return value.trim() ? undefined : "A value is required.";
+}
+
+function prefer(values: readonly string[], preferred: string): readonly string[] {
+  if (!values.includes(preferred)) {
+    return values;
+  }
+  return [preferred, ...values.filter((value) => value !== preferred)];
 }

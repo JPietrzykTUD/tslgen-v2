@@ -126,6 +126,24 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
         snapshot,
         'prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        implementation:\n          tsil "complete(call<primitive=ad',
     )
+    required_features = _completion_labels(
+        snapshot,
+        "prim<v:=v> x(v):\n"
+        "  impls:\n"
+        "    avx512:\n"
+        "      arith:\n"
+        "        requires [avx512_",
+    )
+    nested_required_features = _completion_labels(
+        snapshot,
+        "prim<v:=v> x(v):\n"
+        "  impls:\n"
+        "    avx512:\n"
+        "      arith:\n"
+        "        requires:\n"
+        "          avx512:\n"
+        "            dword [avx512_",
+    )
 
     assert definitions
     assert len(references) > len(definitions)
@@ -139,6 +157,10 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
     assert "scalar" in extensions
     assert "arith" in type_groups
     assert "add" in primitive_calls
+    assert "avx512_fp16" in required_features
+    assert "avx512_fp16" in nested_required_features
+    assert "arith" not in required_features
+    assert "si32" not in required_features
 
 
 def _completion_labels(snapshot, text: str) -> set[str]:
@@ -182,3 +204,42 @@ def test_unsaved_parser_catalog_and_tsil_errors_are_checked(
     tsil = workspace.check(generation)
     assert tsil is not None
     assert any(item.code == "TSL-BODY-MALFORMED-REGION" for item in tsil.diagnostics)
+
+
+def test_unsaved_unknown_implementation_metadata_is_diagnosed(
+    data_root: Path,
+) -> None:
+    path = data_root / "primitives" / "load_store" / "array.tsl"
+    original = path.read_text(encoding="utf-8")
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    changed = original.replace(
+        "        implementation:\n",
+        '        hello: "test"\n        implementation:\n',
+        1,
+    )
+
+    snapshot = workspace.check(workspace.open(path, changed, 1))
+
+    assert snapshot is not None
+    assert any(
+        item.code == "TSL-CATALOG-UNKNOWN-FIELD" and "'hello'" in item.message
+        for item in snapshot.diagnostics
+    )
+    assert snapshot.index is not None
+    call_line = next(
+        line
+        for line, content in enumerate(changed.splitlines())
+        if "call<primitive=store[Vec]" in content
+    )
+    call_character = changed.splitlines()[call_line].index("store")
+
+    definitions = definition_locations(
+        snapshot.index,
+        path,
+        changed,
+        types.Position(line=call_line, character=call_character),
+        workspace,
+    )
+
+    assert definitions
+    assert all(location.uri.endswith("/store.tsl") for location in definitions)

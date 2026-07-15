@@ -24,6 +24,9 @@ _KNOWN_SAFETY_FIELDS = frozenset({"internal_unsafe", "caller_unsafe", "reasons"}
 _KNOWN_VARIANT_SAFETY_FIELDS = frozenset({"internal_unsafe", "reasons"})
 _KNOWN_VARIANT_FIELDS = frozenset({"safety", "tsil", "tsl"})
 _VARIANT_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_KNOWN_SELECTOR_METADATA_FIELDS = frozenset(
+    {"implementation", "requires", "safety", "unroll_variants", "variants"}
+)
 _KNOWN_TARGET_CONSTRAINT_FIELDS = frozenset(
     {"family", "width", "safety", "implementation", "variants"}
 )
@@ -36,6 +39,8 @@ def validate_implementation_safety(
     def walk(entry: ParsedImplementationSelectorEntry) -> None:
         if entry.selector.text == "where":
             _validate_target_constraint(entry, diagnostics)
+        else:
+            _validate_selector_metadata(entry, diagnostics)
         diagnose_duplicate_fields(
             tuple(field for field in entry.fields if field.key.text == "safety"),
             diagnostics,
@@ -65,6 +70,24 @@ def validate_implementation_safety(
 
     for entry in declaration.impl_entries:
         walk(entry)
+
+
+def _validate_selector_metadata(
+    entry: ParsedImplementationSelectorEntry, diagnostics: list[Diagnostic]
+) -> None:
+    """Reject scalar metadata that cannot be a nested selector block."""
+
+    scalar_unknown_fields = tuple(
+        field
+        for field in entry.fields
+        if field.key.text not in _KNOWN_SELECTOR_METADATA_FIELDS and not children(field)
+    )
+    validate_known_fields(
+        scalar_unknown_fields,
+        _KNOWN_SELECTOR_METADATA_FIELDS,
+        diagnostics,
+        owner=f"implementation selector {entry.selector.text!r}",
+    )
 
 
 def _validate_target_constraint(

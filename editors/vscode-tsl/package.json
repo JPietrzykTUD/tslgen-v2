@@ -109,7 +109,7 @@
         "tsl.preview.extension": {
           "type": "string",
           "default": "",
-          "description": "Concrete extension for preview; defaults to the selected profile name."
+          "description": "Concrete extension for preview. When empty, Preview Specialization presents the extensions reported by tslc."
         },
         "tsl.preview.backend": {
           "type": "string",
@@ -127,7 +127,10 @@
     "test:unit": "tsc -p tsconfig.json && mocha 'dist/test/*.test.js' && node --test test/grammar.test.mjs",
     "test:integration": "npm run compile && node scripts/run-integration.mjs",
     "test": "npm run check:grammar && npm run compile && npm run test:unit",
-    "package": "npm run test && vsce package --no-dependencies --out ../../tslctmp/tsl-language-support.vsix"
+    "package:vsix": "vsce package --no-dependencies --out ../../tslctmp/tsl-language-support.vsix",
+    "package": "npm run test && npm run package:vsix",
+    "package:verified": "bash scripts/install-local.sh --package-only",
+    "install:local": "bash scripts/install-local.sh"
   },
   "dependencies": {
     "vscode-languageclient": "10.1.0"
