@@ -2,7 +2,7 @@
   "name": "tsl-language-support",
   "displayName": "TSL Language Support",
   "description": "Compiler-backed language support for tslc .tsl source data.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "tsl-project",
   "license": "MIT",
   "repository": {
@@ -58,7 +58,7 @@
         {
           "id": "tslc",
           "title": "TSLc",
-          "icon": "media/tslc.svg"
+          "icon": "media/tslc-logo.svg"
         }
       ]
     },

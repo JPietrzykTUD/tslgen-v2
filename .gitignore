@@ -14,4 +14,3 @@ test-sort/build*/
 node_modules/
 .vscode-test/
 editors/vscode-tsl/dist/
-editors/vscode-tsl/syntaxes/tsl.tmLanguage.json
