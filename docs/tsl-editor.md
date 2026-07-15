@@ -95,11 +95,15 @@ overlay, so navigation does not begin empty.
 
 Concrete preview is deliberately explicit and saved-file-only. Select a
 primitive name or place the cursor after its declaration, invoke **TSL: Preview
-Specialization**, and choose/configure a concrete profile. Unless
-`tsl.preview.extension` supplies a fixed extension, the client obtains all
-extension names from `tslc list extensions --format json` and presents them in
-a searchable dropdown, with the selected profile first when it is also an
-extension. The client launches
+Specialization**, and choose/configure a concrete profile. Preview, Check, and
+Doctor obtain all profile names from `tslc list profiles --format json` and
+present them in a searchable VS Code quick-pick unless `tsl.preview.profile`
+supplies a fixed profile. `scalar` is placed first when available. Unless
+`tsl.preview.extension` supplies a fixed extension, Preview likewise obtains
+all extension names from `tslc list extensions --format json` and presents
+them in a quick-pick, with the selected profile first when it is also an
+extension. Profile and extension catalog queries run concurrently when Preview
+needs both. The client launches
 `tslc preview` as a cancellable child, shows progress, and opens its immutable
 result in a read-only `tsl-preview:` document beside the source. A newer
 preview cancels and supersedes an older child without allowing stale output to
@@ -131,7 +135,9 @@ Preview/check/doctor use `tsl.preview.command`, then the same bundled/PATH/
 configured-Python order. The client never parses a command as a shell string
 and does not reinterpret an arbitrary custom server command as a full compiler.
 Useful slot settings are `tsl.preview.profile`, `tsl.preview.extension`,
-`tsl.preview.type`, and `tsl.preview.backend`.
+`tsl.preview.type`, and `tsl.preview.backend`. The profile and extension
+settings are fixed overrides; leaving them empty enables the catalog-backed
+quick-picks.
 
 The client contains no TSIL keyword list. During `npm run compile` and package
 creation, `scripts/generate-grammar.mjs` calls `tslc list regions --format json`

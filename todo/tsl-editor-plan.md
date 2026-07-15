@@ -800,7 +800,7 @@ Later completions:
 - selector terms and named option bags per region;
 - type and value query roots and valid continuations;
 - primitive parameter names in TSIL bodies;
-- profile and type values in command prompts;
+- type values in command prompts;
 - minimal declaration snippets.
 
 Completion must use an explicit context resolver that returns a typed context
@@ -857,14 +857,18 @@ globally common default chord. `tslc explain` remains a separate CLI diagnostic
 for candidate ranking, TSIL scanning, lowering, dependency closure, and the
 emission verdict.
 
-Extension selection is catalog-backed rather than a free-form prompt. Unless a
-fixed `tsl.preview.extension` is configured, the client runs
-`tslc list extensions --format json` through the same discovered compiler
-command and shows every returned extension in a searchable VS Code quick-pick.
-The profile is placed first when it is also an extension. This keeps catalog
-ownership in `tslc`, automatically reflects newly added extensions, and leaves
-the explicit setting available for unattended extension-host tests and users
-who always preview the same slot.
+Profile and extension selection are catalog-backed rather than free-form
+prompts. Unless a fixed `tsl.preview.profile` is configured, Preview, Check,
+and Doctor run `tslc list profiles --format json` through the discovered
+compiler command and show every returned profile in a searchable VS Code
+quick-pick, with `scalar` first when available. Unless a fixed
+`tsl.preview.extension` is configured, Preview similarly runs
+`tslc list extensions --format json`; the chosen profile is placed first when
+it is also an extension. Preview starts both catalog queries concurrently when
+both selectors are required. This keeps catalog ownership in `tslc`,
+automatically reflects newly added values, and leaves explicit settings
+available for unattended extension-host tests and users who always target the
+same slot.
 
 The client owns process startup, progress, cancellation, stderr capture, and
 virtual-document refresh. Starting a new preview cancels an older preview for
@@ -1307,6 +1311,9 @@ Work:
 - add a client command that runs the slot-aware `tslc check` path in a child
   process for the current primitive and selected profile/type/backend;
 - add `TSL: Preview Specialization` to the TypeScript client;
+- populate the Preview and Check profile quick-picks from
+  `tslc list profiles --format json`, with `tsl.preview.profile` as a fixed
+  override;
 - populate its extension quick-pick from `tslc list extensions --format json`,
   with `tsl.preview.extension` as a fixed override;
 - add `tslc preview` and launch it in a cancellable child process rather than
@@ -1350,6 +1357,8 @@ Work:
 - replace the unconditional `dev.sh` preflight with the shared report or normal
   verifier preflight;
 - expose doctor through an editor command;
+- populate Doctor's profile quick-pick from `tslc list profiles --format json`,
+  with `tsl.preview.profile` as a fixed override;
 - adapt applicable `metadata_audit` suggestions into explicit workspace edits;
 - add help links and safe source actions for selected diagnostics;
 - measure the completed server and add catalog-level incrementality only if

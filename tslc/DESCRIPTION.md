@@ -78,9 +78,11 @@ remains the detailed selection/lowering diagnostic view.
 
 The [PIVOT exporter](src/tslc/pivot/) is a sibling projection rather than a
 registered backend. `tslc export pivot` reuses the immutable catalog, profile
-selection, and C++ intrinsic/type translation, but owns a separate strict
-lowering configuration that rejects non-dataflow constructs and recursively
-inlines supported primitive calls. It produces standalone YAML artifacts and
+selection, standard TSIL region lowerers, and C++ intrinsic/type translation,
+but replaces call lowering to retain typed sites for recursive inlining and
+validates the resulting lowered body for straight-line dataflow. Generation-time
+control therefore expands normally; only constructs that survive lowering are
+rejected. It produces standalone YAML artifacts and
 does not construct a normal generation request, enter the generation session,
 register a backend, render a generated project, or affect default C++/Rust
 output.

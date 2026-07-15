@@ -99,7 +99,7 @@
         "tsl.preview.profile": {
           "type": "string",
           "default": "",
-          "description": "Preferred concrete authoring profile."
+          "description": "Fixed concrete authoring profile. When empty, Preview, Check, and Doctor present the profiles reported by tslc."
         },
         "tsl.preview.type": {
           "type": "string",

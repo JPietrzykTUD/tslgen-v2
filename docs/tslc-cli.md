@@ -178,10 +178,12 @@ Each definition contains a concrete `isa`, `dtype`, parameter/result
 calls are recursively inlined into the same list.
 
 PIVOT currently accepts only concrete value-producing, straight-line
-specializations. Control flow, pragmas, casts, loops, unsupported TSIL regions,
-unresolved target-library constructs, scalable/sized vectors, and call graphs
-that cannot be resolved exactly are reported as skips. Use `--show-skips` to
-print them, or `--strict` to make any skip fail the command.
+specializations. Standard TSIL lowering first expands resolvable generation-time
+loops and branches. Control flow, blocks, pragmas, casts, unsupported constructs,
+or unresolved target-library calls that remain afterward, along with
+scalable/sized vectors and call graphs that cannot be resolved exactly, are
+reported as skips. Use `--show-skips` to print them, or `--strict` to make any
+skip fail the command.
 
 This command does not register PIVOT as a backend or run the ordinary
 generation/render pipeline. It has a dedicated output root and cannot create

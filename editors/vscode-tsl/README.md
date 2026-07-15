@@ -40,10 +40,11 @@ for `tslc` on the extension-host `PATH`.
 The preview command requires a saved source and runs `tslc preview` in a
 cancellable child. It displays the actual C++ or Rust specialization fragment
 from the normal backend primitive renderer without writing a project or
-invoking a toolchain. When `tsl.preview.extension` is empty, the command loads
-the current compiler catalog and presents every available extension in a
-searchable dropdown. Ordinary hover and diagnostics never lower or render a
-specialization, invoke toolchains, or start preview processes.
+invoking a toolchain. Preview, Check, and Doctor load every available profile
+from the current compiler catalog and present a searchable dropdown when
+`tsl.preview.profile` is empty. Preview does the same for extensions when
+`tsl.preview.extension` is empty. Ordinary hover and diagnostics never lower or
+render a specialization, invoke toolchains, or start preview processes.
 
 See `docs/tsl-editor.md` in the repository for architecture, development,
 performance evidence, remote setup, installation updates, and troubleshooting.

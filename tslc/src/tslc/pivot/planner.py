@@ -45,9 +45,12 @@ _SIMPLE_VALUE_RE = re.compile(
 _INFERRED_LOCAL_RE = re.compile(
     r"^(?:auto(?:\s+const)?|const\s+auto)\s+([A-Za-z_][A-Za-z0-9_]*)\s*="
 )
-_FORBIDDEN_WORD_RE = re.compile(
+_CONTROL_FLOW_WORD_RE = re.compile(
     r"\b(?:if|else|for|while|do|switch|case|default|goto|try|catch|throw|"
-    r"static_cast|reinterpret_cast|const_cast|dynamic_cast|co_await|co_yield)\b"
+    r"co_await|co_yield)\b"
+)
+_NAMED_CAST_RE = re.compile(
+    r"\b(?:static_cast|reinterpret_cast|const_cast|dynamic_cast)\b"
 )
 _C_STYLE_CAST_RE = re.compile(
     r"\(\s*(?:unsigned|signed|char|short|int|long|float|double|bool|"
@@ -533,18 +536,20 @@ def _mask_type(slot: SelectedImplementation, register: str) -> str:
 def _validate_body_text(text: str, source: SourceSpan | None) -> None:
     if not text:
         raise _PivotUnsupported("PIVOT body is empty", source)
-    if any(token in text for token in ("#", "{", "}", "//", "/*", "*/", '"', "'")):
-        raise _PivotUnsupported(
-            "PIVOT body contains a pragma, block, comment, or literal string", source
-        )
+    if "#" in text:
+        raise _PivotUnsupported("PIVOT body contains a pragma", source)
+    if any(token in text for token in ("//", "/*", "*/")):
+        raise _PivotUnsupported("PIVOT body contains a comment", source)
+    if '"' in text or "'" in text:
+        raise _PivotUnsupported("PIVOT body contains a literal string", source)
+    if _CONTROL_FLOW_WORD_RE.search(text):
+        raise _PivotUnsupported("PIVOT body contains residual control flow", source)
+    if _NAMED_CAST_RE.search(text) or _C_STYLE_CAST_RE.search(text):
+        raise _PivotUnsupported("PIVOT body contains a cast", source)
+    if "{" in text or "}" in text:
+        raise _PivotUnsupported("PIVOT body contains a residual block", source)
     if "?" in text:
         raise _PivotUnsupported("PIVOT body contains a conditional expression", source)
-    if _FORBIDDEN_WORD_RE.search(text):
-        raise _PivotUnsupported(
-            "PIVOT body contains control flow or a cast", source
-        )
-    if _C_STYLE_CAST_RE.search(text):
-        raise _PivotUnsupported("PIVOT body contains a C-style cast", source)
     if "::tsl::" in text or "typename Vec::" in text or re.search(r"\bLANES\b", text):
         raise _PivotUnsupported(
             "PIVOT body contains an unresolved generated-library construct", source

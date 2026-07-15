@@ -1,4 +1,4 @@
-"""PIVOT-only TSIL lowering configuration and primitive-call capture."""
+"""PIVOT call capture layered over the standard TSIL lowering configuration."""
 
 from __future__ import annotations
 
@@ -18,11 +18,6 @@ from tslc.lower.region_handlers import DEFAULT_REGION_LOWERERS, RegionLowerer
 from tslc.lower.region_handlers.declarations import VarLowerer
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.target_text import RenderField, RenderText, literal_text, render_sequence, render_text
-
-_ALLOWED_REGION_KEYWORDS = frozenset(
-    {"complete", "intrin", "let", "op", "type", "value"}
-)
-
 
 @dataclass(frozen=True, slots=True)
 class PivotCallSite:
@@ -140,33 +135,25 @@ class PivotVarLowerer:
         return self._delegate.finish_statement(rendered, region)
 
 
-class _UnsupportedPivotRegion:
-    def __init__(self, keyword: str) -> None:
-        self.keyword = keyword
-
-    def lower(
-        self, region: Region, context: LoweringSession, render: RenderBody
-    ) -> RenderField:
-        del render
-        context.effects.skip(
-            "TSL-PIVOT-UNSUPPORTED-REGION",
-            f"PIVOT dataflow does not support {self.keyword!r} regions",
-            source=region.source,
-        )
-        return region.full_text
-
-
 def pivot_region_lowerers(capture: PivotCallCapture) -> tuple[RegionLowerer, ...]:
+    """Reuse normal TSIL semantics, replacing only handlers PIVOT must constrain.
+
+    In particular, the normal control lowerers get the opportunity to splice
+    generation-time branches and expand generation-time loops. The planner
+    validates their final target text and rejects control flow that survives.
+    Calls remain a PIVOT override because their typed call-site identity must be
+    retained for recursive inlining. Variables remain limited to inferred locals
+    so the inliner can alpha-rename every admitted declaration without parsing C++.
+    """
+
     lowerers: list[RegionLowerer] = []
     for lowerer in DEFAULT_REGION_LOWERERS:
         if lowerer.keyword == "call":
             lowerers.append(PivotCallLowerer(capture))
         elif lowerer.keyword == "var":
             lowerers.append(PivotVarLowerer())
-        elif lowerer.keyword in _ALLOWED_REGION_KEYWORDS:
-            lowerers.append(lowerer)
         else:
-            lowerers.append(_UnsupportedPivotRegion(lowerer.keyword))
+            lowerers.append(lowerer)
     return tuple(lowerers)
 
 

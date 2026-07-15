@@ -12,6 +12,11 @@ export interface ConcreteSlot {
   readonly extension: string;
 }
 
+export interface SlotChoices {
+  readonly profiles?: readonly string[];
+  readonly extensions?: readonly string[];
+}
+
 export class PreviewDocumentProvider implements vscode.TextDocumentContentProvider {
   private readonly changed = new vscode.EventEmitter<vscode.Uri>();
   private readonly content = new Map<string, string>();
@@ -38,7 +43,7 @@ export class PreviewManager implements vscode.Disposable {
 
   constructor(
     private readonly provider: PreviewDocumentProvider,
-    private readonly output: vscode.OutputChannel,
+    private readonly output: vscode.LogOutputChannel,
   ) {}
 
   async preview(
@@ -148,8 +153,11 @@ export class PreviewManager implements vscode.Disposable {
       return;
     }
     if (result.code !== 0) {
-      this.output.appendLine(`${title} failed with exit code ${result.code}`);
-      this.output.appendLine(result.stderr || result.stdout);
+      const detail = (result.stderr || result.stdout).trimEnd();
+      this.output.error(
+        `${title} failed with exit code ${String(result.code)}` +
+          (detail ? `\n${detail}` : ""),
+      );
       this.output.show(true);
       void vscode.window.showErrorMessage(
         `${title} failed. See the TSL output channel for details.`,
@@ -157,7 +165,7 @@ export class PreviewManager implements vscode.Disposable {
       return;
     }
     if (result.stderr.trim()) {
-      this.output.appendLine(result.stderr.trimEnd());
+      this.output.warn(result.stderr.trimEnd());
     }
     const uri = vscode.Uri.from({
       scheme: "tsl-preview",
@@ -176,7 +184,7 @@ export class PreviewManager implements vscode.Disposable {
 
 export async function selectConcreteSlot(
   editor: vscode.TextEditor,
-  availableExtensions?: readonly string[],
+  choices: SlotChoices = {},
 ): Promise<ConcreteSlot | undefined> {
   const primitive =
     (await primitiveAt(editor)) ??
@@ -189,24 +197,21 @@ export async function selectConcreteSlot(
     return undefined;
   }
   const configuration = vscode.workspace.getConfiguration("tsl", editor.document.uri);
+  const configuredProfile = configuration.get<string>("preview.profile")?.trim();
   const profile =
-    configuration.get<string>("preview.profile") ||
-    (await vscode.window.showInputBox({
-      title: "TSL profile",
-      value: "scalar",
-      validateInput: required,
-    }));
+    configuredProfile ||
+    (choices.profiles ? await selectProfile(choices.profiles) : undefined);
   if (!profile) {
     return undefined;
   }
   const type = configuration.get<string>("preview.type", "si32");
   const backend = configuration.get<string>("preview.backend", "cpp");
-  const configuredExtension = configuration.get<string>("preview.extension");
+  const configuredExtension = configuration.get<string>("preview.extension")?.trim();
   const extension =
     configuredExtension ||
-    (availableExtensions
+    (choices.extensions
       ? await vscode.window.showQuickPick(
-          prefer(availableExtensions, profile),
+          prefer(choices.extensions, profile),
           {
             title: "TSL extension",
             placeHolder: "Select an extension from the current tslc catalog",
@@ -217,6 +222,15 @@ export async function selectConcreteSlot(
     return undefined;
   }
   return { primitive, profile, type, backend, extension };
+}
+
+export async function selectProfile(
+  availableProfiles: readonly string[],
+): Promise<string | undefined> {
+  return vscode.window.showQuickPick(prefer(availableProfiles, "scalar"), {
+    title: "TSL profile",
+    placeHolder: "Select a profile from the current tslc catalog",
+  });
 }
 
 export function workspaceCwd(document: vscode.TextDocument): string {

@@ -5,12 +5,18 @@ import {
   type ServerOptions,
 } from "vscode-languageclient/node";
 
-import { listExtensions } from "./catalog";
-import { discoverCompiler, discoverServer, type DiscoveryOptions } from "./discovery";
+import { listExtensions, listProfiles } from "./catalog";
+import {
+  discoverCompiler,
+  discoverServer,
+  type CommandSpec,
+  type DiscoveryOptions,
+} from "./discovery";
 import {
   PreviewDocumentProvider,
   PreviewManager,
   selectConcreteSlot,
+  selectProfile,
   workspaceCwd,
 } from "./preview";
 
@@ -84,7 +90,7 @@ async function startServer(): Promise<void> {
     );
     return;
   }
-  output?.appendLine(`Starting TSL server from ${command.source}: ${command.command}`);
+  output?.info(`Starting TSL server from ${command.source}: ${command.command}`);
   const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const serverOptions: ServerOptions = {
     command: command.command,
@@ -108,7 +114,7 @@ async function startServer(): Promise<void> {
     if (client === next) {
       client = undefined;
     }
-    output?.appendLine(`TSL language server failed to start: ${String(error)}`);
+    output?.error(`TSL language server failed to start: ${String(error)}`);
     void vscode.window.showErrorMessage(
       "TSL language server failed to start. See the TSL output channel and verify " +
         "that the selected environment contains tslc[editor].",
@@ -132,16 +138,17 @@ async function previewSpecialization(): Promise<void> {
     return;
   }
   const cwd = workspaceCwd(editor.document);
-  const configuredExtension = vscode.workspace
-    .getConfiguration("tsl", editor.document.uri)
-    .get<string>("preview.extension");
-  const availableExtensions = configuredExtension
-    ? undefined
-    : await loadExtensionChoices(compiler, cwd);
-  if (!configuredExtension && !availableExtensions) {
+  const configuration = vscode.workspace.getConfiguration("tsl", editor.document.uri);
+  const configuredProfile = nonEmpty(configuration.get<string>("preview.profile"));
+  const configuredExtension = nonEmpty(configuration.get<string>("preview.extension"));
+  const [profiles, extensions] = await Promise.all([
+    configuredProfile ? undefined : loadCatalogChoices("profiles", compiler, cwd),
+    configuredExtension ? undefined : loadCatalogChoices("extensions", compiler, cwd),
+  ]);
+  if ((!configuredProfile && !profiles) || (!configuredExtension && !extensions)) {
     return;
   }
-  const slot = await selectConcreteSlot(editor, availableExtensions);
+  const slot = await selectConcreteSlot(editor, { profiles, extensions });
   if (!slot) {
     return;
   }
@@ -159,12 +166,27 @@ async function checkSlot(): Promise<void> {
     );
     return;
   }
-  const slot = await selectConcreteSlot(editor);
   const compiler = await compilerCommand(editor.document.uri);
-  if (!slot || !compiler) {
+  if (!compiler) {
     return;
   }
-  await previewManager.check(compiler, workspaceCwd(editor.document), slot);
+  const cwd = workspaceCwd(editor.document);
+  const configuredProfile = nonEmpty(
+    vscode.workspace
+      .getConfiguration("tsl", editor.document.uri)
+      .get<string>("preview.profile"),
+  );
+  const profiles = configuredProfile
+    ? undefined
+    : await loadCatalogChoices("profiles", compiler, cwd);
+  if (!configuredProfile && !profiles) {
+    return;
+  }
+  const slot = await selectConcreteSlot(editor, { profiles });
+  if (!slot) {
+    return;
+  }
+  await previewManager.check(compiler, cwd, slot);
 }
 
 async function doctor(): Promise<void> {
@@ -178,13 +200,6 @@ async function doctor(): Promise<void> {
     return;
   }
   const configuration = vscode.workspace.getConfiguration("tsl", uri);
-  const profile =
-    configuration.get<string>("preview.profile") ||
-    (await vscode.window.showInputBox({ title: "TSL profile", value: "scalar" }));
-  if (!profile) {
-    return;
-  }
-  const backend = configuration.get<string>("preview.backend", "cpp");
   const compiler = await compilerCommand(uri);
   if (!compiler) {
     return;
@@ -192,9 +207,22 @@ async function doctor(): Promise<void> {
   const cwd =
     vscode.workspace.getWorkspaceFolder(uri)?.uri.fsPath ??
     vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (cwd) {
-    await previewManager.doctor(compiler, cwd, profile, backend);
+  if (!cwd) {
+    return;
   }
+  const configuredProfile = nonEmpty(configuration.get<string>("preview.profile"));
+  const profiles = configuredProfile
+    ? undefined
+    : await loadCatalogChoices("profiles", compiler, cwd);
+  if (!configuredProfile && !profiles) {
+    return;
+  }
+  const profile = configuredProfile || (profiles ? await selectProfile(profiles) : undefined);
+  if (!profile) {
+    return;
+  }
+  const backend = configuration.get<string>("preview.backend", "cpp");
+  await previewManager.doctor(compiler, cwd, profile, backend);
 }
 
 function activeTslEditor(): vscode.TextEditor | undefined {
@@ -206,23 +234,28 @@ function activeTslEditor(): vscode.TextEditor | undefined {
   return editor;
 }
 
-async function loadExtensionChoices(
-  compiler: NonNullable<Awaited<ReturnType<typeof compilerCommand>>>,
+async function loadCatalogChoices(
+  kind: "profiles" | "extensions",
+  compiler: CommandSpec,
   cwd: string,
 ): Promise<readonly string[] | undefined> {
+  const itemName = kind === "profiles" ? "profiles" : "extensions";
   try {
     return await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: "Loading TSL extensions",
+        title: `Loading TSL ${itemName}`,
       },
-      () => listExtensions(compiler, cwd),
+      () =>
+        kind === "profiles"
+          ? listProfiles(compiler, cwd)
+          : listExtensions(compiler, cwd),
     );
   } catch (error) {
-    output?.appendLine(`Could not load TSL extensions: ${String(error)}`);
+    output?.error(`Could not load TSL ${itemName}: ${String(error)}`);
     output?.show(true);
     void vscode.window.showErrorMessage(
-      "Could not load extensions from tslc. See the TSL output channel for details.",
+      `Could not load ${itemName} from tslc. See the TSL output channel for details.`,
     );
     return undefined;
   }

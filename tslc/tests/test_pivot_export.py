@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from tslc import cli
 from tslc.api import _expand_sources, generate_project
+from tslc.backend.cpp_translation import CppBackendDialect
 from tslc.backend.registry import registered_backend_ids
+from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.model import Catalog
+from tslc.ir.scan import scan
+from tslc.lower.lowerer import Lowerer
 from tslc.pivot import PivotExportRequest, export_pivot
+from tslc.pivot._lowering import PivotCallCapture, pivot_region_lowerers
 from tslc.pivot.model import PivotDefinition, PivotDocument
 from tslc.pivot.render_yaml import render_pivot_yaml
+from tslc.select.selector import Selector
 
 
 def _export_add(data_root: Path, machine_profiles_path: Path):
@@ -75,7 +83,7 @@ def test_primitive_calls_are_recursively_inlined_into_direct_flow(
     assert definition.direct[-1].startswith("res = ")
 
 
-def test_control_and_cast_implementations_are_skipped_with_reasons(
+def test_residual_control_and_casts_are_skipped_after_normal_lowering(
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
@@ -84,14 +92,56 @@ def test_control_and_cast_implementations_are_skipped_with_reasons(
     assert any(
         skip.primitive == "add_maskz"
         and skip.extension == "scalar"
-        and "does not support 'if' regions" in skip.reason
+        and "residual control flow" in skip.reason
         for skip in result.skipped
     )
     assert any(
         skip.primitive == "add_maskz"
-        and "does not support 'cast' regions" in skip.reason
+        and "contains a cast" in skip.reason
         for skip in result.skipped
     )
+
+
+def test_generation_loop_is_expanded_by_the_standard_lowerer(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles["avx2"],
+        "add",
+        ("si8",),
+        backend_id="cpp",
+    )
+    slot = next(
+        item
+        for item in selection.selected
+        if item.extension.isa_name == "avx2"
+        and item.primitive.attributes.get("mask") is None
+    )
+    capture = PivotCallCapture()
+    result = Lowerer(region_lowerers=pivot_region_lowerers(capture)).lower(
+        slot,
+        catalog,
+        CppBackendDialect(catalog),
+        body_segments=scan(
+            """
+            var<infer>(acc, left);
+            loop<generation>(i, 0, 2, 1) {
+              acc = op<add>(acc, right);
+            }
+            complete(acc);
+            """
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert result.specialization is not None
+    body = result.specialization.body_text
+    assert "loop" not in body
+    assert "{" not in body
+    assert body.count("acc = (acc + right);") == 2
+    assert body.strip().endswith("return acc;")
 
 
 def test_yaml_renderer_handles_empty_inputs_without_changing_schema_shape() -> None:
