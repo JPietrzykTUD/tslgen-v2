@@ -1,0 +1,74 @@
+import assert from "node:assert/strict";
+
+import {
+  countDescription,
+  groupSlots,
+  originDescription,
+  type ExplorerSlot,
+} from "../src/explorerModel";
+
+describe("primitive explorer presentation", () => {
+  const slots: readonly ExplorerSlot[] = [
+    {
+      extension: "avx2",
+      type: "si32",
+      available: true,
+      origins: ["broader"],
+      unavailableReason: null,
+      implementations: [],
+    },
+    {
+      extension: "avx2",
+      type: "f64",
+      available: false,
+      origins: [],
+      unavailableReason: "missing",
+      implementations: [],
+    },
+    {
+      extension: "scalar",
+      type: "si32",
+      available: true,
+      origins: ["authored", "inherited"],
+      unavailableReason: null,
+      implementations: [],
+    },
+  ];
+
+  it("groups slots and retains compiler ordering", () => {
+    const groups = groupSlots(slots, false);
+    assert.deepEqual(
+      groups.map((group) => [group.extension, group.available, group.total]),
+      [
+        ["avx2", 1, 2],
+        ["scalar", 1, 1],
+      ],
+    );
+    assert.deepEqual(
+      groups[0]?.slots.map((slot) => slot.type),
+      ["si32", "f64"],
+    );
+  });
+
+  it("filters unavailable slots without changing source counts", () => {
+    const groups = groupSlots(slots, true);
+    assert.equal(groups.length, 1);
+    assert.equal(groups[0]?.extension, "avx2");
+    assert.equal(groups[0]?.available, 1);
+    assert.equal(groups[0]?.total, 2);
+    assert.deepEqual(groups[0]?.slots.map((slot) => slot.type), ["f64"]);
+  });
+
+  it("uses textual status descriptions", () => {
+    assert.equal(originDescription(["broader"]), "broader selector");
+    assert.equal(
+      originDescription(["authored", "inherited"]),
+      "authored here + inherited",
+    );
+    assert.equal(countDescription(8, 10), "8/10 available");
+    assert.equal(
+      countDescription(8, 10, true),
+      "2 unavailable • 8/10 available",
+    );
+  });
+});

@@ -27,7 +27,10 @@
     "onCommand:tsl.checkSlot",
     "onCommand:tsl.previewSpecialization",
     "onCommand:tsl.doctor",
-    "onCommand:tsl.addPrimitive"
+    "onCommand:tsl.addPrimitive",
+    "onView:tsl.primitives",
+    "onView:tsl.specializations",
+    "onView:tsl.dependencies"
   ],
   "contributes": {
     "languages": [
@@ -50,6 +53,31 @@
         "path": "./syntaxes/tsl.tmLanguage.json"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tslc",
+          "title": "TSLc",
+          "icon": "media/tslc.svg"
+        }
+      ]
+    },
+    "views": {
+      "tslc": [
+        {
+          "id": "tsl.primitives",
+          "name": "Primitives"
+        },
+        {
+          "id": "tsl.specializations",
+          "name": "Specializations"
+        },
+        {
+          "id": "tsl.dependencies",
+          "name": "Dependencies"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "tsl.restartServer",
@@ -70,6 +98,51 @@
       {
         "command": "tsl.addPrimitive",
         "title": "TSL: Add New Primitive"
+      },
+      {
+        "command": "tsl.explorer.refresh",
+        "title": "TSL: Refresh Explorer",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "tsl.explorer.toggleScope",
+        "title": "TSL: Toggle File/Corpus Scope",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "tsl.explorer.selectProfile",
+        "title": "TSL: Select Explorer Profile",
+        "icon": "$(server-environment)"
+      },
+      {
+        "command": "tsl.explorer.selectBackend",
+        "title": "TSL: Select Explorer Backend",
+        "icon": "$(code)"
+      },
+      {
+        "command": "tsl.explorer.toggleUnavailable",
+        "title": "TSL: Toggle Show Only Unavailable",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "tsl.explorer.goToPrimitive",
+        "title": "Go to Primitive",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "tsl.explorer.goToImplementation",
+        "title": "Go to Implementation",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "tsl.explorer.preview",
+        "title": "Preview Specialization",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "tsl.explorer.showUnavailableReason",
+        "title": "Show Unavailable Reason",
+        "icon": "$(info)"
       }
     ],
     "menus": {
@@ -78,6 +151,78 @@
           "command": "tsl.addPrimitive",
           "when": "editorLangId == tsl",
           "group": "1_modification@10"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "tsl.explorer.toggleScope",
+          "when": "view == tsl.primitives",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tsl.explorer.refresh",
+          "when": "view == tsl.primitives",
+          "group": "navigation@20"
+        },
+        {
+          "command": "tsl.explorer.selectProfile",
+          "when": "view == tsl.specializations",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tsl.explorer.selectBackend",
+          "when": "view == tsl.specializations",
+          "group": "navigation@20"
+        },
+        {
+          "command": "tsl.explorer.toggleUnavailable",
+          "when": "view == tsl.specializations",
+          "group": "navigation@30"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "tsl.explorer.goToPrimitive",
+          "when": "view == tsl.primitives && viewItem == tslPrimitive",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tsl.explorer.goToImplementation",
+          "when": "view == tsl.specializations && viewItem == tslAvailableSlot",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tsl.explorer.preview",
+          "when": "view == tsl.specializations && viewItem == tslAvailableSlot",
+          "group": "inline@20"
+        },
+        {
+          "command": "tsl.explorer.showUnavailableReason",
+          "when": "view == tsl.specializations && viewItem == tslUnavailableSlot",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tsl.explorer.goToPrimitive",
+          "when": "view == tsl.dependencies && viewItem == tslDependency",
+          "group": "navigation@10"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "tsl.explorer.goToPrimitive",
+          "when": "false"
+        },
+        {
+          "command": "tsl.explorer.goToImplementation",
+          "when": "false"
+        },
+        {
+          "command": "tsl.explorer.preview",
+          "when": "false"
+        },
+        {
+          "command": "tsl.explorer.showUnavailableReason",
+          "when": "false"
         }
       ]
     },

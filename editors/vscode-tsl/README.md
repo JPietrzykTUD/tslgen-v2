@@ -14,8 +14,9 @@ tslc check
 It provides unsaved-buffer diagnostics, symbols, definition/reference
 navigation, hover, completion, semantic highlighting, generated TextMate
 coloring, concrete saved-file preview, slot checking, and backend-aware doctor.
-It also provides a compiler-backed primitive scaffolding action. There is
-intentionally no formatter in Version 1.
+It also provides a compiler-backed primitive scaffolding action and a TSLc
+Activity Bar explorer for primitive coverage, concrete slots, and direct call
+dependencies. There is intentionally no formatter in Version 1.
 
 From the repository root, `./dev.sh editor-install` refreshes the generated
 TSIL keyword grammar, bootstraps locked npm dependencies when they are absent
@@ -33,6 +34,15 @@ Commands:
 - `TSL: Preview Specialization`
 - `TSL: Doctor`
 - `TSL: Add New Primitive`
+
+The TSLc sidebar contains Primitives, Specializations, and Dependencies views.
+Primitives can be scoped to the active file or the complete configured corpus.
+Selecting a primitive shows profile/backend-specific extension and type slots,
+with available/total counts and an optional unavailable-only filter. Available
+slots navigate to their selected source implementation and can launch Preview
+without repeating slot QuickPicks. Dependencies shows direct authored Calls and
+Called By relationships. Icons are always accompanied by status text and
+tooltips.
 
 Use `tsl.server.command`/`tsl.server.args` for an explicit server,
 `tsl.preview.command` for an explicit full compiler, or `tsl.python` for a

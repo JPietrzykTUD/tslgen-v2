@@ -44,6 +44,8 @@ class CatalogIndex:
     primitive_references: Mapping[str, tuple[SourceSpan, ...]] = field(default_factory=dict)
     extension_references: Mapping[str, tuple[SourceSpan, ...]] = field(default_factory=dict)
     type_group_references: Mapping[str, tuple[SourceSpan, ...]] = field(default_factory=dict)
+    primitive_calls: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    primitive_callers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     occurrences_by_path: Mapping[Path, tuple[IndexedOccurrence, ...]] = field(default_factory=dict)
     hover_text: Mapping[tuple[SymbolKind, str], str] = field(default_factory=dict)
 
@@ -55,6 +57,8 @@ class CatalogIndex:
             "primitive_references",
             "extension_references",
             "type_group_references",
+            "primitive_calls",
+            "primitive_callers",
             "occurrences_by_path",
             "hover_text",
         ):
@@ -88,6 +92,7 @@ class _DocumentIndex:
     definitions: Mapping[SymbolKind, Mapping[str, tuple[SourceSpan, ...]]]
     references: Mapping[SymbolKind, Mapping[str, tuple[SourceSpan, ...]]]
     occurrences: tuple[IndexedOccurrence, ...]
+    primitive_calls: tuple[tuple[str, str], ...]
 
 
 class CatalogIndexCache:
@@ -143,6 +148,7 @@ def build_catalog_index(
         "region": {},
     }
     occurrences: list[IndexedOccurrence] = []
+    primitive_calls: set[tuple[str, str]] = set()
 
     fragments = (
         cache.fragments(parsed.documents)
@@ -157,6 +163,13 @@ def build_catalog_index(
             for name, spans in names.items():
                 references[kind].setdefault(name, []).extend(spans)
         occurrences.extend(fragment.occurrences)
+        primitive_calls.update(fragment.primitive_calls)
+
+    calls: dict[str, set[str]] = {}
+    callers: dict[str, set[str]] = {}
+    for caller, callee in sorted(primitive_calls):
+        calls.setdefault(caller, set()).add(callee)
+        callers.setdefault(callee, set()).add(caller)
 
     by_path: dict[Path, list[IndexedOccurrence]] = {}
     for occurrence in occurrences:
@@ -168,6 +181,12 @@ def build_catalog_index(
         primitive_references=_freeze_spans(references["primitive"]),
         extension_references=_freeze_spans(references["extension"]),
         type_group_references=_freeze_spans(references["type-group"]),
+        primitive_calls={
+            name: tuple(sorted(values)) for name, values in sorted(calls.items())
+        },
+        primitive_callers={
+            name: tuple(sorted(values)) for name, values in sorted(callers.items())
+        },
         occurrences_by_path={
             path: tuple(sorted(items, key=_occurrence_key))
             for path, items in sorted(by_path.items(), key=lambda item: item[0].as_posix())
@@ -190,7 +209,10 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         "region": {},
     }
     occurrences: list[IndexedOccurrence] = []
-    _index_document(document, definitions, references, occurrences)
+    primitive_calls: set[tuple[str, str]] = set()
+    _index_document(
+        document, definitions, references, occurrences, primitive_calls
+    )
     return _DocumentIndex(
         definitions={
             kind: _freeze_spans(names) for kind, names in definitions.items()
@@ -199,6 +221,7 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
             kind: _freeze_spans(names) for kind, names in references.items()
         },
         occurrences=tuple(sorted(occurrences, key=_occurrence_key)),
+        primitive_calls=tuple(sorted(primitive_calls)),
     )
 
 
@@ -207,6 +230,7 @@ def _index_document(
     definitions: dict[SymbolKind, dict[str, list[SourceSpan]]],
     references: dict[SymbolKind, dict[str, list[SourceSpan]]],
     occurrences: list[IndexedOccurrence],
+    primitive_calls: set[tuple[str, str]],
 ) -> None:
     for primitive in document.primitives:
         span = _name_in_source(primitive.header_source, primitive.name)
@@ -231,6 +255,7 @@ def _index_document(
                 if call is None:
                     continue
                 name = primitive.name if call.primitive_ref == "@self" else call.primitive_ref
+                primitive_calls.add((primitive.name, name))
                 reference_span = _region_selector_name_span(region, call.primitive_ref)
                 if reference_span is not None:
                     _record(references, occurrences, "primitive", name, reference_span, False)

@@ -172,6 +172,37 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         client.send(
             {
                 "jsonrpc": "2.0",
+                "id": 14,
+                "method": "tsl/primitiveExplorer",
+                "params": {
+                    "scopeUri": path.as_uri(),
+                    "profile": "avx2",
+                    "backend": "cpp",
+                    "primitive": "add",
+                },
+            }
+        )
+        explorer_response = client.read_until(lambda item: item.get("id") == 14)
+        explorer = explorer_response["result"]
+        assert explorer["profile"] == "avx2"
+        assert explorer["backend"] == "cpp"
+        add_entry = next(
+            item for item in explorer["primitives"] if item["name"] == "add"
+        )
+        assert 0 < add_entry["availableSlots"] < add_entry["totalSlots"]
+        assert add_entry["definitions"][0]["uri"] == path.as_uri()
+        assert "mov" in add_entry["calls"]
+        assert any(
+            slot["extension"] == "avx2"
+            and slot["type"] == "si32"
+            and slot["available"] is True
+            and slot["implementations"]
+            for slot in explorer["slots"]
+        )
+
+        client.send(
+            {
+                "jsonrpc": "2.0",
                 "id": 12,
                 "method": "tsl/primitiveScaffoldChoices",
                 "params": {},

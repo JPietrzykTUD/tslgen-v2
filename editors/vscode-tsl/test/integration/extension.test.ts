@@ -17,6 +17,11 @@ suite("TSL extension", () => {
     assert.ok(commands.includes("tsl.checkSlot"));
     assert.ok(commands.includes("tsl.doctor"));
     assert.ok(commands.includes("tsl.addPrimitive"));
+    assert.ok(commands.includes("tsl.explorer.refresh"));
+    assert.ok(commands.includes("tsl.explorer.toggleScope"));
+    assert.ok(commands.includes("tsl.explorer.selectProfile"));
+    assert.ok(commands.includes("tsl.explorer.selectBackend"));
+    assert.ok(commands.includes("tsl.explorer.toggleUnavailable"));
 
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     assert.ok(root);
@@ -47,6 +52,9 @@ suite("TSL extension", () => {
 
     const hovers = await waitForHover(uri, new vscode.Position(line, character));
     assert.ok(hovers.length > 0);
+    await vscode.commands.executeCommand("tsl.explorer.refresh");
+    await vscode.commands.executeCommand("tsl.explorer.toggleUnavailable");
+    await vscode.commands.executeCommand("tsl.explorer.toggleUnavailable");
 
     const implementationFieldLine = document
       .getText()

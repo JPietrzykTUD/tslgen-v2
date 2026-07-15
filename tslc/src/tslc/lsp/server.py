@@ -10,6 +10,7 @@ from typing import Any
 from lsprotocol import types
 from pygls.lsp.server import LanguageServer
 
+from tslc.diagnostics import SourceSpan
 from tslc.lsp.features import (
     SEMANTIC_TOKEN_TYPES,
     completions,
@@ -21,7 +22,12 @@ from tslc.lsp.features import (
     reference_locations,
     semantic_tokens,
 )
-from tslc.lsp.positions import path_to_uri, source_position, uri_to_path
+from tslc.lsp.positions import path_to_uri, source_position, span_to_range, uri_to_path
+from tslc.lsp.primitive_explorer import (
+    PrimitiveExplorer,
+    PrimitiveExplorerCache,
+    primitive_explorer,
+)
 from tslc.lsp.primitive_scaffold import (
     primitive_scaffold,
     primitive_shape_choices,
@@ -36,6 +42,7 @@ _INDEX_WAIT_SECONDS = 5.0
 SPECIALIZATION_CONTEXT_METHOD = "tsl/specializationContext"
 PRIMITIVE_SCAFFOLD_CHOICES_METHOD = "tsl/primitiveScaffoldChoices"
 PRIMITIVE_SCAFFOLD_METHOD = "tsl/primitiveScaffold"
+PRIMITIVE_EXPLORER_METHOD = "tsl/primitiveExplorer"
 
 
 @dataclass(slots=True)
@@ -51,6 +58,9 @@ class _ServerState:
     machine_profiles_path: Path | None = None
     backends: tuple[str, ...] | None = None
     index_ready: asyncio.Event = field(default_factory=asyncio.Event)
+    explorer_cache: PrimitiveExplorerCache = field(
+        default_factory=PrimitiveExplorerCache
+    )
 
 
 def create_server(
@@ -338,6 +348,42 @@ def create_server(
             )
         return scaffold.payload(document_version=workspace.document_version(path))
 
+    @server.feature(PRIMITIVE_EXPLORER_METHOD)
+    async def primitive_explorer_request(params: Any) -> dict[str, object]:
+        workspace = await _workspace_with_index(state)
+        snapshot = workspace.latest if workspace is not None else None
+        if (
+            workspace is None
+            or snapshot is None
+            or snapshot.catalog is None
+            or snapshot.index is None
+        ):
+            return _empty_primitive_explorer()
+        scope_uri = _field(params, "scopeUri")
+        scope_path = (
+            uri_to_path(scope_uri) if isinstance(scope_uri, str) and scope_uri else None
+        )
+        requested_profile = _field(params, "profile")
+        requested_backend = _field(params, "backend")
+        selected_primitive = _field(params, "primitive")
+        explorer = await asyncio.to_thread(
+            primitive_explorer,
+            snapshot.catalog,
+            snapshot.index,
+            workspace.config.profiles,
+            workspace.config.backends,
+            profile=requested_profile if isinstance(requested_profile, str) else None,
+            backend=requested_backend if isinstance(requested_backend, str) else None,
+            path=scope_path,
+            selected_primitive=(
+                selected_primitive if isinstance(selected_primitive, str) else None
+            ),
+            preferred_profiles=workspace.config.preferred_profiles,
+            stale=any(item.severity == "error" for item in snapshot.diagnostics),
+            cache=state.explorer_cache,
+        )
+        return _primitive_explorer_payload(explorer, workspace)
+
     @server.feature(types.SHUTDOWN)
     def shutdown(*args: object) -> None:
         del args
@@ -469,6 +515,96 @@ def _primitive_scaffold_error(
     }
 
 
+def _empty_primitive_explorer() -> dict[str, object]:
+    return {
+        "profile": "",
+        "backend": "",
+        "profiles": [],
+        "backends": [],
+        "stale": False,
+        "primitives": [],
+        "selectedPrimitive": None,
+        "slots": [],
+    }
+
+
+def _primitive_explorer_payload(
+    explorer: PrimitiveExplorer, workspace: AuthoringWorkspace
+) -> dict[str, object]:
+    texts: dict[Path, str] = {}
+    return {
+        "profile": explorer.profile,
+        "backend": explorer.backend,
+        "profiles": list(explorer.profiles),
+        "backends": list(explorer.backends),
+        "stale": explorer.stale,
+        "selectedPrimitive": explorer.selected_primitive,
+        "primitives": [
+            {
+                "name": primitive.name,
+                "signatures": list(primitive.signatures),
+                "definitions": [
+                    _location_payload(span, workspace, texts)
+                    for span in primitive.definitions
+                ],
+                "availableSlots": primitive.available_slots,
+                "totalSlots": primitive.total_slots,
+                "calls": list(primitive.calls),
+                "calledBy": list(primitive.called_by),
+            }
+            for primitive in explorer.primitives
+        ],
+        "slots": [
+            {
+                "extension": slot.extension,
+                "type": slot.type_tag,
+                "available": slot.available,
+                "origins": list(slot.origins),
+                "unavailableReason": slot.unavailable_reason,
+                "implementations": [
+                    {
+                        "extension": implementation.extension,
+                        "typeGroup": implementation.type_group,
+                        "selectorPath": list(implementation.selector_path),
+                        "origin": implementation.origin,
+                        "location": _location_payload(
+                            implementation.source, workspace, texts
+                        ),
+                    }
+                    for implementation in slot.implementations
+                ],
+            }
+            for slot in explorer.slots
+        ],
+    }
+
+
+def _location_payload(
+    span: SourceSpan,
+    workspace: AuthoringWorkspace,
+    texts: dict[Path, str],
+) -> dict[str, object]:
+    path = span.path.resolve()
+    text = texts.get(path)
+    if text is None:
+        text = workspace.document_text(path) or ""
+        texts[path] = text
+    range_ = span_to_range(span, text)
+    return {
+        "uri": path_to_uri(span.path),
+        "range": {
+            "start": {
+                "line": range_.start.line,
+                "character": range_.start.character,
+            },
+            "end": {
+                "line": range_.end.line,
+                "character": range_.end.character,
+            },
+        },
+    }
+
+
 def _path_option(options: dict[str, Any], name: str) -> Path | None:
     value = options.get(name)
     return Path(value).resolve() if isinstance(value, str) and value else None
@@ -507,6 +643,7 @@ def _show_setup_error(server: LanguageServer, state: _ServerState) -> None:
 __all__ = (
     "PRIMITIVE_SCAFFOLD_CHOICES_METHOD",
     "PRIMITIVE_SCAFFOLD_METHOD",
+    "PRIMITIVE_EXPLORER_METHOD",
     "SERVER_NAME",
     "SERVER_VERSION",
     "SPECIALIZATION_CONTEXT_METHOD",

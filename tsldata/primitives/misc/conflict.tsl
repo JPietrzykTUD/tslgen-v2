@@ -347,14 +347,14 @@ prim<v:=v> conflict(data):
               let<type>(ConflictT, scalar::size);
               var<const_infer>(values, call<primitive=to_array[Vec]>(data));
               var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-              loop<backend>(idx, 1, value(vector::length), 1) {
+              loop<generation, scoped>(idx, 1, value(vector::length), 1) {
                 var<infer>(conflict, cast<static>(ConflictT, 0));
-                loop<backend>(cur, 0, idx, 1) {
-                  if ((cur < (value(type::size_bytes(base::in)) * 8)) && (values[idx] == values[cur])) {
-                    conflict |= (cast<static>(ConflictT, 1)) << cur;
+                loop<generation, scoped>(cur, 0, value(idx), 1) {
+                  if ((value(cur) < (value(type::size_bytes(base::in)) * 8)) && (values[value(idx)] == values[value(cur)])) {
+                    conflict |= (cast<static>(ConflictT, 1)) << value(cur);
                   }
                 }
-                result[idx] = cast<static>(base::in, conflict);
+                result[value(idx)] = cast<static>(base::in, conflict);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """

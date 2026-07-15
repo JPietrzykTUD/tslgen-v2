@@ -70,6 +70,7 @@ These constraints apply to every slice in this plan:
 | TSIL shell completion | Region-boundary awareness plus selector terms and named option bags for all registered regions | TSIL registry/descriptors and authoring vocabulary |
 | TSIL expression completion | Type/value query roots and continuations, primitive parameters, generic parameters, and named axes | Typed TSIL query rules and primitive scope |
 | Symbols/navigation/tokens | More declaration kinds, nested branches, list selectors, target axes, field/parameter/query token classes | Catalog index and LSP feature adapters |
+| Explorer analysis | Explicit, cancellable lowering verdicts, transitive dependencies, and final implementation state cached by concrete context | Lowering/dependency closure and explorer command boundary |
 | Safe actions | Convert exact compiler suggestions into version-checked `WorkspaceEdit` actions | Diagnostics/audit API and LSP code actions |
 | Public distribution | Self-contained, platform-specific server runtime and release verification | Extension packaging and CI |
 
@@ -133,8 +134,9 @@ should fail during compiler testing and extension packaging.
 ## Ordered Slices
 
 The slices are ordered by dependency. Slice 1 is independent. Slice 2 creates
-the context foundation required by Slices 3 through 5. Slice 6 should wait
-until source-span behavior is stable. Slice 7 is a separate release track and
+the context foundation required by Slices 3 through 5. Slice 6 is the remaining
+explicit-analysis part of the delivered catalog explorer. Slice 7 should wait
+until source-span behavior is stable. Slice 8 is a separate release track and
 must not block the authoring-depth milestone.
 
 ### Slice 1: Complete Typed Hover
@@ -289,7 +291,29 @@ references recognized by the authoring model.
   classify raw target code as TSL semantics.
 - Existing primitive-call and extension navigation remains regression covered.
 
-### Slice 6: Safe Compiler-Owned Code Actions
+### Slice 6: Explorer Concrete Analysis
+
+**Goal:** enrich the catalog explorer with authoritative lowering and transitive
+dependency facts behind an explicit, cached analysis boundary.
+
+**Work:**
+
+- Add an explicit cancellable concrete analysis action for lowering verdicts,
+  transitive call dependencies, and final native/composed/fallback/unknown
+  state.
+- Cache analysis by input digest, primitive, profile, and backend, and label
+  cached results stale after relevant edits.
+- Keep the existing slot-origin and direct Calls/Called By views independent of
+  concrete lowering.
+
+**Exit criteria:**
+
+- Concrete state is labelled analyzed and never confused with authored or
+  selected availability.
+- Cancelling or failing analysis leaves the last valid catalog explorer usable.
+- No automatic edit, hover, selection, or refresh triggers concrete analysis.
+
+### Slice 7: Safe Compiler-Owned Code Actions
 
 **Goal:** expose exact, source-located compiler suggestions as deliberate,
 undoable editor edits.
@@ -318,7 +342,7 @@ undoable editor edits.
 - VS Code integration tests prove edits are previewable/undoable and ordinary
   diagnostics remain non-mutating.
 
-### Slice 7: Self-Contained Marketplace Runtime
+### Slice 8: Self-Contained Marketplace Runtime
 
 **Goal:** make a public VS Code installation work without a separately managed
 Python or `tslc[editor]` environment.
@@ -414,7 +438,7 @@ catalog reconstruction before designing incremental promotion.
 
 ## Authoring-Depth Milestone Acceptance
 
-The authoring-depth milestone is complete when Slices 1 through 6 satisfy their
+The authoring-depth milestone is complete when Slices 1 through 7 satisfy their
 exit criteria and all of the following hold:
 
 - hover exposes complete concise facts without triggering compiler work;
@@ -431,7 +455,7 @@ exit criteria and all of the following hold:
 - focused Python, LSP, extension, and performance checks pass.
 
 Self-contained Marketplace distribution is accepted separately through Slice
-7 and must not be claimed merely because contributor installation works.
+8 and must not be claimed merely because contributor installation works.
 
 ## Active Risks And Mitigations
 
@@ -450,5 +474,5 @@ Self-contained Marketplace distribution is accepted separately through Slice
   keep request handlers lookup-only, and measure against the guardrails before
   adding caching layers.
 - **Bundled Python multiplies platform and release risk.** Keep it isolated in
-  Slice 7, use a declared support matrix, build reproducibly, and retain the
+  Slice 8, use a declared support matrix, build reproducibly, and retain the
   external runtime only as an explicit override.

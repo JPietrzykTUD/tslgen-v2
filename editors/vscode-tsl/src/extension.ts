@@ -10,6 +10,7 @@ import {
   discoverServer,
   type DiscoveryOptions,
 } from "./discovery";
+import { TslExplorer, type ExplorerPreviewSlot } from "./explorer";
 import {
   PreviewDocumentProvider,
   PreviewManager,
@@ -23,16 +24,19 @@ let client: LanguageClient | undefined;
 let previewManager: PreviewManager | undefined;
 let output: vscode.LogOutputChannel | undefined;
 let contextRef: vscode.ExtensionContext | undefined;
+let explorer: TslExplorer | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   contextRef = context;
   output = vscode.window.createOutputChannel("TSL", { log: true });
   const provider = new PreviewDocumentProvider();
   previewManager = new PreviewManager(provider, output);
+  explorer = new TslExplorer(context, output, previewExplorerSlot);
   context.subscriptions.push(
     output,
     provider,
     previewManager,
+    explorer,
     vscode.workspace.registerTextDocumentContentProvider("tsl-preview", provider),
     vscode.commands.registerCommand("tsl.restartServer", restartServer),
     vscode.commands.registerCommand("tsl.previewSpecialization", previewSpecialization),
@@ -53,6 +57,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export async function deactivate(): Promise<void> {
+  explorer?.dispose();
+  explorer = undefined;
   previewManager?.dispose();
   previewManager = undefined;
   if (client) {
@@ -64,6 +70,7 @@ export async function deactivate(): Promise<void> {
 }
 
 async function restartServer(): Promise<void> {
+  explorer?.setClient(undefined);
   if (client) {
     const running = client;
     client = undefined;
@@ -110,16 +117,40 @@ async function startServer(): Promise<void> {
   client = next;
   try {
     await next.start();
+    explorer?.setClient(next);
   } catch (error) {
     if (client === next) {
       client = undefined;
     }
+    explorer?.setClient(undefined);
     output?.error(`TSL language server failed to start: ${String(error)}`);
     void vscode.window.showErrorMessage(
       "TSL language server failed to start. See the TSL output channel and verify " +
         "that the selected environment contains tslc[editor].",
     );
   }
+}
+
+async function previewExplorerSlot(slot: ExplorerPreviewSlot): Promise<void> {
+  const manager = previewManager;
+  if (!manager) {
+    return;
+  }
+  const document = await vscode.workspace.openTextDocument(slot.sourceUri);
+  if (document.isDirty) {
+    void vscode.window.showWarningMessage(
+      "Save the TSL document before previewing so the compiler child reads the displayed source.",
+    );
+    return;
+  }
+  const compiler = await compilerCommand(slot.sourceUri);
+  if (!compiler) {
+    return;
+  }
+  const cwd =
+    vscode.workspace.getWorkspaceFolder(slot.sourceUri)?.uri.fsPath ??
+    workspaceCwd(document);
+  await manager.preview(compiler, cwd, slot);
 }
 
 async function previewSpecialization(): Promise<void> {

@@ -17,8 +17,11 @@ from tslc.lsp.features import (
     semantic_tokens,
 )
 from tslc.lsp.positions import source_position, span_to_range
+from tslc.lsp.primitive_explorer import PrimitiveExplorerCache, primitive_explorer
 from tslc.lsp.specialization_context import specialization_context
 from tslc.lsp.workspace import AuthoringWorkspace
+from tslc.lower.lowerer import Lowerer
+from tslc.select.selector import Selector
 
 
 def test_utf16_position_round_trip() -> None:
@@ -121,6 +124,94 @@ def test_specialization_context_uses_cursor_scope_and_selector_slots(
         "ui32",
         "ui64",
     )
+
+
+def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
+    data_root: Path,
+    monkeypatch,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    assert snapshot.index is not None
+    path = data_root / "primitives" / "arithmetic" / "fundamental.tsl"
+
+    def unexpected_lowering(*args, **kwargs):
+        raise AssertionError("the explorer triggered concrete lowering")
+
+    monkeypatch.setattr(Lowerer, "lower", unexpected_lowering)
+
+    cache = PrimitiveExplorerCache()
+    explorer = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        profile="avx2",
+        backend="cpp",
+        path=path,
+        selected_primitive="add",
+        cache=cache,
+    )
+
+    names = {primitive.name for primitive in explorer.primitives}
+    assert "add" in names
+    assert "load" not in names
+    add = next(item for item in explorer.primitives if item.name == "add")
+    assert 0 < add.available_slots < add.total_slots
+    assert add.calls
+    assert "mov" in add.calls
+    assert "mul" in add.called_by
+    assert all(span.path.resolve() == path.resolve() for span in add.definitions)
+
+    avx2_si32 = next(
+        slot
+        for slot in explorer.slots
+        if slot.extension == "avx2" and slot.type_tag == "si32"
+    )
+    assert avx2_si32.available is True
+    assert "broader" in avx2_si32.origins
+    assert avx2_si32.implementations
+    assert all(item.source.path.is_absolute() for item in avx2_si32.implementations)
+
+    avx512_si32 = next(
+        slot
+        for slot in explorer.slots
+        if slot.extension == "avx512" and slot.type_tag == "si32"
+    )
+    assert avx512_si32.available is False
+    assert "No implementation is selected" in (avx512_si32.unavailable_reason or "")
+
+    corpus = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        profile="avx2",
+        backend="cpp",
+        cache=PrimitiveExplorerCache(),
+    )
+    allocate = next(item for item in corpus.primitives if item.name == "allocate")
+    assert (allocate.available_slots, allocate.total_slots) == (1, 1)
+
+    def unexpected_selection(*args, **kwargs):
+        raise AssertionError("a selected primitive caused the explorer matrix to rebuild")
+
+    monkeypatch.setattr(Selector, "select_profile", unexpected_selection)
+    cached = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        profile="avx2",
+        backend="cpp",
+        path=path,
+        selected_primitive="sub",
+        cache=cache,
+    )
+    assert cached.selected_primitive == "sub"
+    assert cached.slots
 
 
 def test_navigation_hover_completion_and_tokens_use_latest_index(

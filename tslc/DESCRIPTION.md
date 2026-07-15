@@ -76,7 +76,12 @@ parsing or compatibility rules in TypeScript.
 catalog-backed primitive-shape discovery, default parameter-name selection,
 name validation, and source scaffolding; the client only presents choices and
 applies the returned edit. The TypeScript VS Code client contains no compiler
-semantics.
+semantics. [lsp/primitive_explorer.py](src/tslc/lsp/primitive_explorer.py)
+projects File/Corpus primitive lists, profile/backend slot availability,
+selected implementation origins and source spans from the same catalog,
+selector, and index. Direct Calls/Called By relationships are indexed from
+registered `call` regions. The VS Code tree providers render those typed facts
+and never reconstruct selector or dependency rules.
 Concrete preview runs `tslc preview` as a separate saved-file child. It uses
 one loaded input snapshot for selection, lowering, and dependency closure, then
 passes the requested emitted specialization through the registered backend's

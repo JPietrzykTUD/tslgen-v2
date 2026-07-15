@@ -81,6 +81,38 @@ Opening a `.tsl` file activates:
 - **TSL: Doctor**;
 - **TSL: Add New Primitive**.
 
+The TSLc Activity Bar container adds three native tree views:
+
+- **Primitives** lists primitive families from either the active `.tsl` file or
+  the complete configured corpus. Each entry shows available/total slot counts
+  for the explorer's selected machine profile and backend.
+- **Specializations** groups the selected primitive's concrete type slots by
+  extension. Its title actions choose profile/backend and toggle an
+  unavailable-only coverage view. Available rows state whether their winning
+  source is authored on the exact selector, selected from a broader type group,
+  or inherited from an extension ancestor; unavailable rows carry a compiler
+  explanation. Theme icons supplement rather than replace those labels.
+- **Dependencies** lists direct authored Calls and Called By relationships
+  discovered from registered `call` regions across the primitive's source
+  bodies.
+
+Click an available specialization to navigate to the actual selected body. If
+more than one overload/attribute form contributes a winning body, a source
+QuickPick prevents an arbitrary jump. Slot context actions also provide **Go to
+Implementation** and **Preview Specialization**; preview receives the exact
+profile/backend/extension/type tuple from the tree and therefore opens no
+redundant slot selectors. An unavailable slot explains why it has no target
+rather than pretending to have a definition.
+
+Explorer refreshes use the latest compiler catalog index and profile selector;
+they do not scan target-language text, lower TSIL, render code, or start child
+processes. Invalid edits retain the last successful explorer snapshot and label
+it `last valid catalog`. Direct dependency lists are authored relationships,
+not a claim about generation-time branches or transitive closure. Final
+native/composed/fallback classification remains an explicit concrete-analysis
+feature because those facts are decided during lowering and dependency
+propagation.
+
 Completion inside simple and scoped `requires [...]` lists offers target-feature
 tokens from the configured machine profiles and catalog requirements, rather
 than implementation type groups.

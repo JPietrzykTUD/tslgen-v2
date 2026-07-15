@@ -173,13 +173,9 @@ class Selector:
 
         selected: list[SelectedImplementation] = []
         warnings: dict[str, Diagnostic] = {}  # keyed by message, so each ambiguity warns once
-        emitted_extensions = self._emit_extensions(catalog, profile)
-        if backend_id is not None:
-            emitted_extensions = [
-                name
-                for name in emitted_extensions
-                if catalog.extensions[name].supports_backend(backend_id)
-            ]
+        emitted_extensions = list(
+            self.emitted_extensions(catalog, profile, backend_id=backend_id)
+        )
         for primitive in variants:
             # A non-vector (free-function) primitive (`allocate`/`deallocate`) has no SIMD axis:
             # its type group is a placeholder (`ptr`) that no arith tag matches, and its body is
@@ -403,6 +399,30 @@ class Selector:
             for superseded_name in ext.supersedes
         }
         return sorted(name for name in active if name not in superseded)
+
+    def emitted_extensions(
+        self,
+        catalog: Catalog,
+        profile: MachineProfile,
+        *,
+        backend_id: str | None = None,
+    ) -> tuple[str, ...]:
+        """Profile-active extensions, optionally restricted to one backend.
+
+        This is the public catalog/selection view used by authoring tools that
+        need to display the complete extension axis, including slots for which
+        no primitive implementation is selected. It deliberately stops before
+        body selection and lowering.
+        """
+
+        names = self._emit_extensions(catalog, profile)
+        if backend_id is not None:
+            names = [
+                name
+                for name in names
+                if catalog.extensions[name].supports_backend(backend_id)
+            ]
+        return tuple(names)
 
     def evaluate_candidates(
         self,
