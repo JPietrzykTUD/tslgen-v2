@@ -104,18 +104,20 @@ The TSLc Activity Bar container adds four native tree views:
   state whether their winning source is authored on the exact selector,
   selected from a broader type group, or inherited from an extension ancestor.
   Theme icons supplement rather than replace those labels.
-- **Dependencies** lists direct authored Calls and Called By relationships
-  discovered from registered `call` regions across the primitive's source
-  bodies.
+- **Dependencies** keeps direct authored Calls and Called By relationships in
+  explicit authored groups. After **Analyze Concrete Specialization**, it also
+  shows a separate analyzed result with the final native, composed, fallback,
+  or unknown state and the active transitive lowered call tree.
 
 Click an authored or selected specialization to navigate to its source body. If
 more than one overload/attribute form contributes a body, a source
 QuickPick names the callable parameters and signature so it cannot be confused
 with another overload. Switching primitives clears the old specialization rows
 while the replacement projection loads, and slot actions reject stale rows.
-Slot context actions also provide **Go to Implementation** and **Preview
-Specialization**; preview is available only for a selected row and receives the
-exact profile/backend/extension/type tuple from the tree. A missing or
+Slot context actions also provide **Go to Implementation**, **Analyze Concrete
+Specialization**, and **Preview Specialization**. Analysis and preview are
+available only for a selected row and receive the exact
+profile/backend/extension/type tuple from the tree without another prompt. A missing or
 backend-unsupported slot explains why it has no target rather than pretending
 to have a definition, while a profile-rejected row can still navigate to its
 authored source.
@@ -124,10 +126,20 @@ Explorer refreshes use the latest compiler catalog index and profile selector;
 they do not scan target-language text, lower TSIL, render code, or start child
 processes. Invalid edits retain the last successful explorer snapshot and label
 it `last valid catalog`. Direct dependency lists are authored relationships,
-not a claim about generation-time branches or transitive closure. Final
-native/composed/fallback classification remains an explicit concrete-analysis
-feature because those facts are decided during lowering and dependency
-propagation.
+not a claim about generation-time branches or transitive closure. Concrete
+analysis remains an explicit saved-corpus child because final implementation
+state and active dependencies are decided during lowering and dependency
+propagation. Its result is labelled `analyzed`, unresolved edges retain the
+compiler's pruning reason, cycles terminate as explicit cycle nodes, and
+resolved nodes navigate to the selected source implementation.
+
+Analysis results are cached by compiler input digest plus primitive, profile,
+backend, extension, and type. An unchanged repeated action reuses that result.
+Ordinary refresh, selection, hover, and edits never launch analysis; an edit or
+configuration generation change leaves the catalog explorer available and
+marks the prior concrete result stale until the author explicitly analyzes
+again. Cancellation or failure likewise leaves the last catalog projection
+and authored dependency groups intact.
 
 Outer-language completion is driven by parsed declaration, field, selector,
 list, map, and value spans. It offers top-level declaration snippets; known
@@ -235,6 +247,13 @@ project assets are loaded, no generated project is written, and no compiler or
 runner is invoked. Use `tslc explain` separately when the selection and
 lowering decision trace is more useful than rendered code.
 
+The explorer's **Analyze Concrete Specialization** action similarly launches
+`tslc analyze --format json` as a cancellable child, but it never renders an
+artifact. The command retains the pipeline's own post-pruning closure trace,
+including propagated implementation state, and returns a structured active
+dependency tree identified by the loaded input digest. All open TSL documents
+must be saved because the child loads the complete corpus from disk.
+
 There is no formatter in Version 1. The outer parser is not lossless, so the
 server intentionally advertises no formatting capability.
 
@@ -251,7 +270,7 @@ Server discovery is deterministic:
 3. `tslc` on the extension-host `PATH`;
 4. `tsl.python -m tslc`.
 
-Preview/check/doctor use `tsl.preview.command`, then the same bundled/PATH/
+Preview/check/doctor/explorer analysis use `tsl.preview.command`, then the same bundled/PATH/
 configured-Python order. The client never parses a command as a shell string
 and does not reinterpret an arbitrary custom server command as a full compiler.
 Useful slot settings are `tsl.preview.profile`, `tsl.preview.extension`,
@@ -285,6 +304,7 @@ On 2026-07-15 in the repository devcontainer, the 42-file corpus measured:
 | Index-backed hover, p95 | 0.147 ms | under 100 ms |
 | Parsed catalog completion, p95 | 3.584 ms | under 100 ms |
 | Cold saved rendered specialization preview | 2.704 s | under 5 s |
+| Cold concrete explorer analysis (`add/avx2/si32/cpp`) | 3.721 s | under 5 s |
 
 These are development targets, not portable wall-clock test assertions. The
 probe reparses each changed overlay, reuses unchanged parsed documents and

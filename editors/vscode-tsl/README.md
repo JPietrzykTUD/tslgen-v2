@@ -16,7 +16,8 @@ navigation, hover, completion, semantic highlighting, generated TextMate
 coloring, concrete saved-file preview, slot checking, and backend-aware doctor.
 It also provides a compiler-backed primitive scaffolding action and a TSLc
 Activity Bar explorer for primitive coverage, concrete slots, and direct call
-dependencies. There is intentionally no formatter in Version 1.
+dependencies, plus explicit lowered-state and active-closure analysis. There is
+intentionally no formatter in Version 1.
 
 From the repository root, `./dev.sh editor-install` refreshes the generated
 TSIL keyword grammar, bootstraps locked npm dependencies when they are absent
@@ -45,11 +46,18 @@ concrete profile switches to Resolved Profile mode; specialization rows then
 distinguish selected, not selected for this profile, missing implementation,
 and unsupported backend states. Selected slots can launch Preview without
 repeating slot QuickPicks, and resolved mode retains the unavailable-only
-filter.
+filter. A selected slot can also launch **Analyze Concrete Specialization**
+without repeating profile/backend/extension/type prompts.
 Overload choices include their callable parameters and signature, and stale
 rows are cleared when primitive/profile/backend context changes. Dependencies
-shows direct authored Calls and Called By relationships. Icons are always
-accompanied by status text and tooltips.
+shows direct authored Calls and Called By relationships in separate authored
+groups. Explicit analysis adds a native/composed/fallback/unknown verdict and
+the active transitive lowered call tree, including cycle and unresolved-edge
+labels; resolved dependencies navigate to their selected source body. Results
+are cached by compiler input digest and complete slot context, then marked stale
+after a corpus/configuration generation change. Analysis is never triggered by
+ordinary refresh, selection, hover, or editing. Icons are always accompanied by
+status text and tooltips.
 
 Use `tsl.server.command`/`tsl.server.args` for an explicit server,
 `tsl.preview.command` for an explicit full compiler, or `tsl.python` for a
@@ -79,6 +87,9 @@ It displays the actual C++ or Rust specialization fragment from the normal
 backend primitive renderer without writing a project or invoking a toolchain.
 Ordinary hover and diagnostics never lower or render a specialization, invoke
 toolchains, or start preview processes.
+Explorer analysis requires the saved corpus and runs `tslc analyze --format
+json` in a cancellable child. Cancellation or failure leaves the catalog
+explorer and authored dependencies usable.
 
 See `docs/tsl-editor.md` in the repository for architecture, development,
 performance evidence, remote setup, installation updates, and troubleshooting.

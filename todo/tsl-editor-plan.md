@@ -12,9 +12,9 @@ grammar-generation, or primitive-scaffolding work.
 The native TSLc explorer is now part of that working baseline. It provides
 File/Corpus primitive discovery, profile/backend slot counts, an
 unavailable-only view, selected-implementation navigation and preview, and
-direct authored Calls/Called By relationships. Those lookup features remain
-separate from the unfinished concrete-analysis work below: `available` and
-`authored` do not yet imply a final native/composed/fallback verdict.
+direct authored Calls/Called By relationships. Explicit concrete analysis adds
+the compiler's final native/composed/fallback/unknown state and active lowered
+dependency closure without changing those lookup-only paths.
 
 This is the execution plan for the remaining editor work. It should contain
 only unfinished behavior. When a slice meets its exit criteria, remove that
@@ -24,8 +24,7 @@ the completion record.
 Parsed outer-language context, catalog completion, descriptor-driven TSIL
 region-shell completion, typed query-path completion, hierarchical symbols,
 typed selector navigation, and semantic highlighting are now part of the
-working baseline. The next product milestone adds explicit concrete explorer
-analysis and safe source actions.
+working baseline. The next product milestone adds safe source actions.
 A self-contained Marketplace distribution is a later release gate and is
 deliberately separated from authoring behavior.
 
@@ -34,9 +33,6 @@ deliberately separated from authoring behavior.
 An author editing an incomplete `.tsl` document should be able to discover the
 language without memorizing compiler internals:
 
-- an explicit explorer analysis can explain the lowered implementation state
-  and active transitive dependency closure for one concrete slot without
-  slowing ordinary explorer refreshes;
 - safe, source-located compiler suggestions can become explicit, undoable
   editor actions;
 - ordinary lookup requests remain memory-only and fast.
@@ -71,60 +67,16 @@ These constraints apply to every slice in this plan:
 
 | Area | Remaining behavior | Main owner |
 | --- | --- | --- |
-| Explorer analysis | Explicit, cancellable lowering verdicts, transitive dependencies, and final implementation state cached by concrete context | Lowering/dependency closure and explorer command boundary |
 | Safe actions | Convert exact compiler suggestions into version-checked `WorkspaceEdit` actions | Diagnostics/audit API and LSP code actions |
 | Public distribution | Self-contained, platform-specific server runtime and release verification | Extension packaging and CI |
 
 ## Ordered Slices
 
-The slices are ordered by product dependency. Slice 1 is the direct follow-up
-to the catalog explorer. Slice 2 builds safe edits on the now-stable source-span
-model. Slice 3 is a separate release track and must not block the
-authoring-depth milestone.
+The slices are ordered by product dependency. Slice 1 builds safe edits on the
+now-stable source-span model. Slice 2 is a separate release track and must not
+block the authoring-depth milestone.
 
-### Slice 1: Explorer Concrete Analysis
-
-**Goal:** enrich the catalog explorer with authoritative lowering and transitive
-dependency facts behind an explicit, cached analysis boundary.
-
-**Work:**
-
-- Define compiler-owned typed provenance for native, composed, fallback, and
-  unknown outcomes. Derive it from selection, lowering, and dependency
-  propagation; never infer it by scanning raw implementation text in the
-  extension.
-- Add an explicit **Analyze Concrete Specialization** action on a slot. Reuse
-  the explorer's primitive/profile/backend/extension/type context, show
-  cancellable progress, and require no redundant prompts when the context is
-  already complete.
-- Report the active transitive call closure for that lowered specialization,
-  including unresolved or failed dependencies with a concise reason. Keep it
-  distinct from the existing direct authored Calls/Called By graph, which may
-  include branches inactive for the selected slot.
-- Present the verdict and dependency tree in an analyzed-result node or detail
-  view. Include textual labels and tooltips in addition to icons, and make each
-  resolved dependency navigable to its selected implementation.
-- Cache results by corpus/input digest, primitive, profile, backend, extension,
-  and type. Reuse a valid result across view refreshes and mark it stale, rather
-  than silently recomputing it, after a relevant edit or configuration change.
-- Keep the existing slot-origin and direct Calls/Called By views independent of
-  concrete lowering.
-
-**Exit criteria:**
-
-- Concrete state is labelled `analyzed` and never confused with authored
-  selector origin or selected availability; tests cover all four verdicts.
-- The dependency tree represents only the active lowered specialization,
-  detects cycles deterministically, and preserves actionable unresolved-edge
-  diagnostics.
-- The command uses the slot already selected in the explorer and never asks for
-  profile, backend, extension, or type again.
-- Repeating an unchanged analysis is served from the complete-context cache;
-  changing any cache dimension cannot reuse the old verdict.
-- Cancelling or failing analysis leaves the last valid catalog explorer usable.
-- No automatic edit, hover, selection, or refresh triggers concrete analysis.
-
-### Slice 2: Safe Compiler-Owned Code Actions
+### Slice 1: Safe Compiler-Owned Code Actions
 
 **Goal:** expose exact, source-located compiler suggestions as deliberate,
 undoable editor edits.
@@ -153,7 +105,7 @@ undoable editor edits.
 - VS Code integration tests prove edits are previewable/undoable and ordinary
   diagnostics remain non-mutating.
 
-### Slice 3: Self-Contained Marketplace Runtime
+### Slice 2: Self-Contained Marketplace Runtime
 
 **Goal:** make a public VS Code installation work without a separately managed
 Python or `tslc[editor]` environment.
@@ -255,7 +207,7 @@ catalog reconstruction before designing incremental promotion.
 
 ## Authoring-Depth Milestone Acceptance
 
-The authoring-depth milestone is complete when Slices 1 and 2 satisfy their
+The authoring-depth milestone is complete when Slice 1 satisfies its
 exit criteria and all of the following hold:
 
 - completion is correct at top level, nested catalog blocks, TSIL boundaries,
@@ -274,7 +226,7 @@ exit criteria and all of the following hold:
 - focused Python, LSP, extension, and performance checks pass.
 
 Self-contained Marketplace distribution is accepted separately through Slice
-3 and must not be claimed merely because contributor installation works.
+2 and must not be claimed merely because contributor installation works.
 
 ## Active Risks And Mitigations
 
@@ -296,5 +248,5 @@ Self-contained Marketplace distribution is accepted separately through Slice
   complete slot and corpus digest, label analyzed versus lookup facts, and
   invalidate rather than recompute implicitly after edits.
 - **Bundled Python multiplies platform and release risk.** Keep it isolated in
-  Slice 3, use a declared support matrix, build reproducibly, and retain the
+  Slice 2, use a declared support matrix, build reproducibly, and retain the
   external runtime only as an explicit override.

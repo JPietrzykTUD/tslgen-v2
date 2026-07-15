@@ -5,6 +5,8 @@ import {
   type ServerOptions,
 } from "vscode-languageclient/node";
 
+import { ConcreteAnalysisManager } from "./analysis";
+import type { ConcreteAnalysis } from "./analysisModel";
 import {
   discoverCompiler,
   discoverServer,
@@ -22,6 +24,7 @@ import {
 
 let client: LanguageClient | undefined;
 let previewManager: PreviewManager | undefined;
+let analysisManager: ConcreteAnalysisManager | undefined;
 let output: vscode.LogOutputChannel | undefined;
 let contextRef: vscode.ExtensionContext | undefined;
 let explorer: TslExplorer | undefined;
@@ -31,11 +34,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   output = vscode.window.createOutputChannel("TSL", { log: true });
   const provider = new PreviewDocumentProvider();
   previewManager = new PreviewManager(provider, output);
-  explorer = new TslExplorer(context, output, previewExplorerSlot);
+  analysisManager = new ConcreteAnalysisManager(output);
+  explorer = new TslExplorer(
+    context,
+    output,
+    previewExplorerSlot,
+    analyzeExplorerSlot,
+  );
   context.subscriptions.push(
     output,
     provider,
     previewManager,
+    analysisManager,
     explorer,
     vscode.workspace.registerTextDocumentContentProvider("tsl-preview", provider),
     vscode.commands.registerCommand("tsl.restartServer", restartServer),
@@ -61,6 +71,8 @@ export async function deactivate(): Promise<void> {
   explorer = undefined;
   previewManager?.dispose();
   previewManager = undefined;
+  analysisManager?.dispose();
+  analysisManager = undefined;
   if (client) {
     const running = client;
     client = undefined;
@@ -151,6 +163,34 @@ async function previewExplorerSlot(slot: ExplorerPreviewSlot): Promise<void> {
     vscode.workspace.getWorkspaceFolder(slot.sourceUri)?.uri.fsPath ??
     workspaceCwd(document);
   await manager.preview(compiler, cwd, slot);
+}
+
+async function analyzeExplorerSlot(
+  slot: ExplorerPreviewSlot,
+): Promise<ConcreteAnalysis | undefined> {
+  const manager = analysisManager;
+  if (!manager) {
+    return undefined;
+  }
+  const dirty = vscode.workspace.textDocuments.find(
+    (document) => document.languageId === "tsl" && document.isDirty,
+  );
+  if (dirty) {
+    void vscode.window.showWarningMessage(
+      "Save all open TSL documents before analysis so the compiler child reads " +
+        "the displayed corpus.",
+    );
+    return undefined;
+  }
+  const document = await vscode.workspace.openTextDocument(slot.sourceUri);
+  const compiler = await compilerCommand(slot.sourceUri);
+  if (!compiler) {
+    return undefined;
+  }
+  const cwd =
+    vscode.workspace.getWorkspaceFolder(slot.sourceUri)?.uri.fsPath ??
+    workspaceCwd(document);
+  return manager.analyze(compiler, cwd, slot);
 }
 
 async function previewSpecialization(): Promise<void> {

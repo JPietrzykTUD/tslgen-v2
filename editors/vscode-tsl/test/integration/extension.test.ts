@@ -22,6 +22,7 @@ suite("TSL extension", () => {
     assert.ok(commands.includes("tsl.explorer.selectProfile"));
     assert.ok(commands.includes("tsl.explorer.selectBackend"));
     assert.ok(commands.includes("tsl.explorer.toggleUnavailable"));
+    assert.ok(commands.includes("tsl.explorer.analyze"));
 
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     assert.ok(root);

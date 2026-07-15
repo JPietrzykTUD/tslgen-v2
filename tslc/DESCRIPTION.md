@@ -107,6 +107,14 @@ backend-unsupported slot states plus implementation origins and source spans
 from the same catalog, selector, and index. Direct Calls/Called By relationships
 are indexed from registered `call` regions. The VS Code tree providers render
 those typed facts and never reconstruct selector or dependency rules.
+Explicit concrete explorer analysis runs `tslc analyze` as a saved-corpus
+child. An opt-in immutable pipeline trace preserves the same post-pruning slot
+identities, active call edges, unresolved origins, and propagated
+native/composed/fallback/unknown state used by generation. The command returns
+a deterministic cycle-terminating tree plus the complete input digest; the
+client owns only cancellable execution, complete-context caching, stale-state
+presentation, and source navigation. Lookup refreshes never collect this trace
+or start analysis.
 Concrete preview runs `tslc preview` as a separate saved-file child. It uses
 one loaded input snapshot for selection, lowering, and dependency closure, then
 passes the requested emitted specialization through the registered backend's

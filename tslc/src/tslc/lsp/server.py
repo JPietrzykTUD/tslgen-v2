@@ -531,6 +531,7 @@ def _empty_primitive_explorer() -> dict[str, object]:
         "backend": "",
         "profiles": [],
         "backends": [],
+        "generation": 0,
         "stale": False,
         "primitives": [],
         "selectedPrimitive": None,
@@ -548,6 +549,7 @@ def _primitive_explorer_payload(
         "backend": explorer.backend,
         "profiles": list(explorer.profiles),
         "backends": list(explorer.backends),
+        "generation": workspace.generation,
         "stale": explorer.stale,
         "selectedPrimitive": explorer.selected_primitive,
         "primitives": [

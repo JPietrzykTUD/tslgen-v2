@@ -17,6 +17,7 @@ Modes:
                        rebuild only the docs website from existing generated docs/data
   ./${self} explain    diagnose ONE primitive/profile/backend/ext/type slot (no compiler needed)
   ./${self} preview    render ONE specialization fragment (no compiler needed)
+  ./${self} analyze    analyze ONE specialization and active call closure (no compiler needed)
   ./${self} editor-install
                        test, package, and install the local VS Code extension
   ./${self} check      validate the complete TSL corpus without rendering
@@ -37,6 +38,7 @@ and --backends for the existing tree, e.g.:
   ./${self} test    --profiles skylake --primitives add,convert_up
   ./${self} explain --primitive add --profile avx2 --type si32 --backend cpp
   ./${self} preview --primitive add --profile avx2 --type si32 --backend cpp
+  ./${self} analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
   ./${self} editor-install
   ./${self} ratchet --update
   ./${self} benchmark-ratchet --update
@@ -59,9 +61,9 @@ EOF
 mode="build"
 if (( $# > 0 )); then
   case "$1" in
-    generate|build|test|document|document-site|explain|preview|editor-install|check|doctor|list|show|audit|ratchet|benchmark-ratchet|dump) mode="$1"; shift ;;
+    generate|build|test|document|document-site|explain|preview|analyze|editor-install|check|doctor|list|show|audit|ratchet|benchmark-ratchet|dump) mode="$1"; shift ;;
     -h|--help|help) usage; exit 0 ;;
-    *) echo "usage: $0 [generate|build|test|document|document-site|explain|preview|editor-install|check|doctor|list|show|audit|ratchet|benchmark-ratchet|dump] [extra flags...]" >&2; exit 2 ;;
+    *) echo "usage: $0 [generate|build|test|document|document-site|explain|preview|analyze|editor-install|check|doctor|list|show|audit|ratchet|benchmark-ratchet|dump] [extra flags...]" >&2; exit 2 ;;
   esac
 fi
 extra_args=("$@")
@@ -137,6 +139,7 @@ case "$mode" in
     ;;
   explain) exec python -m tslc explain "${extra_args[@]}" ;;
   preview) exec python -m tslc preview "${extra_args[@]}" ;;
+  analyze) exec python -m tslc analyze "${extra_args[@]}" ;;
   check)   exec python -m tslc check "${extra_args[@]}" ;;
   doctor)  exec python -m tslc doctor "${extra_args[@]}" ;;
   list)    exec python -m tslc list "${extra_args[@]}" ;;

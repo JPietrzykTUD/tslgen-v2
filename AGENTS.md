@@ -131,6 +131,7 @@ Use `./dev.sh` for generated-project workflows:
 ./dev.sh test --primitives add --profiles avx2 --backends cpp
 ./dev.sh explain --primitive add --profile avx2 --type si32 --backend cpp
 ./dev.sh preview --primitive add --profile avx2 --type si32 --backend cpp
+./dev.sh analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
 ./dev.sh editor-install
 ./dev.sh dump --stage lowered --primitive add --profile avx2 --type si32 --backend cpp
 ```

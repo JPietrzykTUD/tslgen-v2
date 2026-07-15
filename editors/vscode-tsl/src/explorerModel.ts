@@ -59,6 +59,7 @@ export interface PrimitiveExplorerResponse {
   readonly backend: string;
   readonly profiles: readonly string[];
   readonly backends: readonly string[];
+  readonly generation: number;
   readonly stale: boolean;
   readonly primitives: readonly ExplorerPrimitive[];
   readonly selectedPrimitive: string | null;

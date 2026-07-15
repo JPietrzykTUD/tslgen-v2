@@ -2,6 +2,16 @@ import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 import {
+  ConcreteAnalysisCache,
+  analysisContextKey,
+  implementationStateDescription,
+  type CachedConcreteAnalysis,
+  type ConcreteAnalysis,
+  type ConcreteAnalysisContext,
+  type ConcreteAnalysisNode,
+  type ImplementationState,
+} from "./analysisModel";
+import {
   countDescription,
   groupSlots,
   implementationLabel,
@@ -69,10 +79,24 @@ interface DependencyElement {
   readonly direction: "calls" | "called-by";
 }
 
+interface AnalysisGroupElement {
+  readonly kind: "analysis-group";
+  readonly cached: CachedConcreteAnalysis;
+}
+
+interface AnalysisNodeElement {
+  readonly kind: "analysis-node";
+  readonly node: ConcreteAnalysisNode;
+}
+
 type PrimitiveTreeElement = PrimitiveElement;
 type ContextTreeElement = ContextElement;
 type SlotTreeElement = ExtensionElement | SlotElement;
-type DependencyTreeElement = DependencyGroupElement | DependencyElement;
+type DependencyTreeElement =
+  | DependencyGroupElement
+  | DependencyElement
+  | AnalysisGroupElement
+  | AnalysisNodeElement;
 
 const EMPTY_RESPONSE: PrimitiveExplorerResponse = {
   mode: "authored",
@@ -80,6 +104,7 @@ const EMPTY_RESPONSE: PrimitiveExplorerResponse = {
   backend: "",
   profiles: [],
   backends: [],
+  generation: 0,
   stale: false,
   primitives: [],
   selectedPrimitive: null,
@@ -107,11 +132,16 @@ export class TslExplorer implements vscode.Disposable {
   private lastTslUri: vscode.Uri | undefined;
   private requestGeneration = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly analysisCache = new ConcreteAnalysisCache();
+  private activeAnalysisContext: ConcreteAnalysisContext | undefined;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly output: vscode.LogOutputChannel,
     private readonly preview: (slot: ExplorerPreviewSlot) => Promise<void>,
+    private readonly analyze: (
+      slot: ExplorerPreviewSlot,
+    ) => Promise<ConcreteAnalysis | undefined>,
   ) {
     this.scope = context.workspaceState.get<ExplorerScope>(
       "tsl.explorer.scope",
@@ -191,6 +221,15 @@ export class TslExplorer implements vscode.Disposable {
         (element?: SlotElement) => this.previewSlot(element),
       ),
       vscode.commands.registerCommand(
+        "tsl.explorer.analyze",
+        (element?: SlotElement) => this.analyzeSlot(element),
+      ),
+      vscode.commands.registerCommand(
+        "tsl.explorer.goToAnalyzedImplementation",
+        (element?: AnalysisNodeElement) =>
+          this.goToAnalyzedImplementation(element),
+      ),
+      vscode.commands.registerCommand(
         "tsl.explorer.showUnavailableReason",
         (element?: SlotElement) => this.showUnavailableReason(element),
       ),
@@ -216,6 +255,10 @@ export class TslExplorer implements vscode.Disposable {
         }
       }),
       vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration("tsl")) {
+          this.analysisCache.invalidate();
+          this.updateViews();
+        }
         if (event.affectsConfiguration("tsl.preview.backend")) {
           this.backend = vscode.workspace
             .getConfiguration("tsl")
@@ -226,6 +269,12 @@ export class TslExplorer implements vscode.Disposable {
           );
           this.beginSelectedPrimitiveRefresh();
           this.scheduleRefresh();
+        }
+      }),
+      vscode.workspace.onDidSaveTextDocument((document) => {
+        if (vscode.workspace.asRelativePath(document.uri, false).endsWith("tslc.toml")) {
+          this.analysisCache.invalidate();
+          this.updateViews();
         }
       }),
     );
@@ -516,6 +565,78 @@ export class TslExplorer implements vscode.Disposable {
     });
   }
 
+  private async analyzeSlot(element?: SlotElement): Promise<void> {
+    const primitive = this.selectedPrimitive;
+    if (
+      element?.slot.status !== "selected" ||
+      !primitive ||
+      !(await this.isCurrentSlot(element))
+    ) {
+      return;
+    }
+    const context: ConcreteAnalysisContext = {
+      primitive,
+      profile: this.response.profile,
+      backend: this.response.backend,
+      extension: element.slot.extension,
+      type: element.slot.type,
+    };
+    this.activeAnalysisContext = context;
+    const cached = this.analysisCache.valid(context, this.response.generation);
+    if (cached) {
+      this.output.info(
+        `Reused TSL analysis for ${primitive}<${context.type}> ` +
+          `(${context.profile}/${context.extension}/${context.backend}) from ` +
+          `sha256:${cached.inputDigest}`,
+      );
+      this.updateViews();
+      return;
+    }
+    const source =
+      this.response.primitives.find((item) => item.name === primitive)?.definitions[0]
+        ?.uri ?? element.slot.implementations[0]?.location.uri;
+    if (!source) {
+      void vscode.window.showErrorMessage(
+        `No source document is available for primitive ${primitive}.`,
+      );
+      return;
+    }
+    const workspaceGeneration = this.response.generation;
+    const result = await this.analyze({
+      ...context,
+      sourceUri: vscode.Uri.parse(source),
+    });
+    if (!result) {
+      this.updateViews();
+      return;
+    }
+    if (analysisContextKey(result.context) !== analysisContextKey(context)) {
+      this.output.error(
+        `Ignored mismatched concrete analysis for ${result.context.primitive}; ` +
+          `expected ${primitive}.`,
+      );
+      void vscode.window.showErrorMessage(
+        "TSLc returned an analysis for a different specialization context.",
+      );
+      return;
+    }
+    this.analysisCache.store(result, workspaceGeneration);
+    this.updateViews();
+  }
+
+  private async goToAnalyzedImplementation(
+    element?: AnalysisNodeElement,
+  ): Promise<void> {
+    const location = element?.node.location;
+    if (!location) {
+      return;
+    }
+    await openLocation({
+      uri: vscode.Uri.file(location.path).toString(),
+      range: location.range,
+    });
+  }
+
   private async showUnavailableReason(element?: SlotElement): Promise<void> {
     if (!element || !(await this.isCurrentSlot(element))) {
       return;
@@ -543,6 +664,26 @@ export class TslExplorer implements vscode.Disposable {
     );
     await this.refresh();
     return false;
+  }
+
+  private selectedAnalysis(
+    selected: ExplorerPrimitive | undefined,
+  ): CachedConcreteAnalysis | undefined {
+    const context = this.activeAnalysisContext;
+    if (
+      !selected ||
+      !context ||
+      this.response.mode !== "resolved" ||
+      context.primitive !== selected.name ||
+      context.profile !== this.response.profile ||
+      context.backend !== this.response.backend
+    ) {
+      return undefined;
+    }
+    const cached = this.analysisCache.latest(context, this.response.generation);
+    return cached
+      ? { ...cached, stale: cached.stale || this.response.stale }
+      : undefined;
   }
 
   private updateViews(message?: string): void {
@@ -573,6 +714,7 @@ export class TslExplorer implements vscode.Disposable {
       this.response.mode === this.mode &&
       (this.mode === "authored" || this.response.profile === this.profile) &&
       this.response.backend === this.backend;
+    const analysis = this.selectedAnalysis(selected);
     this.slotView.description = selected
       ? `${selected.name} • ${context}` +
         (this.response.mode === "resolved" && this.onlyUnavailable
@@ -593,12 +735,16 @@ export class TslExplorer implements vscode.Disposable {
     );
 
     this.dependencyView.description = selected
-      ? `${selected.name} • direct authored calls${stale}`
+      ? analysis
+        ? `${selected.name} • analyzed ${analysis.analysis.context.extension}/` +
+          `${analysis.analysis.context.type} • ${analysis.analysis.implementationState}` +
+          (analysis.stale ? " • stale" : "")
+        : `${selected.name} • direct authored calls${stale}`
       : undefined;
     this.dependencyView.message = selected
       ? undefined
       : "Select a primitive in the Primitives view.";
-    this.dependencies.set(selected);
+    this.dependencies.set(selected, analysis);
   }
 
   private beginPrimitiveRefresh(primitive: ExplorerPrimitive): void {
@@ -613,7 +759,7 @@ export class TslExplorer implements vscode.Disposable {
     this.dependencyView.description =
       `${primitive.name} • direct authored calls${stale}`;
     this.dependencyView.message = undefined;
-    this.dependencies.set(primitive);
+    this.dependencies.set(primitive, this.selectedAnalysis(primitive));
   }
 
   private beginSelectedPrimitiveRefresh(): void {
@@ -633,7 +779,7 @@ export class TslExplorer implements vscode.Disposable {
     this.slots.set([], false, undefined, this.mode, "", "");
     this.dependencyView.description = undefined;
     this.dependencyView.message = message;
-    this.dependencies.set(undefined);
+    this.dependencies.set(undefined, undefined);
   }
 }
 
@@ -852,9 +998,14 @@ class DependencyTreeProvider
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
   private primitive: ExplorerPrimitive | undefined;
+  private analysis: CachedConcreteAnalysis | undefined;
 
-  set(primitive: ExplorerPrimitive | undefined): void {
+  set(
+    primitive: ExplorerPrimitive | undefined,
+    analysis: CachedConcreteAnalysis | undefined,
+  ): void {
     this.primitive = primitive;
+    this.analysis = analysis;
     this.changed.fire();
   }
 
@@ -868,6 +1019,9 @@ class DependencyTreeProvider
     }
     if (!element) {
       return [
+        ...(this.analysis
+          ? [{ kind: "analysis-group" as const, cached: this.analysis }]
+          : []),
         { kind: "dependency-group", direction: "calls", names: this.primitive.calls },
         {
           kind: "dependency-group",
@@ -883,12 +1037,73 @@ class DependencyTreeProvider
         direction: element.direction,
       }));
     }
+    if (element.kind === "analysis-group") {
+      return element.cached.analysis.roots.map((node) => ({
+        kind: "analysis-node",
+        node,
+      }));
+    }
+    if (element.kind === "analysis-node") {
+      return element.node.dependencies.map((node) => ({
+        kind: "analysis-node",
+        node,
+      }));
+    }
     return [];
   }
 
   getTreeItem(element: DependencyTreeElement): vscode.TreeItem {
+    if (element.kind === "analysis-group") {
+      const analysis = element.cached.analysis;
+      const item = new vscode.TreeItem(
+        `Analyzed: ${analysis.implementationState}`,
+        vscode.TreeItemCollapsibleState.Expanded,
+      );
+      item.description =
+        `${analysis.context.profile}/${analysis.context.extension}/` +
+        `${analysis.context.type}/${analysis.context.backend}` +
+        (element.cached.stale ? " • stale" : "");
+      item.iconPath = new vscode.ThemeIcon(
+        element.cached.stale ? "history" : implementationStateIcon(analysis.implementationState),
+      );
+      item.tooltip = new vscode.MarkdownString(
+        `**Analyzed concrete specialization**\n\n` +
+          `${implementationStateDescription(analysis.implementationState)}.\n\n` +
+          `Context: \`${analysis.context.primitive}<${analysis.context.type}>\` ` +
+          `on \`${analysis.context.profile}/${analysis.context.extension}/` +
+          `${analysis.context.backend}\`.\n\n` +
+          (element.cached.stale
+            ? "This result is stale because the corpus or configuration changed. Run Analyze Concrete Specialization again."
+            : `Input snapshot: \`sha256:${analysis.inputDigest}\`.`),
+      );
+      return item;
+    }
+    if (element.kind === "analysis-node") {
+      const node = element.node;
+      const callable = `${node.primitive}(${node.parameters.join(", ")})`;
+      const item = new vscode.TreeItem(
+        callable,
+        node.dependencies.length
+          ? vscode.TreeItemCollapsibleState.Collapsed
+          : vscode.TreeItemCollapsibleState.None,
+      );
+      item.description =
+        `${node.status} • ${node.implementationState} • ${node.extension}/${node.type}`;
+      item.iconPath = new vscode.ThemeIcon(analysisNodeIcon(node));
+      item.contextValue = node.location ? "tslAnalyzedDependency" : undefined;
+      item.tooltip = analysisNodeTooltip(node);
+      if (node.location) {
+        item.command = {
+          command: "tsl.explorer.goToAnalyzedImplementation",
+          title: "Go to Analyzed Implementation",
+          arguments: [element],
+        };
+      }
+      return item;
+    }
     if (element.kind === "dependency-group") {
-      const label = element.direction === "calls" ? "Calls" : "Called By";
+      const label =
+        element.direction === "calls" ? "Authored Calls" : "Authored Called By";
       const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Expanded);
       item.description = String(element.names.length);
       item.iconPath = new vscode.ThemeIcon(
@@ -915,6 +1130,55 @@ class DependencyTreeProvider
     };
     return item;
   }
+}
+
+function implementationStateIcon(state: ImplementationState): string {
+  switch (state) {
+    case "native":
+      return "zap";
+    case "composed":
+      return "combine";
+    case "fallback":
+      return "debug-step-back";
+    case "unknown":
+      return "question";
+  }
+}
+
+function analysisNodeIcon(node: ConcreteAnalysisNode): string {
+  if (node.status === "unresolved") {
+    return "warning";
+  }
+  if (node.status === "cycle") {
+    return "sync";
+  }
+  return implementationStateIcon(node.implementationState);
+}
+
+function analysisNodeTooltip(node: ConcreteAnalysisNode): vscode.MarkdownString {
+  const value = new vscode.MarkdownString();
+  value.appendMarkdown(`**${node.primitive}(${node.parameters.join(", ")})**\n\n`);
+  value.appendMarkdown(
+    `Status: ${node.status}; ${implementationStateDescription(node.implementationState)}.\n\n`,
+  );
+  value.appendMarkdown(`Slot: \`${node.extension}/${node.type}/${node.backend}\`.\n\n`);
+  if (node.origin) {
+    value.appendMarkdown(`Call origin: \`${node.origin}\`.\n\n`);
+  }
+  if (node.target) {
+    value.appendMarkdown(
+      `Target: \`${node.target.extension}/${node.target.type}\`.\n\n`,
+    );
+  }
+  if (node.reason) {
+    value.appendMarkdown(`${node.reason}\n\n`);
+  }
+  value.appendMarkdown(
+    node.location
+      ? "Select to open the lowered specialization's source implementation."
+      : "No resolved source implementation is available for this edge.",
+  );
+  return value;
 }
 
 function primitiveTooltip(

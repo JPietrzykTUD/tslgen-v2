@@ -48,6 +48,7 @@ tslc list primitives
 tslc generate --primitives add,sub --profiles scalar,avx2
 tslc build --primitives add,sub --profiles scalar,avx2
 tslc preview --primitive add --profile avx2 --type si32 --backend cpp
+tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
 tslc export pivot --primitives add --profiles avx2 --types si32 \
   --language cpp,rust \
   --output-root ./tslctmp/pivot

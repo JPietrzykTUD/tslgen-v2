@@ -28,6 +28,7 @@
     "onCommand:tsl.previewSpecialization",
     "onCommand:tsl.doctor",
     "onCommand:tsl.addPrimitive",
+    "onCommand:tsl.explorer.analyze",
     "onView:tsl.context",
     "onView:tsl.primitives",
     "onView:tsl.specializations",
@@ -151,6 +152,16 @@
         "icon": "$(open-preview)"
       },
       {
+        "command": "tsl.explorer.analyze",
+        "title": "Analyze Concrete Specialization",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "tsl.explorer.goToAnalyzedImplementation",
+        "title": "Go to Analyzed Implementation",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "tsl.explorer.showUnavailableReason",
         "title": "Show Unavailable Reason",
         "icon": "$(info)"
@@ -208,6 +219,11 @@
           "group": "navigation@10"
         },
         {
+          "command": "tsl.explorer.analyze",
+          "when": "view == tsl.specializations && viewItem == tslSelectedSlot",
+          "group": "inline@10"
+        },
+        {
           "command": "tsl.explorer.preview",
           "when": "view == tsl.specializations && viewItem == tslSelectedSlot",
           "group": "inline@20"
@@ -221,6 +237,11 @@
           "command": "tsl.explorer.goToPrimitive",
           "when": "view == tsl.dependencies && viewItem == tslDependency",
           "group": "navigation@10"
+        },
+        {
+          "command": "tsl.explorer.goToAnalyzedImplementation",
+          "when": "view == tsl.dependencies && viewItem == tslAnalyzedDependency",
+          "group": "navigation@10"
         }
       ],
       "commandPalette": [
@@ -230,6 +251,14 @@
         },
         {
           "command": "tsl.explorer.goToImplementation",
+          "when": "false"
+        },
+        {
+          "command": "tsl.explorer.analyze",
+          "when": "false"
+        },
+        {
+          "command": "tsl.explorer.goToAnalyzedImplementation",
           "when": "false"
         },
         {
@@ -269,7 +298,7 @@
         "tsl.preview.command": {
           "type": "string",
           "default": "",
-          "description": "Explicit full tslc executable for check, preview, and doctor commands."
+          "description": "Explicit full tslc executable for check, preview, analysis, and doctor commands."
         },
         "tsl.preview.profile": {
           "type": "string",

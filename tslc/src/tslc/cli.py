@@ -28,6 +28,7 @@ _COMMANDS = (
     "test",
     "explain",
     "preview",
+    "analyze",
     "inspect",
     "list",
     "show",
@@ -79,6 +80,10 @@ def main(argv: list[str] | None = None) -> int:
         from tslc.maintenance.render_preview import main as preview_main
 
         return _run_configured_maintenance(preview_main, rest)
+    if command == "analyze":
+        from tslc.maintenance.analyze_specialization import main as analyze_main
+
+        return _run_configured_maintenance(analyze_main, rest)
     if command == "inspect":
         from tslc.maintenance.stage_dump import main as inspect_main
 
@@ -105,6 +110,7 @@ def _root_parser() -> argparse.ArgumentParser:
         "test": "generate, build, and run value tests",
         "explain": "explain one selection/lowering slot",
         "preview": "render one specialization fragment",
+        "analyze": "analyze one specialization and its active call closure",
         "inspect": "dump a compiler pipeline stage",
         "list": "list catalog entries",
         "show": "describe one catalog entry",

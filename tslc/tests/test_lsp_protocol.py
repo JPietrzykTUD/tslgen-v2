@@ -188,6 +188,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         assert explorer["mode"] == "resolved"
         assert explorer["profile"] == "avx2"
         assert explorer["backend"] == "cpp"
+        assert explorer["generation"] >= 1
         add_entry = next(
             item for item in explorer["primitives"] if item["name"] == "add"
         )

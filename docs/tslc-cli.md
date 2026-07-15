@@ -94,6 +94,36 @@ unit. It includes the concrete selection and input-snapshot digest. Use
 `tslc explain` for the detailed candidate-ranking, TSIL, lowering, dependency,
 and verdict trace.
 
+Analyze the implementation state and active lowered dependency closure without
+rendering:
+
+```bash
+tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
+tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp --format json
+```
+
+The result is identified by the loaded input digest and labels the final state
+as native, composed, fallback, or unknown. Its tree includes only dependencies
+recorded by the lowered specialization, terminates cycles explicitly, and
+retains the compiler's reason for unresolved edges. This command is intended
+for explicit editor and terminal inspection; it does not render, write, build,
+or run a project.
+
+Analyze the implementation state and active lowered dependency closure without
+rendering:
+
+```bash
+tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
+tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp --format json
+```
+
+The result is identified by the loaded input digest and labels the final state
+as native, composed, fallback, or unknown. Its tree includes only dependencies
+recorded by the lowered specialization, terminates cycles explicitly, and
+retains the compiler's reason for unresolved edges. This command is intended
+for explicit editor and terminal inspection; it does not render, write, build,
+or run a project.
+
 Use the focused catalog commands before writing selectors or invoking
 `explain`:
 
@@ -219,6 +249,8 @@ or alter generated C++/Rust projects.
 
 ```bash
 tslc preview --primitive add --profile avx2 --type si32 --backend cpp
+tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
+tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
 tslc explain --primitive add --profile avx2 --type si32 --backend cpp
 tslc inspect --stage lowered --primitive add --profile avx2 --type si32 --backend cpp
 tslc audit metadata

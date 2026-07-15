@@ -26,6 +26,27 @@ class _LoweredSlot:
     unresolved_callee: "CallDependencyOrigin | None" = None
 
 
+@dataclass(frozen=True, slots=True)
+class LoweringTraceSlot:
+    """Immutable lowered call-graph facts retained for an explicit analysis."""
+
+    profile: str
+    backend: str
+    specialization: LoweredSpecialization
+    callees: tuple[CallDependency, ...]
+    callee_origins: tuple[CallDependencyOrigin, ...]
+    emitted: bool
+    unresolved_callee: CallDependencyOrigin | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LoweringTrace:
+    """One deterministic dependency-closure snapshot from generation."""
+
+    split_names: frozenset[str]
+    slots: tuple[LoweringTraceSlot, ...]
+
+
 type _SlotKey = tuple[
     str,
     str,
@@ -160,9 +181,25 @@ def _slot_key(
     slot: _LoweredSlot,
     split_names: frozenset[str],
 ) -> _SlotKey:
-    spec = slot.spec
+    return _specialization_key(slot.backend, slot.spec, split_names)
+
+
+def lowering_trace_slot_key(
+    slot: LoweringTraceSlot,
+    split_names: frozenset[str],
+) -> _SlotKey:
+    """Return the same identity used by dependency pruning."""
+
+    return _specialization_key(slot.backend, slot.specialization, split_names)
+
+
+def _specialization_key(
+    backend: str,
+    spec: LoweredSpecialization,
+    split_names: frozenset[str],
+) -> _SlotKey:
     return (
-        slot.backend,
+        backend,
         spec.primitive_name,
         _policy_of(spec.primitive_name, spec.mask_policy, split_names),
         VectorIdentity(spec.type_tag, spec.extension_name),
@@ -179,8 +216,59 @@ def _dependency_key(
     dependency: CallDependency,
     split_names: frozenset[str],
 ) -> _SlotKey:
+    return _call_dependency_key(slot.backend, dependency, split_names)
+
+
+def lowering_trace_dependency_key(
+    slot: LoweringTraceSlot,
+    dependency: CallDependency,
+    split_names: frozenset[str],
+) -> _SlotKey:
+    """Resolve an analysis edge with the pipeline's pruning identity."""
+
+    return _call_dependency_key(slot.backend, dependency, split_names)
+
+
+def unresolved_trace_reason(slot: LoweringTraceSlot) -> str:
+    """Explain why dependency pruning removed one traced specialization."""
+
+    return unresolved_callee_reason(slot.unresolved_callee)
+
+
+def unresolved_callee_reason(unresolved: CallDependencyOrigin | None) -> str:
+    """Explain a dependency-pruning edge for generation and analysis."""
+
+    if unresolved is None:
+        return "pruned: a called primitive is not generated for this profile"
     return (
-        slot.backend,
+        f"pruned: {unresolved.origin} calls "
+        f"{dependency_label(unresolved.dependency)}, but that specialization "
+        "is not generated for this profile"
+    )
+
+
+def dependency_label(dependency: CallDependency) -> str:
+    source = (
+        f"{dependency.primitive}<"
+        f"{dependency.source.extension_isa}, {dependency.source.base_tag}>"
+    )
+    if dependency.mask_policy is not None:
+        source = f"{source}[mask={dependency.mask_policy}]"
+    if dependency.target is None:
+        return source
+    return (
+        f"{source} -> <"
+        f"{dependency.target.extension_isa}, {dependency.target.base_tag}>"
+    )
+
+
+def _call_dependency_key(
+    backend: str,
+    dependency: CallDependency,
+    split_names: frozenset[str],
+) -> _SlotKey:
+    return (
+        backend,
         dependency.primitive,
         _policy_of(dependency.primitive, dependency.mask_policy, split_names),
         dependency.source,
