@@ -14,7 +14,7 @@ are explicitly **not applicable**.
 - **28 C++ machine profiles** are probed.
 - **1803 selected variant slots** are accounted for.
 - **1811 candidate sets** are emitted; compile-time immediate cases may fan one slot out into several sets.
-- **8 signature shapes benchmarked**, **49 not applicable**, **0 gaps**.
+- **8 signature shapes benchmarked**, **54 not applicable**, **0 gaps**.
 - **0 strict audit issues**.
 
 ## Signature shapes
@@ -45,6 +45,7 @@ are explicitly **not applicable**.
 | `s:=v` | 5 | 5 | 5 | 5 | 428 | 428 | benchmarked |
 | `s:=v[idx]` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `s[]:=v` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
+| `usize:=(ptr)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `usize:=m` | 3 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `usize:=s` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=()` | 3 | 0 | 0 | 0 | 0 | 0 | not applicable |
@@ -60,9 +61,13 @@ are explicitly **not applicable**.
 | `v:=(m,v,v)` | 21 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(m,v,v,v)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(s,s)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
+| `v:=(v)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(v,s)` | 3 | 2 | 2 | 2 | 12 | 12 | benchmarked |
-| `v:=(v,sImm)` | 7 | 1 | 1 | 1 | 10 | 18 | benchmarked |
+| `v:=(v,sImm)` | 8 | 1 | 1 | 1 | 10 | 18 | benchmarked |
 | `v:=(v,v)` | 13 | 7 | 26 | 26 | 805 | 805 | benchmarked |
+| `v:=(v,v,sImm)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
+| `v:=(v,vidx)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
+| `v:=(v,vidx,v)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(vt,v,sImm)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=cptr` | 2 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=cptr+` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
@@ -89,12 +94,12 @@ benchmark workload.
 |---|---:|---:|---:|---:|---|
 | masked primitive | 50 | 0 | 0 | 0 | not applicable |
 | representation-changing result | 7 | 0 | 0 | 0 | not applicable |
-| cross-lane semantics | 10 | 1 | 32 | 32 | benchmarked |
-| caller-unsafe implementation | 32 | 1 | 32 | 32 | benchmarked |
-| compile-time immediate operand | 19 | 2 | 42 | 50 | benchmarked |
+| cross-lane semantics | 14 | 1 | 32 | 32 | benchmarked |
+| caller-unsafe implementation | 33 | 1 | 32 | 32 | benchmarked |
+| compile-time immediate operand | 21 | 2 | 42 | 50 | benchmarked |
 | lane-list operand | 1 | 0 | 0 | 0 | not applicable |
-| generic SIMD-type parameter | 6 | 1 | 32 | 32 | benchmarked |
+| generic SIMD-type parameter | 8 | 1 | 32 | 32 | benchmarked |
 | boolean attribute axis | 23 | 0 | 0 | 0 | not applicable |
-| sized-vector implementation | 157 | 0 | 0 | 0 | not applicable |
-| scalable-vector implementation | 148 | 0 | 0 | 0 | not applicable |
-| opt-in compiler header implementation | 154 | 0 | 0 | 0 | not applicable |
+| sized-vector implementation | 162 | 0 | 0 | 0 | not applicable |
+| scalable-vector implementation | 153 | 0 | 0 | 0 | not applicable |
+| opt-in compiler header implementation | 159 | 0 | 0 | 0 | not applicable |
