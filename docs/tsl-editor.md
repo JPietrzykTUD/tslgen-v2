@@ -145,6 +145,16 @@ temporarily malformed line, the server combines the active-line prefix with the
 last valid parsed enclosing block and does not reconstruct nesting from
 earlier source lines.
 
+Inside TSIL bodies, the recursive scanner classifies registered region
+boundaries, active `<...>` shells, nested region bodies, comments/strings, and
+raw target text. Region keywords, closed selector terms, selector keys,
+option-bag keys and closed option values come from the region descriptors;
+primitive names in `call<primitive=...>` and backend translation names for
+`cast`, `helper`, and `op` are projected from the current catalog. Completion
+stops at malformed shell text and open query or target-language identifiers
+instead of guessing. Selecting an item replaces only its active selector term
+or value.
+
 Hover, navigation, symbols, completion, and semantic tokens read the most
 recent successful catalog/index and parsed source snapshot. They do not check
 the corpus, select or lower a specialization, render artifacts, or start a
@@ -253,11 +263,11 @@ On 2026-07-15 in the repository devcontainer, the 42-file corpus measured:
 
 | Operation | Result | Version 1 target |
 | --- | ---: | ---: |
-| Initial complete check/index | 2.417 s | under 2.5 s |
-| Changed-document check, p95 | 0.655 s | under 0.750 s |
-| Index-backed hover, p95 | 0.160 ms | under 100 ms |
-| Parsed catalog completion, p95 | 3.462 ms | under 100 ms |
-| Cold saved rendered specialization preview | 2.709 s | under 5 s |
+| Initial complete check/index | 2.339 s | under 2.5 s |
+| Changed-document check, p95 | 0.661 s | under 0.750 s |
+| Index-backed hover, p95 | 0.147 ms | under 100 ms |
+| Parsed catalog completion, p95 | 3.584 ms | under 100 ms |
+| Cold saved rendered specialization preview | 2.704 s | under 5 s |
 
 These are development targets, not portable wall-clock test assertions. The
 probe reparses each changed overlay, reuses unchanged parsed documents and

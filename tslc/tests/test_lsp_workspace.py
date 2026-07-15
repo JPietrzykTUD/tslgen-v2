@@ -482,11 +482,24 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
         "prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        ",
         "prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        requires []\n",
     )
-    primitive_calls = _completion_labels(
-        snapshot,
-        'prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        implementation:\n          tsil "complete(call<primitive=ad',
-        'prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        implementation:\n          tsil "complete(call<primitive=add>(v));"\n',
+    primitive_call_text = (
+        'prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        implementation:\n'
+        '          tsil "complete(call<primitive=ad'
     )
+    primitive_call_baseline = (
+        'prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        implementation:\n'
+        '          tsil "complete(call<primitive=add>(v));"\n'
+    )
+    primitive_call_completion = completions(
+        _snapshot_with_parsed_source(snapshot, primitive_call_baseline),
+        _COMPLETION_PATH,
+        primitive_call_text,
+        types.Position(
+            line=5,
+            character=len('          tsil "complete(call<primitive=ad'),
+        ),
+    )
+    primitive_calls = {item.label for item in primitive_call_completion.items}
     required_features = _completion_labels(
         snapshot,
         "prim<v:=v> x(v):\n"
@@ -537,6 +550,16 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
     } <= implementation_fields
     assert "si32" not in implementation_fields
     assert "add" in primitive_calls
+    add_completion = next(
+        item for item in primitive_call_completion.items if item.label == "add"
+    )
+    assert add_completion.text_edit is not None
+    assert add_completion.text_edit.range.start.character == len(
+        '          tsil "complete(call<primitive='
+    )
+    assert add_completion.text_edit.range.end.character == len(
+        '          tsil "complete(call<primitive=ad'
+    )
     assert "avx512_fp16" in required_features
     assert "avx512_fp16" in nested_required_features
     assert "arith" not in required_features

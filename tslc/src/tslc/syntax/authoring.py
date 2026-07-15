@@ -8,12 +8,14 @@ from pathlib import Path
 import re
 from typing import Literal
 
+from tslc.ir.scan import tsil_cursor_context
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedBlockDeclaration,
     ParsedFieldDeclaration,
     ParsedOuterTslDocument,
     ParsedPrimitiveDeclaration,
+    ParsedTslQuoteForm,
     ParsedTopLevelDeclaration,
     ParsedTopLevelDeclarationKind,
     ParsedTslField,
@@ -43,10 +45,6 @@ _FIELD_VALUE = re.compile(
     r"\s*:?\s+(?P<value>.*)$"
 )
 _PRIMITIVE_SIGNATURE = re.compile(r"^\s*prim<(?P<signature>[^>]*)$")
-_CALL_CONTEXT = re.compile(r"call\s*<\s*primitive\s*=\s*(@?[A-Za-z0-9_]*)$")
-_REGION_SHELL_CONTEXT = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*<([^>]*)$")
-
-
 @dataclass(frozen=True, slots=True)
 class AuthoringTextRange:
     """Python-codepoint offsets replaced by one completion."""
@@ -76,6 +74,10 @@ class AuthoringCursorContext:
     generic_parameters: tuple[str, ...] = ()
     extension_selector: str | None = None
     type_selector: str | None = None
+    tsil_region_keyword: str | None = None
+    tsil_selector_start: int | None = None
+    tsil_selector_prefix: str | None = None
+    tsil_region_path: tuple[str, ...] = ()
     source: AuthoringContextSource = "lexical"
 
 
@@ -162,14 +164,42 @@ def authoring_cursor_context(
     position_kind: AuthoringPositionKind = exact_kind or "field-name"
     context_source: AuthoringContextSource = "parsed" if site is not None else "incomplete-line"
 
-    tsil_source = _tsil_payload_source(declaration, text, bounded_offset)
-    if tsil_source is not None:
-        current_field, position_kind, prefix_range, prefix = _tsil_line_role(
-            line_before,
-            line_start,
-            bounded_offset,
+    tsil_region_keyword: str | None = None
+    tsil_selector_start: int | None = None
+    tsil_selector_prefix: str | None = None
+    tsil_region_path: tuple[str, ...] = ()
+    tsil_site = _tsil_payload_site(declaration, text, bounded_offset)
+    if tsil_site is not None:
+        payload_start, quote_form, context_source = tsil_site
+        payload_prefix = text[payload_start:bounded_offset]
+        if quote_form == "inline":
+            payload_prefix = _normalize_inline_payload(payload_prefix)
+        tsil = tsil_cursor_context(
+            payload_prefix,
+            bounded_offset - payload_start,
         )
-        context_source = tsil_source
+        prefix_range = AuthoringTextRange(
+            payload_start + tsil.replacement_start,
+            payload_start + tsil.replacement_end,
+        )
+        prefix = tsil.prefix
+        tsil_region_path = tsil.region_path
+        if tsil.kind == "region-boundary":
+            current_field = "$region-keyword"
+            position_kind = "tsil-region-boundary"
+        elif tsil.kind == "region-shell":
+            current_field = "$region-shell"
+            position_kind = "tsil-region-shell"
+            tsil_region_keyword = tsil.keyword
+            tsil_selector_start = (
+                None
+                if tsil.selector_start is None
+                else payload_start + tsil.selector_start
+            )
+            tsil_selector_prefix = tsil.selector_prefix
+        else:
+            current_field = None
+            position_kind = "tsil-raw"
     elif site is None:
         current_field, position_kind = _incomplete_line_role(line_before)
         same_line = tuple(
@@ -212,6 +242,10 @@ def authoring_cursor_context(
         generic_parameters=generic_parameters,
         extension_selector=extension_selector,
         type_selector=type_selector,
+        tsil_region_keyword=tsil_region_keyword,
+        tsil_selector_start=tsil_selector_start,
+        tsil_selector_prefix=tsil_selector_prefix,
+        tsil_region_path=tsil_region_path,
         source=context_source,
     )
 
@@ -400,46 +434,84 @@ def _incomplete_line_role(
     return key, "scalar-value"
 
 
-def _tsil_line_role(
-    line_before: str,
-    line_start: int,
-    offset: int,
-) -> tuple[str | None, AuthoringPositionKind, AuthoringTextRange, str]:
-    call = _CALL_CONTEXT.search(line_before)
-    if call is not None:
-        return (
-            "$primitive-call",
-            "tsil-region-shell",
-            AuthoringTextRange(line_start + call.start(1), offset),
-            call.group(1),
-        )
-    shell = _REGION_SHELL_CONTEXT.search(line_before)
-    if shell is not None and shell.group(1) in {"cast", "var"}:
-        selector = shell.group(2).rsplit(",", 1)[-1].strip()
-        return (
-            f"${shell.group(1)}-selector",
-            "tsil-region-shell",
-            AuthoringTextRange(offset - len(selector), offset),
-            selector,
-        )
-    replacement, prefix = _replacement_range(line_before, line_start, offset)
-    return "$region-keyword", "tsil-region-boundary", replacement, prefix
-
-
-def _tsil_payload_source(
+def _tsil_payload_site(
     declaration: ParsedTopLevelDeclaration, text: str, offset: int
-) -> AuthoringContextSource | None:
+) -> tuple[int, ParsedTslQuoteForm, AuthoringContextSource] | None:
     if not isinstance(declaration, ParsedPrimitiveDeclaration):
         return None
     for envelope in declaration.body_envelopes:
-        if not _contains(envelope.payload_source, text, offset):
+        start, parsed_end = _span_offsets(envelope.payload_source, text)
+        if not _payload_opener_matches(text, start, envelope.quote_form):
             continue
-        return (
+        current_end = _current_payload_end(
+            text,
+            start,
+            parsed_end,
+            envelope.quote_form,
+        )
+        if not start <= offset <= current_end:
+            continue
+        return start, envelope.quote_form, (
             "parsed"
             if _span_matches(envelope.payload_source, text)
             else "incomplete-line"
         )
     return None
+
+
+def _normalize_inline_payload(text: str) -> str:
+    """Expose outer-string-escaped target quotes without changing offsets."""
+
+    normalized = list(text)
+    index = 0
+    while index < len(text):
+        if text[index] != "\\":
+            index += 1
+            continue
+        start = index
+        while index < len(text) and text[index] == "\\":
+            index += 1
+        if index >= len(text) or text[index] != '"' or (index - start) % 2 == 0:
+            continue
+        decoded_backslashes = (index - start - 1) // 2
+        keep_from = index - decoded_backslashes
+        for position in range(start, keep_from):
+            normalized[position] = " "
+    return "".join(normalized)
+
+
+def _payload_opener_matches(
+    text: str,
+    start: int,
+    quote_form: ParsedTslQuoteForm,
+) -> bool:
+    if quote_form == "multiline":
+        return start >= 3 and text[start - 3 : start] == '"""'
+    if quote_form == "inline":
+        return start >= 1 and text[start - 1] == '"'
+    return True
+
+
+def _current_payload_end(
+    text: str,
+    start: int,
+    parsed_end: int,
+    quote_form: ParsedTslQuoteForm,
+) -> int:
+    if quote_form == "multiline":
+        close = text.find('"""', start)
+        return len(text) if close < 0 else close
+    if quote_form == "inline":
+        index = start
+        while index < len(text):
+            if text[index] == "\\":
+                index += 2
+                continue
+            if text[index] == '"':
+                return index
+            index += 1
+        return len(text)
+    return parsed_end
 
 
 def _generic_parameter_names(

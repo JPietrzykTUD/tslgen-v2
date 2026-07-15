@@ -67,11 +67,17 @@ fragments before deterministic full-catalog validation publishes a new
 snapshot. Symbols, references, hover, completion, and semantic tokens are pure
 projections of the latest successful catalog/index. The parsed-source boundary
 in [syntax/authoring.py](src/tslc/syntax/authoring.py) constructs a typed cursor
-context from declaration, field, selector, map, list, and value spans; its
-fallback reads only the active incomplete line. Schema- and registry-backed
+context from declaration, field, selector, map, list, and value spans. Inside
+TSIL payloads it uses the recursive scanner's cursor spans to retain enclosing
+region paths and distinguish region boundaries, selector shells, and raw text;
+its outer-language fallback reads only the active incomplete line. Schema- and
+registry-backed
 [authoring_completion.py](src/tslc/authoring_completion.py) returns typed
 completion records with replacement ranges, snippets, details, and stable
-ordering for the LSP adapter. Failed document parses retain that document's
+ordering for the LSP adapter. Region-shell terms and option bags come from the
+same authoring descriptors as registered region keywords, while catalog-backed
+providers supply primitive and backend-translation names. Failed document
+parses retain that document's
 last valid parsed structure without replacing current diagnostics. The
 editor-neutral pygls transport is in `lsp/`; an initially invalid overlay uses
 the valid saved corpus for catalog facts, parsed context, and definitions while

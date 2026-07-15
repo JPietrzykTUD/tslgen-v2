@@ -6,12 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from tslc.authoring_completion import authoring_completions
+from tslc.authoring_completion import AuthoringCompletion, authoring_completions
 from tslc.catalog.model import Catalog
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.sources import SourceDocument
 from tslc.syntax.authoring import authoring_cursor_context
 from tslc.syntax.parser import TslParser
+from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS, TSIL_REGION_KEYWORDS
 
 
 _PATH = Path("tslctmp/authoring-completion.tsl").resolve()
@@ -268,6 +269,126 @@ def test_incomplete_line_fallback_keeps_the_anchored_declaration(
     assert "semantics" in labels
 
 
+def test_every_registered_region_completes_at_a_valid_tsil_boundary(
+    catalog: Catalog,
+) -> None:
+    labels = _tsil_labels(catalog, "")
+
+    assert labels == TSIL_REGION_KEYWORDS
+    for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS:
+        prefix = descriptor.keyword[: max(1, len(descriptor.keyword) - 1)]
+        assert descriptor.keyword in _tsil_labels(catalog, prefix)
+
+
+@pytest.mark.parametrize(
+    ("body", "included"),
+    (
+        ("intrin<name, b", {"build"}),
+        ("intrin<name, build[s", {"suffix"}),
+        ("intrin<name, build[i", {"immediate", "infix", "infix_sep"}),
+        ("helper<arith_", {"arith_add", "arith_mul", "arith_rem"}),
+        ("op<a", {"add"}),
+        ("var<const_", {"const_infer", "const_typed", "const_init_register"}),
+        ("let<t", {"type"}),
+        ("mask<t", {"test"}),
+        ("mask<test, i", {"imask"}),
+        ("mem<a", {"alloc", "alloc_aligned"}),
+        ("lanes<a", {"at"}),
+        ("array<s", {"set"}),
+        ("io<f", {"format"}),
+        ("cast<st", {"static"}),
+        ("cast<reinterpret, t", {"type"}),
+        ("cast<reinterpret, type=p", {"ptr"}),
+        ("call<p", {"primitive"}),
+        ("call<primitive=ad", {"add"}),
+        ("call<primitive=add, a", {"attrs"}),
+        ("call<primitive=add, attrs[m", {"mask"}),
+        ("call<primitive=add, attrs[mask=p", {"pass_through"}),
+        ("call<primitive=add, attrs[aligned=t", {"true"}),
+        ("if<g", {"generation"}),
+        ("loop<b", {"backend"}),
+        ("loop<backend, u", {"unroll"}),
+        ("loop<generation, s", {"scoped"}),
+        ("switch<c", {"compile"}),
+    ),
+)
+def test_registered_region_shells_complete_from_authoring_descriptors(
+    catalog: Catalog,
+    body: str,
+    included: set[str],
+) -> None:
+    assert included <= _tsil_labels(catalog, body)
+
+
+def test_region_shell_completion_uses_precise_replacement_ranges(
+    catalog: Catalog,
+) -> None:
+    text, records = _tsil_completion_case(catalog, "call<primitive=ad")
+    add = next(record for record in records if record.label == "add")
+
+    assert text[add.replacement_range.start : add.replacement_range.end] == "ad"
+    assert add.insert_text == "add"
+    assert add.kind == "function"
+
+    text, records = _tsil_completion_case(
+        catalog,
+        "call<primitive=add, attrs[mask=pa",
+    )
+    pass_through = next(record for record in records if record.label == "pass_through")
+
+    assert (
+        text[
+            pass_through.replacement_range.start : pass_through.replacement_range.end
+        ]
+        == "pa"
+    )
+
+
+def test_inline_tsl_escapes_do_not_hide_later_tsil_completion(
+    catalog: Catalog,
+) -> None:
+    prefix = (
+        "prim<v:=v> probe(value):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      arith:\n"
+        "        implementation:\n"
+        '          tsil "'
+    )
+    baseline = prefix + r'complete(\"value\");' + '"\n'
+    edited = prefix + r'complete(\"value\" + cal'
+    context = authoring_cursor_context(
+        _parsed(baseline),
+        _PATH,
+        edited,
+        len(edited),
+    )
+
+    assert "call" in {
+        record.label for record in authoring_completions(context, catalog)
+    }
+
+
+@pytest.mark.parametrize(
+    "body",
+    (
+        "target_identifier ",
+        "complete(target_identifier ",
+        'complete("cal',
+        "// cal",
+        "call<bogus, a",
+        "call<primitive=add, unknown[x",
+        "mask<test, wrong",
+        "select_expr<",
+    ),
+)
+def test_tsil_completion_stops_at_raw_or_invalid_shell_text(
+    catalog: Catalog,
+    body: str,
+) -> None:
+    assert _tsil_labels(catalog, body) == set()
+
+
 def _labels(
     catalog: Catalog,
     baseline: str,
@@ -290,6 +411,34 @@ def _labels(
             target_features=target_features,
         )
     }
+
+
+def _tsil_labels(catalog: Catalog, body: str) -> set[str]:
+    _text, records = _tsil_completion_case(catalog, body)
+    return {record.label for record in records}
+
+
+def _tsil_completion_case(
+    catalog: Catalog,
+    body: str,
+) -> tuple[str, tuple[AuthoringCompletion, ...]]:
+    opener = (
+        "prim<v:=v> probe(value):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      arith:\n"
+        "        implementation:\n"
+        '          tsil """'
+    )
+    baseline = opener + '\n            complete(value);\n          """\n'
+    edited = opener + "\n            " + body
+    context = authoring_cursor_context(
+        _parsed(baseline),
+        _PATH,
+        edited,
+        len(edited),
+    )
+    return edited, authoring_completions(context, catalog)
 
 
 def _parsed(text: str):

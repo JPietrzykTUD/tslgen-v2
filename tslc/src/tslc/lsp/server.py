@@ -246,7 +246,7 @@ def create_server(
 
     @server.feature(
         types.TEXT_DOCUMENT_COMPLETION,
-        types.CompletionOptions(trigger_characters=["<", "=", ","]),
+        types.CompletionOptions(trigger_characters=["<", "=", ",", "["]),
     )
     async def completion_request(
         params: types.CompletionParams,

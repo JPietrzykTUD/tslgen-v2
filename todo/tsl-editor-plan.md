@@ -21,10 +21,10 @@ only unfinished behavior. When a slice meets its exit criteria, remove that
 slice rather than preserving a completion log here. Git history and tests are
 the completion record.
 
-Parsed outer-language context and catalog completion are now part of the
-working baseline. The next product milestone continues **authoring depth** with
-TSIL-aware completion, deeper navigation, semantic highlighting, and safe
-source actions.
+Parsed outer-language context, catalog completion, and descriptor-driven TSIL
+region-shell completion are now part of the working baseline. The next product
+milestone continues **authoring depth** with query-aware TSIL completion,
+deeper navigation, semantic highlighting, and safe source actions.
 A self-contained Marketplace distribution is a later release gate and is
 deliberately separated from authoring behavior.
 
@@ -74,64 +74,22 @@ These constraints apply to every slice in this plan:
 
 | Area | Remaining behavior | Main owner |
 | --- | --- | --- |
-| TSIL shell completion | Region-boundary awareness plus selector terms and named option bags for all registered regions | TSIL registry/descriptors and authoring vocabulary |
 | TSIL expression completion | Type/value query roots and continuations, primitive parameters, generic parameters, and named axes | Typed TSIL query rules and primitive scope |
 | Symbols/navigation/tokens | More declaration kinds, nested branches, list selectors, target axes, field/parameter/query token classes | Catalog index and LSP feature adapters |
 | Explorer analysis | Explicit, cancellable lowering verdicts, transitive dependencies, and final implementation state cached by concrete context | Lowering/dependency closure and explorer command boundary |
 | Safe actions | Convert exact compiler suggestions into version-checked `WorkspaceEdit` actions | Diagnostics/audit API and LSP code actions |
 | Public distribution | Self-contained, platform-specific server runtime and release verification | Extension packaging and CI |
 
-## TSIL Authoring Descriptors
-
-Region shell completion builds on the descriptor purpose and accepted forms
-already used by hover. Extend that same compiler-owned boundary with:
-
-- selector keys and closed selector values, when applicable;
-- named option-bag keys and closed option values, when applicable;
-- whether expressions, nested regions, or raw body text are accepted.
-
-The descriptor must be close enough to registration and validation that a new
-region cannot silently omit editor vocabulary. Descriptor consistency tests
-should fail during compiler testing and extension packaging.
-
 ## Ordered Slices
 
-The slices are ordered by authoring dependency. Slices 1 through 3 build on the
-delivered parsed cursor context. Slice 4 is the direct follow-up to the catalog
-explorer and may proceed independently once its lowering-provenance vocabulary
-is defined. Slice 5 should wait until source-span behavior is stable. Slice 6
-is a separate release track and must not block the authoring-depth milestone.
+The slices are ordered by authoring dependency. Slices 1 and 2 build on the
+delivered parsed cursor and TSIL region context. Slice 3 is the direct follow-up
+to the catalog explorer and may proceed independently once its
+lowering-provenance vocabulary is defined. Slice 4 should wait until
+source-span behavior is stable. Slice 5 is a separate release track and must
+not block the authoring-depth milestone.
 
-### Slice 1: Complete TSIL Region-Shell Completion
-
-**Goal:** completion inside a TSIL body understands registered region
-boundaries and each region's accepted shell.
-
-**Work:**
-
-- Use the TSIL scanner and cursor spans to distinguish a valid region boundary,
-  an active region shell, nested body content, and raw target text.
-- Offer registered region keywords only at valid boundaries.
-- Offer selector keys, selector values, named option-bag keys, and closed option
-  values from the region authoring descriptors.
-- Migrate any existing `cast` and `var` special cases to the shared descriptor
-  path; do not retain duplicate hard-coded vocabulary.
-- Keep primitive-name completion inside `call<primitive=...>` and make its
-  replacement range precise.
-- Degrade safely for an unfinished or malformed shell: offer only facts valid
-  before the parse error and never guess raw target-language identifiers.
-
-**Exit criteria:**
-
-- Every registered region has positive completion tests for its supported
-  shell and negative tests for invalid positions.
-- Adding a registered region without the required authoring metadata fails a
-  focused consistency test.
-- Nested regions and adjacent raw text do not leak completions into each other.
-- Generated TextMate keyword checks and semantic completion derive from the
-  same registered region inventory.
-
-### Slice 2: TSIL Queries And Primitive Scope
+### Slice 1: TSIL Queries And Primitive Scope
 
 **Goal:** expression completion exposes compiler-known query paths and names in
 the current primitive without attempting target-language analysis.
@@ -157,7 +115,7 @@ the current primitive without attempting target-language analysis.
 - Raw C++/Rust identifiers are never offered or classified by this feature.
 - Completion remains a pure lookup against precomputed catalog/query facts.
 
-### Slice 3: Symbols, Navigation, And Semantic-Token Depth
+### Slice 2: Symbols, Navigation, And Semantic-Token Depth
 
 **Goal:** structural browsing and highlighting cover the same declarations and
 references recognized by the authoring model.
@@ -186,7 +144,7 @@ references recognized by the authoring model.
   classify raw target code as TSL semantics.
 - Existing primitive-call and extension navigation remains regression covered.
 
-### Slice 4: Explorer Concrete Analysis
+### Slice 3: Explorer Concrete Analysis
 
 **Goal:** enrich the catalog explorer with authoritative lowering and transitive
 dependency facts behind an explicit, cached analysis boundary.
@@ -228,7 +186,7 @@ dependency facts behind an explicit, cached analysis boundary.
 - Cancelling or failing analysis leaves the last valid catalog explorer usable.
 - No automatic edit, hover, selection, or refresh triggers concrete analysis.
 
-### Slice 5: Safe Compiler-Owned Code Actions
+### Slice 4: Safe Compiler-Owned Code Actions
 
 **Goal:** expose exact, source-located compiler suggestions as deliberate,
 undoable editor edits.
@@ -257,7 +215,7 @@ undoable editor edits.
 - VS Code integration tests prove edits are previewable/undoable and ordinary
   diagnostics remain non-mutating.
 
-### Slice 6: Self-Contained Marketplace Runtime
+### Slice 5: Self-Contained Marketplace Runtime
 
 **Goal:** make a public VS Code installation work without a separately managed
 Python or `tslc[editor]` environment.
@@ -359,7 +317,7 @@ catalog reconstruction before designing incremental promotion.
 
 ## Authoring-Depth Milestone Acceptance
 
-The authoring-depth milestone is complete when Slices 1 through 5 satisfy their
+The authoring-depth milestone is complete when Slices 1 through 4 satisfy their
 exit criteria and all of the following hold:
 
 - completion is correct at top level, nested catalog blocks, TSIL boundaries,
@@ -400,5 +358,5 @@ Self-contained Marketplace distribution is accepted separately through Slice
   complete slot and corpus digest, label analyzed versus lookup facts, and
   invalidate rather than recompute implicitly after edits.
 - **Bundled Python multiplies platform and release risk.** Keep it isolated in
-  Slice 6, use a declared support matrix, build reproducibly, and retain the
+  Slice 5, use a declared support matrix, build reproducibly, and retain the
   external runtime only as an explicit override.
