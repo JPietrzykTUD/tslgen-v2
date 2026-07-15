@@ -15,8 +15,10 @@ expression streams, so their punctuation stays owned by the surrounding source.
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from functools import lru_cache
 from types import MappingProxyType
 
 from tslc.diagnostics import SourceSpan
@@ -29,6 +31,7 @@ from tslc.ir.region_registry import (
 from tslc.ir.segments import RawText, Region, Segment
 
 KEYWORDS: frozenset[str] = TSIL_REGION_KEYWORDS
+_SCAN_CACHE_SIZE = 4096
 
 _IDENT_START = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
 _IDENT_CONT = _IDENT_START | frozenset("0123456789")
@@ -42,8 +45,60 @@ class MalformedRegion:
     source: SourceSpan | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class _SourceMap:
+    source: SourceSpan | None
+    line_starts: tuple[int, ...]
+
+    @classmethod
+    def create(cls, text: str, source: SourceSpan | None) -> "_SourceMap":
+        starts = [0]
+        starts.extend(
+            index + 1
+            for index, character in enumerate(text)
+            if character == "\n"
+        )
+        return cls(source, tuple(starts))
+
+    def span(self, start: int, end: int) -> SourceSpan | None:
+        if self.source is None:
+            return None
+        line, column = self.line_column(start)
+        end_line, end_column = self.line_column(end)
+        return SourceSpan(
+            path=self.source.path,
+            line=line,
+            column=column,
+            end_line=end_line,
+            end_column=end_column,
+        )
+
+    def line_column(self, offset: int) -> tuple[int, int]:
+        if self.source is None:
+            raise ValueError("source positions require a source span")
+        line_index = bisect_right(self.line_starts, offset) - 1
+        line = self.source.line + line_index
+        column = (
+            self.source.column + offset
+            if line_index == 0
+            else offset - self.line_starts[line_index] + 1
+        )
+        return line, column
+
+
 def scan(text: str, *, source: SourceSpan | None = None) -> tuple[Segment, ...]:
-    return tuple(_scan(text, source, text, 0, statement_context=True))
+    return _cached_scan(text, source)
+
+
+@lru_cache(maxsize=_SCAN_CACHE_SIZE)
+def _cached_scan(text: str, source: SourceSpan | None) -> tuple[Segment, ...]:
+    return _scan_uncached(text, source)
+
+
+def _scan_uncached(text: str, source: SourceSpan | None) -> tuple[Segment, ...]:
+    return tuple(
+        _scan(text, _SourceMap.create(text, source), 0, statement_context=True)
+    )
 
 
 def find_malformed_regions(
@@ -57,13 +112,12 @@ def find_malformed_regions(
     validation diagnose misspelled or incomplete TSIL shells before they disappear into RawText.
     """
 
-    return tuple(_find_malformed_regions(text, source, text, 0))
+    return tuple(_find_malformed_regions(text, _SourceMap.create(text, source), 0))
 
 
 def _find_malformed_regions(
     text: str,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
 ) -> list[MalformedRegion]:
     malformed: list[MalformedRegion] = []
@@ -79,7 +133,7 @@ def _find_malformed_regions(
             keyword, after = _read_ident(text, i)
             if keyword in KEYWORDS:
                 region, end = _try_malformed_region(
-                    text, i, keyword, after, source, root_text, base_offset
+                    text, i, keyword, after, source_map, base_offset
                 )
                 if region is not None:
                     malformed.append(region)
@@ -93,8 +147,7 @@ def _find_malformed_regions(
 
 def _scan(
     text: str,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
     *,
     statement_context: bool,
@@ -113,7 +166,7 @@ def _scan(
             keyword, after = _read_ident(text, i)
             if keyword in KEYWORDS:
                 region, end = _try_region(
-                    text, i, keyword, after, source, root_text, base_offset
+                    text, i, keyword, after, source_map, base_offset
                 )
                 if region is not None:
                     terminated = False
@@ -135,9 +188,7 @@ def _scan(
                         segments.append(
                             RawText(
                                 text[raw_start:i],
-                                source=_span_for(
-                                    source,
-                                    root_text,
+                                source=source_map.span(
                                     base_offset + raw_start,
                                     base_offset + i,
                                 ),
@@ -154,7 +205,7 @@ def _scan(
         segments.append(
             RawText(
                 text[raw_start:n],
-                source=_span_for(source, root_text, base_offset + raw_start, base_offset + n),
+                source=source_map.span(base_offset + raw_start, base_offset + n),
             )
         )
     return segments
@@ -165,8 +216,7 @@ def _try_region(
     start: int,
     keyword: str,
     after_keyword: int,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
 ) -> tuple[Region | None, int]:
     pos = _skip_ws(text, after_keyword)
@@ -187,8 +237,7 @@ def _try_region(
     body = tuple(
         _scan(
             body_text,
-            source,
-            root_text,
+            source_map,
             base_offset + pos + 1,
             statement_context=False,
         )
@@ -205,8 +254,7 @@ def _try_region(
             selector_text,
             body,
             close + 1,
-            source,
-            root_text,
+            source_map,
             base_offset,
         )
     region = Region(
@@ -214,7 +262,7 @@ def _try_region(
         selector_text=selector_text,
         body=body,
         full_text=text[start : close + 1],
-        source=_span_for(source, root_text, base_offset + start, base_offset + close + 1),
+        source=source_map.span(base_offset + start, base_offset + close + 1),
     )
     return region, close + 1
 
@@ -226,8 +274,7 @@ def _try_if_region(
     selector_text: str,
     condition: tuple[Segment, ...],
     after_condition: int,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
 ) -> tuple[Region | None, int]:
     """Capture ``if<sel>(cond) { then } [else<sel> ({else} | if...)]`` from
@@ -243,8 +290,7 @@ def _try_if_region(
     then_block = tuple(
         _scan(
             text[pos + 1 : close],
-            source,
-            root_text,
+            source_map,
             base_offset + pos + 1,
             statement_context=True,
         )
@@ -255,7 +301,7 @@ def _try_if_region(
     after_then = _skip_ws(text, end)
     if _matches_keyword(text, after_then, "else"):
         else_block, end = _scan_else(
-            text, after_then + len("else"), source, root_text, base_offset
+            text, after_then + len("else"), source_map, base_offset
         )
         if else_block is None:
             return None, start
@@ -265,7 +311,7 @@ def _try_if_region(
         selector_text=selector_text,
         body=condition,
         full_text=text[start:end],
-        source=_span_for(source, root_text, base_offset + start, base_offset + end),
+        source=source_map.span(base_offset + start, base_offset + end),
         block=then_block,
         else_block=else_block,
     )
@@ -279,8 +325,7 @@ def _try_loop_region(
     selector_text: str,
     body: tuple[Segment, ...],
     after_body: int,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
 ) -> tuple[Region | None, int]:
     """Capture ``loop<sel>(args) [{ block }]`` from ``after_body`` (just past the args'
@@ -297,8 +342,7 @@ def _try_loop_region(
         block = tuple(
             _scan(
                 text[pos + 1 : close],
-                source,
-                root_text,
+                source_map,
                 base_offset + pos + 1,
                 statement_context=True,
             )
@@ -309,7 +353,7 @@ def _try_loop_region(
         selector_text=selector_text,
         body=body,
         full_text=text[start:end],
-        source=_span_for(source, root_text, base_offset + start, base_offset + end),
+        source=source_map.span(base_offset + start, base_offset + end),
         block=block,
     )
     return region, end
@@ -322,8 +366,7 @@ def _try_switch_region(
     selector_text: str,
     selector: tuple[Segment, ...],
     after_selector: int,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
 ) -> tuple[Region | None, int]:
     """Capture ``switch<sel>(selector) { label => { body } … }`` from ``after_selector`` (just
@@ -337,7 +380,7 @@ def _try_switch_region(
     if outer_close is None:
         return None, start
     arms = _scan_switch_arms(
-        text[pos + 1 : outer_close], source, root_text, base_offset + pos + 1
+        text[pos + 1 : outer_close], source_map, base_offset + pos + 1
     )
     if arms is None:
         return None, start
@@ -346,8 +389,9 @@ def _try_switch_region(
         selector_text=selector_text,
         body=selector,
         full_text=text[start : outer_close + 1],
-        source=_span_for(
-            source, root_text, base_offset + start, base_offset + outer_close + 1
+        source=source_map.span(
+            base_offset + start,
+            base_offset + outer_close + 1,
         ),
         arms=arms,
     )
@@ -359,8 +403,7 @@ def _try_malformed_region(
     start: int,
     keyword: str,
     after_keyword: int,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
 ) -> tuple[MalformedRegion | None, int]:
     pos = _skip_ws(text, after_keyword)
@@ -376,8 +419,7 @@ def _try_malformed_region(
                     len(text),
                     keyword,
                     "unterminated selector",
-                    source,
-                    root_text,
+                    source_map,
                     base_offset,
                 ),
                 len(text),
@@ -394,8 +436,7 @@ def _try_malformed_region(
                     end,
                     keyword,
                     "missing argument payload",
-                    source,
-                    root_text,
+                    source_map,
                     base_offset,
                 ),
                 max(end, after_keyword),
@@ -411,8 +452,7 @@ def _try_malformed_region(
                 len(text),
                 keyword,
                 "unterminated argument payload",
-                source,
-                root_text,
+                source_map,
                 base_offset,
             ),
             len(text),
@@ -424,7 +464,7 @@ def _try_malformed_region(
         if parser is None:
             raise ValueError(f"unregistered malformed TSIL region shape {shape!r}")
         return parser(
-            text, start, keyword, close + 1, source, root_text, base_offset
+            text, start, keyword, close + 1, source_map, base_offset
         )
     return None, close + 1
 
@@ -434,8 +474,7 @@ def _try_malformed_if_region(
     start: int,
     keyword: str,
     after_condition: int,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
 ) -> tuple[MalformedRegion | None, int]:
     pos = _skip_ws(text, after_condition)
@@ -447,8 +486,7 @@ def _try_malformed_if_region(
                 after_condition,
                 keyword,
                 "missing block",
-                source,
-                root_text,
+                source_map,
                 base_offset,
             ),
             after_condition,
@@ -462,8 +500,7 @@ def _try_malformed_if_region(
                 len(text),
                 keyword,
                 "unterminated block",
-                source,
-                root_text,
+                source_map,
                 base_offset,
             ),
             len(text),
@@ -472,7 +509,7 @@ def _try_malformed_if_region(
     after_then = _skip_ws(text, end)
     if _matches_keyword(text, after_then, "else"):
         return _try_malformed_else_region(
-            text, start, keyword, after_then + len("else"), source, root_text, base_offset
+            text, start, keyword, after_then + len("else"), source_map, base_offset
         )
     return None, end
 
@@ -482,8 +519,7 @@ def _try_malformed_else_region(
     start: int,
     keyword: str,
     after_else: int,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
 ) -> tuple[MalformedRegion | None, int]:
     pos = _skip_ws(text, after_else)
@@ -497,8 +533,7 @@ def _try_malformed_else_region(
                     len(text),
                     keyword,
                     "unterminated else selector",
-                    source,
-                    root_text,
+                    source_map,
                     base_offset,
                 ),
                 len(text),
@@ -512,8 +547,7 @@ def _try_malformed_else_region(
                 pos,
                 keyword,
                 "missing else block",
-                source,
-                root_text,
+                source_map,
                 base_offset,
             ),
             pos,
@@ -528,8 +562,7 @@ def _try_malformed_else_region(
                     len(text),
                     keyword,
                     "unterminated else block",
-                    source,
-                    root_text,
+                    source_map,
                     base_offset,
                 ),
                 len(text),
@@ -542,8 +575,7 @@ def _try_malformed_else_region(
             pos,
             nested_keyword,
             nested_after,
-            source,
-            root_text,
+            source_map,
             base_offset,
         )
     return (
@@ -553,8 +585,7 @@ def _try_malformed_else_region(
             pos,
             keyword,
             "malformed else block",
-            source,
-            root_text,
+            source_map,
             base_offset,
         ),
         pos,
@@ -566,8 +597,7 @@ def _try_malformed_loop_region(
     start: int,
     keyword: str,
     after_body: int,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
 ) -> tuple[MalformedRegion | None, int]:
     pos = _skip_ws(text, after_body)
@@ -581,8 +611,7 @@ def _try_malformed_loop_region(
                     len(text),
                     keyword,
                     "unterminated block",
-                    source,
-                    root_text,
+                    source_map,
                     base_offset,
                 ),
                 len(text),
@@ -596,8 +625,7 @@ def _try_malformed_switch_region(
     start: int,
     keyword: str,
     after_selector: int,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
 ) -> tuple[MalformedRegion | None, int]:
     pos = _skip_ws(text, after_selector)
@@ -609,8 +637,7 @@ def _try_malformed_switch_region(
                 after_selector,
                 keyword,
                 "missing switch block",
-                source,
-                root_text,
+                source_map,
                 base_offset,
             ),
             after_selector,
@@ -624,14 +651,13 @@ def _try_malformed_switch_region(
                 len(text),
                 keyword,
                 "unterminated switch block",
-                source,
-                root_text,
+                source_map,
                 base_offset,
             ),
             len(text),
         )
     arms = _scan_switch_arms(
-        text[pos + 1 : outer_close], source, root_text, base_offset + pos + 1
+        text[pos + 1 : outer_close], source_map, base_offset + pos + 1
     )
     if arms is None:
         return (
@@ -641,8 +667,7 @@ def _try_malformed_switch_region(
                 outer_close + 1,
                 keyword,
                 "malformed switch arms",
-                source,
-                root_text,
+                source_map,
                 base_offset,
             ),
             outer_close + 1,
@@ -651,11 +676,11 @@ def _try_malformed_switch_region(
 
 
 RegionShapeParser = Callable[
-    [str, int, str, str, tuple[Segment, ...], int, SourceSpan | None, str, int],
+    [str, int, str, str, tuple[Segment, ...], int, _SourceMap, int],
     tuple[Region | None, int],
 ]
 MalformedRegionShapeParser = Callable[
-    [str, int, str, int, SourceSpan | None, str, int],
+    [str, int, str, int, _SourceMap, int],
     tuple[MalformedRegion | None, int],
 ]
 
@@ -700,8 +725,7 @@ def _malformed_region(
     end: int,
     keyword: str,
     reason: str,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
 ) -> MalformedRegion:
     bounded_end = min(len(text), max(start + len(keyword), end))
@@ -709,9 +733,7 @@ def _malformed_region(
         keyword=keyword,
         reason=reason,
         text=text[start:bounded_end],
-        source=_span_for(
-            source,
-            root_text,
+        source=source_map.span(
             base_offset + start,
             base_offset + bounded_end,
         ),
@@ -720,8 +742,7 @@ def _malformed_region(
 
 def _scan_switch_arms(
     inner: str,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
 ) -> tuple[tuple[str, tuple[Segment, ...]], ...] | None:
     """Parse ``label => { body } …`` arms from a switch block's inner text. Returns None if the
@@ -749,8 +770,7 @@ def _scan_switch_arms(
                 tuple(
                     _scan(
                         inner[brace + 1 : close],
-                        source,
-                        root_text,
+                        source_map,
                         base_offset + brace + 1,
                         statement_context=True,
                     )
@@ -764,8 +784,7 @@ def _scan_switch_arms(
 def _scan_else(
     text: str,
     after_else: int,
-    source: SourceSpan | None,
-    root_text: str,
+    source_map: _SourceMap,
     base_offset: int,
 ) -> tuple[tuple[Segment, ...] | None, int]:
     """Parse the tail of ``else<sel> ( { ... } | if<sel>(...){...} )``.
@@ -789,8 +808,7 @@ def _scan_else(
             tuple(
                 _scan(
                     text[pos + 1 : close],
-                    source,
-                    root_text,
+                    source_map,
                     base_offset + pos + 1,
                     statement_context=True,
                 )
@@ -799,7 +817,7 @@ def _scan_else(
         )
     if _matches_keyword(text, pos, "if"):
         keyword, after = _read_ident(text, pos)
-        region, end = _try_region(text, pos, keyword, after, source, root_text, base_offset)
+        region, end = _try_region(text, pos, keyword, after, source_map, base_offset)
         if region is None:
             return None, pos
         return (region,), end
@@ -843,11 +861,15 @@ def _match_bracket(text: str, open_index: int, open_ch: str, close_ch: str) -> i
 def _skip_opaque(text: str, index: int) -> int | None:
     """Skip target text whose contents cannot contain a TSIL region."""
 
-    if text[index] == '"':
+    character = text[index]
+    if character == '"':
         return _skip_string(text, index)
-    if text.startswith("//", index):
+    if character != "/" or index + 1 >= len(text):
+        return None
+    next_character = text[index + 1]
+    if next_character == "/":
         return _skip_line_comment(text, index)
-    if text.startswith("/*", index):
+    if next_character == "*":
         return _skip_block_comment(text, index)
     return None
 
@@ -904,37 +926,6 @@ def _skip_ws(text: str, index: int) -> int:
     while i < n and text[i] in " \t\r\n":
         i += 1
     return i
-
-
-def _span_for(
-    source: SourceSpan | None,
-    root_text: str,
-    start: int,
-    end: int,
-) -> SourceSpan | None:
-    if source is None:
-        return None
-    line, column = _line_column(source, root_text, start)
-    end_line, end_column = _line_column(source, root_text, end)
-    return SourceSpan(
-        path=source.path,
-        line=line,
-        column=column,
-        end_line=end_line,
-        end_column=end_column,
-    )
-
-
-def _line_column(source: SourceSpan, text: str, offset: int) -> tuple[int, int]:
-    line = source.line
-    column = source.column
-    for character in text[:offset]:
-        if character == "\n":
-            line += 1
-            column = 1
-        else:
-            column += 1
-    return line, column
 
 
 def _boundary_before(text: str, index: int) -> bool:

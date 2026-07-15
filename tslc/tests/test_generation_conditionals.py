@@ -9,7 +9,10 @@ all delivering the SIMD comparison family (signed + unsigned + float) on sse/avx
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 from pathlib import Path
+
+import pytest
 
 from tslc.api import generate_project
 from tslc.backend.registry import create_backend_dialect
@@ -22,6 +25,11 @@ from tslc.lower.context import (
     VectorValue,
 )
 from tslc.lower.lowerer import Lowerer
+from tslc.lower._query_model import (
+    _QUERY_PARSE_CACHE_SIZE,
+    _cached_parse_query,
+    QueryParser,
+)
 from tslc.lower.region_handlers.casts import CastLowerer
 from tslc.lower.queries import (
     DEFAULT_QUERY_FUNCTIONS,
@@ -74,6 +82,27 @@ def test_query_facade_separates_evaluator_from_namespace_functions() -> None:
     assert modules_by_head["vector::runtime_length"] == "tslc.lower._query_vector"
 
 
+def test_query_parsers_share_bounded_immutable_syntax_results() -> None:
+    _cached_parse_query.cache_clear()
+    first = QueryParser().parse("  type::size_bits(base::in)  ")
+    repeated = QueryParser().parse("type::size_bits(base::in)")
+
+    assert repeated is first
+    assert first is not None
+    with pytest.raises(FrozenInstanceError):
+        first.head = "changed"  # type: ignore[misc]
+    assert _cached_parse_query.cache_info().hits >= 1
+
+    _cached_parse_query.cache_clear()
+    first = QueryParser().parse("unit_query_0")
+    for index in range(1, _QUERY_PARSE_CACHE_SIZE + 1):
+        QueryParser().parse(f"unit_query_{index}")
+    assert _cached_parse_query.cache_info().currsize == _QUERY_PARSE_CACHE_SIZE
+    after_eviction = QueryParser().parse("unit_query_0")
+    assert after_eviction == first
+    assert after_eviction is not first
+
+
 def test_type_is_same_query(catalog: Catalog) -> None:
     ev = QueryEvaluator()
     ctx = _ctx(catalog, "avx2", "ui16")
@@ -112,6 +141,7 @@ def test_type_size_queries_accept_type_values_without_wrapper(catalog: Catalog) 
 
 
 def test_select_query_chooses_same_kind_generation_value(catalog: Catalog) -> None:
+    _cached_parse_query.cache_clear()
     ev = QueryEvaluator()
     ctx_f32 = _ctx(catalog, "avx2", "f32")
     ctx_f64 = _ctx(catalog, "avx2", "f64")
@@ -120,6 +150,7 @@ def test_select_query_chooses_same_kind_generation_value(catalog: Catalog) -> No
 
     assert ev.evaluate(query, ctx_f32) == TypeValue("ui32")
     assert ev.evaluate(query, ctx_f64) == TypeValue("ui64")
+    assert _cached_parse_query.cache_info().hits >= 1
     assert ev.evaluate(
         "value<generation>(type::is_same(type(base::in), f32))", ctx_f32
     ) is None

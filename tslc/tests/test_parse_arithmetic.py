@@ -5,7 +5,26 @@ from __future__ import annotations
 from pathlib import Path
 
 from tslc.sources import SourceDocument, SourceLoader
-from tslc.syntax.parser import TslParser
+from tslc.syntax.parser import TslParser, _line_column, _line_starts
+
+
+def _linear_line_column(text: str, offset: int) -> tuple[int, int]:
+    line = 1
+    column = 1
+    for character in text[:offset]:
+        if character == "\n":
+            line += 1
+            column = 1
+        else:
+            column += 1
+    return line, column
+
+
+def test_binary_line_lookup_matches_linear_oracle_at_every_offset() -> None:
+    for text in ("", "one line", "one\ntwo", "one\ntwo\n", "αβ\nγδ\n"):
+        starts = _line_starts(text)
+        for offset in range(len(text) + 1):
+            assert _line_column(starts, offset) == _linear_line_column(text, offset)
 
 
 def _parse(path: Path, grammar: str):

@@ -20,6 +20,7 @@ from tslc._pipeline_closure import (
     _prune_unresolved,
 )
 from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
+from tslc._pipeline_lowering_cache import _LoweringCache
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.registry import backend_capabilities, registered_backend_ids
 from tslc.benchmark.model import EMPTY_BENCHMARK_PROJECT_PLAN
@@ -156,6 +157,15 @@ class _GenerationSession:
         self.selector = Selector()
         self.lowerer = Lowerer()
         self.backends = backend_capabilities(request.backends)
+        self.dialects = {
+            capability.backend_id: capability.create_dialect(inputs.catalog)
+            for capability in self.backends
+        }
+        self.lowering_cache = _LoweringCache(
+            self.lowerer,
+            inputs.catalog,
+            self.dialects,
+        )
         self.type_tags = _sorted_type_tags(request.type_tags)
         self.diagnostics = diagnostics
         self.coverage: list[CoverageEntry] = []
@@ -387,11 +397,9 @@ class _GenerationSession:
                     slot.implementation.body_text,
                     source=slot.implementation.body_source,
                 )
-                dialect = capability.create_dialect(catalog)
-                lowered = self.lowerer.lower(
+                lowered = self.lowering_cache.lower(
                     slot,
-                    catalog,
-                    dialect,
+                    backend,
                     body_segments=body_segments,
                 )
                 self._record_lowering_diagnostics(

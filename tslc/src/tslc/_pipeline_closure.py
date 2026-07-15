@@ -10,6 +10,7 @@ from tslc.lower.dependencies import (
     CallDependency,
     CallDependencyOrigin,
     VectorIdentity,
+    dependency_sort_key,
 )
 from tslc.lower.implementation_state import combine_implementation_states
 from tslc.lower.lowerer import LoweredSpecialization
@@ -47,7 +48,7 @@ def _prune_unresolved(
             origins = {
                 origin.dependency: origin for origin in slot.callee_origins
             }
-            for dependency in slot.callees:
+            for dependency in sorted(slot.callees, key=dependency_sort_key):
                 resolved = _dependency_key(slot, dependency, split_names)
                 if resolved not in available:
                     slot.unresolved_callee = origins.get(

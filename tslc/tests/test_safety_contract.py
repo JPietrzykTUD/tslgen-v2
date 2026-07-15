@@ -117,9 +117,12 @@ def test_caller_unsafe_callees_transitively_require_internal_unsafe() -> None:
             }
         ),
     )
+    cached_base_spec = caller.spec
 
     _propagate_transitive_call_facts([caller, callee], frozenset())
 
+    assert caller.spec is not cached_base_spec
+    assert cached_base_spec.safety == ImplementationSafety()
     assert caller.spec.safety.caller_unsafe is False
     assert caller.spec.safety.internal_unsafe is True
     assert "unsafe_callee" in caller.spec.safety.reasons
@@ -286,6 +289,27 @@ def test_pruned_variant_dependency_keeps_variant_origin() -> None:
         "pruned: implementation variant 'alt' calls missing<scalar, si32>, "
         "but that specialization is not generated for this profile"
     )
+
+
+def test_pruning_chooses_first_unresolved_dependency_deterministically() -> None:
+    blend = CallDependency(
+        primitive="blend",
+        mask_policy=None,
+        source=VectorIdentity("si16", "avx512"),
+    )
+    less_than = CallDependency(
+        primitive="less_than",
+        mask_policy=None,
+        source=VectorIdentity("si16", "avx512"),
+    )
+    caller = _slot("caller", callees=frozenset({less_than, blend}))
+
+    grouped, pruned = _prune_unresolved([caller], frozenset())
+
+    assert grouped == {}
+    assert pruned == [caller]
+    assert caller.unresolved_callee is not None
+    assert caller.unresolved_callee.dependency == blend
 
 
 def test_pruning_one_overload_keeps_live_sibling() -> None:

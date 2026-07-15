@@ -39,6 +39,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 def test_pipeline_facade_keeps_input_and_closure_boundaries() -> None:
     assert pipeline.generate.__module__ == "tslc.pipeline"
     assert pipeline._load_inputs.__module__ == "tslc._pipeline_inputs"
+    assert pipeline._LoweringCache.__module__ == "tslc._pipeline_lowering_cache"
     assert pipeline._LoweredSlot.__module__ == "tslc._pipeline_closure"
     assert pipeline._prune_unresolved.__module__ == "tslc._pipeline_closure"
     assert (

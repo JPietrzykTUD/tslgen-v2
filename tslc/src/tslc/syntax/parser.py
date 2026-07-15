@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+from bisect import bisect_right
 from collections.abc import Iterable
 from functools import lru_cache
 
@@ -636,9 +637,5 @@ def _line_starts(text: str) -> tuple[int, ...]:
 
 
 def _line_column(line_starts: tuple[int, ...], offset: int) -> tuple[int, int]:
-    line_index = 0
-    for index, start in enumerate(line_starts):
-        if start > offset:
-            break
-        line_index = index
+    line_index = bisect_right(line_starts, offset) - 1
     return line_index + 1, offset - line_starts[line_index] + 1

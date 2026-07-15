@@ -2,7 +2,58 @@
 
 ## Status
 
-Proposed implementation plan.
+Implemented on 2026-07-14. Slices 0 through 4 were accepted. The profiled
+thresholds for Slice 5 and the resource-failure condition for Slice 6 were not
+met, so those conditional rewrites were deliberately not implemented.
+
+## Execution Result
+
+The final implementation keeps the original design boundaries and adds only
+bounded pure-text caches or generation-session-owned state. It does not add
+Python threads, thread pools, multiprocessing, or mechanical generator
+conversions.
+
+- Slice 0 added the explicit snapshot capture/compare tool, canonical semantic
+  manifests, sequential fresh-process benchmark driver, and an immutable
+  original baseline for all five cases under
+  `tslctmp/performance-optimize/baseline/`.
+- Slice 1 changed parser and TSIL source-position lookup to binary search and
+  retained exact offset-oracle coverage.
+- Slice 2 added the 4,096-entry immutable TSIL scan cache. The final full
+  request uses 1,916 entries.
+- Slice 3 creates one dialect per requested backend and caches immutable
+  lowering results by the complete selected-slot semantics within one
+  generation session. The full request records 87,796 misses and 640,760 hits;
+  the equivalent two-profile case records 28,638 misses and 28,638 hits.
+- Slice 4 retained one additional optimization: a shared 512-entry pure query
+  parse cache. The full request uses 275 entries and records 764,447 hits. The
+  AVX2 prototype improved median runtime by 5.4%, clearing the acceptance gate.
+- The post-Slice-3 profile attributed 7.4% to dependency pruning and call-fact
+  propagation, below Slice 5's 10% threshold. The true full request completes
+  in one process, so Slice 6's two-phase retention redesign remains deferred.
+
+Fresh-process final measurements on the audit host:
+
+| Workload | Audited before | Final wall time | Final peak RSS |
+|---|---:|---:|---:|
+| Catalog-only check | 5.82 s | 2.04 s | 109 MiB |
+| Focused AVX2 `add` closure | 7.98 s | 3.31 s | 142 MiB |
+| Full-corpus AVX2 lowering | 20.03 s | 9.44 s | 434 MiB |
+| `skylake,cascadelake` reuse | 36.78 s | 11.88 s | 474 MiB |
+| Default full request | not previously practical as a benchmark | 65.91 s | 1.52 GiB |
+
+Every final snapshot case (`focused`, `lowering-reuse`,
+`all-profiles-shapes`, `profile-diverse`, and the true combined `full`
+request) matches the original baseline exactly. The final ordinary Python suite
+passes with 1,644 tests and 69 expected default skips. The representative
+generated C++/Rust scalar+AVX2 matrix build passes all eight build commands.
+
+The broader explicit generated gate finishes with 60 passes and four existing
+full-corpus/allocation failures. Those failures are an unchanged generated ABI
+issue: allocation functions are declared as `void**` / `*mut *mut c_void` but
+their bodies return `void*` / `*mut c_void`. Exact final-to-original snapshots
+prove the performance work did not introduce or alter that output; correcting
+the pointer ABI belongs in a separate primitive/compiler slice.
 
 This plan turns the July 2026 performance audit into small, correctness-first
 compiler slices. Every optimization must preserve the current generated project
