@@ -2,9 +2,15 @@
 
 Compiler-backed VS Code support for `tslc` `.tsl` source data.
 
-This 0.1 package is a contributor preview. Install Python 3.14 or newer and
-`tslc[editor]` in the local or remote workspace environment where this
-workspace extension runs:
+Platform-specific packages include the matching self-contained compiler and
+language server. They perform no activation-time download and require no
+separately installed Python or Node.js. The release targets are Linux x64 and
+arm64 (glibc), Windows x64, and macOS x64 and arm64; each artifact must pass its
+native-host CI job before publication.
+
+The platform-neutral package is a contributor preview. For that package,
+install Python 3.14 or newer and `tslc[editor]` in the local or remote workspace
+environment where this workspace extension runs:
 
 ```bash
 python -m pip install -e './tslc[editor]'
@@ -29,6 +35,13 @@ then reload the VS Code window. From this directory, the
 equivalent command is `npm run install:local`; `npm run package:verified` stops
 after packaging. The first run therefore needs registry/network access for
 `npm ci`; later runs reuse the current `node_modules` tree.
+
+`npm run package:runtime` is the release gate for the current native host. It
+requires the pinned packages in `runtime-requirements.txt`, freezes the same
+compiler used by contributors, smoke-tests version/preview/LSP behavior with
+external Python discovery disabled, runs client tests, emits a target-specific
+VSIX, and verifies every manifest checksum. CI performs that gate for all five
+advertised targets.
 
 Commands:
 
@@ -60,10 +73,13 @@ after a corpus/configuration generation change. Analysis is never triggered by
 ordinary refresh, selection, hover, or editing. Icons are always accompanied by
 status text and tooltips.
 
+The platform package uses its manifest-validated bundled compiler by default.
 Use `tsl.server.command`/`tsl.server.args` for an explicit server,
 `tsl.preview.command` for an explicit full compiler, or `tsl.python` for a
-Python environment containing `tslc[editor]`. Otherwise the extension searches
-for `tslc` on the extension-host `PATH`.
+Python environment containing `tslc[editor]`. The contributor package otherwise
+searches for `tslc` on the extension-host `PATH`. A packaged runtime that is
+missing, corrupt, stale, or built for the wrong extension-host target is an
+installation error rather than a silent fallback.
 
 The concrete commands use the language server's parsed cursor scope and real
 selector matrix. A concrete extension or scalar type at the cursor is reused;

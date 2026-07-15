@@ -5,6 +5,7 @@ Install the package from the repository to get the `tslc` executable:
 ```bash
 python -m pip install -e ./tslc
 tslc --help
+tslc --version
 ```
 
 Editable installs reflect source changes after restarting the running command

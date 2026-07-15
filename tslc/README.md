@@ -43,6 +43,7 @@ PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_b
 # Write scratch/output under the workspace (./tslctmp), not /tmp: on WSL the
 # container overlay (which backs /tmp) only grows the VHDX and never shrinks.
 python -m pip install -e ./tslc
+tslc --version
 tslc check
 tslc list primitives
 tslc generate --primitives add,sub --profiles scalar,avx2

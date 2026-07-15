@@ -29,6 +29,7 @@ from tslc.lsp.positions import (
 )
 from tslc.syntax.authoring import AuthoringTextRange, authoring_cursor_context
 from tslc.lsp.workspace import AuthoringWorkspace, WorkspaceSnapshot
+from tslc.version import package_version
 
 SEMANTIC_TOKEN_TYPES = (
     "function",
@@ -83,7 +84,7 @@ def lsp_diagnostic(diagnostic: Diagnostic, workspace: AuthoringWorkspace) -> typ
         message=message,
         severity=_severity(diagnostic.severity),
         code=diagnostic.code,
-        source="tslc",
+        source=f"tslc {package_version()}",
         related_information=related or None,
     )
 

@@ -25,6 +25,7 @@ Validate client changes with:
 npm test
 xvfb-run -a npm run test:integration
 npm run package
+npm run package:runtime  # when changing frozen-runtime/release behavior
 ```
 
 Use `npm run package:verified` for the combined unit/integration/package gate,

@@ -8,10 +8,41 @@ actions in `tslc`.
 The extension owns only process discovery, LSP transport, VS Code commands,
 configuration, syntax coloring, and preview presentation.
 
-## Contributor preview setup
+## Platform package installation
 
-The current extension is a contributor preview, not a self-contained
-Marketplace release. Install a package-supported Python (currently 3.14 or
+Platform-specific VSIX artifacts contain the matching frozen Python compiler,
+language server, grammar, render assets, and runtime dependencies. Installing
+one of these packages requires no separately managed Python, Node.js, repository
+checkout, or activation-time download:
+
+| VS Code target | Build host | Supported placement |
+| --- | --- | --- |
+| `linux-x64` | Ubuntu 22.04 x64 | local Linux, x64 SSH, devcontainer, and WSL extension hosts |
+| `linux-arm64` | Ubuntu 22.04 arm64 | local/remote glibc arm64 extension hosts |
+| `win32-x64` | Windows Server 2022 x64 | local Windows x64 extension hosts |
+| `darwin-x64` | macOS 15 Intel | local/remote Intel macOS extension hosts |
+| `darwin-arm64` | macOS 15 Apple silicon | local/remote Apple-silicon extension hosts |
+
+Alpine/musl and Windows arm64 are not advertised by this release matrix. The
+extension is a workspace extension: VS Code installs and runs the matching
+package in the extension host that can see the workspace. Consequently, a
+remote SSH/container/WSL session needs the Linux package on the remote side,
+not the Windows or macOS package used by the local UI.
+
+Every platform package contains `server/release-manifest.json` with the target,
+compiler and extension versions, source commit, build-tool versions, license
+inventory, and SHA-256/size entry for every runtime file. Activation validates
+the target, extension version, and executable presence before starting it. A
+broken packaged runtime produces a reinstall/matching-target error and is never
+silently replaced by an unrelated `tslc` from `PATH`. The selected compiler
+version and source commit are logged; the LSP server version and diagnostic
+source expose that same compiler version.
+CI also publishes a `.vsix.sha256` sidecar for whole-package verification.
+
+## Contributor setup and overrides
+
+The platform-neutral contributor VSIX deliberately remains available for
+compiler development. Install a package-supported Python (currently 3.14 or
 newer) and the compiler's editor extra in the environment where the VS Code
 extension host runs:
 
@@ -63,10 +94,33 @@ asking you to reload the VS Code window.
 packaging without installing the VSIX. The standalone `npm test` remains a
 strict stale-generated-file check for CI.
 
-Because the preview VSIX does not bundle Python, install
+Because the contributor VSIX does not bundle Python, install
 `tslc[editor]` on the remote/workspace side when using SSH, WSL, or a
 devcontainer. The extension is declared as a workspace extension so the server
 and explicit preview process see the same files as the compiler.
+
+To reproduce the platform package on the current supported build host:
+
+```bash
+python -m pip install -r editors/vscode-tsl/runtime-requirements.txt
+python -m pip install --no-deps -e ./tslc
+cd editors/vscode-tsl
+npm ci
+npm run package:runtime
+```
+
+The command freezes the compiler, generates the manifest/license/checksum
+inventory, removes Python environment variables for the runtime smoke, checks
+`--version`, rendered preview, diagnostics, hover, and completion, runs the
+client tests, packages with the matching VS Code `--target`, and verifies the
+VSIX contents and executable mode. PyInstaller is pinned because it freezes on
+the native host rather than cross-compiling. CI repeats this process on every
+advertised target; Linux x64 additionally runs the real extension host with an
+assertion that the bundled server was selected.
+
+Ordinary `npm run package` remains a contributor build and excludes any staged
+`server/` directory. Only `npm run package:runtime` opts that directory into a
+target-specific VSIX.
 
 ## Features and commands
 
@@ -282,9 +336,15 @@ changing generation defaults.
 Server discovery is deterministic:
 
 1. `tsl.server.command` plus the argv array in `tsl.server.args`;
-2. a future platform-matching bundled `server/<platform>-<arch>/tslc`;
+2. a manifest-validated platform-matching bundled
+   `server/<platform>-<arch>/tslc`;
 3. `tslc` on the extension-host `PATH`;
 4. `tsl.python -m tslc`.
+
+The last two fallbacks apply to the contributor package. A platform package
+with a manifest must use its matching executable unless an explicit override
+is configured; missing, mismatched, or stale packaged files are actionable
+installation errors.
 
 Preview/check/doctor/explorer analysis use `tsl.preview.command`, then the same bundled/PATH/
 configured-Python order. The client never parses a command as a shell string
@@ -328,25 +388,34 @@ probe reparses each changed overlay, reuses unchanged parsed documents and
 index fragments, and still performs deterministic complete-catalog validation.
 The code-action sample requests the ordinary no-fix path at a parsed catalog
 reference, including the compiler audit projection and LSP translation.
+The Linux x64 frozen-runtime smoke initialized the LSP process in 0.634 s and
+published the first complete-corpus diagnostics 4.913 s after `didOpen` in this
+container. That packaging measurement includes frozen-module loading and is
+recorded separately from the development thresholds above; it shows that the
+compiler corpus check, not executable startup, dominates cold packaged use.
 
 ## Troubleshooting
 
-- **Server not found:** run `tslc lsp --help` in the integrated terminal. If it
-  fails, install `tslc[editor]` there or configure `tsl.server.command` or
-  `tsl.python`.
+- **Packaged runtime is missing or mismatched:** reinstall the VSIX whose target
+  matches the workspace extension host. The TSL output channel names both the
+  packaged and actual host targets.
+- **Contributor server not found:** run `tslc lsp --help` in the integrated
+  terminal. If it fails, install `tslc[editor]` there or configure
+  `tsl.server.command` or `tsl.python`.
 - **Changes to `tslc` are not visible:** editable installs need a server
   restart; non-editable installs need the force-reinstall command above.
 - **Preview is refused:** save the `.tsl` document first. Version 1 never writes
   temporary source files or silently previews stale disk content.
 - **Preview or doctor fails:** inspect the **TSL** output channel and run
   `tslc doctor --profile <profile> --backend <backend>` in a terminal.
-- **Remote workspace:** install/configure the server on the remote extension
-  host, not only on the local UI machine.
+- **Remote workspace:** install the matching platform VSIX or configure the
+  contributor server on the remote extension host, not only on the local UI
+  machine.
 - **Protocol debugging:** logs go to stderr by default. `tslc lsp --log-file`
   accepts only paths below the workspace's `tslctmp/` directory so protocol
   stdout remains reserved for LSP frames.
 
-A future polished Marketplace release must bundle and smoke-test a
-self-contained server for every platform it claims to support and perform no
-activation-time downloads. Until such platform VSIX artifacts exist, the
-external Python requirement above is intentional and explicit.
+Platform artifacts are built independently because frozen Python applications
+are native to their build OS and architecture. Do not publish the contributor
+VSIX as a platform fallback: it intentionally retains the documented external
+runtime contract.

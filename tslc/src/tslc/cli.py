@@ -15,6 +15,7 @@ from tslc.output.verify import BuildVerificationReport
 from tslc.output.verify_model import BackendToolchain
 from tslc.pipeline import GenerationResult
 from tslc.project_config import ProjectConfig, load_project_config
+from tslc.version import package_version
 
 if TYPE_CHECKING:
     from tslc.output.summary import ProfileValueTestSummary
@@ -42,9 +43,13 @@ _COMMANDS = (
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     # Preserve the original flat generation surface for scripts that already use it.
-    if arguments and arguments[0].startswith("-") and arguments[0] not in ("-h", "--help"):
+    if arguments and arguments[0].startswith("-") and arguments[0] not in (
+        "-h",
+        "--help",
+        "--version",
+    ):
         return _generation_main(arguments, use_project_config=False)
-    if not arguments or arguments[0] in ("-h", "--help"):
+    if not arguments or arguments[0] in ("-h", "--help", "--version"):
         _root_parser().parse_args(arguments)
         return 0
     command, rest = arguments[0], arguments[1:]
@@ -100,6 +105,11 @@ def _root_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="tslc",
         description="Validate, inspect, compile, and verify TSL source data.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {package_version()}",
     )
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
     descriptions = {

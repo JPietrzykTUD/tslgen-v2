@@ -20,6 +20,8 @@ Modes:
   ./${self} analyze    analyze ONE specialization and active call closure (no compiler needed)
   ./${self} editor-install
                        test, package, and install the local VS Code extension
+  ./${self} editor-package-runtime
+                       freeze, smoke-test, and package this host's platform VSIX
   ./${self} check      validate the complete TSL corpus without rendering
   ./${self} doctor     probe selected backend/profile toolchains and runners
   ./${self} list       list catalog entries
@@ -40,6 +42,7 @@ and --backends for the existing tree, e.g.:
   ./${self} preview --primitive add --profile avx2 --type si32 --backend cpp
   ./${self} analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
   ./${self} editor-install
+  ./${self} editor-package-runtime
   ./${self} ratchet --update
   ./${self} benchmark-ratchet --update
   ./${self} dump    --stage segments --primitive add
@@ -61,9 +64,9 @@ EOF
 mode="build"
 if (( $# > 0 )); then
   case "$1" in
-    generate|build|test|document|document-site|explain|preview|analyze|editor-install|check|doctor|list|show|audit|ratchet|benchmark-ratchet|dump) mode="$1"; shift ;;
+    generate|build|test|document|document-site|explain|preview|analyze|editor-install|editor-package-runtime|check|doctor|list|show|audit|ratchet|benchmark-ratchet|dump) mode="$1"; shift ;;
     -h|--help|help) usage; exit 0 ;;
-    *) echo "usage: $0 [generate|build|test|document|document-site|explain|preview|analyze|editor-install|check|doctor|list|show|audit|ratchet|benchmark-ratchet|dump] [extra flags...]" >&2; exit 2 ;;
+    *) echo "usage: $0 [generate|build|test|document|document-site|explain|preview|analyze|editor-install|editor-package-runtime|check|doctor|list|show|audit|ratchet|benchmark-ratchet|dump] [extra flags...]" >&2; exit 2 ;;
   esac
 fi
 extra_args=("$@")
@@ -136,6 +139,10 @@ case "$mode" in
   editor-install)
     cd editors/vscode-tsl
     exec npm run install:local -- "${extra_args[@]}"
+    ;;
+  editor-package-runtime)
+    cd editors/vscode-tsl
+    exec npm run package:runtime -- "${extra_args[@]}"
     ;;
   explain) exec python -m tslc explain "${extra_args[@]}" ;;
   preview) exec python -m tslc preview "${extra_args[@]}" ;;

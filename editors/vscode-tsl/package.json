@@ -7,7 +7,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/JPietrzykTUD/tslgen-v99.git",
+    "url": "https://github.com/JPietrzykTUD/tslgen-v2.git",
     "directory": "editors/vscode-tsl"
   },
   "engines": {
@@ -332,6 +332,9 @@
     "test:integration": "npm run compile && node scripts/run-integration.mjs",
     "test": "npm run check:grammar && npm run compile && npm run test:unit",
     "package:vsix": "vsce package --no-dependencies --out ../../tslctmp/tsl-language-support.vsix",
+    "build:server": "python scripts/runtime_bundle.py",
+    "smoke:server": "python scripts/smoke_bundled_server.py",
+    "package:runtime": "npm run build:server && npm run smoke:server && npm run test && node scripts/package-runtime.mjs",
     "package": "npm run test && npm run package:vsix",
     "package:verified": "bash scripts/install-local.sh --package-only",
     "install:local": "bash scripts/install-local.sh"

@@ -35,9 +35,10 @@ from tslc.lsp.primitive_scaffold import (
 )
 from tslc.lsp.specialization_context import specialization_context
 from tslc.lsp.workspace import AuthoringWorkspace, WorkspaceSnapshot
+from tslc.version import package_version
 
 SERVER_NAME = "tslc"
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = package_version()
 _DEBOUNCE_SECONDS = 0.15
 SPECIALIZATION_CONTEXT_METHOD = "tsl/specializationContext"
 PRIMITIVE_SCAFFOLD_CHOICES_METHOD = "tsl/primitiveScaffoldChoices"

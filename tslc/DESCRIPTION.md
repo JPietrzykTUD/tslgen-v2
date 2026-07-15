@@ -96,6 +96,13 @@ retaining parseable overlay occurrence spans.
 combines the parsed cursor scope with the real selector to expose valid
 `(profile, extension, type)` slots to editor clients without duplicating source
 parsing or compatibility rules in TypeScript.
+[version.py](src/tslc/version.py) derives the installed distribution version
+used by `tslc --version`, LSP server metadata, and diagnostic sources. The
+platform-specific editor release freezes this same CLI/LSP entry point and its
+package assets; its release manifest records that compiler version, the
+extension version, source commit, build tools, licenses, and every runtime file
+checksum. The TypeScript client validates only distribution facts and process
+placement, never compiler semantics.
 [lsp/primitive_scaffold.py](src/tslc/lsp/primitive_scaffold.py) likewise owns
 catalog-backed primitive-shape discovery, default parameter-name selection,
 name validation, and source scaffolding; the client only presents choices and

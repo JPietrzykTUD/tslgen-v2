@@ -12,3 +12,5 @@ syntaxes/*.template.json
 tsconfig.json
 esbuild.mjs
 package-lock.json
+runtime-requirements.txt
+server/**

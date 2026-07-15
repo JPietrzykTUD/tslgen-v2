@@ -14,3 +14,4 @@ test-sort/build*/
 node_modules/
 .vscode-test/
 editors/vscode-tsl/dist/
+editors/vscode-tsl/server/

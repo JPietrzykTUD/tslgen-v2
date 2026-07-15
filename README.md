@@ -53,8 +53,9 @@ tslc doctor --profile scalar
 The checked-in `tslc.toml` supplies corpus, profile, backend, and scratch-output
 defaults. See the [command-line tools guide](docs/tslc-cli.md) for validation,
 discovery, generation, inspection, audit, coverage, and configuration commands.
-For unsaved diagnostics, navigation, completion, and explicit specialization
-preview, see the [TSL editor guide](docs/tsl-editor.md).
+For unsaved diagnostics, navigation, completion, explicit specialization
+preview, and self-contained platform VSIX packages, see the
+[TSL editor guide](docs/tsl-editor.md).
 
 Generate and verify a small C++/Rust project:
 

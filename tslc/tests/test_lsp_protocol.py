@@ -11,6 +11,8 @@ import sys
 import time
 from typing import Any, BinaryIO, Callable
 
+from tslc.version import package_version
+
 
 class _LspClient:
     def __init__(self, process: subprocess.Popen[bytes]) -> None:
@@ -103,6 +105,10 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         )
         initialized = client.read_until(lambda item: item.get("id") == 1)
         assert "result" in initialized, initialized
+        assert initialized["result"]["serverInfo"] == {
+            "name": "tslc",
+            "version": package_version(),
+        }
         capabilities = initialized["result"]["capabilities"]
         assert capabilities["hoverProvider"] is True
         assert capabilities["documentSymbolProvider"] is True
@@ -360,6 +366,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         )
         assert invalid["params"]["diagnostics"]
         invalid_diagnostic = invalid["params"]["diagnostics"][0]
+        assert invalid_diagnostic["source"] == f"tslc {package_version()}"
         client.send(
             {
                 "jsonrpc": "2.0",

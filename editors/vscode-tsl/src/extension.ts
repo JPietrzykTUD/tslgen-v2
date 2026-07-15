@@ -8,8 +8,10 @@ import {
 import { ConcreteAnalysisManager } from "./analysis";
 import type { ConcreteAnalysis } from "./analysisModel";
 import {
+  BundledRuntimeError,
   discoverCompiler,
   discoverServer,
+  type CommandSpec,
   type DiscoveryOptions,
 } from "./discovery";
 import { TslExplorer, type ExplorerPreviewSlot } from "./explorer";
@@ -28,8 +30,19 @@ let analysisManager: ConcreteAnalysisManager | undefined;
 let output: vscode.LogOutputChannel | undefined;
 let contextRef: vscode.ExtensionContext | undefined;
 let explorer: TslExplorer | undefined;
+let serverSource: string | undefined;
 
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
+export interface TslExtensionApi {
+  readonly activeServerSource: () => string | undefined;
+}
+
+export function activeServerSource(): string | undefined {
+  return serverSource;
+}
+
+export async function activate(
+  context: vscode.ExtensionContext,
+): Promise<TslExtensionApi> {
   contextRef = context;
   output = vscode.window.createOutputChannel("TSL", { log: true });
   const provider = new PreviewDocumentProvider();
@@ -65,6 +78,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
   await startServer();
+  return { activeServerSource };
 }
 
 async function openGuide(value: unknown): Promise<void> {
@@ -88,10 +102,12 @@ export async function deactivate(): Promise<void> {
     await running.stop();
   }
   contextRef = undefined;
+  serverSource = undefined;
 }
 
 async function restartServer(): Promise<void> {
   explorer?.setClient(undefined);
+  serverSource = undefined;
   if (client) {
     const running = client;
     client = undefined;
@@ -106,11 +122,17 @@ async function startServer(): Promise<void> {
     return;
   }
   const configuration = vscode.workspace.getConfiguration("tsl");
-  const command = await discoverServer({
-    ...discoveryBase(context),
-    explicitCommand: nonEmpty(configuration.get<string>("server.command")),
-    explicitArgs: configuration.get<string[]>("server.args", ["lsp", "--stdio"]),
-  });
+  let command: CommandSpec | undefined;
+  try {
+    command = await discoverServer({
+      ...discoveryBase(context),
+      explicitCommand: nonEmpty(configuration.get<string>("server.command")),
+      explicitArgs: configuration.get<string[]>("server.args", ["lsp", "--stdio"]),
+    });
+  } catch (error) {
+    showDiscoveryError("language server", error);
+    return;
+  }
   if (!command) {
     void vscode.window.showErrorMessage(
       "TSL language server was not found in this workspace environment. " +
@@ -118,7 +140,13 @@ async function startServer(): Promise<void> {
     );
     return;
   }
-  output?.info(`Starting TSL server from ${command.source}: ${command.command}`);
+  const runtime = command.runtime;
+  output?.info(
+    runtime
+      ? `Starting bundled TSL compiler ${runtime.compilerVersion} ` +
+          `for ${runtime.target} from commit ${runtime.sourceCommit}: ${command.command}`
+      : `Starting TSL server from ${command.source}: ${command.command}`,
+  );
   const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const serverOptions: ServerOptions = {
     command: command.command,
@@ -138,16 +166,21 @@ async function startServer(): Promise<void> {
   client = next;
   try {
     await next.start();
+    serverSource = command.source;
     explorer?.setClient(next);
   } catch (error) {
     if (client === next) {
       client = undefined;
     }
+    serverSource = undefined;
     explorer?.setClient(undefined);
     output?.error(`TSL language server failed to start: ${String(error)}`);
     void vscode.window.showErrorMessage(
-      "TSL language server failed to start. See the TSL output channel and verify " +
-        "that the selected environment contains tslc[editor].",
+      command.source === "bundled"
+        ? "The bundled TSL language server failed to start. See the TSL output " +
+            "channel and reinstall the matching platform VSIX."
+        : "TSL language server failed to start. See the TSL output channel and " +
+            "verify that the selected environment contains tslc[editor].",
     );
   }
 }
@@ -502,10 +535,16 @@ async function compilerCommand(uri: vscode.Uri) {
     return undefined;
   }
   const configuration = vscode.workspace.getConfiguration("tsl", uri);
-  const compiler = await discoverCompiler({
-    ...discoveryBase(context),
-    explicitCommand: nonEmpty(configuration.get<string>("preview.command")),
-  });
+  let compiler: CommandSpec | undefined;
+  try {
+    compiler = await discoverCompiler({
+      ...discoveryBase(context),
+      explicitCommand: nonEmpty(configuration.get<string>("preview.command")),
+    });
+  } catch (error) {
+    showDiscoveryError("compiler", error);
+    return undefined;
+  }
   if (!compiler) {
     void vscode.window.showErrorMessage(
       "A full tslc command is required for Preview, Check, and Doctor. " +
@@ -521,8 +560,19 @@ function discoveryBase(context: vscode.ExtensionContext): DiscoveryOptions {
   const configuration = vscode.workspace.getConfiguration("tsl");
   return {
     extensionPath: context.extensionPath,
+    expectedExtensionVersion: String(context.extension.packageJSON.version),
     python: nonEmpty(configuration.get<string>("python")),
   };
+}
+
+function showDiscoveryError(purpose: string, error: unknown): void {
+  const message =
+    error instanceof BundledRuntimeError
+      ? error.message
+      : `Could not discover the TSL ${purpose}: ${String(error)}`;
+  output?.error(message);
+  output?.show(true);
+  void vscode.window.showErrorMessage(message);
 }
 
 function nonEmpty(value: string | undefined): string | undefined {

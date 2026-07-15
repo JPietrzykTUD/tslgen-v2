@@ -149,10 +149,13 @@ python -m pip install -e './tslc[editor]'
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_lsp_*.py
 (cd editors/vscode-tsl && npm test)
 (cd editors/vscode-tsl && xvfb-run -a npm run test:integration)
+(cd editors/vscode-tsl && npm run package:runtime)
 ```
 
 Read `editors/vscode-tsl/AGENTS.md` before changing the client or generated
-TextMate grammar.
+TextMate grammar. Runtime packaging additionally requires the pinned
+`editors/vscode-tsl/runtime-requirements.txt`; build each advertised VSIX on its
+native OS/architecture because the freezer is not a cross-compiler.
 
 ## Scratch And Generated Output
 

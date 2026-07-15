@@ -9,7 +9,13 @@ suite("TSL extension", () => {
       "tsl-project.tsl-language-support",
     );
     assert.ok(extension);
-    await extension.activate();
+    const api = (await extension.activate()) as {
+      activeServerSource(): string | undefined;
+    };
+    const expectedServerSource = process.env.TSL_EXPECT_SERVER_SOURCE;
+    if (expectedServerSource) {
+      assert.equal(api.activeServerSource(), expectedServerSource);
+    }
 
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes("tsl.restartServer"));
