@@ -231,6 +231,8 @@ def _region(item: TsilRegionDescriptor) -> dict[str, object]:
     return {
         "kind": "region",
         "name": item.keyword,
+        "purpose": item.purpose,
+        "accepted_forms": list(item.accepted_forms),
         "body_shape": item.body_shape,
         "shell_validator": item.shell_validator,
     }

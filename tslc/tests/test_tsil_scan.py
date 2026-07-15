@@ -42,6 +42,13 @@ def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
     }
 
     assert len(descriptor_keywords) == len(set(descriptor_keywords))
+    assert all(descriptor.purpose.strip() for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS)
+    assert all(descriptor.accepted_forms for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS)
+    assert all(
+        form.strip()
+        for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS
+        for form in descriptor.accepted_forms
+    )
     assert len(REGION_LOWERING_REGISTRATIONS) == len(registration_keywords)
     assert KEYWORDS == TSIL_REGION_KEYWORDS
     assert registration_keywords == TSIL_REGION_KEYWORDS

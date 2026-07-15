@@ -21,17 +21,16 @@ only unfinished behavior. When a slice meets its exit criteria, remove that
 slice rather than preserving a completion log here. Git history and tests are
 the completion record.
 
-The next product milestone is **authoring depth**: complete, context-accurate
-hover and completion, followed by deeper navigation, semantic highlighting,
-and safe source actions. A self-contained Marketplace distribution is a later
-release gate and is deliberately separated from authoring behavior.
+The next product milestone is **authoring depth**: context-accurate completion,
+followed by deeper navigation, semantic highlighting, and safe source actions.
+A self-contained Marketplace distribution is a later release gate and is
+deliberately separated from authoring behavior.
 
 ## Target Outcome
 
 An author editing an incomplete `.tsl` document should be able to discover the
 language without memorizing compiler internals:
 
-- hover exposes the useful typed facts already known by the catalog;
 - completion proposes fields and values that are valid at the cursor, not just
   values that happen to be nearby in the file;
 - TSIL completion understands region shells, queries, and the current
@@ -75,7 +74,6 @@ These constraints apply to every slice in this plan:
 
 | Area | Remaining behavior | Main owner |
 | --- | --- | --- |
-| Hover | Primitive parameter names and declaration location; extension backend and activation facts; author-facing TSIL region forms and purpose; concise documentation links | Compiler catalog index and TSIL descriptors |
 | Outer/catalog completion | Top-level declarations, nested block fields, broad enum/boolean/backend values, duplicate-field suppression, and precise nested selector context | Compiler authoring context and vocabulary |
 | TSIL shell completion | Region-boundary awareness plus selector terms and named option bags for all registered regions | TSIL registry/descriptors and authoring vocabulary |
 | TSIL expression completion | Type/value query roots and continuations, primitive parameters, generic parameters, and named axes | Typed TSIL query rules and primitive scope |
@@ -127,12 +125,9 @@ rules.
 
 ### TSIL authoring descriptors
 
-Region hover and completion need author-facing metadata, not validator function
-names. Enrich the existing region descriptor boundary, or add one adjacent
-compiler-owned authoring descriptor, with:
+Region shell completion builds on the descriptor purpose and accepted forms
+already used by hover. Extend that same compiler-owned boundary with:
 
-- a short purpose statement;
-- accepted outer forms;
 - selector keys and closed selector values, when applicable;
 - named option-bag keys and closed option values, when applicable;
 - whether expressions, nested regions, or raw body text are accepted.
@@ -143,42 +138,14 @@ should fail during compiler testing and extension packaging.
 
 ## Ordered Slices
 
-The slices are ordered by authoring dependency. Slice 1 is independent. Slice 2
-creates the context foundation required by Slices 3 through 5. Slice 6 is the
-direct follow-up to the delivered catalog explorer and may proceed independently
-once its lowering-provenance vocabulary is defined. Slice 7 should wait until
-source-span behavior is stable. Slice 8 is a separate release track and must not
-block the authoring-depth milestone.
+The slices are ordered by authoring dependency. Slice 1 creates the context
+foundation required by Slices 2 through 4. Slice 5 is the direct follow-up to
+the delivered catalog explorer and may proceed independently once its
+lowering-provenance vocabulary is defined. Slice 6 should wait until source-span
+behavior is stable. Slice 7 is a separate release track and must not block the
+authoring-depth milestone.
 
-### Slice 1: Complete Typed Hover
-
-**Goal:** every supported hover target presents concise author-facing facts
-already available from the latest successful catalog index.
-
-**Work:**
-
-- Include primitive parameter names alongside the signature and brief
-  description.
-- Include the declaration source path and position as a navigable Markdown
-  link where the client supports it.
-- Include an extension's supported backend IDs and required target features or
-  compile modes, omitting empty sections.
-- Replace internal TSIL validator names with the region purpose and accepted
-  forms from the authoring descriptor.
-- Add one concise link to the declaration or relevant maintained guide instead
-  of copying long documentation into the hover.
-- Keep existing type-group member hover as regression-covered behavior.
-
-**Exit criteria:**
-
-- Exact Markdown tests cover primitives, extensions, type groups, and every
-  registered TSIL region.
-- Missing optional facts produce clean omission, not placeholders or `None`.
-- Hover output is deterministic and contains no internal callable names.
-- A test proves hover uses only the supplied index and starts no check,
-  selection, lowering, rendering, or subprocess path.
-
-### Slice 2: Parsed Cursor Context And Catalog Completion
+### Slice 1: Parsed Cursor Context And Catalog Completion
 
 **Goal:** outer-language completion is driven by the syntactic role at the
 cursor, including incomplete documents.
@@ -218,7 +185,7 @@ cursor, including incomplete documents.
 - The incomplete-line fallback is conservative and cannot reinterpret a
   successfully parsed surrounding block.
 
-### Slice 3: Complete TSIL Region-Shell Completion
+### Slice 2: Complete TSIL Region-Shell Completion
 
 **Goal:** completion inside a TSIL body understands registered region
 boundaries and each region's accepted shell.
@@ -247,7 +214,7 @@ boundaries and each region's accepted shell.
 - Generated TextMate keyword checks and semantic completion derive from the
   same registered region inventory.
 
-### Slice 4: TSIL Queries And Primitive Scope
+### Slice 3: TSIL Queries And Primitive Scope
 
 **Goal:** expression completion exposes compiler-known query paths and names in
 the current primitive without attempting target-language analysis.
@@ -273,7 +240,7 @@ the current primitive without attempting target-language analysis.
 - Raw C++/Rust identifiers are never offered or classified by this feature.
 - Completion remains a pure lookup against precomputed catalog/query facts.
 
-### Slice 5: Symbols, Navigation, And Semantic-Token Depth
+### Slice 4: Symbols, Navigation, And Semantic-Token Depth
 
 **Goal:** structural browsing and highlighting cover the same declarations and
 references recognized by the authoring model.
@@ -302,7 +269,7 @@ references recognized by the authoring model.
   classify raw target code as TSL semantics.
 - Existing primitive-call and extension navigation remains regression covered.
 
-### Slice 6: Explorer Concrete Analysis
+### Slice 5: Explorer Concrete Analysis
 
 **Goal:** enrich the catalog explorer with authoritative lowering and transitive
 dependency facts behind an explicit, cached analysis boundary.
@@ -344,7 +311,7 @@ dependency facts behind an explicit, cached analysis boundary.
 - Cancelling or failing analysis leaves the last valid catalog explorer usable.
 - No automatic edit, hover, selection, or refresh triggers concrete analysis.
 
-### Slice 7: Safe Compiler-Owned Code Actions
+### Slice 6: Safe Compiler-Owned Code Actions
 
 **Goal:** expose exact, source-located compiler suggestions as deliberate,
 undoable editor edits.
@@ -373,7 +340,7 @@ undoable editor edits.
 - VS Code integration tests prove edits are previewable/undoable and ordinary
   diagnostics remain non-mutating.
 
-### Slice 8: Self-Contained Marketplace Runtime
+### Slice 7: Self-Contained Marketplace Runtime
 
 **Goal:** make a public VS Code installation work without a separately managed
 Python or `tslc[editor]` environment.
@@ -474,10 +441,9 @@ catalog reconstruction before designing incremental promotion.
 
 ## Authoring-Depth Milestone Acceptance
 
-The authoring-depth milestone is complete when Slices 1 through 7 satisfy their
+The authoring-depth milestone is complete when Slices 1 through 6 satisfy their
 exit criteria and all of the following hold:
 
-- hover exposes complete concise facts without triggering compiler work;
 - completion is correct at top level, nested catalog blocks, TSIL boundaries,
   region shells, query paths, and primitive scope;
 - completion remains useful but conservative on the incomplete line;
@@ -516,5 +482,5 @@ Self-contained Marketplace distribution is accepted separately through Slice
   complete slot and corpus digest, label analyzed versus lookup facts, and
   invalidate rather than recompute implicitly after edits.
 - **Bundled Python multiplies platform and release risk.** Keep it isolated in
-  Slice 8, use a declared support matrix, build reproducibly, and retain the
+  Slice 7, use a declared support matrix, build reproducibly, and retain the
   external runtime only as an explicit override.

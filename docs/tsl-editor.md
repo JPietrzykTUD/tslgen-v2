@@ -141,6 +141,14 @@ already invalid, the server seeds catalog facts and definitions from the valid
 saved corpus and combines them with any parseable occurrence spans in the
 overlay, so navigation does not begin empty.
 
+Hover is a concise typed catalog projection. Primitive hover lists every
+declaration signature with parameter names, its brief description when present,
+and a source link. Extension hover reports family, inheritance, width, supported
+backends, required target features and compile modes while omitting absent
+facts. Type groups retain their member list and declaration link. Registered
+TSIL regions show their compiler-owned purpose and accepted source forms, then
+link to the maintained TSIL guide; internal validator names are never exposed.
+
 **TSL: Add New Primitive** is a guided, compiler-backed source edit. Its first
 QuickPick contains the distinct primitive signature shapes in the current
 catalog. Each entry includes default parameter names chosen from the most

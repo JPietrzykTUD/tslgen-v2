@@ -170,9 +170,15 @@ def test_catalog_list_and_show_have_stable_json(
     shown = json.loads(capsys.readouterr().out)
     assert status == 0
     assert shown == {
+        "accepted_forms": [
+            "intrin<name>(args)",
+            "intrin<base, build>(args)",
+            "intrin<base, build[modifier=value, ...]>(args)",
+        ],
         "body_shape": "call",
         "kind": "region",
         "name": "intrin",
+        "purpose": "Invoke a target intrinsic.",
         "shell_validator": "intrin_selector",
     }
 

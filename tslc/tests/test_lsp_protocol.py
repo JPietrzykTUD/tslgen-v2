@@ -286,7 +286,9 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
             }
         )
         hovered = client.read_until(lambda item: item.get("id") == 2)
-        assert "primitive add" in hovered["result"]["contents"]["value"]
+        hover_markdown = hovered["result"]["contents"]["value"]
+        assert "**Primitive** `add`" in hover_markdown
+        assert "`prim<v:=(v,v)> add(left, right)`" in hover_markdown
 
         client.send(
             {

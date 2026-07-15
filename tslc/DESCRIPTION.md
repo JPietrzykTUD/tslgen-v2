@@ -206,14 +206,16 @@ is ordinary target text and is never searched or rewritten, including in comment
 literals, and Rust lifetimes.
 
 The descriptor registry
-([ir/region_registry.py](src/tslc/ir/region_registry.py)) is the lexical source
-of truth consumed by scanning and shell validation. The typed lower-owned
+([ir/region_registry.py](src/tslc/ir/region_registry.py)) is the lexical and
+authoring source of truth consumed by scanning, shell validation, discovery,
+and editor hover. Each descriptor carries a concise purpose and accepted source
+forms in addition to its structural and validator keys. The typed lower-owned
 registration
 ([lower/region_handlers/registry.py](src/tslc/lower/region_handlers/registry.py))
 joins each keyword's handler factory with its implementation-state effect, so
 lowering and state classification cannot drift into parallel keyword lists.
 Together they cover `complete`, `intrin`, `helper`, `op`, `call`, `value`,
-`type`, `cast`, `var`, `let`, `mask`, `mem`, `lanes`, `io`, `if`,
+`type`, `cast`, `var`, `let`, `mask`, `mem`, `lanes`, `array`, `io`, `if`,
 `select_expr`, `loop`, `switch`, and `assume_aligned`. **A call-shaped keyword
 grows by adding a lexical descriptor, its owned validator when needed, and one
 lowering registration row. A genuinely new structural body shape also adds one

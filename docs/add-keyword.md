@@ -128,15 +128,37 @@ tslc/src/tslc/ir/region_registry.py
 Add one descriptor:
 
 ```python
-TsilRegionDescriptor("helper", shell_validator="helper_selector")
+TsilRegionDescriptor(
+    "helper",
+    "Invoke a compiler-owned helper.",
+    (
+        "helper<name>(args)",
+        "helper<name, template_arg, ...>(args)",
+    ),
+    shell_validator="helper_selector",
+)
 ```
 
 Use a body shape only for structural regions:
 
 ```python
-TsilRegionDescriptor("loop", body_shape="loop_block")
-TsilRegionDescriptor("switch", body_shape="switch_block")
+TsilRegionDescriptor(
+    "loop",
+    "Emit or expand a loop.",
+    ("loop<backend>(var, start, end, step) { body }",),
+    body_shape="loop_block",
+)
+TsilRegionDescriptor(
+    "switch",
+    "Emit compile-time selection.",
+    ("switch<compile>(selector) { arms }",),
+    body_shape="switch_block",
+)
 ```
+
+The purpose and accepted forms are required author-facing facts. Hover and
+future shell completion consume them directly, so describe source syntax rather
+than validator or lowering implementation names.
 
 The descriptor tuple is the closed keyword vocabulary.
 
@@ -145,10 +167,11 @@ It drives:
 - `TSIL_REGION_KEYWORDS`;
 - scanner recognition;
 - shell-validator lookup;
+- author-facing hover forms and purpose;
 - lowerer registration checks;
 - documentation tests.
 
-The descriptor owns lexical facts only.
+The descriptor owns lexical and author-facing syntax facts only.
 
 It must not import catalog or backend code.
 

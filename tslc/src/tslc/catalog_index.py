@@ -26,6 +26,9 @@ from tslc.syntax.ast import (
 )
 
 SymbolKind = Literal["primitive", "extension", "type-group", "region"]
+_TSIL_REGION_GUIDE = (
+    "https://github.com/JPietrzykTUD/tslgen-v2/blob/main/docs/tsil-keywords.md"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,7 +194,7 @@ def build_catalog_index(
             path: tuple(sorted(items, key=_occurrence_key))
             for path, items in sorted(by_path.items(), key=lambda item: item[0].as_posix())
         },
-        hover_text=_hover_text(catalog),
+        hover_text=_hover_text(catalog, definitions),
     )
 
 
@@ -399,29 +402,112 @@ def _source_span(source: ParsedTslSourceSpan) -> SourceSpan:
     )
 
 
-def _hover_text(catalog: Catalog) -> dict[tuple[SymbolKind, str], str]:
+def _hover_text(
+    catalog: Catalog,
+    definitions: Mapping[SymbolKind, Mapping[str, Iterable[SourceSpan]]],
+) -> dict[tuple[SymbolKind, str], str]:
     hover: dict[tuple[SymbolKind, str], str] = {}
     for name in sorted({primitive.name for primitive in catalog.primitives}):
         variants = catalog.primitives_named(name, unmasked=False)
-        signatures = sorted({primitive.signature for primitive in variants})
-        brief = next((primitive.brief_description for primitive in variants if primitive.brief_description), None)
-        text = f"primitive {name}: {', '.join(signatures)}"
-        hover[("primitive", name)] = f"{text}\n\n{brief}" if brief else text
+        declarations = {
+            (
+                primitive.signature,
+                primitive.parameters,
+                primitive.brief_description,
+                primitive.header_source,
+            )
+            for primitive in variants
+        }
+        lines = [f"**Primitive** `{name}`", "", "**Declarations**", ""]
+        for signature, parameters, brief, source in sorted(
+            declarations,
+            key=lambda item: (*_optional_span_key(item[3]), item[0], item[1]),
+        ):
+            declaration = f"prim<{signature}> {name}({', '.join(parameters)})"
+            line = f"- `{declaration}`"
+            if brief:
+                line += f" — {brief}"
+            if source is not None:
+                line += f" ([{source.path.name}:{source.line}]({_source_uri(source)}))"
+            lines.append(line)
+        hover[("primitive", name)] = "\n".join(lines)
     for name, extension in sorted(catalog.extensions.items()):
-        parts = [f"extension {name}", f"family: {extension.family}"]
+        parts = [f"**Extension** `{name}`"]
+        if extension.family:
+            parts.append(f"**Family:** `{extension.family}`")
         if extension.inherits:
-            parts.append(f"inherits: {extension.inherits}")
+            parts.append(f"**Inherits:** `{extension.inherits}`")
         if extension.vector_bits:
-            parts.append(f"width: {extension.vector_bits} bits")
+            width = f"{extension.vector_bits} bits"
+            if extension.vector_bits_kind:
+                width += f" (`{extension.vector_bits_kind}`)"
+            parts.append(f"**Width:** {width}")
+        elif extension.vector_bits_kind in {"scalable", "sized"}:
+            parts.append(f"**Width:** {extension.vector_bits_kind}")
+        backends = tuple(
+            sorted(
+                backend
+                for backend, supported in extension.backend_supported.items()
+                if supported
+            )
+        )
+        if backends:
+            parts.append(f"**Supported backends:** {_inline_code(backends)}")
+        target_features = tuple(sorted(extension.active_when.target_features))
+        if target_features:
+            parts.append(
+                f"**Required target features:** {_inline_code(target_features)}"
+            )
+        compile_modes = tuple(sorted(extension.active_when.compile_modes))
+        if compile_modes:
+            parts.append(f"**Required compile modes:** {_inline_code(compile_modes)}")
+        if extension.source is not None:
+            parts.append(
+                f"[Declaration: {extension.source.path.name}:{extension.source.line}]"
+                f"({_source_uri(extension.source)})"
+            )
         hover[("extension", name)] = "\n\n".join(parts)
     for name, members in sorted(catalog.type_groups.items()):
-        hover[("type-group", name)] = f"type group {name}: {', '.join(members)}"
+        parts = [f"**Type group** `{name}`", _inline_code(members)]
+        declaration_links = _declaration_links(
+            definitions["type-group"].get(name, ())
+        )
+        if declaration_links:
+            parts.append(f"**Declared at:** {', '.join(declaration_links)}")
+        hover[("type-group", name)] = "\n\n".join(parts)
     for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS:
-        details = [f"TSIL region {descriptor.keyword}", f"shape: {descriptor.body_shape}"]
-        if descriptor.shell_validator:
-            details.append(f"selector: {descriptor.shell_validator}")
-        hover[("region", descriptor.keyword)] = "\n\n".join(details)
+        forms = "\n".join(f"- `{form}`" for form in descriptor.accepted_forms)
+        guide = f"{_TSIL_REGION_GUIDE}#{descriptor.keyword}"
+        hover[("region", descriptor.keyword)] = "\n\n".join(
+            (
+                f"**TSIL region** `{descriptor.keyword}`",
+                descriptor.purpose,
+                f"**Accepted forms**\n\n{forms}",
+                f"[TSIL region guide]({guide})",
+            )
+        )
     return hover
+
+
+def _optional_span_key(span: SourceSpan | None) -> tuple[str, int, int]:
+    if span is None:
+        return ("", 0, 0)
+    return (span.path.as_posix(), span.line, span.column)
+
+
+def _source_uri(span: SourceSpan) -> str:
+    return f"{span.path.resolve().as_uri()}#L{span.line},{span.column}"
+
+
+def _declaration_links(spans: Iterable[SourceSpan]) -> tuple[str, ...]:
+    return tuple(
+        f"[{span.path.name}:{span.line}]({_source_uri(span)})"
+        for span in _sorted_spans(spans)
+    )
+
+
+def _inline_code(values: Iterable[str]) -> str:
+    return ", ".join(f"`{value}`" for value in values)
 
 
 def _definitions(index: CatalogIndex, kind: SymbolKind) -> Mapping[str, tuple[SourceSpan, ...]]:
