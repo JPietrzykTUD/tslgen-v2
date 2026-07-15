@@ -1003,14 +1003,42 @@ prim<v:=(v)> abs(data):
             complete(cast<bitcast>(base::in, bits & (all_bits >> 1)));
           """
     avx512:
-      si64:
+      [si8, si16]:
+        requires [avx512f, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<abs, build[suffix=base::in]>(data));"
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      [si32, si64]:
         requires [avx512f]
         safety:
           internal_unsafe true
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(intrin<_mm512_abs_epi64>(data));"
+          tsil "complete(intrin<abs, build[suffix=base::in]>(data));"
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
       ui?:
         requires [avx512f]
         safety:
@@ -1042,13 +1070,176 @@ prim<v:=(v)> abs(data):
           reasons []
         implementation:
           tsil """
-            var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
-            var<infer>(result, lanes);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
-            }
-            complete(call<primitive=from_array[Vec]>(result));
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(SBase, base::signed_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
+            var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
+            var<const_infer>(all_bits, call<primitive=set1[UVec]>(
+              cast<bitcast>(UBase, cast<static>(SBase, -1))
+            ));
+            var<const_infer>(magnitude_mask, call<primitive=shift_right[UVec, false]>(all_bits, 1));
+            complete(call<primitive=reinterpret[UVec, Vec]>(
+              call<primitive=binary_and[UVec]>(bits, magnitude_mask)
+            ));
           """
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    avx2:
+      [si8, si16, si32]:
+        requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<abs, build[suffix=base::in]>(data));"
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      si64:
+        requires [avx, avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(zero, call<primitive=set_zero[Vec]>());
+            var<const_infer>(negative, call<primitive=to_vector[Vec]>(
+              call<primitive=greater_than[Vec]>(zero, data)
+            ));
+            complete(call<primitive=sub[Vec]>(
+              call<primitive=binary_xor[Vec]>(data, negative),
+              negative
+            ));
+          """
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      f?:
+        requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(SBase, base::signed_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
+            var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
+            var<const_infer>(all_bits, call<primitive=set1[UVec]>(
+              cast<bitcast>(UBase, cast<static>(SBase, -1))
+            ));
+            var<const_infer>(magnitude_mask, call<primitive=shift_right[UVec, false]>(all_bits, 1));
+            complete(call<primitive=reinterpret[UVec, Vec]>(
+              call<primitive=binary_and[UVec]>(bits, magnitude_mask)
+            ));
+          """
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    sse:
+      [si8, si16, si32]:
+        requires [sse, sse2, ssse3]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<abs, build[suffix=base::in]>(data));"
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      f?:
+        requires:
+          f32 [sse]
+          f64 [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(SBase, base::signed_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
+            var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
+            var<const_infer>(all_bits, call<primitive=set1[UVec]>(
+              cast<bitcast>(UBase, cast<static>(SBase, -1))
+            ));
+            var<const_infer>(magnitude_mask, call<primitive=shift_right[UVec, false]>(all_bits, 1));
+            complete(call<primitive=reinterpret[UVec, Vec]>(
+              call<primitive=binary_and[UVec]>(bits, magnitude_mask)
+            ));
+          """
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    [avx2_vl, sse_vl]:
+      si64:
+        requires:
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<abs, build[suffix=base::in]>(data));"
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(lanes[i]);
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
     [avx2, sse, neon, wasm128]:
       ui?:
         requires:
@@ -1082,12 +1273,9 @@ prim<v:=(v)> abs(data):
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
+    [neon, wasm128]:
       f?:
         requires:
-          avx2 [avx]
-          sse:
-            f32 [sse]
-            f64 [sse, sse2]
           neon [neon]
           wasm128 [simd128]
         safety:

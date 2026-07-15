@@ -48,6 +48,55 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<alignr, build[suffix=base::signed_of(base::in)]>(left, right, count));"
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<infer>(result, right_lanes);
+              var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, i + offset);
+                if (source < value(vector::length)) { result[i] = right_lanes[source]; }
+                else { result[i] = left_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      [f32, f64]:
+        requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IBase, base::signed_of(base::in));
+            let<type>(IVec, vector::as_base(IBase));
+            var<const_infer>(left_bits, call<primitive=reinterpret[Vec, IVec]>(left));
+            var<const_infer>(right_bits, call<primitive=reinterpret[Vec, IVec]>(right));
+            var<const_infer>(aligned, intrin<alignr, build[suffix=IBase]>(
+              left_bits,
+              right_bits,
+              count
+            ));
+            complete(call<primitive=reinterpret[IVec, Vec]>(
+              aligned
+            ));
+          """
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<infer>(result, right_lanes);
+              var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, i + offset);
+                if (source < value(vector::length)) { result[i] = right_lanes[source]; }
+                else { result[i] = left_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
       arith:
         requires [avx512f]
         safety:
@@ -67,6 +116,68 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
+    [avx2_vl, sse_vl]:
+      [?i32, ?i64]:
+        requires:
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<alignr, build[suffix=base::signed_of(base::in)]>(left, right, count));"
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<infer>(result, right_lanes);
+              var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, i + offset);
+                if (source < value(vector::length)) { result[i] = right_lanes[source]; }
+                else { result[i] = left_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      [f32, f64]:
+        requires:
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IBase, base::signed_of(base::in));
+            let<type>(IVec, vector::as_base(IBase));
+            var<const_infer>(left_bits, call<primitive=reinterpret[Vec, IVec]>(left));
+            var<const_infer>(right_bits, call<primitive=reinterpret[Vec, IVec]>(right));
+            var<const_infer>(aligned, intrin<alignr, build[suffix=IBase]>(
+              left_bits,
+              right_bits,
+              count
+            ));
+            complete(call<primitive=reinterpret[IVec, Vec]>(
+              aligned
+            ));
+          """
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<infer>(result, right_lanes);
+              var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, i + offset);
+                if (source < value(vector::length)) { result[i] = right_lanes[source]; }
+                else { result[i] = left_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
     [avx2, sse, neon, wasm128]:
       arith:
         requires:

@@ -647,74 +647,74 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
-            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-            loop<backend, unroll>(i, 0, value(generic::length(IndicesType)), 1) {
-              result[i] = *(cast<reinterpret, type=const_ptr>(base::in, ptr_add(cast<reinterpret, type=const_ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale))));
+            let<type>(SignedBase, base::signed_of(base::in));
+            let<type>(LowVec, vector::as(avx2, base::in));
+            switch<compile>(scale) {
+              1 => {
+                var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
+                  index,
+                  cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
+                  1
+                ));
+                complete(call<primitive=insert[LowVec, Vec, 0]>(
+                  call<primitive=set_zero[Vec]>(), loaded
+                ));
+              }
+              2 => {
+                var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
+                  index,
+                  cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
+                  2
+                ));
+                complete(call<primitive=insert[LowVec, Vec, 0]>(
+                  call<primitive=set_zero[Vec]>(), loaded
+                ));
+              }
+              4 => {
+                var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
+                  index,
+                  cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
+                  4
+                ));
+                complete(call<primitive=insert[LowVec, Vec, 0]>(
+                  call<primitive=set_zero[Vec]>(), loaded
+                ));
+              }
+              8 => {
+                var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
+                  index,
+                  cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
+                  8
+                ));
+                complete(call<primitive=insert[LowVec, Vec, 0]>(
+                  call<primitive=set_zero[Vec]>(), loaded
+                ));
+              }
+              _ => {
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+                loop<backend, unroll>(i, 0, value(generic::length(IndicesType)), 1) {
+                  result[i] = *(cast<reinterpret, type=const_ptr>(base::in, ptr_add(cast<reinterpret, type=const_ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale))));
+                }
+                complete(call<primitive=from_array[Vec]>(result));
+              }
             }
-            complete(call<primitive=from_array[Vec]>(result));
           """
         variants:
-          intrinsic_gather:
+          scalar_lanes_fallback:
             safety:
               internal_unsafe true
-              reasons [intrinsic]
+              reasons [raw_pointer]
             tsil """
-              let<type>(SignedBase, base::signed_of(base::in));
-              let<type>(LowVec, vector::as(avx2, base::in));
-              switch<compile>(scale) {
-                1 => {
-                  var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
-                    index,
-                    cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
-                    1
-                  ));
-                  complete(call<primitive=insert[LowVec, Vec, 0]>(
-                    call<primitive=set_zero[Vec]>(), loaded
-                  ));
-                }
-                2 => {
-                  var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
-                    index,
-                    cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
-                    2
-                  ));
-                  complete(call<primitive=insert[LowVec, Vec, 0]>(
-                    call<primitive=set_zero[Vec]>(), loaded
-                  ));
-                }
-                4 => {
-                  var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
-                    index,
-                    cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
-                    4
-                  ));
-                  complete(call<primitive=insert[LowVec, Vec, 0]>(
-                    call<primitive=set_zero[Vec]>(), loaded
-                  ));
-                }
-                8 => {
-                  var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
-                    index,
-                    cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
-                    8
-                  ));
-                  complete(call<primitive=insert[LowVec, Vec, 0]>(
-                    call<primitive=set_zero[Vec]>(), loaded
-                  ));
-                }
-                _ => {
-                  var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
-                  var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                  loop<backend, unroll>(i, 0, value(generic::length(IndicesType)), 1) {
-                    result[i] = *(cast<reinterpret, type=const_ptr>(base::in, ptr_add(cast<reinterpret, type=const_ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale))));
-                  }
-                  complete(call<primitive=from_array[Vec]>(result));
-                }
+              var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+              var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+              loop<backend, unroll>(i, 0, value(generic::length(IndicesType)), 1) {
+                result[i] = *(cast<reinterpret, type=const_ptr>(base::in, ptr_add(cast<reinterpret, type=const_ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale))));
               }
+              complete(call<primitive=from_array[Vec]>(result));
             """
     clang_v128:
       [bword, dword]:
