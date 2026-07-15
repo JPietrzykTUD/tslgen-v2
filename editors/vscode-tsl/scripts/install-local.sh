@@ -51,5 +51,10 @@ if ! command -v "${code_bin}" >/dev/null 2>&1; then
   echo "Set CODE_BIN to the VS Code or VS Code Insiders CLI executable." >&2
   exit 1
 fi
+extension_id="tsl-project.tsl-language-support"
+if "${code_bin}" --list-extensions | grep -Fqx "${extension_id}"; then
+  echo "Removing the installed ${extension_id} so the same-version development build is replaced..."
+  "${code_bin}" --uninstall-extension "${extension_id}"
+fi
 "${code_bin}" --install-extension "${vsix_path}" --force
 echo "Installed ${vsix_path}. Reload the VS Code window to activate it."

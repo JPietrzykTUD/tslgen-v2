@@ -46,7 +46,7 @@ npm run package                       # writes ../../tslctmp/tsl-language-suppor
 
 Install the resulting VSIX with VS Code's **Extensions: Install from VSIX…**
 command. For the complete grammar/unit test, extension-host test, package, and
-force-install workflow, use one command from the repository root:
+verified reinstall workflow, use one command from the repository root:
 
 ```bash
 ./dev.sh editor-install

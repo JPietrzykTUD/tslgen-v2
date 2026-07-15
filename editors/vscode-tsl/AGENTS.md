@@ -29,4 +29,5 @@ npm run package
 
 Use `npm run package:verified` for the combined unit/integration/package gate,
 or `./dev.sh editor-install` from the repository root to run that gate and
-force-install the resulting VSIX through the configured `CODE_BIN`/`code` CLI.
+reinstall the resulting VSIX through the configured `CODE_BIN`/`code` CLI so a
+same-version contributor build replaces the installed copy.
