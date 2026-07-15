@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """Audit full-corpus implementation-variant benchmark coverage.
 
-Every selected C++ implementation variant must survive lowering and dependency
-closure, receive correctness facts and a typed workload scenario, and reach at
-least one emitted candidate set. Default-only shapes remain explicitly outside
-this gate and are inventoried as not applicable.
+The audit tracks whether each selected C++ implementation variant survives
+lowering and dependency closure, receives correctness facts and a typed workload
+scenario, and reaches an emitted candidate set. Newly introduced issue identities
+fail against a committed baseline; known gaps can be closed incrementally.
+Default-only shapes remain explicitly outside this gate and are inventoried as
+not applicable.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 
 from tslc.api import _ARITH_TYPE_TAGS, generate_project
 from tslc.benchmark.model import (
@@ -47,6 +50,27 @@ from tslc.sources import SourceLoader
 from tslc.syntax.parser import TslParser
 
 _INVENTORY = _REPO_ROOT / "coverage" / "benchmark-shape-inventory.md"
+_BASELINE = _REPO_ROOT / "coverage" / "benchmark-baseline.json"
+_BASELINE_VERSION = 1
+
+BenchmarkIssueKind = Literal[
+    "coverage-gap",
+    "inactive-authored-shape",
+    "selected-slot-skipped",
+    "selected-slot-missing-planner",
+    "emitted-without-candidates",
+    "candidate-without-coverage",
+]
+_ISSUE_KINDS = frozenset(
+    (
+        "coverage-gap",
+        "inactive-authored-shape",
+        "selected-slot-skipped",
+        "selected-slot-missing-planner",
+        "emitted-without-candidates",
+        "candidate-without-coverage",
+    )
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,14 +99,7 @@ class BenchmarkSlotKey:
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkCoverageIssue:
-    kind: Literal[
-        "coverage-gap",
-        "inactive-authored-shape",
-        "selected-slot-skipped",
-        "selected-slot-missing-planner",
-        "emitted-without-candidates",
-        "candidate-without-coverage",
-    ]
+    kind: BenchmarkIssueKind
     detail: str
     source_shape: SourceShapeKey
     slot: BenchmarkSlotKey | None = None
@@ -94,6 +111,37 @@ class BenchmarkCoverageIssue:
             () if self.slot is None else self.slot.sort_key(),
             self.detail,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkIssueKey:
+    """Stable issue identity; explanatory reason text is intentionally excluded."""
+
+    kind: BenchmarkIssueKind
+    source_shape: SourceShapeKey
+    slot: BenchmarkSlotKey | None = None
+
+    def sort_key(self) -> tuple[object, ...]:
+        return (
+            self.kind,
+            self.source_shape.sort_key(),
+            () if self.slot is None else self.slot.sort_key(),
+        )
+
+    @classmethod
+    def from_issue(cls, issue: BenchmarkCoverageIssue) -> BenchmarkIssueKey:
+        return cls(issue.kind, issue.source_shape, issue.slot)
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkIssueBaseline:
+    issues: tuple[BenchmarkIssueKey, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkIssueDiff:
+    new_issues: tuple[BenchmarkCoverageIssue, ...]
+    resolved_issues: tuple[BenchmarkIssueKey, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -441,6 +489,180 @@ def compute_benchmark_coverage_audit(
     )
 
 
+def benchmark_issue_baseline(
+    issues: tuple[BenchmarkCoverageIssue, ...],
+) -> BenchmarkIssueBaseline:
+    """Collapse current issues to their stable, reason-independent identities."""
+
+    keys = {BenchmarkIssueKey.from_issue(issue) for issue in issues}
+    return BenchmarkIssueBaseline(tuple(sorted(keys, key=BenchmarkIssueKey.sort_key)))
+
+
+def diff_benchmark_issues(
+    baseline: BenchmarkIssueBaseline,
+    current: tuple[BenchmarkCoverageIssue, ...],
+) -> BenchmarkIssueDiff:
+    """Report newly introduced and resolved strict issue identities."""
+
+    baseline_keys = frozenset(baseline.issues)
+    current_by_key = {
+        BenchmarkIssueKey.from_issue(issue): issue for issue in current
+    }
+    new_issues = tuple(
+        sorted(
+            (
+                issue
+                for key, issue in current_by_key.items()
+                if key not in baseline_keys
+            ),
+            key=BenchmarkCoverageIssue.sort_key,
+        )
+    )
+    resolved_issues = tuple(
+        sorted(
+            baseline_keys - current_by_key.keys(),
+            key=BenchmarkIssueKey.sort_key,
+        )
+    )
+    return BenchmarkIssueDiff(new_issues, resolved_issues)
+
+
+def serialize_issue_baseline(baseline: BenchmarkIssueBaseline) -> str:
+    """Render one compact JSON record per stable issue for reviewable diffs."""
+
+    records = [
+        json.dumps(_issue_key_record(issue), separators=(",", ":"))
+        for issue in sorted(baseline.issues, key=BenchmarkIssueKey.sort_key)
+    ]
+    lines = ["{", f'  "version": {_BASELINE_VERSION},', '  "issues": [']
+    for index, record in enumerate(records):
+        comma = "," if index + 1 < len(records) else ""
+        lines.append(f"    {record}{comma}")
+    lines.extend(("  ]", "}"))
+    return "\n".join(lines) + "\n"
+
+
+def deserialize_issue_baseline(text: str) -> BenchmarkIssueBaseline:
+    """Load and validate the deterministic benchmark issue baseline."""
+
+    payload: Any = json.loads(text)
+    if not isinstance(payload, dict) or payload.get("version") != _BASELINE_VERSION:
+        raise ValueError(
+            f"expected benchmark baseline version {_BASELINE_VERSION}"
+        )
+    records = payload.get("issues")
+    if not isinstance(records, list):
+        raise ValueError("benchmark baseline issues must be a list")
+    issues = tuple(_issue_key_from_record(record) for record in records)
+    if len(frozenset(issues)) != len(issues):
+        raise ValueError("benchmark baseline contains duplicate issue identities")
+    return BenchmarkIssueBaseline(
+        tuple(sorted(issues, key=BenchmarkIssueKey.sort_key))
+    )
+
+
+def _issue_key_record(issue: BenchmarkIssueKey) -> list[object]:
+    shape = issue.source_shape
+    shape_record: list[object] = [
+        shape.primitive_name,
+        shape.result_kind,
+        list(shape.param_kinds),
+        shape.mask_policy,
+    ]
+    slot = issue.slot
+    slot_record: list[object] | None = None
+    if slot is not None:
+        slot_record = [
+            slot.backend_id,
+            slot.profile_name,
+            slot.extension_name,
+            slot.type_tag,
+            [list(pair) for pair in slot.axis],
+            list(slot.variant_names),
+        ]
+    return [issue.kind, shape_record, slot_record]
+
+
+def _issue_key_from_record(record: object) -> BenchmarkIssueKey:
+    if not isinstance(record, list) or len(record) != 3:
+        raise ValueError("benchmark issue record must contain kind, shape, and slot")
+    kind_value, shape_value, slot_value = record
+    if not isinstance(kind_value, str) or kind_value not in _ISSUE_KINDS:
+        raise ValueError(f"unknown benchmark issue kind: {kind_value!r}")
+    if not isinstance(shape_value, list) or len(shape_value) != 4:
+        raise ValueError("benchmark issue shape must contain four fields")
+    primitive_name, result_kind, param_kinds_value, mask_policy = shape_value
+    if (
+        not isinstance(primitive_name, str)
+        or not isinstance(result_kind, str)
+        or not isinstance(param_kinds_value, list)
+        or not all(isinstance(value, str) for value in param_kinds_value)
+        or (mask_policy is not None and not isinstance(mask_policy, str))
+    ):
+        raise ValueError("benchmark issue shape contains invalid field types")
+    source_shape = SourceShapeKey(
+        primitive_name,
+        result_kind,
+        tuple(cast(list[str], param_kinds_value)),
+        mask_policy,
+    )
+    slot: BenchmarkSlotKey | None = None
+    if slot_value is not None:
+        if not isinstance(slot_value, list) or len(slot_value) != 6:
+            raise ValueError("benchmark issue slot must contain six fields")
+        (
+            backend_id,
+            profile_name,
+            extension_name,
+            type_tag,
+            axis_value,
+            variants_value,
+        ) = slot_value
+        scalar_values = (backend_id, profile_name, extension_name, type_tag)
+        if not all(isinstance(value, str) for value in scalar_values):
+            raise ValueError("benchmark issue slot contains invalid scalar fields")
+        if not isinstance(axis_value, list):
+            raise ValueError("benchmark issue slot axis must be a list")
+        axis: list[tuple[str, str]] = []
+        for pair in axis_value:
+            if (
+                not isinstance(pair, list)
+                or len(pair) != 2
+                or not all(isinstance(value, str) for value in pair)
+            ):
+                raise ValueError("benchmark issue slot contains an invalid axis")
+            axis.append((cast(str, pair[0]), cast(str, pair[1])))
+        if not isinstance(variants_value, list) or not all(
+            isinstance(value, str) for value in variants_value
+        ):
+            raise ValueError("benchmark issue slot variants must be strings")
+        slot = BenchmarkSlotKey(
+            cast(str, backend_id),
+            cast(str, profile_name),
+            source_shape,
+            cast(str, extension_name),
+            cast(str, type_tag),
+            tuple(axis),
+            tuple(cast(list[str], variants_value)),
+        )
+    return BenchmarkIssueKey(
+        cast(BenchmarkIssueKind, kind_value), source_shape, slot
+    )
+
+
+def _format_issue(issue: BenchmarkCoverageIssue) -> str:
+    where = ""
+    if issue.slot is not None:
+        where = (
+            f" [{issue.slot.profile_name}/{issue.slot.backend_id} "
+            f"{issue.slot.extension_name}/{issue.slot.type_tag}]"
+        )
+    return (
+        f"{issue.kind}: {shape_label(issue.source_shape)}{where}: "
+        f"{issue.detail}"
+    )
+
+
 def _split(value: str) -> tuple[str, ...]:
     return tuple(part.strip() for part in value.split(",") if part.strip())
 
@@ -449,15 +671,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="tslc-benchmark-coverage",
         description=(
-            "Require complete benchmark coverage for all selected "
+            "Reject new benchmark coverage issues for selected "
             "implementation variants."
         ),
     )
     parser.add_argument("--inventory", default=str(_INVENTORY))
+    parser.add_argument("--baseline", default=str(_BASELINE))
     parser.add_argument(
         "--update",
         action="store_true",
-        help="rewrite the deterministic shape inventory after a complete audit",
+        help="rewrite the deterministic issue baseline and shape inventory",
     )
     parser.add_argument("--sources", default=str(_DATA_ROOT))
     parser.add_argument("--machine-profiles", default=str(_PROFILES_PATH))
@@ -480,38 +703,57 @@ def main(argv: list[str] | None = None) -> int:
         for error in errors:
             print(f"  {error}", file=sys.stderr)
         return 2
-    if not audit.complete:
-        print(
-            f"benchmark coverage: {len(audit.issues)} strict issue(s) across "
-            f"{audit.selected_slots} selected variant slots",
-            file=sys.stderr,
-        )
-        for issue in audit.issues:
-            where = ""
-            if issue.slot is not None:
-                where = (
-                    f" [{issue.slot.profile_name}/{issue.slot.backend_id} "
-                    f"{issue.slot.extension_name}/{issue.slot.type_tag}]"
-                )
-            print(
-                f"  {issue.kind}: {shape_label(issue.source_shape)}{where}: "
-                f"{issue.detail}",
-                file=sys.stderr,
-            )
-        return 1
-
     rendered = render_benchmark_shape_inventory(audit)
     inventory_path = Path(args.inventory)
+    baseline_path = Path(args.baseline)
     if args.update:
         inventory_path.parent.mkdir(parents=True, exist_ok=True)
-        inventory_path.write_text(rendered)
+        baseline_path.parent.mkdir(parents=True, exist_ok=True)
+        inventory_path.write_text(rendered, encoding="utf-8")
+        baseline_path.write_text(
+            serialize_issue_baseline(benchmark_issue_baseline(audit.issues)),
+            encoding="utf-8",
+        )
         print(
             f"benchmark coverage: {audit.selected_slots} selected slots, "
-            f"{audit.candidate_sets} candidate sets, 0 gaps"
+            f"{audit.candidate_sets} candidate sets, "
+            f"{len(audit.issues)} known issues"
         )
         print(f"wrote inventory {inventory_path}")
+        print(f"wrote baseline {baseline_path}")
         return 0
-    if not inventory_path.exists() or inventory_path.read_text() != rendered:
+    if not baseline_path.exists():
+        print(
+            "benchmark coverage: committed issue baseline is missing; "
+            "run './dev.sh benchmark-ratchet --update'",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        baseline = deserialize_issue_baseline(
+            baseline_path.read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(
+            f"benchmark coverage: invalid issue baseline {baseline_path}: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+    diff = diff_benchmark_issues(baseline, audit.issues)
+    if diff.new_issues:
+        print(
+            f"benchmark coverage: {len(diff.new_issues)} new issue(s) across "
+            f"{audit.selected_slots} selected variant slots "
+            f"({len(audit.issues)} current, {len(baseline.issues)} baselined)",
+            file=sys.stderr,
+        )
+        for issue in diff.new_issues:
+            print(f"  {_format_issue(issue)}", file=sys.stderr)
+        return 1
+    if (
+        not inventory_path.exists()
+        or inventory_path.read_text(encoding="utf-8") != rendered
+    ):
         print(
             "benchmark coverage: committed shape inventory is missing or stale; "
             "run './dev.sh benchmark-ratchet --update'",
@@ -520,7 +762,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(
         f"benchmark coverage: {audit.selected_slots} selected slots, "
-        f"{audit.candidate_sets} candidate sets, 0 gaps; inventory current"
+        f"{audit.candidate_sets} candidate sets, {len(audit.issues)} known issues, "
+        f"{len(diff.resolved_issues)} resolved since baseline; evidence current"
     )
     return 0
 
@@ -532,7 +775,14 @@ if __name__ == "__main__":
 __all__ = (
     "BenchmarkCoverageAudit",
     "BenchmarkCoverageIssue",
+    "BenchmarkIssueBaseline",
+    "BenchmarkIssueDiff",
+    "BenchmarkIssueKey",
     "BenchmarkSlotKey",
     "audit_benchmark_coverage",
+    "benchmark_issue_baseline",
     "compute_benchmark_coverage_audit",
+    "deserialize_issue_baseline",
+    "diff_benchmark_issues",
+    "serialize_issue_baseline",
 )

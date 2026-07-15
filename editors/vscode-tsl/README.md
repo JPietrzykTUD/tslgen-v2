@@ -37,12 +37,16 @@ Commands:
 
 The TSLc sidebar contains Primitives, Specializations, and Dependencies views.
 Primitives can be scoped to the active file or the complete configured corpus.
+The **+** button in the Primitives title starts the guided primitive scaffold.
 Selecting a primitive shows profile/backend-specific extension and type slots,
-with available/total counts and an optional unavailable-only filter. Available
-slots navigate to their selected source implementation and can launch Preview
-without repeating slot QuickPicks. Dependencies shows direct authored Calls and
-Called By relationships. Icons are always accompanied by status text and
-tooltips.
+with available/total counts and an optional unavailable-only filter. The
+initial profile is the richest configured authoring profile; the profile title
+action can select another. Available slots navigate to their selected source
+implementation and can launch Preview without repeating slot QuickPicks.
+Overload choices include their callable parameters and signature, and stale
+rows are cleared when primitive/profile/backend context changes. Dependencies
+shows direct authored Calls and Called By relationships. Icons are always
+accompanied by status text and tooltips.
 
 Use `tsl.server.command`/`tsl.server.args` for an explicit server,
 `tsl.preview.command` for an explicit full compiler, or `tsl.python` for a

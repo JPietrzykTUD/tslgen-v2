@@ -26,7 +26,7 @@ Modes:
   ./${self} audit      audit source metadata
   ./${self} ratchet    coverage regression gate vs the committed baseline   (no compiler needed)
   ./${self} benchmark-ratchet
-                       require complete variant benchmark coverage/inventory (no compiler needed)
+                       reject new variant benchmark coverage gaps             (no compiler needed)
   ./${self} dump       dump one pipeline stage (catalog/segments/selection/lowered) (no compiler)
 
 Extra flags pass through after generator modes; document-site honors --output-root

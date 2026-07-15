@@ -23,6 +23,9 @@ SlotOrigin = Literal["authored", "broader", "inherited"]
 class ExplorerImplementation:
     """One selected source body that can satisfy an explorer slot."""
 
+    primitive: str
+    signature: str
+    parameters: tuple[str, ...]
     extension: str
     type_group: str
     selector_path: tuple[str, ...]
@@ -299,6 +302,9 @@ def _primitive_slots(
         implementation = item.implementation
         selected.setdefault(key, []).append(
             ExplorerImplementation(
+                primitive=item.primitive.name,
+                signature=item.primitive.signature,
+                parameters=item.primitive.parameters,
                 extension=implementation.extension,
                 type_group=implementation.type_group,
                 selector_path=implementation.selector_path,
@@ -377,6 +383,9 @@ def _unique_implementations(
 ) -> tuple[ExplorerImplementation, ...]:
     unique = {
         (
+            value.primitive,
+            value.signature,
+            value.parameters,
             value.extension,
             value.type_group,
             value.selector_path,
@@ -395,9 +404,19 @@ def _selected_profile(
 ) -> str:
     if requested in profiles:
         return requested or ""
-    for name in (*preferred, "scalar"):
-        if name in profiles:
-            return name
+    configured = tuple(name for name in preferred if name in profiles)
+    if configured:
+        # Start with a useful coverage matrix before the author explicitly
+        # selects a profile. Configuration order remains the stable tie-break.
+        return max(
+            configured,
+            key=lambda name: (
+                len(profiles[name].features) + len(profiles[name].compile_modes),
+                -configured.index(name),
+            ),
+        )
+    if "scalar" in profiles:
+        return "scalar"
     return min(profiles, default="")
 
 

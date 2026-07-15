@@ -4,6 +4,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import {
   countDescription,
   groupSlots,
+  implementationLabel,
   originDescription,
   type ExplorerLocation,
   type ExplorerPrimitive,
@@ -37,6 +38,9 @@ interface ExtensionElement {
 
 export interface SlotElement {
   readonly kind: "slot";
+  readonly primitive: string;
+  readonly profile: string;
+  readonly backend: string;
   readonly slot: ExplorerSlot;
 }
 
@@ -163,6 +167,7 @@ export class TslExplorer implements vscode.Disposable {
         const selected = event.selection[0];
         if (selected) {
           this.selectedPrimitive = selected.primitive.name;
+          this.beginPrimitiveRefresh(selected.primitive);
           void this.refresh();
         }
       }),
@@ -188,6 +193,7 @@ export class TslExplorer implements vscode.Disposable {
             "tsl.explorer.backend",
             this.backend,
           );
+          this.beginSelectedPrimitiveRefresh();
           this.scheduleRefresh();
         }
       }),
@@ -275,6 +281,7 @@ export class TslExplorer implements vscode.Disposable {
     this.scope = this.scope === "file" ? "corpus" : "file";
     await this.context.workspaceState.update("tsl.explorer.scope", this.scope);
     this.selectedPrimitive = undefined;
+    this.clearSelectedViews("Select a primitive in the Primitives view.");
     await this.refresh();
   }
 
@@ -288,6 +295,7 @@ export class TslExplorer implements vscode.Disposable {
     }
     this.profile = selected;
     await this.context.workspaceState.update("tsl.explorer.profile", selected);
+    this.beginSelectedPrimitiveRefresh();
     await this.refresh();
   }
 
@@ -301,6 +309,7 @@ export class TslExplorer implements vscode.Disposable {
     }
     this.backend = selected;
     await this.context.workspaceState.update("tsl.explorer.backend", selected);
+    this.beginSelectedPrimitiveRefresh();
     await this.refresh();
   }
 
@@ -358,13 +367,16 @@ export class TslExplorer implements vscode.Disposable {
     if (!element) {
       return;
     }
+    if (!(await this.isCurrentSlot(element))) {
+      return;
+    }
     if (!element.slot.available) {
       await this.showUnavailableReason(element);
       return;
     }
     const choices = element.slot.implementations.map((implementation) => ({
-      label: `${implementation.extension} / ${implementation.typeGroup}`,
-      description: implementation.selectorPath.join(" / "),
+      label: implementationLabel(implementation),
+      description: `${implementation.signature} • ${implementation.selectorPath.join(" / ")}`,
       detail: locationDescription(implementation.location),
       location: implementation.location,
     }));
@@ -384,7 +396,11 @@ export class TslExplorer implements vscode.Disposable {
 
   private async previewSlot(element?: SlotElement): Promise<void> {
     const primitive = this.selectedPrimitive;
-    if (!element?.slot.available || !primitive) {
+    if (
+      !element?.slot.available ||
+      !primitive ||
+      !(await this.isCurrentSlot(element))
+    ) {
       return;
     }
     const source =
@@ -407,12 +423,30 @@ export class TslExplorer implements vscode.Disposable {
   }
 
   private async showUnavailableReason(element?: SlotElement): Promise<void> {
-    if (!element) {
+    if (!element || !(await this.isCurrentSlot(element))) {
       return;
     }
     void vscode.window.showInformationMessage(
       element.slot.unavailableReason ?? "This specialization is unavailable.",
     );
+  }
+
+  private async isCurrentSlot(element: SlotElement): Promise<boolean> {
+    if (
+      element.primitive === this.selectedPrimitive &&
+      element.primitive === this.response.selectedPrimitive &&
+      element.profile === this.profile &&
+      element.profile === this.response.profile &&
+      element.backend === this.backend &&
+      element.backend === this.response.backend
+    ) {
+      return true;
+    }
+    this.output.warn(
+      `Ignored stale specialization row for ${element.primitive}; refreshing ${this.selectedPrimitive ?? "the explorer"}.`,
+    );
+    await this.refresh();
+    return false;
   }
 
   private updateViews(message?: string): void {
@@ -429,6 +463,11 @@ export class TslExplorer implements vscode.Disposable {
     const selected = this.response.primitives.find(
       (primitive) => primitive.name === this.selectedPrimitive,
     );
+    const selectionIsCurrent =
+      selected !== undefined &&
+      this.response.selectedPrimitive === selected.name &&
+      this.response.profile === this.profile &&
+      this.response.backend === this.backend;
     this.slotView.description = selected
       ? `${selected.name} • ${this.response.profile}/${this.response.backend}` +
         (this.onlyUnavailable ? " • unavailable only" : "") +
@@ -439,7 +478,13 @@ export class TslExplorer implements vscode.Disposable {
     this.slotView.message = selected
       ? undefined
       : "Select a primitive in the Primitives view.";
-    this.slots.set(this.response.slots, this.onlyUnavailable);
+    this.slots.set(
+      selectionIsCurrent ? this.response.slots : [],
+      this.onlyUnavailable,
+      selectionIsCurrent ? selected.name : undefined,
+      selectionIsCurrent ? this.response.profile : "",
+      selectionIsCurrent ? this.response.backend : "",
+    );
 
     this.dependencyView.description = selected
       ? `${selected.name} • direct authored calls${stale}`
@@ -448,6 +493,40 @@ export class TslExplorer implements vscode.Disposable {
       ? undefined
       : "Select a primitive in the Primitives view.";
     this.dependencies.set(selected);
+  }
+
+  private beginPrimitiveRefresh(primitive: ExplorerPrimitive): void {
+    const stale = this.response.stale ? " • last valid catalog" : "";
+    const profile = this.profile || this.response.profile;
+    const backend = this.backend || this.response.backend;
+    this.slotView.description =
+      `${primitive.name} • ${profile}/${backend}` + stale;
+    this.slotView.message = "Loading specializations…";
+    this.slots.set([], this.onlyUnavailable, undefined, "", "");
+    this.dependencyView.description =
+      `${primitive.name} • direct authored calls${stale}`;
+    this.dependencyView.message = undefined;
+    this.dependencies.set(primitive);
+  }
+
+  private beginSelectedPrimitiveRefresh(): void {
+    const selected = this.response.primitives.find(
+      (primitive) => primitive.name === this.selectedPrimitive,
+    );
+    if (selected) {
+      this.beginPrimitiveRefresh(selected);
+    } else {
+      this.clearSelectedViews("Select a primitive in the Primitives view.");
+    }
+  }
+
+  private clearSelectedViews(message: string): void {
+    this.slotView.description = undefined;
+    this.slotView.message = message;
+    this.slots.set([], this.onlyUnavailable, undefined, "", "");
+    this.dependencyView.description = undefined;
+    this.dependencyView.message = message;
+    this.dependencies.set(undefined);
   }
 }
 
@@ -496,10 +575,22 @@ class SlotTreeProvider
   readonly onDidChangeTreeData = this.changed.event;
   private groups: readonly ExtensionSlotGroup[] = [];
   private onlyUnavailable = false;
+  private primitive: string | undefined;
+  private profile = "";
+  private backend = "";
 
-  set(values: readonly ExplorerSlot[], onlyUnavailable: boolean): void {
+  set(
+    values: readonly ExplorerSlot[],
+    onlyUnavailable: boolean,
+    primitive: string | undefined,
+    profile: string,
+    backend: string,
+  ): void {
     this.groups = groupSlots(values, onlyUnavailable);
     this.onlyUnavailable = onlyUnavailable;
+    this.primitive = primitive;
+    this.profile = profile;
+    this.backend = backend;
     this.changed.fire();
   }
 
@@ -512,7 +603,17 @@ class SlotTreeProvider
       return this.groups.map((group) => ({ kind: "extension", group }));
     }
     if (element.kind === "extension") {
-      return element.group.slots.map((slot) => ({ kind: "slot", slot }));
+      const primitive = this.primitive;
+      if (!primitive) {
+        return [];
+      }
+      return element.group.slots.map((slot) => ({
+        kind: "slot",
+        primitive,
+        profile: this.profile,
+        backend: this.backend,
+        slot,
+      }));
     }
     return [];
   }

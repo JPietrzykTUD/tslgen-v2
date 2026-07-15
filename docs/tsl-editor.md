@@ -85,7 +85,10 @@ The TSLc Activity Bar container adds three native tree views:
 
 - **Primitives** lists primitive families from either the active `.tsl` file or
   the complete configured corpus. Each entry shows available/total slot counts
-  for the explorer's selected machine profile and backend.
+  for the explorer's selected machine profile and backend. Its **+** title
+  action starts the same guided **TSL: Add New Primitive** workflow used from
+  the editor. Until the author explicitly chooses a profile, the explorer uses
+  the configured authoring profile with the broadest feature/mode set.
 - **Specializations** groups the selected primitive's concrete type slots by
   extension. Its title actions choose profile/backend and toggle an
   unavailable-only coverage view. Available rows state whether their winning
@@ -98,11 +101,14 @@ The TSLc Activity Bar container adds three native tree views:
 
 Click an available specialization to navigate to the actual selected body. If
 more than one overload/attribute form contributes a winning body, a source
-QuickPick prevents an arbitrary jump. Slot context actions also provide **Go to
-Implementation** and **Preview Specialization**; preview receives the exact
-profile/backend/extension/type tuple from the tree and therefore opens no
-redundant slot selectors. An unavailable slot explains why it has no target
-rather than pretending to have a definition.
+QuickPick names the callable parameters and signature so it cannot be confused
+with another overload. Switching primitives clears the old specialization rows
+while the replacement projection loads, and slot actions reject stale rows.
+Slot context actions also provide **Go to Implementation** and **Preview
+Specialization**; preview receives the exact profile/backend/extension/type
+tuple from the tree and therefore opens no redundant slot selectors. An
+unavailable slot explains why it has no target rather than pretending to have a
+definition.
 
 Explorer refreshes use the latest compiler catalog index and profile selector;
 they do not scan target-language text, lower TSIL, render code, or start child

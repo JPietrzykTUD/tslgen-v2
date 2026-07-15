@@ -97,7 +97,8 @@
       },
       {
         "command": "tsl.addPrimitive",
-        "title": "TSL: Add New Primitive"
+        "title": "TSL: Add New Primitive",
+        "icon": "$(add)"
       },
       {
         "command": "tsl.explorer.refresh",
@@ -154,6 +155,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "tsl.addPrimitive",
+          "when": "view == tsl.primitives",
+          "group": "navigation@5"
+        },
         {
           "command": "tsl.explorer.toggleScope",
           "when": "view == tsl.primitives",

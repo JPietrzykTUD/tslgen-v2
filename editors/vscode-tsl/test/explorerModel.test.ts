@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   countDescription,
   groupSlots,
+  implementationLabel,
   originDescription,
+  type ExplorerImplementation,
   type ExplorerSlot,
 } from "../src/explorerModel";
 
@@ -69,6 +71,30 @@ describe("primitive explorer presentation", () => {
     assert.equal(
       countDescription(8, 10, true),
       "2 unavailable • 8/10 available",
+    );
+  });
+
+  it("identifies overloads in implementation choices", () => {
+    const implementation: ExplorerImplementation = {
+      primitive: "hmax",
+      signature: "s:=(m,v)",
+      parameters: ["mask", "vec"],
+      extension: "clang_v128",
+      typeGroup: "arith",
+      selectorPath: ["clang_v128", "arith"],
+      origin: "broader",
+      location: {
+        uri: "file:///workspace/horizontal.tsl",
+        range: {
+          start: { line: 10, character: 0 },
+          end: { line: 10, character: 1 },
+        },
+      },
+    };
+
+    assert.equal(
+      implementationLabel(implementation),
+      "hmax(mask, vec) • clang_v128 / arith",
     );
   });
 });

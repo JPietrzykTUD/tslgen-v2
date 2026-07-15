@@ -9,6 +9,13 @@ compiler and authoring-service boundaries are documented in
 language-server, preview, doctor, contributor install/package,
 grammar-generation, or primitive-scaffolding work.
 
+The native TSLc explorer is now part of that working baseline. It provides
+File/Corpus primitive discovery, profile/backend slot counts, an
+unavailable-only view, selected-implementation navigation and preview, and
+direct authored Calls/Called By relationships. Those lookup features remain
+separate from the unfinished concrete-analysis work below: `available` and
+`authored` do not yet imply a final native/composed/fallback verdict.
+
 This is the execution plan for the remaining editor work. It should contain
 only unfinished behavior. When a slice meets its exit criteria, remove that
 slice rather than preserving a completion log here. Git history and tests are
@@ -31,6 +38,9 @@ language without memorizing compiler internals:
   primitive's scope without interpreting raw target-language text;
 - symbols, definitions, references, and semantic tokens cover the same typed
   declarations and selectors;
+- an explicit explorer analysis can explain the lowered implementation state
+  and active transitive dependency closure for one concrete slot without
+  slowing ordinary explorer refreshes;
 - safe, source-located compiler suggestions can become explicit, undoable
   editor actions;
 - ordinary lookup requests remain memory-only and fast.
@@ -133,11 +143,12 @@ should fail during compiler testing and extension packaging.
 
 ## Ordered Slices
 
-The slices are ordered by dependency. Slice 1 is independent. Slice 2 creates
-the context foundation required by Slices 3 through 5. Slice 6 is the remaining
-explicit-analysis part of the delivered catalog explorer. Slice 7 should wait
-until source-span behavior is stable. Slice 8 is a separate release track and
-must not block the authoring-depth milestone.
+The slices are ordered by authoring dependency. Slice 1 is independent. Slice 2
+creates the context foundation required by Slices 3 through 5. Slice 6 is the
+direct follow-up to the delivered catalog explorer and may proceed independently
+once its lowering-provenance vocabulary is defined. Slice 7 should wait until
+source-span behavior is stable. Slice 8 is a separate release track and must not
+block the authoring-depth milestone.
 
 ### Slice 1: Complete Typed Hover
 
@@ -298,18 +309,38 @@ dependency facts behind an explicit, cached analysis boundary.
 
 **Work:**
 
-- Add an explicit cancellable concrete analysis action for lowering verdicts,
-  transitive call dependencies, and final native/composed/fallback/unknown
-  state.
-- Cache analysis by input digest, primitive, profile, and backend, and label
-  cached results stale after relevant edits.
+- Define compiler-owned typed provenance for native, composed, fallback, and
+  unknown outcomes. Derive it from selection, lowering, and dependency
+  propagation; never infer it by scanning raw implementation text in the
+  extension.
+- Add an explicit **Analyze Concrete Specialization** action on a slot. Reuse
+  the explorer's primitive/profile/backend/extension/type context, show
+  cancellable progress, and require no redundant prompts when the context is
+  already complete.
+- Report the active transitive call closure for that lowered specialization,
+  including unresolved or failed dependencies with a concise reason. Keep it
+  distinct from the existing direct authored Calls/Called By graph, which may
+  include branches inactive for the selected slot.
+- Present the verdict and dependency tree in an analyzed-result node or detail
+  view. Include textual labels and tooltips in addition to icons, and make each
+  resolved dependency navigable to its selected implementation.
+- Cache results by corpus/input digest, primitive, profile, backend, extension,
+  and type. Reuse a valid result across view refreshes and mark it stale, rather
+  than silently recomputing it, after a relevant edit or configuration change.
 - Keep the existing slot-origin and direct Calls/Called By views independent of
   concrete lowering.
 
 **Exit criteria:**
 
-- Concrete state is labelled analyzed and never confused with authored or
-  selected availability.
+- Concrete state is labelled `analyzed` and never confused with authored
+  selector origin or selected availability; tests cover all four verdicts.
+- The dependency tree represents only the active lowered specialization,
+  detects cycles deterministically, and preserves actionable unresolved-edge
+  diagnostics.
+- The command uses the slot already selected in the explorer and never asks for
+  profile, backend, extension, or type again.
+- Repeating an unchanged analysis is served from the complete-context cache;
+  changing any cache dimension cannot reuse the old verdict.
 - Cancelling or failing analysis leaves the last valid catalog explorer usable.
 - No automatic edit, hover, selection, or refresh triggers concrete analysis.
 
@@ -428,8 +459,13 @@ current full-corpus semantics and measure after each authoring slice.
 - edited-document diagnostics after debounce: p95 below 750 milliseconds;
 - hover, completion, definition, references, symbols, and semantic tokens from
   a ready index: p95 below 100 milliseconds;
+- explorer refresh for an unchanged catalog/profile/backend projection: p95
+  below 100 milliseconds; selecting an uncached profile/backend projection:
+  p95 below 750 milliseconds;
 - explicit specialization preview/check/doctor result: normally below 5
-  seconds, remaining cancellable and outside lookup requests.
+  seconds, remaining cancellable and outside lookup requests;
+- explicit explorer concrete analysis: normally below 5 seconds for one slot,
+  remaining cancellable and never running as a refresh side effect.
 
 Record the corpus size and measurement command when changing a threshold. If a
 lookup exceeds its budget, profile context construction and index shape first.
@@ -448,6 +484,9 @@ exit criteria and all of the following hold:
 - all compiler-owned completion inventories have consistency/drift tests;
 - symbols, navigation, references, and semantic tokens use the same typed
   declarations and source spans;
+- explorer analysis distinguishes final lowering state from selector origin,
+  exposes the active transitive dependency closure, and remains explicit and
+  cancellable;
 - every automatic edit is explicit, source-located, version-checked, and
   undoable;
 - ordinary editing remains free of rendering, builds, tests, network access,
@@ -473,6 +512,9 @@ Self-contained Marketplace distribution is accepted separately through Slice
 - **More feature detail can regress latency.** Precompute immutable index facts,
   keep request handlers lookup-only, and measure against the guardrails before
   adding caching layers.
+- **Concrete explorer results can become stale or misleading.** Key them by the
+  complete slot and corpus digest, label analyzed versus lookup facts, and
+  invalidate rather than recompute implicitly after edits.
 - **Bundled Python multiplies platform and release risk.** Keep it isolated in
   Slice 8, use a declared support matrix, build reproducibly, and retain the
   external runtime only as an explicit override.

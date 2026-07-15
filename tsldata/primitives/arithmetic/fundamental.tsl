@@ -1186,15 +1186,11 @@ prim<v:=(v)> abs(data):
           tsil """
             let<type>(UBase, base::unsigned_of(base::in));
             let<type>(SBase, base::signed_of(base::in));
-            let<type>(UVec, vector::as_base(UBase));
-            var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
-            var<const_infer>(all_bits, call<primitive=set1[UVec]>(
-              cast<bitcast>(UBase, cast<static>(SBase, -1))
+            var<const_infer>(all_bits, cast<bitcast>(UBase, cast<static>(SBase, -1)));
+            var<const_infer>(magnitude_mask, call<primitive=set1[Vec]>(
+              cast<bitcast>(base::in, all_bits >> 1)
             ));
-            var<const_infer>(magnitude_mask, call<primitive=shift_right[UVec, false]>(all_bits, 1));
-            complete(call<primitive=reinterpret[UVec, Vec]>(
-              call<primitive=binary_and[UVec]>(bits, magnitude_mask)
-            ));
+            complete(call<primitive=binary_and[Vec]>(data, magnitude_mask));
           """
         variants:
           scalar_lanes_fallback:
@@ -1237,15 +1233,11 @@ prim<v:=(v)> abs(data):
           tsil """
             let<type>(UBase, base::unsigned_of(base::in));
             let<type>(SBase, base::signed_of(base::in));
-            let<type>(UVec, vector::as_base(UBase));
-            var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
-            var<const_infer>(all_bits, call<primitive=set1[UVec]>(
-              cast<bitcast>(UBase, cast<static>(SBase, -1))
+            var<const_infer>(all_bits, cast<bitcast>(UBase, cast<static>(SBase, -1)));
+            var<const_infer>(magnitude_mask, call<primitive=set1[Vec]>(
+              cast<bitcast>(base::in, all_bits >> 1)
             ));
-            var<const_infer>(magnitude_mask, call<primitive=shift_right[UVec, false]>(all_bits, 1));
-            complete(call<primitive=reinterpret[UVec, Vec]>(
-              call<primitive=binary_and[UVec]>(bits, magnitude_mask)
-            ));
+            complete(call<primitive=binary_and[Vec]>(data, magnitude_mask));
           """
         variants:
           scalar_lanes_fallback:

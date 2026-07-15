@@ -38,7 +38,6 @@ from tslc.lsp.workspace import AuthoringWorkspace, WorkspaceSnapshot
 SERVER_NAME = "tslc"
 SERVER_VERSION = "0.1.0"
 _DEBOUNCE_SECONDS = 0.15
-_INDEX_WAIT_SECONDS = 5.0
 SPECIALIZATION_CONTEXT_METHOD = "tsl/specializationContext"
 PRIMITIVE_SCAFFOLD_CHOICES_METHOD = "tsl/primitiveScaffoldChoices"
 PRIMITIVE_SCAFFOLD_METHOD = "tsl/primitiveScaffold"
@@ -57,7 +56,7 @@ class _ServerState:
     source_roots: tuple[Path, ...] | None = None
     machine_profiles_path: Path | None = None
     backends: tuple[str, ...] | None = None
-    index_ready: asyncio.Event = field(default_factory=asyncio.Event)
+    initial_check_complete: asyncio.Event = field(default_factory=asyncio.Event)
     explorer_cache: PrimitiveExplorerCache = field(
         default_factory=PrimitiveExplorerCache
     )
@@ -86,7 +85,7 @@ def create_server(
         state.source_roots = sources
         state.machine_profiles_path = profiles
         state.backends = backends
-        state.index_ready.clear()
+        state.initial_check_complete.clear()
         try:
             state.workspace = AuthoringWorkspace.from_root(
                 selected_root,
@@ -125,7 +124,7 @@ def create_server(
             return
         for document in documents:
             replacement.open(document.path, document.text, document.version)
-        state.index_ready.clear()
+        state.initial_check_complete.clear()
         state.workspace = replacement
         state.setup_error = None
         state.shown_setup_error = False
@@ -139,9 +138,17 @@ def create_server(
         )
 
     @server.feature(types.INITIALIZED)
-    def initialized(params: types.InitializedParams) -> None:
+    async def initialized(params: types.InitializedParams) -> None:
         del params
         _show_setup_error(server, state)
+        workspace = state.workspace
+        if workspace is not None:
+            await _check_and_publish(
+                server,
+                state,
+                workspace.generation,
+                debounce=False,
+            )
 
     @server.feature(types.TEXT_DOCUMENT_DID_OPEN)
     async def did_open(params: types.DidOpenTextDocumentParams) -> None:
@@ -387,7 +394,7 @@ def create_server(
     @server.feature(types.SHUTDOWN)
     def shutdown(*args: object) -> None:
         del args
-        state.index_ready.set()
+        state.initial_check_complete.set()
         if state.workspace is not None:
             state.workspace.close()
 
@@ -398,10 +405,7 @@ async def _workspace_with_index(state: _ServerState) -> AuthoringWorkspace | Non
     workspace = state.workspace
     if workspace is None or workspace.latest.index is not None:
         return workspace
-    try:
-        await asyncio.wait_for(state.index_ready.wait(), timeout=_INDEX_WAIT_SECONDS)
-    except TimeoutError:
-        pass
+    await state.initial_check_complete.wait()
     return state.workspace
 
 
@@ -431,8 +435,7 @@ def _publish(
     workspace = state.workspace
     if workspace is None:
         return
-    if snapshot.index is not None:
-        state.index_ready.set()
+    state.initial_check_complete.set()
     grouped = diagnostics_by_path(snapshot)
     current_paths = set(grouped) | set(snapshot.versions)
     paths = current_paths | state.published_paths
@@ -563,6 +566,9 @@ def _primitive_explorer_payload(
                 "unavailableReason": slot.unavailable_reason,
                 "implementations": [
                     {
+                        "primitive": implementation.primitive,
+                        "signature": implementation.signature,
+                        "parameters": list(implementation.parameters),
                         "extension": implementation.extension,
                         "typeGroup": implementation.type_group,
                         "selectorPath": list(implementation.selector_path),

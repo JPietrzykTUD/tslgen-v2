@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 from lsprotocol import types
+from pygls.lsp.server import LanguageServer
 
 from tslc.diagnostics import SourceSpan
 from tslc.ir.region_registry import TSIL_REGION_KEYWORDS
@@ -18,10 +22,42 @@ from tslc.lsp.features import (
 )
 from tslc.lsp.positions import source_position, span_to_range
 from tslc.lsp.primitive_explorer import PrimitiveExplorerCache, primitive_explorer
+from tslc.lsp.server import _publish, _ServerState, _workspace_with_index
 from tslc.lsp.specialization_context import specialization_context
-from tslc.lsp.workspace import AuthoringWorkspace
+from tslc.lsp.workspace import AuthoringWorkspace, WorkspaceSnapshot
 from tslc.lower.lowerer import Lowerer
 from tslc.select.selector import Selector
+
+
+def test_index_requests_wait_for_a_completed_initial_check() -> None:
+    async def exercise() -> None:
+        state = _ServerState()
+        workspace = SimpleNamespace(
+            latest=WorkspaceSnapshot(0, None, None, (), (), {})
+        )
+        state.workspace = cast(AuthoringWorkspace, workspace)
+
+        request = asyncio.create_task(_workspace_with_index(state))
+        await asyncio.sleep(0)
+        assert not request.done()
+
+        state.initial_check_complete.set()
+        assert await request is workspace
+
+    asyncio.run(exercise())
+
+
+def test_completed_check_releases_index_requests_without_an_index() -> None:
+    state = _ServerState()
+    workspace = SimpleNamespace(
+        latest=WorkspaceSnapshot(0, None, None, (), (), {})
+    )
+    state.workspace = cast(AuthoringWorkspace, workspace)
+    snapshot = WorkspaceSnapshot(0, None, None, (), (), {})
+
+    _publish(cast(LanguageServer, object()), state, snapshot)
+
+    assert state.initial_check_complete.is_set()
 
 
 def test_utf16_position_round_trip() -> None:
@@ -212,6 +248,62 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
     )
     assert cached.selected_primitive == "sub"
     assert cached.slots
+
+
+def test_primitive_explorer_defaults_to_richest_authoring_profile_and_keeps_overloads(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    assert snapshot.index is not None
+
+    default = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        backend="cpp",
+        selected_primitive="max",
+        preferred_profiles=workspace.config.preferred_profiles,
+    )
+    assert default.profile == "avx2"
+    assert {"sse", "avx2"} <= {slot.extension for slot in default.slots}
+
+    max_slot = next(
+        slot
+        for slot in default.slots
+        if slot.extension == "clang_v128" and slot.type_tag == "si8"
+    )
+    assert len(max_slot.implementations) == 1
+    max_implementation = max_slot.implementations[0]
+    assert max_implementation.primitive == "max"
+    assert max_implementation.signature == "v:=(v,v)"
+    assert max_implementation.parameters == ("vec_a", "vec_b")
+    assert max_implementation.source.path.name == "select.tsl"
+
+    hmax = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        profile="avx2",
+        backend="cpp",
+        selected_primitive="hmax",
+    )
+    hmax_slot = next(
+        slot
+        for slot in hmax.slots
+        if slot.extension == "clang_v128" and slot.type_tag == "si8"
+    )
+    assert {
+        (implementation.signature, implementation.parameters)
+        for implementation in hmax_slot.implementations
+    } == {
+        ("s:=v", ("vec",)),
+        ("s:=(m,v)", ("mask", "vec")),
+    }
 
 
 def test_navigation_hover_completion_and_tokens_use_latest_index(

@@ -83,7 +83,9 @@ prim<v:=s> set1(value):
       f?:
         requires:
           avx2 [avx]
-          sse [sse, sse2]
+          sse:
+            f32 [sse]
+            f64 [sse, sse2]
         safety:
           internal_unsafe true
           caller_unsafe false

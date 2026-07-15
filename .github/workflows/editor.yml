@@ -31,7 +31,9 @@ jobs:
         with:
           python-version: "3.14"
           cache: pip
-          cache-dependency-path: tslc/pyproject.toml
+          cache-dependency-path: |
+            requirements.txt
+            tslc/pyproject.toml
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -40,8 +42,11 @@ jobs:
           cache: npm
           cache-dependency-path: editors/vscode-tsl/package-lock.json
 
-      - name: Install compiler editor extra
-        run: python -m pip install -e './tslc[editor]'
+      - name: Install editor test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install --no-deps -e './tslc[editor]'
 
       - name: Run editor-neutral LSP tests
         run: python -m pytest -q tslc/tests/test_authoring_check.py tslc/tests/test_lsp_*.py

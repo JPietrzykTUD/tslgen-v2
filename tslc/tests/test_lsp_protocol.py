@@ -199,6 +199,22 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
             and slot["implementations"]
             for slot in explorer["slots"]
         )
+        selected_implementations = next(
+            slot["implementations"]
+            for slot in explorer["slots"]
+            if slot["extension"] == "clang_v128"
+            and slot["type"] == "si8"
+            and slot["implementations"]
+        )
+        assert all(
+            implementation["primitive"] == "add"
+            for implementation in selected_implementations
+        )
+        assert any(
+            implementation["signature"] == "v:=(v,v)"
+            and implementation["parameters"] == ["left", "right"]
+            for implementation in selected_implementations
+        )
 
         client.send(
             {

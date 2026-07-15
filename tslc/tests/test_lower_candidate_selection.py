@@ -105,6 +105,8 @@ def test_x86_abs_uses_exact_intrinsics_and_keeps_scalar_lane_fallback(
     ("profile_name", "extension_name", "type_tag"),
     (
         ("avx2", "avx2", "si64"),
+        ("avx", "avx2", "f32"),
+        ("sse", "sse", "f32"),
         ("sse2", "sse", "f64"),
         ("avx2", "avx2", "f32"),
     ),
@@ -137,13 +139,32 @@ def test_x86_abs_composes_register_operations_when_no_exact_intrinsic_exists(
             assert "binary_xor" in lowered.body_text
             assert "sub" in lowered.body_text
         else:
-            assert "reinterpret" in lowered.body_text
-            assert "shift_right" in lowered.body_text
+            assert "set1" in lowered.body_text
             assert "binary_and" in lowered.body_text
+            assert "reinterpret" not in lowered.body_text
+            assert "shift_right" not in lowered.body_text
         assert [variant.name for variant in lowered.variant_bodies] == [
             "scalar_lanes_fallback"
         ]
         assert "to_array" in lowered.variant_bodies[0].body_text
+
+
+def test_sse_f32_set1_does_not_require_sse2(catalog: Catalog, machine_profiles) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["sse"], "set1", ("f32",))
+        .selected
+        if selected.extension.name == "sse"
+    )
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert lowered.required_features == frozenset(("sse",))
+    assert "_mm_set1_ps" in lowered.body_text
 
 
 @pytest.mark.parametrize(

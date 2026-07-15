@@ -16,6 +16,9 @@ export interface ExplorerLocation {
 export type SlotOrigin = "authored" | "broader" | "inherited";
 
 export interface ExplorerImplementation {
+  readonly primitive: string;
+  readonly signature: string;
+  readonly parameters: readonly string[];
   readonly extension: string;
   readonly typeGroup: string;
   readonly selectorPath: readonly string[];
@@ -115,4 +118,11 @@ export function countDescription(
   return onlyUnavailable
     ? `${String(total - available)} unavailable • ${String(available)}/${String(total)} available`
     : `${String(available)}/${String(total)} available`;
+}
+
+export function implementationLabel(
+  implementation: ExplorerImplementation,
+): string {
+  const callable = `${implementation.primitive}(${implementation.parameters.join(", ")})`;
+  return `${callable} • ${implementation.extension} / ${implementation.typeGroup}`;
 }
