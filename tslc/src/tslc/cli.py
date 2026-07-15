@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from tslc.api import generate_project, verify_project, write_artifacts
-from tslc.diagnostics import has_errors
+from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.output.verify import BuildVerificationReport
 from tslc.output.verify_model import BackendToolchain
 from tslc.pipeline import GenerationResult
@@ -32,6 +32,7 @@ _COMMANDS = (
     "audit",
     "coverage",
     "doctor",
+    "lsp",
 )
 
 
@@ -62,6 +63,10 @@ def main(argv: list[str] | None = None) -> int:
         from tslc.doctor import main as doctor_main
 
         return doctor_main(rest)
+    if command == "lsp":
+        from tslc.lsp_cli import main as lsp_main
+
+        return lsp_main(rest)
     if command == "explain":
         from tslc.maintenance.explain import main as explain_main
 
@@ -96,6 +101,7 @@ def _root_parser() -> argparse.ArgumentParser:
         "audit": "run source metadata audits",
         "coverage": "run coverage maintenance tools",
         "doctor": "probe configured toolchains and runners",
+        "lsp": "run the editor-neutral language server",
     }
     for name in _COMMANDS:
         subparsers.add_parser(name, help=descriptions[name], add_help=False)
@@ -282,8 +288,7 @@ def _generation_main(
         _write_summary_file(args.summary_file, result, verify_report, args.test)
 
     for diagnostic in result.diagnostics:
-        location = f" {diagnostic.location.path}:{diagnostic.location.line}" if diagnostic.location else ""
-        print(f"[{diagnostic.severity}] {diagnostic.code}{location}: {diagnostic.message}", file=sys.stderr)
+        print(format_diagnostic(diagnostic), file=sys.stderr)
 
     print(
         f"generated {len(result.coverage)} specializations across "
@@ -302,7 +307,7 @@ def _generation_main(
     if args.output_root is not None:
         write_report = write_artifacts(result.artifacts, args.output_root)
         for diagnostic in write_report.diagnostics:
-            print(f"[write] {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
+            print(format_diagnostic(diagnostic), file=sys.stderr)
         if has_errors(write_report.diagnostics):
             write_summary_once()
             return 1
@@ -337,7 +342,7 @@ def _generation_main(
             for note in verify_report.skipped:
                 print(f"[verify-skip] {note}", file=sys.stderr)
             for diagnostic in verify_report.diagnostics:
-                print(f"[verify] {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
+                print(format_diagnostic(diagnostic), file=sys.stderr)
             if args.test:
                 _print_test_output(verify_report)
             incomplete_value_tests = (

@@ -298,7 +298,10 @@ def test_cli_test_flag_fails_on_value_test_diagnostic(monkeypatch, tmp_path, cap
 
     captured = capsys.readouterr()
     assert rc == 1
-    assert "[verify] TSL-BUILD-VERIFY-COMMAND-FAILED" in captured.err
+    assert (
+        "warning[TSL-BUILD-VERIFY-COMMAND-FAILED]: "
+        "rust profile skylake test command failed"
+    ) in captured.err
     assert "build/test-verified" not in captured.out
 
 

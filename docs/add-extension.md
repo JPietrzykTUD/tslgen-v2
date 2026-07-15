@@ -278,9 +278,14 @@ wasm32-simd128 + simd128
 ## 11. Generate A Smoke Project
 
 ```bash
-PYTHONPATH=tslc/src python -m tslc.cli \
-  --sources tsldata \
-  --machine-profiles supplementary/buildsystem/machine_profiles.json \
+tslc check \
+  --primitive add \
+  --profile wasm32-simd128 \
+  --type si32 \
+  --backend cpp \
+  --backend rust
+
+tslc generate \
   --primitives add,sub,set1,set_zero,load,store,from_array,to_array \
   --profiles wasm32-simd128 \
   --types si32,ui32,f32 \

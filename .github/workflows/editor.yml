@@ -1,0 +1,67 @@
+name: TSL Editor
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tslc-editor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  editor-tests:
+    name: Client, LSP, and VSIX
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: tslc/pyproject.toml
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: editors/vscode-tsl/package-lock.json
+
+      - name: Install compiler editor extra
+        run: python -m pip install -e './tslc[editor]'
+
+      - name: Run editor-neutral LSP tests
+        run: python -m pytest -q tslc/tests/test_authoring_check.py tslc/tests/test_lsp_*.py
+
+      - name: Install client dependencies
+        working-directory: editors/vscode-tsl
+        run: npm ci
+
+      - name: Run client tests and package VSIX
+        working-directory: editors/vscode-tsl
+        run: npm run package
+
+      - name: Run real VS Code extension-host test
+        working-directory: editors/vscode-tsl
+        run: xvfb-run -a npm run test:integration
+
+      - name: Upload contributor-preview VSIX
+        uses: actions/upload-artifact@v7
+        with:
+          name: tsl-language-support-contributor-preview
+          path: tslctmp/tsl-language-support.vsix
+          if-no-files-found: error
+          retention-days: 14

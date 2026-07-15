@@ -1,0 +1,14 @@
+.vscode-test/**
+.vscode-test.mjs
+AGENTS.md
+dist/test/**
+dist/src/**
+dist/**/*.map
+scripts/**
+src/**
+test/**
+*.map
+syntaxes/*.template.json
+tsconfig.json
+esbuild.mjs
+package-lock.json

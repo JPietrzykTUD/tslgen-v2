@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
-import json
 from pathlib import Path
 import sys
 import time
@@ -13,7 +12,12 @@ from typing import Any
 from tslc.api import _expand_sources, generate_project
 from tslc.authoring import check_catalog
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
-from tslc.diagnostics import Diagnostic, has_errors
+from tslc.diagnostics import (
+    Diagnostic,
+    format_diagnostic,
+    format_diagnostics_json,
+    has_errors,
+)
 from tslc.project_config import ProjectConfig, load_project_config
 
 
@@ -35,6 +39,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backend", action="append", default=[])
     parser.add_argument("--type", action="append", dest="type_tags", default=[])
     parser.add_argument("--format", choices=("text", "json"), default="text")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="treat unsupported selected lowering slots as check failures",
+    )
     parser.add_argument("--watch", action="store_true")
     parser.add_argument(
         "--watch-interval",
@@ -122,7 +131,7 @@ def _run_once(settings: _Settings, args: argparse.Namespace) -> int:
             profiles=args.profile or None,
             type_tags=args.type_tags or DEFAULT_SCALAR_TYPE_TAGS,
             backends=settings.backends,
-            generation_mode="strict",
+            generation_mode="strict" if args.strict else "partial",
             render_artifacts=False,
         )
         diagnostics = generation.diagnostics
@@ -142,7 +151,7 @@ def _run_once(settings: _Settings, args: argparse.Namespace) -> int:
             "coverage": len(generation.coverage),
             "skipped": skipped_payload,
         }
-        failed = has_errors(diagnostics) or bool(generation.skipped)
+        failed = has_errors(diagnostics)
     else:
         catalog_check = check_catalog(settings.sources, backends=settings.backends)
         diagnostics = catalog_check.diagnostics
@@ -152,16 +161,15 @@ def _run_once(settings: _Settings, args: argparse.Namespace) -> int:
     hidden = len(diagnostics) - len(shown)
     payload.update(
         {
-            "status": "error" if failed else "ok",
-            "diagnostics": [_diagnostic_json(item) for item in shown],
+            "status": "error" if failed else "ok-with-skips" if skipped_payload else "ok",
             "hidden_diagnostics": hidden,
         }
     )
     if args.format == "json":
-        print(json.dumps(payload, indent=2, sort_keys=True))
+        print(format_diagnostics_json(shown, extra=payload))
     else:
         for diagnostic in shown:
-            print(_diagnostic_text(diagnostic), file=sys.stderr)
+            print(format_diagnostic(diagnostic), file=sys.stderr)
         if hidden:
             print(
                 f"{hidden} diagnostic(s) outside the requested paths were hidden",
@@ -180,38 +188,14 @@ def _run_once(settings: _Settings, args: argparse.Namespace) -> int:
 
 
 def _matches(diagnostic: Diagnostic, filters: tuple[Path, ...]) -> bool:
-    if not filters or diagnostic.location is None:
+    if not filters or diagnostic.span is None:
         return True
-    path = diagnostic.location.path.resolve()
-    return any(path == item or item in path.parents for item in filters)
-
-
-def _diagnostic_text(diagnostic: Diagnostic) -> str:
-    location = diagnostic.location
-    at = (
-        ""
-        if location is None
-        else f" {location.path}:{location.line}:{location.column}"
+    paths = (diagnostic.span.path, *(item.span.path for item in diagnostic.related))
+    return any(
+        path.resolve() == item or item in path.resolve().parents
+        for path in paths
+        for item in filters
     )
-    return f"[{diagnostic.severity}] {diagnostic.code}{at}: {diagnostic.message}"
-
-
-def _diagnostic_json(diagnostic: Diagnostic) -> dict[str, object]:
-    location = diagnostic.location
-    return {
-        "severity": diagnostic.severity,
-        "code": diagnostic.code,
-        "message": diagnostic.message,
-        "location": (
-            None
-            if location is None
-            else {
-                "path": str(location.path),
-                "line": location.line,
-                "column": location.column,
-            }
-        ),
-    }
 
 
 def _fingerprint(

@@ -38,7 +38,7 @@ _KNOWN_IMMEDIATE_DISPATCH = frozenset({"literal_match"})
 _BASE_WIDTH_CONSTRAINT_RE = re.compile(
     r"^width\(self::base\)\s*(>=|>|==)\s*width\(base::in\)$"
 )
-_KNOWN_PRIMITIVE_FIELDS = frozenset(
+KNOWN_PRIMITIVE_FIELDS = frozenset(
     {
         "benchmarks",
         "brief_description",
@@ -76,7 +76,7 @@ def validate_primitive(
     fields = tuple(field.field for field in declaration.fields)
     validate_known_fields(
         fields,
-        _KNOWN_PRIMITIVE_FIELDS,
+        KNOWN_PRIMITIVE_FIELDS,
         diagnostics,
         owner=f"primitive {declaration.name!r}",
     )

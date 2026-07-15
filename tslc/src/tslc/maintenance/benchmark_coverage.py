@@ -25,7 +25,7 @@ from tslc.benchmark.model import (
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.model import Catalog
 from tslc.compiler_assets import load_default_tsl_grammar
-from tslc.diagnostics import has_errors
+from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.maintenance.benchmark_inventory import (
     BenchmarkShapeInventoryEntry,
     BenchmarkSpecialCaseInventoryEntry,
@@ -398,7 +398,7 @@ def _load_catalog(sources: Path) -> tuple[Catalog | None, tuple[str, ...]]:
     )
     built = CatalogBuilder().build(parsed)
     errors = tuple(
-        f"[{diagnostic.severity}] {diagnostic.code}: {diagnostic.message}"
+        format_diagnostic(diagnostic)
         for diagnostic in built.diagnostics
         if diagnostic.severity == "error"
     )
@@ -425,7 +425,7 @@ def compute_benchmark_coverage_audit(
     )
     if has_errors(result.diagnostics) or result.rendered is None:
         errors = tuple(
-            f"[{diagnostic.severity}] {diagnostic.code}: {diagnostic.message}"
+            format_diagnostic(diagnostic)
             for diagnostic in result.diagnostics
             if diagnostic.severity == "error"
         )

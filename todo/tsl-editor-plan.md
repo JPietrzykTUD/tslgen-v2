@@ -2,7 +2,11 @@
 
 ## Status
 
-Proposed implementation plan.
+Version 1 implemented as a contributor preview on 2026-07-15. The VS Code
+client deliberately uses the documented external `tslc[editor]` runtime and is
+not advertised as a self-contained Marketplace release; the conditional
+platform-bundling requirement therefore remains a future release gate rather
+than a Version 1 claim.
 
 This document describes an authoring toolchain for the current `.tsl` source
 language and `tslc` compiler. It is intentionally separate from the historical
@@ -1668,6 +1672,29 @@ Version 1 is complete when:
   troubleshooting;
 - the full Python suite, mypy, packaging smoke test, client tests, and
   `git diff --check` pass.
+
+### Version 1 Completion Evidence
+
+The completion audit on 2026-07-15 produced the following results on the
+repository devcontainer:
+
+- full Python suite: 1,673 passed and 70 explicitly gated generated-build or
+  generated-value-test cases skipped;
+- mypy: 226 source files checked with no issues;
+- isolated authoring latency: 2.261 s cold check, 0.634 s changed-document p95,
+  0.139 ms hover p95, and 2.759 s cold explicit preview;
+- TypeScript/client tests: six Mocha tests and two generated-grammar tests
+  passed, including synthetic registry propagation and byte reproducibility;
+- real VS Code 1.128 extension-host test: activation, unsaved parser/catalog/
+  TSIL diagnostics, concurrent hover during preview, and beside-editor preview
+  passed;
+- wheel smoke: the base wheel exposed `check`, `list`, `show`, and `lsp --help`
+  without installing editor dependencies; the same wheel with `[editor]`
+  passed a raw-stdio initialize/open/change/symbol/definition/reference/hover/
+  reload/close/shutdown protocol lifecycle;
+- VSIX packaging produced the contributor-preview package from the generated
+  grammar and bundled TypeScript client; compileall and `git diff --check`
+  passed.
 
 ## Future Extensions
 

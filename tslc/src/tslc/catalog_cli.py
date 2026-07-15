@@ -12,7 +12,7 @@ from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog, Extension, Primitive
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS, SCALAR_TYPE_INFOS
-from tslc.diagnostics import Diagnostic, SourceSpan, has_errors
+from tslc.diagnostics import Diagnostic, SourceSpan, format_diagnostic, has_errors
 from tslc.ir.region_registry import (
     DEFAULT_TSIL_REGION_DESCRIPTORS,
     TSIL_REGION_BY_KEYWORD,
@@ -241,6 +241,8 @@ def _source(source: SourceSpan | None) -> dict[str, object] | None:
         "path": str(source.path),
         "line": source.line,
         "column": source.column,
+        "end_line": source.end_line,
+        "end_column": source.end_column,
     }
 
 
@@ -270,7 +272,7 @@ def _flatten(value: object, prefix: str = "") -> list[str]:
 
 def _print_diagnostics(diagnostics: tuple[Diagnostic, ...]) -> None:
     for item in diagnostics:
-        print(f"[{item.severity}] {item.code}: {item.message}", file=sys.stderr)
+        print(format_diagnostic(item), file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from tslc import cli
+from tslc import check_cli
 from tslc.authoring import check_catalog
 from tslc.doctor import diagnose
 from tslc.maintenance import coverage_inventory
@@ -71,6 +72,38 @@ def test_slot_check_lowers_without_rendering(
     assert payload["skipped"] == []
 
 
+def test_slot_check_strict_mode_is_explicit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    modes: list[str] = []
+
+    def fake_generate(*args: object, **kwargs: object) -> object:
+        del args
+        modes.append(str(kwargs["generation_mode"]))
+        return SimpleNamespace(diagnostics=(), coverage=(), skipped=())
+
+    monkeypatch.setattr(check_cli, "generate_project", fake_generate)
+    common = [
+        "--sources",
+        str(tmp_path),
+        "--machine-profiles",
+        str(tmp_path / "profiles.json"),
+        "--profile",
+        "scalar",
+        "--format",
+        "json",
+    ]
+
+    assert check_cli.main(common) == 0
+    capsys.readouterr()
+    assert check_cli.main([*common, "--strict"]) == 0
+    capsys.readouterr()
+
+    assert modes == ["partial", "strict"]
+
+
 def test_catalog_list_and_show_have_stable_json(
     data_root: Path,
     machine_profiles_path: Path,
@@ -122,6 +155,7 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
                 'sources = ["data"]',
                 'machine_profiles = "profiles.json"',
                 'backends = ["cpp"]',
+                'authoring_profiles = ["scalar"]',
                 'output_root = "out"',
                 "[tslc.toolchains.cpp]",
                 'compiler = "clang++"',
@@ -139,6 +173,7 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
     assert config.sources == ((tmp_path / "data").resolve(),)
     assert config.machine_profiles == (tmp_path / "profiles.json").resolve()
     assert config.output_root == (tmp_path / "out").resolve()
+    assert config.authoring_profiles == ("scalar",)
     assert config.toolchains["cpp"].compiler == ("clang++",)
     assert config.runner_paths == {"sde": "/opt/sde64"}
 

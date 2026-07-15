@@ -59,6 +59,18 @@ request selection and lowering. Catalog `list`/`show` and `doctor` consume the
 same typed catalog, backend registry, machine-profile projection, and verifier
 drivers rather than maintaining parallel compiler knowledge.
 
+Editor overlays use that same boundary through
+[lsp/workspace.py](src/tslc/lsp/workspace.py). A workspace-scoped parsed cache
+reparses changed buffers and reuses unchanged documents; a per-document
+[catalog index](src/tslc/catalog_index.py) similarly reuses unchanged source
+fragments before deterministic full-catalog validation publishes a new
+snapshot. Symbols, references, hover, completion, and semantic tokens are pure
+projections of the latest successful index. The editor-neutral pygls transport
+is in `lsp/`; the TypeScript VS Code client contains no compiler semantics.
+Concrete preview runs `tslc explain` as a separate saved-file child with
+rendering disabled, using one loaded input snapshot for narration and the
+authoritative dependency-closure verdict.
+
 ## The input language (two nested languages)
 
 ### 1. The outer TSL data language

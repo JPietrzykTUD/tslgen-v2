@@ -10,3 +10,8 @@ supplementary/docs/site/specializations/react/node_modules/
 supplementary/docs/site/specializations/react/dist/
 
 test-sort/build*/
+
+node_modules/
+.vscode-test/
+editors/vscode-tsl/dist/
+editors/vscode-tsl/syntaxes/tsl.tmLanguage.json

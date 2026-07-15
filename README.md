@@ -22,6 +22,7 @@ generated projects, and optionally verifies them with real toolchains.
 CHARTER.md    Repository-wide design contract
 tslc/         Python compiler package, tests, compiler charter, and architecture docs
 tsldata/      TSL type/language/extension/primitive source corpus
+editors/      Editor clients; compiler semantics remain in tslc
 docs/         Human-authored maintainer guides
 examples/     Checked-in C++ and Rust generated-library consumers
 .github/      GitHub Actions workflows, actions, and workflow-only scripts
@@ -52,19 +53,8 @@ tslc doctor --profile scalar
 The checked-in `tslc.toml` supplies corpus, profile, backend, and scratch-output
 defaults. See the [command-line tools guide](docs/tslc-cli.md) for validation,
 discovery, generation, inspection, audit, coverage, and configuration commands.
-
-Install the unified command locally, or use its module equivalent:
-
-```bash
-python -m pip install -e ./tslc
-tslc check
-tslc list primitives
-tslc doctor --profile scalar
-```
-
-The checked-in `tslc.toml` supplies corpus, profile, backend, and scratch-output
-defaults. See the [command-line tools guide](docs/tslc-cli.md) for validation,
-discovery, generation, inspection, audit, coverage, and configuration commands.
+For unsaved diagnostics, navigation, completion, and explicit specialization
+preview, see the [TSL editor guide](docs/tsl-editor.md).
 
 Generate and verify a small C++/Rust project:
 
@@ -86,7 +76,7 @@ overlay.
 
 - Package quick start: [tslc/README.md](tslc/README.md)
 - Command-line tools: [docs/tslc-cli.md](docs/tslc-cli.md)
-- Command-line tools: [docs/tslc-cli.md](docs/tslc-cli.md)
+- Editor setup and architecture: [docs/tsl-editor.md](docs/tsl-editor.md)
 - Repository charter: [CHARTER.md](CHARTER.md)
 - Compiler charter: [tslc/CHARTER.md](tslc/CHARTER.md)
 - Architecture narrative: [tslc/DESCRIPTION.md](tslc/DESCRIPTION.md)

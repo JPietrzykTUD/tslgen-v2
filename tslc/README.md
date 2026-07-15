@@ -59,5 +59,18 @@ same commands without installation. See the full
 [command-line tools guide](../docs/tslc-cli.md) for `check --watch`, JSON
 diagnostics, catalog discovery, `doctor`, inspection, audits, and exit codes.
 
+Install the optional editor server without the repository-wide requirements:
+
+```bash
+python -m pip install -e './tslc[editor]'
+tslc lsp --help
+```
+
+The Python server remains compiler-owned under `src/tslc/lsp/`; the TypeScript
+VS Code client is under `../editors/vscode-tsl/`. See the
+[TSL editor guide](../docs/tsl-editor.md) for setup, explicit saved-file
+preview, extension development, performance evidence, limitations, and how to
+refresh editable versus non-editable installations.
+
 Contributor instructions for compiler changes live in
 [`AGENTS.md`](AGENTS.md), in addition to the repository instructions.

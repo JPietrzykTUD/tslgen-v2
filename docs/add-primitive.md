@@ -253,6 +253,11 @@ Inspect at least one Rust artifact.
 Run focused checks:
 
 ```bash
+tslc check \
+  --primitive PRIMITIVE_NAME \
+  --profile scalar \
+  --backend cpp \
+  --type si32
 python -m compileall -q tslc/src/tslc
 PYTHONPATH=tslc/src python -m pytest -q \
   tslc/tests/test_catalog_validation.py \

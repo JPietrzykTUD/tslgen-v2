@@ -139,6 +139,18 @@ must not render or write projects; add singular primitive/profile/backend/type
 filters only when slot selection and lowering are part of the check. Repository
 defaults come from the discovered `tslc.toml`.
 
+Editor development uses the compiler-owned Python server and TypeScript client:
+
+```bash
+python -m pip install -e './tslc[editor]'
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_lsp_*.py
+(cd editors/vscode-tsl && npm test)
+(cd editors/vscode-tsl && xvfb-run -a npm run test:integration)
+```
+
+Read `editors/vscode-tsl/AGENTS.md` before changing the client or generated
+TextMate grammar.
+
 ## Scratch And Generated Output
 
 Use workspace-local scratch paths; in common WSL setups, `/tmp` lives on an

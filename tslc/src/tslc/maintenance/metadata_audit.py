@@ -24,7 +24,7 @@ from tslc.catalog.model import Catalog, ImplementationSafety
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.catalog.signatures import parse_signature
 from tslc.compiler_assets import load_default_tsl_grammar
-from tslc.diagnostics import Diagnostic, has_errors
+from tslc.diagnostics import Diagnostic, format_diagnostic, has_errors
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import CallDependency
 from tslc.lower.lowerer import Lowerer
@@ -243,15 +243,7 @@ def main(argv: list[str] | None = None) -> int:
         backends=tuple(_split_csv(args.backends)),
     )
     for diagnostic in result.diagnostics:
-        location = (
-            f" {diagnostic.location.path}:{diagnostic.location.line}"
-            if diagnostic.location is not None
-            else ""
-        )
-        print(
-            f"[{diagnostic.severity}] {diagnostic.code}{location}: {diagnostic.message}",
-            file=sys.stderr,
-        )
+        print(format_diagnostic(diagnostic), file=sys.stderr)
     if has_errors(result.diagnostics):
         return 1
 

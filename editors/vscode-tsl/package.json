@@ -1,0 +1,146 @@
+{
+  "name": "tsl-language-support",
+  "displayName": "TSL Language Support",
+  "description": "Compiler-backed language support for tslc .tsl source data.",
+  "version": "0.1.0",
+  "publisher": "tsl-project",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JPietrzykTUD/tslgen-v99.git",
+    "directory": "editors/vscode-tsl"
+  },
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "dist/extension.js",
+  "activationEvents": [
+    "onLanguage:tsl",
+    "onCommand:tsl.restartServer",
+    "onCommand:tsl.checkSlot",
+    "onCommand:tsl.previewSpecialization",
+    "onCommand:tsl.doctor"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "tsl",
+        "aliases": [
+          "TSL",
+          "tsl"
+        ],
+        "extensions": [
+          ".tsl"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "tsl",
+        "scopeName": "source.tsl",
+        "path": "./syntaxes/tsl.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "tsl.restartServer",
+        "title": "TSL: Restart Language Server"
+      },
+      {
+        "command": "tsl.checkSlot",
+        "title": "TSL: Check Concrete Specialization"
+      },
+      {
+        "command": "tsl.previewSpecialization",
+        "title": "TSL: Preview Specialization"
+      },
+      {
+        "command": "tsl.doctor",
+        "title": "TSL: Doctor"
+      }
+    ],
+    "configuration": {
+      "title": "TSL",
+      "properties": {
+        "tsl.server.command": {
+          "type": "string",
+          "default": "",
+          "description": "Explicit tslc language-server executable. Arguments are configured separately."
+        },
+        "tsl.server.args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "lsp",
+            "--stdio"
+          ],
+          "description": "Arguments for the explicit server command."
+        },
+        "tsl.python": {
+          "type": "string",
+          "default": "",
+          "description": "Python interpreter containing the matching tslc[editor] package."
+        },
+        "tsl.preview.command": {
+          "type": "string",
+          "default": "",
+          "description": "Explicit full tslc executable for check, preview, and doctor commands."
+        },
+        "tsl.preview.profile": {
+          "type": "string",
+          "default": "",
+          "description": "Preferred concrete authoring profile."
+        },
+        "tsl.preview.type": {
+          "type": "string",
+          "default": "si32",
+          "description": "Preferred scalar type for concrete preview."
+        },
+        "tsl.preview.extension": {
+          "type": "string",
+          "default": "",
+          "description": "Concrete extension for preview; defaults to the selected profile name."
+        },
+        "tsl.preview.backend": {
+          "type": "string",
+          "default": "cpp",
+          "description": "Preferred backend for concrete preview."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "generate:grammar": "node scripts/generate-grammar.mjs",
+    "check:grammar": "node scripts/check-grammar.mjs",
+    "compile": "npm run generate:grammar && tsc -p tsconfig.json && node esbuild.mjs",
+    "test:unit": "tsc -p tsconfig.json && mocha 'dist/test/*.test.js' && node --test test/grammar.test.mjs",
+    "test:integration": "npm run compile && node scripts/run-integration.mjs",
+    "test": "npm run check:grammar && npm run compile && npm run test:unit",
+    "package": "npm run test && vsce package --no-dependencies --out ../../tslctmp/tsl-language-support.vsix"
+  },
+  "dependencies": {
+    "vscode-languageclient": "10.1.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "10.0.10",
+    "@types/node": "26.1.1",
+    "@types/vscode": "1.125.0",
+    "@vscode/test-cli": "0.0.15",
+    "@vscode/test-electron": "3.0.0",
+    "@vscode/vsce": "3.9.2",
+    "esbuild": "0.28.1",
+    "mocha": "11.7.6",
+    "typescript": "7.0.2"
+  }
+}

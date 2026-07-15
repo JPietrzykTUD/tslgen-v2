@@ -141,7 +141,17 @@ def generate(request: GenerationRequest) -> GenerationResult:
     if inputs is None:
         return _empty(diagnostics)
 
-    return _GenerationSession(request, inputs, diagnostics).run()
+    return _generate_loaded(request, inputs, diagnostics)
+
+
+def _generate_loaded(
+    request: GenerationRequest,
+    inputs: _PipelineInputs,
+    diagnostics: list[Diagnostic],
+) -> GenerationResult:
+    """Run from one already-loaded immutable input snapshot."""
+
+    return _GenerationSession(request, inputs, list(diagnostics)).run()
 
 
 class _GenerationSession:

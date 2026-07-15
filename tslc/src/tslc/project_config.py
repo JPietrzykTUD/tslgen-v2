@@ -19,6 +19,7 @@ class ProjectConfig:
     sources: tuple[Path, ...]
     machine_profiles: Path
     backends: tuple[str, ...]
+    authoring_profiles: tuple[str, ...] = ()
     output_root: Path | None = None
     toolchains: Mapping[str, BackendToolchain] = field(default_factory=dict)
     runner_paths: Mapping[str, str] = field(default_factory=dict)
@@ -60,6 +61,7 @@ def load_project_config(path: Path | str | None = None) -> ProjectConfig | None:
     sources = _string_list(root, "sources", required=True)
     profiles = _string(root, "machine_profiles", required=True)
     backends = _string_list(root, "backends", required=True)
+    authoring_profiles = _optional_string_list(root, "authoring_profiles")
     output = _string(root, "output_root", required=False)
     toolchain_table = root.get("toolchains", {})
     if not isinstance(toolchain_table, dict):
@@ -87,6 +89,7 @@ def load_project_config(path: Path | str | None = None) -> ProjectConfig | None:
         sources=tuple(_resolve(base, value) for value in sources),
         machine_profiles=_resolve(base, profiles),
         backends=tuple(backends),
+        authoring_profiles=authoring_profiles,
         output_root=_resolve(base, output) if output is not None else None,
         toolchains=toolchains,
         runner_paths={str(key): str(value) for key, value in runners.items()},
@@ -133,6 +136,17 @@ def _optional_table_string(
             f"{path}: tslc.toolchains.{backend_id}.{key} must be a non-empty string"
         )
     return value
+
+
+def _optional_string_list(table: dict[str, object], key: str) -> tuple[str, ...]:
+    value = table.get(key)
+    if value is None:
+        return ()
+    if not isinstance(value, list) or not all(
+        isinstance(item, str) and item.strip() for item in value
+    ):
+        raise ValueError(f"tslc.{key} must be a string array")
+    return tuple(value)
 
 
 __all__ = ("CONFIG_NAME", "ProjectConfig", "discover_config", "load_project_config")

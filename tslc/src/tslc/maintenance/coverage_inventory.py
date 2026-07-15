@@ -17,7 +17,7 @@ from tslc.api import _ARITH_TYPE_TAGS, generate_project
 from tslc.authoring import check_catalog
 from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.machine_profiles import load_machine_profiles_checked
-from tslc.diagnostics import Diagnostic, has_errors
+from tslc.diagnostics import Diagnostic, format_diagnostic, has_errors
 from tslc.maintenance.coverage_inventory_report import (
     CoverageInventory,
     build_coverage_inventory,
@@ -291,7 +291,7 @@ def _csv(value: str) -> tuple[str, ...]:
 
 def _diagnostic_lines(diagnostics: tuple[Diagnostic, ...]) -> tuple[str, ...]:
     return tuple(
-        f"{diagnostic.severity.upper()} {diagnostic.code}: {diagnostic.message}"
+        format_diagnostic(diagnostic)
         for diagnostic in diagnostics
         if diagnostic.severity == "error"
     )

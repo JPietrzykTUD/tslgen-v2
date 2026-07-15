@@ -5,3 +5,5 @@ pytest==9.1.1
 mypy==2.2.0
 sphinx==8.2.3
 breathe==4.36.0
+pygls==2.1.1
+lsprotocol==2025.0.0

@@ -7,6 +7,12 @@ python -m pip install -e ./tslc
 tslc --help
 ```
 
+Editable installs reflect source changes after restarting the running command
+or language server. Re-run the install when dependencies, entry points, or
+package metadata change. Update a non-editable local install with
+`python -m pip install --upgrade --force-reinstall ./tslc` (or
+`'./tslc[editor]'` when editor support is needed).
+
 `PYTHONPATH=tslc/src python -m tslc ...` provides the same command surface
 without installing it. The repository `dev.sh` remains a convenience wrapper.
 
@@ -20,6 +26,7 @@ filesystem root. Relative paths are resolved from the configuration file:
 sources = ["tsldata"]
 machine_profiles = "supplementary/buildsystem/machine_profiles.json"
 backends = ["cpp", "rust"]
+authoring_profiles = ["scalar", "avx2"]
 output_root = "tslctmp/generated"
 
 [tslc.toolchains.cpp]
@@ -70,6 +77,9 @@ rendering:
 tslc check --primitive add --profile avx2 --backend cpp --type si32
 ```
 
+Unsupported selected slots are reported separately and do not fail the
+default partial check. Add `--strict` when every requested slot must lower.
+
 Use the focused catalog commands before writing selectors or invoking
 `explain`:
 
@@ -90,6 +100,21 @@ tslc show region intrin
 
 Their JSON output is deterministic and is suitable for completion and editor
 clients.
+
+## Language server
+
+The editor-neutral server is an optional dependency so ordinary compiler users
+do not install LSP libraries:
+
+```bash
+python -m pip install -e './tslc[editor]'
+tslc lsp --stdio
+```
+
+Standard output is reserved for protocol frames. Logs use standard error, or a
+path below workspace `tslctmp/` supplied through `--log-file`. See the
+[editor guide](tsl-editor.md) for the VS Code client, external-server discovery,
+unsaved overlays, explicit specialization preview, and troubleshooting.
 
 ## Generate and verify
 

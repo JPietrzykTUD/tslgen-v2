@@ -7,6 +7,7 @@ from pathlib import Path
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.builder import CatalogBuildResult, CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import SourceLocation
 from tslc.lower.lowerer import Lowerer
@@ -40,6 +41,21 @@ def _build(text: str, path: Path = Path("diagnostic_fixture.tsl")) -> CatalogBui
     return CatalogBuilder().build(parsed)
 
 
+def _validate(text: str) -> tuple:
+    path = Path("diagnostic_fixture.tsl")
+    document = SourceDocument(
+        path=path,
+        text=text + _TARGET_FAMILIES,
+        digest="d",
+        kind="tsl",
+    )
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    built = CatalogBuilder().build(parsed)
+    assert built.catalog is not None
+    return validate_catalog(built.catalog, parsed, required_backends=())
+
+
 def test_catalog_params_diagnostic_has_source_location() -> None:
     result = _build(
         "prim<v:=(v,sImm)> shift(data, amount):\n"
@@ -56,6 +72,34 @@ def test_catalog_params_diagnostic_has_source_location() -> None:
     diagnostic = result.diagnostics[0]
     assert diagnostic.code == "TSL-PARAMS-UNKNOWN-PARAM"
     assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 3, 5)
+
+
+def test_unknown_field_has_full_span_and_nearest_name_help() -> None:
+    diagnostics = _validate(
+        "extension scalar:\n"
+        '  extensoin_name "scalar"\n'
+        '  family "scalar"\n'
+    )
+
+    diagnostic = next(item for item in diagnostics if item.code == "TSL-CATALOG-UNKNOWN-FIELD")
+    assert diagnostic.span is not None
+    assert diagnostic.span.end_column > diagnostic.span.column
+    assert diagnostic.help == "did you mean 'extension_name'?"
+
+
+def test_duplicate_block_points_back_to_first_definition() -> None:
+    diagnostics = _validate(
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+    )
+
+    diagnostic = next(item for item in diagnostics if item.code == "TSL-CATALOG-DUPLICATE-BLOCK")
+    assert len(diagnostic.related) == 1
+    assert diagnostic.related[0].span.line == 1
 
 
 def test_selector_ambiguity_warning_has_source_location() -> None:
