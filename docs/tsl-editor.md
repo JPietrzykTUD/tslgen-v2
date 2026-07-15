@@ -73,8 +73,9 @@ Opening a `.tsl` file activates:
 
 - ranged parser, catalog, invariant, and TSIL-shell diagnostics for unsaved
   overlays while the complete configured corpus remains loaded;
-- document symbols, primitive-call definition/reference navigation, hover,
-  context-aware completion, semantic highlighting, and TextMate coloring;
+- hierarchical document symbols, typed selector and primitive-call
+  definition/reference navigation, hover, context-aware completion, semantic
+  highlighting, and TextMate coloring;
 - **TSL: Restart Language Server**;
 - **TSL: Check Concrete Specialization**;
 - **TSL: Preview Specialization**;
@@ -169,6 +170,17 @@ malformed overlay. If the first document arrives
 already invalid, the server seeds catalog facts and definitions from the valid
 saved corpus and combines them with any parseable occurrence spans in the
 overlay, so navigation does not begin empty.
+
+Document symbols cover every parsed top-level declaration and nest primitive
+parameters, generic parameters, result target axes, implementation selectors,
+variants, named tests, and type groups beneath their owner. Extension and type
+selectors are indexed element-by-element even when authored as a list; result
+target axes resolve only within their primitive declaration, so repeated names
+such as `ToBase` cannot cross-link unrelated primitives. Semantic tokens come
+from those same parsed spans and the TSIL/query registries. They distinguish
+declaration keywords, fields, parameters, selector values, closed enums, and
+query roots inside typed `type(...)`/`value(...)` islands while deliberately
+leaving arbitrary C++/Rust text unclassified.
 
 Hover is a concise typed catalog projection. Primitive hover lists every
 declaration signature with parameter names, its brief description when present,

@@ -22,10 +22,10 @@ slice rather than preserving a completion log here. Git history and tests are
 the completion record.
 
 Parsed outer-language context, catalog completion, descriptor-driven TSIL
-region-shell completion, typed query-path completion, and reliable
-primitive/generic/selector scope are now part of the working baseline. The
-next product milestone continues **authoring depth** with deeper navigation,
-semantic highlighting, and safe source actions.
+region-shell completion, typed query-path completion, hierarchical symbols,
+typed selector navigation, and semantic highlighting are now part of the
+working baseline. The next product milestone adds explicit concrete explorer
+analysis and safe source actions.
 A self-contained Marketplace distribution is a later release gate and is
 deliberately separated from authoring behavior.
 
@@ -34,8 +34,6 @@ deliberately separated from authoring behavior.
 An author editing an incomplete `.tsl` document should be able to discover the
 language without memorizing compiler internals:
 
-- symbols, definitions, references, and semantic tokens cover the same typed
-  declarations and selectors;
 - an explicit explorer analysis can explain the lowered implementation state
   and active transitive dependency closure for one concrete slot without
   slowing ordinary explorer refreshes;
@@ -73,50 +71,18 @@ These constraints apply to every slice in this plan:
 
 | Area | Remaining behavior | Main owner |
 | --- | --- | --- |
-| Symbols/navigation/tokens | More declaration kinds, nested branches, list selectors, target axes, field/parameter/query token classes | Catalog index and LSP feature adapters |
 | Explorer analysis | Explicit, cancellable lowering verdicts, transitive dependencies, and final implementation state cached by concrete context | Lowering/dependency closure and explorer command boundary |
 | Safe actions | Convert exact compiler suggestions into version-checked `WorkspaceEdit` actions | Diagnostics/audit API and LSP code actions |
 | Public distribution | Self-contained, platform-specific server runtime and release verification | Extension packaging and CI |
 
 ## Ordered Slices
 
-The slices are ordered by authoring dependency. Slice 1 builds on the delivered
-parsed cursor, TSIL region context, and query vocabulary. Slice 2 is the direct
-follow-up to the catalog explorer and may proceed independently once its
-lowering-provenance vocabulary is defined. Slice 3 should wait until source-span
-behavior is stable. Slice 4 is a separate release track and must not block the
+The slices are ordered by product dependency. Slice 1 is the direct follow-up
+to the catalog explorer. Slice 2 builds safe edits on the now-stable source-span
+model. Slice 3 is a separate release track and must not block the
 authoring-depth milestone.
 
-### Slice 1: Symbols, Navigation, And Semantic-Token Depth
-
-**Goal:** structural browsing and highlighting cover the same declarations and
-references recognized by the authoring model.
-
-**Work:**
-
-- Add document symbols for all parsed top-level declaration kinds and useful
-  nested declaration nodes, including implementation branches, variants,
-  generic parameters, and test cases where named.
-- Index individual elements of list-valued selectors instead of treating the
-  complete list as one reference.
-- Add definitions and references for nested target axes and other typed
-  selectors once their ownership is unambiguous.
-- Add semantic token classes for declaration keywords, known field names,
-  parameters, selector keys/values, query roots, and closed enum values.
-- Use `AuthoringCursorContext` and catalog/source spans for classification; do
-  not introduce a TextMate-derived semantic parser.
-
-**Exit criteria:**
-
-- Symbol hierarchy tests cover every supported declaration and nested symbol
-  kind with stable names and ranges.
-- Definition/reference tests cover single and list selectors, including
-  unresolved and ambiguous cases.
-- Semantic token snapshots cover complete and incomplete documents and never
-  classify raw target code as TSL semantics.
-- Existing primitive-call and extension navigation remains regression covered.
-
-### Slice 2: Explorer Concrete Analysis
+### Slice 1: Explorer Concrete Analysis
 
 **Goal:** enrich the catalog explorer with authoritative lowering and transitive
 dependency facts behind an explicit, cached analysis boundary.
@@ -158,7 +124,7 @@ dependency facts behind an explicit, cached analysis boundary.
 - Cancelling or failing analysis leaves the last valid catalog explorer usable.
 - No automatic edit, hover, selection, or refresh triggers concrete analysis.
 
-### Slice 3: Safe Compiler-Owned Code Actions
+### Slice 2: Safe Compiler-Owned Code Actions
 
 **Goal:** expose exact, source-located compiler suggestions as deliberate,
 undoable editor edits.
@@ -187,7 +153,7 @@ undoable editor edits.
 - VS Code integration tests prove edits are previewable/undoable and ordinary
   diagnostics remain non-mutating.
 
-### Slice 4: Self-Contained Marketplace Runtime
+### Slice 3: Self-Contained Marketplace Runtime
 
 **Goal:** make a public VS Code installation work without a separately managed
 Python or `tslc[editor]` environment.
@@ -289,7 +255,7 @@ catalog reconstruction before designing incremental promotion.
 
 ## Authoring-Depth Milestone Acceptance
 
-The authoring-depth milestone is complete when Slices 1 through 3 satisfy their
+The authoring-depth milestone is complete when Slices 1 and 2 satisfy their
 exit criteria and all of the following hold:
 
 - completion is correct at top level, nested catalog blocks, TSIL boundaries,
@@ -308,7 +274,7 @@ exit criteria and all of the following hold:
 - focused Python, LSP, extension, and performance checks pass.
 
 Self-contained Marketplace distribution is accepted separately through Slice
-4 and must not be claimed merely because contributor installation works.
+3 and must not be claimed merely because contributor installation works.
 
 ## Active Risks And Mitigations
 
@@ -330,5 +296,5 @@ Self-contained Marketplace distribution is accepted separately through Slice
   complete slot and corpus digest, label analyzed versus lookup facts, and
   invalidate rather than recompute implicitly after edits.
 - **Bundled Python multiplies platform and release risk.** Keep it isolated in
-  Slice 4, use a declared support matrix, build reproducibly, and retain the
+  Slice 3, use a declared support matrix, build reproducibly, and retain the
   external runtime only as an explicit override.

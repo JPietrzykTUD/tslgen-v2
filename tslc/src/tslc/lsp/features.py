@@ -11,9 +11,15 @@ from tslc.authoring_completion import (
     AuthoringCompletionKind,
     authoring_completions,
 )
-from tslc.catalog_index import CatalogIndex, IndexedOccurrence, SymbolKind
+from tslc.catalog_index import (
+    CatalogIndex,
+    DocumentSymbolKind,
+    IndexedDocumentSymbol,
+    IndexedOccurrence,
+)
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.lsp.positions import (
+    SourceTextMap,
     offset_position,
     path_to_uri,
     position_offset,
@@ -23,7 +29,17 @@ from tslc.lsp.positions import (
 from tslc.syntax.authoring import authoring_cursor_context
 from tslc.lsp.workspace import AuthoringWorkspace, WorkspaceSnapshot
 
-SEMANTIC_TOKEN_TYPES = ("function", "class", "type", "keyword")
+SEMANTIC_TOKEN_TYPES = (
+    "function",
+    "class",
+    "type",
+    "keyword",
+    "property",
+    "parameter",
+    "typeParameter",
+    "enumMember",
+    "namespace",
+)
 _TOKEN_INDEX = {name: index for index, name in enumerate(SEMANTIC_TOKEN_TYPES)}
 
 
@@ -76,21 +92,11 @@ def document_symbols(
 ) -> tuple[types.DocumentSymbol, ...]:
     if index is None:
         return ()
-    symbols: list[types.DocumentSymbol] = []
-    for occurrence in index.occurrences_by_path.get(path.resolve(), ()):
-        if not occurrence.definition:
-            continue
-        range_ = span_to_range(occurrence.span, text)
-        symbols.append(
-            types.DocumentSymbol(
-                name=occurrence.name,
-                kind=_symbol_kind(occurrence.kind),
-                range=range_,
-                selection_range=range_,
-                detail=occurrence.kind,
-            )
-        )
-    return tuple(symbols)
+    source_map = SourceTextMap.from_text(text)
+    return tuple(
+        _document_symbol(symbol, source_map)
+        for symbol in index.document_symbols_by_path.get(path.resolve(), ())
+    )
 
 
 def definition_locations(
@@ -192,9 +198,10 @@ def semantic_tokens(
 ) -> types.SemanticTokens:
     if index is None:
         return types.SemanticTokens(data=[])
+    source_map = SourceTextMap.from_text(text)
     absolute: list[tuple[int, int, int, int]] = []
-    for occurrence in index.occurrences_by_path.get(path.resolve(), ()):
-        range_ = span_to_range(occurrence.span, text)
+    for token in index.semantic_tokens_by_path.get(path.resolve(), ()):
+        range_ = source_map.range(token.span)
         if range_.start.line != range_.end.line:
             continue
         length = range_.end.character - range_.start.character
@@ -205,7 +212,7 @@ def semantic_tokens(
                 range_.start.line,
                 range_.start.character,
                 length,
-                _TOKEN_INDEX[_token_type(occurrence.kind)],
+                _TOKEN_INDEX[token.kind],
             )
         )
     absolute.sort()
@@ -258,12 +265,34 @@ def _severity(value: str) -> types.DiagnosticSeverity:
     }[value]
 
 
-def _symbol_kind(kind: SymbolKind) -> types.SymbolKind:
+def _document_symbol(
+    symbol: IndexedDocumentSymbol,
+    source_map: SourceTextMap,
+) -> types.DocumentSymbol:
+    return types.DocumentSymbol(
+        name=symbol.name,
+        kind=_symbol_kind(symbol.kind),
+        range=source_map.range(symbol.span),
+        selection_range=source_map.range(symbol.selection_span),
+        detail=symbol.detail,
+        children=[_document_symbol(child, source_map) for child in symbol.children]
+        or None,
+    )
+
+
+def _symbol_kind(kind: DocumentSymbolKind) -> types.SymbolKind:
     return {
         "primitive": types.SymbolKind.Function,
         "extension": types.SymbolKind.Class,
         "type-group": types.SymbolKind.Struct,
-        "region": types.SymbolKind.Namespace,
+        "block": types.SymbolKind.Namespace,
+        "field": types.SymbolKind.Field,
+        "implementation": types.SymbolKind.Object,
+        "variant": types.SymbolKind.Method,
+        "parameter": types.SymbolKind.Variable,
+        "generic-parameter": types.SymbolKind.TypeParameter,
+        "target-axis": types.SymbolKind.TypeParameter,
+        "test-case": types.SymbolKind.Event,
     }[kind]
 
 
@@ -275,15 +304,6 @@ def _completion_kind(kind: AuthoringCompletionKind) -> types.CompletionItemKind:
         "function": types.CompletionItemKind.Function,
         "class": types.CompletionItemKind.Class,
         "type": types.CompletionItemKind.TypeParameter,
-    }[kind]
-
-
-def _token_type(kind: SymbolKind) -> str:
-    return {
-        "primitive": "function",
-        "extension": "class",
-        "type-group": "type",
-        "region": "keyword",
     }[kind]
 
 

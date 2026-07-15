@@ -9,6 +9,14 @@ from types import MappingProxyType
 from typing import Literal
 
 from tslc.catalog.model import Catalog
+from tslc.catalog_authoring_index import (
+    DocumentSymbolKind,
+    IndexedDocumentSymbol,
+    IndexedSemanticToken,
+    SemanticTokenKind,
+    build_document_authoring_index,
+    selector_items,
+)
 from tslc.diagnostics import SourceSpan
 from tslc.ir.region_syntax import parse_call_selector
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS
@@ -25,7 +33,13 @@ from tslc.syntax.ast import (
     ParsedTslSourceSpan,
 )
 
-SymbolKind = Literal["primitive", "extension", "type-group", "region"]
+SymbolKind = Literal[
+    "primitive",
+    "extension",
+    "type-group",
+    "region",
+    "target-axis",
+]
 _TSIL_REGION_GUIDE = (
     "https://github.com/JPietrzykTUD/tslgen-v2/blob/main/docs/tsil-keywords.md"
 )
@@ -37,6 +51,7 @@ class IndexedOccurrence:
     name: str
     span: SourceSpan
     definition: bool = False
+    scope: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,9 +62,21 @@ class CatalogIndex:
     primitive_references: Mapping[str, tuple[SourceSpan, ...]] = field(default_factory=dict)
     extension_references: Mapping[str, tuple[SourceSpan, ...]] = field(default_factory=dict)
     type_group_references: Mapping[str, tuple[SourceSpan, ...]] = field(default_factory=dict)
+    target_axis_definitions: Mapping[tuple[str, str], tuple[SourceSpan, ...]] = field(
+        default_factory=dict
+    )
+    target_axis_references: Mapping[tuple[str, str], tuple[SourceSpan, ...]] = field(
+        default_factory=dict
+    )
     primitive_calls: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     primitive_callers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     occurrences_by_path: Mapping[Path, tuple[IndexedOccurrence, ...]] = field(default_factory=dict)
+    document_symbols_by_path: Mapping[Path, tuple[IndexedDocumentSymbol, ...]] = field(
+        default_factory=dict
+    )
+    semantic_tokens_by_path: Mapping[Path, tuple[IndexedSemanticToken, ...]] = field(
+        default_factory=dict
+    )
     hover_text: Mapping[tuple[SymbolKind, str], str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -60,9 +87,13 @@ class CatalogIndex:
             "primitive_references",
             "extension_references",
             "type_group_references",
+            "target_axis_definitions",
+            "target_axis_references",
             "primitive_calls",
             "primitive_callers",
             "occurrences_by_path",
+            "document_symbols_by_path",
+            "semantic_tokens_by_path",
             "hover_text",
         ):
             values = getattr(self, name)
@@ -77,12 +108,27 @@ class CatalogIndex:
         return min(candidates, key=lambda item: _span_size(item.span), default=None)
 
     def definitions(self, occurrence: IndexedOccurrence) -> tuple[SourceSpan, ...]:
+        if occurrence.kind == "target-axis":
+            if occurrence.scope is None:
+                return ()
+            return self.target_axis_definitions.get(
+                (occurrence.scope, occurrence.name), ()
+            )
         return _definitions(self, occurrence.kind).get(occurrence.name, ())
 
     def references(
         self, occurrence: IndexedOccurrence, *, include_declaration: bool = True
     ) -> tuple[SourceSpan, ...]:
-        referenced = _references(self, occurrence.kind).get(occurrence.name, ())
+        if occurrence.kind == "target-axis":
+            referenced = (
+                ()
+                if occurrence.scope is None
+                else self.target_axis_references.get(
+                    (occurrence.scope, occurrence.name), ()
+                )
+            )
+        else:
+            referenced = _references(self, occurrence.kind).get(occurrence.name, ())
         declared = self.definitions(occurrence) if include_declaration else ()
         return _sorted_spans((*declared, *referenced))
 
@@ -94,8 +140,12 @@ class CatalogIndex:
 class _DocumentIndex:
     definitions: Mapping[SymbolKind, Mapping[str, tuple[SourceSpan, ...]]]
     references: Mapping[SymbolKind, Mapping[str, tuple[SourceSpan, ...]]]
+    target_axis_definitions: Mapping[tuple[str, str], tuple[SourceSpan, ...]]
+    target_axis_references: Mapping[tuple[str, str], tuple[SourceSpan, ...]]
     occurrences: tuple[IndexedOccurrence, ...]
     primitive_calls: tuple[tuple[str, str], ...]
+    symbols: tuple[IndexedDocumentSymbol, ...]
+    semantic_tokens: tuple[IndexedSemanticToken, ...]
 
 
 class CatalogIndexCache:
@@ -143,15 +193,21 @@ def build_catalog_index(
         "extension": {},
         "type-group": {},
         "region": {},
+        "target-axis": {},
     }
     references: dict[SymbolKind, dict[str, list[SourceSpan]]] = {
         "primitive": {},
         "extension": {},
         "type-group": {},
         "region": {},
+        "target-axis": {},
     }
+    target_axis_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
+    target_axis_references: dict[tuple[str, str], list[SourceSpan]] = {}
     occurrences: list[IndexedOccurrence] = []
     primitive_calls: set[tuple[str, str]] = set()
+    symbols_by_path: dict[Path, tuple[IndexedDocumentSymbol, ...]] = {}
+    semantic_tokens_by_path: dict[Path, tuple[IndexedSemanticToken, ...]] = {}
 
     fragments = (
         cache.fragments(parsed.documents)
@@ -165,8 +221,18 @@ def build_catalog_index(
         for kind, names in fragment.references.items():
             for name, spans in names.items():
                 references[kind].setdefault(name, []).extend(spans)
+        for key, spans in fragment.target_axis_definitions.items():
+            target_axis_definitions.setdefault(key, []).extend(spans)
+        for key, spans in fragment.target_axis_references.items():
+            target_axis_references.setdefault(key, []).extend(spans)
         occurrences.extend(fragment.occurrences)
         primitive_calls.update(fragment.primitive_calls)
+        if fragment.symbols:
+            path = fragment.symbols[0].span.path.resolve()
+            symbols_by_path[path] = fragment.symbols
+        if fragment.semantic_tokens:
+            path = fragment.semantic_tokens[0].span.path.resolve()
+            semantic_tokens_by_path[path] = fragment.semantic_tokens
 
     calls: dict[str, set[str]] = {}
     callers: dict[str, set[str]] = {}
@@ -184,6 +250,8 @@ def build_catalog_index(
         primitive_references=_freeze_spans(references["primitive"]),
         extension_references=_freeze_spans(references["extension"]),
         type_group_references=_freeze_spans(references["type-group"]),
+        target_axis_definitions=_freeze_scoped_spans(target_axis_definitions),
+        target_axis_references=_freeze_scoped_spans(target_axis_references),
         primitive_calls={
             name: tuple(sorted(values)) for name, values in sorted(calls.items())
         },
@@ -194,6 +262,8 @@ def build_catalog_index(
             path: tuple(sorted(items, key=_occurrence_key))
             for path, items in sorted(by_path.items(), key=lambda item: item[0].as_posix())
         },
+        document_symbols_by_path=symbols_by_path,
+        semantic_tokens_by_path=semantic_tokens_by_path,
         hover_text=_hover_text(catalog, definitions),
     )
 
@@ -204,18 +274,29 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         "extension": {},
         "type-group": {},
         "region": {},
+        "target-axis": {},
     }
     references: dict[SymbolKind, dict[str, list[SourceSpan]]] = {
         "primitive": {},
         "extension": {},
         "type-group": {},
         "region": {},
+        "target-axis": {},
     }
+    target_axis_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
+    target_axis_references: dict[tuple[str, str], list[SourceSpan]] = {}
     occurrences: list[IndexedOccurrence] = []
     primitive_calls: set[tuple[str, str]] = set()
     _index_document(
-        document, definitions, references, occurrences, primitive_calls
+        document,
+        definitions,
+        references,
+        target_axis_definitions,
+        target_axis_references,
+        occurrences,
+        primitive_calls,
     )
+    authoring = build_document_authoring_index(document)
     return _DocumentIndex(
         definitions={
             kind: _freeze_spans(names) for kind, names in definitions.items()
@@ -223,8 +304,12 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         references={
             kind: _freeze_spans(names) for kind, names in references.items()
         },
+        target_axis_definitions=_freeze_scoped_spans(target_axis_definitions),
+        target_axis_references=_freeze_scoped_spans(target_axis_references),
         occurrences=tuple(sorted(occurrences, key=_occurrence_key)),
         primitive_calls=tuple(sorted(primitive_calls)),
+        symbols=authoring.symbols,
+        semantic_tokens=authoring.semantic_tokens,
     )
 
 
@@ -232,60 +317,73 @@ def _index_document(
     document: ParsedOuterTslDocument,
     definitions: dict[SymbolKind, dict[str, list[SourceSpan]]],
     references: dict[SymbolKind, dict[str, list[SourceSpan]]],
+    target_axis_definitions: dict[tuple[str, str], list[SourceSpan]],
+    target_axis_references: dict[tuple[str, str], list[SourceSpan]],
     occurrences: list[IndexedOccurrence],
     primitive_calls: set[tuple[str, str]],
 ) -> None:
     for primitive in document.primitives:
+        scope = _primitive_scope(primitive)
+        result_target = _result_target(primitive)
         span = _name_in_source(primitive.header_source, primitive.name)
         _record(definitions, occurrences, "primitive", primitive.name, span, True)
-        _index_implementation_selectors(primitive, references, occurrences)
+        if result_target is not None:
+            _, target_name, target_span = result_target
+            _record_scoped(
+                target_axis_definitions,
+                occurrences,
+                "target-axis",
+                scope,
+                target_name,
+                target_span,
+                True,
+            )
+        _index_implementation_selectors(
+            primitive,
+            references,
+            target_axis_references,
+            occurrences,
+            result_target=result_target,
+            scope=scope,
+        )
         for envelope in primitive.body_envelopes:
             source = _source_span(envelope.payload_source)
             for region in _regions(scan(envelope.payload_text, source=source)):
-                if region.source is not None:
-                    keyword_span = _subspan(
-                        region.source,
-                        region.full_text,
-                        0,
-                        len(region.keyword),
-                    )
-                    occurrences.append(
-                        IndexedOccurrence("region", region.keyword, keyword_span, False)
-                    )
-                if region.keyword != "call":
-                    continue
-                call = parse_call_selector(region.selector_text)
-                if call is None:
-                    continue
-                name = primitive.name if call.primitive_ref == "@self" else call.primitive_ref
-                primitive_calls.add((primitive.name, name))
-                reference_span = _region_selector_name_span(region, call.primitive_ref)
-                if reference_span is not None:
-                    _record(references, occurrences, "primitive", name, reference_span, False)
+                _index_region(
+                    primitive,
+                    region,
+                    references,
+                    occurrences,
+                    primitive_calls,
+                )
 
     for block in document.blocks:
         if block.kind == "extension" and block.name:
             span = _name_in_source(block.source, block.name)
             _record(definitions, occurrences, "extension", block.name, span, True)
-            for field in block.fields:
-                if field.key.text == "inherits" and isinstance(field.value, ParsedTslScalarValue):
+            for block_field in block.fields:
+                if block_field.key.text == "inherits" and isinstance(
+                    block_field.value, ParsedTslScalarValue
+                ):
                     _record_scalar_reference(
-                        field.value, references, occurrences, "extension"
+                        block_field.value, references, occurrences, "extension"
                     )
-                elif field.key.text == "supersedes" and isinstance(field.value, ParsedTslListValue):
-                    for item in field.value.items:
+                elif block_field.key.text == "supersedes" and isinstance(
+                    block_field.value, ParsedTslListValue
+                ):
+                    for item in block_field.value.items:
                         if isinstance(item, ParsedTslScalarValue):
                             _record_scalar_reference(
                                 item, references, occurrences, "extension"
                             )
         elif block.kind == "types":
-            for field in block.fields:
-                span = _source_span(field.key.source)
+            for block_field in block.fields:
+                span = _source_span(block_field.key.source)
                 _record(
                     definitions,
                     occurrences,
                     "type-group",
-                    field.key.text,
+                    block_field.key.text,
                     span,
                     True,
                 )
@@ -294,33 +392,97 @@ def _index_document(
 def _index_implementation_selectors(
     primitive: ParsedPrimitiveDeclaration,
     references: dict[SymbolKind, dict[str, list[SourceSpan]]],
+    target_axis_references: dict[tuple[str, str], list[SourceSpan]],
     occurrences: list[IndexedOccurrence],
+    *,
+    result_target: tuple[str, str, SourceSpan] | None,
+    scope: str,
 ) -> None:
     def visit(entry: ParsedImplementationSelectorEntry, depth: int) -> None:
-        name = entry.selector.text
+        items = selector_items(entry.selector)
         if depth == 0:
-            _record(
-                references,
-                occurrences,
-                "extension",
-                name,
-                _source_span(entry.selector.source),
-                False,
-            )
+            for name, span in items:
+                _record(references, occurrences, "extension", name, span, False)
         elif depth == 1:
-            _record(
-                references,
-                occurrences,
-                "type-group",
-                name,
-                _source_span(entry.selector.source),
-                False,
-            )
+            for name, span in items:
+                _record(references, occurrences, "type-group", name, span, False)
+        elif depth == 2 and result_target is not None:
+            for name, span in items:
+                _record_scoped(
+                    target_axis_references,
+                    occurrences,
+                    "target-axis",
+                    scope,
+                    name,
+                    span,
+                    False,
+                )
+        elif depth == 3 and result_target is not None:
+            for name, span in items:
+                _record(references, occurrences, "type-group", name, span, False)
         for child in entry.children:
             visit(child, depth + 1)
 
     for entry in primitive.impl_entries:
         visit(entry, 0)
+
+
+def _index_region(
+    primitive: ParsedPrimitiveDeclaration,
+    region: Region,
+    references: dict[SymbolKind, dict[str, list[SourceSpan]]],
+    occurrences: list[IndexedOccurrence],
+    primitive_calls: set[tuple[str, str]],
+) -> None:
+    if region.source is None:
+        return
+    keyword_span = _subspan(
+        region.source,
+        region.full_text,
+        0,
+        len(region.keyword),
+    )
+    occurrences.append(IndexedOccurrence("region", region.keyword, keyword_span, False))
+    if region.keyword != "call":
+        return
+    call = parse_call_selector(region.selector_text)
+    if call is None:
+        return
+    name = primitive.name if call.primitive_ref == "@self" else call.primitive_ref
+    primitive_calls.add((primitive.name, name))
+    reference_span = _region_selector_name_span(region, call.primitive_ref)
+    if reference_span is not None:
+        _record(references, occurrences, "primitive", name, reference_span, False)
+
+
+def _result_target(
+    primitive: ParsedPrimitiveDeclaration,
+) -> tuple[str, str, SourceSpan] | None:
+    for primitive_field in primitive.fields_by_name("return_type"):
+        for field in primitive_field.field.children:
+            if not isinstance(field.value, ParsedTslScalarValue):
+                continue
+            source = field.value.payload_source or field.value.source
+            return field.key.text, field.value.text, _source_span(source)
+    return None
+
+
+def _primitive_scope(primitive: ParsedPrimitiveDeclaration) -> str:
+    source = primitive.header_source
+    return f"{source.path.resolve().as_posix()}:{source.line}:{source.column}:{primitive.name}"
+
+
+def _record_scoped(
+    values: dict[tuple[str, str], list[SourceSpan]],
+    occurrences: list[IndexedOccurrence],
+    kind: Literal["target-axis"],
+    scope: str,
+    name: str,
+    span: SourceSpan,
+    definition: bool,
+) -> None:
+    values.setdefault((scope, name), []).append(span)
+    occurrences.append(IndexedOccurrence(kind, name, span, definition, scope))
 
 
 def _record_scalar_reference(
@@ -534,6 +696,12 @@ def _freeze_spans(values: dict[str, list[SourceSpan]]) -> dict[str, tuple[Source
     return {name: _sorted_spans(spans) for name, spans in sorted(values.items())}
 
 
+def _freeze_scoped_spans(
+    values: dict[tuple[str, str], list[SourceSpan]],
+) -> dict[tuple[str, str], tuple[SourceSpan, ...]]:
+    return {key: _sorted_spans(spans) for key, spans in sorted(values.items())}
+
+
 def _sorted_spans(spans: Iterable[SourceSpan]) -> tuple[SourceSpan, ...]:
     return tuple(sorted(set(spans), key=_span_key))
 
@@ -561,7 +729,11 @@ def _span_size(span: SourceSpan) -> tuple[int, int]:
 __all__ = (
     "CatalogIndex",
     "CatalogIndexCache",
+    "DocumentSymbolKind",
+    "IndexedDocumentSymbol",
     "IndexedOccurrence",
+    "IndexedSemanticToken",
+    "SemanticTokenKind",
     "SymbolKind",
     "build_catalog_index",
 )

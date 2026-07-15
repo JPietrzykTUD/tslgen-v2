@@ -221,7 +221,11 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
         immediate_split_names=frozenset(),
     )
 
-    rendered = render_project((profile,), ("fake",), assets=RenderAssets({}))
+    rendered = render_project(
+        (profile,),
+        ("fake",),
+        assets=load_default_render_assets(),
+    )
     artifacts = {
         artifact.logical_path: artifact for artifact in rendered.artifacts.artifacts
     }
@@ -332,7 +336,11 @@ prim<v:=v> id(data):
         immediate_split_names=frozenset(),
     )
 
-    rendered = render_project((emitted,), ("fake",), assets=RenderAssets({}))
+    rendered = render_project(
+        (emitted,),
+        ("fake",),
+        assets=load_default_render_assets(),
+    )
 
     assert rendered.verify.backends[0].backend_id == "fake"
     assert rendered.verify.backends[0].profiles == (

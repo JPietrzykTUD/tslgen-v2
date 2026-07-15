@@ -65,7 +65,11 @@ reparses changed buffers and reuses unchanged documents; a per-document
 [catalog index](src/tslc/catalog_index.py) similarly reuses unchanged source
 fragments before deterministic full-catalog validation publishes a new
 snapshot. Symbols, references, hover, completion, and semantic tokens are pure
-projections of the latest successful catalog/index. The parsed-source boundary
+projections of the latest successful catalog/index. Hierarchical document
+symbols and registry-backed semantic token facts are built separately in
+[catalog_authoring_index.py](src/tslc/catalog_authoring_index.py); the core
+index retains resolvable catalog occurrences, including individual list
+selector elements and primitive-scoped result target axes. The parsed-source boundary
 in [syntax/authoring.py](src/tslc/syntax/authoring.py) constructs a typed cursor
 context from declaration, field, selector, map, list, and value spans. Inside
 TSIL payloads it uses the recursive scanner's cursor spans to retain enclosing

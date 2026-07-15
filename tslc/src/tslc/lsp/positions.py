@@ -2,12 +2,40 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from lsprotocol import types
 
 from tslc.diagnostics import SourceSpan
+
+
+@dataclass(frozen=True, slots=True)
+class SourceTextMap:
+    """One request-local source map for repeated UTF-16 range conversion."""
+
+    lines: tuple[str, ...]
+
+    @classmethod
+    def from_text(cls, text: str) -> "SourceTextMap":
+        return cls(tuple(text.splitlines(keepends=True)))
+
+    def range(self, span: SourceSpan) -> types.Range:
+        return types.Range(
+            start=types.Position(
+                line=max(span.line - 1, 0),
+                character=_utf16_column(self.lines, span.line, span.column),
+            ),
+            end=types.Position(
+                line=max(span.end_line - 1, 0),
+                character=_utf16_column(
+                    self.lines,
+                    span.end_line,
+                    span.end_column,
+                ),
+            ),
+        )
 
 
 def path_to_uri(path: Path) -> str:
@@ -62,20 +90,12 @@ def offset_position(text: str, offset: int) -> types.Position:
 
 
 def span_to_range(span: SourceSpan, text: str) -> types.Range:
-    lines = text.splitlines(keepends=True)
-    return types.Range(
-        start=types.Position(
-            line=max(span.line - 1, 0),
-            character=_utf16_column(lines, span.line, span.column),
-        ),
-        end=types.Position(
-            line=max(span.end_line - 1, 0),
-            character=_utf16_column(lines, span.end_line, span.end_column),
-        ),
-    )
+    return SourceTextMap.from_text(text).range(span)
 
 
-def _utf16_column(lines: list[str], one_based_line: int, one_based_column: int) -> int:
+def _utf16_column(
+    lines: tuple[str, ...], one_based_line: int, one_based_column: int
+) -> int:
     if one_based_line < 1 or one_based_line > len(lines):
         return max(one_based_column - 1, 0)
     prefix = lines[one_based_line - 1][: max(one_based_column - 1, 0)]
@@ -95,6 +115,7 @@ def _codepoints_for_utf16(text: str, units: int) -> int:
 
 
 __all__ = (
+    "SourceTextMap",
     "offset_position",
     "path_to_uri",
     "position_offset",
