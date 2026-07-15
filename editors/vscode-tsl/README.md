@@ -86,4 +86,4 @@ performance evidence, remote setup, installation updates, and troubleshooting.
 ## License
 
 The VS Code extension is licensed under the Apache License, Version 2.0. See
-[`LICENSE`](LICENSE).
+[`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).

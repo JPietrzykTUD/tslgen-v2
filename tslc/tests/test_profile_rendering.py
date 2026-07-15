@@ -68,6 +68,39 @@ def test_backend_selection_is_honored(data_root: Path, machine_profiles_path: Pa
     assert [b.backend_id for b in cpp_only.rendered.verify.backends] == ["cpp"]
 
 
+def test_generated_project_carries_apache_license_notices(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["add"],
+        profiles=["scalar"],
+        backends=["cpp", "rust"],
+    )
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in result.artifacts.artifacts
+    }
+
+    assert "Apache License" in artifacts["cpp/LICENSE"]
+    assert "Apache License" in artifacts["rust/LICENSE"]
+    assert artifacts["cpp/include/tsl.hpp"].startswith(
+        "/*\n * Copyright 2026 Johannes Pietrzyk and TSL(c) contributors\n"
+    )
+    assert artifacts["rust/src/lib.rs"].startswith(
+        "// Copyright 2026 Johannes Pietrzyk and TSL(c) contributors\n"
+    )
+    assert artifacts["cpp/CMakeLists.txt"].startswith(
+        "# Copyright 2026 Johannes Pietrzyk and TSL(c) contributors\n"
+    )
+    assert artifacts["rust/Cargo.toml"].startswith(
+        "# Copyright 2026 Johannes Pietrzyk and TSL(c) contributors\n"
+    )
+    assert artifacts["docs/specializations/specializations.json"].startswith("{")
+
+
 def test_representative_project_shape_is_byte_stable(
     data_root: Path,
     machine_profiles_path: Path,
@@ -80,17 +113,17 @@ def test_representative_project_shape_is_byte_stable(
         backends=["cpp", "rust"],
     )
     expected = {
-        "cpp/CMakeLists.txt": "c6f3f365c803d2c1ba6d4b5c7004c758ed973929b5b296288029b991e0686443",
-        "cpp/docs/input/tsl_api_docs.hpp": "f683b6488ef843ccb05a2efa206d59acf1957f9108745f89b8c9df65a7b4d5f7",
-        "cpp/include/tsl.hpp": "e1cec8bf3ad693875e8ecb00d59fbe344b82023a1834010738d4330fb4e1bf5d",
-        "cpp/include/tsl_primitives.hpp": "6eaab8876343ace059044e6156a08ff5b10873f18b161328733ae3d5cdb03ba6",
-        "cpp/include/tsl_scalar.hpp": "c01eef76df6f19e1a9603f82c31feed205ea4c69ae23fb9ec5387fdf29763d77",
-        "cpp/tests/smoke_scalar.cpp": "50356e924e55f6e36a486f6335993f2a6010bf5c4ba89d06836dd8a40d96a018",
-        "rust/Cargo.toml": "9eba8ca48fc7f7a5b21606b0843be9415fab94e55f6e06d368aa48df3174f80b",
-        "rust/src/lib.rs": "a9e11a552173055897ea59e25a1c7063358d1f406a3357ab926adf2d2b64b249",
-        "rust/src/tsl_documentation.rs": "13e6f2279a23f5af8873f4803c969af2abd5de74344303a8fc634d4b121e6b89",
-        "rust/src/tsl_scalar.rs": "653123ec41463d2f98419ce71191e2651c4d6dae8ecb2a509b6fa8db810067cf",
-        "rust/tests/smoke.rs": "2ee72716a94e44fae4dedb3fd789f3fbfc1092ff5726e2ca1ac267f4aa64e4c3",
+        "cpp/CMakeLists.txt": "622fab8141d4a28d85b69cdbb1531486133425e614311cb2f1a60299dea77649",
+        "cpp/docs/input/tsl_api_docs.hpp": "e8550c8f23c29e97012248af4d0bbec2922a81d213f3128132f39ff9e96a1d54",
+        "cpp/include/tsl.hpp": "298cd47b4e1509cd59eb4100f7a0d82bcdbc6e5d9f4eedccb0a68ba0bf667e03",
+        "cpp/include/tsl_primitives.hpp": "49a74d084e4b375d6e0832beb57c54ebfcf85edb25394f9c84d8776520ea0bb8",
+        "cpp/include/tsl_scalar.hpp": "c351ac880a1b88e6b5591dca883a5d057e2542f2fcb1bbb12e55f198aa7fc17f",
+        "cpp/tests/smoke_scalar.cpp": "b8d0793aa19282d85dab6db70c43f41fb0a029daad3799377eab7a4a3bd8c7bf",
+        "rust/Cargo.toml": "73aed933b9c6741b4d235ed3ac544c64cea9914db1df2722c5bc2bc1714b4238",
+        "rust/src/lib.rs": "c253d50313f50f4714ec8540bebc5ace33de5f452d6d3d48df8fa717c4af4cb6",
+        "rust/src/tsl_documentation.rs": "61d5fe51a8e119c92d17d953f304fbb6f49a334f300f326f21f3fdac214608bc",
+        "rust/src/tsl_scalar.rs": "b3e82b905ff00757a56f783551557f8f8c596d120817d83d4f79b896d14e07d5",
+        "rust/tests/smoke.rs": "a4d108f502689e7f29ba5259e22779e8ef0afa36ab83c239022e2772d68d6b44",
     }
     actual = {
         artifact.logical_path: sha256(artifact.content.encode()).hexdigest()

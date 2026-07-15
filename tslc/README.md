@@ -87,4 +87,6 @@ Contributor instructions for compiler changes live in
 ## License
 
 `tslc` is licensed under the Apache License, Version 2.0. See
-[`LICENSE`](LICENSE).
+[`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). Generated C++ and Rust projects
+include Apache-2.0 `LICENSE` files and short license headers in commentable
+generated files.

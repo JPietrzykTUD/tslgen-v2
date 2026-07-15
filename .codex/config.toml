@@ -1,6 +1,5 @@
 sandbox_mode = "workspace-write"
 web_search = "live"
-model_reasoning_effort = "xhigh"
 
 [sandbox_workspace_write]
 network_access = true

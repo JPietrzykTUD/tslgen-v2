@@ -91,5 +91,6 @@ overlay.
 ## License
 
 This repository is licensed under the Apache License, Version 2.0. See
-[LICENSE](LICENSE). The `tslc` Python package and the VS Code extension include
-their own Apache-2.0 `LICENSE` files for standalone distribution.
+[LICENSE](LICENSE) and [NOTICE](NOTICE). The `tslc` Python package and the VS
+Code extension include their own Apache-2.0 `LICENSE` and `NOTICE` files for
+standalone distribution.

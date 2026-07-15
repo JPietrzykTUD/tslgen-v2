@@ -11,6 +11,10 @@ from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact, ArtifactSet
 from tslc.output.verify_model import VerifyBackend, VerifyProject
 from tslc.render.documentation_project import documentation_artifacts
+from tslc.render.licensing import (
+    add_generated_license_notice,
+    generated_license_artifacts,
+)
 from tslc.value_tests import ValueTestProjectPlan
 
 _EMPTY_VALUE_TEST_PLAN = ValueTestProjectPlan(profiles=())
@@ -36,12 +40,15 @@ def render_project(
     artifacts: list[Artifact] = []
     verify_backends: list[VerifyBackend] = []
 
-    for driver in backend_capabilities(backends):
+    drivers = backend_capabilities(backends)
+    for driver in drivers:
         artifacts.extend(driver.render_project_artifacts(ordered, assets))
         artifacts.extend(driver.render_test_artifacts(value_tests, assets))
         artifacts.extend(driver.render_benchmark_artifacts(benchmarks, assets))
         verify_backends.append(driver.verify_backend(ordered))
     artifacts.extend(documentation_artifacts(ordered))
+    artifacts.extend(generated_license_artifacts(drivers, assets))
+    artifacts = [add_generated_license_notice(artifact) for artifact in artifacts]
     return RenderedProject(
         artifacts=ArtifactSet.create(tuple(artifacts)),
         verify=VerifyProject(backends=tuple(verify_backends)),
