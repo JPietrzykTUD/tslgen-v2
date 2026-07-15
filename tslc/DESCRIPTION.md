@@ -300,7 +300,11 @@ AVX-512/NEON/SVE code runs on hardware that lacks it.
   be lowered yet is *recorded as a skip*, not a failure; `strict` mode promotes
   skips to errors. [coverage.py](src/tslc/coverage.py) and
   [maintenance/](src/tslc/maintenance/) (e.g. `coverage_inventory`)
-  operationalize the charter's coverage-not-completeness rule.
+  operationalize the charter's coverage-not-completeness rule. `tslc coverage
+  inventory` is read-only by default and folds finalized lowering outcomes into
+  one typed report with text, Markdown, and JSON renderers. Its profile/backend
+  percentages share a logical-candidate denominator, while explicit `--update`
+  and `--check` modes own the canonical tracked Markdown evidence.
 - **Honest edges**: [support_policy.py](src/tslc/support_policy.py) centralizes
   what the compiler can emit today; some keyword forms are *recognized so a
   body skips cleanly* rather than leaking through as raw text.

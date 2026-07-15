@@ -129,11 +129,22 @@ tslc explain --primitive add --profile avx2 --type si32 --backend cpp
 tslc inspect --stage lowered --primitive add --profile avx2 --type si32 --backend cpp
 tslc audit metadata
 tslc coverage ratchet
+tslc coverage inventory
+tslc coverage inventory --profiles scalar,avx2 --backends cpp,rust
+tslc coverage inventory --format json
+tslc coverage inventory --update
 tslc coverage inventory --check
 ```
 
-`coverage inventory` rewrites its configured report only when invoked without
-`--check`; `--help` and `--check` are side-effect-free.
+`coverage inventory` is read-only by default. It reports corpus totals and an
+emitted-specialization matrix for the configured profiles and backends; text,
+Markdown, and JSON formats use the same typed inventory. Each profile/backend
+percentage uses the profile-wide union of logical specialization candidates as
+its denominator, so backend availability differences remain visible.
+
+`--update` rewrites the tracked canonical Markdown report and `--check` fails
+when that report is stale. Both maintenance modes use the repository's fixed
+canonical probe scope; `--help`, the default report, and `--check` do not write.
 
 ## Output and exit contract
 
