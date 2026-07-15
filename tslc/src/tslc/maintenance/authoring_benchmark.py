@@ -10,7 +10,7 @@ import subprocess
 import sys
 from time import perf_counter
 
-from tslc.lsp.features import completions, hover
+from tslc.lsp.features import code_actions, completions, hover
 from tslc.lsp.positions import span_to_range
 from tslc.lsp.workspace import AuthoringWorkspace
 
@@ -26,14 +26,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--edits", type=int, default=20)
     parser.add_argument("--hovers", type=int, default=200)
     parser.add_argument("--completions", type=int, default=200)
+    parser.add_argument("--actions", type=int, default=200)
     parser.add_argument("--primitive", default="add")
     parser.add_argument("--profile", default="avx2")
     parser.add_argument("--extension", default="avx2")
     parser.add_argument("--type", dest="type_tag", default="si32")
     parser.add_argument("--backend", default="cpp")
     args = parser.parse_args(argv)
-    if args.edits < 1 or args.hovers < 1 or args.completions < 1:
-        parser.error("--edits, --hovers, and --completions must be positive")
+    if min(args.edits, args.hovers, args.completions, args.actions) < 1:
+        parser.error(
+            "--edits, --hovers, --completions, and --actions must be positive"
+        )
 
     root = args.root.resolve()
     workspace = AuthoringWorkspace.from_root(root)
@@ -84,6 +87,20 @@ def main(argv: list[str] | None = None) -> int:
         if not completed.items:
             parser.error("benchmark reference did not produce completion items")
 
+    action_seconds: list[float] = []
+    action_range = span_to_range(reference, text)
+    for _ in range(args.actions):
+        started = perf_counter()
+        code_actions(
+            snapshot,
+            reference.path,
+            text,
+            action_range,
+            (),
+            workspace,
+        )
+        action_seconds.append(perf_counter() - started)
+
     workspace.close_document(path)
     command = [
         sys.executable,
@@ -125,11 +142,16 @@ def main(argv: list[str] | None = None) -> int:
                     _percentile(completion_seconds, 0.95),
                     6,
                 ),
+                "code_action_p95_seconds": round(
+                    _percentile(action_seconds, 0.95),
+                    6,
+                ),
                 "preview_seconds": round(preview_seconds, 6),
                 "samples": {
                     "edits": args.edits,
                     "hovers": args.hovers,
                     "completions": args.completions,
+                    "actions": args.actions,
                 },
             },
             indent=2,

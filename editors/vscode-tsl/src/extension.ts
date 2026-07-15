@@ -53,6 +53,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("tsl.checkSlot", checkSlot),
     vscode.commands.registerCommand("tsl.doctor", doctor),
     vscode.commands.registerCommand("tsl.addPrimitive", addNewPrimitive),
+    vscode.commands.registerCommand("tsl.openGuide", openGuide),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (
         event.affectsConfiguration("tsl.server.command") ||
@@ -64,6 +65,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
   await startServer();
+}
+
+async function openGuide(value: unknown): Promise<void> {
+  if (typeof value !== "string" || !/^https:\/\//u.test(value)) {
+    output?.error(`Ignored invalid TSL guide URL: ${String(value)}`);
+    return;
+  }
+  await vscode.env.openExternal(vscode.Uri.parse(value));
 }
 
 export async function deactivate(): Promise<void> {

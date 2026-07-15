@@ -16,6 +16,11 @@ direct authored Calls/Called By relationships. Explicit concrete analysis adds
 the compiler's final native/composed/fallback/unknown state and active lowered
 dependency closure without changing those lookup-only paths.
 
+Safe compiler-owned code actions are also part of the working baseline. Exact
+metadata and schema repairs are source-located, document-version/digest checked,
+returned as LSP `WorkspaceEdit` values, and undoable. Ambiguous diagnostics
+offer help rather than guessed edits.
+
 This is the execution plan for the remaining editor work. It should contain
 only unfinished behavior. When a slice meets its exit criteria, remove that
 slice rather than preserving a completion log here. Git history and tests are
@@ -23,19 +28,16 @@ the completion record.
 
 Parsed outer-language context, catalog completion, descriptor-driven TSIL
 region-shell completion, typed query-path completion, hierarchical symbols,
-typed selector navigation, and semantic highlighting are now part of the
-working baseline. The next product milestone adds safe source actions.
-A self-contained Marketplace distribution is a later release gate and is
-deliberately separated from authoring behavior.
+typed selector navigation, semantic highlighting, and safe source actions are
+now part of the working baseline. A self-contained Marketplace distribution is
+the remaining release gate and is deliberately separated from authoring
+behavior.
 
 ## Target Outcome
 
-An author editing an incomplete `.tsl` document should be able to discover the
-language without memorizing compiler internals:
-
-- safe, source-located compiler suggestions can become explicit, undoable
-  editor actions;
-- ordinary lookup requests remain memory-only and fast.
+A user should be able to install the public extension on a supported host and
+use the compiler-backed editor without separately installing Python or
+`tslc[editor]`, while contributors retain explicit external-runtime overrides.
 
 ## Fixed Boundaries
 
@@ -67,51 +69,19 @@ These constraints apply to every slice in this plan:
 
 | Area | Remaining behavior | Main owner |
 | --- | --- | --- |
-| Safe actions | Convert exact compiler suggestions into version-checked `WorkspaceEdit` actions | Diagnostics/audit API and LSP code actions |
 | Public distribution | Self-contained, platform-specific server runtime and release verification | Extension packaging and CI |
 
 ## Ordered Slices
 
-The slices are ordered by product dependency. Slice 1 builds safe edits on the
-now-stable source-span model. Slice 2 is a separate release track and must not
-block the authoring-depth milestone.
+The remaining slice is a separate release/distribution track. It builds on the
+stable authoring protocol but does not change its compiler/editor ownership.
 
-### Slice 1: Safe Compiler-Owned Code Actions
-
-**Goal:** expose exact, source-located compiler suggestions as deliberate,
-undoable editor edits.
-
-**Work:**
-
-- Define a typed suggestion/fix record with diagnostic identity, document URI,
-  expected document version or digest, replacement range, and replacement
-  text.
-- Convert metadata-audit suggestions only when the compiler can identify an
-  exact safe insertion or replacement range.
-- Add missing required-field actions only for schema cases with an unambiguous
-  insertion point and canonical indentation.
-- Add non-editing actions that open the relevant guide or inspect the owning
-  declaration when automatic repair is not safe.
-- Return LSP `WorkspaceEdit` objects; the server must not write source files
-  directly.
-
-**Exit criteria:**
-
-- Every edit action has before/after tests, preserves surrounding text, and is
-  rejected for a stale document version or digest.
-- Ambiguous diagnostics expose explanation/help only, never a guessed edit.
-- Multi-document edits are absent unless one atomic compiler suggestion truly
-  owns every affected span.
-- VS Code integration tests prove edits are previewable/undoable and ordinary
-  diagnostics remain non-mutating.
-
-### Slice 2: Self-Contained Marketplace Runtime
+### Slice 1: Self-Contained Marketplace Runtime
 
 **Goal:** make a public VS Code installation work without a separately managed
 Python or `tslc[editor]` environment.
 
-This slice starts only after the authoring-depth slices are stable. It is a
-release/distribution project, not a language-feature prerequisite.
+This is a release/distribution project, not a language-feature prerequisite.
 
 **Work:**
 
@@ -205,48 +175,8 @@ lookup exceeds its budget, profile context construction and index shape first.
 If rebuild diagnostics exceed their budget, measure parse-cache misses and
 catalog reconstruction before designing incremental promotion.
 
-## Authoring-Depth Milestone Acceptance
-
-The authoring-depth milestone is complete when Slice 1 satisfies its
-exit criteria and all of the following hold:
-
-- completion is correct at top level, nested catalog blocks, TSIL boundaries,
-  region shells, query paths, and primitive scope;
-- completion remains useful but conservative on the incomplete line;
-- all compiler-owned completion inventories have consistency/drift tests;
-- symbols, navigation, references, and semantic tokens use the same typed
-  declarations and source spans;
-- explorer analysis distinguishes final lowering state from selector origin,
-  exposes the active transitive dependency closure, and remains explicit and
-  cancellable;
-- every automatic edit is explicit, source-located, version-checked, and
-  undoable;
-- ordinary editing remains free of rendering, builds, tests, network access,
-  and direct file writes;
-- focused Python, LSP, extension, and performance checks pass.
-
-Self-contained Marketplace distribution is accepted separately through Slice
-2 and must not be claimed merely because contributor installation works.
-
 ## Active Risks And Mitigations
 
-- **Incomplete buffers can defeat parsed context.** Keep the fallback limited
-  to the current line, carry a confidence marker, and prefer omission over an
-  invalid completion.
-- **Schema and completion can drift.** Derive values from typed schemas and
-  registries and add inventory tests that compare registered forms with
-  authoring descriptors.
-- **TSIL vocabulary can fragment across scanners, validators, and lowering.**
-  Put author-facing metadata next to region registration and test every
-  registered descriptor.
-- **Raw TSIL text is intentionally ambiguous.** Stop semantic classification at
-  raw-text boundaries; do not infer target-language names.
-- **More feature detail can regress latency.** Precompute immutable index facts,
-  keep request handlers lookup-only, and measure against the guardrails before
-  adding caching layers.
-- **Concrete explorer results can become stale or misleading.** Key them by the
-  complete slot and corpus digest, label analyzed versus lookup facts, and
-  invalidate rather than recompute implicitly after edits.
 - **Bundled Python multiplies platform and release risk.** Keep it isolated in
-  Slice 2, use a declared support matrix, build reproducibly, and retain the
+  this slice, use a declared support matrix, build reproducibly, and retain the
   external runtime only as an explicit override.

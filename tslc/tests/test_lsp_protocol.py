@@ -107,6 +107,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         assert capabilities["hoverProvider"] is True
         assert capabilities["documentSymbolProvider"] is True
         assert capabilities["completionProvider"] is not None
+        assert capabilities["codeActionProvider"] is not None
         assert capabilities.get("documentFormattingProvider") in (None, False)
         client.send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
         client.send(
@@ -254,12 +255,100 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         assert "editor_scaffold_probe(left, right)" in scaffold["insertText"]
         assert scaffold["insertText"][scaffold["focusOffset"] - 1 : scaffold["focusOffset"] + 1] == '""'
 
+        safety_block = (
+            "      f32:\n"
+            "        requires [sse]\n"
+            "        safety:\n"
+            "          internal_unsafe true\n"
+            "          caller_unsafe false\n"
+            "          reasons [intrinsic]\n"
+            "        implementation:\n"
+            '          tsil "complete(intrin<add, build>(left, right));"'
+        )
+        without_safety = text.replace(
+            safety_block,
+            (
+                "      f32:\n"
+                "        requires [sse]\n"
+                "        implementation:\n"
+                '          tsil "complete(intrin<add, build>(left, right));"'
+            ),
+            1,
+        )
+        assert without_safety != text
         client.send(
             {
                 "jsonrpc": "2.0",
                 "method": "textDocument/didChange",
                 "params": {
                     "textDocument": {"uri": path.as_uri(), "version": 2},
+                    "contentChanges": [{"text": without_safety}],
+                },
+            }
+        )
+        metadata_changed = client.read_until(
+            lambda item: item.get("method") == "textDocument/publishDiagnostics"
+            and item["params"]["uri"] == path.as_uri()
+            and item["params"].get("version") == 2
+        )
+        assert metadata_changed["params"]["diagnostics"] == []
+        action_marker = (
+            "        requires [sse]\n"
+            "        implementation:\n"
+            '          tsil "complete(intrin<add, build>(left, right));"'
+        )
+        action_offset = without_safety.index(action_marker) + action_marker.index("tsil")
+        action_line = without_safety.count("\n", 0, action_offset)
+        action_character = action_offset - without_safety.rfind("\n", 0, action_offset) - 1
+        client.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 15,
+                "method": "textDocument/codeAction",
+                "params": {
+                    "textDocument": {"uri": path.as_uri()},
+                    "range": {
+                        "start": {"line": action_line, "character": action_character},
+                        "end": {"line": action_line, "character": action_character},
+                    },
+                    "context": {"diagnostics": []},
+                },
+            }
+        )
+        actions = client.read_until(lambda item: item.get("id") == 15)["result"]
+        metadata_action = next(
+            action for action in actions if "safety metadata" in action["title"]
+        )
+        assert metadata_action["kind"] == "quickfix"
+        assert metadata_action["edit"]["documentChanges"][0]["textDocument"] == {
+            "uri": path.as_uri(),
+            "version": 2,
+        }
+        assert metadata_action["data"]["documentDigest"]
+
+        client.send(
+            {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didChange",
+                "params": {
+                    "textDocument": {"uri": path.as_uri(), "version": 3},
+                    "contentChanges": [{"text": text}],
+                },
+            }
+        )
+        restored = client.read_until(
+            lambda item: item.get("method") == "textDocument/publishDiagnostics"
+            and item["params"]["uri"] == path.as_uri()
+            and item["params"].get("version") == 3
+        )
+        assert restored["params"]["diagnostics"] == []
+
+        client.send(
+            {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didChange",
+                "params": {
+                    "textDocument": {"uri": path.as_uri(), "version": 4},
                     "contentChanges": [{"text": text + "\nprim<v:=\n"}],
                 },
             }
@@ -267,9 +356,32 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         invalid = client.read_until(
             lambda item: item.get("method") == "textDocument/publishDiagnostics"
             and item["params"]["uri"] == path.as_uri()
-            and item["params"].get("version") == 2
+            and item["params"].get("version") == 4
         )
         assert invalid["params"]["diagnostics"]
+        invalid_diagnostic = invalid["params"]["diagnostics"][0]
+        client.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 16,
+                "method": "textDocument/codeAction",
+                "params": {
+                    "textDocument": {"uri": path.as_uri()},
+                    "range": invalid_diagnostic["range"],
+                    "context": {"diagnostics": [invalid_diagnostic]},
+                },
+            }
+        )
+        help_actions = client.read_until(lambda item: item.get("id") == 16)["result"]
+        help_action = next(
+            action for action in help_actions if "authoring guide" in action["title"]
+        )
+        assert help_action["kind"] == "quickfix.tsl.help"
+        assert "edit" not in help_action
+        assert help_action["command"]["command"] == "tsl.openGuide"
+        assert help_action["command"]["arguments"] == [
+            "https://github.com/JPietrzykTUD/tslgen-v2/blob/main/docs/tsl-editor.md"
+        ]
 
         add_line = next(
             index for index, line in enumerate(text.splitlines()) if "> add(" in line
@@ -327,7 +439,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         reloaded = client.read_until(
             lambda item: item.get("method") == "textDocument/publishDiagnostics"
             and item["params"]["uri"] == path.as_uri()
-            and item["params"].get("version") == 2
+            and item["params"].get("version") == 4
         )
         assert reloaded["params"]["diagnostics"]
 
@@ -336,7 +448,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
                 "jsonrpc": "2.0",
                 "method": "textDocument/didChange",
                 "params": {
-                    "textDocument": {"uri": path.as_uri(), "version": 3},
+                    "textDocument": {"uri": path.as_uri(), "version": 5},
                     "contentChanges": [{"text": text}],
                 },
             }
@@ -344,7 +456,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         corrected = client.read_until(
             lambda item: item.get("method") == "textDocument/publishDiagnostics"
             and item["params"]["uri"] == path.as_uri()
-            and item["params"].get("version") == 3
+            and item["params"].get("version") == 5
         )
         assert corrected["params"]["diagnostics"] == []
 

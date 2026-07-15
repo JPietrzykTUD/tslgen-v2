@@ -95,6 +95,66 @@ suite("TSL extension", () => {
     assert.equal(document.getText().length, originalLength);
     assert.equal(document.isDirty, false);
 
+    const safetyBlock =
+      "      f32:\n" +
+      "        requires [sse]\n" +
+      "        safety:\n" +
+      "          internal_unsafe true\n" +
+      "          caller_unsafe false\n" +
+      "          reasons [intrinsic]\n" +
+      "        implementation:\n" +
+      '          tsil "complete(intrin<add, build>(left, right));"';
+    const safetyBlockStart = document.getText().indexOf(safetyBlock);
+    assert.ok(safetyBlockStart >= 0);
+    const safetyStart = safetyBlockStart + safetyBlock.indexOf("        safety:");
+    const implementationStart =
+      safetyBlockStart + safetyBlock.indexOf("        implementation:");
+    await sourceEditor.edit((edit) =>
+      edit.delete(
+        new vscode.Range(
+          document.positionAt(safetyStart),
+          document.positionAt(implementationStart),
+        ),
+      ),
+    );
+    const actionPosition = document.positionAt(
+      document.getText().indexOf(actionMarker(document.getText())) +
+        actionMarker(document.getText()).indexOf("tsil"),
+    );
+    const metadataAction = await waitForCodeAction(
+      uri,
+      actionPosition,
+      "Add required safety metadata",
+    );
+    assert.doesNotMatch(
+      document
+        .getText()
+        .slice(
+          safetyBlockStart,
+          document.getText().indexOf("      f64:", safetyBlockStart),
+        ),
+      /safety:/,
+    );
+    assert.ok(metadataAction?.edit);
+    assert.equal(metadataAction.edit.entries().length, 1);
+    assert.equal(await vscode.workspace.applyEdit(metadataAction.edit), true);
+    assert.match(
+      document.getText(),
+      /requires \[sse\]\n        safety:\n          internal_unsafe true\n          caller_unsafe false\n          reasons \[intrinsic\]\n        implementation:/,
+    );
+    await vscode.commands.executeCommand("undo");
+    const afterActionUndo = document.getText();
+    assert.doesNotMatch(
+      afterActionUndo.slice(
+        safetyBlockStart,
+        afterActionUndo.indexOf("      f64:", safetyBlockStart),
+      ),
+      /safety:/,
+    );
+    await vscode.commands.executeCommand("undo");
+    assert.equal(document.getText().length, originalLength);
+    assert.equal(document.isDirty, false);
+
     const briefStart = document.positionAt(document.getText().indexOf("brief_description"));
     await sourceEditor.edit((edit) =>
       edit.replace(
@@ -223,4 +283,34 @@ async function waitForDiagnostic(
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   return false;
+}
+
+function actionMarker(text: string): string {
+  const marker =
+    "        requires [sse]\n" +
+    "        implementation:\n" +
+    '          tsil "complete(intrin<add, build>(left, right));"';
+  assert.ok(text.includes(marker));
+  return marker;
+}
+
+async function waitForCodeAction(
+  uri: vscode.Uri,
+  position: vscode.Position,
+  title: string,
+): Promise<vscode.CodeAction | undefined> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const actions = await vscode.commands.executeCommand<
+      (vscode.CodeAction | vscode.Command)[]
+    >("vscode.executeCodeActionProvider", uri, new vscode.Range(position, position));
+    const action = actions.find(
+      (item): item is vscode.CodeAction =>
+        "kind" in item && item.title.includes(title),
+    );
+    if (action) {
+      return action;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return undefined;
 }

@@ -13,7 +13,8 @@ tslc check
 
 It provides unsaved-buffer diagnostics, symbols, definition/reference
 navigation, hover, completion, semantic highlighting, generated TextMate
-coloring, concrete saved-file preview, slot checking, and backend-aware doctor.
+coloring, compiler-owned Quick Fixes, concrete saved-file preview, slot
+checking, and backend-aware doctor.
 It also provides a compiler-backed primitive scaffolding action and a TSLc
 Activity Bar explorer for primitive coverage, concrete slots, and direct call
 dependencies, plus explicit lowered-state and active-closure analysis. There is
@@ -90,6 +91,13 @@ toolchains, or start preview processes.
 Explorer analysis requires the saved corpus and runs `tslc analyze --format
 json` in a cancellable child. Cancellation or failure leaves the catalog
 explorer and authored dependencies usable.
+
+Quick Fixes are offered only when the compiler supplies an exact replacement
+for the current document version and digest. The language server returns a
+versioned `WorkspaceEdit` and never writes the file itself, so applying the fix
+uses normal VS Code preview and undo behavior. Diagnostics that cannot be
+repaired unambiguously offer an authoring-guide action instead of inventing an
+edit.
 
 See `docs/tsl-editor.md` in the repository for architecture, development,
 performance evidence, remote setup, installation updates, and troubleshooting.

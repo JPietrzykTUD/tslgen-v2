@@ -3,7 +3,8 @@
 Version 1 combines a compiler-owned Python language server with a small
 TypeScript VS Code client. The language server lives in `tslc/src/tslc/lsp/`;
 the client lives in `editors/vscode-tsl/`. This keeps parsing, catalog rules,
-TSIL vocabulary, diagnostics, navigation, hover, and completion in `tslc`.
+TSIL vocabulary, diagnostics, navigation, hover, completion, and safe source
+actions in `tslc`.
 The extension owns only process discovery, LSP transport, VS Code commands,
 configuration, syntax coloring, and preview presentation.
 
@@ -73,6 +74,9 @@ Opening a `.tsl` file activates:
 
 - ranged parser, catalog, invariant, and TSIL-shell diagnostics for unsaved
   overlays while the complete configured corpus remains loaded;
+- compiler-owned Quick Fixes for exact safety-metadata insertions and canonical
+  missing safety fields, plus guide actions for supported diagnostics that are
+  not safe to repair automatically;
 - hierarchical document symbols, typed selector and primitive-call
   definition/reference navigation, hover, context-aware completion, semantic
   highlighting, and TextMate coloring;
@@ -183,6 +187,18 @@ already invalid, the server seeds catalog facts and definitions from the valid
 saved corpus and combines them with any parseable occurrence spans in the
 overlay, so navigation does not begin empty.
 
+Quick Fixes are a separate, explicit request over that same in-memory snapshot.
+The compiler owns each action's diagnostic or audit identity, source path,
+expected document version and digest, exact replacement range, replacement
+text, and expected original text. The LSP adapter revalidates those facts and
+returns a versioned `WorkspaceEdit`; neither the compiler action builder nor
+the language server writes the source file. If the buffer changes before the
+action is returned, the edit is omitted, and VS Code also rejects a versioned
+edit that becomes stale afterward. Exact metadata-audit suggestions may be
+offered at the owning implementation even when no diagnostic is present.
+Ambiguous schema errors offer a maintained authoring guide instead of a guessed
+edit. Applying an edit remains a normal previewable, undoable editor operation.
+
 Document symbols cover every parsed top-level declaration and nest primitive
 parameters, generic parameters, result target axes, implementation selectors,
 variants, named tests, and type groups beneath their owner. Extension and type
@@ -292,7 +308,7 @@ Run the reproducible probe from the repository root:
 
 ```bash
 PYTHONPATH=tslc/src python -m tslc.maintenance.authoring_benchmark \
-  --root . --edits 20 --hovers 500 --completions 500
+  --root . --edits 20 --hovers 500 --completions 500 --actions 500
 ```
 
 On 2026-07-15 in the repository devcontainer, the 42-file corpus measured:
@@ -303,12 +319,15 @@ On 2026-07-15 in the repository devcontainer, the 42-file corpus measured:
 | Changed-document check, p95 | 0.661 s | under 0.750 s |
 | Index-backed hover, p95 | 0.147 ms | under 100 ms |
 | Parsed catalog completion, p95 | 3.584 ms | under 100 ms |
+| Compiler-owned code action lookup, p95 | 31.441 ms | under 100 ms |
 | Cold saved rendered specialization preview | 2.704 s | under 5 s |
 | Cold concrete explorer analysis (`add/avx2/si32/cpp`) | 3.721 s | under 5 s |
 
 These are development targets, not portable wall-clock test assertions. The
 probe reparses each changed overlay, reuses unchanged parsed documents and
 index fragments, and still performs deterministic complete-catalog validation.
+The code-action sample requests the ordinary no-fix path at a parsed catalog
+reference, including the compiler audit projection and LSP translation.
 
 ## Troubleshooting
 

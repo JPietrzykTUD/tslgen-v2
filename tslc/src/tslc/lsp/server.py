@@ -13,6 +13,7 @@ from pygls.lsp.server import LanguageServer
 from tslc.diagnostics import SourceSpan
 from tslc.lsp.features import (
     SEMANTIC_TOKEN_TYPES,
+    code_actions,
     completions,
     definition_locations,
     diagnostics_by_path,
@@ -273,6 +274,32 @@ def create_server(
         path = uri_to_path(params.text_document.uri)
         text = workspace.document_text(path) or ""
         return semantic_tokens(workspace.latest.index, path, text)
+
+    @server.feature(
+        types.TEXT_DOCUMENT_CODE_ACTION,
+        types.CodeActionOptions(
+            code_action_kinds=[types.CodeActionKind.QuickFix],
+            resolve_provider=False,
+        ),
+    )
+    async def code_action_request(
+        params: types.CodeActionParams,
+    ) -> list[types.CodeAction]:
+        workspace = await _workspace_with_index(state)
+        if workspace is None:
+            return []
+        path = uri_to_path(params.text_document.uri)
+        text = workspace.document_text(path) or ""
+        return list(
+            code_actions(
+                workspace.latest,
+                path,
+                text,
+                params.range,
+                tuple(params.context.diagnostics),
+                workspace,
+            )
+        )
 
     @server.feature(SPECIALIZATION_CONTEXT_METHOD)
     async def specialization_context_request(params: Any) -> dict[str, object]:

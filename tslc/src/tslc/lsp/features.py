@@ -7,6 +7,7 @@ from pathlib import Path
 
 from lsprotocol import types
 
+from tslc.authoring_fixes import authoring_actions, validated_edit
 from tslc.authoring_completion import (
     AuthoringCompletionKind,
     authoring_completions,
@@ -26,7 +27,7 @@ from tslc.lsp.positions import (
     source_position,
     span_to_range,
 )
-from tslc.syntax.authoring import authoring_cursor_context
+from tslc.syntax.authoring import AuthoringTextRange, authoring_cursor_context
 from tslc.lsp.workspace import AuthoringWorkspace, WorkspaceSnapshot
 
 SEMANTIC_TOKEN_TYPES = (
@@ -228,6 +229,106 @@ def semantic_tokens(
     return types.SemanticTokens(data=data)
 
 
+def code_actions(
+    snapshot: WorkspaceSnapshot,
+    path: Path,
+    text: str,
+    range_: types.Range,
+    requested_diagnostics: tuple[types.Diagnostic, ...],
+    workspace: AuthoringWorkspace,
+) -> tuple[types.CodeAction, ...]:
+    """Translate compiler-owned actions to versioned LSP workspace edits."""
+
+    requested = {
+        (str(item.code), item.message)
+        for item in requested_diagnostics
+        if item.code is not None
+    }
+    diagnostics = tuple(
+        item
+        for item in snapshot.diagnostics
+        if item.span is not None
+        and item.span.path.resolve() == path.resolve()
+        and (item.code, item.message) in requested
+    )
+    start = position_offset(text, range_.start)
+    end = position_offset(text, range_.end)
+    version = workspace.document_version(path)
+    actions = authoring_actions(
+        parsed=snapshot.parsed,
+        diagnostics=diagnostics,
+        path=path,
+        text=text,
+        version=version,
+        request_range=AuthoringTextRange(min(start, end), max(start, end)),
+    )
+    result: list[types.CodeAction] = []
+    for action in actions:
+        lsp_diagnostics = (
+            [lsp_diagnostic(action.diagnostic, workspace)]
+            if action.diagnostic is not None
+            else None
+        )
+        edit = validated_edit(
+            action,
+            path=path,
+            text=text,
+            version=version,
+        )
+        workspace_edit = None
+        if edit is not None:
+            workspace_edit = types.WorkspaceEdit(
+                document_changes=[
+                    types.TextDocumentEdit(
+                        text_document=types.OptionalVersionedTextDocumentIdentifier(
+                            uri=path_to_uri(path),
+                            version=version,
+                        ),
+                        edits=[
+                            types.TextEdit(
+                                range=types.Range(
+                                    start=offset_position(text, edit.range.start),
+                                    end=offset_position(text, edit.range.end),
+                                ),
+                                new_text=edit.replacement,
+                            )
+                        ],
+                    )
+                ]
+            )
+        command = (
+            types.Command(
+                title=action.title,
+                command="tsl.openGuide",
+                arguments=[action.guide_url],
+            )
+            if action.guide_url is not None
+            else None
+        )
+        if workspace_edit is None and command is None:
+            continue
+        result.append(
+            types.CodeAction(
+                title=action.title,
+                kind=(
+                    types.CodeActionKind.QuickFix
+                    if action.kind == "quickfix"
+                    else "quickfix.tsl.help"
+                ),
+                diagnostics=lsp_diagnostics,
+                is_preferred=action.preferred or None,
+                edit=workspace_edit,
+                command=command,
+                data={
+                    "diagnosticIdentity": action.diagnostic_identity,
+                    "documentVersion": action.expected_document.version,
+                    "documentDigest": action.expected_document.digest,
+                },
+            )
+        )
+    return tuple(result)
+
+
 def _occurrence(
     index: CatalogIndex | None,
     path: Path,
@@ -310,6 +411,7 @@ def _completion_kind(kind: AuthoringCompletionKind) -> types.CompletionItemKind:
 __all__ = (
     "SEMANTIC_TOKEN_TYPES",
     "completions",
+    "code_actions",
     "definition_locations",
     "diagnostics_by_path",
     "document_symbols",

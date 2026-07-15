@@ -100,7 +100,14 @@ parsing or compatibility rules in TypeScript.
 catalog-backed primitive-shape discovery, default parameter-name selection,
 name validation, and source scaffolding; the client only presents choices and
 applies the returned edit. The TypeScript VS Code client contains no compiler
-semantics. [lsp/primitive_explorer.py](src/tslc/lsp/primitive_explorer.py)
+semantics. Exact diagnostic and metadata-audit repairs are represented by the
+typed, editor-neutral records in
+[authoring_fixes.py](src/tslc/authoring_fixes.py). They bind an edit to its
+diagnostic or suggestion identity, source path, document version and digest,
+replacement range, and expected original text. The LSP adapter revalidates the
+record and returns a versioned `WorkspaceEdit`; compiler and server code never
+write the document. Ambiguous diagnostics yield non-editing guide actions.
+[lsp/primitive_explorer.py](src/tslc/lsp/primitive_explorer.py)
 projects File/Corpus primitive lists in either authored-source or concrete
 profile mode. It owns authored, selected, profile-rejected, missing, and
 backend-unsupported slot states plus implementation origins and source spans
