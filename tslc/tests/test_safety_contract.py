@@ -150,6 +150,42 @@ def test_transitive_safety_keeps_runtime_and_immediate_overloads_distinct() -> N
     assert immediate.spec.body_text == "unsafe { return data; }"
 
 
+def test_call_facts_include_every_body_behind_one_dependency_key() -> None:
+    runtime = _slot(
+        "callee",
+        required_features=frozenset({"avx2"}),
+    )
+    immediate = _slot(
+        "callee",
+        required_features=frozenset({"avx512f"}),
+        safety=ImplementationSafety(
+            internal_unsafe=True,
+            reasons=frozenset({"intrinsic"}),
+        ),
+        implementation_state=ImplementationState.FALLBACK,
+        param_kinds=("v", "sImm"),
+        immediate=("shift", "u32"),
+    )
+    caller = _slot(
+        "caller",
+        callees=frozenset(
+            {
+                CallDependency(
+                    primitive="callee",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                )
+            }
+        ),
+    )
+
+    _propagate_transitive_call_facts([caller, runtime, immediate], frozenset())
+
+    assert caller.spec.required_features == frozenset({"avx2", "avx512f"})
+    assert caller.spec.safety.internal_unsafe is True
+    assert caller.spec.implementation_state is ImplementationState.FALLBACK
+
+
 def test_call_facts_propagate_bottom_up_recursively() -> None:
     leaf = _slot(
         "leaf",
@@ -196,6 +232,48 @@ def test_call_facts_propagate_bottom_up_recursively() -> None:
     assert "unsafe_callee" in root.spec.safety.reasons
     assert middle.spec.body.requires_unsafe is False
     assert root.spec.body.requires_unsafe is False
+
+
+def test_call_facts_converge_through_cycles() -> None:
+    left = _slot(
+        "left",
+        required_features=frozenset({"sse2"}),
+        callees=frozenset(
+            {
+                CallDependency(
+                    primitive="right",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                )
+            }
+        ),
+    )
+    right = _slot(
+        "right",
+        required_features=frozenset({"avx2"}),
+        safety=ImplementationSafety(
+            internal_unsafe=True,
+            reasons=frozenset({"intrinsic"}),
+        ),
+        callees=frozenset(
+            {
+                CallDependency(
+                    primitive="left",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                )
+            }
+        ),
+    )
+
+    _propagate_transitive_call_facts([left, right], frozenset())
+
+    expected_features = frozenset({"sse2", "avx2"})
+    assert left.spec.required_features == expected_features
+    assert right.spec.required_features == expected_features
+    assert left.spec.safety.internal_unsafe is True
+    assert right.spec.safety.internal_unsafe is True
+    assert "unsafe_callee" in left.spec.safety.reasons
 
 
 def test_call_facts_propagate_implementation_state_bottom_up() -> None:
@@ -328,6 +406,36 @@ def test_pruning_one_overload_keeps_live_sibling() -> None:
 
     grouped, pruned = _prune_unresolved([runtime, immediate], frozenset())
 
+    assert grouped["rust"]["shift_like"] == [runtime.spec]
+    assert pruned == [immediate]
+
+
+def test_pruning_keeps_callers_while_an_equivalent_provider_remains() -> None:
+    dependency = CallDependency(
+        primitive="shift_like",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    runtime = _slot("shift_like")
+    missing = CallDependency(
+        primitive="missing",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    immediate = _slot(
+        "shift_like",
+        param_kinds=("v", "sImm"),
+        immediate=("shift", "u32"),
+        callees=frozenset({missing}),
+    )
+    caller = _slot("caller", callees=frozenset({dependency}))
+
+    grouped, pruned = _prune_unresolved(
+        [caller, runtime, immediate],
+        frozenset(),
+    )
+
+    assert grouped["rust"]["caller"] == [caller.spec]
     assert grouped["rust"]["shift_like"] == [runtime.spec]
     assert pruned == [immediate]
 

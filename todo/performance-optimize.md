@@ -2,16 +2,18 @@
 
 ## Status
 
-Implemented on 2026-07-14. Slices 0 through 4 were accepted. The profiled
-thresholds for Slice 5 and the resource-failure condition for Slice 6 were not
-met, so those conditional rewrites were deliberately not implemented.
+Implemented on 2026-07-15. Slices 0 through 5 were accepted. Slice 5 was
+initially deferred by the single-profile AVX2 profile, then accepted after the
+true full request showed that repeated dependency fixpoints accounted for 31%
+of profiled compiler work. The resource-failure condition for Slice 6 was not
+met, so that architectural retention rewrite remains deferred.
 
 ## Execution Result
 
-The final implementation keeps the original design boundaries and adds only
-bounded pure-text caches or generation-session-owned state. It does not add
-Python threads, thread pools, multiprocessing, or mechanical generator
-conversions.
+The final implementation keeps the original design boundaries and uses bounded
+pure-text caches, generation-session-owned state, immutable catalog indexes,
+and profile-local dependency indexes. It does not add Python threads, thread
+pools, multiprocessing, or mechanical generator conversions.
 
 - Slice 0 added the explicit snapshot capture/compare tool, canonical semantic
   manifests, sequential fresh-process benchmark driver, and an immutable
@@ -28,24 +30,31 @@ conversions.
 - Slice 4 retained one additional optimization: a shared 512-entry pure query
   parse cache. The full request uses 275 entries and records 764,447 hits. The
   AVX2 prototype improved median runtime by 5.4%, clearing the acceptance gate.
-- The post-Slice-3 profile attributed 7.4% to dependency pruning and call-fact
-  propagation, below Slice 5's 10% threshold. The true full request completes
-  in one process, so Slice 6's two-phase retention redesign remains deferred.
+- Slice 5 precomputes dependency identities and reverse edges, prunes missing
+  dependencies in deterministic waves, and propagates safety, features, and
+  implementation state with a changed-node worklist. It also stores the three
+  unique signature-role kinds when the immutable catalog is validated instead
+  of rediscovering them in specialization loops. Full-request wall time falls
+  from 65.91 seconds to 50.20 seconds. Its peak RSS moves from 1.52 GiB to
+  1.55 GiB, while the AVX2 and two-profile peaks both fall; the full high-water
+  mark includes retained earlier profiles plus the active profile's dependency
+  graph. The true full request still completes in one process, so Slice 6's
+  two-phase retention redesign remains deferred.
 
 Fresh-process final measurements on the audit host:
 
 | Workload | Audited before | Final wall time | Final peak RSS |
 |---|---:|---:|---:|
 | Catalog-only check | 5.82 s | 2.04 s | 109 MiB |
-| Focused AVX2 `add` closure | 7.98 s | 3.31 s | 142 MiB |
-| Full-corpus AVX2 lowering | 20.03 s | 9.44 s | 434 MiB |
-| `skylake,cascadelake` reuse | 36.78 s | 11.88 s | 474 MiB |
-| Default full request | not previously practical as a benchmark | 65.91 s | 1.52 GiB |
+| Focused AVX2 `add` closure | 7.98 s | 3.21 s | 139 MiB |
+| Full-corpus AVX2 lowering | 20.03 s | 8.72 s | 408 MiB |
+| `skylake,cascadelake` reuse | 36.78 s | 10.67 s | 451 MiB |
+| Default full request | not previously practical as a benchmark | 50.20 s | 1.55 GiB |
 
 Every final snapshot case (`focused`, `lowering-reuse`,
 `all-profiles-shapes`, `profile-diverse`, and the true combined `full`
 request) matches the original baseline exactly. The final ordinary Python suite
-passes with 1,644 tests and 69 expected default skips. The representative
+passes with 1,647 tests and 69 expected default skips. The representative
 generated C++/Rust scalar+AVX2 matrix build passes all eight build commands.
 
 The broader explicit generated gate finishes with 60 passes and four existing
@@ -619,11 +628,14 @@ slice to produce no code change.
 Goal: decide whether call-fact propagation remains material after reuse is in
 place.
 
-First capture a new cProfile report. Continue only if
-`_propagate_transitive_call_facts` or `_prune_unresolved` remains at least 10%
-of full-corpus AVX2 compiler time.
+The initial full-corpus AVX2 profile attributed 7.4% to this stage, so the slice
+was correctly deferred for that workload. A later profile of the true combined
+full request attributed 48.1 of 153.3 profiled compiler seconds (31%) to
+`_prune_unresolved`, including 42.2 seconds in
+`_propagate_transitive_call_facts`. That full-request evidence cleared the
+threshold and activated this slice.
 
-If justified:
+Implemented changes:
 
 - precompute deterministic dependency edges and reverse caller edges once;
 - propagate safety, required features, and implementation state through a

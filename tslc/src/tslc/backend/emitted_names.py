@@ -50,16 +50,17 @@ def _split_immediates(
     split_names: frozenset[str],
 ) -> dict[str, tuple[LoweredSpecialization, ...]]:
     out: dict[str, tuple[LoweredSpecialization, ...]] = {}
+    immediate_kind = DEFAULT_SUPPORT_POLICY.immediate_kind
     for name, specs in by_name.items():
         imm = tuple(
             spec
             for spec in specs
-            if DEFAULT_SUPPORT_POLICY.immediate_kind in spec.param_kinds
+            if immediate_kind in spec.param_kinds
         )
         runtime = tuple(
             spec
             for spec in specs
-            if DEFAULT_SUPPORT_POLICY.immediate_kind not in spec.param_kinds
+            if immediate_kind not in spec.param_kinds
         )
         if _immediate_split_base(name) in split_names and imm and runtime:
             out[name] = runtime

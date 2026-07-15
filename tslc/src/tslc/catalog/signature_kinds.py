@@ -47,6 +47,9 @@ class SignatureKindCatalog:
         repr=False,
         compare=False,
     )
+    _immediate_kind: str = field(init=False, repr=False, compare=False)
+    _lane_list_kind: str = field(init=False, repr=False, compare=False)
+    _index_vector_kind: str = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         by_kind: dict[str, SignatureKindCapability] = {}
@@ -61,8 +64,21 @@ class SignatureKindCatalog:
                 + ", ".join(sorted(set(duplicates)))
             )
         object.__setattr__(self, "_by_kind", MappingProxyType(by_kind))
-        for flag in ("immediate_operand", "lane_list", "index_vector"):
-            self._validate_single_kind(flag)
+        object.__setattr__(
+            self,
+            "_immediate_kind",
+            self._validated_single_kind("immediate_operand"),
+        )
+        object.__setattr__(
+            self,
+            "_lane_list_kind",
+            self._validated_single_kind("lane_list"),
+        )
+        object.__setattr__(
+            self,
+            "_index_vector_kind",
+            self._validated_single_kind("index_vector"),
+        )
 
     @property
     def by_kind(self) -> Mapping[str, SignatureKindCapability]:
@@ -130,15 +146,15 @@ class SignatureKindCatalog:
 
     @property
     def immediate_kind(self) -> str:
-        return self._single_kind("immediate_operand")
+        return self._immediate_kind
 
     @property
     def lane_list_kind(self) -> str:
-        return self._single_kind("lane_list")
+        return self._lane_list_kind
 
     @property
     def index_vector_kind(self) -> str:
-        return self._single_kind("index_vector")
+        return self._index_vector_kind
 
     def supports(self, kind: str) -> bool:
         return kind in self.by_kind
@@ -176,15 +192,7 @@ class SignatureKindCatalog:
             register_is_base=register_is_base
         )
 
-    def _single_kind(self, flag: str) -> str:
-        self._validate_single_kind(flag)
-        return next(
-            capability.kind
-            for capability in self.capabilities
-            if bool(getattr(capability, flag))
-        )
-
-    def _validate_single_kind(self, flag: str) -> None:
+    def _validated_single_kind(self, flag: str) -> str:
         matches = tuple(
             capability.kind
             for capability in self.capabilities
@@ -192,6 +200,7 @@ class SignatureKindCatalog:
         )
         if len(matches) != 1:
             raise ValueError(f"expected exactly one signature kind with {flag}")
+        return matches[0]
 
     def _capability(self, kind: str) -> SignatureKindCapability:
         capability = self.by_kind.get(kind)
