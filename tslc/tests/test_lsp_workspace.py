@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -11,6 +12,7 @@ from lsprotocol import types
 from pygls.lsp.server import LanguageServer
 
 from tslc.diagnostics import SourceSpan
+from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.ir.region_registry import TSIL_REGION_KEYWORDS
 from tslc.lsp.features import (
     completions,
@@ -20,13 +22,23 @@ from tslc.lsp.features import (
     reference_locations,
     semantic_tokens,
 )
-from tslc.lsp.positions import source_position, span_to_range
+from tslc.lsp.positions import (
+    offset_position,
+    position_offset,
+    source_position,
+    span_to_range,
+)
 from tslc.lsp.primitive_explorer import PrimitiveExplorerCache, primitive_explorer
 from tslc.lsp.server import _publish, _ServerState, _workspace_with_index
 from tslc.lsp.specialization_context import specialization_context
 from tslc.lsp.workspace import AuthoringWorkspace, WorkspaceSnapshot
 from tslc.lower.lowerer import Lowerer
 from tslc.select.selector import Selector
+from tslc.sources import SourceDocument
+from tslc.syntax.parser import TslParser
+
+
+_COMPLETION_PATH = Path("tslctmp/lsp-completion.tsl").resolve()
 
 
 def test_index_requests_wait_for_a_completed_initial_check() -> None:
@@ -69,6 +81,8 @@ def test_utf16_position_round_trip() -> None:
     assert range_.start.character == 6
     assert range_.end.character == 8
     assert source_position(text, range_.end) == (1, 8)
+    assert offset_position(text, 7) == range_.end
+    assert position_offset(text, range_.end) == 7
 
 
 def test_workspace_reuses_unchanged_documents_and_suppresses_stale_results(
@@ -92,6 +106,13 @@ def test_workspace_reuses_unchanged_documents_and_suppresses_stale_results(
     assert malformed is not None
     assert malformed.diagnostics
     assert malformed.index is baseline_index
+    assert malformed.parsed is not None
+    retained = next(
+        document
+        for document in malformed.parsed.documents
+        if document.path.resolve() == path.resolve()
+    )
+    assert retained.declarations
     assert workspace.cache.last_reparsed == (path.resolve(),)
     # Failed checks retain the last successful index; no new fragment is published.
 
@@ -101,6 +122,28 @@ def test_workspace_reuses_unchanged_documents_and_suppresses_stale_results(
     assert fixed.diagnostics == ()
     assert workspace.cache.last_reparsed == (path.resolve(),)
     assert workspace.cache.index_cache.last_reindexed == (path.resolve(),)
+
+
+def test_initial_invalid_overlay_seeds_last_valid_parsed_context(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    path = next(iter(sorted(data_root.rglob("*.tsl"))))
+    original = path.read_text(encoding="utf-8")
+
+    generation = workspace.open(path, original + "\nprim<v:=\n", 1)
+    snapshot = workspace.check(generation)
+
+    assert snapshot is not None
+    assert snapshot.diagnostics
+    assert snapshot.catalog is not None
+    assert snapshot.parsed is not None
+    retained = next(
+        document
+        for document in snapshot.parsed.documents
+        if document.path.resolve() == path.resolve()
+    )
+    assert retained.declarations
 
 
 def test_specialization_context_uses_cursor_scope_and_selector_slots(
@@ -404,28 +447,45 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
     symbols = document_symbols(snapshot.index, reference.path, text)
     tokens = semantic_tokens(snapshot.index, reference.path, text)
     completion_text = 'prim<v:=v> x(v):\n  impls:\n    scalar:\n      si32:\n        implementation:\n          tsil "cal'
-    completed = completions(
+    completion_snapshot = _snapshot_with_parsed_source(
         snapshot,
+        completion_text + 'l"\n',
+    )
+    completed = completions(
+        completion_snapshot,
+        _COMPLETION_PATH,
         completion_text,
         types.Position(line=5, character=len('          tsil "cal')),
     )
     all_regions = _completion_labels(
         snapshot,
         'prim<v:=v> x(v):\n  impls:\n    scalar:\n      si32:\n        implementation:\n          tsil "',
+        'prim<v:=v> x(v):\n  impls:\n    scalar:\n      si32:\n        implementation:\n          tsil "complete(value);"\n',
     )
-    outer = _completion_labels(snapshot, "prim<v:=v> x(v):\n  bri")
-    extensions = _completion_labels(snapshot, "prim<v:=v> x(v):\n  impls:\n    sca")
+    outer = _completion_labels(
+        snapshot,
+        "prim<v:=v> x(v):\n  bri",
+        'prim<v:=v> x(v):\n  brief_description "x"\n',
+    )
+    extensions = _completion_labels(
+        snapshot,
+        "prim<v:=v> x(v):\n  impls:\n    sca",
+        "prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        requires []\n",
+    )
     type_groups = _completion_labels(
         snapshot,
         "prim<v:=v> x(v):\n  impls:\n    scalar:\n      ari",
+        "prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        requires []\n",
     )
     implementation_fields = _completion_labels(
         snapshot,
         "prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        ",
+        "prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        requires []\n",
     )
     primitive_calls = _completion_labels(
         snapshot,
         'prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        implementation:\n          tsil "complete(call<primitive=ad',
+        'prim<v:=v> x(v):\n  impls:\n    scalar:\n      arith:\n        implementation:\n          tsil "complete(call<primitive=add>(v));"\n',
     )
     required_features = _completion_labels(
         snapshot,
@@ -434,6 +494,11 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
         "    avx512:\n"
         "      arith:\n"
         "        requires [avx512_",
+        "prim<v:=v> x(v):\n"
+        "  impls:\n"
+        "    avx512:\n"
+        "      arith:\n"
+        "        requires [avx512f]\n",
     )
     nested_required_features = _completion_labels(
         snapshot,
@@ -444,6 +509,13 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
         "        requires:\n"
         "          avx512:\n"
         "            dword [avx512_",
+        "prim<v:=v> x(v):\n"
+        "  impls:\n"
+        "    avx512:\n"
+        "      arith:\n"
+        "        requires:\n"
+        "          avx512:\n"
+        "            dword [avx512f]\n",
     )
 
     assert definitions
@@ -459,7 +531,6 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
     assert "arith" in type_groups
     assert {
         "implementation",
-        "requires",
         "safety",
         "unroll_variants",
         "variants",
@@ -472,14 +543,26 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
     assert "si32" not in required_features
 
 
-def _completion_labels(snapshot, text: str) -> set[str]:
+def _completion_labels(snapshot, text: str, baseline: str) -> set[str]:
     lines = text.splitlines()
+    parsed_snapshot = _snapshot_with_parsed_source(snapshot, baseline)
     completed = completions(
-        snapshot,
+        parsed_snapshot,
+        _COMPLETION_PATH,
         text,
         types.Position(line=len(lines) - 1, character=len(lines[-1])),
     )
     return {item.label for item in completed.items}
+
+
+def _snapshot_with_parsed_source(
+    snapshot: WorkspaceSnapshot, text: str
+) -> WorkspaceSnapshot:
+    parsed = TslParser(load_default_tsl_grammar()).parse(
+        (SourceDocument(_COMPLETION_PATH, text, "", "tsl"),)
+    )
+    assert parsed.diagnostics == ()
+    return replace(snapshot, parsed=parsed)
 
 
 def test_unsaved_parser_catalog_and_tsil_errors_are_checked(

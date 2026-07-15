@@ -188,17 +188,23 @@ class AuthoringWorkspace:
                     cache=self.cache,
                 )
                 if baseline.index is not None:
+                    parsed = _merge_parsed(
+                        result.parsed,
+                        baseline.parsed,
+                        result.source_paths,
+                    )
                     result = replace(
                         result,
+                        parsed=parsed,
                         catalog=baseline.catalog,
                         index=(
                             build_catalog_index(
                                 baseline.catalog,
-                                result.parsed,
+                                parsed,
                                 cache=self.cache.index_cache,
                             )
                             if baseline.catalog is not None
-                            and result.parsed is not None
+                            and parsed is not None
                             else baseline.index
                         ),
                     )
@@ -230,6 +236,7 @@ class AuthoringWorkspace:
                     key=lambda item: item.as_posix(),
                 )
             )
+            parsed = _merge_parsed(result.parsed, previous.parsed, paths)
             snapshot = WorkspaceSnapshot(
                 generation,
                 catalog,
@@ -238,7 +245,7 @@ class AuthoringWorkspace:
                 paths,
                 versions,
                 self.config.target_features,
-                result.parsed,
+                parsed,
             )
             self._latest = snapshot
             return snapshot
@@ -263,6 +270,35 @@ def _configured_profiles(path: Path | None) -> Mapping[str, MachineProfile]:
     if path is None:
         return MappingProxyType({})
     return load_machine_profiles_checked(path).profiles
+
+
+def _merge_parsed(
+    current: OuterTslParseResult | None,
+    fallback: OuterTslParseResult | None,
+    source_paths: tuple[Path, ...],
+) -> OuterTslParseResult | None:
+    """Retain the last parsed document only where the current edit failed to parse."""
+
+    if current is None:
+        return fallback
+    if fallback is None:
+        return current
+    allowed = {path.resolve() for path in source_paths}
+    documents = {
+        document.path.resolve(): document
+        for document in fallback.documents
+        if document.path.resolve() in allowed
+    }
+    documents.update(
+        {document.path.resolve(): document for document in current.documents}
+    )
+    return OuterTslParseResult(
+        documents=tuple(
+            documents[path]
+            for path in sorted(documents, key=lambda item: item.as_posix())
+        ),
+        diagnostics=current.diagnostics,
+    )
 
 
 __all__ = (

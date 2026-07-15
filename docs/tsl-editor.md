@@ -128,15 +128,29 @@ native/composed/fallback classification remains an explicit concrete-analysis
 feature because those facts are decided during lowering and dependency
 propagation.
 
+Outer-language completion is driven by parsed declaration, field, selector,
+list, map, and value spans. It offers top-level declaration snippets; known
+nested schema fields; implementation extension/type/representation-target
+selectors; booleans, enums, backend IDs, datatypes, signature shapes, and other
+closed catalog values. Singleton fields already present in a mapping are
+suppressed, while repeatable implementation selector branches remain
+available. Completion edits replace only the active prefix and carry concise
+kind/detail metadata.
+
 Completion inside simple and scoped `requires [...]` lists offers target-feature
 tokens from the configured machine profiles and catalog requirements, rather
-than implementation type groups.
+than implementation type groups. At an implementation extension/type mapping,
+completion offers the mapping's metadata keys rather than datatypes. For a
+temporarily malformed line, the server combines the active-line prefix with the
+last valid parsed enclosing block and does not reconstruct nesting from
+earlier source lines.
 
 Hover, navigation, symbols, completion, and semantic tokens read the most
-recent successful `CatalogIndex`. They do not check the corpus, select or lower
-a specialization, render artifacts, or start a process. If the current buffer
-is malformed, those features continue from the last successful index while
-new diagnostics describe the malformed overlay. If the first document arrives
+recent successful catalog/index and parsed source snapshot. They do not check
+the corpus, select or lower a specialization, render artifacts, or start a
+process. If the current buffer is malformed, those features continue from the
+last successful catalog and parsed document while new diagnostics describe the
+malformed overlay. If the first document arrives
 already invalid, the server seeds catalog facts and definitions from the valid
 saved corpus and combines them with any parseable occurrence spans in the
 overlay, so navigation does not begin empty.
@@ -232,17 +246,18 @@ Run the reproducible probe from the repository root:
 
 ```bash
 PYTHONPATH=tslc/src python -m tslc.maintenance.authoring_benchmark \
-  --root . --edits 20 --hovers 500
+  --root . --edits 20 --hovers 500 --completions 500
 ```
 
 On 2026-07-15 in the repository devcontainer, the 42-file corpus measured:
 
 | Operation | Result | Version 1 target |
 | --- | ---: | ---: |
-| Initial complete check/index | 2.305 s | under 2.5 s |
-| Changed-document check, p95 | 0.637 s | under 0.750 s |
-| Index-backed hover, p95 | 0.138 ms | under 100 ms |
-| Cold saved rendered specialization preview | 2.724 s | under 5 s |
+| Initial complete check/index | 2.417 s | under 2.5 s |
+| Changed-document check, p95 | 0.655 s | under 0.750 s |
+| Index-backed hover, p95 | 0.160 ms | under 100 ms |
+| Parsed catalog completion, p95 | 3.462 ms | under 100 ms |
+| Cold saved rendered specialization preview | 2.709 s | under 5 s |
 
 These are development targets, not portable wall-clock test assertions. The
 probe reparses each changed overlay, reuses unchanged parsed documents and

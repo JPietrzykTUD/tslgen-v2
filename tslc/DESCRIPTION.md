@@ -65,10 +65,18 @@ reparses changed buffers and reuses unchanged documents; a per-document
 [catalog index](src/tslc/catalog_index.py) similarly reuses unchanged source
 fragments before deterministic full-catalog validation publishes a new
 snapshot. Symbols, references, hover, completion, and semantic tokens are pure
-projections of the latest successful index. The editor-neutral pygls transport
-is in `lsp/`; an initially invalid overlay uses the valid saved corpus for
-catalog facts and definitions while retaining parseable overlay occurrence
-spans. [lsp/specialization_context.py](src/tslc/lsp/specialization_context.py)
+projections of the latest successful catalog/index. The parsed-source boundary
+in [syntax/authoring.py](src/tslc/syntax/authoring.py) constructs a typed cursor
+context from declaration, field, selector, map, list, and value spans; its
+fallback reads only the active incomplete line. Schema- and registry-backed
+[authoring_completion.py](src/tslc/authoring_completion.py) returns typed
+completion records with replacement ranges, snippets, details, and stable
+ordering for the LSP adapter. Failed document parses retain that document's
+last valid parsed structure without replacing current diagnostics. The
+editor-neutral pygls transport is in `lsp/`; an initially invalid overlay uses
+the valid saved corpus for catalog facts, parsed context, and definitions while
+retaining parseable overlay occurrence spans.
+[lsp/specialization_context.py](src/tslc/lsp/specialization_context.py)
 combines the parsed cursor scope with the real selector to expose valid
 `(profile, extension, type)` slots to editor clients without duplicating source
 parsing or compatibility rules in TypeScript.

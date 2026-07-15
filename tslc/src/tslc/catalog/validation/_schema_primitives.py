@@ -33,8 +33,13 @@ from tslc.syntax.ast import (
     ParsedTslField,
 )
 
-_KNOWN_GENERIC_PARAM_KINDS = frozenset({"bool", "int", "simd_type"})
-_KNOWN_IMMEDIATE_DISPATCH = frozenset({"literal_match"})
+KNOWN_GENERIC_PARAM_KINDS = frozenset({"bool", "int", "simd_type"})
+KNOWN_IMMEDIATE_DISPATCH = frozenset({"literal_match"})
+KNOWN_GENERIC_PARAM_FIELDS = frozenset(
+    {"kind", "default", "base_types", "specialize_base", "constraints"}
+)
+KNOWN_IMMEDIATE_PARAM_FIELDS = frozenset({"type", "value_range", "dispatch"})
+KNOWN_RETURN_TYPE_FIELDS = frozenset({"base", "extension"})
 _BASE_WIDTH_CONSTRAINT_RE = re.compile(
     r"^width\(self::base\)\s*(>=|>|==)\s*width\(base::in\)$"
 )
@@ -55,7 +60,7 @@ KNOWN_PRIMITIVE_FIELDS = frozenset(
         "tests",
     }
 )
-_KNOWN_PRIMITIVE_ATTRIBUTES = {
+KNOWN_PRIMITIVE_ATTRIBUTES = {
     "aligned": frozenset({"true", "false", "*"}),
     "arg_count": frozenset({"return_vector_length"}),
     "cast": frozenset({"reinterpret", "convert"}),
@@ -120,7 +125,7 @@ def _validate_attributes(
                 )
             )
         seen.add(identity)
-        allowed = _KNOWN_PRIMITIVE_ATTRIBUTES.get(key)
+        allowed = KNOWN_PRIMITIVE_ATTRIBUTES.get(key)
         if allowed is None:
             diagnostics.append(
                 diagnostic_at(
@@ -150,20 +155,18 @@ def _validate_generic_params(
         for entry in children(field.field):
             validate_known_fields(
                 children(entry),
-                frozenset(
-                    {"kind", "default", "base_types", "specialize_base", "constraints"}
-                ),
+                KNOWN_GENERIC_PARAM_FIELDS,
                 diagnostics,
                 owner=f"generic parameter {entry.key.text!r}",
             )
             kind_field = child(entry, "kind")
             kind = field_text(kind_field)
-            if kind is not None and kind not in _KNOWN_GENERIC_PARAM_KINDS:
+            if kind is not None and kind not in KNOWN_GENERIC_PARAM_KINDS:
                 invalid_enum(
                     diagnostics,
                     kind_field,
                     f"generic parameter kind {kind!r}",
-                    sorted(_KNOWN_GENERIC_PARAM_KINDS),
+                    sorted(KNOWN_GENERIC_PARAM_KINDS),
                 )
             specialize_base = child(entry, "specialize_base")
             if specialize_base is not None:
@@ -332,7 +335,7 @@ def _validate_immediate_params(
         for entry in children(field.field):
             validate_known_fields(
                 children(entry),
-                frozenset({"type", "value_range", "dispatch"}),
+                KNOWN_IMMEDIATE_PARAM_FIELDS,
                 diagnostics,
                 owner=f"params entry {entry.key.text!r}",
             )
@@ -348,12 +351,12 @@ def _validate_immediate_params(
                         )
                     )
                 strategy = field_text(child_field)
-                if strategy is not None and strategy not in _KNOWN_IMMEDIATE_DISPATCH:
+                if strategy is not None and strategy not in KNOWN_IMMEDIATE_DISPATCH:
                     invalid_enum(
                         diagnostics,
                         child_field,
                         f"immediate dispatch strategy {strategy!r}",
-                        sorted(_KNOWN_IMMEDIATE_DISPATCH),
+                        sorted(KNOWN_IMMEDIATE_DISPATCH),
                     )
 
 
@@ -441,7 +444,7 @@ def _validate_param_types(
                     )
                     continue
                 assert attribute_value is not None
-                allowed = _KNOWN_PRIMITIVE_ATTRIBUTES.get(attribute_name, frozenset())
+                allowed = KNOWN_PRIMITIVE_ATTRIBUTES.get(attribute_name, frozenset())
                 if attribute_value not in allowed or attribute_value == "*":
                     invalid_enum(
                         diagnostics,
@@ -499,7 +502,7 @@ def _validate_return_type(
     for field in declaration.fields_by_name("return_type"):
         validate_known_fields(
             children(field.field),
-            frozenset({"base", "extension"}),
+            KNOWN_RETURN_TYPE_FIELDS,
             diagnostics,
             owner="return_type",
         )

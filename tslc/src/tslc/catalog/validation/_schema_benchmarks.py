@@ -11,8 +11,8 @@ from tslc.catalog.validation.source_spans import children, field_text, source_sp
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.ast import ParsedPrimitiveDeclaration, ParsedTslMapValue
 
-_KNOWN_BENCHMARK_FIELDS = frozenset({"latency_chain", "operand_domains"})
-_KNOWN_OPERAND_DOMAINS = frozenset({"nonzero", "shift_count"})
+KNOWN_BENCHMARK_FIELDS = frozenset({"latency_chain", "operand_domains"})
+KNOWN_OPERAND_DOMAINS = frozenset({"nonzero", "shift_count"})
 
 
 def validate_benchmarks(
@@ -38,7 +38,7 @@ def validate_benchmarks(
         entries = children(field)
         validate_known_fields(
             entries,
-            _KNOWN_BENCHMARK_FIELDS,
+            KNOWN_BENCHMARK_FIELDS,
             diagnostics,
             owner=f"primitive {declaration.name!r} benchmarks",
         )
@@ -139,7 +139,7 @@ def validate_benchmarks(
                             source=source_span(operand.source),
                         )
                     )
-                if domain not in _KNOWN_OPERAND_DOMAINS:
+                if domain not in KNOWN_OPERAND_DOMAINS:
                     diagnostics.append(
                         diagnostic_at(
                             severity="error",
@@ -147,7 +147,7 @@ def validate_benchmarks(
                             message=(
                                 f"primitive {declaration.name!r}: unknown benchmark "
                                 f"operand domain {domain!r}; expected one of: "
-                                f"{', '.join(sorted(_KNOWN_OPERAND_DOMAINS))}"
+                                f"{', '.join(sorted(KNOWN_OPERAND_DOMAINS))}"
                             ),
                             source=source_span(operand.source),
                         )

@@ -14,7 +14,7 @@ from tslc.catalog.validation.source_spans import child, children, field_text, so
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.ast import ParsedTslField, ParsedTslListValue, ParsedTslScalarValue
 
-_KNOWN_TARGET_FAMILIES_FIELDS = frozenset(
+KNOWN_TARGET_FAMILIES_FIELDS = frozenset(
     {
         "extension_family_capabilities",
         "known_extension_families",
@@ -22,7 +22,7 @@ _KNOWN_TARGET_FAMILIES_FIELDS = frozenset(
         "profile_families",
     }
 )
-_KNOWN_EXTENSION_FAMILY_FIELDS = frozenset(
+KNOWN_EXTENSION_FAMILY_FIELDS = frozenset(
     {
         "free_function_owner",
         "implementation_fallback",
@@ -30,7 +30,7 @@ _KNOWN_EXTENSION_FAMILY_FIELDS = frozenset(
         "requires_declared_vector_register",
     }
 )
-_KNOWN_PROFILE_FAMILY_FIELDS = frozenset(
+KNOWN_PROFILE_FAMILY_FIELDS = frozenset(
     {
         "backends",
         "extension_families",
@@ -39,7 +39,7 @@ _KNOWN_PROFILE_FAMILY_FIELDS = frozenset(
         "sort_order",
     }
 )
-_KNOWN_BACKEND_PROFILE_FIELDS = frozenset(
+KNOWN_BACKEND_PROFILE_FIELDS = frozenset(
     {"detection", "feature_flags", "linker", "target"}
 )
 
@@ -52,7 +52,7 @@ def validate_target_families(
     target_fields = children(field)
     validate_known_fields(
         target_fields,
-        _KNOWN_TARGET_FAMILIES_FIELDS,
+        KNOWN_TARGET_FAMILIES_FIELDS,
         diagnostics,
         owner="target_families",
     )
@@ -96,7 +96,7 @@ def validate_target_families(
         extension_fields = children(extension_family)
         validate_known_fields(
             extension_fields,
-            _KNOWN_EXTENSION_FAMILY_FIELDS,
+            KNOWN_EXTENSION_FAMILY_FIELDS,
             diagnostics,
             owner=owner,
         )
@@ -107,7 +107,7 @@ def validate_target_families(
         )
         _validate_boolean_fields(
             extension_family,
-            _KNOWN_EXTENSION_FAMILY_FIELDS,
+            KNOWN_EXTENSION_FAMILY_FIELDS,
             diagnostics,
             owner,
         )
@@ -119,7 +119,7 @@ def validate_target_families(
     for profile in children(profiles):
         validate_known_fields(
             children(profile),
-            _KNOWN_PROFILE_FAMILY_FIELDS,
+            KNOWN_PROFILE_FAMILY_FIELDS,
             diagnostics,
             owner=f"profile family {profile.key.text!r}",
         )
@@ -167,7 +167,7 @@ def validate_target_families(
             )
             validate_known_fields(
                 children(backend),
-                _KNOWN_BACKEND_PROFILE_FIELDS,
+                KNOWN_BACKEND_PROFILE_FIELDS,
                 diagnostics,
                 owner=owner,
             )

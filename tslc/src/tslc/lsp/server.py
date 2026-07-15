@@ -256,7 +256,7 @@ def create_server(
             return types.CompletionList(is_incomplete=False, items=[])
         path = uri_to_path(params.text_document.uri)
         text = workspace.document_text(path) or ""
-        return completions(workspace.latest, text, params.position)
+        return completions(workspace.latest, path, text, params.position)
 
     @server.feature(
         types.TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL,

@@ -72,8 +72,10 @@ suite("TSL extension", () => {
       implementationCompletions.items.map((item) => item.label.toString()),
     );
     assert.ok(implementationLabels.has("requires"));
-    assert.ok(implementationLabels.has("safety"));
-    assert.ok(implementationLabels.has("implementation"));
+    assert.ok(implementationLabels.has("unroll_variants"));
+    assert.ok(implementationLabels.has("variants"));
+    assert.ok(!implementationLabels.has("safety"));
+    assert.ok(!implementationLabels.has("implementation"));
     assert.ok(!implementationLabels.has("si32"));
 
     const originalLength = document.getText().length;

@@ -10,7 +10,7 @@ import subprocess
 import sys
 from time import perf_counter
 
-from tslc.lsp.features import hover
+from tslc.lsp.features import completions, hover
 from tslc.lsp.positions import span_to_range
 from tslc.lsp.workspace import AuthoringWorkspace
 
@@ -18,19 +18,22 @@ from tslc.lsp.workspace import AuthoringWorkspace
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m tslc.maintenance.authoring_benchmark",
-        description="Measure cold authoring, cached edit, hover, and preview latency.",
+        description=(
+            "Measure cold authoring, cached edit, hover, completion, and preview latency."
+        ),
     )
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--edits", type=int, default=20)
     parser.add_argument("--hovers", type=int, default=200)
+    parser.add_argument("--completions", type=int, default=200)
     parser.add_argument("--primitive", default="add")
     parser.add_argument("--profile", default="avx2")
     parser.add_argument("--extension", default="avx2")
     parser.add_argument("--type", dest="type_tag", default="si32")
     parser.add_argument("--backend", default="cpp")
     args = parser.parse_args(argv)
-    if args.edits < 1 or args.hovers < 1:
-        parser.error("--edits and --hovers must be positive")
+    if args.edits < 1 or args.hovers < 1 or args.completions < 1:
+        parser.error("--edits, --hovers, and --completions must be positive")
 
     root = args.root.resolve()
     workspace = AuthoringWorkspace.from_root(root)
@@ -68,10 +71,18 @@ def main(argv: list[str] | None = None) -> int:
     hover_seconds: list[float] = []
     for _ in range(args.hovers):
         started = perf_counter()
-        result = hover(snapshot.index, reference.path, text, position)
+        hovered = hover(snapshot.index, reference.path, text, position)
         hover_seconds.append(perf_counter() - started)
-        if result is None:
+        if hovered is None:
             parser.error("benchmark reference did not produce hover content")
+
+    completion_seconds: list[float] = []
+    for _ in range(args.completions):
+        started = perf_counter()
+        completed = completions(snapshot, reference.path, text, position)
+        completion_seconds.append(perf_counter() - started)
+        if not completed.items:
+            parser.error("benchmark reference did not produce completion items")
 
     workspace.close_document(path)
     command = [
@@ -110,8 +121,16 @@ def main(argv: list[str] | None = None) -> int:
                 "cold_check_seconds": round(cold_seconds, 6),
                 "edit_p95_seconds": round(_percentile(edit_seconds, 0.95), 6),
                 "hover_p95_seconds": round(_percentile(hover_seconds, 0.95), 6),
+                "completion_p95_seconds": round(
+                    _percentile(completion_seconds, 0.95),
+                    6,
+                ),
                 "preview_seconds": round(preview_seconds, 6),
-                "samples": {"edits": args.edits, "hovers": args.hovers},
+                "samples": {
+                    "edits": args.edits,
+                    "hovers": args.hovers,
+                    "completions": args.completions,
+                },
             },
             indent=2,
             sort_keys=True,

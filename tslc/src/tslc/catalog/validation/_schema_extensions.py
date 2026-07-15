@@ -55,7 +55,20 @@ KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
         "type_name",
     }
 )
-_KNOWN_MASK_POLICY_KINDS = frozenset(
+KNOWN_MASK_POLICY_FIELDS = frozenset(
+    {"kind", "backend_spelling", "backend_spelling_by_lanes"}
+)
+KNOWN_IMASK_POLICY_FIELDS = frozenset({"kind"})
+KNOWN_INTRINSIC_COMPOSE_FIELDS = frozenset({"prefix", "suffix"})
+KNOWN_INTRINSIC_SUFFIX_FIELDS = frozenset({"by_type"})
+KNOWN_ACTIVE_WHEN_FIELDS = frozenset({"target_features", "compile_modes"})
+KNOWN_SIZE_PARAMETER_FIELDS = frozenset({"name"})
+KNOWN_VECTOR_REGISTER_POLICY_FIELDS = frozenset({"kind"})
+KNOWN_COMPILE_GUARD_FIELDS = frozenset(
+    {"macro", "equals", "hint_flag", "diagnostic"}
+)
+KNOWN_TEST_FILTER_FIELDS = frozenset({"exclude_templates"})
+KNOWN_MASK_POLICY_KINDS = frozenset(
     {
         "bool",
         "exact_lane_bitmask",
@@ -66,7 +79,7 @@ _KNOWN_MASK_POLICY_KINDS = frozenset(
         "boolean_lane_vector",
     }
 )
-_KNOWN_IMASK_POLICY_KINDS = frozenset(
+KNOWN_IMASK_POLICY_KINDS = frozenset(
     {"lane_bitmask", "same_as_mask_type", "unsigned_scalar"}
 )
 
@@ -98,8 +111,8 @@ def validate_extension_block(
     mask = fields.get("mask_type_policy")
     _validate_policy_block(
         mask,
-        frozenset({"kind", "backend_spelling", "backend_spelling_by_lanes"}),
-        _KNOWN_MASK_POLICY_KINDS,
+        KNOWN_MASK_POLICY_FIELDS,
+        KNOWN_MASK_POLICY_KINDS,
         "mask_type_policy",
         diagnostics,
     )
@@ -107,8 +120,8 @@ def validate_extension_block(
     imask = fields.get("integral_mask_type_policy")
     _validate_policy_block(
         imask,
-        frozenset({"kind"}),
-        _KNOWN_IMASK_POLICY_KINDS,
+        KNOWN_IMASK_POLICY_FIELDS,
+        KNOWN_IMASK_POLICY_KINDS,
         "integral_mask_type_policy",
         diagnostics,
     )
@@ -117,7 +130,7 @@ def validate_extension_block(
     if compose is not None:
         validate_known_fields(
             children(compose),
-            frozenset({"prefix", "suffix"}),
+            KNOWN_INTRINSIC_COMPOSE_FIELDS,
             diagnostics,
             owner="intrinsic_compose",
         )
@@ -130,7 +143,7 @@ def validate_extension_block(
         if suffix is not None:
             validate_known_fields(
                 children(suffix),
-                frozenset({"by_type"}),
+                KNOWN_INTRINSIC_SUFFIX_FIELDS,
                 diagnostics,
                 owner="intrinsic suffix",
             )
@@ -138,7 +151,7 @@ def validate_extension_block(
     if active_when is not None:
         validate_known_fields(
             children(active_when),
-            frozenset({"target_features", "compile_modes"}),
+            KNOWN_ACTIVE_WHEN_FIELDS,
             diagnostics,
             owner="active_when",
         )
@@ -151,7 +164,7 @@ def validate_extension_block(
     if size_parameter is not None:
         validate_known_fields(
             children(size_parameter),
-            frozenset({"name"}),
+            KNOWN_SIZE_PARAMETER_FIELDS,
             diagnostics,
             owner="size_parameter",
         )
@@ -164,7 +177,7 @@ def validate_extension_block(
     if register_policy is not None:
         validate_known_fields(
             children(register_policy),
-            frozenset({"kind"}),
+            KNOWN_VECTOR_REGISTER_POLICY_FIELDS,
             diagnostics,
             owner="vector_register_type_policy",
         )
@@ -248,7 +261,7 @@ def _validate_compile_guards(
     for guard in children(field):
         validate_known_fields(
             children(guard),
-            frozenset({"macro", "equals", "hint_flag", "diagnostic"}),
+            KNOWN_COMPILE_GUARD_FIELDS,
             diagnostics,
             owner=f"{backend_id} compile guard {guard.key.text!r}",
         )

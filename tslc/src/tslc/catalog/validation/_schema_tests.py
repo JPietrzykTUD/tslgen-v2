@@ -19,7 +19,7 @@ from tslc.syntax.ast import (
     ParsedTslScalarValue,
 )
 
-_KNOWN_TEST_FIELDS = frozenset(
+KNOWN_TEST_FIELDS = frozenset(
     {
         "id",
         "tags",
@@ -42,7 +42,8 @@ _KNOWN_TEST_FIELDS = frozenset(
     }
 )
 _REQUIRED_TEST_FIELDS = ("tags", "type", "case")
-_KNOWN_TEST_ROLES = frozenset({"value", "compile"})
+KNOWN_TEST_ROLES = frozenset({"value", "compile"})
+KNOWN_TEST_CASE_FIELDS = frozenset({"inputs", "expected"})
 
 
 def validate_tests(
@@ -94,7 +95,7 @@ def _validate_test_case(
         else f"primitive {primitive_name!r} test"
     )
     for key, entry in entries.items():
-        if key not in _KNOWN_TEST_FIELDS:
+        if key not in KNOWN_TEST_FIELDS:
             diagnostics.append(
                 diagnostic_at(
                     severity="error",
@@ -134,12 +135,12 @@ def _validate_test_case(
             )
         )
     role = field_text(entries.get("role"))
-    if role is not None and role not in _KNOWN_TEST_ROLES:
+    if role is not None and role not in KNOWN_TEST_ROLES:
         invalid_enum(
             diagnostics,
             entries.get("role"),
             f"test role {role!r}",
-            sorted(_KNOWN_TEST_ROLES),
+            sorted(KNOWN_TEST_ROLES),
         )
     index_type = field_text(entries.get("index_type"))
     if index_type is not None and not is_type_tag(index_type):
@@ -154,7 +155,7 @@ def _validate_test_case(
         case_children = children(case)
         validate_known_fields(
             case_children,
-            frozenset({"inputs", "expected"}),
+            KNOWN_TEST_CASE_FIELDS,
             diagnostics,
             owner=f"{owner} case",
         )

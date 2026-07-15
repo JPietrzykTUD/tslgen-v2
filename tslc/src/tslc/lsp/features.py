@@ -7,15 +7,20 @@ from pathlib import Path
 
 from lsprotocol import types
 
-from tslc.authoring_vocabulary import completion_context, completion_values
+from tslc.authoring_completion import (
+    AuthoringCompletionKind,
+    authoring_completions,
+)
 from tslc.catalog_index import CatalogIndex, IndexedOccurrence, SymbolKind
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.lsp.positions import (
+    offset_position,
     path_to_uri,
     position_offset,
     source_position,
     span_to_range,
 )
+from tslc.syntax.authoring import authoring_cursor_context
 from tslc.lsp.workspace import AuthoringWorkspace, WorkspaceSnapshot
 
 SEMANTIC_TOKEN_TYPES = ("function", "class", "type", "keyword")
@@ -139,24 +144,45 @@ def hover(
 
 def completions(
     snapshot: WorkspaceSnapshot,
+    path: Path,
     text: str,
     position: types.Position,
 ) -> types.CompletionList:
     if snapshot.catalog is None:
         return types.CompletionList(is_incomplete=False, items=[])
-    context = completion_context(text, position_offset(text, position))
-    values = completion_values(
+    context = authoring_cursor_context(
+        snapshot.parsed,
+        path,
+        text,
+        position_offset(text, position),
+    )
+    records = authoring_completions(
         context,
         snapshot.catalog,
         target_features=snapshot.target_features,
     )
     items = [
         types.CompletionItem(
-            label=value,
-            kind=_completion_kind(context.kind),
-            sort_text=value,
+            label=record.label,
+            kind=_completion_kind(record.kind),
+            detail=record.detail,
+            documentation=record.documentation,
+            sort_text=f"{record.sort_group:03d}:{record.label}",
+            text_edit=types.TextEdit(
+                range=types.Range(
+                    start=offset_position(text, record.replacement_range.start),
+                    end=offset_position(text, record.replacement_range.end),
+                ),
+                new_text=record.insert_text,
+            ),
+            insert_text_format=(
+                types.InsertTextFormat.Snippet
+                if record.snippet
+                else types.InsertTextFormat.PlainText
+            ),
+            commit_characters=list(record.commit_characters) or None,
         )
-        for value in values
+        for record in records
     ]
     return types.CompletionList(is_incomplete=False, items=items)
 
@@ -241,16 +267,15 @@ def _symbol_kind(kind: SymbolKind) -> types.SymbolKind:
     }[kind]
 
 
-def _completion_kind(kind: str) -> types.CompletionItemKind:
-    if kind in {"primitive-field", "extension-field", "implementation-field"}:
-        return types.CompletionItemKind.Field
-    if kind == "primitive-call":
-        return types.CompletionItemKind.Function
-    if kind == "implementation-extension":
-        return types.CompletionItemKind.Class
-    if kind == "implementation-type-group":
-        return types.CompletionItemKind.TypeParameter
-    return types.CompletionItemKind.Keyword
+def _completion_kind(kind: AuthoringCompletionKind) -> types.CompletionItemKind:
+    return {
+        "field": types.CompletionItemKind.Field,
+        "keyword": types.CompletionItemKind.Keyword,
+        "value": types.CompletionItemKind.Value,
+        "function": types.CompletionItemKind.Function,
+        "class": types.CompletionItemKind.Class,
+        "type": types.CompletionItemKind.TypeParameter,
+    }[kind]
 
 
 def _token_type(kind: SymbolKind) -> str:

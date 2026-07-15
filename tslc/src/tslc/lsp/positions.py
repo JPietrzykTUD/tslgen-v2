@@ -48,6 +48,19 @@ def position_offset(text: str, position: types.Position) -> int:
     return prefix + _codepoints_for_utf16(content, max(position.character, 0))
 
 
+def offset_position(text: str, offset: int) -> types.Position:
+    """Return a zero-based UTF-16 LSP position for a Python codepoint offset."""
+
+    bounded = min(max(offset, 0), len(text))
+    line_start = text.rfind("\n", 0, bounded) + 1
+    line = text.count("\n", 0, line_start)
+    prefix = text[line_start:bounded]
+    return types.Position(
+        line=line,
+        character=len(prefix.encode("utf-16-le")) // 2,
+    )
+
+
 def span_to_range(span: SourceSpan, text: str) -> types.Range:
     lines = text.splitlines(keepends=True)
     return types.Range(
@@ -82,6 +95,7 @@ def _codepoints_for_utf16(text: str, units: int) -> int:
 
 
 __all__ = (
+    "offset_position",
     "path_to_uri",
     "position_offset",
     "source_position",

@@ -1,2 +1,16 @@
 **/__pycache__/
 **/CMakeFiles/
+
+__pycache__/
+/**/__pycache__/
+/**/*.egg-info/
+/tslctmp/*
+
+supplementary/docs/site/specializations/react/node_modules/
+supplementary/docs/site/specializations/react/dist/
+
+test-sort/build*/
+
+node_modules/
+.vscode-test/
+editors/vscode-tsl/dist/

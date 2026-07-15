@@ -20,22 +20,24 @@ from tslc.syntax.ast import (
     ParsedTslScalarValue,
 )
 
-_KNOWN_SAFETY_FIELDS = frozenset({"internal_unsafe", "caller_unsafe", "reasons"})
-_KNOWN_VARIANT_SAFETY_FIELDS = frozenset({"internal_unsafe", "reasons"})
-_KNOWN_VARIANT_FIELDS = frozenset({"safety", "tsil", "tsl"})
+KNOWN_SAFETY_FIELDS = frozenset({"internal_unsafe", "caller_unsafe", "reasons"})
+KNOWN_VARIANT_SAFETY_FIELDS = frozenset({"internal_unsafe", "reasons"})
+KNOWN_VARIANT_FIELDS = frozenset({"safety", "tsil", "tsl"})
 _VARIANT_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_KNOWN_SELECTOR_METADATA_FIELDS = frozenset(
+KNOWN_SELECTOR_METADATA_FIELDS = frozenset(
     {"implementation", "requires", "safety", "unroll_variants", "variants"}
 )
-_KNOWN_TARGET_CONSTRAINT_FIELDS = frozenset(
+KNOWN_TARGET_CONSTRAINT_FIELDS = frozenset(
     {"family", "width", "safety", "implementation", "variants"}
 )
+KNOWN_TARGET_FAMILY_RELATIONS = frozenset({"same_as"})
+KNOWN_TARGET_WIDTH_RELATIONS = frozenset({"smaller_than", "larger_than"})
 
 
 def known_implementation_selector_fields() -> frozenset[str]:
     """Return the metadata keys accepted beneath an implementation selector."""
 
-    return _KNOWN_SELECTOR_METADATA_FIELDS
+    return KNOWN_SELECTOR_METADATA_FIELDS
 
 
 def validate_implementation_safety(
@@ -86,11 +88,11 @@ def _validate_selector_metadata(
     scalar_unknown_fields = tuple(
         field
         for field in entry.fields
-        if field.key.text not in _KNOWN_SELECTOR_METADATA_FIELDS and not children(field)
+        if field.key.text not in KNOWN_SELECTOR_METADATA_FIELDS and not children(field)
     )
     validate_known_fields(
         scalar_unknown_fields,
-        _KNOWN_SELECTOR_METADATA_FIELDS,
+        KNOWN_SELECTOR_METADATA_FIELDS,
         diagnostics,
         owner=f"implementation selector {entry.selector.text!r}",
     )
@@ -101,13 +103,13 @@ def _validate_target_constraint(
 ) -> None:
     validate_known_fields(
         entry.fields,
-        _KNOWN_TARGET_CONSTRAINT_FIELDS,
+        KNOWN_TARGET_CONSTRAINT_FIELDS,
         diagnostics,
         owner="target constraint",
     )
     for name, allowed in (
-        ("family", frozenset({"same_as"})),
-        ("width", frozenset({"smaller_than", "larger_than"})),
+        ("family", KNOWN_TARGET_FAMILY_RELATIONS),
+        ("width", KNOWN_TARGET_WIDTH_RELATIONS),
     ):
         matches = tuple(field for field in entry.fields if field.key.text == name)
         diagnose_duplicate_fields(matches, diagnostics, label=f"target constraint {name}")
@@ -164,7 +166,7 @@ def _validate_safety_field(
     diagnostics: list[Diagnostic],
     *,
     owner: str = "implementation safety",
-    allowed_fields: frozenset[str] = _KNOWN_SAFETY_FIELDS,
+    allowed_fields: frozenset[str] = KNOWN_SAFETY_FIELDS,
 ) -> None:
     field_children = children(field)
     if not field_children:
@@ -247,7 +249,7 @@ def _validate_variants_field(
         variant_children = children(variant)
         validate_known_fields(
             variant_children,
-            _KNOWN_VARIANT_FIELDS,
+            KNOWN_VARIANT_FIELDS,
             diagnostics,
             owner=f"implementation variant {variant.key.text!r}",
         )
@@ -276,7 +278,7 @@ def _validate_variants_field(
                 safety,
                 diagnostics,
                 owner=f"implementation variant {variant.key.text!r} safety",
-                allowed_fields=_KNOWN_VARIANT_SAFETY_FIELDS,
+                allowed_fields=KNOWN_VARIANT_SAFETY_FIELDS,
             )
         for body in bodies:
             _validate_variant_body_field(variant, body, diagnostics)

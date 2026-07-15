@@ -29,6 +29,10 @@ from tslc.syntax.ast import (
 )
 
 
+KNOWN_TYPE_GROUP_FIELDS = frozenset({"types"})
+KNOWN_LANGUAGE_TYPE_FIELDS = frozenset({"type"})
+
+
 def validate_parsed_documents(
     parsed: OuterTslParseResult,
     diagnostics: list[Diagnostic],
@@ -145,7 +149,7 @@ def _validate_block(
         for field in declaration.fields:
             validate_known_fields(
                 children(field),
-                frozenset({"types"}),
+                KNOWN_TYPE_GROUP_FIELDS,
                 diagnostics,
                 owner=f"type group {field.key.text!r}",
             )
@@ -155,7 +159,7 @@ def _validate_block(
         for field in declaration.fields:
             validate_known_fields(
                 children(field),
-                frozenset({"type"}),
+                KNOWN_LANGUAGE_TYPE_FIELDS,
                 diagnostics,
                 owner=f"language {declaration.name or '<unnamed>'} type {field.key.text!r}",
             )
