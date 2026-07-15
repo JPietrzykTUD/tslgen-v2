@@ -176,6 +176,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
                 "method": "tsl/primitiveExplorer",
                 "params": {
                     "scopeUri": path.as_uri(),
+                    "mode": "resolved",
                     "profile": "avx2",
                     "backend": "cpp",
                     "primitive": "add",
@@ -184,6 +185,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         )
         explorer_response = client.read_until(lambda item: item.get("id") == 14)
         explorer = explorer_response["result"]
+        assert explorer["mode"] == "resolved"
         assert explorer["profile"] == "avx2"
         assert explorer["backend"] == "cpp"
         add_entry = next(
@@ -195,6 +197,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         assert any(
             slot["extension"] == "avx2"
             and slot["type"] == "si32"
+            and slot["status"] == "selected"
             and slot["available"] is True
             and slot["implementations"]
             for slot in explorer["slots"]

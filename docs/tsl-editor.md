@@ -81,34 +81,43 @@ Opening a `.tsl` file activates:
 - **TSL: Doctor**;
 - **TSL: Add New Primitive**.
 
-The TSLc Activity Bar container adds three native tree views:
+The TSLc Activity Bar container adds four native tree views:
 
+- **Target Context** makes the explorer projection explicit. **Authored Source**
+  mode uses **All profiles** and shows every source declaration; **Resolved
+  Profile** mode selects one configured machine profile. Profile and backend
+  rows are clickable, and choosing a concrete profile switches to resolved
+  mode.
 - **Primitives** lists primitive families from either the active `.tsl` file or
-  the complete configured corpus. Each entry shows available/total slot counts
-  for the explorer's selected machine profile and backend. Its **+** title
-  action starts the same guided **TSL: Add New Primitive** workflow used from
-  the editor. Until the author explicitly chooses a profile, the explorer uses
-  the configured authoring profile with the broadest feature/mode set.
-- **Specializations** groups the selected primitive's concrete type slots by
-  extension. Its title actions choose profile/backend and toggle an
-  unavailable-only coverage view. Available rows state whether their winning
-  source is authored on the exact selector, selected from a broader type group,
-  or inherited from an extension ancestor; unavailable rows carry a compiler
-  explanation. Theme icons supplement rather than replace those labels.
+  the complete configured corpus. Entries count authored source slots in the
+  default authored mode and selected/total slots in resolved mode. Its **+**
+  title action starts the same guided **TSL: Add New Primitive** workflow used
+  from the editor.
+- **Specializations** groups the selected primitive's type slots by extension.
+  Authored mode is the profile-independent source inventory, so AVX-512 bodies
+  remain visible and navigable without choosing an AVX-512-capable machine.
+  Resolved mode distinguishes selected rows, implementations that are authored
+  but not selected for the profile, genuinely missing implementations, and
+  extensions unsupported by the backend. Its title actions choose
+  profile/backend and toggle an unavailable-only coverage view. Selected rows
+  state whether their winning source is authored on the exact selector,
+  selected from a broader type group, or inherited from an extension ancestor.
+  Theme icons supplement rather than replace those labels.
 - **Dependencies** lists direct authored Calls and Called By relationships
   discovered from registered `call` regions across the primitive's source
   bodies.
 
-Click an available specialization to navigate to the actual selected body. If
-more than one overload/attribute form contributes a winning body, a source
+Click an authored or selected specialization to navigate to its source body. If
+more than one overload/attribute form contributes a body, a source
 QuickPick names the callable parameters and signature so it cannot be confused
 with another overload. Switching primitives clears the old specialization rows
 while the replacement projection loads, and slot actions reject stale rows.
 Slot context actions also provide **Go to Implementation** and **Preview
-Specialization**; preview receives the exact profile/backend/extension/type
-tuple from the tree and therefore opens no redundant slot selectors. An
-unavailable slot explains why it has no target rather than pretending to have a
-definition.
+Specialization**; preview is available only for a selected row and receives the
+exact profile/backend/extension/type tuple from the tree. A missing or
+backend-unsupported slot explains why it has no target rather than pretending
+to have a definition, while a profile-rejected row can still navigate to its
+authored source.
 
 Explorer refreshes use the latest compiler catalog index and profile selector;
 they do not scan target-language text, lower TSIL, render code, or start child

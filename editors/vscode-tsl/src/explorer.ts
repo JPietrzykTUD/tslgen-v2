@@ -5,7 +5,8 @@ import {
   countDescription,
   groupSlots,
   implementationLabel,
-  originDescription,
+  slotStatusDescription,
+  type ExplorerMode,
   type ExplorerLocation,
   type ExplorerPrimitive,
   type ExplorerSlot,
@@ -31,6 +32,17 @@ interface PrimitiveElement {
   readonly primitive: ExplorerPrimitive;
 }
 
+interface ContextElement {
+  readonly kind: "context";
+  readonly field: "mode" | "profile" | "backend";
+  readonly label: string;
+  readonly value: string;
+  readonly command:
+    | "tsl.explorer.selectMode"
+    | "tsl.explorer.selectProfile"
+    | "tsl.explorer.selectBackend";
+}
+
 interface ExtensionElement {
   readonly kind: "extension";
   readonly group: ExtensionSlotGroup;
@@ -39,6 +51,7 @@ interface ExtensionElement {
 export interface SlotElement {
   readonly kind: "slot";
   readonly primitive: string;
+  readonly mode: ExplorerMode;
   readonly profile: string;
   readonly backend: string;
   readonly slot: ExplorerSlot;
@@ -57,10 +70,12 @@ interface DependencyElement {
 }
 
 type PrimitiveTreeElement = PrimitiveElement;
+type ContextTreeElement = ContextElement;
 type SlotTreeElement = ExtensionElement | SlotElement;
 type DependencyTreeElement = DependencyGroupElement | DependencyElement;
 
 const EMPTY_RESPONSE: PrimitiveExplorerResponse = {
+  mode: "authored",
   profile: "",
   backend: "",
   profiles: [],
@@ -73,15 +88,18 @@ const EMPTY_RESPONSE: PrimitiveExplorerResponse = {
 
 export class TslExplorer implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
+  private readonly targetContext = new TargetContextTreeProvider();
   private readonly primitives = new PrimitiveTreeProvider();
   private readonly slots = new SlotTreeProvider();
   private readonly dependencies = new DependencyTreeProvider();
+  private readonly contextView: vscode.TreeView<ContextTreeElement>;
   private readonly primitiveView: vscode.TreeView<PrimitiveTreeElement>;
   private readonly slotView: vscode.TreeView<SlotTreeElement>;
   private readonly dependencyView: vscode.TreeView<DependencyTreeElement>;
   private client: LanguageClient | undefined;
   private response: PrimitiveExplorerResponse = EMPTY_RESPONSE;
   private scope: ExplorerScope;
+  private mode: ExplorerMode;
   private profile: string;
   private backend: string;
   private selectedPrimitive: string | undefined;
@@ -99,9 +117,13 @@ export class TslExplorer implements vscode.Disposable {
       "tsl.explorer.scope",
       "file",
     );
+    this.mode = context.workspaceState.get<ExplorerMode>(
+      "tsl.explorer.mode",
+      "authored",
+    );
     this.profile = context.workspaceState.get<string>(
       "tsl.explorer.profile",
-      vscode.workspace.getConfiguration("tsl").get<string>("preview.profile", ""),
+      "",
     );
     this.backend = context.workspaceState.get<string>(
       "tsl.explorer.backend",
@@ -113,6 +135,10 @@ export class TslExplorer implements vscode.Disposable {
     );
     this.lastTslUri = activeTslUri();
 
+    this.contextView = vscode.window.createTreeView("tsl.context", {
+      treeDataProvider: this.targetContext,
+      showCollapseAll: false,
+    });
     this.primitiveView = vscode.window.createTreeView("tsl.primitives", {
       treeDataProvider: this.primitives,
       showCollapseAll: false,
@@ -127,15 +153,20 @@ export class TslExplorer implements vscode.Disposable {
     });
 
     this.disposables.push(
+      this.targetContext,
       this.primitives,
       this.slots,
       this.dependencies,
+      this.contextView,
       this.primitiveView,
       this.slotView,
       this.dependencyView,
       vscode.commands.registerCommand("tsl.explorer.refresh", () => this.refresh()),
       vscode.commands.registerCommand("tsl.explorer.toggleScope", () =>
         this.toggleScope(),
+      ),
+      vscode.commands.registerCommand("tsl.explorer.selectMode", () =>
+        this.selectMode(),
       ),
       vscode.commands.registerCommand("tsl.explorer.selectProfile", () =>
         this.selectProfile(),
@@ -240,6 +271,7 @@ export class TslExplorer implements vscode.Disposable {
         EXPLORER_METHOD,
         {
           scopeUri: scopeUri?.toString(),
+          mode: this.mode,
           profile: this.profile,
           backend: this.backend,
           primitive: this.selectedPrimitive,
@@ -249,7 +281,10 @@ export class TslExplorer implements vscode.Disposable {
         return;
       }
       this.response = response;
-      this.profile = response.profile;
+      this.mode = response.mode;
+      if (response.profile) {
+        this.profile = response.profile;
+      }
       this.backend = response.backend;
       const selectedExists = response.primitives.some(
         (primitive) => primitive.name === this.selectedPrimitive,
@@ -286,15 +321,64 @@ export class TslExplorer implements vscode.Disposable {
   }
 
   private async selectProfile(): Promise<void> {
-    const selected = await vscode.window.showQuickPick(this.response.profiles, {
+    const selected = await vscode.window.showQuickPick(
+      [
+        {
+          label: "All profiles",
+          description: "Show every authored implementation",
+          profile: "",
+        },
+        ...this.response.profiles.map((profile) => ({
+          label: profile,
+          description: "Resolve selection for this machine profile",
+          profile,
+        })),
+      ],
+      {
       title: "TSLc Explorer profile",
-      placeHolder: "Select the machine profile used for slot availability",
-    });
+      placeHolder: "Show authored source or resolve a concrete profile",
+      },
+    );
     if (!selected) {
       return;
     }
-    this.profile = selected;
-    await this.context.workspaceState.update("tsl.explorer.profile", selected);
+    this.mode = selected.profile ? "resolved" : "authored";
+    if (selected.profile) {
+      this.profile = selected.profile;
+    }
+    await this.context.workspaceState.update("tsl.explorer.mode", this.mode);
+    await this.context.workspaceState.update(
+      "tsl.explorer.profile",
+      this.profile,
+    );
+    this.beginSelectedPrimitiveRefresh();
+    await this.refresh();
+  }
+
+  private async selectMode(): Promise<void> {
+    const selected = await vscode.window.showQuickPick(
+      [
+        {
+          label: "Authored source",
+          description: "All profiles; show implementations declared in TSL",
+          mode: "authored" as const,
+        },
+        {
+          label: "Resolved profile",
+          description: "Show selection and coverage for one machine profile",
+          mode: "resolved" as const,
+        },
+      ],
+      {
+        title: "TSLc Explorer mode",
+        placeHolder: "Choose how specialization rows are projected",
+      },
+    );
+    if (!selected) {
+      return;
+    }
+    this.mode = selected.mode;
+    await this.context.workspaceState.update("tsl.explorer.mode", this.mode);
     this.beginSelectedPrimitiveRefresh();
     await this.refresh();
   }
@@ -314,6 +398,12 @@ export class TslExplorer implements vscode.Disposable {
   }
 
   private async toggleUnavailable(): Promise<void> {
+    if (this.mode === "authored") {
+      void vscode.window.showInformationMessage(
+        "Coverage filtering is available in Resolved Profile mode.",
+      );
+      return;
+    }
     this.onlyUnavailable = !this.onlyUnavailable;
     await this.context.workspaceState.update(
       "tsl.explorer.onlyUnavailable",
@@ -340,6 +430,7 @@ export class TslExplorer implements vscode.Disposable {
         const corpus = await this.client.sendRequest<PrimitiveExplorerResponse>(
           EXPLORER_METHOD,
           {
+            mode: this.mode,
             profile: this.profile,
             backend: this.backend,
             primitive: name,
@@ -370,7 +461,7 @@ export class TslExplorer implements vscode.Disposable {
     if (!(await this.isCurrentSlot(element))) {
       return;
     }
-    if (!element.slot.available) {
+    if (!element.slot.implementations.length) {
       await this.showUnavailableReason(element);
       return;
     }
@@ -386,7 +477,10 @@ export class TslExplorer implements vscode.Disposable {
         : (
             await vscode.window.showQuickPick(choices, {
               title: `${this.selectedPrimitive ?? "Primitive"}<${element.slot.type}> implementation`,
-              placeHolder: "Select the winning source body to open",
+              placeHolder:
+                element.slot.status === "selected"
+                  ? "Select the winning source body to open"
+                  : "Select an authored source body to open",
               matchOnDescription: true,
               matchOnDetail: true,
             })
@@ -397,7 +491,7 @@ export class TslExplorer implements vscode.Disposable {
   private async previewSlot(element?: SlotElement): Promise<void> {
     const primitive = this.selectedPrimitive;
     if (
-      !element?.slot.available ||
+      element?.slot.status !== "selected" ||
       !primitive ||
       !(await this.isCurrentSlot(element))
     ) {
@@ -427,7 +521,7 @@ export class TslExplorer implements vscode.Disposable {
       return;
     }
     void vscode.window.showInformationMessage(
-      element.slot.unavailableReason ?? "This specialization is unavailable.",
+      element.slot.detail ?? slotStatusDescription(element.slot),
     );
   }
 
@@ -435,7 +529,9 @@ export class TslExplorer implements vscode.Disposable {
     if (
       element.primitive === this.selectedPrimitive &&
       element.primitive === this.response.selectedPrimitive &&
-      element.profile === this.profile &&
+      element.mode === this.mode &&
+      element.mode === this.response.mode &&
+      (element.mode === "authored" || element.profile === this.profile) &&
       element.profile === this.response.profile &&
       element.backend === this.backend &&
       element.backend === this.response.backend
@@ -451,14 +547,22 @@ export class TslExplorer implements vscode.Disposable {
 
   private updateViews(message?: string): void {
     const stale = this.response.stale ? " • last valid catalog" : "";
+    const context = targetContextDescription(
+      this.response.mode,
+      this.response.profile,
+      this.response.backend,
+    );
+    this.contextView.description = context + stale;
+    this.contextView.message = message;
+    this.targetContext.set(
+      this.response.mode,
+      this.response.profile,
+      this.response.backend,
+    );
     this.primitiveView.description =
-      `${this.scope === "file" ? "File" : "Corpus"}` +
-      (this.response.profile
-        ? ` • ${this.response.profile}/${this.response.backend}`
-        : "") +
-      stale;
+      `${this.scope === "file" ? "File" : "Corpus"} • ${context}${stale}`;
     this.primitiveView.message = message;
-    this.primitives.set(this.response.primitives);
+    this.primitives.set(this.response.primitives, this.response.mode);
 
     const selected = this.response.primitives.find(
       (primitive) => primitive.name === this.selectedPrimitive,
@@ -466,22 +570,24 @@ export class TslExplorer implements vscode.Disposable {
     const selectionIsCurrent =
       selected !== undefined &&
       this.response.selectedPrimitive === selected.name &&
-      this.response.profile === this.profile &&
+      this.response.mode === this.mode &&
+      (this.mode === "authored" || this.response.profile === this.profile) &&
       this.response.backend === this.backend;
     this.slotView.description = selected
-      ? `${selected.name} • ${this.response.profile}/${this.response.backend}` +
-        (this.onlyUnavailable ? " • unavailable only" : "") +
+      ? `${selected.name} • ${context}` +
+        (this.response.mode === "resolved" && this.onlyUnavailable
+          ? " • unavailable only"
+          : "") +
         stale
-      : this.response.profile
-        ? `${this.response.profile}/${this.response.backend}${stale}`
-        : undefined;
+      : `${context}${stale}`;
     this.slotView.message = selected
       ? undefined
       : "Select a primitive in the Primitives view.";
     this.slots.set(
       selectionIsCurrent ? this.response.slots : [],
-      this.onlyUnavailable,
+      this.response.mode === "resolved" && this.onlyUnavailable,
       selectionIsCurrent ? selected.name : undefined,
+      selectionIsCurrent ? this.response.mode : "authored",
       selectionIsCurrent ? this.response.profile : "",
       selectionIsCurrent ? this.response.backend : "",
     );
@@ -499,10 +605,11 @@ export class TslExplorer implements vscode.Disposable {
     const stale = this.response.stale ? " • last valid catalog" : "";
     const profile = this.profile || this.response.profile;
     const backend = this.backend || this.response.backend;
+    const context = targetContextDescription(this.mode, profile, backend);
     this.slotView.description =
-      `${primitive.name} • ${profile}/${backend}` + stale;
+      `${primitive.name} • ${context}` + stale;
     this.slotView.message = "Loading specializations…";
-    this.slots.set([], this.onlyUnavailable, undefined, "", "");
+    this.slots.set([], false, undefined, this.mode, "", "");
     this.dependencyView.description =
       `${primitive.name} • direct authored calls${stale}`;
     this.dependencyView.message = undefined;
@@ -523,10 +630,81 @@ export class TslExplorer implements vscode.Disposable {
   private clearSelectedViews(message: string): void {
     this.slotView.description = undefined;
     this.slotView.message = message;
-    this.slots.set([], this.onlyUnavailable, undefined, "", "");
+    this.slots.set([], false, undefined, this.mode, "", "");
     this.dependencyView.description = undefined;
     this.dependencyView.message = message;
     this.dependencies.set(undefined);
+  }
+}
+
+class TargetContextTreeProvider
+  implements vscode.TreeDataProvider<ContextTreeElement>, vscode.Disposable
+{
+  private readonly changed = new vscode.EventEmitter<void>();
+  readonly onDidChangeTreeData = this.changed.event;
+  private mode: ExplorerMode = "authored";
+  private profile = "";
+  private backend = "";
+
+  set(mode: ExplorerMode, profile: string, backend: string): void {
+    this.mode = mode;
+    this.profile = profile;
+    this.backend = backend;
+    this.changed.fire();
+  }
+
+  dispose(): void {
+    this.changed.dispose();
+  }
+
+  getChildren(): ContextTreeElement[] {
+    return [
+      {
+        kind: "context",
+        field: "mode",
+        label: "Mode",
+        value: this.mode === "authored" ? "Authored source" : "Resolved profile",
+        command: "tsl.explorer.selectMode",
+      },
+      {
+        kind: "context",
+        field: "profile",
+        label: "Profile",
+        value: this.mode === "authored" ? "All profiles" : this.profile,
+        command: "tsl.explorer.selectProfile",
+      },
+      {
+        kind: "context",
+        field: "backend",
+        label: "Backend",
+        value: this.backend,
+        command: "tsl.explorer.selectBackend",
+      },
+    ];
+  }
+
+  getTreeItem(element: ContextTreeElement): vscode.TreeItem {
+    const item = new vscode.TreeItem(
+      element.label,
+      vscode.TreeItemCollapsibleState.None,
+    );
+    item.description = element.value;
+    item.iconPath = new vscode.ThemeIcon(
+      element.field === "mode"
+        ? "layers-active"
+        : element.field === "profile"
+          ? "server-environment"
+          : "code",
+    );
+    item.tooltip =
+      element.field === "mode"
+        ? "Choose authored-source or concrete profile resolution."
+        : `Select the explorer ${element.field}.`;
+    item.command = {
+      command: element.command,
+      title: `Select ${element.label}`,
+    };
+    return item;
   }
 }
 
@@ -536,9 +714,11 @@ class PrimitiveTreeProvider
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
   private values: readonly ExplorerPrimitive[] = [];
+  private mode: ExplorerMode = "authored";
 
-  set(values: readonly ExplorerPrimitive[]): void {
+  set(values: readonly ExplorerPrimitive[], mode: ExplorerMode): void {
     this.values = values;
+    this.mode = mode;
     this.changed.fire();
   }
 
@@ -558,12 +738,14 @@ class PrimitiveTreeProvider
     item.description = countDescription(
       element.primitive.availableSlots,
       element.primitive.totalSlots,
+      false,
+      this.mode,
     );
     item.iconPath = new vscode.ThemeIcon(
       element.primitive.availableSlots > 0 ? "symbol-function" : "warning",
     );
     item.contextValue = "tslPrimitive";
-    item.tooltip = primitiveTooltip(element.primitive);
+    item.tooltip = primitiveTooltip(element.primitive, this.mode);
     return item;
   }
 }
@@ -576,6 +758,7 @@ class SlotTreeProvider
   private groups: readonly ExtensionSlotGroup[] = [];
   private onlyUnavailable = false;
   private primitive: string | undefined;
+  private mode: ExplorerMode = "authored";
   private profile = "";
   private backend = "";
 
@@ -583,12 +766,14 @@ class SlotTreeProvider
     values: readonly ExplorerSlot[],
     onlyUnavailable: boolean,
     primitive: string | undefined,
+    mode: ExplorerMode,
     profile: string,
     backend: string,
   ): void {
     this.groups = groupSlots(values, onlyUnavailable);
     this.onlyUnavailable = onlyUnavailable;
     this.primitive = primitive;
+    this.mode = mode;
     this.profile = profile;
     this.backend = backend;
     this.changed.fire();
@@ -610,6 +795,7 @@ class SlotTreeProvider
       return element.group.slots.map((slot) => ({
         kind: "slot",
         primitive,
+        mode: this.mode,
         profile: this.profile,
         backend: this.backend,
         slot,
@@ -628,29 +814,32 @@ class SlotTreeProvider
         element.group.available,
         element.group.total,
         this.onlyUnavailable,
+        this.mode,
       );
       item.iconPath = new vscode.ThemeIcon("layers");
       item.tooltip = new vscode.MarkdownString(
-        `**${element.group.extension}**\n\n` +
-          `${String(element.group.available)} of ${String(element.group.total)} slots are available.`,
+        `**${element.group.extension}**\n\n` + extensionGroupDescription(element.group, this.mode),
       );
       return item;
     }
     const slot = element.slot;
     const item = new vscode.TreeItem(slot.type, vscode.TreeItemCollapsibleState.None);
-    item.description = slot.available
-      ? `available • ${originDescription(slot.origins)}`
-      : "unavailable";
-    item.contextValue = slot.available ? "tslAvailableSlot" : "tslUnavailableSlot";
-    item.iconPath = new vscode.ThemeIcon(
-      slot.available ? slotIcon(slot) : "circle-slash",
-    );
+    item.description = slotStatusDescription(slot);
+    item.contextValue =
+      slot.status === "selected"
+        ? "tslSelectedSlot"
+        : slot.implementations.length
+          ? "tslSourceSlot"
+          : "tslUnresolvedSlot";
+    item.iconPath = new vscode.ThemeIcon(slotIcon(slot));
     item.tooltip = slotTooltip(slot);
     item.command = {
-      command: slot.available
+      command: slot.implementations.length
         ? "tsl.explorer.goToImplementation"
         : "tsl.explorer.showUnavailableReason",
-      title: slot.available ? "Go to Implementation" : "Show Unavailable Reason",
+      title: slot.implementations.length
+        ? "Go to Implementation"
+        : "Show Status Detail",
       arguments: [element],
     };
     return item;
@@ -728,11 +917,16 @@ class DependencyTreeProvider
   }
 }
 
-function primitiveTooltip(primitive: ExplorerPrimitive): vscode.MarkdownString {
+function primitiveTooltip(
+  primitive: ExplorerPrimitive,
+  mode: ExplorerMode,
+): vscode.MarkdownString {
   const value = new vscode.MarkdownString();
   value.appendMarkdown(`**${primitive.name}**\n\n`);
   value.appendMarkdown(
-    `${String(primitive.availableSlots)} of ${String(primitive.totalSlots)} slots available.\n\n`,
+    mode === "authored"
+      ? `${String(primitive.totalSlots)} authored source slots.\n\n`
+      : `${String(primitive.availableSlots)} of ${String(primitive.totalSlots)} slots selected.\n\n`,
   );
   value.appendMarkdown(`Signatures: ${primitive.signatures.map(code).join(", ")}\n\n`);
   value.appendMarkdown(
@@ -747,11 +941,10 @@ function primitiveTooltip(primitive: ExplorerPrimitive): vscode.MarkdownString {
 function slotTooltip(slot: ExplorerSlot): vscode.MarkdownString {
   const value = new vscode.MarkdownString();
   value.appendMarkdown(`**${slot.extension} / ${slot.type}**\n\n`);
-  if (!slot.available) {
-    value.appendMarkdown(`Unavailable. ${slot.unavailableReason ?? ""}`);
-    return value;
+  value.appendMarkdown(`${slotStatusDescription(slot)}.\n\n`);
+  if (slot.detail) {
+    value.appendMarkdown(`${slot.detail}\n\n`);
   }
-  value.appendMarkdown(`Available via ${originDescription(slot.origins)}.\n\n`);
   for (const implementation of slot.implementations) {
     value.appendMarkdown(
       `- ${code(`${implementation.extension} / ${implementation.typeGroup}`)} ` +
@@ -762,6 +955,15 @@ function slotTooltip(slot: ExplorerSlot): vscode.MarkdownString {
 }
 
 function slotIcon(slot: ExplorerSlot): string {
+  if (slot.status === "not-selected") {
+    return "circle-outline";
+  }
+  if (slot.status === "missing") {
+    return "warning";
+  }
+  if (slot.status === "backend-unsupported") {
+    return "circle-slash";
+  }
   if (slot.origins.includes("authored")) {
     return "check";
   }
@@ -769,6 +971,25 @@ function slotIcon(slot: ExplorerSlot): string {
     return "symbol-interface";
   }
   return "git-merge";
+}
+
+function targetContextDescription(
+  mode: ExplorerMode,
+  profile: string,
+  backend: string,
+): string {
+  return mode === "authored"
+    ? `All profiles • ${backend}`
+    : `${profile}/${backend}`;
+}
+
+function extensionGroupDescription(
+  group: ExtensionSlotGroup,
+  mode: ExplorerMode,
+): string {
+  return mode === "authored"
+    ? `${String(group.total)} authored source slots.`
+    : `${String(group.available)} of ${String(group.total)} slots are selected.`;
 }
 
 async function chooseLocation(

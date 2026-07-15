@@ -4,7 +4,7 @@
   "description": "Compiler-backed language support for tslc .tsl source data.",
   "version": "0.1.1",
   "publisher": "tsl-project",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/JPietrzykTUD/tslgen-v99.git",
@@ -28,6 +28,7 @@
     "onCommand:tsl.previewSpecialization",
     "onCommand:tsl.doctor",
     "onCommand:tsl.addPrimitive",
+    "onView:tsl.context",
     "onView:tsl.primitives",
     "onView:tsl.specializations",
     "onView:tsl.dependencies"
@@ -64,6 +65,10 @@
     },
     "views": {
       "tslc": [
+        {
+          "id": "tsl.context",
+          "name": "Target Context"
+        },
         {
           "id": "tsl.primitives",
           "name": "Primitives"
@@ -109,6 +114,11 @@
         "command": "tsl.explorer.toggleScope",
         "title": "TSL: Toggle File/Corpus Scope",
         "icon": "$(list-tree)"
+      },
+      {
+        "command": "tsl.explorer.selectMode",
+        "title": "TSL: Select Explorer Mode",
+        "icon": "$(layers-active)"
       },
       {
         "command": "tsl.explorer.selectProfile",
@@ -194,17 +204,17 @@
         },
         {
           "command": "tsl.explorer.goToImplementation",
-          "when": "view == tsl.specializations && viewItem == tslAvailableSlot",
+          "when": "view == tsl.specializations && (viewItem == tslSelectedSlot || viewItem == tslSourceSlot)",
           "group": "navigation@10"
         },
         {
           "command": "tsl.explorer.preview",
-          "when": "view == tsl.specializations && viewItem == tslAvailableSlot",
+          "when": "view == tsl.specializations && viewItem == tslSelectedSlot",
           "group": "inline@20"
         },
         {
           "command": "tsl.explorer.showUnavailableReason",
-          "when": "view == tsl.specializations && viewItem == tslUnavailableSlot",
+          "when": "view == tsl.specializations && viewItem == tslUnresolvedSlot",
           "group": "navigation@10"
         },
         {

@@ -9,19 +9,27 @@ from threading import Lock
 from typing import Literal
 
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import Catalog, Implementation
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS, SCALAR_TYPE_ORDER
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog_index import CatalogIndex
 from tslc.diagnostics import SourceSpan
 from tslc.select.selector import SelectedImplementation, Selector
 
+ExplorerMode = Literal["authored", "resolved"]
 SlotOrigin = Literal["authored", "broader", "inherited"]
+SlotStatus = Literal[
+    "authored",
+    "selected",
+    "not-selected",
+    "missing",
+    "backend-unsupported",
+]
 
 
 @dataclass(frozen=True, slots=True)
 class ExplorerImplementation:
-    """One selected source body that can satisfy an explorer slot."""
+    """One authored source body associated with an explorer slot."""
 
     primitive: str
     signature: str
@@ -35,16 +43,17 @@ class ExplorerImplementation:
 
 @dataclass(frozen=True, slots=True)
 class ExplorerSlot:
-    """One visible ``(extension, type)`` cell for a concrete profile/backend."""
+    """One authored or profile-resolved ``(extension, type)`` cell."""
 
     extension: str
     type_tag: str
+    status: SlotStatus
     implementations: tuple[ExplorerImplementation, ...] = ()
-    unavailable_reason: str | None = None
+    detail: str | None = None
 
     @property
     def available(self) -> bool:
-        return bool(self.implementations)
+        return self.status in ("authored", "selected")
 
     @property
     def origins(self) -> tuple[SlotOrigin, ...]:
@@ -72,8 +81,9 @@ class ExplorerPrimitive:
 
 @dataclass(frozen=True, slots=True)
 class PrimitiveExplorer:
-    """Sidebar facts for one concrete profile/backend and optional primitive."""
+    """Sidebar facts for authored source or one concrete target context."""
 
+    mode: ExplorerMode
     profile: str
     backend: str
     profiles: tuple[str, ...]
@@ -93,6 +103,7 @@ class PrimitiveExplorerCache:
         self._index: CatalogIndex | None = None
         self._profiles: Mapping[str, MachineProfile] | None = None
         self._backends: tuple[str, ...] = ()
+        self._mode: ExplorerMode = "authored"
         self._profile = ""
         self._backend = ""
         self._path: Path | None = None
@@ -106,6 +117,7 @@ class PrimitiveExplorerCache:
         profiles: Mapping[str, MachineProfile],
         backends: tuple[str, ...],
         *,
+        mode: ExplorerMode,
         profile: str,
         backend: str,
         path: Path | None,
@@ -114,14 +126,15 @@ class PrimitiveExplorerCache:
     ) -> PrimitiveExplorer:
         with self._lock:
             if not self._matches(
-                catalog, index, profiles, backends, profile, backend, path
+                catalog, index, profiles, backends, mode, profile, backend, path
             ):
                 self._rebuild(
-                    catalog, index, profiles, backends, profile, backend, path
+                    catalog, index, profiles, backends, mode, profile, backend, path
                 )
             names = {primitive.name for primitive in self._primitives}
             selected = selected_primitive if selected_primitive in names else None
             return PrimitiveExplorer(
+                mode,
                 profile,
                 backend,
                 tuple(sorted(profiles)),
@@ -138,6 +151,7 @@ class PrimitiveExplorerCache:
         index: CatalogIndex,
         profiles: Mapping[str, MachineProfile],
         backends: tuple[str, ...],
+        mode: ExplorerMode,
         profile: str,
         backend: str,
         path: Path | None,
@@ -147,6 +161,7 @@ class PrimitiveExplorerCache:
             and self._index is index
             and self._profiles is profiles
             and self._backends == backends
+            and self._mode == mode
             and self._profile == profile
             and self._backend == backend
             and self._path == path
@@ -158,27 +173,34 @@ class PrimitiveExplorerCache:
         index: CatalogIndex,
         profiles: Mapping[str, MachineProfile],
         backends: tuple[str, ...],
+        mode: ExplorerMode,
         profile: str,
         backend: str,
         path: Path | None,
     ) -> None:
         names = _primitive_names(catalog, index, path)
         selector = Selector()
-        machine_profile = profiles[profile]
-        extension_names = selector.emitted_extensions(
-            catalog, machine_profile, backend_id=backend
-        )
-        slots_by_name = {
-            name: _primitive_slots(
-                catalog,
-                selector,
-                machine_profile,
-                backend,
-                extension_names,
-                name,
-            )
-            for name in names
-        }
+        if mode == "authored":
+            slots_by_name = {
+                name: _authored_primitive_slots(catalog, selector, name)
+                for name in names
+            }
+        else:
+            machine_profile = profiles[profile]
+            # Keep backend-unsupported extensions visible so the compiler can
+            # distinguish them from missing or profile-rejected bodies.
+            extension_names = selector.emitted_extensions(catalog, machine_profile)
+            slots_by_name = {
+                name: _resolved_primitive_slots(
+                    catalog,
+                    selector,
+                    machine_profile,
+                    backend,
+                    extension_names,
+                    name,
+                )
+                for name in names
+            }
         primitives = tuple(
             ExplorerPrimitive(
                 name=name,
@@ -206,6 +228,7 @@ class PrimitiveExplorerCache:
         self._index = index
         self._profiles = profiles
         self._backends = backends
+        self._mode = mode
         self._profile = profile
         self._backend = backend
         self._path = path
@@ -219,6 +242,7 @@ def primitive_explorer(
     profiles: Mapping[str, MachineProfile],
     backends: tuple[str, ...],
     *,
+    mode: ExplorerMode | None = None,
     profile: str | None = None,
     backend: str | None = None,
     path: Path | None = None,
@@ -229,10 +253,16 @@ def primitive_explorer(
 ) -> PrimitiveExplorer:
     """Build deterministic index/selection facts without scanning or lowering bodies."""
 
-    profile_name = _selected_profile(profiles, profile, preferred_profiles)
+    explorer_mode: ExplorerMode = mode or ("resolved" if profile else "authored")
+    profile_name = (
+        _selected_profile(profiles, profile, preferred_profiles)
+        if explorer_mode == "resolved"
+        else ""
+    )
     backend_id = _selected_backend(backends, backend)
-    if not profile_name or not backend_id:
+    if (explorer_mode == "resolved" and not profile_name) or not backend_id:
         return PrimitiveExplorer(
+            explorer_mode,
             profile_name,
             backend_id,
             tuple(sorted(profiles)),
@@ -248,6 +278,7 @@ def primitive_explorer(
         index,
         profiles,
         backends,
+        mode=explorer_mode,
         profile=profile_name,
         backend=backend_id,
         path=path.resolve() if path is not None else None,
@@ -278,7 +309,56 @@ def _scoped_definitions(
     return tuple(sorted(spans, key=_span_key))
 
 
-def _primitive_slots(
+def _authored_primitive_slots(
+    catalog: Catalog,
+    selector: Selector,
+    primitive_name: str,
+) -> tuple[ExplorerSlot, ...]:
+    implementations: dict[tuple[str, str], list[ExplorerImplementation]] = {}
+    for primitive in catalog.primitives_named(primitive_name, unmasked=False):
+        shape = parse_signature(primitive.signature)
+        free_function = (
+            shape is not None and selector.support.shape_is_free_function(shape)
+        )
+        for implementation in primitive.implementations:
+            members = catalog.type_group_members(implementation.type_group)
+            type_tags = (
+                members
+                if free_function
+                else tuple(tag for tag in DEFAULT_SCALAR_TYPE_TAGS if tag in members)
+            )
+            source = _authored_implementation_source(primitive.source, implementation)
+            if source is None:
+                continue
+            for type_tag in type_tags:
+                key = (implementation.extension, type_tag)
+                implementations.setdefault(key, []).append(
+                    _explorer_implementation(
+                        catalog,
+                        primitive.name,
+                        primitive.signature,
+                        primitive.parameters,
+                        implementation,
+                        source,
+                        requested_extension=implementation.extension,
+                        type_tag=type_tag,
+                    )
+                )
+
+    return tuple(
+        ExplorerSlot(
+            extension=extension,
+            type_tag=type_tag,
+            status="authored",
+            implementations=_unique_implementations(values),
+        )
+        for (extension, type_tag), values in sorted(
+            implementations.items(), key=lambda item: _slot_key(item[0])
+        )
+    )
+
+
+def _resolved_primitive_slots(
     catalog: Catalog,
     selector: Selector,
     profile: MachineProfile,
@@ -301,15 +381,15 @@ def _primitive_slots(
         key = (item.extension.isa_name, item.type_tag)
         implementation = item.implementation
         selected.setdefault(key, []).append(
-            ExplorerImplementation(
-                primitive=item.primitive.name,
-                signature=item.primitive.signature,
-                parameters=item.primitive.parameters,
-                extension=implementation.extension,
-                type_group=implementation.type_group,
-                selector_path=implementation.selector_path,
-                source=source,
-                origin=_slot_origin(catalog, item),
+            _explorer_implementation(
+                catalog,
+                item.primitive.name,
+                item.primitive.signature,
+                item.primitive.parameters,
+                implementation,
+                source,
+                requested_extension=item.extension.isa_name,
+                type_tag=item.type_tag,
             )
         )
 
@@ -323,29 +403,46 @@ def _primitive_slots(
         }
     )
     keys.update(selected)
-    return tuple(
-        ExplorerSlot(
-            extension=extension,
-            type_tag=type_tag,
-            implementations=_unique_implementations(selected.get((extension, type_tag), ())),
-            unavailable_reason=(
-                None
-                if (extension, type_tag) in selected
-                else (
-                    f"No implementation is selected for {primitive_name}<{type_tag}> "
-                    f"on {extension} with profile {profile.name!r} and backend {backend!r}."
-                )
-            ),
+    slots: list[ExplorerSlot] = []
+    for extension, type_tag in sorted(keys, key=_slot_key):
+        key = (extension, type_tag)
+        selected_implementations = _unique_implementations(selected.get(key, ()))
+        candidates = _authored_candidates(
+            catalog, primitive_name, extension=extension, type_tag=type_tag
         )
-        for extension, type_tag in sorted(
-            keys,
-            key=lambda item: (
-                item[0],
-                SCALAR_TYPE_ORDER.get(item[1], 999),
-                item[1],
-            ),
+        if selected_implementations:
+            status: SlotStatus = "selected"
+            implementations = selected_implementations
+            detail = None
+        elif not catalog.extensions[extension].supports_backend(backend):
+            status = "backend-unsupported"
+            implementations = candidates
+            detail = f"Extension {extension!r} does not support backend {backend!r}."
+        elif candidates:
+            status = "not-selected"
+            implementations = candidates
+            detail = (
+                f"An implementation is authored for {primitive_name}<{type_tag}> on "
+                f"{extension}, but profile {profile.name!r} does not select it for "
+                f"backend {backend!r}."
+            )
+        else:
+            status = "missing"
+            implementations = ()
+            detail = (
+                f"No implementation is authored for {primitive_name}<{type_tag}> on "
+                f"{extension} or its inherited extension chain."
+            )
+        slots.append(
+            ExplorerSlot(
+                extension=extension,
+                type_tag=type_tag,
+                status=status,
+                implementations=implementations,
+                detail=detail,
+            )
         )
-    )
+    return tuple(slots)
 
 
 def _is_free_function(
@@ -369,13 +466,97 @@ def _implementation_source(item: SelectedImplementation) -> SourceSpan | None:
     )
 
 
-def _slot_origin(catalog: Catalog, item: SelectedImplementation) -> SlotOrigin:
-    implementation = item.implementation
-    if implementation.extension != item.extension.isa_name:
+def _authored_candidates(
+    catalog: Catalog,
+    primitive_name: str,
+    *,
+    extension: str,
+    type_tag: str,
+) -> tuple[ExplorerImplementation, ...]:
+    candidates: list[ExplorerImplementation] = []
+    extension_chain = set(catalog.extension_chain(extension))
+    for primitive in catalog.primitives_named(primitive_name, unmasked=False):
+        for implementation in primitive.implementations:
+            if (
+                implementation.extension not in extension_chain
+                or not catalog.type_group_contains(implementation.type_group, type_tag)
+            ):
+                continue
+            source = _authored_implementation_source(primitive.source, implementation)
+            if source is None:
+                continue
+            candidates.append(
+                _explorer_implementation(
+                    catalog,
+                    primitive.name,
+                    primitive.signature,
+                    primitive.parameters,
+                    implementation,
+                    source,
+                    requested_extension=extension,
+                    type_tag=type_tag,
+                )
+            )
+    return _unique_implementations(candidates)
+
+
+def _authored_implementation_source(
+    primitive_source: SourceSpan | None,
+    implementation: Implementation,
+) -> SourceSpan | None:
+    return (
+        implementation.body_source
+        or implementation.selector_source
+        or implementation.source
+        or primitive_source
+    )
+
+
+def _explorer_implementation(
+    catalog: Catalog,
+    primitive_name: str,
+    signature: str,
+    parameters: tuple[str, ...],
+    implementation: Implementation,
+    source: SourceSpan,
+    *,
+    requested_extension: str,
+    type_tag: str,
+) -> ExplorerImplementation:
+    return ExplorerImplementation(
+        primitive=primitive_name,
+        signature=signature,
+        parameters=parameters,
+        extension=implementation.extension,
+        type_group=implementation.type_group,
+        selector_path=implementation.selector_path,
+        source=source,
+        origin=_slot_origin(
+            catalog,
+            implementation.extension,
+            implementation.type_group,
+            requested_extension,
+            type_tag,
+        ),
+    )
+
+
+def _slot_origin(
+    catalog: Catalog,
+    implementation_extension: str,
+    type_group: str,
+    requested_extension: str,
+    type_tag: str,
+) -> SlotOrigin:
+    if implementation_extension != requested_extension:
         return "inherited"
-    if catalog.type_group_members(implementation.type_group) != (item.type_tag,):
+    if catalog.type_group_members(type_group) != (type_tag,):
         return "broader"
     return "authored"
+
+
+def _slot_key(item: tuple[str, str]) -> tuple[str, int, str]:
+    return (item[0], SCALAR_TYPE_ORDER.get(item[1], 999), item[1])
 
 
 def _unique_implementations(
@@ -439,10 +620,12 @@ def _span_key(span: SourceSpan) -> tuple[str, int, int, int, int]:
 
 
 __all__ = (
+    "ExplorerMode",
     "ExplorerImplementation",
     "ExplorerPrimitive",
     "ExplorerSlot",
     "PrimitiveExplorer",
     "PrimitiveExplorerCache",
+    "SlotStatus",
     "primitive_explorer",
 )

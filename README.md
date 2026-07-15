@@ -87,3 +87,9 @@ overlay.
 - TSL source-data instructions: [tsldata/AGENTS.md](tsldata/AGENTS.md)
 - Shared task skills: `.agents/skills/`, exposed to Claude Code through
   `.claude/skills/`
+
+## License
+
+This repository is licensed under the Apache License, Version 2.0. See
+[LICENSE](LICENSE). The `tslc` Python package and the VS Code extension include
+their own Apache-2.0 `LICENSE` files for standalone distribution.

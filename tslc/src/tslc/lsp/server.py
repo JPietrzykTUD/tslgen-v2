@@ -371,6 +371,7 @@ def create_server(
             uri_to_path(scope_uri) if isinstance(scope_uri, str) and scope_uri else None
         )
         requested_profile = _field(params, "profile")
+        requested_mode = _field(params, "mode")
         requested_backend = _field(params, "backend")
         selected_primitive = _field(params, "primitive")
         explorer = await asyncio.to_thread(
@@ -379,6 +380,11 @@ def create_server(
             snapshot.index,
             workspace.config.profiles,
             workspace.config.backends,
+            mode=(
+                requested_mode
+                if requested_mode in ("authored", "resolved")
+                else None
+            ),
             profile=requested_profile if isinstance(requested_profile, str) else None,
             backend=requested_backend if isinstance(requested_backend, str) else None,
             path=scope_path,
@@ -520,6 +526,7 @@ def _primitive_scaffold_error(
 
 def _empty_primitive_explorer() -> dict[str, object]:
     return {
+        "mode": "authored",
         "profile": "",
         "backend": "",
         "profiles": [],
@@ -536,6 +543,7 @@ def _primitive_explorer_payload(
 ) -> dict[str, object]:
     texts: dict[Path, str] = {}
     return {
+        "mode": explorer.mode,
         "profile": explorer.profile,
         "backend": explorer.backend,
         "profiles": list(explorer.profiles),
@@ -561,9 +569,12 @@ def _primitive_explorer_payload(
             {
                 "extension": slot.extension,
                 "type": slot.type_tag,
+                "status": slot.status,
+                "detail": slot.detail,
                 "available": slot.available,
                 "origins": list(slot.origins),
-                "unavailableReason": slot.unavailable_reason,
+                # Retain these aliases for older clients of the custom method.
+                "unavailableReason": slot.detail,
                 "implementations": [
                     {
                         "primitive": implementation.primitive,

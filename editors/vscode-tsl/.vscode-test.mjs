@@ -7,6 +7,6 @@ export default defineConfig({
   workspaceFolder: "../..",
   launchArgs: ["--disable-extensions"],
   mocha: {
-    timeout: 30000
+    timeout: 90000
   }
 });

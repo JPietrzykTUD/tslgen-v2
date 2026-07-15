@@ -36,14 +36,16 @@ Commands:
 - `TSL: Doctor`
 - `TSL: Add New Primitive`
 
-The TSLc sidebar contains Primitives, Specializations, and Dependencies views.
-Primitives can be scoped to the active file or the complete configured corpus.
-The **+** button in the Primitives title starts the guided primitive scaffold.
-Selecting a primitive shows profile/backend-specific extension and type slots,
-with available/total counts and an optional unavailable-only filter. The
-initial profile is the richest configured authoring profile; the profile title
-action can select another. Available slots navigate to their selected source
-implementation and can launch Preview without repeating slot QuickPicks.
+The TSLc sidebar contains Target Context, Primitives, Specializations, and
+Dependencies views. Primitives can be scoped to the active file or the complete
+configured corpus. The **+** button in the Primitives title starts the guided
+primitive scaffold. Target Context defaults to Authored Source / All Profiles,
+where every declared implementation remains visible and navigable. Choosing a
+concrete profile switches to Resolved Profile mode; specialization rows then
+distinguish selected, not selected for this profile, missing implementation,
+and unsupported backend states. Selected slots can launch Preview without
+repeating slot QuickPicks, and resolved mode retains the unavailable-only
+filter.
 Overload choices include their callable parameters and signature, and stale
 rows are cleared when primitive/profile/backend context changes. Dependencies
 shows direct authored Calls and Called By relationships. Icons are always
@@ -80,3 +82,8 @@ toolchains, or start preview processes.
 
 See `docs/tsl-editor.md` in the repository for architecture, development,
 performance evidence, remote setup, installation updates, and troubleshooting.
+
+## License
+
+The VS Code extension is licensed under the Apache License, Version 2.0. See
+[`LICENSE`](LICENSE).

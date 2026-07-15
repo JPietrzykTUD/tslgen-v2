@@ -5,6 +5,7 @@ import {
   groupSlots,
   implementationLabel,
   originDescription,
+  slotStatusDescription,
   type ExplorerImplementation,
   type ExplorerSlot,
 } from "../src/explorerModel";
@@ -14,25 +15,28 @@ describe("primitive explorer presentation", () => {
     {
       extension: "avx2",
       type: "si32",
+      status: "selected",
+      detail: null,
       available: true,
       origins: ["broader"],
-      unavailableReason: null,
       implementations: [],
     },
     {
       extension: "avx2",
       type: "f64",
+      status: "missing",
+      detail: "missing",
       available: false,
       origins: [],
-      unavailableReason: "missing",
       implementations: [],
     },
     {
       extension: "scalar",
       type: "si32",
+      status: "authored",
+      detail: null,
       available: true,
       origins: ["authored", "inherited"],
-      unavailableReason: null,
       implementations: [],
     },
   ];
@@ -68,9 +72,16 @@ describe("primitive explorer presentation", () => {
       "authored here + inherited",
     );
     assert.equal(countDescription(8, 10), "8/10 available");
+    assert.equal(countDescription(8, 10, false, "authored"), "10 authored");
     assert.equal(
       countDescription(8, 10, true),
       "2 unavailable • 8/10 available",
+    );
+    assert.equal(slotStatusDescription(slots[0]!), "selected • broader selector");
+    assert.equal(slotStatusDescription(slots[1]!), "missing implementation");
+    assert.equal(
+      slotStatusDescription(slots[2]!),
+      "authored source • authored here + inherited",
     );
   });
 

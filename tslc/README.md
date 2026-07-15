@@ -83,3 +83,8 @@ refresh editable versus non-editable installations.
 
 Contributor instructions for compiler changes live in
 [`AGENTS.md`](AGENTS.md), in addition to the repository instructions.
+
+## License
+
+`tslc` is licensed under the Apache License, Version 2.0. See
+[`LICENSE`](LICENSE).

@@ -14,6 +14,13 @@ export interface ExplorerLocation {
 }
 
 export type SlotOrigin = "authored" | "broader" | "inherited";
+export type ExplorerMode = "authored" | "resolved";
+export type SlotStatus =
+  | "authored"
+  | "selected"
+  | "not-selected"
+  | "missing"
+  | "backend-unsupported";
 
 export interface ExplorerImplementation {
   readonly primitive: string;
@@ -29,9 +36,10 @@ export interface ExplorerImplementation {
 export interface ExplorerSlot {
   readonly extension: string;
   readonly type: string;
+  readonly status: SlotStatus;
+  readonly detail: string | null;
   readonly available: boolean;
   readonly origins: readonly SlotOrigin[];
-  readonly unavailableReason: string | null;
   readonly implementations: readonly ExplorerImplementation[];
 }
 
@@ -46,6 +54,7 @@ export interface ExplorerPrimitive {
 }
 
 export interface PrimitiveExplorerResponse {
+  readonly mode: ExplorerMode;
   readonly profile: string;
   readonly backend: string;
   readonly profiles: readonly string[];
@@ -114,10 +123,29 @@ export function countDescription(
   available: number,
   total: number,
   onlyUnavailable = false,
+  mode: ExplorerMode = "resolved",
 ): string {
+  if (mode === "authored") {
+    return `${String(total)} authored`;
+  }
   return onlyUnavailable
     ? `${String(total - available)} unavailable • ${String(available)}/${String(total)} available`
     : `${String(available)}/${String(total)} available`;
+}
+
+export function slotStatusDescription(slot: ExplorerSlot): string {
+  switch (slot.status) {
+    case "authored":
+      return `authored source • ${originDescription(slot.origins)}`;
+    case "selected":
+      return `selected • ${originDescription(slot.origins)}`;
+    case "not-selected":
+      return "not selected for profile";
+    case "missing":
+      return "missing implementation";
+    case "backend-unsupported":
+      return "unsupported by backend";
+  }
 }
 
 export function implementationLabel(

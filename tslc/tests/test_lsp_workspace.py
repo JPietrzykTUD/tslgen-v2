@@ -184,6 +184,7 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
         snapshot.index,
         workspace.config.profiles,
         workspace.config.backends,
+        mode="resolved",
         profile="avx2",
         backend="cpp",
         path=path,
@@ -217,19 +218,44 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
         if slot.extension == "avx512" and slot.type_tag == "si32"
     )
     assert avx512_si32.available is False
-    assert "No implementation is selected" in (avx512_si32.unavailable_reason or "")
+    assert avx512_si32.status == "not-selected"
+    assert avx512_si32.implementations
+    assert "does not select it" in (avx512_si32.detail or "")
+
+    rust = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        mode="resolved",
+        profile="avx2",
+        backend="rust",
+        path=path,
+        selected_primitive="add",
+        cache=PrimitiveExplorerCache(),
+    )
+    clang_si8 = next(
+        slot
+        for slot in rust.slots
+        if slot.extension == "clang_v128" and slot.type_tag == "si8"
+    )
+    assert clang_si8.status == "backend-unsupported"
+    assert clang_si8.implementations
 
     corpus = primitive_explorer(
         snapshot.catalog,
         snapshot.index,
         workspace.config.profiles,
         workspace.config.backends,
+        mode="resolved",
         profile="avx2",
         backend="cpp",
+        selected_primitive="div",
         cache=PrimitiveExplorerCache(),
     )
     allocate = next(item for item in corpus.primitives if item.name == "allocate")
     assert (allocate.available_slots, allocate.total_slots) == (1, 1)
+    assert any(slot.status == "missing" for slot in corpus.slots)
 
     def unexpected_selection(*args, **kwargs):
         raise AssertionError("a selected primitive caused the explorer matrix to rebuild")
@@ -240,6 +266,7 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
         snapshot.index,
         workspace.config.profiles,
         workspace.config.backends,
+        mode="resolved",
         profile="avx2",
         backend="cpp",
         path=path,
@@ -250,7 +277,7 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
     assert cached.slots
 
 
-def test_primitive_explorer_defaults_to_richest_authoring_profile_and_keeps_overloads(
+def test_primitive_explorer_defaults_to_authored_source_and_keeps_overloads(
     data_root: Path,
 ) -> None:
     workspace = AuthoringWorkspace.from_root(data_root.parent)
@@ -268,16 +295,31 @@ def test_primitive_explorer_defaults_to_richest_authoring_profile_and_keeps_over
         selected_primitive="max",
         preferred_profiles=workspace.config.preferred_profiles,
     )
-    assert default.profile == "avx2"
-    assert {"sse", "avx2"} <= {slot.extension for slot in default.slots}
+    assert default.mode == "authored"
+    assert default.profile == ""
+    assert {"sse", "avx2", "avx512"} <= {
+        slot.extension for slot in default.slots
+    }
+
+    avx512_slot = next(
+        slot
+        for slot in default.slots
+        if slot.extension == "avx512" and slot.type_tag == "si32"
+    )
+    assert avx512_slot.status == "authored"
+    assert avx512_slot.available is True
 
     max_slot = next(
         slot
         for slot in default.slots
         if slot.extension == "clang_v128" and slot.type_tag == "si8"
     )
-    assert len(max_slot.implementations) == 1
-    max_implementation = max_slot.implementations[0]
+    assert len(max_slot.implementations) == 2
+    max_implementation = next(
+        implementation
+        for implementation in max_slot.implementations
+        if implementation.type_group == "?i?"
+    )
     assert max_implementation.primitive == "max"
     assert max_implementation.signature == "v:=(v,v)"
     assert max_implementation.parameters == ("vec_a", "vec_b")
@@ -288,6 +330,7 @@ def test_primitive_explorer_defaults_to_richest_authoring_profile_and_keeps_over
         snapshot.index,
         workspace.config.profiles,
         workspace.config.backends,
+        mode="resolved",
         profile="avx2",
         backend="cpp",
         selected_primitive="hmax",
@@ -304,6 +347,17 @@ def test_primitive_explorer_defaults_to_richest_authoring_profile_and_keeps_over
         ("s:=v", ("vec",)),
         ("s:=(m,v)", ("mask", "vec")),
     }
+
+    resolved = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        mode="resolved",
+        backend="cpp",
+        preferred_profiles=workspace.config.preferred_profiles,
+    )
+    assert resolved.profile == "avx2"
 
 
 def test_navigation_hover_completion_and_tokens_use_latest_index(
