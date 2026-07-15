@@ -12,6 +12,47 @@ from _select_lower_backend_support import (
 
 
 @pytest.mark.parametrize(
+    ("extension_name", "type_tag", "expected_body"),
+    (
+        ("clang_v128", "si8", "__builtin_elementwise_abs"),
+        ("clang_v256", "si64", "__builtin_elementwise_abs"),
+        ("clang_v512", "f32", "__builtin_elementwise_abs"),
+        ("clang_v128_bool", "f64", "__builtin_elementwise_abs"),
+        ("clang_v256_bool", "si16", "__builtin_elementwise_abs"),
+        ("clang_v512_bool", "ui32", "return data"),
+    ),
+)
+def test_clang_vector_abs_uses_elementwise_builtin_and_keeps_fallback(
+    catalog: Catalog,
+    machine_profiles,
+    extension_name: str,
+    type_tag: str,
+    expected_body: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog, machine_profiles["avx2"], "abs", (type_tag,)
+        )
+        .selected
+        if selected.extension.name == extension_name
+    )
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert expected_body in lowered.body_text
+    assert "for (" not in lowered.body_text
+    assert [variant.name for variant in lowered.variant_bodies] == [
+        "scalar_lanes_fallback"
+    ]
+    assert "for (" in lowered.variant_bodies[0].body_text
+
+
+@pytest.mark.parametrize(
     ("profile_name", "extension_name", "type_tag", "intrinsic"),
     (
         ("sse3", "sse", "si8", "_mm_abs_epi8"),

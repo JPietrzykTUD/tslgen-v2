@@ -1002,6 +1002,44 @@ prim<v:=(v)> abs(data):
             var<const_infer>(all_bits, cast<bitcast>(UBase, cast<static>(SBase, -1)));
             complete(cast<bitcast>(base::in, bits & (all_bits >> 1)));
           """
+    clang_v128:
+      ui?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(data);"
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<init_register>(result);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(data[i]);
+              }
+              complete(result);
+            """
+      [si?, f?]:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil "complete(intrin<__builtin_elementwise_abs>(data));"
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<init_register>(result);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                result[i] = call<primitive=@self[vector::as_extension(scalar)]>(data[i]);
+              }
+              complete(result);
+            """
     avx512:
       [si8, si16]:
         requires [avx512f, avx512bw]
