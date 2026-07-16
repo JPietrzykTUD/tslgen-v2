@@ -140,3 +140,67 @@ jobs:
             tslctmp/tsl-language-support-${{ matrix.target }}.vsix.sha256
           if-no-files-found: error
           retention-days: 14
+
+  publish-runtime-packages:
+    name: Publish VSIX release assets
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - editor-tests
+      - runtime-packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+
+    steps:
+      - name: Download packaged VSIX artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: tsl-language-support-*
+          path: tslctmp/editor-release-assets
+          merge-multiple: true
+
+      - name: Verify platform VSIX assets
+        working-directory: tslctmp/editor-release-assets
+        run: |
+          set -euo pipefail
+          targets=(
+            linux-x64
+            linux-arm64
+            win32-x64
+            darwin-x64
+            darwin-arm64
+          )
+          for target in "${targets[@]}"; do
+            asset="tsl-language-support-${target}.vsix"
+            test -f "${asset}"
+            test -f "${asset}.sha256"
+            sha256sum -c "${asset}.sha256"
+          done
+
+      - name: Publish platform VSIX release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          release_title="TSL generated ${RELEASE_TAG}"
+          release_notes="Generated TSL package for ${RELEASE_TAG} (${GITHUB_SHA})."
+          if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            if ! gh release create "${RELEASE_TAG}" \
+              --title "${release_title}" \
+              --notes "${release_notes}" \
+              --verify-tag; then
+              gh release view "${RELEASE_TAG}" >/dev/null
+            fi
+          fi
+
+          assets=()
+          for target in linux-x64 linux-arm64 win32-x64 darwin-x64 darwin-arm64; do
+            asset="tslctmp/editor-release-assets/tsl-language-support-${target}.vsix"
+            assets+=("${asset}" "${asset}.sha256")
+          done
+          gh release upload "${RELEASE_TAG}" "${assets[@]}" --clobber

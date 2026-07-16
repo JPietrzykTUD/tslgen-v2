@@ -136,11 +136,14 @@ jobs:
               release_asset_path="tslctmp/artifacts/${asset_name}"
               cp "${ASSET_PATH}" "${release_asset_path}"
 
-              gh release view "${RELEASE_TAG}" >/dev/null 2>&1 || \
-                gh release create "${RELEASE_TAG}" \
+              if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+                if ! gh release create "${RELEASE_TAG}" \
                   --title "${release_title}" \
                   --notes "${release_notes}" \
-                  --verify-tag
+                  --verify-tag; then
+                  gh release view "${RELEASE_TAG}" >/dev/null
+                fi
+              fi
 
               gh release upload \
                 "${RELEASE_TAG}" \
