@@ -1449,16 +1449,6 @@ function setIndexedBit(bitsetsByValue, value, recordIndex, size) {
   setBit(bits, recordIndex);
 }
 
-function groupRecordsByPrimitive(records) {
-  const grouped = new Map();
-  for (const record of records) {
-    const rows = grouped.get(record.primitive);
-    if (rows) rows.push(record);
-    else grouped.set(record.primitive, [record]);
-  }
-  return grouped;
-}
-
 function recordIndexesByPrimitive(records) {
   const grouped = new Map();
   for (const [recordIndex, record] of records.entries()) {
@@ -1928,27 +1918,6 @@ function recordSearchText(record) {
   ]
     .join(" ")
     .toLowerCase();
-}
-
-function recordRequirementsVisible(record, enabledRequirements) {
-  if (!enabledRequirements) return false;
-  if (record.required_features.length === 0) {
-    return enabledRequirements.has(NO_REQUIREMENT);
-  }
-  return record.required_features.every((requirement) =>
-    enabledRequirements.has(requirement)
-  );
-}
-
-function recordCompilerVisible(record, enabledCompilers) {
-  if (!enabledCompilers) return false;
-  if (record.compiler_ids.length === 0) return true;
-  return record.compiler_ids.some((compiler) => enabledCompilers.has(compiler));
-}
-
-function recordTypeVisible(record, enabledTypes, typeByTag) {
-  if (!enabledTypes) return false;
-  return !typeByTag.has(record.type_tag) || enabledTypes.has(record.type_tag);
 }
 
 function requirementLabel(requirement) {

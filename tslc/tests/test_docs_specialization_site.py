@@ -221,7 +221,11 @@ def test_specialization_explorer_react_source_keeps_expected_views() -> None:
         / "supplementary/docs/site/specializations/react/src/App.jsx"
     ).read_text(encoding="utf-8")
 
-    assert 'import React, { useEffect, useMemo, useState } from "react";' in app_source
+    assert (
+        'import React, { useDeferredValue, useEffect, useMemo, useState } from "react";'
+        in app_source
+    )
+    assert "const deferredSearch = useDeferredValue(search);" in app_source
     assert "const [filtersOpen, setFiltersOpen] = useState(false);" in app_source
     assert "setActiveCell(null);" in app_source
     assert "function PrimitiveBrowser" in app_source
@@ -276,7 +280,7 @@ def test_specialization_explorer_react_source_keeps_expected_views() -> None:
     assert "Profile capabilities and compiler availability are shown separately" in app_source
     assert "function typeLabel" in app_source
     assert "function targetWidthForRecord" not in app_source
-    assert "record.target_class === targetClass.key" in app_source
+    assert "cellRecords.get(cellKey(targetClass.key, typeTag))" in app_source
     assert "activeCell?.targetClass === targetClass.key" in app_source
     assert "function targetClassSortKey" in app_source
     assert "function implementationTargetRank" in app_source
@@ -286,9 +290,14 @@ def test_specialization_explorer_react_source_keeps_expected_views() -> None:
     assert "enabledRequirements" in app_source
     assert "enabledProfiles" in app_source
     assert "enabledCompilers" in app_source
-    assert "recordCompilerVisible" in app_source
     assert "supportedCompilerRows" in app_source
-    assert "compiler_ids.length > 0 || enabledProfiles" in app_source
+    assert "buildFilterIndex" in app_source
+    assert "filteredRecordMask" in app_source
+    assert "profileMask" in app_source
+    assert "compilerMask" in app_source
+    assert "requirementMask" in app_source
+    assert "typeMask" in app_source
+    assert "recordIndexesByPrimitive" in app_source
     assert 'title="Compilers"' in app_source
     assert "function ProfileChipGroups" in app_source
     assert "function profileFilterGroups" in app_source
