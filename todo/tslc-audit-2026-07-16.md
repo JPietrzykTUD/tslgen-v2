@@ -34,7 +34,66 @@ accreting in `doctor`/maintenance and the newest explorer code.
 
 ## Part I — Consolidated findings (ordered by severity)
 
-### Near-blocker
+### Incomplete first part of the audit report
+
+#### MAJOR-1 — PIVOT planner is a raw-string rewrite engine over lowered C++/Rust text
+
+tslc/src/tslc/pivot/planner.py:45-70 (regex inventory), 378-473 (_emit_slot), 790-804 (_prepare_body strips Rust unsafe { }), 864-889 (_split_statements), 892-919 (_local_renames, _replace_identifiers), 931-953 (marker re-discovery).
+Rule violated: tslc/AGENTS.md TSIL Boundary — "Shared semantics become typed TSIL regions or lowering values, not raw-string rewrite ladders"; root AGENTS.md — "do not grow ad-hoc C/C++/Rust parsers or raw string rewrite ladders". DESCRIPTION.md:96-98 blesses validating the lowered body and rejecting survivors; this module goes well beyond validation into rewriting: regex alpha-renaming of locals, regex parameter substitution, statement re-splitting, and splicing inlined text. The typed call sites captured by PivotCallLowerer (pivot/_lowering.py:99-101) are flattened into __tslc_pivot_call_N( string markers and then re-found by regex + paren matching (planner.py:45,931-953) — a typed boundary deliberately created and then thrown away.
+Why it matters: _replace_identifiers (planner.py:914-919) substitutes every identifier token, including qualified-name and member positions. _validate_body_text does not forbid std:: calls, so a primitive parameter named min in a body using std::min(...) is rewritten to std::(<arg>) — silently corrupt YAML output. Each new admitted body idiom will grow this ladder.
+Smallest repair: keep call sites typed end-to-end — have the pivot lowerer return the body as a segment/RenderField sequence whose call sites are typed nodes (they already are, pre-flattening), and inline by composing typed pieces instead of marker regex surgery; restrict regex use to rejection only (which DESCRIPTION.md sanctions).
+Proving test: pivot export of a primitive whose parameter name collides with an identifier used in a qualified call in the body (e.g. parameter min, body complete(std::min(a, b))); assert the emitted direct: statement is not corrupted (currently would be).
+
+
+#### MAJOR-2 — PIVOT duplicates backend type-spelling knowledge owned by backend/signature_types.py
+
+tslc/src/tslc/pivot/planner.py:662-695 (_concrete_type: "std::size_t"/"usize" at 671, std::uint{w}_t/u{w} at 687-691), 698-730 (_fixed_type: typename {vector}::register_type|mask_type|imask_type, <{vector} as tsl::tsl_core::SimdVector>::RegisterType|…), 770-781 (_fixed_vector_spelling: Rust VectorFor<…>::Vec string built inline while the C++ arm correctly reuses dialect.types.fixed_vector_spelling).
+Rule violated: root AGENTS.md "DRY with judgment — remove duplicated … backend rules"; tslc/AGENTS.md Backend Boundary. The compiler already owns exactly this projection: backend/signature_types.py:102-254 (CPP_SIGNATURE_TYPES/RUST_SIGNATURE_TYPES, including concrete forms), and the Rust fixed-vector spelling knowledge lives at backend/rust_algorithm.py:669. DESCRIPTION.md:94-95 claims PIVOT "reuses … the selected C++ or Rust intrinsic/type translation" — true for intrinsics via the dialect, overstated for signature-kind type spelling. (benchmark/render_cpp.py:279-290 is a pre-existing second copy; pivot adds a third.)
+Why it matters: a backend rename of a member type or size type now needs three edits; the C++/Rust asymmetry inside _fixed_vector_spelling shows the boundary already leaking.
+Smallest repair: add the vector-scoped member form to SignatureTypeForms (or a member/fixed template) and route _concrete_type/_fixed_type through BackendSignatureTypes; move the Rust VectorFor fixed spelling beside its owner in rust_algorithm.py.
+Proving test: unit test asserting pivot's kind→type projection equals the backend signature-type registry's projection per kind, so one owner breaks loudly.
+
+
+#### MAJOR-3 — Explorer slot-status classification re-implements selector candidate discovery instead of reusing Selector.evaluate_candidates
+
+tslc/src/tslc/lsp/primitive_explorer.py:407-444 (status ladder selected/backend-unsupported/not-selected/missing), 469-500 (_authored_candidates: walks catalog.extension_chain + type_group_contains — the same walk as select/selector.py:446-453). This is the freshest code (added this session).
+Rule violated: CHARTER.md §8 — live features are projections of compiler-owned … selection; root CHARTER §4 — "Shared knowledge should have one owner"; DESCRIPTION.md:79-84 — explorer facts come "from the same catalog, selector, and index". The selector already exposes typed candidate evaluation with per-candidate rejection reasons: evaluate_candidates (consumed by maintenance/explain.py:230,378). The explorer instead re-derives a simplified candidate set that ignores selector admission rules (masking-variant expansion, requires clauses, where target constraints, arity/overload filtering).
+Why it matters: when selector semantics change, "not selected for profile" vs "missing implementation" will misreport in the sidebar with no failing test — precisely the second-selector drift Charter §8 exists to prevent, one layer below the TypeScript client.
+Smallest repair: for empty slots, call selector.evaluate_candidates(...) and project its typed rejections into SlotStatus/detail; delete _authored_candidates' chain walk.
+Proving test: an implementation that exists on the extension chain for the type but is rejected by a selector-only rule (unsatisfied requires feature); assert explorer detail carries the selector's rejection reason rather than "missing"/generic text.
+
+
+#### MINOR-4 — planner.py is a catch-all module (1116 lines, largest in the repo)
+
+It mixes: profile cover-set optimization (1023-1068), selection orchestration (136-249), recursive inline engine (378-516), callee resolution (518-569), straight-line body law (807-889), PIVOT type projection (662-758), and text utilities (927-966).
+Rule violated: tslc/AGENTS.md — "Split modules before they become catch-all files."
+Repair: split along the already-clean seams: eligibility/validation, inline engine, type projection (which MAJOR-2 mostly deletes). Mechanical; existing test_pivot_export.py is the safety net.
+
+
+#### MINOR-5 — Untyped duck-typing at internal domain boundaries
+
+pivot/planner.py:969-974 — _target_matches(candidate, target: object) uses getattr(target, "base_tag", …) although the dependency target is the typed VectorIdentity (lower/dependencies.py:19-22). Same pattern: lsp/specialization_context.py:206-212 _same_source getattr-compares span fields.
+Rule violated: tslc/CHARTER.md §5 — "Typed, immutable domain objects after the parser boundary."
+Repair: type the parameters (VectorIdentity | None, SourceSpan | None) and compare fields directly. Test: mypy strictness alone catches regressions once typed.
+
+
+#### MINOR-6 — specialization_context re-parses selector-head list syntax duplicated from the catalog builder
+
+tslc/src/tslc/lsp/specialization_context.py:159-178 (_contextual_extensions splits "[a, b]") duplicates catalog/_builder_implementations.py:173-179 (_selector_extensions).
+Rule violated: CHARTER §8 no-second-parser spirit / root CHARTER §4 single owner — TSL selector syntax is catalog-promotion knowledge.
+Repair: promote _selector_extensions to a shared catalog-owned helper (or expose parsed extension names on ParsedImplementationSelectorEntry) and consume it. Test: a selector-head with padding/duplicates asserting both callers agree.
+
+
+#### MINOR-7 — An unexpected exception in the first corpus check hangs all index-backed requests forever
+
+tslc/src/tslc/lsp/server.py:410-415 awaits initial_check_complete with no timeout; the event is only set in _publish (444) or shutdown (403). _check_and_publish (418-435) has no try/except around asyncio.to_thread(workspace.check, …); pygls logs a notification-handler exception, the coroutine dies, and the event stays unset — hover/definition/explorer requests then never return, with no user-visible diagnostic. check_catalog is designed to return diagnostics rather than raise, so this needs a defect to trigger — but the failure mode is a silently wedged server.
+Rule violated: audit item 9 / root AGENTS.md "Diagnostics are part of the product" (graceful, actionable failure); Charter §8 responsiveness.
+Repair: try/finally in _check_and_publish that sets initial_check_complete and emits a window/showMessage/log on unexpected failure.
+Proving test: monkeypatch AuthoringWorkspace.check to raise; assert a subsequent definition request completes (empty) instead of hanging.
+
+### Complete audit report (consolidated findings)
+
+#### Near-blocker
 
 **F1. One bad string escape crashes `tslc check` and the language server with
 a raw `SyntaxError`.**
@@ -52,7 +111,7 @@ SyntaxError)` and emit a spanned `TSL-OUTER-PARSE-BAD-STRING`.
 *Prove:* parse a document containing `x "\x"`; assert one located error
 diagnostic and no escaping exception.
 
-### Major — correctness defects
+#### Major — correctness defects
 
 **F2. Duplicate primitive declarations are silently accepted; the first
 silently wins.**
@@ -155,7 +214,7 @@ identifier in a qualified call (parameter `min`, body
 `complete(std::min(a, b))`); assert the emitted `direct:` statement is not
 corrupted.
 
-### Major — boundary and extensibility drift
+#### Major — boundary and extensibility drift
 
 **F8. `doctor.py` hard-dispatches on backend-id strings and crashes on
 backend #3.** (Found independently by two reviewers.)
@@ -327,7 +386,7 @@ coverage status or warning for suppressed fuzz cases.
 scalable-only case against a non-scalable support reports
 `backend_unsupported`.
 
-### Minor findings, grouped by theme
+#### Minor findings, grouped by theme
 
 **Catalog input honesty**
 
@@ -601,7 +660,7 @@ scalable-only case against a non-scalable support reports
   `_DEFAULT_BACKENDS` (`:52`) is captured at import time as a dataclass
   default, so registry monkeypatching cannot affect it.
 
-### Nits
+#### Nits
 
 - `ir/scan.py:176-186` — manual 9-field `Region` reconstruction instead of
   `dataclasses.replace(...)`; a future field silently resets.
