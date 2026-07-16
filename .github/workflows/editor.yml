@@ -185,6 +185,7 @@ jobs:
       - name: Publish platform VSIX release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           release_title="TSL generated ${RELEASE_TAG}"
