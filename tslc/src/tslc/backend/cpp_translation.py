@@ -253,9 +253,9 @@ class _CppSyntax:
                 keyword = "if" if not parts else "else if"
                 parts.extend(
                     (
-                        literal_text(f"{keyword} constexpr ("),
+                        literal_text(f"{keyword} constexpr (("),
                         selector,
-                        literal_text(f" == {label}) {{\n        "),
+                        literal_text(f") == {label}) {{\n        "),
                         body,
                         literal_text("\n      }"),
                     )

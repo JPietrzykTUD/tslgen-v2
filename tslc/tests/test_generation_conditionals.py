@@ -507,6 +507,9 @@ def test_mask_test_imask_lowers_integral_mask_bit_test(
     catalog: Catalog, machine_profiles
 ) -> None:
     cpp = _spec(catalog, machine_profiles, "avx2", "test_imask", "avx2", "ui32")
+    cpp_arithmetic_index = _spec(
+        catalog, machine_profiles, "avx", "to_mask", "sse", "si8"
+    )
     rust = _spec(
         catalog, machine_profiles, "scalar", "to_mask", "scalar", "ui32", backend="rust"
     )
@@ -514,6 +517,9 @@ def test_mask_test_imask_lowers_integral_mask_bit_test(
     assert cpp is not None
     assert "static_cast<std::uint64_t>(mask)" in cpp.body_text
     assert "mask<test" not in cpp.body_text
+    assert cpp_arithmetic_index is not None
+    assert ">> (16 - 1 - 15)" in cpp_arithmetic_index.body_text
+    assert ">> 16 - 1" not in cpp_arithmetic_index.body_text
     assert rust is not None
     assert rust.body_text == "return (((mask) as u64 >> 0) & 1u64) != 0;"
 

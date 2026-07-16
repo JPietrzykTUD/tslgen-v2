@@ -71,7 +71,7 @@ def test_sve_gather_prefers_native_indexed_load_with_runtime_fallback(
 
     assert lowered is not None
     assert "svld1_gather_index" in lowered.body_text
-    assert "if constexpr (scale == 4)" in lowered.body_text
+    assert "if constexpr ((scale) == 4)" in lowered.body_text
     assert "IndicesType::extension_type" in lowered.body_text
     assert "index_lanes" in lowered.body_text
     assert "idx_array_storage" in lowered.body_text
@@ -120,7 +120,7 @@ def test_sve_scatter_prefers_native_indexed_store_with_runtime_fallback(
 
     assert lowered is not None
     assert "svst1_scatter_index" in lowered.body_text
-    assert "if constexpr (scale == 4)" in lowered.body_text
+    assert "if constexpr ((scale) == 4)" in lowered.body_text
     assert "IndicesType::extension_type" in lowered.body_text
     assert "index_lanes" in lowered.body_text
     assert "idx_array_storage" in lowered.body_text
@@ -134,6 +134,34 @@ def test_sve_scatter_prefers_native_indexed_store_with_runtime_fallback(
     assert "idx_array_storage" in fallback
     assert "val_array_storage" in fallback
     assert ("active_array_storage" in fallback) is masked
+
+
+def test_compile_switch_parenthesizes_compound_selector(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog, machine_profiles["avx"], "permute_lanes", ("si64",)
+        )
+        .selected
+        if selected.extension.name == "sse"
+        and selected.primitive.immediate_params
+    )
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert (
+        "if constexpr (((control & 1) | ((control >> 1) & 2)) == 2)"
+        in lowered.body_text
+    )
+    assert (
+        "if constexpr ((control & 1) | ((control >> 1) & 2) == 2)"
+        not in lowered.body_text
+    )
 
 
 def test_simd_type_base_specialization_expands_gather_narrow_slots(
