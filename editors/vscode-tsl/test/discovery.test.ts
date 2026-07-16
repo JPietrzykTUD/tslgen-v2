@@ -77,14 +77,15 @@ describe("command discovery", () => {
   });
 
   it("loads and reports a matching release manifest", async () => {
+    const extensionPath = path.resolve("test-extension");
     const executable = path.join(
-      "/extension",
+      extensionPath,
       "server",
       "linux-x64",
       "tslc",
     );
     const result = await discoverServer({
-      extensionPath: "/extension",
+      extensionPath,
       platform: "linux",
       arch: "x64",
       expectedExtensionVersion: "0.1.1",
