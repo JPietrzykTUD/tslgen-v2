@@ -75,8 +75,14 @@ def main(argv: list[str] | None = None) -> int:
     if not target.startswith("win32-"):
         executable.chmod(executable.stat().st_mode | 0o755)
 
-    licenses = _collect_licenses(staged_runtime)
-    checksums = _checksums(staged_runtime)
+    staged_server = scratch / "staged-server"
+    target_output = staged_server / target
+    # A VSIX is a zip archive and cannot retain PyInstaller's POSIX symlink
+    # graph. Materialize it first, then inventory the exact tree that the
+    # smoke test and extension package consume.
+    shutil.copytree(staged_runtime, target_output)
+    licenses = _collect_licenses(target_output)
+    checksums = _checksums(target_output)
     commit, dirty = _source_provenance()
     manifest = {
         "schema_version": 1,
@@ -94,16 +100,13 @@ def main(argv: list[str] | None = None) -> int:
         "checksums": checksums,
     }
 
-    staged_server = scratch / "staged-server"
-    target_output = staged_server / target
-    shutil.copytree(staged_runtime, target_output)
     _write_json(staged_server / "release-manifest.json", manifest)
     if SERVER_ROOT.exists():
         shutil.rmtree(SERVER_ROOT)
     shutil.copytree(staged_server, SERVER_ROOT)
     print(
         f"staged {target}: tslc {compiler_version}, "
-        f"{len(checksums)} files, {_tree_size(staged_runtime)} bytes"
+        f"{len(checksums)} files, {_tree_size(target_output)} bytes"
     )
     return 0
 

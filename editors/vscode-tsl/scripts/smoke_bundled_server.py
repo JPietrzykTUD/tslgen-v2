@@ -290,7 +290,15 @@ def _verify_checksums(runtime: Path, checksums: list[dict[str, object]]) -> None
         if path.is_file()
     }
     if actual != expected:
-        raise RuntimeError("bundled runtime checksums do not match the release manifest")
+        missing = sorted(expected.keys() - actual.keys())
+        unexpected = sorted(actual.keys() - expected.keys())
+        changed = sorted(
+            path for path in expected.keys() & actual.keys() if expected[path] != actual[path]
+        )
+        raise RuntimeError(
+            "bundled runtime checksums do not match the release manifest: "
+            f"missing={missing}, unexpected={unexpected}, changed={changed}"
+        )
 
 
 if __name__ == "__main__":
