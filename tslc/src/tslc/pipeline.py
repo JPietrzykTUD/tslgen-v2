@@ -14,9 +14,12 @@ from pathlib import Path
 from typing import Literal
 
 from tslc._pipeline_closure import (
+    LoweringTrace,
+    LoweringTraceSlot,
     _LoweredSlot,
     _profile_with_required_features,
     _prune_unresolved,
+    unresolved_callee_reason,
 )
 from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
 from tslc._pipeline_lowering_cache import _LoweringCache
@@ -35,7 +38,7 @@ from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
-from tslc.lower.dependencies import CallDependency
+from tslc.lower.dependencies import dependency_sort_key
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer, LoweringResult
 from tslc.output.artifacts import ArtifactSet
 from tslc.render.project import RenderedProject, render_project
@@ -62,6 +65,7 @@ class GenerationRequest:
     primitives: tuple[str, ...] | None
     profiles: tuple[str, ...] | None
     type_tags: tuple[str, ...]
+    extensions: tuple[str, ...] | None = None
     backends: tuple[str, ...] = _DEFAULT_BACKENDS
     mode: GenerationMode = "partial"
     # Pull the value-test harness primitives (vector<->array round-trip and mask normalization)
@@ -79,6 +83,9 @@ class GenerationRequest:
     # Authoring checks reuse selection and lowering but stop before test planning,
     # benchmarking, render-asset loading, and artifact rendering.
     render_artifacts: bool = True
+    # Explicit concrete-analysis commands may retain the lowered call graph.
+    # Ordinary checking/generation discards it after closure and propagation.
+    collect_lowering_trace: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +130,8 @@ class GenerationResult:
     diagnostics: tuple[Diagnostic, ...]
     coverage: tuple[CoverageEntry, ...]
     skipped: tuple[SkippedEntry, ...] = ()
+    emitted_profiles: tuple[EmittedProfile, ...] = ()
+    lowering_trace: LoweringTrace | None = None
 
 
 def generate(request: GenerationRequest) -> GenerationResult:
@@ -141,7 +150,17 @@ def generate(request: GenerationRequest) -> GenerationResult:
     if inputs is None:
         return _empty(diagnostics)
 
-    return _GenerationSession(request, inputs, diagnostics).run()
+    return _generate_loaded(request, inputs, diagnostics)
+
+
+def _generate_loaded(
+    request: GenerationRequest,
+    inputs: _PipelineInputs,
+    diagnostics: list[Diagnostic],
+) -> GenerationResult:
+    """Run from one already-loaded immutable input snapshot."""
+
+    return _GenerationSession(request, inputs, list(diagnostics)).run()
 
 
 class _GenerationSession:
@@ -170,6 +189,7 @@ class _GenerationSession:
         self.coverage: list[CoverageEntry] = []
         self.skipped: list[SkippedEntry] = []
         self.emitted_profiles: list[EmittedProfile] = []
+        self.lowering_trace_slots: list[LoweringTraceSlot] = []
 
     def run(self) -> GenerationResult:
         for profile_name in _expand_requested_profiles(
@@ -185,6 +205,14 @@ class _GenerationSession:
         emitted_profiles = tuple(
             sorted(self.emitted_profiles, key=lambda item: item.profile.name)
         )
+        lowering_trace = (
+            LoweringTrace(
+                split_names=self.inputs.split_names,
+                slots=tuple(sorted(self.lowering_trace_slots, key=_trace_slot_key)),
+            )
+            if self.request.collect_lowering_trace
+            else None
+        )
         backend_diagnostics: list[Diagnostic] = []
         for capability in self.backends:
             backend_diagnostics.extend(capability.validate_profiles(emitted_profiles))
@@ -192,19 +220,31 @@ class _GenerationSession:
 
         if has_errors(backend_diagnostics):
             return _result_without_artifacts(
-                self.diagnostics, self.coverage, self.skipped
+                self.diagnostics,
+                self.coverage,
+                self.skipped,
+                emitted_profiles,
+                lowering_trace,
             )
 
         if self.request.mode == "strict" and (
             _has_strict_skips(self.skipped) or has_errors(self.diagnostics)
         ):
             return _result_without_artifacts(
-                self.diagnostics, self.coverage, self.skipped
+                self.diagnostics,
+                self.coverage,
+                self.skipped,
+                emitted_profiles,
+                lowering_trace,
             )
 
         if not self.request.render_artifacts:
             return _result_without_artifacts(
-                self.diagnostics, self.coverage, self.skipped
+                self.diagnostics,
+                self.coverage,
+                self.skipped,
+                emitted_profiles,
+                lowering_trace,
             )
 
         value_tests = (
@@ -233,7 +273,11 @@ class _GenerationSession:
         self.diagnostics.extend(benchmarks.diagnostics)
         if has_errors((*value_test_diagnostics, *benchmarks.diagnostics)):
             return _result_without_artifacts(
-                self.diagnostics, self.coverage, self.skipped
+                self.diagnostics,
+                self.coverage,
+                self.skipped,
+                emitted_profiles,
+                lowering_trace,
             )
         if self.inputs.render_assets is None:
             raise AssertionError("render assets were not loaded for generation")
@@ -249,7 +293,15 @@ class _GenerationSession:
             else None
         )
         artifacts = rendered.artifacts if rendered is not None else ArtifactSet.create(())
-        return _result(artifacts, rendered, self.diagnostics, self.coverage, self.skipped)
+        return _result(
+            artifacts,
+            rendered,
+            self.diagnostics,
+            self.coverage,
+            self.skipped,
+            emitted_profiles,
+            lowering_trace,
+        )
 
     def _plan_value_tests(
         self, profiles: tuple[EmittedProfile, ...]
@@ -287,12 +339,12 @@ class _GenerationSession:
         selected_extensions: dict[str, Extension] = {}
         all_backend_ids = frozenset(capability.backend_id for capability in self.backends)
         worklist = [
-            (primitive, self.type_tags, all_backend_ids)
+            (primitive, self.type_tags, all_backend_ids, self.request.extensions)
             for primitive in _requested_primitives(self.request, self.inputs.catalog)
         ]
         if self.request.test_harness:
             worklist.extend(
-                (name, self.type_tags, all_backend_ids)
+                (name, self.type_tags, all_backend_ids, None)
                 for name in (
                     self.inputs.test_harness.from_array,
                     self.inputs.test_harness.to_array,
@@ -302,19 +354,22 @@ class _GenerationSession:
                 )
                 if name is not None
             )
-        for capability in self.backends:
-            worklist.extend(
-                (name, self.type_tags, frozenset({capability.backend_id}))
-                for name in capability.closure_seed_primitives(self.inputs.catalog)
-            )
-        processed: dict[tuple[str, str], set[str]] = {}
+        if self.request.render_artifacts or self.request.extensions is None:
+            for capability in self.backends:
+                worklist.extend(
+                    (name, self.type_tags, frozenset({capability.backend_id}), None)
+                    for name in capability.closure_seed_primitives(self.inputs.catalog)
+                )
+        processed: dict[tuple[str, str, tuple[str, ...] | None], set[str]] = {}
         while worklist:
-            primitive, requested_types, target_backends = worklist.pop(0)
+            primitive, requested_types, target_backends, extensions = worklist.pop(0)
+            scope = tuple(extensions) if extensions is not None else None
             for backend in sorted(target_backends):
                 remaining_types = tuple(
                     type_tag
                     for type_tag in requested_types
-                    if backend not in processed.get((primitive, type_tag), set())
+                    if backend
+                    not in processed.get((primitive, type_tag, scope), set())
                 )
                 if not remaining_types:
                     continue
@@ -325,25 +380,47 @@ class _GenerationSession:
                     remaining_types,
                     selected_extensions,
                     frozenset({backend}),
+                    extensions,
                 )
                 for type_tag in remaining_types:
-                    processed.setdefault((primitive, type_tag), set()).add(backend)
+                    processed.setdefault((primitive, type_tag, scope), set()).add(backend)
                 lowered_specs.extend(primitive_slots)
-                for dependency_primitive, dependency_type, dependency_backend in (
-                    discovered_dependencies
-                ):
+                for (
+                    dependency_primitive,
+                    dependency_type,
+                    dependency_extension,
+                    dependency_backend,
+                ) in discovered_dependencies:
+                    dependency_scope = (
+                        (dependency_extension,) if extensions is not None else None
+                    )
                     if dependency_backend not in processed.get(
-                        (dependency_primitive, dependency_type), set()
+                        (dependency_primitive, dependency_type, dependency_scope), set()
                     ):
                         worklist.append(
                             (
                                 dependency_primitive,
                                 (dependency_type,),
                                 frozenset({dependency_backend}),
+                                dependency_scope,
                             )
                         )
 
         grouped, pruned = _prune_unresolved(lowered_specs, self.inputs.split_names)
+        if self.request.collect_lowering_trace:
+            pruned_ids = {id(slot) for slot in pruned}
+            self.lowering_trace_slots.extend(
+                LoweringTraceSlot(
+                    profile=profile_name,
+                    backend=slot.backend,
+                    specialization=slot.spec,
+                    callees=tuple(sorted(slot.callees, key=dependency_sort_key)),
+                    callee_origins=slot.callee_origins,
+                    emitted=id(slot) not in pruned_ids,
+                    unresolved_callee=slot.unresolved_callee,
+                )
+                for slot in lowered_specs
+            )
         for slot in pruned:
             self._record_pruned_skip(profile_name, slot)
         self._record_coverage(profile_name, lowered_specs, pruned)
@@ -373,10 +450,11 @@ class _GenerationSession:
         type_tags: tuple[str, ...],
         selected_extensions: dict[str, Extension],
         backend_ids: frozenset[str],
-    ) -> tuple[list["_LoweredSlot"], tuple[tuple[str, str, str], ...]]:
+        extensions: tuple[str, ...] | None,
+    ) -> tuple[list["_LoweredSlot"], tuple[tuple[str, str, str, str], ...]]:
         catalog = self.inputs.catalog
         lowered_slots: list[_LoweredSlot] = []
-        discovered_dependencies: set[tuple[str, str, str]] = set()
+        discovered_dependencies: set[tuple[str, str, str, str]] = set()
 
         for capability in self.backends:
             backend = capability.backend_id
@@ -391,6 +469,12 @@ class _GenerationSession:
             )
             self.diagnostics.extend(selection.diagnostics)
             for slot in selection.selected:
+                if (
+                    extensions is not None
+                    and slot.extension.name not in extensions
+                    and slot.extension.isa_name not in extensions
+                ):
+                    continue
                 _record_render_extensions(catalog, selected_extensions, slot)
                 body_segments = scan(
                     slot.implementation.body_text,
@@ -419,7 +503,12 @@ class _GenerationSession:
                     )
                 )
                 discovered_dependencies.update(
-                    (dependency.primitive, dependency.source.base_tag, backend)
+                    (
+                        dependency.primitive,
+                        dependency.source.base_tag,
+                        dependency.source.extension_isa,
+                        backend,
+                    )
                     for dependency in callees
                     if catalog.primitives_named(dependency.primitive, unmasked=False)
                 )
@@ -541,29 +630,7 @@ def _render_extension_priority(extension: Extension) -> tuple[int, str]:
 
 
 def _pruned_reason(slot: "_LoweredSlot") -> str:
-    unresolved = slot.unresolved_callee
-    if unresolved is None:
-        return "pruned: a called primitive is not generated for this profile"
-    dependency = unresolved.dependency
-    return (
-        f"pruned: {unresolved.origin} calls {_dependency_label(dependency)}, "
-        "but that specialization is not generated for this profile"
-    )
-
-
-def _dependency_label(dependency: CallDependency) -> str:
-    source = (
-        f"{dependency.primitive}<"
-        f"{dependency.source.extension_isa}, {dependency.source.base_tag}>"
-    )
-    if dependency.mask_policy is not None:
-        source = f"{source}[mask={dependency.mask_policy}]"
-    if dependency.target is None:
-        return source
-    return (
-        f"{source} -> <"
-        f"{dependency.target.extension_isa}, {dependency.target.base_tag}>"
-    )
+    return unresolved_callee_reason(slot.unresolved_callee)
 
 
 def _lowering_skipped_entry(
@@ -702,6 +769,25 @@ def _spec_key(spec: LoweredSpecialization) -> tuple[int, str, str]:
     return (_TYPE_ORDER.get(spec.type_tag, 99), spec.type_tag, spec.extension_name)
 
 
+def _trace_slot_key(slot: LoweringTraceSlot) -> tuple[object, ...]:
+    spec = slot.specialization
+    source = spec.source
+    return (
+        slot.profile,
+        slot.backend,
+        spec.primitive_name,
+        _TYPE_ORDER.get(spec.type_tag, 99),
+        spec.type_tag,
+        spec.extension_name,
+        spec.mask_policy or "",
+        spec.param_kinds,
+        spec.axis,
+        source.path.as_posix() if source is not None else "",
+        source.line if source is not None else 0,
+        source.column if source is not None else 0,
+    )
+
+
 def _sorted_type_tags(type_tags: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(sorted(type_tags, key=lambda tag: (_TYPE_ORDER.get(tag, 99), tag)))
 
@@ -756,8 +842,18 @@ def _result_without_artifacts(
     diagnostics: list[Diagnostic],
     coverage: list[CoverageEntry],
     skipped: list[SkippedEntry],
+    emitted_profiles: tuple[EmittedProfile, ...] = (),
+    lowering_trace: LoweringTrace | None = None,
 ) -> GenerationResult:
-    return _result(ArtifactSet.create(()), None, diagnostics, coverage, skipped)
+    return _result(
+        ArtifactSet.create(()),
+        None,
+        diagnostics,
+        coverage,
+        skipped,
+        emitted_profiles,
+        lowering_trace,
+    )
 
 
 def _result(
@@ -766,6 +862,8 @@ def _result(
     diagnostics: list[Diagnostic],
     coverage: list[CoverageEntry],
     skipped: list[SkippedEntry],
+    emitted_profiles: tuple[EmittedProfile, ...] = (),
+    lowering_trace: LoweringTrace | None = None,
 ) -> GenerationResult:
     return GenerationResult(
         artifacts=artifacts,
@@ -773,6 +871,8 @@ def _result(
         diagnostics=sort_diagnostics(diagnostics),
         coverage=tuple(sorted(coverage, key=_coverage_key)),
         skipped=tuple(sorted(skipped, key=_skipped_key)),
+        emitted_profiles=emitted_profiles,
+        lowering_trace=lowering_trace,
     )
 
 

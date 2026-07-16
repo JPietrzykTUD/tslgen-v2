@@ -122,7 +122,7 @@ Use `./dev.sh` for generated-project workflows:
 
 ```bash
 ./dev.sh check
-./dev.sh check --primitive add --profile avx2 --backend cpp --type si32
+./dev.sh check --primitive add --profile avx2 --extension avx2 --backend cpp --type si32
 ./dev.sh list primitives
 ./dev.sh show extension avx2
 ./dev.sh doctor --profile avx2 --backend cpp
@@ -130,6 +130,9 @@ Use `./dev.sh` for generated-project workflows:
 ./dev.sh build --primitives add --profiles scalar,avx2 --backends cpp,rust
 ./dev.sh test --primitives add --profiles avx2 --backends cpp
 ./dev.sh explain --primitive add --profile avx2 --type si32 --backend cpp
+./dev.sh preview --primitive add --profile avx2 --type si32 --backend cpp
+./dev.sh analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
+./dev.sh editor-install
 ./dev.sh dump --stage lowered --primitive add --profile avx2 --type si32 --backend cpp
 ```
 
@@ -138,6 +141,21 @@ same authoring/compiler tools. Prefer `tslc check` for corpus validation that
 must not render or write projects; add singular primitive/profile/backend/type
 filters only when slot selection and lowering are part of the check. Repository
 defaults come from the discovered `tslc.toml`.
+
+Editor development uses the compiler-owned Python server and TypeScript client:
+
+```bash
+python -m pip install -e './tslc[editor]'
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_lsp_*.py
+(cd editors/vscode-tsl && npm test)
+(cd editors/vscode-tsl && xvfb-run -a npm run test:integration)
+(cd editors/vscode-tsl && npm run package:runtime)
+```
+
+Read `editors/vscode-tsl/AGENTS.md` before changing the client or generated
+TextMate grammar. Runtime packaging additionally requires the pinned
+`editors/vscode-tsl/runtime-requirements.txt`; build each advertised VSIX on its
+native OS/architecture because the freezer is not a cross-compiler.
 
 ## Scratch And Generated Output
 

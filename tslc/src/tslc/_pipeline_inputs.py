@@ -4,18 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import Protocol
 
-from tslc.catalog.builder import CatalogBuilder
+from tslc.authoring import check_documents
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
-from tslc.catalog.validation import validate_catalog
-from tslc.backend.registry import registered_backend_ids
 from tslc.compiler_assets import (
     RenderAssets,
     load_default_render_assets,
-    load_default_tsl_grammar,
 )
 from tslc.diagnostics import Diagnostic, has_errors
 from tslc.sources import SourceLoader
@@ -45,6 +43,7 @@ class CatalogInputs:
     """Validated authoring inputs before profile selection or rendering."""
 
     catalog: Catalog
+    source_digest: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +54,7 @@ class _PipelineInputs:
     split_names: frozenset[str]
     imm_split_names: frozenset[str]
     test_harness: HarnessPrimitiveNames
+    input_digest: str
 
 
 def _load_inputs(request: _InputRequest) -> tuple[_PipelineInputs | None, list[Diagnostic]]:
@@ -87,6 +87,10 @@ def _load_inputs(request: _InputRequest) -> tuple[_PipelineInputs | None, list[D
             split_names=split_names,
             imm_split_names=imm_split_names,
             test_harness=test_harness,
+            input_digest=_combine_input_digests(
+                catalog_inputs.source_digest,
+                profile_result.digest,
+            ),
         ),
         diagnostics,
     )
@@ -105,29 +109,27 @@ def load_catalog_inputs(
     if has_errors(diagnostics):
         return None, diagnostics
 
-    from tslc.syntax.parser import TslParser
-
-    parse_result = TslParser(load_default_tsl_grammar()).parse(load_result.documents)
-    diagnostics.extend(parse_result.diagnostics)
-    if has_errors(diagnostics):
-        return None, diagnostics
-
-    catalog_result = CatalogBuilder().build(parse_result)
-    diagnostics.extend(catalog_result.diagnostics)
-    if catalog_result.catalog is None or has_errors(diagnostics):
-        return None, diagnostics
-    catalog = catalog_result.catalog
-    diagnostics.extend(
-        validate_catalog(
-            catalog,
-            parse_result,
-            required_backends=required_backends,
-            supported_backends=registered_backend_ids(),
-        )
+    checked = check_documents(
+        load_result.documents,
+        required_backends=required_backends,
     )
-    if has_errors(diagnostics):
+    diagnostics.extend(checked.diagnostics)
+    if checked.catalog is None or has_errors(diagnostics):
         return None, diagnostics
-    return CatalogInputs(catalog), diagnostics
+    digest = sha256()
+    for document in load_result.documents:
+        digest.update(document.path.as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(document.digest.encode("ascii"))
+        digest.update(b"\0")
+    return CatalogInputs(checked.catalog, digest.hexdigest()), diagnostics
+
+
+def _combine_input_digests(source_digest: str, profile_digest: str | None) -> str:
+    digest = sha256()
+    digest.update(f"sources:{source_digest}\n".encode("ascii"))
+    digest.update(f"profiles:{profile_digest or 'unavailable'}\n".encode("ascii"))
+    return digest.hexdigest()
 
 
 __all__ = ("CatalogInputs", "load_catalog_inputs")

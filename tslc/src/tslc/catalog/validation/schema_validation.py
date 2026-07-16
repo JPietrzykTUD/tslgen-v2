@@ -19,7 +19,7 @@ from tslc.catalog.validation._schema_extensions import (
 from tslc.catalog.validation._schema_primitives import validate_primitive
 from tslc.catalog.validation._schema_target_families import validate_target_families
 from tslc.catalog.validation.source_spans import children, source_span
-from tslc.diagnostics import Diagnostic, diagnostic_at
+from tslc.diagnostics import Diagnostic, RelatedLocation, diagnostic_at
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedBlockDeclaration,
@@ -27,6 +27,10 @@ from tslc.syntax.ast import (
     ParsedPrimitiveDeclaration,
     ParsedTslField,
 )
+
+
+KNOWN_TYPE_GROUP_FIELDS = frozenset({"types"})
+KNOWN_LANGUAGE_TYPE_FIELDS = frozenset({"type"})
 
 
 def validate_parsed_documents(
@@ -97,6 +101,7 @@ def _validate_named_block_duplicates(
     if first is None:
         seen[key] = declaration
         return
+    first_span = source_span(first.source)
     diagnostics.append(
         diagnostic_at(
             severity="error",
@@ -106,6 +111,16 @@ def _validate_named_block_duplicates(
                 f"first definition is at {first.source.path}:{first.source.line}"
             ),
             source=source_span(declaration.source),
+            related=(
+                ()
+                if first_span is None
+                else (
+                    RelatedLocation(
+                        message="first definition is here",
+                        span=first_span,
+                    ),
+                )
+            ),
         )
     )
 
@@ -134,7 +149,7 @@ def _validate_block(
         for field in declaration.fields:
             validate_known_fields(
                 children(field),
-                frozenset({"types"}),
+                KNOWN_TYPE_GROUP_FIELDS,
                 diagnostics,
                 owner=f"type group {field.key.text!r}",
             )
@@ -144,7 +159,7 @@ def _validate_block(
         for field in declaration.fields:
             validate_known_fields(
                 children(field),
-                frozenset({"type"}),
+                KNOWN_LANGUAGE_TYPE_FIELDS,
                 diagnostics,
                 owner=f"language {declaration.name or '<unnamed>'} type {field.key.text!r}",
             )

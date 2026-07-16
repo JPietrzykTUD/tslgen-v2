@@ -6,7 +6,13 @@ from dataclasses import replace
 
 from tslc.catalog.model import Extension
 from tslc.lane_count import LaneCount
-from tslc.lower._query_model import QueryValue, TextValue, TypeValue
+from tslc.lower._query_model import (
+    QueryValue,
+    TextValue,
+    TypeValue,
+    query_argument,
+    query_function,
+)
 from tslc.lower.context import (
     LoweringSession,
     SimdTypeParameterValue,
@@ -86,6 +92,7 @@ class RegisterQuery:
     """``vector::register`` -> backend spelling of the vector register type."""
 
     head = "vector::register"
+    descriptor = query_function("text")
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -97,6 +104,10 @@ class RegisterGenericQuery:
     """``register::generic(x)`` -> concrete register type for a vector/base."""
 
     head = "register::generic"
+    descriptor = query_function(
+        "text",
+        arguments=(query_argument("type", "vector", "simd_type"),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -140,6 +151,7 @@ class MaskQuery:
     """``vector::mask`` -> backend spelling of the vector mask type."""
 
     head = "vector::mask"
+    descriptor = query_function("text")
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -151,6 +163,7 @@ class ImaskQuery:
     """``vector::imask`` -> integral-mask type or backend spelling."""
 
     head = "vector::imask"
+    descriptor = query_function("type", "text")
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -168,6 +181,7 @@ class VectorAlignmentQuery:
     """``vector::alignment`` -> natural register byte alignment."""
 
     head = "vector::alignment"
+    descriptor = query_function("text")
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -185,6 +199,7 @@ class VectorLengthQuery:
     """``vector::length`` -> generation-time lane count expression."""
 
     head = "vector::length"
+    descriptor = query_function("text")
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -204,6 +219,7 @@ class VectorRuntimeLengthQuery:
     """``vector::runtime_length`` -> lane count expression valid at runtime."""
 
     head = "vector::runtime_length"
+    descriptor = query_function("text")
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -230,6 +246,10 @@ class AsExtensionQuery:
     """``vector::as_extension(ext)`` -> current base under a named extension."""
 
     head = "vector::as_extension"
+    descriptor = query_function(
+        "vector",
+        arguments=(query_argument("text", role="extension"),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -251,6 +271,7 @@ class FixedFacadeQuery:
     """
 
     head = "vector::fixed"
+    descriptor = query_function("vector")
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -278,6 +299,10 @@ class AsBaseQuery:
     """``vector::as_base(base)`` -> given base under the current extension."""
 
     head = "vector::as_base"
+    descriptor = query_function(
+        "vector",
+        arguments=(query_argument("type"),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -291,6 +316,10 @@ class WindowBaseQuery:
     """``vector::window_base(base)`` -> re-base at constant total bit width."""
 
     head = "vector::window_base"
+    descriptor = query_function(
+        "vector",
+        arguments=(query_argument("type"),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -340,6 +369,13 @@ class VectorAsQuery:
     """``vector::as(ext, base)`` -> the given base under the named extension."""
 
     head = "vector::as"
+    descriptor = query_function(
+        "vector",
+        arguments=(
+            query_argument("text", role="extension"),
+            query_argument("type"),
+        ),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -356,6 +392,11 @@ class BaseGenericQuery:
     """``base::generic(V)`` -> base type tag of a vector value."""
 
     head = "base::generic"
+    descriptor = query_function(
+        "type",
+        "text",
+        arguments=(query_argument("vector", "simd_type"),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -378,6 +419,10 @@ class GenericLengthQuery:
     """``generic::length(V)`` -> lane count of a vector value."""
 
     head = "generic::length"
+    descriptor = query_function(
+        "text",
+        arguments=(query_argument("vector", "simd_type"),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
@@ -407,6 +452,10 @@ class GenericRuntimeLengthQuery:
     """``generic::runtime_length(V)`` -> runtime lane count of a vector value."""
 
     head = "generic::runtime_length"
+    descriptor = query_function(
+        "text",
+        arguments=(query_argument("vector", "simd_type"),),
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession

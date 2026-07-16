@@ -5,7 +5,14 @@ Install the package from the repository to get the `tslc` executable:
 ```bash
 python -m pip install -e ./tslc
 tslc --help
+tslc --version
 ```
+
+Editable installs reflect source changes after restarting the running command
+or language server. Re-run the install when dependencies, entry points, or
+package metadata change. Update a non-editable local install with
+`python -m pip install --upgrade --force-reinstall ./tslc` (or
+`'./tslc[editor]'` when editor support is needed).
 
 `PYTHONPATH=tslc/src python -m tslc ...` provides the same command surface
 without installing it. The repository `dev.sh` remains a convenience wrapper.
@@ -20,6 +27,7 @@ filesystem root. Relative paths are resolved from the configuration file:
 sources = ["tsldata"]
 machine_profiles = "supplementary/buildsystem/machine_profiles.json"
 backends = ["cpp", "rust"]
+authoring_profiles = ["scalar", "avx2"]
 output_root = "tslctmp/generated"
 
 [tslc.toolchains.cpp]
@@ -67,8 +75,55 @@ lowering. This path still stops before value-test planning, benchmarking, and
 rendering:
 
 ```bash
-tslc check --primitive add --profile avx2 --backend cpp --type si32
+tslc check --primitive add --profile avx2 --extension avx2 --backend cpp --type si32
 ```
+
+Unsupported selected slots are reported separately and do not fail the
+default partial check. `--extension` restricts the requested primitive slot;
+dependency closure may still select other extensions required by that slot.
+Add `--strict` when every requested slot must lower.
+
+Render one concrete specialization fragment with the registered backend's
+normal primitive renderer, without constructing or writing a project:
+
+```bash
+tslc preview --primitive add --profile avx2 --type si32 --backend cpp --extension avx2
+```
+
+The output is backend source for inspection, not a standalone translation
+unit. It includes the concrete selection and input-snapshot digest. Use
+`tslc explain` for the detailed candidate-ranking, TSIL, lowering, dependency,
+and verdict trace.
+
+Analyze the implementation state and active lowered dependency closure without
+rendering:
+
+```bash
+tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
+tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp --format json
+```
+
+The result is identified by the loaded input digest and labels the final state
+as native, composed, fallback, or unknown. Its tree includes only dependencies
+recorded by the lowered specialization, terminates cycles explicitly, and
+retains the compiler's reason for unresolved edges. This command is intended
+for explicit editor and terminal inspection; it does not render, write, build,
+or run a project.
+
+Analyze the implementation state and active lowered dependency closure without
+rendering:
+
+```bash
+tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
+tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp --format json
+```
+
+The result is identified by the loaded input digest and labels the final state
+as native, composed, fallback, or unknown. Its tree includes only dependencies
+recorded by the lowered specialization, terminates cycles explicitly, and
+retains the compiler's reason for unresolved edges. This command is intended
+for explicit editor and terminal inspection; it does not render, write, build,
+or run a project.
 
 Use the focused catalog commands before writing selectors or invoking
 `explain`:
@@ -90,6 +145,21 @@ tslc show region intrin
 
 Their JSON output is deterministic and is suitable for completion and editor
 clients.
+
+## Language server
+
+The editor-neutral server is an optional dependency so ordinary compiler users
+do not install LSP libraries:
+
+```bash
+python -m pip install -e './tslc[editor]'
+tslc lsp --stdio
+```
+
+Standard output is reserved for protocol frames. Logs use standard error, or a
+path below workspace `tslctmp/` supplied through `--log-file`. See the
+[editor guide](tsl-editor.md) for the VS Code client, external-server discovery,
+unsaved overlays, explicit specialization preview, and troubleshooting.
 
 ## Generate and verify
 
@@ -122,9 +192,66 @@ Missing run support is always reported, but affects the exit status only with
 `--run`. Missing build prerequisites or a failed compiler/target preflight
 produce exit status 1.
 
-## Explain, inspect, audit, and coverage
+## Export PIVOT YAML
+
+PIVOT export is an explicit path, separate from normal backend generation:
 
 ```bash
+tslc export pivot \
+  --primitives add,sub \
+  --profiles avx2 \
+  --types si8,si32 \
+  --language cpp,rust \
+  --output-root ./tslctmp/pivot
+```
+
+`--language` is required and accepts `cpp`, `rust`, or both as a comma-separated
+list. The command writes one deterministic YAML document per supported callable
+under `<output-root>/<language>/`; a combined export therefore writes sibling
+`cpp/` and `rust/` trees.
+Each definition contains a concrete `isa`, `dtype`, parameter/result
+`signature`, and a `direct` instruction list. The final list entry assigns the
+`complete(...)` value to the document's `output` name. Supported primitive
+calls are recursively inlined into the same list.
+
+Fixed-width specializations that participate in the generated C++
+`dataparallel::fixed<N>` mapping also add `tsl_128`, `tsl_256`, or `tsl_512`
+definitions. Here `N` is the lane count for the definition's `dtype`, not its
+bit width. These definitions use the compiler-owned fixed-vector spelling and
+render a call to the generated TSL primitive; for example, 256-bit `int32`
+uses `fixed<8>`.
+
+Rust uses the corresponding generated `dataparallel::Fixed<N>` and `VectorFor`
+mapping and calls the selected `tsl::profile` primitive. Concrete Rust intrinsic
+definitions use the existing Rust backend spellings and are intended for the
+unsafe target-feature context owned by the PIVOT consumer.
+
+PIVOT currently accepts only concrete value-producing, straight-line
+specializations. Standard TSIL lowering first expands resolvable generation-time
+loops and branches. Control flow, blocks, pragmas, casts, unsupported constructs,
+or unresolved target-library calls that remain afterward, along with
+scalable/sized vectors and call graphs that cannot be resolved exactly, are
+reported as skips. Use `--show-skips` to print them, or `--strict` to make any
+skip fail the command.
+
+When no profile is specified, or when several profiles are requested, PIVOT
+projects them to one selection pass per distinct `(target family, hardware
+feature set)`. Compiler modes from profiles in the same group are combined so
+mode-activated definitions remain available. A single explicitly selected
+profile is used unchanged. Selection then retains a deterministic cover of
+feature sets: a feature set that contributes no corpus implementation beyond
+those already covered is not lowered or rendered.
+
+This command does not register PIVOT as a backend or run the ordinary
+generation/render pipeline. It has a dedicated output root and cannot create
+or alter generated C++/Rust projects.
+
+## Preview, explain, inspect, audit, and coverage
+
+```bash
+tslc preview --primitive add --profile avx2 --type si32 --backend cpp
+tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
+tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
 tslc explain --primitive add --profile avx2 --type si32 --backend cpp
 tslc inspect --stage lowered --primitive add --profile avx2 --type si32 --backend cpp
 tslc audit metadata

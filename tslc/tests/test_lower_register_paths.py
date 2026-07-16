@@ -371,6 +371,32 @@ def test_clang_conflict_unrolls_direct_vector_lanes(
     assert "from_array" not in lowered.body_text
     assert "for " not in lowered.body_text
 
+
+@pytest.mark.parametrize("backend_id", ["cpp", "rust"])
+def test_x86_conflict_generation_expands_fixed_nested_loops(
+    catalog: Catalog,
+    machine_profiles,
+    backend_id: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "conflict", ("ui32",))
+        .selected
+        if selected.extension.name == "avx2"
+    )
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, backend_id)
+    ).specialization
+
+    assert lowered is not None
+    assert "values[1]" in lowered.body_text
+    assert "values[7]" in lowered.body_text
+    assert "result[1]" in lowered.body_text
+    assert "result[7]" in lowered.body_text
+    assert "for " not in lowered.body_text
+
+
 @pytest.mark.parametrize(
     ("profile", "extension"),
     [

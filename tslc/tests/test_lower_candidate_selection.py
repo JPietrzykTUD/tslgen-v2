@@ -11,6 +11,484 @@ from _select_lower_backend_support import (
 )
 
 
+def _assert_generation_expanded(body: str) -> None:
+    assert "loop<" not in body
+    assert "for " not in body
+    assert "[0]" in body
+
+
+@pytest.mark.parametrize(
+    ("extension_name", "type_tag", "expected_body"),
+    (
+        ("clang_v128", "si8", "__builtin_elementwise_abs"),
+        ("clang_v256", "si64", "__builtin_elementwise_abs"),
+        ("clang_v512", "f32", "__builtin_elementwise_abs"),
+        ("clang_v128_bool", "f64", "__builtin_elementwise_abs"),
+        ("clang_v256_bool", "si16", "__builtin_elementwise_abs"),
+        ("clang_v512_bool", "ui32", "return data"),
+    ),
+)
+def test_clang_vector_abs_uses_elementwise_builtin_and_keeps_fallback(
+    catalog: Catalog,
+    machine_profiles,
+    extension_name: str,
+    type_tag: str,
+    expected_body: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog, machine_profiles["avx2"], "abs", (type_tag,)
+        )
+        .selected
+        if selected.extension.name == extension_name
+    )
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert expected_body in lowered.body_text
+    assert "for (" not in lowered.body_text
+    assert [variant.name for variant in lowered.variant_bodies] == [
+        "scalar_lanes_fallback"
+    ]
+    _assert_generation_expanded(lowered.variant_bodies[0].body_text)
+
+
+@pytest.mark.parametrize(
+    ("profile_name", "extension_name", "type_tag", "intrinsic"),
+    (
+        ("sse3", "sse", "si8", "_mm_abs_epi8"),
+        ("avx2", "avx2", "si32", "_mm256_abs_epi32"),
+        ("skylake", "avx512", "si16", "_mm512_abs_epi16"),
+        ("skylake", "avx512", "si64", "_mm512_abs_epi64"),
+        ("skylake", "avx2_vl", "si64", "_mm256_abs_epi64"),
+        ("skylake", "sse_vl", "si64", "_mm_abs_epi64"),
+    ),
+)
+def test_x86_abs_uses_exact_intrinsics_and_keeps_scalar_lane_fallback(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+    extension_name: str,
+    type_tag: str,
+    intrinsic: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles[profile_name], "abs", (type_tag,))
+        .selected
+        if selected.extension.name == extension_name
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert intrinsic in lowered.body_text
+        assert "to_array" not in lowered.body_text
+        assert lowered.implementation_state.value == "native"
+        assert [variant.name for variant in lowered.variant_bodies] == [
+            "scalar_lanes_fallback"
+        ]
+        assert "to_array" in lowered.variant_bodies[0].body_text
+        assert "from_array" in lowered.variant_bodies[0].body_text
+
+
+@pytest.mark.parametrize(
+    ("profile_name", "extension_name", "type_tag"),
+    (
+        ("avx2", "avx2", "si64"),
+        ("avx", "avx2", "f32"),
+        ("sse", "sse", "f32"),
+        ("sse2", "sse", "f64"),
+        ("avx2", "avx2", "f32"),
+    ),
+)
+def test_x86_abs_composes_register_operations_when_no_exact_intrinsic_exists(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+    extension_name: str,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles[profile_name], "abs", (type_tag,))
+        .selected
+        if selected.extension.name == extension_name
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "to_array" not in lowered.body_text
+        assert lowered.implementation_state.value == "composed"
+        if type_tag == "si64":
+            assert "greater_than" in lowered.body_text
+            assert "binary_xor" in lowered.body_text
+            assert "sub" in lowered.body_text
+        else:
+            assert "set1" in lowered.body_text
+            assert "binary_and" in lowered.body_text
+            assert "reinterpret" not in lowered.body_text
+            assert "shift_right" not in lowered.body_text
+        assert [variant.name for variant in lowered.variant_bodies] == [
+            "scalar_lanes_fallback"
+        ]
+        assert "to_array" in lowered.variant_bodies[0].body_text
+
+
+def test_sse_f32_set1_does_not_require_sse2(catalog: Catalog, machine_profiles) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["sse"], "set1", ("f32",))
+        .selected
+        if selected.extension.name == "sse"
+    )
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert lowered.required_features == frozenset(("sse",))
+    assert "_mm_set1_ps" in lowered.body_text
+
+
+@pytest.mark.parametrize(
+    ("extension_name", "type_tag", "intrinsic"),
+    (
+        ("avx512", "ui32", "_mm512_alignr_epi32"),
+        ("avx512", "f64", "_mm512_alignr_epi64"),
+        ("avx2_vl", "si64", "_mm256_alignr_epi64"),
+        ("sse_vl", "ui32", "_mm_alignr_epi32"),
+    ),
+)
+def test_avx512_align_right_lanes_uses_full_vector_align_intrinsics(
+    catalog: Catalog,
+    machine_profiles,
+    extension_name: str,
+    type_tag: str,
+    intrinsic: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["skylake"],
+            "align_right_lanes",
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == extension_name
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert intrinsic in lowered.body_text
+        assert "to_array" not in lowered.body_text
+        assert [variant.name for variant in lowered.variant_bodies] == [
+            "scalar_lanes_fallback"
+        ]
+        assert "to_array" in lowered.variant_bodies[0].body_text
+        assert "from_array" in lowered.variant_bodies[0].body_text
+
+
+@pytest.mark.parametrize(
+    ("profile_name", "extension_name"),
+    (("avx2", "avx2"), ("skylake", "avx512")),
+)
+def test_byte_alignr_is_not_used_for_full_vector_lane_alignment(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+    extension_name: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile_name],
+            "align_right_lanes",
+            ("si8",),
+        )
+        .selected
+        if selected.extension.name == extension_name
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "alignr_epi8" not in lowered.body_text
+        assert "to_array" in lowered.body_text
+        assert "from_array" in lowered.body_text
+
+
+@pytest.mark.parametrize(
+    ("profile_name", "extension_name", "type_tag", "intrinsic", "backends"),
+    (
+        ("neon", "neon", "si32", "vabsq_s32", ("cpp", "rust")),
+        (
+            "wasm32-simd128",
+            "wasm128",
+            "si16",
+            "i16x8_abs",
+            ("cpp", "rust"),
+        ),
+        ("sve", "sve", "si64", "svabs_s64_x", ("cpp",)),
+    ),
+)
+def test_non_x86_abs_uses_native_intrinsics_and_keeps_fallback(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+    extension_name: str,
+    type_tag: str,
+    intrinsic: str,
+    backends: tuple[str, ...],
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles[profile_name], "abs", (type_tag,))
+        .selected
+        if selected.extension.name == extension_name
+    )
+
+    for backend_id in backends:
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert intrinsic in lowered.body_text
+        assert "to_array" not in lowered.body_text
+        assert [variant.name for variant in lowered.variant_bodies] == [
+            "scalar_lanes_fallback"
+        ]
+        fallback_body = lowered.variant_bodies[0].body_text
+        if extension_name == "sve":
+            assert "for " in fallback_body
+        else:
+            _assert_generation_expanded(fallback_body)
+
+
+@pytest.mark.parametrize(
+    ("profile_name", "extension_name", "type_tag", "intrinsic", "backends"),
+    (
+        ("sse3", "sse", "si32", "_mm_alignr_epi8", ("cpp", "rust")),
+        ("neon", "neon", "si32", "vextq_u8", ("cpp", "rust")),
+        (
+            "wasm32-simd128",
+            "wasm128",
+            "si32",
+            "i8x16_swizzle",
+            ("cpp", "rust"),
+        ),
+        (
+            "avx2",
+            "clang_v128",
+            "si32",
+            "__builtin_shufflevector",
+            ("cpp",),
+        ),
+        ("sve", "sve", "si32", "svtbl_s32", ("cpp",)),
+    ),
+)
+def test_align_right_lanes_prefers_native_cross_lane_operations(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+    extension_name: str,
+    type_tag: str,
+    intrinsic: str,
+    backends: tuple[str, ...],
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile_name],
+            "align_right_lanes",
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == extension_name
+    )
+
+    for backend_id in backends:
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert intrinsic in lowered.body_text
+        assert "to_array" not in lowered.body_text
+        assert [variant.name for variant in lowered.variant_bodies] == [
+            "scalar_lanes_fallback"
+        ]
+        fallback_body = lowered.variant_bodies[0].body_text
+        if extension_name == "sve":
+            assert "for " in fallback_body
+        else:
+            _assert_generation_expanded(fallback_body)
+
+
+@pytest.mark.parametrize(
+    ("primitive", "profile_name", "extension_name", "type_tag", "intrinsic"),
+    (
+        (
+            "permute_lanes",
+            "avx2",
+            "avx2",
+            "si32",
+            "_mm256_permutevar8x32_epi32",
+        ),
+        (
+            "permute_lanes",
+            "cannonlake",
+            "avx512",
+            "si8",
+            "_mm512_permutexvar_epi8",
+        ),
+        (
+            "table_lookup",
+            "skylake",
+            "avx512",
+            "si64",
+            "_mm512_permutex2var_epi64",
+        ),
+        (
+            "table_lookup",
+            "skylake",
+            "avx2_vl",
+            "si64",
+            "_mm256_permutex2var_epi64",
+        ),
+        ("permute_lanes", "neon", "neon", "si8", "vqtbl1q_s8"),
+        (
+            "table_lookup",
+            "wasm32-simd128",
+            "wasm128",
+            "ui8",
+            "i8x16_swizzle",
+        ),
+        ("table_lookup", "sve256", "sve256", "si32", "svtbl_s32"),
+    ),
+)
+def test_runtime_permute_and_table_lookup_prefer_native_operations(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    profile_name: str,
+    extension_name: str,
+    type_tag: str,
+    intrinsic: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile_name],
+            primitive,
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == extension_name
+        and any(param.name == "IndicesType" for param in selected.primitive.generic_params)
+    )
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert intrinsic in lowered.body_text
+    assert "to_array" not in lowered.body_text
+    assert [variant.name for variant in lowered.variant_bodies] == [
+        "scalar_lanes_fallback"
+    ]
+    fallback_body = lowered.variant_bodies[0].body_text
+    if extension_name == "sve256":
+        assert "for " in fallback_body
+    else:
+        _assert_generation_expanded(fallback_body)
+
+
+@pytest.mark.parametrize(
+    ("profile_name", "extension_name", "type_tag", "intrinsic"),
+    (
+        ("avx2", "avx2", "si32", "_mm256_shuffle_epi32"),
+        ("sse2", "sse", "f64", "_mm_shuffle_pd"),
+        ("skylake", "avx512", "si64", "_mm512_permutex_epi64"),
+        (
+            "avx2",
+            "clang_v128",
+            "si32",
+            "__builtin_shufflevector",
+        ),
+    ),
+)
+def test_immediate_permute_lanes_prefers_native_operations(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+    extension_name: str,
+    type_tag: str,
+    intrinsic: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile_name],
+            "permute_lanes",
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == extension_name
+        and not any(
+            param.name == "IndicesType" for param in selected.primitive.generic_params
+        )
+    )
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert intrinsic in lowered.body_text
+    assert "to_array" not in lowered.body_text
+    assert [variant.name for variant in lowered.variant_bodies] == [
+        "scalar_lanes_fallback"
+    ]
+    _assert_generation_expanded(lowered.variant_bodies[0].body_text)
+
+
 def test_sse41_to_mask_fast_paths_win_over_portable_fallback(
     catalog: Catalog, machine_profiles
 ) -> None:

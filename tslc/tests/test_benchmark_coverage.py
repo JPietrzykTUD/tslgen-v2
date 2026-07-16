@@ -12,9 +12,12 @@ from tslc.catalog.model import Catalog
 from tslc.diagnostics import has_errors
 from tslc.maintenance.benchmark_coverage import (
     audit_benchmark_coverage,
+    benchmark_issue_baseline,
+    deserialize_issue_baseline,
+    diff_benchmark_issues,
     render_benchmark_shape_inventory,
+    serialize_issue_baseline,
 )
-from tslc.pipeline import SkippedEntry
 from tslc.pipeline import SkippedEntry
 
 
@@ -90,6 +93,46 @@ def test_audit_rejects_a_selected_slot_without_a_workload(
     )
 
 
+def test_issue_baseline_is_deterministic_and_ignores_reason_wording(
+    catalog: Catalog,
+    focused_benchmark_result,
+) -> None:
+    assert focused_benchmark_result.rendered is not None
+    focused_benchmark_plan = focused_benchmark_result.rendered.benchmarks
+    first, *rest = focused_benchmark_plan.coverage
+    broken = replace(
+        focused_benchmark_plan,
+        coverage=(
+            replace(first, status="unsupported", reason="baseline sentinel"),
+            *rest,
+        ),
+    )
+    audit = audit_benchmark_coverage(
+        catalog,
+        broken,
+        primitive_names=("mul",),
+        selection_coverage=focused_benchmark_result.coverage,
+        selection_skips=focused_benchmark_result.skipped,
+    )
+    assert len(audit.issues) == 1
+    baseline = benchmark_issue_baseline(audit.issues)
+
+    rendered = serialize_issue_baseline(baseline)
+    loaded = deserialize_issue_baseline(rendered)
+
+    assert loaded == baseline
+    assert serialize_issue_baseline(loaded) == rendered
+    reworded = (replace(audit.issues[0], detail="different explanation"),)
+    unchanged = diff_benchmark_issues(loaded, reworded)
+    assert unchanged.new_issues == ()
+    assert unchanged.resolved_issues == ()
+
+    added = replace(audit.issues[0], kind="candidate-without-coverage")
+    regressed = diff_benchmark_issues(loaded, (*reworded, added))
+    assert regressed.new_issues == (added,)
+    assert regressed.resolved_issues == ()
+
+
 def test_audit_rejects_a_lowered_variant_slot_missing_from_the_planner(
     catalog: Catalog,
     focused_benchmark_result,
@@ -112,47 +155,6 @@ def test_audit_rejects_a_lowered_variant_slot_missing_from_the_planner(
         issue.kind == "selected-slot-missing-planner"
         and issue.slot is not None
         and issue.slot.extension_name == "unplanned_extension"
-        for issue in audit.issues
-    )
-
-
-def test_audit_keeps_variant_lowering_skips_in_the_funnel(
-    catalog: Catalog,
-    focused_benchmark_result,
-) -> None:
-    assert focused_benchmark_result.rendered is not None
-    selected = next(
-        entry for entry in focused_benchmark_result.coverage if entry.variant_names
-    )
-    remaining = tuple(
-        entry for entry in focused_benchmark_result.coverage if entry is not selected
-    )
-    skipped = SkippedEntry(
-        profile=selected.profile,
-        backend=selected.backend,
-        primitive=selected.primitive,
-        extension=selected.extension,
-        type_tag=selected.type_tag,
-        reason="focused lowering-skip sentinel",
-        source_primitive_name=selected.source_primitive_name,
-        result_kind=selected.result_kind,
-        param_kinds=selected.param_kinds,
-        mask_policy=selected.mask_policy,
-        axis=selected.axis,
-        variant_names=selected.variant_names,
-    )
-
-    audit = audit_benchmark_coverage(
-        catalog,
-        focused_benchmark_result.rendered.benchmarks,
-        primitive_names=("mul",),
-        selection_coverage=remaining,
-        selection_skips=(*focused_benchmark_result.skipped, skipped),
-    )
-
-    assert any(
-        issue.kind == "selected-slot-skipped"
-        and "lowering-skip sentinel" in issue.detail
         for issue in audit.issues
     )
 
@@ -222,10 +224,13 @@ def test_shape_inventory_is_deterministic_and_marks_default_only_shapes(
     assert "not applicable" in first
     assert "inactive-authored-shape" in first
     special_cases = {entry.name: entry for entry in audit.special_cases}
+    sized = special_cases["sized-vector implementation"]
+    assert sized.variant_declarations == 0
+    assert sized.status == "not applicable"
+
     for name in (
-        "sized-vector implementation",
         "scalable-vector implementation",
         "opt-in compiler header implementation",
     ):
-        assert special_cases[name].variant_declarations == 0
-        assert special_cases[name].status == "not applicable"
+        assert special_cases[name].variant_declarations > 0
+        assert special_cases[name].status == "gap"

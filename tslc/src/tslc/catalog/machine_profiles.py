@@ -11,6 +11,7 @@ compiler mode such as a fixed SVE vector width.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from hashlib import sha256
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -82,6 +83,7 @@ class MachineProfile:
 class MachineProfileLoadResult:
     profiles: Mapping[str, MachineProfile]
     diagnostics: tuple[Diagnostic, ...]
+    digest: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,7 +119,10 @@ def load_machine_profiles_checked(
                     f"could not read machine profiles {path}: {exc}",
                 ),
             ),
+            digest=None,
         )
+
+    digest = sha256(text.encode("utf-8")).hexdigest()
 
     try:
         data = json.loads(text, object_pairs_hook=lambda pairs: _JsonObject(tuple(pairs)))
@@ -132,6 +137,7 @@ def load_machine_profiles_checked(
                     location=SourceLocation(path, exc.lineno, exc.colno),
                 ),
             ),
+            digest=digest,
         )
 
     if not isinstance(data, _JsonObject):
@@ -144,6 +150,7 @@ def load_machine_profiles_checked(
                     "machine profiles root must be a JSON object",
                 ),
             ),
+            digest=digest,
         )
 
     profiles: dict[str, MachineProfile] = {}
@@ -276,6 +283,24 @@ def load_machine_profiles_checked(
     return MachineProfileLoadResult(
         profiles=MappingProxyType(profiles),
         diagnostics=sort_diagnostics(diagnostics),
+        digest=digest,
+    )
+
+
+def target_feature_names(
+    profiles: Mapping[str, MachineProfile],
+) -> tuple[str, ...]:
+    """Return the author-facing feature tokens accepted by ``requires`` clauses."""
+
+    return tuple(
+        sorted(
+            {
+                feature
+                for profile in profiles.values()
+                for feature in profile.features
+                if feature != _NO_SIMD
+            }
+        )
     )
 
 

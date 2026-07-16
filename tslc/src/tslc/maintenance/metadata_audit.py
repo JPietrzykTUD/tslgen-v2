@@ -23,8 +23,9 @@ from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_
 from tslc.catalog.model import Catalog, ImplementationSafety
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.catalog.signatures import parse_signature
+from tslc.catalog.validation.source_spans import source_span
 from tslc.compiler_assets import load_default_tsl_grammar
-from tslc.diagnostics import Diagnostic, has_errors
+from tslc.diagnostics import Diagnostic, SourceSpan, format_diagnostic, has_errors
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import CallDependency
 from tslc.lower.lowerer import Lowerer
@@ -68,6 +69,7 @@ class MetadataSuggestion:
     before: str
     after: str
     edit: TextEdit | None = None
+    scope: SourceSpan | None = None
 
     @property
     def applicable(self) -> bool:
@@ -243,15 +245,7 @@ def main(argv: list[str] | None = None) -> int:
         backends=tuple(_split_csv(args.backends)),
     )
     for diagnostic in result.diagnostics:
-        location = (
-            f" {diagnostic.location.path}:{diagnostic.location.line}"
-            if diagnostic.location is not None
-            else ""
-        )
-        print(
-            f"[{diagnostic.severity}] {diagnostic.code}{location}: {diagnostic.message}",
-            file=sys.stderr,
-        )
+        print(format_diagnostic(diagnostic), file=sys.stderr)
     if has_errors(result.diagnostics):
         return 1
 
@@ -319,10 +313,24 @@ def _load_inputs(
 
 
 def _safety_suggestions(inputs: _AuditInputs) -> tuple[MetadataSuggestion, ...]:
+    return safety_metadata_suggestions(inputs.parsed, inputs.documents)
+
+
+def safety_metadata_suggestions(
+    parsed: OuterTslParseResult,
+    documents: Mapping[Path, SourceDocument],
+    *,
+    path: Path | None = None,
+) -> tuple[MetadataSuggestion, ...]:
+    """Return the audit's exact direct-safety edits from an in-memory parse."""
+
     suggestions: list[MetadataSuggestion] = []
-    for ref in _implementation_entries(inputs.parsed):
+    selected_path = path.resolve() if path is not None else None
+    for ref in _implementation_entries(parsed):
         primitive = ref.primitive
         entry = ref.entry
+        if selected_path is not None and entry.source.path.resolve() != selected_path:
+            continue
         if not entry.body_envelopes:
             continue
         required = _direct_safety_facts(primitive, entry)
@@ -330,7 +338,7 @@ def _safety_suggestions(inputs: _AuditInputs) -> tuple[MetadataSuggestion, ...]:
         if _safety_contains(local, required):
             continue
         after = local.merge(required)
-        edit = _safety_edit(inputs, entry, after)
+        edit = _safety_edit(documents, entry, after)
         suggestions.append(
             MetadataSuggestion(
                 kind="safety",
@@ -342,6 +350,7 @@ def _safety_suggestions(inputs: _AuditInputs) -> tuple[MetadataSuggestion, ...]:
                 before=_render_safety_block(_child_indent(entry), local).rstrip(),
                 after=_render_safety_block(_child_indent(entry), after).rstrip(),
                 edit=edit,
+                scope=_entry_scope(entry),
             )
         )
     return tuple(suggestions)
@@ -491,7 +500,7 @@ def _requires_suggestions(
         entry = ref.entry
         local_flags, field = _local_requires_flags(entry)
         after_flags = frozenset(local_flags | frozenset(missing_features))
-        edit = _requires_edit(inputs, entry, after_flags, field)
+        edit = _requires_edit(inputs.documents, entry, after_flags, field)
         suggestions.append(
             MetadataSuggestion(
                 kind="requires",
@@ -511,30 +520,31 @@ def _requires_suggestions(
                 ),
                 after=_render_requires_line(_child_indent(entry), sorted(after_flags)).rstrip(),
                 edit=edit,
+                scope=_entry_scope(entry),
             )
         )
     return tuple(suggestions)
 
 
 def _safety_edit(
-    inputs: _AuditInputs,
+    documents: Mapping[Path, SourceDocument],
     entry: ParsedImplementationSelectorEntry,
     safety: ImplementationSafety,
 ) -> TextEdit | None:
     field = _first_field(entry, "safety")
     rendered = _render_safety_block(_child_indent(entry), safety)
     if field is not None:
-        return _replace_field_edit(inputs, field, rendered.rstrip())
+        return _replace_field_edit(documents, field, rendered.rstrip())
     anchor = _first_field(entry, "implementation") or (
         entry.fields[0] if entry.fields else None
     )
     if anchor is None:
         return None
-    return _insert_before_field_edit(inputs, anchor, rendered)
+    return _insert_before_field_edit(documents, anchor, rendered)
 
 
 def _requires_edit(
-    inputs: _AuditInputs,
+    documents: Mapping[Path, SourceDocument],
     entry: ParsedImplementationSelectorEntry,
     flags: frozenset[str],
     field: ParsedTslField | None,
@@ -543,21 +553,21 @@ def _requires_edit(
     if field is not None:
         if not isinstance(field.value, ParsedTslListValue):
             return None
-        return _replace_field_edit(inputs, field, rendered.rstrip())
+        return _replace_field_edit(documents, field, rendered.rstrip())
     if entry.children:
         return None
     anchor = _first_field(entry, "safety") or _first_field(entry, "implementation")
     if anchor is None:
         return None
-    return _insert_before_field_edit(inputs, anchor, rendered)
+    return _insert_before_field_edit(documents, anchor, rendered)
 
 
 def _replace_field_edit(
-    inputs: _AuditInputs,
+    documents: Mapping[Path, SourceDocument],
     field: ParsedTslField,
     replacement: str,
 ) -> TextEdit | None:
-    document = inputs.documents.get(field.source.path)
+    document = documents.get(field.source.path)
     if document is None:
         return None
     start = _offset(document.text, field.source)
@@ -570,11 +580,11 @@ def _replace_field_edit(
 
 
 def _insert_before_field_edit(
-    inputs: _AuditInputs,
+    documents: Mapping[Path, SourceDocument],
     field: ParsedTslField,
     replacement: str,
 ) -> TextEdit | None:
-    document = inputs.documents.get(field.source.path)
+    document = documents.get(field.source.path)
     if document is None:
         return None
     start = _line_start(document.text, field.source.line)
@@ -689,6 +699,24 @@ def _entry_index(
 
 def _child_indent(entry: ParsedImplementationSelectorEntry) -> str:
     return " " * (entry.source.column + 1)
+
+
+def _entry_scope(entry: ParsedImplementationSelectorEntry) -> SourceSpan:
+    spans = [entry.source]
+    spans.extend(field.source for field in entry.fields)
+    spans.extend(envelope.envelope_source for envelope in entry.body_envelopes)
+    for variant in entry.variants:
+        spans.append(variant.source)
+        spans.extend(field.source for field in variant.fields)
+        spans.extend(envelope.envelope_source for envelope in variant.body_envelopes)
+    end = max(spans, key=lambda span: (span.end_line, span.end_column))
+    return SourceSpan(
+        path=entry.source.path,
+        line=entry.source.line,
+        column=entry.source.column,
+        end_line=end.end_line,
+        end_column=end.end_column,
+    )
 
 
 def _render_safety_block(indent: str, safety: ImplementationSafety) -> str:

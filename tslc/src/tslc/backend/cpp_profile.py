@@ -345,12 +345,9 @@ def _cpp_inferred_simd_registrations(
     native_candidates: dict[str, tuple[tuple[int, int, str], str]] = {}
     for ext, type_tag, base in used_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
-        if extension is None or DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
-            continue
-        metadata = extension.metadata.backend.get("cpp")
-        if metadata is not None and not metadata.participates_in_dataparallel_inference:
-            continue
-        if not _cpp_extension_register_is_available(extension, type_tag):
+        if extension is None or not cpp_participates_in_dataparallel_inference(
+            extension, type_tag
+        ):
             continue
         preference = (
             extension.metadata.native_sort_order or 0,
@@ -464,6 +461,30 @@ def _cpp_extension_register_is_available(extension: Extension, type_tag: str) ->
     return is_x86_register_extension(extension) or (
         extension.direct_vector_register_type("cpp", type_tag) is not None
     )
+
+
+def cpp_participates_in_dataparallel_inference(
+    extension: Extension, type_tag: str
+) -> bool:
+    """Whether C++ may map ``native``/``fixed<N>`` to this concrete vector."""
+
+    if DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
+        return False
+    metadata = extension.metadata.backend.get("cpp")
+    if metadata is not None and not metadata.participates_in_dataparallel_inference:
+        return False
+    return _cpp_extension_register_is_available(extension, type_tag)
+
+
+def cpp_dataparallel_fixed_lane_count(
+    extension: Extension, type_tag: str
+) -> int | None:
+    """Return the concrete ``fixed<N>`` lane count admitted by C++ inference."""
+
+    if not cpp_participates_in_dataparallel_inference(extension, type_tag):
+        return None
+    lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
+    return None if lane_count in (None, 1) else lane_count
 
 
 def _cpp_mask_type(

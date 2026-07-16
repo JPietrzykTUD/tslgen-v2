@@ -920,13 +920,13 @@ prim<s:=(m,v)> hand(mask, vec):
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(base::in, result, cast<static>(base::in, 0));
             var<typed>(scalar::size, found, 0);
-            loop<backend>(i, 0, value(vector::length), 1) {
-              if (mask<test, imask>(mask_scalar, i)) {
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(mask_scalar, value(i))) {
                 if (found == 0) {
-                  result = values[i];
+                  result = values[value(i)];
                   found = 1;
                 } else {
-                  result &= values[i];
+                  result &= values[value(i)];
                 }
               }
             }
@@ -952,10 +952,10 @@ prim<s:=(m,v)> hand(mask, vec):
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
             var<typed>(scalar::size, found, 0);
-            loop<backend>(i, 0, value(vector::length), 1) {
-              if (mask<test, imask>(mask_scalar, i)) {
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(mask_scalar, value(i))) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
-                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[i]), value(type::size_bytes(base::in)));
+                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[value(i)]), value(type::size_bytes(base::in)));
                 if (found == 0) {
                   result = bits;
                   found = 1;
@@ -1217,9 +1217,9 @@ prim<s:=(m,v)> hor(mask, vec):
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(base::in, result, cast<static>(base::in, 0));
-            loop<backend>(i, 0, value(vector::length), 1) {
-              if (mask<test, imask>(mask_scalar, i)) {
-                result |= values[i];
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(mask_scalar, value(i))) {
+                result |= values[value(i)];
               }
             }
             complete(result);
@@ -1243,10 +1243,10 @@ prim<s:=(m,v)> hor(mask, vec):
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            loop<backend>(i, 0, value(vector::length), 1) {
-              if (mask<test, imask>(mask_scalar, i)) {
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(mask_scalar, value(i))) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
-                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[i]), value(type::size_bytes(base::in)));
+                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[value(i)]), value(type::size_bytes(base::in)));
                 result |= bits;
               }
             }

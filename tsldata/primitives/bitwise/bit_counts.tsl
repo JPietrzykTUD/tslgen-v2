@@ -491,8 +491,8 @@ prim<v:=v> popcnt(data):
         implementation:
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
-               loop<backend, unroll>(i, 0, value(vector::length), 1)  {
-                data_arr[i] = cast<static>(base::in, helper<popcount>(data_arr[i]));
+               loop<generation, scoped>(i, 0, value(vector::length), 1)  {
+                data_arr[value(i)] = cast<static>(base::in, helper<popcount>(data_arr[value(i)]));
               }
                complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
@@ -1198,8 +1198,8 @@ prim<v:=v> lzc(data):
         implementation:
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
-               loop<backend, unroll>(i, 0, value(vector::length), 1)  {
-                data_arr[i] = cast<static>(base::in, call<primitive=lzc_scalar[vector::as_extension(scalar)]>(data_arr[i]));
+               loop<generation, scoped>(i, 0, value(vector::length), 1)  {
+                data_arr[value(i)] = cast<static>(base::in, call<primitive=lzc_scalar[vector::as_extension(scalar)]>(data_arr[value(i)]));
               }
                complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """

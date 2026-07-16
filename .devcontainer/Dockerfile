@@ -16,7 +16,8 @@ RUN apt-get update -y && \
     g++-riscv64-linux-gnu binutils-riscv64-linux-gnu \
     git curl gnupg xz-utils unzip pkg-config ca-certificates nodejs npm jq \
     python3 python3-pip python3-venv \
-    qemu-user qemu-user-binfmt && \
+    qemu-user qemu-user-binfmt \
+    xvfb libgtk-3-0t64 libnss3 libasound2t64 libxss1 libsecret-1-0 fonts-liberation && \
     python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip setuptools wheel && \
     apt-get clean && rm -rf /var/lib/apt/lists/*

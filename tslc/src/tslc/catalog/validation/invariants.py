@@ -17,7 +17,7 @@ from tslc.catalog.validation.source_spans import (
     child_from_sequence,
     source_span,
 )
-from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
+from tslc.diagnostics import Diagnostic, RelatedLocation, SourceSpan, diagnostic_at
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedBlockDeclaration,
@@ -275,6 +275,15 @@ def validate_extension_inheritance(
                                 + " -> ".join(cycle)
                             ),
                             source=inherit_sources.get(current),
+                            related=tuple(
+                                RelatedLocation(
+                                    message=f"inheritance edge from {member!r}",
+                                    span=span,
+                                )
+                                for member in cycle[:-1]
+                                if member != current
+                                if (span := inherit_sources.get(member)) is not None
+                            ),
                         )
                     )
                 break

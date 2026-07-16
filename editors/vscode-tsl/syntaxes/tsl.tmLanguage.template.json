@@ -1,0 +1,103 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "TSL",
+  "scopeName": "source.tsl",
+  "x-tslc-region-keywords": __TSIL_KEYWORDS_JSON__,
+  "patterns": [
+    {"include": "#comments"},
+    {"include": "#primitive"},
+    {"include": "#extension"},
+    {"include": "#tsil-multiline"},
+    {"include": "#tsil-inline"},
+    {"include": "#field"},
+    {"include": "#string"},
+    {"include": "#number"}
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {"name": "comment.line.number-sign.tsl", "match": "#.*$"}
+      ]
+    },
+    "primitive": {
+      "name": "meta.declaration.primitive.tsl",
+      "match": "^(prim)(<[^>]+>)(\\s+)([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": {"name": "storage.type.primitive.tsl"},
+        "2": {"name": "entity.name.type.signature.tsl"},
+        "4": {"name": "entity.name.function.primitive.tsl"}
+      }
+    },
+    "extension": {
+      "name": "meta.declaration.extension.tsl",
+      "match": "^(extension)(\\s+)([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": {"name": "storage.type.extension.tsl"},
+        "3": {"name": "entity.name.type.extension.tsl"}
+      }
+    },
+    "field": {
+      "name": "variable.other.member.tsl",
+      "match": "^\\s*([A-Za-z_?][A-Za-z0-9_?]*(?:<[^>]+>)?)(?=\\s|:|\\{)"
+    },
+    "tsil-multiline": {
+      "name": "meta.embedded.tsil.tsl",
+      "begin": "(\\btsil\\b)(\\s*)(\\\"\\\"\\\")",
+      "beginCaptures": {
+        "1": {"name": "storage.type.tsil.tsl"},
+        "3": {"name": "punctuation.definition.string.begin.tsl"}
+      },
+      "end": "\\\"\\\"\\\"",
+      "endCaptures": {
+        "0": {"name": "punctuation.definition.string.end.tsl"}
+      },
+      "patterns": [
+        {"include": "#tsil-keywords"},
+        {"include": "#target-comments"},
+        {"include": "#string"}
+      ]
+    },
+    "tsil-inline": {
+      "name": "meta.embedded.tsil.tsl",
+      "begin": "(\\btsil\\b)(\\s*)(\\\")",
+      "beginCaptures": {
+        "1": {"name": "storage.type.tsil.tsl"},
+        "3": {"name": "punctuation.definition.string.begin.tsl"}
+      },
+      "end": "(?<!\\\\)\\\"",
+      "endCaptures": {
+        "0": {"name": "punctuation.definition.string.end.tsl"}
+      },
+      "patterns": [
+        {"include": "#tsil-keywords"},
+        {"include": "#target-comments"}
+      ]
+    },
+    "tsil-keywords": {
+      "patterns": [
+        {
+          "name": "support.function.tsil.tsl",
+          "match": "\\b(__TSIL_KEYWORD_PATTERN__)\\b(?=\\s*(?:<|\\())"
+        }
+      ]
+    },
+    "target-comments": {
+      "patterns": [
+        {"name": "comment.line.double-slash.tsl", "match": "//.*$"},
+        {"name": "comment.block.tsl", "begin": "/\\*", "end": "\\*/"}
+      ]
+    },
+    "string": {
+      "name": "string.quoted.double.tsl",
+      "begin": "\\\"",
+      "end": "\\\"",
+      "patterns": [
+        {"name": "constant.character.escape.tsl", "match": "\\\\."}
+      ]
+    },
+    "number": {
+      "name": "constant.numeric.tsl",
+      "match": "(?<![A-Za-z_])[-+]?(?:0x[0-9A-Fa-f]+|[0-9]+)(?![A-Za-z_])"
+    }
+  }
+}

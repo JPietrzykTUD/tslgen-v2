@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from hashlib import sha256
+from collections.abc import Iterable
 from pathlib import Path
 
 from tslc.diagnostics import Diagnostic, SourceLocation
@@ -82,3 +83,25 @@ class SourceLoader:
 
         paths = tuple(sorted(root.rglob("*.tsl"), key=lambda item: item.as_posix()))
         return self.load(paths)
+
+
+def expand_source_paths(source_paths: Iterable[Path | str]) -> tuple[Path, ...]:
+    """Expand corpus roots to a deterministic de-duplicated file sequence."""
+
+    expanded: list[Path] = []
+    for entry in source_paths:
+        path = Path(entry)
+        if path.is_dir():
+            expanded.extend(sorted(path.rglob("*.tsl"), key=lambda item: item.as_posix()))
+        else:
+            expanded.append(path)
+    by_path = {path.resolve(): path for path in expanded}
+    return tuple(by_path[path] for path in sorted(by_path, key=lambda item: item.as_posix()))
+
+
+__all__ = (
+    "SourceDocument",
+    "SourceLoadResult",
+    "SourceLoader",
+    "expand_source_paths",
+)

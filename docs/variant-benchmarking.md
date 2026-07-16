@@ -322,9 +322,13 @@ The audit checks:
 - a typed scenario exists;
 - emitted candidates match coverage identity.
 
-The audit writes `coverage/benchmark-shape-inventory.md`.
+The gate compares stable issue identities to
+`coverage/benchmark-baseline.json`, so newly introduced gaps fail while known
+gaps can be closed incrementally. Explanatory reason text is not part of issue
+identity. The audit also checks the deterministic
+`coverage/benchmark-shape-inventory.md`.
 
-Refresh an intentional baseline change with:
+Refresh both evidence files after an intentional coverage change with:
 
 ```bash
 ./dev.sh benchmark-ratchet --update

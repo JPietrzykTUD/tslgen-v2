@@ -1,0 +1,356 @@
+{
+  "name": "tsl-language-support",
+  "displayName": "TSL Language Support",
+  "description": "Compiler-backed language support for tslc .tsl source data.",
+  "version": "0.1.1",
+  "publisher": "tsl-project",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JPietrzykTUD/tslgen-v2.git",
+    "directory": "editors/vscode-tsl"
+  },
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "dist/extension.js",
+  "activationEvents": [
+    "onLanguage:tsl",
+    "onCommand:tsl.restartServer",
+    "onCommand:tsl.checkSlot",
+    "onCommand:tsl.previewSpecialization",
+    "onCommand:tsl.doctor",
+    "onCommand:tsl.addPrimitive",
+    "onCommand:tsl.explorer.analyze",
+    "onView:tsl.context",
+    "onView:tsl.primitives",
+    "onView:tsl.specializations",
+    "onView:tsl.dependencies"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "tsl",
+        "aliases": [
+          "TSL",
+          "tsl"
+        ],
+        "extensions": [
+          ".tsl"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "tsl",
+        "scopeName": "source.tsl",
+        "path": "./syntaxes/tsl.tmLanguage.json"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tslc",
+          "title": "TSLc",
+          "icon": "media/tslc-logo.svg"
+        }
+      ]
+    },
+    "views": {
+      "tslc": [
+        {
+          "id": "tsl.context",
+          "name": "Target Context"
+        },
+        {
+          "id": "tsl.primitives",
+          "name": "Primitives"
+        },
+        {
+          "id": "tsl.specializations",
+          "name": "Specializations"
+        },
+        {
+          "id": "tsl.dependencies",
+          "name": "Dependencies"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "tsl.restartServer",
+        "title": "TSL: Restart Language Server"
+      },
+      {
+        "command": "tsl.checkSlot",
+        "title": "TSL: Check Concrete Specialization"
+      },
+      {
+        "command": "tsl.previewSpecialization",
+        "title": "TSL: Preview Specialization"
+      },
+      {
+        "command": "tsl.doctor",
+        "title": "TSL: Doctor"
+      },
+      {
+        "command": "tsl.addPrimitive",
+        "title": "TSL: Add New Primitive",
+        "icon": "$(add)"
+      },
+      {
+        "command": "tsl.explorer.refresh",
+        "title": "TSL: Refresh Explorer",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "tsl.explorer.toggleScope",
+        "title": "TSL: Toggle File/Corpus Scope",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "tsl.explorer.selectMode",
+        "title": "TSL: Select Explorer Mode",
+        "icon": "$(layers-active)"
+      },
+      {
+        "command": "tsl.explorer.selectProfile",
+        "title": "TSL: Select Explorer Profile",
+        "icon": "$(server-environment)"
+      },
+      {
+        "command": "tsl.explorer.selectBackend",
+        "title": "TSL: Select Explorer Backend",
+        "icon": "$(code)"
+      },
+      {
+        "command": "tsl.explorer.toggleUnavailable",
+        "title": "TSL: Toggle Show Only Unavailable",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "tsl.explorer.goToPrimitive",
+        "title": "Go to Primitive",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "tsl.explorer.goToImplementation",
+        "title": "Go to Implementation",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "tsl.explorer.preview",
+        "title": "Preview Specialization",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "tsl.explorer.analyze",
+        "title": "Analyze Concrete Specialization",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "tsl.explorer.goToAnalyzedImplementation",
+        "title": "Go to Analyzed Implementation",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "tsl.explorer.showUnavailableReason",
+        "title": "Show Unavailable Reason",
+        "icon": "$(info)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "tsl.addPrimitive",
+          "when": "editorLangId == tsl",
+          "group": "1_modification@10"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "tsl.addPrimitive",
+          "when": "view == tsl.primitives",
+          "group": "navigation@5"
+        },
+        {
+          "command": "tsl.explorer.toggleScope",
+          "when": "view == tsl.primitives",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tsl.explorer.refresh",
+          "when": "view == tsl.primitives",
+          "group": "navigation@20"
+        },
+        {
+          "command": "tsl.explorer.selectProfile",
+          "when": "view == tsl.specializations",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tsl.explorer.selectBackend",
+          "when": "view == tsl.specializations",
+          "group": "navigation@20"
+        },
+        {
+          "command": "tsl.explorer.toggleUnavailable",
+          "when": "view == tsl.specializations",
+          "group": "navigation@30"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "tsl.explorer.goToPrimitive",
+          "when": "view == tsl.primitives && viewItem == tslPrimitive",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tsl.explorer.goToImplementation",
+          "when": "view == tsl.specializations && (viewItem == tslSelectedSlot || viewItem == tslSourceSlot)",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tsl.explorer.analyze",
+          "when": "view == tsl.specializations && viewItem == tslSelectedSlot",
+          "group": "inline@10"
+        },
+        {
+          "command": "tsl.explorer.preview",
+          "when": "view == tsl.specializations && viewItem == tslSelectedSlot",
+          "group": "inline@20"
+        },
+        {
+          "command": "tsl.explorer.showUnavailableReason",
+          "when": "view == tsl.specializations && viewItem == tslUnresolvedSlot",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tsl.explorer.goToPrimitive",
+          "when": "view == tsl.dependencies && viewItem == tslDependency",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tsl.explorer.goToAnalyzedImplementation",
+          "when": "view == tsl.dependencies && viewItem == tslAnalyzedDependency",
+          "group": "navigation@10"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "tsl.explorer.goToPrimitive",
+          "when": "false"
+        },
+        {
+          "command": "tsl.explorer.goToImplementation",
+          "when": "false"
+        },
+        {
+          "command": "tsl.explorer.analyze",
+          "when": "false"
+        },
+        {
+          "command": "tsl.explorer.goToAnalyzedImplementation",
+          "when": "false"
+        },
+        {
+          "command": "tsl.explorer.preview",
+          "when": "false"
+        },
+        {
+          "command": "tsl.explorer.showUnavailableReason",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "TSL",
+      "properties": {
+        "tsl.server.command": {
+          "type": "string",
+          "default": "",
+          "description": "Explicit tslc language-server executable. Arguments are configured separately."
+        },
+        "tsl.server.args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "lsp",
+            "--stdio"
+          ],
+          "description": "Arguments for the explicit server command."
+        },
+        "tsl.python": {
+          "type": "string",
+          "default": "",
+          "description": "Python interpreter containing the matching tslc[editor] package."
+        },
+        "tsl.preview.command": {
+          "type": "string",
+          "default": "",
+          "description": "Explicit full tslc executable for check, preview, analysis, and doctor commands."
+        },
+        "tsl.preview.profile": {
+          "type": "string",
+          "default": "",
+          "description": "Fixed concrete authoring profile. When empty, Preview, Check, and Doctor present the profiles reported by tslc."
+        },
+        "tsl.preview.type": {
+          "type": "string",
+          "default": "",
+          "description": "Fixed scalar type for concrete commands. When empty, cursor context or a filtered QuickPick selects the type."
+        },
+        "tsl.preview.extension": {
+          "type": "string",
+          "default": "",
+          "description": "Fixed extension for concrete commands. When empty, cursor context or a profile-filtered QuickPick selects the extension."
+        },
+        "tsl.preview.backend": {
+          "type": "string",
+          "default": "cpp",
+          "description": "Backend for concrete Preview, Check, and Doctor commands."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "generate:grammar": "node scripts/generate-grammar.mjs",
+    "check:grammar": "node scripts/check-grammar.mjs",
+    "compile": "npm run clean && npm run generate:grammar && tsc -p tsconfig.json && node esbuild.mjs",
+    "test:unit": "tsc -p tsconfig.json && mocha \"dist/test/*.test.js\" && node --test test/grammar.test.mjs",
+    "test:integration": "npm run compile && node scripts/run-integration.mjs",
+    "test": "npm run check:grammar && npm run compile && npm run test:unit",
+    "package:vsix": "vsce package --no-dependencies --out ../../tslctmp/tsl-language-support.vsix",
+    "build:server": "python scripts/runtime_bundle.py",
+    "smoke:server": "python scripts/smoke_bundled_server.py",
+    "package:runtime": "npm run build:server && npm run smoke:server && npm run test && node scripts/package-runtime.mjs",
+    "package": "npm run test && npm run package:vsix",
+    "package:verified": "bash scripts/install-local.sh --package-only",
+    "install:local": "bash scripts/install-local.sh"
+  },
+  "dependencies": {
+    "vscode-languageclient": "10.1.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "10.0.10",
+    "@types/node": "26.1.1",
+    "@types/vscode": "1.125.0",
+    "@vscode/test-cli": "0.0.15",
+    "@vscode/test-electron": "3.0.0",
+    "@vscode/vsce": "3.9.2",
+    "esbuild": "0.28.1",
+    "mocha": "11.7.6",
+    "typescript": "7.0.2"
+  }
+}

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -14,6 +16,7 @@ from tslc.ir.region_registry import (
     DEFAULT_TSIL_REGION_DESCRIPTORS,
     TSIL_REGION_KEYWORDS,
     region_shell_validator,
+    validate_region_authoring_descriptors,
 )
 from tslc.ir.scan import (
     KEYWORDS,
@@ -23,6 +26,7 @@ from tslc.ir.scan import (
     _cached_scan,
     find_malformed_regions,
     scan,
+    tsil_cursor_context,
 )
 from tslc.ir.segments import RawText, Region
 from tslc.lower.region_handlers.registry import (
@@ -42,6 +46,13 @@ def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
     }
 
     assert len(descriptor_keywords) == len(set(descriptor_keywords))
+    assert all(descriptor.purpose.strip() for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS)
+    assert all(descriptor.accepted_forms for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS)
+    assert all(
+        form.strip()
+        for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS
+        for form in descriptor.accepted_forms
+    )
     assert len(REGION_LOWERING_REGISTRATIONS) == len(registration_keywords)
     assert KEYWORDS == TSIL_REGION_KEYWORDS
     assert registration_keywords == TSIL_REGION_KEYWORDS
@@ -64,6 +75,103 @@ def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
         if descriptor.shell_validator is not None
     }
     assert declared_validators <= frozenset(_SHELL_VALIDATORS)
+    assert all(
+        descriptor.authoring.selector_forms
+        for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS
+    )
+
+
+def test_registered_region_without_authoring_metadata_fails_consistency() -> None:
+    incomplete = replace(
+        DEFAULT_TSIL_REGION_DESCRIPTORS[0],
+        authoring=cast(Any, None),
+    )
+
+    with pytest.raises(ValueError, match="missing authoring metadata"):
+        validate_region_authoring_descriptors((incomplete,))
+
+
+@pytest.mark.parametrize(
+    ("body", "kind", "prefix", "keyword", "selector_prefix", "region_path"),
+    (
+        ("cal", "region-boundary", "cal", None, None, ()),
+        ("complete(cal", "region-boundary", "cal", None, None, ("complete",)),
+        ("call<primitive=ad", "region-shell", "", "call", "primitive=ad", ()),
+        (
+            "if<generation>(flag) { cal",
+            "region-boundary",
+            "cal",
+            None,
+            None,
+            ("if",),
+        ),
+        (
+            "switch<compile>(kind) { _ => { cal",
+            "region-boundary",
+            "cal",
+            None,
+            None,
+            ("switch",),
+        ),
+    ),
+)
+def test_tsil_cursor_uses_recursive_region_spans(
+    body: str,
+    kind: str,
+    prefix: str,
+    keyword: str | None,
+    selector_prefix: str | None,
+    region_path: tuple[str, ...],
+) -> None:
+    context = tsil_cursor_context(body, len(body))
+
+    assert context.kind == kind
+    assert context.prefix == prefix
+    assert context.keyword == keyword
+    assert context.selector_prefix == selector_prefix
+    assert context.region_path == region_path
+
+
+@pytest.mark.parametrize(
+    "body",
+    (
+        "target_identifier ",
+        'value = "cal',
+        "// cal",
+        "/* cal",
+        "complete(target_identifier ",
+        "switch<compile>(kind) { _ => ",
+    ),
+)
+def test_tsil_cursor_does_not_leak_regions_into_raw_text(body: str) -> None:
+    assert tsil_cursor_context(body, len(body)).kind == "raw"
+
+
+def test_tsil_cursor_reports_only_the_innermost_open_region_arguments() -> None:
+    direct = tsil_cursor_context("complete(base::s", len("complete(base::s"))
+    nested = tsil_cursor_context(
+        "complete(value(base::s",
+        len("complete(value(base::s"),
+    )
+    block = tsil_cursor_context(
+        "if<generation>(flag) { target",
+        len("if<generation>(flag) { target"),
+    )
+
+    assert direct.argument_keyword == "complete"
+    assert direct.argument_selector == ""
+    assert direct.argument_prefix == "base::s"
+    assert direct.argument_start == len("complete(")
+    assert nested.argument_keyword == "value"
+    assert nested.argument_prefix == "base::s"
+    assert block.argument_keyword is None
+
+
+def test_tsil_cursor_marks_opaque_text_inside_registered_arguments() -> None:
+    context = tsil_cursor_context("complete(/* base::", len("complete(/* base::"))
+
+    assert context.argument_keyword == "complete"
+    assert context.in_opaque_text is True
 
 
 def test_tsil_keyword_documentation_matches_registered_surface() -> None:

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 77.782 77.782">
+  <g fill="currentColor" transform="translate(-66.82087 -89.47341)">
+    <rect width="25" height="25" x="-174.2668" y="-5.232192"
+      transform="matrix(-.70710678 -.70710678 -.70710678 .70710678 0 0)"/>
+    <rect width="35" height="5" x="144.2668" y="24.767807"
+      transform="rotate(45)" opacity=".38"/>
+    <rect width="40" height="5" x="139.2668" y="29.767807"
+      transform="rotate(45)" opacity=".72"/>
+    <rect width="45" height="5" x="134.2668" y="34.767807"
+      transform="rotate(45)" opacity=".45"/>
+    <path d="m133.99627 119.52551-35.355459 35.35546h21.213179l24.74887-24.74887v-10.60659z"
+      opacity=".88"/>
+  </g>
+</svg>

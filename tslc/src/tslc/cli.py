@@ -10,11 +10,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from tslc.api import generate_project, verify_project, write_artifacts
-from tslc.diagnostics import has_errors
+from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.output.verify import BuildVerificationReport
 from tslc.output.verify_model import BackendToolchain
 from tslc.pipeline import GenerationResult
 from tslc.project_config import ProjectConfig, load_project_config
+from tslc.version import package_version
 
 if TYPE_CHECKING:
     from tslc.output.summary import ProfileValueTestSummary
@@ -22,30 +23,40 @@ if TYPE_CHECKING:
 
 _COMMANDS = (
     "generate",
+    "export",
     "check",
     "build",
     "test",
     "explain",
+    "preview",
+    "analyze",
     "inspect",
     "list",
     "show",
     "audit",
     "coverage",
     "doctor",
+    "lsp",
 )
 
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     # Preserve the original flat generation surface for scripts that already use it.
-    if arguments and arguments[0].startswith("-") and arguments[0] not in ("-h", "--help"):
+    if arguments and arguments[0].startswith("-") and arguments[0] not in (
+        "-h",
+        "--help",
+        "--version",
+    ):
         return _generation_main(arguments, use_project_config=False)
-    if not arguments or arguments[0] in ("-h", "--help"):
+    if not arguments or arguments[0] in ("-h", "--help", "--version"):
         _root_parser().parse_args(arguments)
         return 0
     command, rest = arguments[0], arguments[1:]
     if command == "generate":
         return _generation_main(rest, use_project_config=True, command="generate")
+    if command == "export":
+        return _export_group(rest)
     if command == "build":
         return _generation_main(rest, use_project_config=True, command="build")
     if command == "test":
@@ -62,10 +73,22 @@ def main(argv: list[str] | None = None) -> int:
         from tslc.doctor import main as doctor_main
 
         return doctor_main(rest)
+    if command == "lsp":
+        from tslc.lsp_cli import main as lsp_main
+
+        return lsp_main(rest)
     if command == "explain":
         from tslc.maintenance.explain import main as explain_main
 
         return _run_configured_maintenance(explain_main, rest)
+    if command == "preview":
+        from tslc.maintenance.render_preview import main as preview_main
+
+        return _run_configured_maintenance(preview_main, rest)
+    if command == "analyze":
+        from tslc.maintenance.analyze_specialization import main as analyze_main
+
+        return _run_configured_maintenance(analyze_main, rest)
     if command == "inspect":
         from tslc.maintenance.stage_dump import main as inspect_main
 
@@ -83,19 +106,28 @@ def _root_parser() -> argparse.ArgumentParser:
         prog="tslc",
         description="Validate, inspect, compile, and verify TSL source data.",
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {package_version()}",
+    )
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
     descriptions = {
         "generate": "render configured generated projects",
+        "export": "export an isolated external-framework projection",
         "check": "validate the corpus without rendering",
         "build": "generate and build-verify",
         "test": "generate, build, and run value tests",
         "explain": "explain one selection/lowering slot",
+        "preview": "render one specialization fragment",
+        "analyze": "analyze one specialization and its active call closure",
         "inspect": "dump a compiler pipeline stage",
         "list": "list catalog entries",
         "show": "describe one catalog entry",
         "audit": "run source metadata audits",
         "coverage": "run coverage maintenance tools",
         "doctor": "probe configured toolchains and runners",
+        "lsp": "run the editor-neutral language server",
     }
     for name in _COMMANDS:
         subparsers.add_parser(name, help=descriptions[name], add_help=False)
@@ -282,8 +314,7 @@ def _generation_main(
         _write_summary_file(args.summary_file, result, verify_report, args.test)
 
     for diagnostic in result.diagnostics:
-        location = f" {diagnostic.location.path}:{diagnostic.location.line}" if diagnostic.location else ""
-        print(f"[{diagnostic.severity}] {diagnostic.code}{location}: {diagnostic.message}", file=sys.stderr)
+        print(format_diagnostic(diagnostic), file=sys.stderr)
 
     print(
         f"generated {len(result.coverage)} specializations across "
@@ -302,7 +333,7 @@ def _generation_main(
     if args.output_root is not None:
         write_report = write_artifacts(result.artifacts, args.output_root)
         for diagnostic in write_report.diagnostics:
-            print(f"[write] {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
+            print(format_diagnostic(diagnostic), file=sys.stderr)
         if has_errors(write_report.diagnostics):
             write_summary_once()
             return 1
@@ -337,7 +368,7 @@ def _generation_main(
             for note in verify_report.skipped:
                 print(f"[verify-skip] {note}", file=sys.stderr)
             for diagnostic in verify_report.diagnostics:
-                print(f"[verify] {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
+                print(format_diagnostic(diagnostic), file=sys.stderr)
             if args.test:
                 _print_test_output(verify_report)
             incomplete_value_tests = (
@@ -513,6 +544,19 @@ def _maintenance_group(group: str, arguments: list[str]) -> int:
 
         return inventory_main(rest)
     print(f"unknown tslc {group} command {action!r}", file=sys.stderr)
+    return 2
+
+
+def _export_group(arguments: list[str]) -> int:
+    if not arguments or arguments[0] in ("-h", "--help"):
+        print("usage: tslc export {pivot} [options]")
+        return 0
+    target, rest = arguments[0], arguments[1:]
+    if target == "pivot":
+        from tslc.pivot.cli import main as pivot_main
+
+        return _run_configured_maintenance(pivot_main, rest)
+    print(f"unknown tslc export target {target!r}", file=sys.stderr)
     return 2
 
 

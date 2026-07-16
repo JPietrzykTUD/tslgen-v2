@@ -67,3 +67,13 @@ Root documentation explains the repository and cross-tree workflow.
 start. Top-level `docs/` contains human-authored maintainer guides.
 `supplementary/docs/` contains inputs used to build generated TSL
 documentation. Keep these roles distinct.
+
+## 8. Authoring Tools Reuse Compiler Semantics
+
+Interactive diagnostics, catalog discovery, navigation, hover, completion, and
+preview are projections of compiler-owned parsed documents, typed catalogs,
+registries, selection, and lowering. Editor clients may own transport and UI,
+but must not grow a second TSL parser or TSIL vocabulary. Ordinary live
+features read the latest successful source index and never render projects or
+invoke generated-code toolchains. Concrete specialization preview is an
+explicit, cancellable saved-file action outside the language-server process.

@@ -800,9 +800,9 @@ def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridg
         to_integral_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert to_integral is not None
-    assert "if (mask[i] != 0)" in to_integral.body_text
+    assert "if (mask[0] != 0)" in to_integral.body_text
     assert (
-        "result |= (static_cast<typename Vec::imask_type>(1)) << i;"
+        "result |= (static_cast<typename Vec::imask_type>(1)) << 0;"
         in to_integral.body_text
     )
 
@@ -814,7 +814,7 @@ def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridg
     assert "typename Vec::mask_type result = static_cast<typename Vec::mask_type>(0);" in (
         to_mask.body_text
     )
-    assert "result[i] = -1;" in to_mask.body_text
+    assert "result[0] = -1;" in to_mask.body_text
 
     bool_equal_slot = _by_key(catalog, profile, "equal")[("f32", "clang_v256_bool")]
     bool_equal = Lowerer().lower(
@@ -830,7 +830,7 @@ def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridg
         bool_to_integral_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert bool_to_integral is not None
-    assert "if (mask[i])" in bool_to_integral.body_text
+    assert "if (mask[0])" in bool_to_integral.body_text
 
     bool_to_mask_slot = _by_key(catalog, profile, "to_mask")[
         ("f32", "clang_v256_bool")
@@ -840,7 +840,7 @@ def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridg
     ).specialization
     assert bool_to_mask is not None
     assert "static_cast<typename Vec::mask_type>(false)" in bool_to_mask.body_text
-    assert "result[i] = true;" in bool_to_mask.body_text
+    assert "result[0] = true;" in bool_to_mask.body_text
 
     bool_to_vector_slot = _by_key(catalog, profile, "to_vector")[
         ("f32", "clang_v256_bool")

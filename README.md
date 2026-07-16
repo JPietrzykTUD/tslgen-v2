@@ -1,11 +1,11 @@
-# tslgen-v99
+# tslgen-v2
 
-[![Python Logic](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/python.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/python.yml)
-[![Generated Build](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/generated-build.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/generated-build.yml)
-[![Generated Value Tests](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/generated-values.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/generated-values.yml)
-[![Generated Package](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/generated-package.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/generated-package.yml)
-[![Coverage Ratchet](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/coverage-ratchet.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/coverage-ratchet.yml)
-[![Docs](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v99/actions/workflows/docs.yml)
+[![Python Logic](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/python.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/python.yml)
+[![Generated Build](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-build.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-build.yml)
+[![Generated Value Tests](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-values.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-values.yml)
+[![Generated Package](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-package.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-package.yml)
+[![Coverage Ratchet](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/coverage-ratchet.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/coverage-ratchet.yml)
+[![Docs](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/docs.yml)
 
 This repository contains `tslc`, a Python compiler for the TSL data language,
 plus the authored source data, packaged compiler assets, generated-documentation
@@ -22,6 +22,7 @@ generated projects, and optionally verifies them with real toolchains.
 CHARTER.md    Repository-wide design contract
 tslc/         Python compiler package, tests, compiler charter, and architecture docs
 tsldata/      TSL type/language/extension/primitive source corpus
+editors/      Editor clients; compiler semantics remain in tslc
 docs/         Human-authored maintainer guides
 examples/     Checked-in C++ and Rust generated-library consumers
 .github/      GitHub Actions workflows, actions, and workflow-only scripts
@@ -52,19 +53,9 @@ tslc doctor --profile scalar
 The checked-in `tslc.toml` supplies corpus, profile, backend, and scratch-output
 defaults. See the [command-line tools guide](docs/tslc-cli.md) for validation,
 discovery, generation, inspection, audit, coverage, and configuration commands.
-
-Install the unified command locally, or use its module equivalent:
-
-```bash
-python -m pip install -e ./tslc
-tslc check
-tslc list primitives
-tslc doctor --profile scalar
-```
-
-The checked-in `tslc.toml` supplies corpus, profile, backend, and scratch-output
-defaults. See the [command-line tools guide](docs/tslc-cli.md) for validation,
-discovery, generation, inspection, audit, coverage, and configuration commands.
+For unsaved diagnostics, navigation, completion, explicit specialization
+preview, and self-contained platform VSIX packages, see the
+[TSL editor guide](docs/tsl-editor.md).
 
 Generate and verify a small C++/Rust project:
 
@@ -86,7 +77,7 @@ overlay.
 
 - Package quick start: [tslc/README.md](tslc/README.md)
 - Command-line tools: [docs/tslc-cli.md](docs/tslc-cli.md)
-- Command-line tools: [docs/tslc-cli.md](docs/tslc-cli.md)
+- Editor setup and architecture: [docs/tsl-editor.md](docs/tsl-editor.md)
 - Repository charter: [CHARTER.md](CHARTER.md)
 - Compiler charter: [tslc/CHARTER.md](tslc/CHARTER.md)
 - Architecture narrative: [tslc/DESCRIPTION.md](tslc/DESCRIPTION.md)
@@ -97,3 +88,10 @@ overlay.
 - TSL source-data instructions: [tsldata/AGENTS.md](tsldata/AGENTS.md)
 - Shared task skills: `.agents/skills/`, exposed to Claude Code through
   `.claude/skills/`
+
+## License
+
+This repository is licensed under the Apache License, Version 2.0. See
+[LICENSE](LICENSE) and [NOTICE](NOTICE). The `tslc` Python package and the VS
+Code extension include their own Apache-2.0 `LICENSE` and `NOTICE` files for
+standalone distribution.

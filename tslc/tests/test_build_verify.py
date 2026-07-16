@@ -92,6 +92,7 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=[
+            "abs",
             "add",
             "blend",
             "equal",
@@ -137,6 +138,7 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
     (consumer / "main.cpp").write_text(
         textwrap.dedent(
             """
+            #include <cmath>
             #include <cstdint>
             #include <tsl.hpp>
 
@@ -156,6 +158,8 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
               Vec::register_type left = {1, 2, 3, 4};
               Vec::register_type right = {4, 3, 2, 1};
               auto sum = tsl::add<Vec>(left, right);
+              Vec::register_type abs_input = {-1, INT32_MIN, 3, -4};
+              auto magnitude = tsl::abs<Vec>(abs_input);
               Vec::register_type compared_right = {1, 0, 3, 0};
               auto equal = tsl::equal<Vec>(left, compared_right);
               auto odd = tsl::to_mask<Vec>(static_cast<Vec::imask_type>(0b1010));
@@ -169,11 +173,15 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
               FloatVec::register_type float_left = {1.0f, 2.0f, 3.0f, 4.0f};
               FloatVec::register_type float_right = {1.0f, 0.0f, 3.0f, 0.0f};
               auto float_equal = tsl::equal<FloatVec>(float_left, float_right);
+              FloatVec::register_type float_abs_input = {-0.0f, -1.5f, 2.0f, -3.25f};
+              auto float_magnitude = tsl::abs<FloatVec>(float_abs_input);
               constexpr std::uint64_t wide_bits = 0x8000000000000001ull;
               auto wide = tsl::to_mask<WideVec>(wide_bits);
 #if __has_feature(ext_vector_type_boolean)
               BoolVec::register_type bool_left = {1, 2, 3, 4};
               BoolVec::register_type bool_right = {1, 0, 3, 0};
+              BoolVec::register_type bool_abs_input = {-1, INT32_MIN, 3, -4};
+              auto bool_magnitude = tsl::abs<BoolVec>(bool_abs_input);
               auto bool_equal = tsl::equal<BoolVec>(bool_left, bool_right);
               auto bool_odd = tsl::to_mask<BoolVec>(
                   static_cast<BoolVec::imask_type>(0b1010));
@@ -184,6 +192,8 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
               auto bool_blended = tsl::blend<BoolVec>(bool_odd, bool_left, bool_right);
 #endif
               return sum[0] == 5 && sum[3] == 5 &&
+                             magnitude[0] == 1 && magnitude[1] == INT32_MIN &&
+                             magnitude[2] == 3 && magnitude[3] == 4 &&
                              tsl::hadd<Vec>(sum) == 20 &&
                              tsl::to_integral<Vec>(equal) == 0b0101 &&
                              tsl::to_integral<Vec>(odd) == 0b1010 &&
@@ -195,8 +205,15 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
                              tsl::to_integral<Vec>(inverted) == 0b1010 &&
                              tsl::mask_population_count<Vec>(odd) == 2 &&
                              tsl::to_integral<FloatVec>(float_equal) == 0b0101 &&
+                             !std::signbit(float_magnitude[0]) &&
+                             float_magnitude[1] == 1.5f &&
+                             float_magnitude[2] == 2.0f &&
+                             float_magnitude[3] == 3.25f &&
                              tsl::to_integral<WideVec>(wide) == wide_bits &&
 #if __has_feature(ext_vector_type_boolean)
+                             bool_magnitude[0] == 1 &&
+                             bool_magnitude[1] == INT32_MIN &&
+                             bool_magnitude[2] == 3 && bool_magnitude[3] == 4 &&
                              tsl::to_integral<BoolVec>(bool_equal) == 0b0101 &&
                              tsl::to_integral<BoolVec>(bool_odd) == 0b1010 &&
                              tsl::to_integral<BoolVec>(bool_both) == 0 &&

@@ -450,9 +450,9 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
                var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
                var<infer>(data_array, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
                var<infer>(offset, 0);
-               loop<backend>(i, 0, value(vector::length), 1)  {
-                if (mask<test, imask>(imask, i)) {
-                  data_array[i] = *ptr_add(ptr, offset);
+               loop<generation, scoped>(i, 0, value(vector::length), 1)  {
+                if (mask<test, imask>(imask, value(i))) {
+                  data_array[value(i)] = *ptr_add(ptr, offset);
                   offset += 1;
                 }
               }

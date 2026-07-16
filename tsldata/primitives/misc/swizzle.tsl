@@ -48,6 +48,55 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<alignr, build[suffix=base::signed_of(base::in)]>(left, right, count));"
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<infer>(result, right_lanes);
+              var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, value(i) + offset);
+                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
+                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      [f32, f64]:
+        requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IBase, base::signed_of(base::in));
+            let<type>(IVec, vector::as_base(IBase));
+            var<const_infer>(left_bits, call<primitive=reinterpret[Vec, IVec]>(left));
+            var<const_infer>(right_bits, call<primitive=reinterpret[Vec, IVec]>(right));
+            var<const_infer>(aligned, intrin<alignr, build[suffix=IBase]>(
+              left_bits,
+              right_bits,
+              count
+            ));
+            complete(call<primitive=reinterpret[IVec, Vec]>(
+              aligned
+            ));
+          """
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<infer>(result, right_lanes);
+              var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, value(i) + offset);
+                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
+                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
       arith:
         requires [avx512f]
         safety:
@@ -60,20 +109,218 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
             var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
             var<infer>(result, right_lanes);
             var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              var<const_infer>(source, i + offset);
-              if (source < value(vector::length)) { result[i] = right_lanes[source]; }
-              else { result[i] = left_lanes[source - value(vector::length)]; }
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(source, value(i) + offset);
+              if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
+              else { result[value(i)] = left_lanes[source - value(vector::length)]; }
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
-    [avx2, sse, neon, wasm128]:
+    [avx2_vl, sse_vl]:
+      [?i32, ?i64]:
+        requires:
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<alignr, build[suffix=base::signed_of(base::in)]>(left, right, count));"
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<infer>(result, right_lanes);
+              var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, value(i) + offset);
+                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
+                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      [f32, f64]:
+        requires:
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IBase, base::signed_of(base::in));
+            let<type>(IVec, vector::as_base(IBase));
+            var<const_infer>(left_bits, call<primitive=reinterpret[Vec, IVec]>(left));
+            var<const_infer>(right_bits, call<primitive=reinterpret[Vec, IVec]>(right));
+            var<const_infer>(aligned, intrin<alignr, build[suffix=IBase]>(
+              left_bits,
+              right_bits,
+              count
+            ));
+            complete(call<primitive=reinterpret[IVec, Vec]>(
+              aligned
+            ));
+          """
+        variants:
+          scalar_lanes_fallback:
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<infer>(result, right_lanes);
+              var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, value(i) + offset);
+                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
+                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    sse:
+      arith:
+        requires [sse, sse2, ssse3]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(ByteVec, vector::as_base(si8));
+            var<const_infer>(left_bytes, call<primitive=reinterpret[Vec, ByteVec]>(left));
+            var<const_infer>(right_bytes, call<primitive=reinterpret[Vec, ByteVec]>(right));
+            switch<compile>((cast<static>(scalar::size, count) % value(vector::length)) * value(type::size_bytes(base::in))) {
+              0 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=0]>(left_bytes, right_bytes, 0))); }
+              1 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=1]>(left_bytes, right_bytes, 1))); }
+              2 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=2]>(left_bytes, right_bytes, 2))); }
+              3 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=3]>(left_bytes, right_bytes, 3))); }
+              4 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=4]>(left_bytes, right_bytes, 4))); }
+              5 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=5]>(left_bytes, right_bytes, 5))); }
+              6 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=6]>(left_bytes, right_bytes, 6))); }
+              7 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=7]>(left_bytes, right_bytes, 7))); }
+              8 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=8]>(left_bytes, right_bytes, 8))); }
+              9 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=9]>(left_bytes, right_bytes, 9))); }
+              10 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=10]>(left_bytes, right_bytes, 10))); }
+              11 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=11]>(left_bytes, right_bytes, 11))); }
+              12 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=12]>(left_bytes, right_bytes, 12))); }
+              13 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=13]>(left_bytes, right_bytes, 13))); }
+              14 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=14]>(left_bytes, right_bytes, 14))); }
+              _ => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<alignr, build[suffix=si8, immediate(2)=15]>(left_bytes, right_bytes, 15))); }
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<infer>(result, right_lanes);
+              var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, value(i) + offset);
+                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
+                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    neon:
+      arith:
+        requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(ByteVec, vector::as_base(ui8));
+            var<const_infer>(left_bytes, call<primitive=reinterpret[Vec, ByteVec]>(left));
+            var<const_infer>(right_bytes, call<primitive=reinterpret[Vec, ByteVec]>(right));
+            switch<compile>((cast<static>(scalar::size, count) % value(vector::length)) * value(type::size_bytes(base::in))) {
+              0 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=0]>(right_bytes, left_bytes, 0))); }
+              1 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=1]>(right_bytes, left_bytes, 1))); }
+              2 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=2]>(right_bytes, left_bytes, 2))); }
+              3 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=3]>(right_bytes, left_bytes, 3))); }
+              4 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=4]>(right_bytes, left_bytes, 4))); }
+              5 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=5]>(right_bytes, left_bytes, 5))); }
+              6 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=6]>(right_bytes, left_bytes, 6))); }
+              7 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=7]>(right_bytes, left_bytes, 7))); }
+              8 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=8]>(right_bytes, left_bytes, 8))); }
+              9 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=9]>(right_bytes, left_bytes, 9))); }
+              10 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=10]>(right_bytes, left_bytes, 10))); }
+              11 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=11]>(right_bytes, left_bytes, 11))); }
+              12 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=12]>(right_bytes, left_bytes, 12))); }
+              13 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=13]>(right_bytes, left_bytes, 13))); }
+              14 => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=14]>(right_bytes, left_bytes, 14))); }
+              _ => { complete(call<primitive=reinterpret[ByteVec, Vec]>(intrin<vextq, build[suffix=ui8, immediate(2)=15]>(right_bytes, left_bytes, 15))); }
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<infer>(result, right_lanes);
+              var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, value(i) + offset);
+                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
+                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(ByteBase, ui8);
+            let<type>(ByteVec, vector::as_base(ByteBase));
+            var<const_infer>(offsets, call<primitive=add[ByteVec]>(
+              call<primitive=sequence[ByteVec]>(),
+              call<primitive=set1[ByteVec]>(cast<static>(ByteBase,
+                (cast<static>(scalar::size, count) % value(vector::length)) * value(type::size_bytes(base::in))
+              ))
+            ));
+            var<const_infer>(left_offsets, call<primitive=sub[ByteVec]>(
+              offsets,
+              call<primitive=set1[ByteVec]>(cast<static>(ByteBase, 16))
+            ));
+            var<const_infer>(from_right, intrin<i8x16_swizzle, build[suffix=""]>(right, offsets));
+            var<const_infer>(from_left, intrin<i8x16_swizzle, build[suffix=""]>(left, left_offsets));
+            complete(intrin<v128_or, build[suffix=""]>(from_right, from_left));
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<infer>(result, right_lanes);
+              var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, value(i) + offset);
+                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
+                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    [avx2, sse]:
       arith:
         requires:
           avx2 [avx]
           sse [sse, sse2]
-          neon [neon]
-          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -84,18 +331,48 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
             var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
             var<infer>(result, right_lanes);
             var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              var<const_infer>(source, i + offset);
-              if (source < value(vector::length)) { result[i] = right_lanes[source]; }
-              else { result[i] = left_lanes[source - value(vector::length)]; }
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(source, value(i) + offset);
+              if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
+              else { result[value(i)] = left_lanes[source - value(vector::length)]; }
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
-    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl]:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil """
+            complete(intrin<__builtin_shufflevector>(
+              right, left
+              loop<generation>(i, 0, value(vector::length), 1) {
+                , value(i) + (cast<static>(scalar::size, count) % value(vector::length))
+              }
+            ));
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<init_register>(result);
+              var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, value(i) + offset);
+                if (source < value(vector::length)) { result[value(i)] = right[source]; }
+                else { result[value(i)] = left[source - value(vector::length)]; }
+              }
+              complete(result);
+            """
+    [generic, oneapi_fpga, oneapi_fpga_rtl]:
       arith:
         requires:
           generic []
-          clang_v128 []
           oneapi_fpga []
           oneapi_fpga_rtl []
         safety:
@@ -117,26 +394,49 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
       arith:
         requires [sve]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(Base, base::in);
+            let<type>(IndexBase, base::unsigned_of(base::in));
+            let<type>(IndexVec, vector::as_base(IndexBase));
             var<const_infer>(lanes, value(vector::runtime_length));
-            var<runtime_array>(Base, left_lanes, lanes);
-            var<runtime_array>(Base, right_lanes, lanes);
-            var<runtime_array>(Base, result, lanes);
-            call<primitive=store[Vec], attrs[aligned=false]>(left_lanes, left);
-            call<primitive=store[Vec], attrs[aligned=false]>(right_lanes, right);
-            var<const_infer>(offset, cast<static>(scalar::size, count) % lanes);
-            loop<backend>(i, 0, lanes, 1) {
-              var<const_infer>(source, i + offset);
-              if (source < lanes) { result[i] = right_lanes[source]; }
-              else { result[i] = left_lanes[source - lanes]; }
-            }
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            var<const_infer>(indexes, call<primitive=add[IndexVec]>(
+              call<primitive=sequence[IndexVec]>(),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase,
+                cast<static>(scalar::size, count) % lanes
+              ))
+            ));
+            var<const_infer>(from_right, intrin<svtbl, build[suffix=base::in]>(right, indexes));
+            var<const_infer>(left_indexes, call<primitive=sub[IndexVec]>(
+              indexes,
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, lanes))
+            ));
+            var<const_infer>(from_left, intrin<svtbl, build[suffix=base::in]>(left, left_indexes));
+            complete(call<primitive=binary_or[Vec]>(from_right, from_left));
           """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              let<type>(Base, base::in);
+              var<const_infer>(lanes, value(vector::runtime_length));
+              var<runtime_array>(Base, left_lanes, lanes);
+              var<runtime_array>(Base, right_lanes, lanes);
+              var<runtime_array>(Base, result, lanes);
+              call<primitive=store[Vec], attrs[aligned=false]>(left_lanes, left);
+              call<primitive=store[Vec], attrs[aligned=false]>(right_lanes, right);
+              var<const_infer>(offset, cast<static>(scalar::size, count) % lanes);
+              loop<backend>(i, 0, lanes, 1) {
+                var<const_infer>(source, i + offset);
+                if (source < lanes) { result[i] = right_lanes[source]; }
+                else { result[i] = left_lanes[source - lanes]; }
+              }
+              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            """
 
 prim<v:=(v,sImm)> permute_lanes(data, control):
   brief_description "Permutes consecutive groups of up to four lanes using two-bit selectors."
@@ -177,14 +477,70 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
         implementation:
           tsil "complete(data);"
     avx2:
-      ?i64:
+      [?i32, f32]:
+        requires:
+          ?i32 [avx, avx2]
+          f32 [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if<generation>(type::is_same(base::in, f32)) {
+              complete(intrin<permute, build[suffix=f32, immediate(1)=control]>(data, control));
+            } else<generation> {
+              complete(intrin<shuffle, build[suffix=si32, immediate(1)=control]>(data, control));
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(group_start, (value(i) / 4) * 4);
+                var<infer>(group_length, value(vector::length) - group_start);
+                if (group_length > 4) { group_length = 4; }
+                var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3);
+                result[value(i)] = lanes[group_start + selector % group_length];
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      [?i64, f64]:
         requires [avx, avx2]
         safety:
           internal_unsafe true
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(intrin<_mm256_permute4x64_epi64>(data, control));"
+          tsil """
+            if<generation>(type::is_same(base::in, f64)) {
+              complete(intrin<permute4x64, build[suffix=f64, immediate(1)=control]>(data, control));
+            } else<generation> {
+              complete(intrin<permute4x64, build[suffix=si64, immediate(1)=control]>(data, control));
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(group_start, (value(i) / 4) * 4);
+                var<infer>(group_length, value(vector::length) - group_start);
+                if (group_length > 4) { group_length = 4; }
+                var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3);
+                result[value(i)] = lanes[group_start + selector % group_length];
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
       arith:
         requires [avx]
         safety:
@@ -195,24 +551,107 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
           tsil """
             var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
             var<infer>(result, lanes);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              var<const_infer>(group_start, (i / 4) * 4);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(group_start, (value(i) / 4) * 4);
               var<infer>(group_length, value(vector::length) - group_start);
               if (group_length > 4) { group_length = 4; }
-              var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (i % 4))) & 3);
-              result[i] = lanes[group_start + selector % group_length];
+              var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3);
+              result[value(i)] = lanes[group_start + selector % group_length];
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
     sse:
-      ?i32:
+      [?i32, f32]:
+        requires:
+          ?i32 [sse, sse2]
+          f32 [sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if<generation>(type::is_same(base::in, f32)) {
+              complete(intrin<shuffle, build[suffix=f32, immediate(2)=control]>(data, data, control));
+            } else<generation> {
+              complete(intrin<shuffle, build[suffix=si32, immediate(1)=control]>(data, control));
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(group_start, (value(i) / 4) * 4);
+                var<infer>(group_length, value(vector::length) - group_start);
+                if (group_length > 4) { group_length = 4; }
+                var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3);
+                result[value(i)] = lanes[group_start + selector % group_length];
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      ?i64:
         requires [sse, sse2]
         safety:
           internal_unsafe true
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(intrin<_mm_shuffle_epi32>(data, control));"
+          tsil """
+            switch<compile>((control & 1) | ((control >> 1) & 2)) {
+              0 => { complete(intrin<shuffle, build[suffix=si32, immediate(1)=68]>(data, 68)); }
+              1 => { complete(intrin<shuffle, build[suffix=si32, immediate(1)=78]>(data, 78)); }
+              2 => { complete(intrin<shuffle, build[suffix=si32, immediate(1)=228]>(data, 228)); }
+              _ => { complete(intrin<shuffle, build[suffix=si32, immediate(1)=238]>(data, 238)); }
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * value(i))) & 3);
+                result[value(i)] = lanes[selector % value(vector::length)];
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      f64:
+        requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            switch<compile>((control & 1) | ((control >> 1) & 2)) {
+              0 => { complete(intrin<shuffle, build[suffix=f64, immediate(2)=0]>(data, data, 0)); }
+              1 => { complete(intrin<shuffle, build[suffix=f64, immediate(2)=1]>(data, data, 1)); }
+              2 => { complete(intrin<shuffle, build[suffix=f64, immediate(2)=2]>(data, data, 2)); }
+              _ => { complete(intrin<shuffle, build[suffix=f64, immediate(2)=3]>(data, data, 3)); }
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * value(i))) & 3);
+                result[value(i)] = lanes[selector % value(vector::length)];
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
       arith:
         requires [sse, sse2]
         safety:
@@ -223,19 +662,100 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
           tsil """
             var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
             var<infer>(result, lanes);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              var<const_infer>(group_start, (i / 4) * 4);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(group_start, (value(i) / 4) * 4);
               var<infer>(group_length, value(vector::length) - group_start);
               if (group_length > 4) { group_length = 4; }
-              var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (i % 4))) & 3);
-              result[i] = lanes[group_start + selector % group_length];
+              var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3);
+              result[value(i)] = lanes[group_start + selector % group_length];
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
-    [avx512, neon, wasm128]:
+    avx512:
+      [?i32, f32]:
+        requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if<generation>(type::is_same(base::in, f32)) {
+              complete(intrin<permute, build[suffix=f32, immediate(1)=control]>(data, control));
+            } else<generation> {
+              complete(intrin<shuffle, build[suffix=si32, immediate(1)=control]>(data, control));
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(group_start, (value(i) / 4) * 4);
+                var<infer>(group_length, value(vector::length) - group_start);
+                if (group_length > 4) { group_length = 4; }
+                var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3);
+                result[value(i)] = lanes[group_start + selector % group_length];
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      [?i64, f64]:
+        requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if<generation>(type::is_same(base::in, f64)) {
+              complete(intrin<permutex, build[suffix=f64, immediate(1)=control]>(data, control));
+            } else<generation> {
+              complete(intrin<permutex, build[suffix=si64, immediate(1)=control]>(data, control));
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, lanes);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(group_start, (value(i) / 4) * 4);
+                var<infer>(group_length, value(vector::length) - group_start);
+                if (group_length > 4) { group_length = 4; }
+                var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3);
+                result[value(i)] = lanes[group_start + selector % group_length];
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+      arith:
+        requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+            var<infer>(result, lanes);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(group_start, (value(i) / 4) * 4);
+              var<infer>(group_length, value(vector::length) - group_start);
+              if (group_length > 4) { group_length = 4; }
+              var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3);
+              result[value(i)] = lanes[group_start + selector % group_length];
+            }
+            complete(call<primitive=from_array[Vec]>(result));
+          """
+    [neon, wasm128]:
       arith:
         requires:
-          avx512 [avx512f]
           neon [neon]
           wasm128 [simd128]
         safety:
@@ -246,16 +766,48 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
           tsil """
             var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
             var<infer>(result, lanes);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              var<const_infer>(group_start, (i / 4) * 4);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(group_start, (value(i) / 4) * 4);
               var<infer>(group_length, value(vector::length) - group_start);
               if (group_length > 4) { group_length = 4; }
-              var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (i % 4))) & 3);
-              result[i] = lanes[group_start + selector % group_length];
+              var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3);
+              result[value(i)] = lanes[group_start + selector % group_length];
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
-    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl]:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil """
+            complete(intrin<__builtin_shufflevector>(
+              data, data
+              loop<generation>(i, 0, value(vector::length), 1) {
+                , ((value(i) / 4) * 4) + (((cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3) % ((value(vector::length) < 4) ? value(vector::length) : 4))
+              }
+            ));
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<init_register>(result);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(group_start, (value(i) / 4) * 4);
+                var<infer>(group_length, value(vector::length) - group_start);
+                if (group_length > 4) { group_length = 4; }
+                var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3);
+                result[value(i)] = data[group_start + selector % group_length];
+              }
+              complete(result);
+            """
+    [generic, oneapi_fpga, oneapi_fpga_rtl]:
       arith:
         requires:
           generic []
@@ -345,14 +897,42 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
             complete(data);
           """
     avx512:
-      ?i32:
-        requires [avx512f]
+      arith:
+        requires:
+          ?i8 [avx512f, avx512vbmi]
+          ?i16 [avx512f, avx512bw]
+          ?i32 [avx512f]
+          ?i64 [avx512f]
+          f32 [avx512f]
+          f64 [avx512f]
         safety:
           internal_unsafe true
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(intrin<_mm512_permutexvar_epi32>(indexes, data));"
+          tsil """
+            if<generation>(type::is_same(base::in, f32) || type::is_same(base::in, f64)) {
+              complete(intrin<permutexvar, build[suffix=base::in]>(indexes, data));
+            } else<generation> {
+              complete(intrin<permutexvar, build[suffix=base::signed_of(base::in)]>(indexes, data));
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(input, call<primitive=to_array[Vec]>(data));
+              var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
+              var<infer>(result, input);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % value(vector::length));
+                result[value(i)] = input[source];
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    avx512:
       arith:
         requires [avx512f]
         safety:
@@ -364,12 +944,215 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
             var<const_infer>(input, call<primitive=to_array[Vec]>(data));
             var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
             var<infer>(result, input);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              var<const_infer>(source, idx_offset(index_lanes[i], 1) % value(vector::length));
-              result[i] = input[source];
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % value(vector::length));
+              result[value(i)] = input[source];
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
+    avx2:
+      arith:
+        requires:
+          ?i32 [avx, avx2]
+          f32 [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if<generation>(type::is_same(base::in, f32)) {
+              complete(intrin<permutevar8x32, build[suffix=f32]>(data, indexes));
+            } else<generation> {
+              complete(intrin<permutevar8x32, build[suffix=si32]>(data, indexes));
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(input, call<primitive=to_array[Vec]>(data));
+              var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
+              var<infer>(result, input);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % value(vector::length));
+                result[value(i)] = input[source];
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    avx2_vl:
+      arith:
+        requires:
+          ?i8 [avx, avx512f, avx512vl, avx512vbmi]
+          ?i16 [avx, avx512f, avx512vl, avx512bw]
+          ?i32 [avx, avx512f, avx512vl]
+          ?i64 [avx, avx512f, avx512vl]
+          f32 [avx, avx512f, avx512vl]
+          f64 [avx, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if<generation>(type::is_same(base::in, f32) || type::is_same(base::in, f64)) {
+              complete(intrin<permutexvar, build[suffix=base::in]>(indexes, data));
+            } else<generation> {
+              complete(intrin<permutexvar, build[suffix=base::signed_of(base::in)]>(indexes, data));
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(input, call<primitive=to_array[Vec]>(data));
+              var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
+              var<infer>(result, input);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % value(vector::length));
+                result[value(i)] = input[source];
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    sse_vl:
+      arith:
+        requires:
+          ?i8 [sse, sse2, avx512f, avx512vl, avx512vbmi]
+          ?i16 [sse, sse2, avx512f, avx512vl, avx512bw]
+          ?i32 [sse, sse2, avx512f, avx512vl]
+          ?i64 [sse, sse2, avx512f, avx512vl]
+          f32 [sse, sse2, avx512f, avx512vl]
+          f64 [sse, sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if<generation>(type::is_same(base::in, f32) || type::is_same(base::in, f64)) {
+              complete(intrin<permutex2var, build[suffix=base::in]>(data, indexes, data));
+            } else<generation> {
+              complete(intrin<permutex2var, build[suffix=base::signed_of(base::in)]>(data, indexes, data));
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(input, call<primitive=to_array[Vec]>(data));
+              var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
+              var<infer>(result, input);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % value(vector::length));
+                result[value(i)] = input[source];
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    neon:
+      ?i8:
+        requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IndexVec, vector::as_base(ui8));
+            var<const_infer>(normalized, call<primitive=binary_and[IndexVec]>(
+              cast<bitcast>(register::generic(IndexVec), indexes),
+              call<primitive=set1[IndexVec]>(15)
+            ));
+            complete(intrin<vqtbl1q, build[suffix=base::in]>(data, normalized));
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(input, call<primitive=to_array[Vec]>(data));
+              var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
+              var<infer>(result, input);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % value(vector::length));
+                result[value(i)] = input[source];
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    wasm128:
+      ?i8:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IndexVec, vector::as_base(ui8));
+            var<const_infer>(normalized, call<primitive=binary_and[IndexVec]>(
+              cast<bitcast>(register::generic(IndexVec), indexes),
+              call<primitive=set1[IndexVec]>(15)
+            ));
+            complete(intrin<i8x16_swizzle, build[suffix=""]>(data, normalized));
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(input, call<primitive=to_array[Vec]>(data));
+              var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
+              var<infer>(result, input);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % value(vector::length));
+                result[value(i)] = input[source];
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    [sve128, sve256, sve512]:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IndexBase, base::unsigned_of(base::generic(IndicesType)));
+            let<type>(IndexVec, vector::as_base(IndexBase));
+            var<const_infer>(normalized, call<primitive=binary_and[IndexVec]>(
+              call<primitive=reinterpret[IndicesType, IndexVec]>(indexes),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, value(vector::length) - 1))
+            ));
+            complete(intrin<svtbl, build[suffix=base::in]>(data, normalized));
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              let<type>(Base, base::in);
+              let<type>(IndexBase, base::generic(IndicesType));
+              var<const_infer>(lanes, value(vector::runtime_length));
+              var<runtime_array>(Base, input, lanes);
+              var<runtime_array>(IndexBase, index_lanes, lanes);
+              var<runtime_array>(Base, result, lanes);
+              call<primitive=store[Vec], attrs[aligned=false]>(input, data);
+              call<primitive=store[IndicesType], attrs[aligned=false]>(index_lanes, indexes);
+              loop<backend>(i, 0, lanes, 1) {
+                var<const_infer>(source, idx_offset(index_lanes[i], 1) % lanes);
+                result[i] = input[source];
+              }
+              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            """
     [avx2, sse, neon, wasm128]:
       arith:
         requires:
@@ -386,9 +1169,9 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
             var<const_infer>(input, call<primitive=to_array[Vec]>(data));
             var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
             var<infer>(result, input);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              var<const_infer>(source, idx_offset(index_lanes[i], 1) % value(vector::length));
-              result[i] = input[source];
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % value(vector::length));
+              result[value(i)] = input[source];
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
@@ -499,14 +1282,44 @@ prim<v:=(v,vidx,v)> table_lookup(left, indexes, right):
             complete(right);
           """
     avx512:
-      ?i32:
-        requires [avx512f]
+      arith:
+        requires:
+          ?i8 [avx512f, avx512vbmi]
+          ?i16 [avx512f, avx512bw]
+          ?i32 [avx512f]
+          ?i64 [avx512f]
+          f32 [avx512f]
+          f64 [avx512f]
         safety:
           internal_unsafe true
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(intrin<_mm512_permutex2var_epi32>(left, indexes, right));"
+          tsil """
+            if<generation>(type::is_same(base::in, f32) || type::is_same(base::in, f64)) {
+              complete(intrin<permutex2var, build[suffix=base::in]>(left, indexes, right));
+            } else<generation> {
+              complete(intrin<permutex2var, build[suffix=base::signed_of(base::in)]>(left, indexes, right));
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
+              var<infer>(result, left_lanes);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % (2 * value(vector::length)));
+                if (source < value(vector::length)) { result[value(i)] = left_lanes[source]; }
+                else { result[value(i)] = right_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    avx512:
       arith:
         requires [avx512f]
         safety:
@@ -519,13 +1332,175 @@ prim<v:=(v,vidx,v)> table_lookup(left, indexes, right):
             var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
             var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
             var<infer>(result, left_lanes);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              var<const_infer>(source, idx_offset(index_lanes[i], 1) % (2 * value(vector::length)));
-              if (source < value(vector::length)) { result[i] = left_lanes[source]; }
-              else { result[i] = right_lanes[source - value(vector::length)]; }
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % (2 * value(vector::length)));
+              if (source < value(vector::length)) { result[value(i)] = left_lanes[source]; }
+              else { result[value(i)] = right_lanes[source - value(vector::length)]; }
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
+    [avx2_vl, sse_vl]:
+      arith:
+        requires:
+          ?i8 [sse, sse2, avx, avx512f, avx512vl, avx512vbmi]
+          ?i16 [sse, sse2, avx, avx512f, avx512vl, avx512bw]
+          ?i32 [sse, sse2, avx, avx512f, avx512vl]
+          ?i64 [sse, sse2, avx, avx512f, avx512vl]
+          f32 [sse, sse2, avx, avx512f, avx512vl]
+          f64 [sse, sse2, avx, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if<generation>(type::is_same(base::in, f32) || type::is_same(base::in, f64)) {
+              complete(intrin<permutex2var, build[suffix=base::in]>(left, indexes, right));
+            } else<generation> {
+              complete(intrin<permutex2var, build[suffix=base::signed_of(base::in)]>(left, indexes, right));
+            }
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
+              var<infer>(result, left_lanes);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % (2 * value(vector::length)));
+                if (source < value(vector::length)) { result[value(i)] = left_lanes[source]; }
+                else { result[value(i)] = right_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    neon:
+      ?i8:
+        requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IndexVec, vector::as_base(ui8));
+            var<const_infer>(normalized, call<primitive=binary_and[IndexVec]>(
+              cast<bitcast>(register::generic(IndexVec), indexes),
+              call<primitive=set1[IndexVec]>(31)
+            ));
+            var<const_infer>(from_left, intrin<vqtbl1q, build[suffix=base::in]>(left, normalized));
+            var<const_infer>(right_indexes, call<primitive=sub[IndexVec]>(
+              normalized,
+              call<primitive=set1[IndexVec]>(16)
+            ));
+            var<const_infer>(from_right, intrin<vqtbl1q, build[suffix=base::in]>(right, right_indexes));
+            complete(call<primitive=binary_or[Vec]>(from_left, from_right));
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
+              var<infer>(result, left_lanes);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % (2 * value(vector::length)));
+                if (source < value(vector::length)) { result[value(i)] = left_lanes[source]; }
+                else { result[value(i)] = right_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    wasm128:
+      ?i8:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IndexVec, vector::as_base(ui8));
+            var<const_infer>(normalized, call<primitive=binary_and[IndexVec]>(
+              cast<bitcast>(register::generic(IndexVec), indexes),
+              call<primitive=set1[IndexVec]>(31)
+            ));
+            var<const_infer>(from_left, intrin<i8x16_swizzle, build[suffix=""]>(left, normalized));
+            var<const_infer>(right_indexes, call<primitive=sub[IndexVec]>(
+              normalized,
+              call<primitive=set1[IndexVec]>(16)
+            ));
+            var<const_infer>(from_right, intrin<i8x16_swizzle, build[suffix=""]>(right, right_indexes));
+            complete(intrin<v128_or, build[suffix=""]>(from_left, from_right));
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
+              var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
+              var<infer>(result, left_lanes);
+              loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % (2 * value(vector::length)));
+                if (source < value(vector::length)) { result[value(i)] = left_lanes[source]; }
+                else { result[value(i)] = right_lanes[source - value(vector::length)]; }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    [sve128, sve256, sve512]:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IndexBase, base::unsigned_of(base::generic(IndicesType)));
+            let<type>(IndexVec, vector::as_base(IndexBase));
+            var<const_infer>(normalized, call<primitive=binary_and[IndexVec]>(
+              call<primitive=reinterpret[IndicesType, IndexVec]>(indexes),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, 2 * value(vector::length) - 1))
+            ));
+            var<const_infer>(from_left, intrin<svtbl, build[suffix=base::in]>(left, normalized));
+            var<const_infer>(right_indexes, call<primitive=sub[IndexVec]>(
+              normalized,
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, value(vector::length)))
+            ));
+            var<const_infer>(from_right, intrin<svtbl, build[suffix=base::in]>(right, right_indexes));
+            complete(call<primitive=binary_or[Vec]>(from_left, from_right));
+          """
+        variants:
+          scalar_lanes_fallback:
+            safety:
+              internal_unsafe false
+              reasons []
+            tsil """
+              let<type>(Base, base::in);
+              let<type>(IndexBase, base::generic(IndicesType));
+              var<const_infer>(lanes, value(vector::runtime_length));
+              var<runtime_array>(Base, left_lanes, lanes);
+              var<runtime_array>(Base, right_lanes, lanes);
+              var<runtime_array>(IndexBase, index_lanes, lanes);
+              var<runtime_array>(Base, result, lanes);
+              call<primitive=store[Vec], attrs[aligned=false]>(left_lanes, left);
+              call<primitive=store[Vec], attrs[aligned=false]>(right_lanes, right);
+              call<primitive=store[IndicesType], attrs[aligned=false]>(index_lanes, indexes);
+              loop<backend>(i, 0, lanes, 1) {
+                var<const_infer>(source, idx_offset(index_lanes[i], 1) % (2 * lanes));
+                if (source < lanes) { result[i] = left_lanes[source]; }
+                else { result[i] = right_lanes[source - lanes]; }
+              }
+              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            """
     [avx2, sse, neon, wasm128]:
       arith:
         requires:
@@ -543,10 +1518,10 @@ prim<v:=(v,vidx,v)> table_lookup(left, indexes, right):
             var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
             var<const_infer>(index_lanes, call<primitive=to_array[IndicesType]>(indexes));
             var<infer>(result, left_lanes);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              var<const_infer>(source, idx_offset(index_lanes[i], 1) % (2 * value(vector::length)));
-              if (source < value(vector::length)) { result[i] = left_lanes[source]; }
-              else { result[i] = right_lanes[source - value(vector::length)]; }
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(source, idx_offset(index_lanes[value(i)], 1) % (2 * value(vector::length)));
+              if (source < value(vector::length)) { result[value(i)] = left_lanes[source]; }
+              else { result[value(i)] = right_lanes[source - value(vector::length)]; }
             }
             complete(call<primitive=from_array[Vec]>(result));
           """

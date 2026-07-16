@@ -17,6 +17,7 @@ from tslc.output.verify import (
 from tslc.output.verify_model import BackendToolchain
 from tslc.output.writer import ArtifactWriteMode, ArtifactWriteReport, ArtifactWriter
 from tslc.pipeline import GenerationMode, GenerationRequest, GenerationResult, generate
+from tslc.sources import expand_source_paths
 
 _ARITH_TYPE_TAGS = DEFAULT_SCALAR_TYPE_TAGS
 
@@ -28,6 +29,7 @@ def generate_project(
     primitives: Iterable[str] | None = None,
     profiles: Iterable[str] | None = None,
     type_tags: Iterable[str] = _ARITH_TYPE_TAGS,
+    extensions: Iterable[str] | None = None,
     backends: Iterable[str] = registered_backend_ids(),
     generation_mode: GenerationMode = "partial",
     test_harness: bool = False,
@@ -46,11 +48,12 @@ def generate_project(
     """
 
     request = GenerationRequest(
-        source_paths=_expand_sources(source_paths),
+        source_paths=expand_source_paths(source_paths),
         machine_profiles_path=Path(machine_profiles_path),
         primitives=tuple(primitives) if primitives is not None else None,
         profiles=tuple(profiles) if profiles is not None else None,
         type_tags=tuple(type_tags),
+        extensions=tuple(extensions) if extensions is not None else None,
         backends=tuple(backends),
         mode=generation_mode,
         test_harness=test_harness,
@@ -62,22 +65,9 @@ def generate_project(
 
 
 def _expand_sources(source_paths: Iterable[Path | str]) -> tuple[Path, ...]:
-    expanded: list[Path] = []
-    for entry in source_paths:
-        path = Path(entry)
-        if path.is_dir():
-            expanded.extend(sorted(path.rglob("*.tsl"), key=lambda item: item.as_posix()))
-        else:
-            expanded.append(path)
-    # de-duplicate while keeping deterministic order
-    seen: set[str] = set()
-    unique: list[Path] = []
-    for path in sorted(expanded, key=lambda item: item.as_posix()):
-        key = path.as_posix()
-        if key not in seen:
-            seen.add(key)
-            unique.append(path)
-    return tuple(unique)
+    """Compatibility wrapper for older internal callers."""
+
+    return expand_source_paths(source_paths)
 
 
 def write_artifacts(

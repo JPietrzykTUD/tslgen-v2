@@ -211,8 +211,8 @@ prim<s:=v> hadd(vec):
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(base::in, result, cast<static>(base::in, 0));
-            loop<backend>(i, 0, value(vector::length), 1) {
-              result = helper<arith_add>(result, values[i]);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              result = helper<arith_add>(result, values[value(i)]);
             }
             complete(result);
           """
@@ -317,8 +317,8 @@ prim<s:=v> hadd(vec):
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(base::in, result, cast<static>(base::in, 0));
-            loop<backend>(i, 0, value(vector::length), 1) {
-              result = helper<arith_add>(result, values[i]);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              result = helper<arith_add>(result, values[value(i)]);
             }
             complete(result);
           """
@@ -364,8 +364,8 @@ prim<s:=v> hadd(vec):
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(base::in, result, cast<static>(base::in, 0));
-            loop<backend>(i, 0, value(vector::length), 1) {
-              result = helper<arith_add>(result, values[i]);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              result = helper<arith_add>(result, values[value(i)]);
             }
             complete(result);
           """
@@ -705,9 +705,9 @@ prim<s:=v> hmax(vec):
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, values[0]);
-            loop<backend>(i, 1, value(vector::length), 1) {
-              if (values[i] > result) {
-                result = values[i];
+            loop<generation, scoped>(i, 1, value(vector::length), 1) {
+              if (values[value(i)] > result) {
+                result = values[value(i)];
               }
             }
             complete(result);
@@ -1050,9 +1050,9 @@ prim<s:=v> hmin(vec):
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, values[0]);
-            loop<backend>(i, 1, value(vector::length), 1) {
-              if (values[i] < result) {
-                result = values[i];
+            loop<generation, scoped>(i, 1, value(vector::length), 1) {
+              if (values[value(i)] < result) {
+                result = values[value(i)];
               }
             }
             complete(result);
@@ -1292,9 +1292,9 @@ prim<s:=(m,v)> hadd(mask, vec):
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(base::in, result, cast<static>(base::in, 0));
-            loop<backend>(i, 0, value(vector::length), 1) {
-              if (mask<test, imask>(mask_scalar, i)) {
-                result = helper<arith_add>(result, values[i]);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(mask_scalar, value(i))) {
+                result = helper<arith_add>(result, values[value(i)]);
               }
             }
             complete(result);
@@ -1749,13 +1749,13 @@ prim<s:=(m,v)> hmax(mask, vec):
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(base::in, result, cast<static>(base::in, 0));
             var<typed>(scalar::size, found, 0);
-            loop<backend>(i, 0, value(vector::length), 1) {
-              if (mask<test, imask>(mask_scalar, i)) {
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(mask_scalar, value(i))) {
                 if (found == 0) {
-                  result = values[i];
+                  result = values[value(i)];
                   found = 1;
-                } else if (values[i] > result) {
-                  result = values[i];
+                } else if (values[value(i)] > result) {
+                  result = values[value(i)];
                 }
               }
             }
@@ -2217,13 +2217,13 @@ prim<s:=(m,v)> hmin(mask, vec):
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(base::in, result, cast<static>(base::in, 0));
             var<typed>(scalar::size, found, 0);
-            loop<backend>(i, 0, value(vector::length), 1) {
-              if (mask<test, imask>(mask_scalar, i)) {
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(mask_scalar, value(i))) {
                 if (found == 0) {
-                  result = values[i];
+                  result = values[value(i)];
                   found = 1;
-                } else if (values[i] < result) {
-                  result = values[i];
+                } else if (values[value(i)] < result) {
+                  result = values[value(i)];
                 }
               }
             }

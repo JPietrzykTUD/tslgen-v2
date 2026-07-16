@@ -9,6 +9,8 @@ from types import SimpleNamespace
 import pytest
 
 from tslc import cli
+from tslc import check_cli
+from tslc.api import generate_project
 from tslc.authoring import check_catalog
 from tslc.doctor import diagnose
 from tslc.maintenance import coverage_inventory
@@ -57,6 +59,8 @@ def test_slot_check_lowers_without_rendering(
             "avx2",
             "--backend",
             "cpp",
+            "--extension",
+            "avx2",
             "--type",
             "si32",
             "--format",
@@ -69,6 +73,66 @@ def test_slot_check_lowers_without_rendering(
     assert payload["mode"] == "slots"
     assert payload["coverage"] > 0
     assert payload["skipped"] == []
+
+
+def test_slot_check_extension_filter_keeps_dependency_closure_concrete(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        (data_root,),
+        machine_profiles_path=machine_profiles_path,
+        primitives=("add",),
+        profiles=("avx2",),
+        type_tags=("si32",),
+        extensions=("avx2",),
+        backends=("cpp",),
+        render_artifacts=False,
+    )
+
+    assert result.diagnostics == ()
+    assert result.skipped == ()
+    assert result.coverage
+    assert {entry.extension for entry in result.coverage} == {"avx2"}
+    assert {entry.type_tag for entry in result.coverage} == {"si32"}
+    assert any(entry.source_primitive_name == "add" for entry in result.coverage)
+
+
+def test_slot_check_strict_mode_is_explicit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    modes: list[str] = []
+    extensions: list[object] = []
+
+    def fake_generate(*args: object, **kwargs: object) -> object:
+        del args
+        modes.append(str(kwargs["generation_mode"]))
+        extensions.append(kwargs["extensions"])
+        return SimpleNamespace(diagnostics=(), coverage=(), skipped=())
+
+    monkeypatch.setattr(check_cli, "generate_project", fake_generate)
+    common = [
+        "--sources",
+        str(tmp_path),
+        "--machine-profiles",
+        str(tmp_path / "profiles.json"),
+        "--profile",
+        "scalar",
+        "--extension",
+        "scalar",
+        "--format",
+        "json",
+    ]
+
+    assert check_cli.main(common) == 0
+    capsys.readouterr()
+    assert check_cli.main([*common, "--strict"]) == 0
+    capsys.readouterr()
+
+    assert modes == ["partial", "strict"]
+    assert extensions == [["scalar"], ["scalar"]]
 
 
 def test_catalog_list_and_show_have_stable_json(
@@ -106,9 +170,15 @@ def test_catalog_list_and_show_have_stable_json(
     shown = json.loads(capsys.readouterr().out)
     assert status == 0
     assert shown == {
+        "accepted_forms": [
+            "intrin<name>(args)",
+            "intrin<base, build>(args)",
+            "intrin<base, build[modifier=value, ...]>(args)",
+        ],
         "body_shape": "call",
         "kind": "region",
         "name": "intrin",
+        "purpose": "Invoke a target intrinsic.",
         "shell_validator": "intrin_selector",
     }
 
@@ -122,6 +192,7 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
                 'sources = ["data"]',
                 'machine_profiles = "profiles.json"',
                 'backends = ["cpp"]',
+                'authoring_profiles = ["scalar"]',
                 'output_root = "out"',
                 "[tslc.toolchains.cpp]",
                 'compiler = "clang++"',
@@ -139,6 +210,7 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
     assert config.sources == ((tmp_path / "data").resolve(),)
     assert config.machine_profiles == (tmp_path / "profiles.json").resolve()
     assert config.output_root == (tmp_path / "out").resolve()
+    assert config.authoring_profiles == ("scalar",)
     assert config.toolchains["cpp"].compiler == ("clang++",)
     assert config.runner_paths == {"sde": "/opt/sde64"}
 

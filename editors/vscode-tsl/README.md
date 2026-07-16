@@ -1,0 +1,124 @@
+# TSL Language Support
+
+Compiler-backed VS Code support for `tslc` `.tsl` source data.
+
+Platform-specific packages include the matching self-contained compiler and
+language server. They perform no activation-time download and require no
+separately installed Python or Node.js. The release targets are Linux x64 and
+arm64 (glibc), Windows x64, and macOS x64 and arm64; each artifact must pass its
+native-host CI job before publication.
+
+The platform-neutral package is a contributor preview. For that package,
+install Python 3.14 or newer and `tslc[editor]` in the local or remote workspace
+environment where this workspace extension runs:
+
+```bash
+python -m pip install -e './tslc[editor]'
+tslc check
+```
+
+It provides unsaved-buffer diagnostics, symbols, definition/reference
+navigation, hover, completion, semantic highlighting, generated TextMate
+coloring, compiler-owned Quick Fixes, concrete saved-file preview, slot
+checking, and backend-aware doctor.
+It also provides a compiler-backed primitive scaffolding action and a TSLc
+Activity Bar explorer for primitive coverage, concrete slots, and direct call
+dependencies, plus explicit lowered-state and active-closure analysis. There is
+intentionally no formatter in Version 1.
+
+From the repository root, `./dev.sh editor-install` refreshes the generated
+TSIL keyword grammar, bootstraps locked npm dependencies when they are absent
+or stale, runs the grammar/unit and real extension-host checks, packages the
+VSIX, and reinstalls it through the `code` CLI so same-version development
+builds are actually replaced. Set `CODE_BIN=code-insiders` when appropriate,
+then reload the VS Code window. From this directory, the
+equivalent command is `npm run install:local`; `npm run package:verified` stops
+after packaging. The first run therefore needs registry/network access for
+`npm ci`; later runs reuse the current `node_modules` tree.
+
+`npm run package:runtime` is the release gate for the current native host. It
+requires the pinned packages in `runtime-requirements.txt`, freezes the same
+compiler used by contributors, smoke-tests version/preview/LSP behavior with
+external Python discovery disabled, runs client tests, emits a target-specific
+VSIX, and verifies every manifest checksum. CI performs that gate for all five
+advertised targets.
+
+Commands:
+
+- `TSL: Restart Language Server`
+- `TSL: Check Concrete Specialization`
+- `TSL: Preview Specialization`
+- `TSL: Doctor`
+- `TSL: Add New Primitive`
+
+The TSLc sidebar contains Target Context, Primitives, Specializations, and
+Dependencies views. Primitives can be scoped to the active file or the complete
+configured corpus. The **+** button in the Primitives title starts the guided
+primitive scaffold. Target Context defaults to Authored Source / All Profiles,
+where every declared implementation remains visible and navigable. Choosing a
+concrete profile switches to Resolved Profile mode; specialization rows then
+distinguish selected, not selected for this profile, missing implementation,
+and unsupported backend states. Selected slots can launch Preview without
+repeating slot QuickPicks, and resolved mode retains the unavailable-only
+filter. A selected slot can also launch **Analyze Concrete Specialization**
+without repeating profile/backend/extension/type prompts.
+Overload choices include their callable parameters and signature, and stale
+rows are cleared when primitive/profile/backend context changes. Dependencies
+shows direct authored Calls and Called By relationships in separate authored
+groups. Explicit analysis adds a native/composed/fallback/unknown verdict and
+the active transitive lowered call tree, including cycle and unresolved-edge
+labels; resolved dependencies navigate to their selected source body. Results
+are cached by compiler input digest and complete slot context, then marked stale
+after a corpus/configuration generation change. Analysis is never triggered by
+ordinary refresh, selection, hover, or editing. Icons are always accompanied by
+status text and tooltips.
+
+The platform package uses its manifest-validated bundled compiler by default.
+Use `tsl.server.command`/`tsl.server.args` for an explicit server,
+`tsl.preview.command` for an explicit full compiler, or `tsl.python` for a
+Python environment containing `tslc[editor]`. The contributor package otherwise
+searches for `tslc` on the extension-host `PATH`. A packaged runtime that is
+missing, corrupt, stale, or built for the wrong extension-host target is an
+installation error rather than a silent fallback.
+
+The concrete commands use the language server's parsed cursor scope and real
+selector matrix. A concrete extension or scalar type at the cursor is reused;
+missing values are chosen through searchable QuickPicks filtered in order by
+profile, extension, and type. Explicit settings remain valid overrides only
+when they belong to the current matrix. Check passes the selected extension to
+`tslc check`. Inside a primitive, Doctor uses the same full concrete selection
+flow and labels its result with that context; its actual toolchain probe remains
+profile/backend scoped because extension and scalar type do not change tool
+availability.
+
+**TSL: Add New Primitive** is available from the command palette and the TSL
+editor context menu. It presents the distinct signature shapes from the current
+typed catalog, shows the corpus-derived default parameter names, then asks for
+the new primitive name. The language server validates the name and produces a
+declaration/documentation skeleton; the client appends it to the open buffer,
+focuses the empty brief description, and leaves the edit under normal editor
+undo. It does not invent an implementation body.
+
+Preview requires a saved source and runs `tslc preview` in a cancellable child.
+It displays the actual C++ or Rust specialization fragment from the normal
+backend primitive renderer without writing a project or invoking a toolchain.
+Ordinary hover and diagnostics never lower or render a specialization, invoke
+toolchains, or start preview processes.
+Explorer analysis requires the saved corpus and runs `tslc analyze --format
+json` in a cancellable child. Cancellation or failure leaves the catalog
+explorer and authored dependencies usable.
+
+Quick Fixes are offered only when the compiler supplies an exact replacement
+for the current document version and digest. The language server returns a
+versioned `WorkspaceEdit` and never writes the file itself, so applying the fix
+uses normal VS Code preview and undo behavior. Diagnostics that cannot be
+repaired unambiguously offer an authoring-guide action instead of inventing an
+edit.
+
+See `docs/tsl-editor.md` in the repository for architecture, development,
+performance evidence, remote setup, installation updates, and troubleshooting.
+
+## License
+
+The VS Code extension is licensed under the Apache License, Version 2.0. See
+[`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).

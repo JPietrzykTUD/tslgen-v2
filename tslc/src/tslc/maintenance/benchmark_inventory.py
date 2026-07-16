@@ -254,9 +254,11 @@ def render_benchmark_shape_inventory(audit: BenchmarkCoverageAudit) -> str:
         "",
         "This inventory is holistic over the current TSL corpus without inventing",
         "timing semantics for default-only primitives. Every authored",
-        "implementation-variant shape must pass the selected-slot → correctness →",
-        "typed-scenario → emitted-candidate funnel. Shapes with no authored variants",
-        "are explicitly **not applicable**.",
+        "implementation-variant shape is tracked through the selected-slot →",
+        "correctness → typed-scenario → emitted-candidate funnel. The committed",
+        "issue baseline rejects newly introduced gaps while known gaps can be closed",
+        "incrementally. Shapes with no authored variants are explicitly **not",
+        "applicable**.",
         "",
         "## Summary",
         "",
@@ -305,18 +307,23 @@ def render_benchmark_shape_inventory(audit: BenchmarkCoverageAudit) -> str:
             f"{special_case_entry.candidate_sets} | {special_case_entry.status} |"
         )
     if audit.issues:
-        lines.extend(("", "## Audit issues", ""))
+        issue_counts: dict[str, int] = defaultdict(int)
         for issue in audit.issues:
-            slot = ""
-            if issue.slot is not None:
-                slot = (
-                    f" ({issue.slot.profile_name}/{issue.slot.backend_id} "
-                    f"{issue.slot.extension_name}/{issue.slot.type_tag})"
-                )
-            lines.append(
-                f"- `{issue.kind}` `{shape_label(issue.source_shape)}`{slot}: "
-                f"{issue.detail}"
+            issue_counts[issue.kind] += 1
+        lines.extend(
+            (
+                "",
+                "## Audit issue counts",
+                "",
+                "Exact stable issue identities are stored in",
+                "`coverage/benchmark-baseline.json`.",
+                "",
+                "| Kind | Count |",
+                "|---|---:|",
             )
+        )
+        for kind, count in sorted(issue_counts.items()):
+            lines.append(f"| `{kind}` | {count} |")
     return "\n".join(lines) + "\n"
 
 

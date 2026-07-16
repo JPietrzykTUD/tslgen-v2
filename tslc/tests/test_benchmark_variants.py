@@ -862,7 +862,7 @@ def test_indexed_load_variant_gets_hot_l1_throughput_scenario(
     assert candidate_set.key.generic_values == (("N", "1"),)
     assert [candidate.variant_id for candidate in candidate_set.candidates] == [
         "default",
-        "intrinsic_gather",
+        "scalar_lanes_fallback",
     ]
     assert all(
         isinstance(case, BenchmarkIndexedLoadCorrectnessCase)

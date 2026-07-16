@@ -81,6 +81,9 @@ def cpp_artifacts(
             emitted_profile.extensions,
             None,
         )
+        declaration_specializations = {
+            name: all_specializations[name] for name in by_primitive
+        }
         emitted_exts = used_extensions(by_primitive)
         x86_exts = [
             e
@@ -103,19 +106,29 @@ def cpp_artifacts(
         )
         selectors = "\n\n".join(
             rendered
-            for name in sorted(by_primitive)
-            if (rendered := backend.render_variant_selectors(name, by_primitive[name]))
+            for name in sorted(declaration_specializations)
+            if (
+                rendered := backend.render_variant_selectors(
+                    name, declaration_specializations[name]
+                )
+            )
         )
         # All implementation templates precede all wrappers and specialization
         # bodies. Selectors precede the optional build-local policy include.
         implementation_declarations = "\n\n".join(
-            backend.render_implementation_declarations(name, by_primitive[name])
-            for name in sorted(by_primitive)
+            backend.render_implementation_declarations(
+                name, declaration_specializations[name]
+            )
+            for name in sorted(declaration_specializations)
         )
         wrappers = "\n\n".join(
             rendered
-            for name in sorted(by_primitive)
-            if (rendered := backend.render_wrappers(name, by_primitive[name]))
+            for name in sorted(declaration_specializations)
+            if (
+                rendered := backend.render_wrappers(
+                    name, declaration_specializations[name]
+                )
+            )
         )
         definitions = _cpp_conditioned_definitions(
             backend,

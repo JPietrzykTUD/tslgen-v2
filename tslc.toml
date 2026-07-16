@@ -2,6 +2,7 @@
 sources = ["tsldata"]
 machine_profiles = "supplementary/buildsystem/machine_profiles.json"
 backends = ["cpp", "rust"]
+authoring_profiles = ["scalar", "avx2"]
 output_root = "tslctmp/generated"
 
 # Optional local overrides use these tables; keep host-specific values uncommitted.

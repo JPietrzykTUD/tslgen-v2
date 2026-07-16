@@ -59,6 +59,106 @@ request selection and lowering. Catalog `list`/`show` and `doctor` consume the
 same typed catalog, backend registry, machine-profile projection, and verifier
 drivers rather than maintaining parallel compiler knowledge.
 
+Editor overlays use that same boundary through
+[lsp/workspace.py](src/tslc/lsp/workspace.py). A workspace-scoped parsed cache
+reparses changed buffers and reuses unchanged documents; a per-document
+[catalog index](src/tslc/catalog_index.py) similarly reuses unchanged source
+fragments before deterministic full-catalog validation publishes a new
+snapshot. Symbols, references, hover, completion, and semantic tokens are pure
+projections of the latest successful catalog/index. Hierarchical document
+symbols and registry-backed semantic token facts are built separately in
+[catalog_authoring_index.py](src/tslc/catalog_authoring_index.py); the core
+index retains resolvable catalog occurrences, including individual list
+selector elements and primitive-scoped result target axes. The parsed-source boundary
+in [syntax/authoring.py](src/tslc/syntax/authoring.py) constructs a typed cursor
+context from declaration, field, selector, map, list, and value spans. Inside
+TSIL payloads it uses the recursive scanner's cursor spans to retain enclosing
+region paths and distinguish region boundaries, selector shells, and raw text;
+its outer-language fallback reads only the active incomplete line. Schema- and
+registry-backed
+[authoring_completion.py](src/tslc/authoring_completion.py) returns typed
+completion records with replacement ranges, snippets, details, and stable
+ordering for the LSP adapter. Region-shell terms and option bags come from the
+same authoring descriptors as registered region keywords, while catalog-backed
+providers supply primitive and backend-translation names. Typed query
+completion is a pure projection of the evaluator function descriptors and
+closed leaf namespaces in
+[lower/query_authoring.py](src/tslc/lower/query_authoring.py); lexical scanner
+facts delimit registered region arguments without classifying raw C++ or Rust,
+and parsed primitive facts supply only reliable parameter, generic-parameter,
+and selector-axis names. Failed document
+parses retain that document's
+last valid parsed structure without replacing current diagnostics. The
+editor-neutral pygls transport is in `lsp/`; an initially invalid overlay uses
+the valid saved corpus for catalog facts, parsed context, and definitions while
+retaining parseable overlay occurrence spans.
+[lsp/specialization_context.py](src/tslc/lsp/specialization_context.py)
+combines the parsed cursor scope with the real selector to expose valid
+`(profile, extension, type)` slots to editor clients without duplicating source
+parsing or compatibility rules in TypeScript.
+[version.py](src/tslc/version.py) derives the installed distribution version
+used by `tslc --version`, LSP server metadata, and diagnostic sources. The
+platform-specific editor release freezes this same CLI/LSP entry point and its
+package assets; its release manifest records that compiler version, the
+extension version, source commit, build tools, licenses, and every runtime file
+checksum. The TypeScript client validates only distribution facts and process
+placement, never compiler semantics.
+[lsp/primitive_scaffold.py](src/tslc/lsp/primitive_scaffold.py) likewise owns
+catalog-backed primitive-shape discovery, default parameter-name selection,
+name validation, and source scaffolding; the client only presents choices and
+applies the returned edit. The TypeScript VS Code client contains no compiler
+semantics. Exact diagnostic and metadata-audit repairs are represented by the
+typed, editor-neutral records in
+[authoring_fixes.py](src/tslc/authoring_fixes.py). They bind an edit to its
+diagnostic or suggestion identity, source path, document version and digest,
+replacement range, and expected original text. The LSP adapter revalidates the
+record and returns a versioned `WorkspaceEdit`; compiler and server code never
+write the document. Ambiguous diagnostics yield non-editing guide actions.
+[lsp/primitive_explorer.py](src/tslc/lsp/primitive_explorer.py)
+projects File/Corpus primitive lists in either authored-source or concrete
+profile mode. It owns authored, selected, profile-rejected, missing, and
+backend-unsupported slot states plus implementation origins and source spans
+from the same catalog, selector, and index. Direct Calls/Called By relationships
+are indexed from registered `call` regions. The VS Code tree providers render
+those typed facts and never reconstruct selector or dependency rules.
+Explicit concrete explorer analysis runs `tslc analyze` as a saved-corpus
+child. An opt-in immutable pipeline trace preserves the same post-pruning slot
+identities, active call edges, unresolved origins, and propagated
+native/composed/fallback/unknown state used by generation. The command returns
+a deterministic cycle-terminating tree plus the complete input digest; the
+client owns only cancellable execution, complete-context caching, stale-state
+presentation, and source navigation. Lookup refreshes never collect this trace
+or start analysis.
+Concrete preview runs `tslc preview` as a separate saved-file child. It uses
+one loaded input snapshot for selection, lowering, and dependency closure, then
+passes the requested emitted specialization through the registered backend's
+normal primitive renderer. It does not load project render assets, plan tests
+or benchmarks, write a generated project, or invoke a toolchain. `tslc explain`
+remains the detailed selection/lowering diagnostic view.
+
+The [PIVOT exporter](src/tslc/pivot/) is a sibling projection rather than a
+registered backend. `tslc export pivot` reuses the immutable catalog, profile
+selection, standard TSIL region lowerers, and the selected C++ or Rust
+intrinsic/type translation,
+but replaces call lowering to retain typed sites for recursive inlining and
+validates the resulting lowered body for straight-line dataflow. Generation-time
+control therefore expands normally; only constructs that survive lowering are
+rejected. For fixed-width C++ vectors participating in dataparallel inference,
+the projection also emits width-labelled `tsl_128`/`tsl_256`/`tsl_512`
+definitions whose calls and `fixed<N>` vector types use the existing C++
+dialect, with `N` resolved as the scalar-type-specific lane count. It produces
+standalone YAML artifacts. Multiple requested machine profiles (including the
+implicit all-profiles case) are first projected to distinct target-family and
+hardware-feature-set combinations, with compiler modes combined within each
+combination. This avoids repeating the same PIVOT selection for profile aliases
+without changing ordinary generation. From those combinations it retains a
+deterministic cover of selected corpus implementations, so a feature set that
+adds no implementation is not lowered or rendered. The exporter
+does not construct a normal generation request, enter the generation session,
+register a backend, render a generated project, or affect default C++/Rust
+output. Its required comma-separated `--language` selection writes independent
+YAML trees below `<output-root>/cpp/` and/or `<output-root>/rust/`.
+
 ## The input language (two nested languages)
 
 ### 1. The outer TSL data language
@@ -152,14 +252,16 @@ is ordinary target text and is never searched or rewritten, including in comment
 literals, and Rust lifetimes.
 
 The descriptor registry
-([ir/region_registry.py](src/tslc/ir/region_registry.py)) is the lexical source
-of truth consumed by scanning and shell validation. The typed lower-owned
+([ir/region_registry.py](src/tslc/ir/region_registry.py)) is the lexical and
+authoring source of truth consumed by scanning, shell validation, discovery,
+and editor hover. Each descriptor carries a concise purpose and accepted source
+forms in addition to its structural and validator keys. The typed lower-owned
 registration
 ([lower/region_handlers/registry.py](src/tslc/lower/region_handlers/registry.py))
 joins each keyword's handler factory with its implementation-state effect, so
 lowering and state classification cannot drift into parallel keyword lists.
 Together they cover `complete`, `intrin`, `helper`, `op`, `call`, `value`,
-`type`, `cast`, `var`, `let`, `mask`, `mem`, `lanes`, `io`, `if`,
+`type`, `cast`, `var`, `let`, `mask`, `mem`, `lanes`, `array`, `io`, `if`,
 `select_expr`, `loop`, `switch`, and `assume_aligned`. **A call-shaped keyword
 grows by adding a lexical descriptor, its owned validator when needed, and one
 lowering registration row. A genuinely new structural body shape also adds one

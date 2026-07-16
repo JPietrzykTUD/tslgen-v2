@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import tslc._pipeline_inputs as pipeline_inputs
+import tslc.maintenance.explain as explain_module
 from tslc.maintenance.explain import _decisive_tiebreak, explain
 from tslc.select.selector import RankedCandidate, Selector
 
@@ -46,6 +48,45 @@ def test_compiling_slot_shows_intrinsic_and_verdict(
     assert "avx2:?i?" in report  # the winning body's extension:type-group
     # the float body is a rejected on-chain candidate, with the reason
     assert "f?" in report and "does not contain si32" in report
+
+
+def test_explain_uses_one_non_rendering_input_snapshot(
+    data_root: Path,
+    machine_profiles_path: Path,
+    monkeypatch,
+) -> None:
+    load_calls = 0
+    real_load = explain_module._load_inputs
+
+    def counted_load(request):
+        nonlocal load_calls
+        load_calls += 1
+        assert request.render_artifacts is False
+        return real_load(request)
+
+    def unexpected_render_assets():
+        raise AssertionError("explain must not load render assets")
+
+    monkeypatch.setattr(explain_module, "_load_inputs", counted_load)
+    monkeypatch.setattr(
+        pipeline_inputs,
+        "load_default_render_assets",
+        unexpected_render_assets,
+    )
+    report = _explain(
+        data_root,
+        machine_profiles_path,
+        primitive="add",
+        profile="avx2",
+        type_tag="si32",
+        backend="cpp",
+        extension="avx2",
+    )
+
+    assert load_calls == 1
+    assert "input snapshot: sha256:" in report
+    assert "selection: primitive=add profile=avx2 type=si32 backend=cpp" in report
+    assert "VERDICT: COMPILES" in report
 
 
 def test_segment_tree_names_the_regions(

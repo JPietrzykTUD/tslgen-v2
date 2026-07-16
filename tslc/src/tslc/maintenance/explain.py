@@ -45,8 +45,8 @@ from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.pipeline import (
     GenerationRequest,
     GenerationResult,
+    _generate_loaded,
     _load_inputs,
-    generate,
 )
 from tslc.select.selector import (
     CandidateEvaluation,
@@ -127,6 +127,7 @@ def explain(
         profiles=(profile,),
         type_tags=(type_tag,),
         backends=(backend,),
+        render_artifacts=False,
     )
     inputs, diagnostics = _load_inputs(request)
     if inputs is None:
@@ -142,6 +143,12 @@ def explain(
     out.line(
         f"# explain  {primitive}<{extension or '*'}, {type_tag}>  "
         f"profile={profile}  backend={backend}"
+    )
+    out.line(f"  input snapshot: sha256:{inputs.input_digest}")
+    out.line(
+        "  selection: "
+        f"primitive={primitive} profile={profile} type={type_tag} backend={backend} "
+        f"extension={extension or '*'} to_target={to_target or '*'}"
     )
     out.line(f"  profile target features: {_format_flags(machine_profile.features)}")
     if machine_profile.compile_modes:
@@ -175,7 +182,7 @@ def explain(
     ]
 
     # Authoritative outcome from the real pipeline (its dependency closure + prune fixpoint).
-    pipeline_result = generate(request)
+    pipeline_result = _generate_loaded(request, inputs, diagnostics)
     verdicts = _PipelineVerdicts.from_result(pipeline_result, primitive, backend)
 
     if selected_slots:

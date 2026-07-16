@@ -307,7 +307,7 @@ def test_x86_narrow_result_cast_uses_semantic_zero_and_insert(
         assert forbidden not in lowered.body_text
 
 
-def test_avx512_partial_narrow_gather_uses_semantic_zero_and_insert(
+def test_avx512_partial_narrow_gather_defaults_to_intrinsic_and_keeps_fallback(
     catalog: Catalog, machine_profiles
 ) -> None:
     slot = next(
@@ -329,12 +329,15 @@ def test_avx512_partial_narrow_gather_uses_semantic_zero_and_insert(
         ).specialization
 
         assert lowered is not None
-        variant = next(
-            body for body in lowered.variant_bodies if body.name == "intrinsic_gather"
-        )
-        assert "set_zero" in variant.body_text
-        assert "insert" in variant.body_text
-        assert "zextsi256" not in variant.body_text
+        assert "i64gather" in lowered.body_text
+        assert "set_zero" in lowered.body_text
+        assert "insert" in lowered.body_text
+        assert "zextsi256" not in lowered.body_text
+        assert [body.name for body in lowered.variant_bodies] == [
+            "scalar_lanes_fallback"
+        ]
+        assert "to_array" in lowered.variant_bodies[0].body_text
+        assert "from_array" in lowered.variant_bodies[0].body_text
 
 
 @pytest.mark.parametrize("primitive", ["compress_store", "expand_load"])
