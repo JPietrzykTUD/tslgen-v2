@@ -328,7 +328,7 @@
     "generate:grammar": "node scripts/generate-grammar.mjs",
     "check:grammar": "node scripts/check-grammar.mjs",
     "compile": "npm run clean && npm run generate:grammar && tsc -p tsconfig.json && node esbuild.mjs",
-    "test:unit": "tsc -p tsconfig.json && mocha 'dist/test/*.test.js' && node --test test/grammar.test.mjs",
+    "test:unit": "tsc -p tsconfig.json && mocha \"dist/test/*.test.js\" && node --test test/grammar.test.mjs",
     "test:integration": "npm run compile && node scripts/run-integration.mjs",
     "test": "npm run check:grammar && npm run compile && npm run test:unit",
     "package:vsix": "vsce package --no-dependencies --out ../../tslctmp/tsl-language-support.vsix",
