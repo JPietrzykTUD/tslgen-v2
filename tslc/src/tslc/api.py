@@ -84,6 +84,7 @@ def verify_project(
     *,
     toolchains: Mapping[str, BackendToolchain] | None = None,
     runner_paths: Mapping[str, str] | None = None,
+    tool_paths: Mapping[str, str] | None = None,
     run_value_tests: bool = False,
 ) -> BuildVerificationReport:
     return verify_generated_project(
@@ -92,6 +93,7 @@ def verify_project(
         config=BuildVerifierConfig.create(
             toolchains=toolchains,
             runner_paths=runner_paths,
+            tool_paths=tool_paths,
             run_value_tests=run_value_tests,
         ),
     )

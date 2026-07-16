@@ -17,7 +17,11 @@ from tslc.output._verify_rust_config import (
     rust_target,
     rust_target_args,
 )
-from tslc.output.verify_drivers import VerifyBackendDriver
+from tslc.output.verify_drivers import (
+    BackendPreparation,
+    CommandFollowUp,
+    VerifyBackendDriver,
+)
 from tslc.output.verify_model import (
     BuildCommand,
     BuildCommandResult,
@@ -139,24 +143,28 @@ def _prepare_rust_backend(
     backend: VerifyBackend,
     config: BuildVerifierConfig,
     runner: BuildCommandRunner,
-    results: list[BuildCommandResult],
-    diagnostics: list[Diagnostic],
-    skipped: list[str],
-) -> VerifyBackend | None:
+) -> BackendPreparation:
+    results: list[BuildCommandResult] = []
+    diagnostics: list[Diagnostic] = []
+    skipped: list[str] = []
     compiler = effective_rust_compiler(config)
     missing_compiler = missing_executable(compiler)
     if missing_compiler is not None:
         skipped.append(f"rust: Rust compiler {missing_compiler} not found")
-        return None
+        return BackendPreparation(backend=None, skipped=tuple(skipped))
     preflight = _rust_preflight_command(root, backend, compiler)
     if isinstance(preflight, Diagnostic):
         diagnostics.append(preflight)
-        return None
+        return BackendPreparation(backend=None, diagnostics=tuple(diagnostics))
     result = runner(preflight)
     results.append(result)
     if result.returncode != 0:
         skipped.append(_rust_preflight_skip(result))
-        return None
+        return BackendPreparation(
+            backend=None,
+            commands=tuple(results),
+            skipped=tuple(skipped),
+        )
     target_profiles: list[VerifyProfile] = []
     for profile in backend.profiles:
         target = rust_target(profile, config)
@@ -179,10 +187,15 @@ def _prepare_rust_backend(
             skipped.append(_rust_target_preflight_skip(result))
             continue
         target_profiles.append(profile)
-    return VerifyBackend(
-        backend_id=backend.backend_id,
-        root_path=backend.root_path,
-        profiles=tuple(target_profiles),
+    return BackendPreparation(
+        backend=VerifyBackend(
+            backend_id=backend.backend_id,
+            root_path=backend.root_path,
+            profiles=tuple(target_profiles),
+        ),
+        commands=tuple(results),
+        diagnostics=tuple(diagnostics),
+        skipped=tuple(skipped),
     )
 
 
@@ -191,24 +204,27 @@ def _after_rust_command(
     profiles_by_name: Mapping[str, VerifyProfile],
     config: BuildVerifierConfig,
     runner: BuildCommandRunner,
-    results: list[BuildCommandResult],
-    diagnostics: list[Diagnostic],
-) -> None:
+) -> CommandFollowUp:
     if result.command.step != "build-tests":
-        return
+        return CommandFollowUp()
     profile = profiles_by_name[result.command.profile_name]
     followups, followup_diagnostics = _rust_emulated_test_commands(
         result,
         profile,
         config,
     )
-    diagnostics.extend(followup_diagnostics)
+    results: list[BuildCommandResult] = []
+    diagnostics: list[Diagnostic] = list(followup_diagnostics)
     for followup in followups:
         followup_result = runner(followup)
         results.append(followup_result)
         if followup_result.returncode != 0:
             diagnostics.append(command_failure_diagnostic(followup_result))
             break
+    return CommandFollowUp(
+        commands=tuple(results),
+        diagnostics=tuple(diagnostics),
+    )
 
 
 def _rust_command_groups(

@@ -7,6 +7,7 @@ import os
 from tslc.output.verify_model import (
     BuildCommandEnvironment,
     BuildVerifierConfig,
+    ToolchainCommands,
     VerifyProfile,
     _normalize_compiler_executable,
 )
@@ -18,6 +19,16 @@ def rust_target(profile: VerifyProfile, config: BuildVerifierConfig) -> str | No
 
 def rust_linker(profile: VerifyProfile, config: BuildVerifierConfig) -> str | None:
     return config.toolchain("rust").linker or profile.linker
+
+
+def rust_toolchain_commands(
+    profile: VerifyProfile, config: BuildVerifierConfig
+) -> ToolchainCommands:
+    return ToolchainCommands(
+        compiler=(effective_rust_compiler(config),),
+        target=rust_target(profile, config),
+        linker=rust_linker(profile, config),
+    )
 
 
 def rust_target_args(
@@ -80,4 +91,5 @@ __all__ = (
     "rust_linker",
     "rust_target",
     "rust_target_args",
+    "rust_toolchain_commands",
 )

@@ -263,6 +263,7 @@ def _generation_main(
         )
         runner_paths = dict(project.runner_paths) if project is not None else {}
         runner_paths.update(_assignments(args.runner, "--runner"))
+        tool_paths = dict(project.tool_paths) if project is not None else {}
     except ValueError as exc:
         parser.error(str(exc))
 
@@ -363,6 +364,7 @@ def _generation_main(
                 result.rendered.verify,
                 toolchains=toolchains,
                 runner_paths=runner_paths,
+                tool_paths=tool_paths,
                 run_value_tests=args.test,
             )
             for note in verify_report.skipped:

@@ -109,6 +109,8 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
         value_test_support_factory=lambda: None,  # type: ignore[return-value]
         test_renderer=lambda plan, assets, media_type: [],
         verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
+        toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
         documentation_formatter_factory=_FakeDocumentationFormatter,
     ).closure_seed_primitives(catalog) == ()
     assert CPP_BACKEND.helper_manifest is CPP_HELPER_MANIFEST
@@ -139,6 +141,8 @@ def test_backend_capability_owns_optional_benchmark_planning(catalog) -> None:
         value_test_support_factory=lambda: None,  # type: ignore[return-value]
         test_renderer=lambda plan, assets, media_type: [],
         verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
+        toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
         documentation_formatter_factory=_FakeDocumentationFormatter,
         benchmark_plan_builder=plan_benchmarks,
     )
@@ -193,6 +197,8 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
         value_test_support_factory=lambda: None,  # type: ignore[return-value]
         test_renderer=lambda plan, assets, media_type: [],
         verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
+        toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
         documentation_formatter_factory=_FakeDocumentationFormatter,
     )
     monkeypatch.setattr(registry, "BACKEND_CAPABILITIES", (fake,))
@@ -325,6 +331,8 @@ prim<v:=v> id(data):
         value_test_support_factory=lambda: None,  # type: ignore[return-value]
         test_renderer=lambda plan, assets, media_type: [],
         verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
+        toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
         documentation_formatter_factory=_FakeDocumentationFormatter,
     )
     monkeypatch.setattr(registry, "BACKEND_CAPABILITIES", (fake,))

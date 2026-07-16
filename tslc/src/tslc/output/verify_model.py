@@ -70,11 +70,21 @@ class BackendToolchain:
 
 
 @dataclass(frozen=True, slots=True)
+class ToolchainCommands:
+    """The effective compiler invocation, target, and linker for one verify profile."""
+
+    compiler: tuple[str, ...]
+    target: str | None
+    linker: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class BuildVerifierConfig:
     """Backend-keyed toolchain and runner configuration for verification."""
 
     toolchains: Mapping[str, BackendToolchain] = field(default_factory=dict)
     runner_paths: Mapping[str, str] = field(default_factory=dict)
+    tool_paths: Mapping[str, str] = field(default_factory=dict)
     run_value_tests: bool = False
 
     def __post_init__(self) -> None:
@@ -88,6 +98,11 @@ class BuildVerifierConfig:
             "runner_paths",
             MappingProxyType(dict(sorted(self.runner_paths.items()))),
         )
+        object.__setattr__(
+            self,
+            "tool_paths",
+            MappingProxyType(dict(sorted(self.tool_paths.items()))),
+        )
 
     @classmethod
     def create(
@@ -95,6 +110,7 @@ class BuildVerifierConfig:
         *,
         toolchains: Mapping[str, BackendToolchain] | None = None,
         runner_paths: Mapping[str, str] | None = None,
+        tool_paths: Mapping[str, str] | None = None,
         run_value_tests: bool = False,
     ) -> "BuildVerifierConfig":
         return cls(
@@ -102,6 +118,11 @@ class BuildVerifierConfig:
             runner_paths={
                 kind: normalized
                 for kind, path in (runner_paths or {}).items()
+                if (normalized := _normalize_compiler_executable(path)) is not None
+            },
+            tool_paths={
+                role: normalized
+                for role, path in (tool_paths or {}).items()
                 if (normalized := _normalize_compiler_executable(path)) is not None
             },
             run_value_tests=run_value_tests,
@@ -112,6 +133,9 @@ class BuildVerifierConfig:
 
     def runner_path(self, kind: str) -> str | None:
         return self.runner_paths.get(kind)
+
+    def tool_path(self, role: str) -> str | None:
+        return self.tool_paths.get(role)
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,6 +200,7 @@ __all__ = [
     "BuildVerificationReport",
     "BuildVerifierConfig",
     "BackendToolchain",
+    "ToolchainCommands",
     "VerifyBackend",
     "VerifyProfile",
     "VerifyProject",

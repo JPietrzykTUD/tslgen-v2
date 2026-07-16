@@ -19,7 +19,11 @@ from tslc.output._verify_runners import (
     configured_runner_kinds,
     runner_prefix,
 )
-from tslc.output.verify_drivers import VerifyBackendDriver
+from tslc.output.verify_drivers import (
+    BackendPreparation,
+    CommandFollowUp,
+    VerifyBackendDriver,
+)
 from tslc.output.verify_model import (
     BuildCommand,
     BuildCommandResult,
@@ -45,10 +49,10 @@ def _prepare_cpp_backend(
     backend: VerifyBackend,
     config: BuildVerifierConfig,
     runner: BuildCommandRunner,
-    results: list[BuildCommandResult],
-    diagnostics: list[Diagnostic],
-    skipped: list[str],
-) -> VerifyBackend | None:
+) -> BackendPreparation:
+    results: list[BuildCommandResult] = []
+    diagnostics: list[Diagnostic] = []
+    skipped: list[str] = []
     native_preflight_by_compiler: dict[tuple[str, ...], bool] = {}
     target_profiles: list[VerifyProfile] = []
     for profile in backend.profiles:
@@ -92,10 +96,15 @@ def _prepare_cpp_backend(
             skipped.append(_cpp_target_preflight_skip(result))
             continue
         target_profiles.append(profile)
-    return VerifyBackend(
-        backend_id=backend.backend_id,
-        root_path=backend.root_path,
-        profiles=tuple(target_profiles),
+    return BackendPreparation(
+        backend=VerifyBackend(
+            backend_id=backend.backend_id,
+            root_path=backend.root_path,
+            profiles=tuple(target_profiles),
+        ),
+        commands=tuple(results),
+        diagnostics=tuple(diagnostics),
+        skipped=tuple(skipped),
     )
 
 
@@ -104,10 +113,9 @@ def _after_noop_command(
     profiles_by_name: Mapping[str, VerifyProfile],
     config: BuildVerifierConfig,
     runner: BuildCommandRunner,
-    results: list[BuildCommandResult],
-    diagnostics: list[Diagnostic],
-) -> None:
-    del result, profiles_by_name, config, runner, results, diagnostics
+) -> CommandFollowUp:
+    del result, profiles_by_name, config, runner
+    return CommandFollowUp()
 
 
 def _cpp_command_groups(

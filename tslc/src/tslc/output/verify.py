@@ -93,15 +93,11 @@ def verify_generated_project(
         skipped.extend(profile_skips)
         if not backend.profiles:
             continue
-        prepared = driver.prepare_backend(
-            root,
-            backend,
-            config,
-            runner,
-            results,
-            diagnostics,
-            skipped,
-        )
+        prep = driver.prepare_backend(root, backend, config, runner)
+        results.extend(prep.commands)
+        diagnostics.extend(prep.diagnostics)
+        skipped.extend(prep.skipped)
+        prepared = prep.backend
         if prepared is None or not prepared.profiles:
             continue
         profiles_by_name = {
@@ -114,14 +110,14 @@ def verify_generated_project(
                 if result.returncode != 0:
                     diagnostics.append(command_failure_diagnostic(result))
                     break
-                driver.after_successful_command(
+                follow_up = driver.after_successful_command(
                     result,
                     profiles_by_name,
                     config,
                     runner,
-                    results,
-                    diagnostics,
                 )
+                results.extend(follow_up.commands)
+                diagnostics.extend(follow_up.diagnostics)
 
     return BuildVerificationReport(
         commands=tuple(results),
