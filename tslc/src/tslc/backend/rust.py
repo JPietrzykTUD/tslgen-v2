@@ -180,7 +180,9 @@ class RustBackend:
         shape = specs[0]
         internal_name = _variant_primitive_name(primitive_name, variant_name)
         caller_unsafe = _any_caller_unsafe(specs)
-        vi = varying_positions(specs)[0]  # one varying position in scope
+        # Exactly one varying position: wider overloads were rejected by
+        # validate_rust_profiles (TSL-BACKEND-RUST-UNSUPPORTED-MULTI-POSITION-OVERLOAD).
+        vi = varying_positions(specs)[0]
         arg_trait = f"{rust_primitive_trait_name(internal_name)}Arg"
         fixed = [
             (name, kind)
