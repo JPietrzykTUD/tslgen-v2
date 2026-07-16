@@ -11,19 +11,8 @@ from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.registry import backend_capability, registered_backend_ids
 from tslc.diagnostics import Diagnostic, format_diagnostic, has_errors
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.maintenance import _repo_context
 from tslc.pipeline import GenerationRequest, SkippedEntry, _generate_loaded, _load_inputs
-
-
-def _find_repo_root(start: Path) -> Path:
-    for candidate in (start, *start.parents):
-        if (candidate / "tsldata").is_dir() and (candidate / "tslc" / "src").is_dir():
-            return candidate
-    return start
-
-
-_REPO_ROOT = _find_repo_root(Path(__file__).resolve())
-_DEFAULT_SOURCES = _REPO_ROOT / "tsldata"
-_DEFAULT_PROFILES = _REPO_ROOT / "supplementary" / "buildsystem" / "machine_profiles.json"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -42,13 +31,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--extension", default=None)
     parser.add_argument("--to-target", default=None)
-    parser.add_argument("--sources", default=str(_DEFAULT_SOURCES))
-    parser.add_argument("--machine-profiles", default=str(_DEFAULT_PROFILES))
+    parser.add_argument(
+        "--sources",
+        default=None,
+        help="corpus root (default: the checkout's tsldata/)",
+    )
+    parser.add_argument(
+        "--machine-profiles",
+        default=None,
+        help="machine profile catalog (default: the checkout's "
+        "supplementary/buildsystem/machine_profiles.json)",
+    )
     args = parser.parse_args(argv)
 
+    sources, machine_profiles = _repo_context.resolve_corpus_paths(
+        parser, args.sources, args.machine_profiles
+    )
     rendered, diagnostics = render_preview(
-        sources=Path(args.sources),
-        machine_profiles=Path(args.machine_profiles),
+        sources=sources,
+        machine_profiles=machine_profiles,
         primitive=args.primitive,
         profile=args.profile,
         type_tag=args.type_tag,

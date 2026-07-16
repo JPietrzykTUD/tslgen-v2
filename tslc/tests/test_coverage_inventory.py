@@ -186,7 +186,6 @@ def test_inventory_command_is_read_only_by_default(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     output = tmp_path / "inventory.md"
-    monkeypatch.setattr(coverage_inventory, "_OUT", output)
     monkeypatch.setattr(
         coverage_inventory,
         "collect_inventory",

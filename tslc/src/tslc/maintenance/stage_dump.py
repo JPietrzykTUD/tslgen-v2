@@ -38,7 +38,7 @@ from tslc.catalog.model import Catalog, Extension, Primitive
 from tslc.diagnostics import SourceSpan
 from tslc.ir.scan import scan
 from tslc.maintenance._segments_view import format_segment_tree, segment_to_json
-from tslc.maintenance.coverage_inventory import _DATA_ROOT, _PROFILES_PATH
+from tslc.maintenance import _repo_context
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.pipeline import GenerationRequest, _load_inputs
 from tslc.select.selector import SelectedImplementation, Selector
@@ -58,8 +58,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--type", default=None, dest="type_tag", help="restrict to this type tag")
     parser.add_argument("--extension", default=None, help="restrict to this simd<> extension tag")
     parser.add_argument("--format", default="text", choices=("text", "json"))
-    parser.add_argument("--sources", default=str(_DATA_ROOT))
-    parser.add_argument("--machine-profiles", default=str(_PROFILES_PATH))
+    parser.add_argument(
+        "--sources",
+        default=None,
+        help="corpus root (default: the checkout's tsldata/)",
+    )
+    parser.add_argument(
+        "--machine-profiles",
+        default=None,
+        help="machine profile catalog (default: the checkout's "
+        "supplementary/buildsystem/machine_profiles.json)",
+    )
     args = parser.parse_args(argv)
 
     if args.stage in ("selection", "lowered") and args.profile is None:
@@ -67,10 +76,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.stage in ("segments", "lowered") and args.primitive is None:
         parser.error(f"--stage {args.stage} requires --primitive (output would be unbounded)")
 
+    sources, machine_profiles = _repo_context.resolve_corpus_paths(
+        parser, args.sources, args.machine_profiles
+    )
     text, payload, errors = run(
         stage=args.stage,
-        sources=Path(args.sources),
-        machine_profiles=Path(args.machine_profiles),
+        sources=sources,
+        machine_profiles=machine_profiles,
         primitive=args.primitive,
         profile=args.profile,
         backend=args.backend,

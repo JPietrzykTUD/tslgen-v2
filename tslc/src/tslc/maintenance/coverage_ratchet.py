@@ -33,20 +33,23 @@ from pathlib import Path
 from tslc.api import _ARITH_TYPE_TAGS, generate_project
 from tslc.backend.registry import registered_backend_ids
 from tslc.diagnostics import has_errors
-from tslc.maintenance.coverage_inventory import (
-    PROFILES,
-    _DATA_ROOT,
-    _PROFILES_PATH,
-    _REPO_ROOT,
-    skip_category,
-)
+from tslc.maintenance import _repo_context
+from tslc.maintenance._repo_context import RepoContext
+from tslc.maintenance.coverage_inventory import PROFILES, skip_category
 
 _BACKENDS = registered_backend_ids()
-# A lockfile-style committed snapshot: machine-generated, diffed by this gate, not hand-edited.
-# It lives at the repo root (it describes whole-repo generation state, spanning tsldata/ and
-# supplementary/), not under tslc/ (source) or docs/ (prose evidence).
-_BASELINE = _REPO_ROOT / "coverage" / "baseline.json"
 _BASELINE_VERSION = 1
+
+
+def canonical_baseline_path(context: RepoContext) -> Path:
+    """The lockfile-style committed snapshot maintained by ``--update``.
+
+    Machine-generated, diffed by this gate, not hand-edited. It lives at the
+    repo root (it describes whole-repo generation state, spanning tsldata/ and
+    supplementary/), not under tslc/ (source) or docs/ (prose evidence).
+    """
+
+    return context.coverage_root / "baseline.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -344,22 +347,44 @@ def main(argv: list[str] | None = None) -> int:
         prog="tslc coverage ratchet",
         description="Fail when a change drops a coverage slot that used to lower.",
     )
-    parser.add_argument("--baseline", default=str(_BASELINE), help="path to the baseline JSON")
+    parser.add_argument(
+        "--baseline",
+        default=None,
+        help="path to the baseline JSON (default: the checkout's coverage/baseline.json)",
+    )
     parser.add_argument(
         "--update",
         action="store_true",
         help="recompute and overwrite the baseline (accept the current coverage); never fails",
     )
-    parser.add_argument("--sources", default=str(_DATA_ROOT))
-    parser.add_argument("--machine-profiles", default=str(_PROFILES_PATH))
+    parser.add_argument(
+        "--sources",
+        default=None,
+        help="corpus root (default: the checkout's tsldata/)",
+    )
+    parser.add_argument(
+        "--machine-profiles",
+        default=None,
+        help="machine profile catalog (default: the checkout's "
+        "supplementary/buildsystem/machine_profiles.json)",
+    )
     parser.add_argument("--profiles", default=",".join(PROFILES))
     parser.add_argument("--backends", default=",".join(_BACKENDS))
     parser.add_argument("--types", default=",".join(_ARITH_TYPE_TAGS))
     args = parser.parse_args(argv)
 
+    sources, machine_profiles = _repo_context.resolve_corpus_paths(
+        parser, args.sources, args.machine_profiles
+    )
+    baseline_path = (
+        Path(args.baseline)
+        if args.baseline is not None
+        else canonical_baseline_path(_repo_context.require_repo_context(parser))
+    )
+
     snapshot, errors = compute_snapshot(
-        sources=Path(args.sources),
-        machine_profiles=Path(args.machine_profiles),
+        sources=sources,
+        machine_profiles=machine_profiles,
         profiles=tuple(_split(args.profiles)),
         backends=tuple(_split(args.backends)),
         types=tuple(_split(args.types)),
@@ -369,8 +394,6 @@ def main(argv: list[str] | None = None) -> int:
         for error in errors:
             print(f"  {error}", file=sys.stderr)
         return 2
-
-    baseline_path = Path(args.baseline)
 
     if args.update:
         previous = (

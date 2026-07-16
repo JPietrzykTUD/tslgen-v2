@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
+
 from tslc.backend.registry import registered_backend_ids
 from tslc.concrete_analysis import (
     ConcreteAnalysis,
@@ -18,7 +18,7 @@ from tslc.diagnostics import (
     has_errors,
     span_json,
 )
-from tslc.maintenance.render_preview import _DEFAULT_PROFILES, _DEFAULT_SOURCES
+from tslc.maintenance import _repo_context
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -36,14 +36,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--backend", default="cpp", choices=registered_backend_ids()
     )
-    parser.add_argument("--sources", default=str(_DEFAULT_SOURCES))
-    parser.add_argument("--machine-profiles", default=str(_DEFAULT_PROFILES))
+    parser.add_argument(
+        "--sources",
+        default=None,
+        help="corpus root (default: the checkout's tsldata/)",
+    )
+    parser.add_argument(
+        "--machine-profiles",
+        default=None,
+        help="machine profile catalog (default: the checkout's "
+        "supplementary/buildsystem/machine_profiles.json)",
+    )
     parser.add_argument("--format", choices=("text", "json"), default="text")
     args = parser.parse_args(argv)
 
+    sources, machine_profiles = _repo_context.resolve_corpus_paths(
+        parser, args.sources, args.machine_profiles
+    )
     analysis, diagnostics = analyze_concrete_specialization(
-        sources=Path(args.sources),
-        machine_profiles=Path(args.machine_profiles),
+        sources=sources,
+        machine_profiles=machine_profiles,
         primitive=args.primitive,
         profile=args.profile,
         backend=args.backend,

@@ -39,6 +39,7 @@ from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
 from tslc.diagnostics import Diagnostic, SourceLocation, SourceSpan
 from tslc.ir.scan import scan
+from tslc.maintenance import _repo_context
 from tslc.maintenance._segments_view import format_segment_tree
 from tslc.lower.dependencies import CallDependency
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
@@ -55,18 +56,6 @@ from tslc.select.selector import (
     SelectedImplementation,
     Selector,
 )
-
-
-def _find_repo_root(start: Path) -> Path:
-    for candidate in (start, *start.parents):
-        if (candidate / "tsldata").is_dir() and (candidate / "tslc" / "src").is_dir():
-            return candidate
-    return start
-
-
-_REPO_ROOT = _find_repo_root(Path(__file__).resolve())
-_DEFAULT_SOURCES = _REPO_ROOT / "tsldata"
-_DEFAULT_PROFILES = _REPO_ROOT / "supplementary" / "buildsystem" / "machine_profiles.json"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -89,13 +78,25 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="for a representation-change primitive, the concrete target type/extension",
     )
-    parser.add_argument("--sources", default=str(_DEFAULT_SOURCES))
-    parser.add_argument("--machine-profiles", default=str(_DEFAULT_PROFILES))
+    parser.add_argument(
+        "--sources",
+        default=None,
+        help="corpus root (default: the checkout's tsldata/)",
+    )
+    parser.add_argument(
+        "--machine-profiles",
+        default=None,
+        help="machine profile catalog (default: the checkout's "
+        "supplementary/buildsystem/machine_profiles.json)",
+    )
     args = parser.parse_args(argv)
 
+    sources, machine_profiles = _repo_context.resolve_corpus_paths(
+        parser, args.sources, args.machine_profiles
+    )
     report = explain(
-        sources=Path(args.sources),
-        machine_profiles=Path(args.machine_profiles),
+        sources=sources,
+        machine_profiles=machine_profiles,
         primitive=args.primitive,
         profile=args.profile,
         type_tag=args.type_tag,
