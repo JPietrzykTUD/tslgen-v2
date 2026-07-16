@@ -7,9 +7,11 @@ without lengthening one mixed validator file.
 
 from __future__ import annotations
 
+from tslc.catalog.signatures import parse_signature
 from tslc.catalog.target_families import TargetFamilyCatalog
 from tslc.catalog.validation._schema_common import (
     diagnose_duplicate_fields,
+    is_non_empty_scalar_list,
     validate_known_fields,
 )
 from tslc.catalog.validation._schema_extensions import (
@@ -18,14 +20,16 @@ from tslc.catalog.validation._schema_extensions import (
 )
 from tslc.catalog.validation._schema_primitives import validate_primitive
 from tslc.catalog.validation._schema_target_families import validate_target_families
-from tslc.catalog.validation.source_spans import children, source_span
+from tslc.catalog.validation.source_spans import child, children, source_span
 from tslc.diagnostics import Diagnostic, RelatedLocation, diagnostic_at
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedBlockDeclaration,
     ParsedFieldDeclaration,
     ParsedPrimitiveDeclaration,
+    ParsedTslAttribute,
     ParsedTslField,
+    ParsedTslScalarValue,
 )
 
 
@@ -48,6 +52,7 @@ def validate_parsed_documents(
     )
     type_group_fields: list[ParsedTslField] = []
     named_blocks: dict[tuple[str, str], ParsedBlockDeclaration] = {}
+    seen_primitives: dict[_PrimitiveIdentity, ParsedPrimitiveDeclaration] = {}
     target_family_fields: list[ParsedTslField] = []
 
     for document in parsed.documents:
@@ -63,6 +68,7 @@ def validate_parsed_documents(
                 if declaration.kind == "types":
                     type_group_fields.extend(declaration.fields)
             elif isinstance(declaration, ParsedPrimitiveDeclaration):
+                _validate_duplicate_primitive(declaration, seen_primitives, diagnostics)
                 validate_primitive(declaration, backend_ids, diagnostics)
             elif (
                 isinstance(declaration, ParsedFieldDeclaration)
@@ -125,6 +131,80 @@ def _validate_named_block_duplicates(
     )
 
 
+# The callable identity of one primitive declaration: name, overload shape, and
+# concrete attribute items. Distinct signatures are legal overloads (`store(ptr, v)`
+# vs `store(ptr, s)`); distinct attribute values are legal variants (masking,
+# `[aligned=true]` vs `[aligned=false]`). Wildcards stay unexpanded, so two
+# `[aligned=*]` declarations of one callable collide.
+type _PrimitiveIdentity = tuple[
+    str,
+    tuple[str, tuple[str, ...]] | str,
+    tuple[tuple[str, str, str], ...],
+]
+
+
+def _primitive_identity(
+    declaration: ParsedPrimitiveDeclaration,
+) -> _PrimitiveIdentity:
+    shape = parse_signature(declaration.signature)
+    overload: tuple[str, tuple[str, ...]] | str = (
+        (shape.result_kind, shape.param_kinds)
+        if shape is not None
+        else declaration.signature.replace(" ", "")
+    )
+    return (
+        declaration.name,
+        overload,
+        tuple(sorted(_attribute_identity(item) for item in declaration.attributes)),
+    )
+
+
+def _attribute_identity(attribute: ParsedTslAttribute) -> tuple[str, str, str]:
+    value = attribute.value
+    return (
+        attribute.key.text,
+        attribute.key_argument.text if attribute.key_argument is not None else "",
+        value.text
+        if isinstance(value, ParsedTslScalarValue)
+        else value.source.text.strip(),
+    )
+
+
+def _validate_duplicate_primitive(
+    declaration: ParsedPrimitiveDeclaration,
+    seen: dict[_PrimitiveIdentity, ParsedPrimitiveDeclaration],
+    diagnostics: list[Diagnostic],
+) -> None:
+    key = _primitive_identity(declaration)
+    first = seen.get(key)
+    if first is None:
+        seen[key] = declaration
+        return
+    first_span = source_span(first.header_source)
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-CATALOG-DUPLICATE-PRIMITIVE",
+            message=(
+                f"duplicate declaration of primitive {declaration.name!r} with the"
+                " same signature and attributes; first declaration is at"
+                f" {first.header_source.path}:{first.header_source.line}"
+            ),
+            source=source_span(declaration.header_source),
+            related=(
+                ()
+                if first_span is None
+                else (
+                    RelatedLocation(
+                        message="first declaration is here",
+                        span=first_span,
+                    ),
+                )
+            ),
+        )
+    )
+
+
 def _validate_block(
     declaration: ParsedBlockDeclaration,
     backend_ids: frozenset[str],
@@ -154,6 +234,19 @@ def _validate_block(
                 owner=f"type group {field.key.text!r}",
             )
             diagnose_duplicate_fields(children(field), diagnostics, label="type-group field")
+            types_field = child(field, "types")
+            if types_field is None or not is_non_empty_scalar_list(types_field):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-TYPE-GROUP-MALFORMED",
+                        message=(
+                            f"type group {field.key.text!r} must declare a"
+                            " non-empty `types` list of scalar type tags"
+                        ),
+                        source=source_span(field.source),
+                    )
+                )
     elif declaration.kind == "language":
         diagnose_duplicate_fields(declaration.fields, diagnostics, label="language type")
         for field in declaration.fields:

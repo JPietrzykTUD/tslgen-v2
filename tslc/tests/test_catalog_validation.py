@@ -620,6 +620,110 @@ def test_duplicate_keys_are_diagnosed() -> None:
     assert "TSL-CATALOG-DUPLICATE-BLOCK" in {d.code for d in diagnostics}
 
 
+def test_duplicate_primitive_declarations_are_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "prim<v:=v> id(data):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(data);"\n'
+        )
+    )
+
+    duplicate = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-DUPLICATE-PRIMITIVE"
+    )
+    assert "id" in duplicate.message
+    assert duplicate.related
+    assert duplicate.related[0].message == "first declaration is here"
+
+
+def test_repeated_wildcard_primitive_declaration_is_a_duplicate() -> None:
+    block = (
+        "prim<v:=v>[aligned=*] dup(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+    diagnostics = _diagnostics(_base_source(block + block))
+
+    assert "TSL-CATALOG-DUPLICATE-PRIMITIVE" in {d.code for d in diagnostics}
+
+
+def test_primitive_overloads_and_attribute_variants_are_not_duplicates() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "prim<v:=(v,v)> combine(left, right):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(left);"\n'
+            "prim<v:=(v,s)> combine(left, scalar):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(left);"\n'
+            "prim<v:=v>[aligned=true] tagged(data):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(data);"\n'
+            "prim<v:=v>[aligned=false] tagged(data):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(data);"\n'
+        )
+    )
+
+    assert "TSL-CATALOG-DUPLICATE-PRIMITIVE" not in {d.code for d in diagnostics}
+
+
+def test_type_group_without_member_list_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "types:\n"
+            '  broken:\n'
+            '    types "notalist"\n'
+        )
+    )
+
+    malformed = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-TYPE-GROUP-MALFORMED"
+    )
+    assert "broken" in malformed.message
+
+
+def test_type_group_with_empty_member_list_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "types:\n"
+            "  hollow {types []}\n"
+        )
+    )
+
+    assert "TSL-CATALOG-TYPE-GROUP-MALFORMED" in {d.code for d in diagnostics}
+
+
+def test_type_group_missing_types_field_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "types:\n"
+            "  nameless {}\n"
+        )
+    )
+
+    assert "TSL-CATALOG-TYPE-GROUP-MALFORMED" in {d.code for d in diagnostics}
+
+
 def test_unknown_fields_are_diagnosed() -> None:
     diagnostics = _diagnostics(
         _base_source(
@@ -1440,10 +1544,47 @@ def test_machine_profile_runner_metadata_is_validated(tmp_path: Path) -> None:
 
     result = load_machine_profiles_checked(path, _target_family_catalog())
 
-    assert result.profiles["avx2"].runner is not None
-    assert result.profiles["avx2"].runner.kind == "sde"
-    assert result.profiles["avx2"].runner.profile == "hsw"
-    assert "TSL-PROFILE-MALFORMED-RUNNER" in {d.code for d in result.diagnostics}
+    leading_dash = next(
+        d
+        for d in result.diagnostics
+        if d.code == "TSL-PROFILE-MALFORMED-RUNNER" and "'-hsw'" in d.message
+    )
+    assert "avx2" in leading_dash.message
+    assert result.profiles["avx2"].runner is None
+    runner_errors = [
+        d for d in result.diagnostics if d.code == "TSL-PROFILE-MALFORMED-RUNNER"
+    ]
+    assert len(runner_errors) == 2
+
+
+def test_machine_profile_valid_runners_are_preserved_verbatim(tmp_path: Path) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{\n'
+        '  "x86": [\n'
+        '    {"name": "avx2", "target_features": "avx avx2", '
+        '"runner": {"kind": "sde", "profile": "hsw"}}\n'
+        '  ],\n'
+        '  "aarch64": [\n'
+        '    {"name": "neon", "target_features": "neon", '
+        '"runner": {"kind": "qemu-aarch64", "profile": "cortex-a76", '
+        '"args": ["-cpu"]}}\n'
+        '  ]\n'
+        '}\n',
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path, _target_family_catalog())
+
+    assert result.diagnostics == ()
+    sde = result.profiles["avx2"].runner
+    assert sde is not None and (sde.kind, sde.profile) == ("sde", "hsw")
+    qemu = result.profiles["neon"].runner
+    assert qemu is not None and (qemu.kind, qemu.profile, qemu.args) == (
+        "qemu-aarch64",
+        "cortex-a76",
+        ("-cpu",),
+    )
 
 
 def test_machine_profile_runner_kinds_come_from_target_families(tmp_path: Path) -> None:

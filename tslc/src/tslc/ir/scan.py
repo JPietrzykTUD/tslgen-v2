@@ -774,14 +774,14 @@ def _scan_switch_arms(
     arms: list[tuple[str, tuple[Segment, ...]]] = []
     i = 0
     while True:
-        i = _skip_ws(inner, i)
+        i = _skip_trivia(inner, i)
         if i >= len(inner):
             break
-        arrow = inner.find("=>", i)
-        if arrow == -1:
+        arrow = _find_arm_arrow(inner, i)
+        if arrow is None:
             return None
-        label = inner[i:arrow].strip()
-        brace = _skip_ws(inner, arrow + 2)
+        label = _arm_label(inner, i, arrow)
+        brace = _skip_trivia(inner, arrow + 2)
         if brace >= len(inner) or inner[brace] != "{":
             return None
         close = _match_bracket(inner, brace, "{", "}")
@@ -802,6 +802,57 @@ def _scan_switch_arms(
         )
         i = close + 1
     return tuple(arms) if arms else None
+
+
+def _skip_trivia(text: str, index: int) -> int:
+    """Skip whitespace and comments; arm boundaries treat comments as blank."""
+
+    i = index
+    n = len(text)
+    while i < n:
+        if text[i].isspace():
+            i += 1
+            continue
+        if text[i] == "/" and i + 1 < n and text[i + 1] in "/*":
+            end = _skip_opaque(text, i)
+            if end is None:
+                break
+            i = end
+            continue
+        break
+    return i
+
+
+def _find_arm_arrow(text: str, index: int) -> int | None:
+    """The next ``=>`` outside comments and string literals, or ``None``."""
+
+    i = index
+    n = len(text)
+    while i < n:
+        opaque_end = _skip_opaque(text, i)
+        if opaque_end is not None:
+            i = opaque_end
+            continue
+        if text.startswith("=>", i):
+            return i
+        i += 1
+    return None
+
+
+def _arm_label(text: str, start: int, end: int) -> str:
+    """The label text between ``start`` and the arm arrow, with comments removed."""
+
+    parts: list[str] = []
+    i = start
+    while i < end:
+        if text[i] == "/" and i + 1 < end and text[i + 1] in "/*":
+            opaque_end = _skip_opaque(text, i)
+            if opaque_end is not None:
+                i = min(opaque_end, end)
+                continue
+        parts.append(text[i])
+        i += 1
+    return "".join(parts).strip()
 
 
 def _scan_else(

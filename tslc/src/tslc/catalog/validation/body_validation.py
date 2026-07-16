@@ -86,12 +86,8 @@ def _validate_segments(
         if isinstance(segment, RawText):
             continue
         _validate_region(primitive_name, segment, diagnostics)
-        _validate_segments(primitive_name, segment.body, diagnostics)
-        _validate_segments(primitive_name, segment.block, diagnostics)
-        _validate_segments(primitive_name, segment.else_block, diagnostics)
-        if segment.arms is not None:
-            for _label, body in segment.arms:
-                _validate_segments(primitive_name, body, diagnostics)
+        for child in segment.child_sequences():
+            _validate_segments(primitive_name, child, diagnostics)
 
 
 def _validate_region(

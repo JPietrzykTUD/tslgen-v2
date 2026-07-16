@@ -256,6 +256,48 @@ def test_extension_compiler_metadata_is_promoted(catalog: Catalog) -> None:
     assert sve.runtime_lane_count["cpp"] == "svcntb() / sizeof({base_type})"
 
 
+def test_boolean_wildcard_attributes_expand_to_concrete_variants() -> None:
+    source = SourceDocument(
+        Path("wildcard_fixture.tsl"),
+        (
+            "types:\n"
+            "  ints {types [si32]}\n"
+            "extension scalar:\n"
+            '  extension_name "scalar"\n'
+            '  family "scalar"\n'
+            "prim<v:=v>[aligned=*, packed=*, value=zero] wtest(data):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(data);"\n'
+        ),
+        "d",
+        "tsl",
+    )
+    parsed = TslParser(load_default_tsl_grammar()).parse((source,))
+    assert parsed.diagnostics == ()
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+
+    variants = result.catalog.primitives_named("wtest")
+    combos = {
+        (p.attributes["aligned"], p.attributes["packed"]) for p in variants
+    }
+    assert combos == {
+        ("true", "true"),
+        ("true", "false"),
+        ("false", "true"),
+        ("false", "false"),
+    }
+    assert len(variants) == 4
+    assert all(p.attributes["value"] == "zero" for p in variants)
+    bodies = {
+        tuple(impl.body_text for impl in p.implementations) for p in variants
+    }
+    assert len(bodies) == 1
+
+
 def test_extension_inheritance_respects_explicit_false_and_empty_overrides() -> None:
     source = SourceDocument(
         Path("extension_inheritance_fixture.tsl"),

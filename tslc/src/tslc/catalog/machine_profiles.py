@@ -91,15 +91,6 @@ class _JsonObject:
     pairs: tuple[tuple[str, Any], ...]
 
 
-def load_machine_profiles(
-    path: Path,
-    target_families: TargetFamilyCatalog | None = None,
-) -> Mapping[str, MachineProfile]:
-    """Load every machine profile, keyed by name. The filesystem-read boundary."""
-
-    return load_machine_profiles_checked(path, target_families).profiles
-
-
 def load_machine_profiles_checked(
     path: Path,
     target_families: TargetFamilyCatalog | None = None,
@@ -569,6 +560,21 @@ def _runner(
             )
         )
         return None
+    if profile_value.strip().startswith("-"):
+        # The runner invocation adds the flag prefix itself; authored data keeps
+        # the bare profile name. Diagnose rather than silently repairing.
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-RUNNER",
+                (
+                    f"machine profile {profile_name!r} runner profile must not start"
+                    f" with '-'; write the bare profile name"
+                    f" (got {profile_value.strip()!r})"
+                ),
+            )
+        )
+        return None
     args_value = fields.get("args", ())
     args: tuple[str, ...]
     if args_value == ():
@@ -584,8 +590,7 @@ def _runner(
             )
         )
         args = ()
-    cleaned_profile = profile_value.strip().lstrip("-") if kind == "sde" else profile_value.strip()
-    return MachineProfileRunner(kind=kind, profile=cleaned_profile, args=args)
+    return MachineProfileRunner(kind=kind, profile=profile_value.strip(), args=args)
 
 
 def _diagnostic(path: Path, code: str, message: str) -> Diagnostic:

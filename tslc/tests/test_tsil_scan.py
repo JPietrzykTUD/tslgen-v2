@@ -337,6 +337,61 @@ def test_comment_delimiters_do_not_close_region_payloads() -> None:
     )
 
 
+def test_region_child_sequences_cover_every_block_shape() -> None:
+    body = (
+        "if<generation>(flag) { complete(a); } else<generation> { complete(b); }\n"
+        "switch<compile>(scale) { 1 => { complete(c); } _ => { complete(d); } }\n"
+        "loop<backend>(i, 0, 4, 1) { complete(e); }\n"
+    )
+
+    regions = [s for s in scan(body) if isinstance(s, Region)]
+    by_keyword = {region.keyword: region for region in regions}
+
+    if_region = by_keyword["if"]
+    assert if_region.statement_blocks() == (if_region.block, if_region.else_block)
+    switch_region = by_keyword["switch"]
+    assert switch_region.arms is not None
+    assert switch_region.statement_blocks() == tuple(
+        arm for _label, arm in switch_region.arms
+    )
+    loop_region = by_keyword["loop"]
+    assert loop_region.block is not None
+    assert loop_region.statement_blocks() == (loop_region.block,)
+    for region in regions:
+        assert region.child_sequences() == (
+            region.body,
+            *region.statement_blocks(),
+        )
+
+
+def test_switch_arms_treat_comments_as_opaque() -> None:
+    body = (
+        "switch<compile>(scale) {\n"
+        "  // selects the byte path\n"
+        "  1 => { complete(a); }\n"
+        "  /* scale => bytes */ 2 => { complete(b); }\n"
+        "}"
+    )
+
+    segments = scan(body)
+
+    switch = next(s for s in segments if isinstance(s, Region))
+    assert switch.keyword == "switch"
+    assert switch.arms is not None
+    assert [label for label, _ in switch.arms] == ["1", "2"]
+    assert find_malformed_regions(body) == ()
+
+
+def test_switch_arm_label_excludes_leading_line_comment() -> None:
+    body = 'switch<compile>(scale) {\n  // doc\n  1 => { complete(a); }\n}'
+
+    segments = scan(body)
+    switch = next(s for s in segments if isinstance(s, Region))
+
+    assert switch.arms is not None
+    assert switch.arms[0][0] == "1"
+
+
 def test_malformed_region_scan_ignores_commented_regions() -> None:
     assert find_malformed_regions(
         "// call<primitive=broken trailing>(value)\n"

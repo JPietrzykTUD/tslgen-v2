@@ -107,8 +107,8 @@ class _RecordingSyntax:
     def render_call(self, *args, **kwargs):  # noqa: ANN002, ANN003, ANN201
         return self.inner.render_call(*args, **kwargs)
 
-    def render_pointer_cast(self, inner, *, is_const, expr):  # noqa: ANN001, ANN201
-        return self.inner.render_pointer_cast(inner, is_const=is_const, expr=expr)
+    def render_pointer_cast(self, inner, *, is_const, operand):  # noqa: ANN001, ANN201
+        return self.inner.render_pointer_cast(inner, is_const=is_const, operand=operand)
 
     def render_param_type(  # noqa: ANN001, ANN201
         self,

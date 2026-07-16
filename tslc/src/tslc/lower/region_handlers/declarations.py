@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from tslc.ir.region_syntax import parse_var_selector, segments_text, split_arg_groups
-from tslc.ir.segments import Region, Segment
+from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import QueryEvaluator, TypeValue
 from tslc.lower.region_handlers.common import _resolve_type_expression
@@ -22,10 +22,12 @@ class VarLowerer:
 
     Two shapes: inferred (``var<infer>(name, value)`` / ``var<const_infer>``) fills
     ``var_<variant> = {name}/{value}``; typed (``var<typed>(type, name, value)``)
-    additionally carries ``{type}``. An uninitialized array initializer
-    (``value(uninit::array)``) routes to the dedicated ``var_array_uninit``
-    template instead, which carries ``{type}`` so Rust's MaybeUninit gets it (a value
-    region alone cannot supply the array type). The declaration syntax itself is
+    additionally carries ``{type}``. An uninitialized declaration is spelled with
+    the exact value forms ``value(uninit::array)`` -> ``var_array_uninit`` and
+    ``value(uninit::scalar)`` -> ``var_uninit``; both templates carry ``{type}``
+    so Rust's MaybeUninit gets it (a value region alone cannot supply the type).
+    Other ``uninit::*`` spellings are diagnosed, and an ordinary initializer is
+    never classified by its raw text. The declaration syntax itself is
     backend-neutral, coming from the ``var_*`` translate templates.
     """
 
@@ -113,8 +115,31 @@ class VarLowerer:
             return region.full_text
         type_value = resolved_type[1]
         name = render_text(render(groups[1])).strip()
-        # An uninitialized array uses the type-carrying template (see class docstring).
-        key = "var_array_uninit" if "uninit" in segments_text(groups[2]) else f"var_{variant}"
+        uninit_form = _uninit_value_form(groups[2])
+        if uninit_form is not None:
+            # Exact uninitialized value forms use the type-carrying templates
+            # (see class docstring); nearby spellings diagnose instead of guessing.
+            key = _UNINIT_TEMPLATES.get(uninit_form)
+            if key is None:
+                context.effects.skip(
+                    "TSL-LOWER-UNSUPPORTED-VAR",
+                    f"unsupported uninitialized form 'uninit::{uninit_form}' in "
+                    f"{region.full_text!r}; supported forms are uninit::array "
+                    "and uninit::scalar",
+                    source=region.source,
+                )
+                return region.full_text
+            if context.env.backend.templates.template(key) is None:
+                context.effects.skip(
+                    "TSL-LOWER-UNSUPPORTED-VAR",
+                    f"unsupported var<typed> declaration: {region.full_text!r}",
+                    source=region.source,
+                )
+                return region.full_text
+            return context.env.backend.templates.render_template(
+                key, type=type_value, name=name
+            )
+        key = f"var_{variant}"
         if context.env.backend.templates.template(key) is None:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
@@ -122,8 +147,6 @@ class VarLowerer:
                 source=region.source,
             )
             return region.full_text
-        if key == "var_array_uninit":
-            return context.env.backend.templates.render_template(key, type=type_value, name=name)
         value = render(groups[2])
         return context.env.backend.templates.render_template(
             key, type=type_value, name=name, value=value
@@ -166,6 +189,29 @@ class VarLowerer:
         return context.env.backend.templates.render_template(
             "var_runtime_array", type=type_value, name=name, count=count
         )
+
+
+_UNINIT_TEMPLATES = {"array": "var_array_uninit", "scalar": "var_uninit"}
+
+
+def _uninit_value_form(group: tuple[Segment, ...]) -> str | None:
+    """The ``<form>`` of a lone ``value(uninit::<form>)`` initializer group.
+
+    Returns ``None`` for every other shape — an ordinary initializer is target
+    text and must never be classified by substring.
+    """
+
+    regions = [segment for segment in group if isinstance(segment, Region)]
+    if len(regions) != 1 or regions[0].keyword != "value":
+        return None
+    if any(
+        isinstance(segment, RawText) and segment.text.strip() for segment in group
+    ):
+        return None
+    body = segments_text(regions[0].body).strip()
+    if not body.startswith("uninit::"):
+        return None
+    return body.removeprefix("uninit::")
 
 
 def _join_rendered(groups: list[tuple[Segment, ...]], render: RenderBody) -> RenderText:

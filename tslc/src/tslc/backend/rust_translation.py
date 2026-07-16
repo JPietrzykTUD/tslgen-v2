@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from tslc.backend import translation_common as common
+from tslc.backend.translation import PointerCastOperand
 from tslc.backend.target_capability import (
     rust_arch_module,
     rust_extension_tag,
@@ -248,32 +249,18 @@ class _RustSyntax:
         )
 
     def render_pointer_cast(
-        self, inner: RenderField, *, is_const: bool, expr: RenderField
+        self, inner: RenderField, *, is_const: bool, operand: PointerCastOperand
     ) -> RenderText:
         # Rust has no `void`; a `void`-cast (a memcpy byte pointer) becomes a `u8` pointer,
         # matching the byte-addressed `mem_copy` helper.
         if inner == "void":
             inner = "u8"
-        expr_text = render_text(expr).strip()
-        if expr_text.startswith("&mut "):
-            target = expr_text[len("&mut ") :].strip()
+        if operand.kind == "address_of":
             macro = "addr_of!" if is_const else "addr_of_mut!"
             return render_sequence(
                 (
                     literal_text(f"core::ptr::{macro}("),
-                    literal_text(target),
-                    literal_text(").cast::<"),
-                    inner,
-                    literal_text(">()"),
-                )
-            )
-        if expr_text.startswith("&"):
-            target = expr_text[1:].strip()
-            macro = "addr_of!" if is_const else "addr_of_mut!"
-            return render_sequence(
-                (
-                    literal_text(f"core::ptr::{macro}("),
-                    literal_text(target),
+                    operand.target,
                     literal_text(").cast::<"),
                     inner,
                     literal_text(">()"),
@@ -281,7 +268,7 @@ class _RustSyntax:
             )
         return render_sequence(
             (
-                expr,
+                operand.target,
                 literal_text(f" as *{'const' if is_const else 'mut'} "),
                 inner,
             )

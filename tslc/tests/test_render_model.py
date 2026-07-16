@@ -211,6 +211,8 @@ def test_backend_renderers_do_not_rewrite_body_text_semantics() -> None:
     checked = [
         _REPO_ROOT / "tslc" / "src" / "tslc" / "backend" / "cpp.py",
         _REPO_ROOT / "tslc" / "src" / "tslc" / "backend" / "rust.py",
+        _REPO_ROOT / "tslc" / "src" / "tslc" / "backend" / "cpp_translation.py",
+        _REPO_ROOT / "tslc" / "src" / "tslc" / "backend" / "rust_translation.py",
         _REPO_ROOT / "tslc" / "src" / "tslc" / "render" / "cpp_project.py",
         _REPO_ROOT / "tslc" / "src" / "tslc" / "render" / "rust_project.py",
     ]
@@ -219,6 +221,16 @@ def test_backend_renderers_do_not_rewrite_body_text_semantics() -> None:
         text = path.read_text(encoding="utf-8")
         assert "_concretize_simd_assoc" not in text
         assert _body_text_replace_calls(path, text) == []
+
+
+def test_backend_dialects_do_not_classify_rendered_expression_text() -> None:
+    # Semantics such as address-of-ness arrive as typed lowered facts
+    # (PointerCastOperand); a dialect must not re-derive them by sniffing
+    # rendered target text.
+    for name in ("cpp_translation.py", "rust_translation.py"):
+        path = _REPO_ROOT / "tslc" / "src" / "tslc" / "backend" / name
+        text = path.read_text(encoding="utf-8")
+        assert 'startswith("&' not in text, name
 
 
 def _body_text_replace_calls(path: Path, text: str) -> list[str]:

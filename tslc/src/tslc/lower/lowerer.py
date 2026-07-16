@@ -747,13 +747,8 @@ def _type_param_bound_names(
                 and parsed.type_args[0].strip() == type_param_name
             ):
                 names.add(parsed.primitive_ref)
-        names.update(_type_param_bound_names(segment.body, type_param_name))
-        names.update(_type_param_bound_names(segment.block, type_param_name))
-        if segment.else_block is not None:
-            names.update(_type_param_bound_names(segment.else_block, type_param_name))
-        if segment.arms is not None:
-            for _label, body in segment.arms:
-                names.update(_type_param_bound_names(body, type_param_name))
+        for child in segment.child_sequences():
+            names.update(_type_param_bound_names(child, type_param_name))
     return frozenset(names)
 
 

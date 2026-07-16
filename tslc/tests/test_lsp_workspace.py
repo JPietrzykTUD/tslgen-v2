@@ -29,7 +29,12 @@ from tslc.lsp.positions import (
     span_to_range,
 )
 from tslc.lsp.primitive_explorer import PrimitiveExplorerCache, primitive_explorer
-from tslc.lsp.server import _publish, _ServerState, _workspace_with_index
+from tslc.lsp.server import (
+    _check_and_publish,
+    _publish,
+    _ServerState,
+    _workspace_with_index,
+)
 from tslc.lsp.specialization_context import specialization_context
 from tslc.lsp.workspace import AuthoringWorkspace, WorkspaceSnapshot
 from tslc.lower.lowerer import Lowerer
@@ -70,6 +75,43 @@ def test_completed_check_releases_index_requests_without_an_index() -> None:
     _publish(cast(LanguageServer, object()), state, snapshot)
 
     assert state.initial_check_complete.is_set()
+
+
+def test_failed_initial_check_releases_requests_and_reports() -> None:
+    async def exercise() -> None:
+        state = _ServerState()
+
+        def raising_check(generation: int) -> WorkspaceSnapshot | None:
+            del generation
+            raise RuntimeError("boom")
+
+        workspace = SimpleNamespace(
+            latest=WorkspaceSnapshot(0, None, None, (), (), {}),
+            generation=1,
+            check=raising_check,
+        )
+        state.workspace = cast(AuthoringWorkspace, workspace)
+        logged: list[str] = []
+        shown: list[str] = []
+        server = SimpleNamespace(
+            window_log_message=lambda params: logged.append(params.message),
+            window_show_message=lambda params: shown.append(params.message),
+        )
+
+        request = asyncio.create_task(_workspace_with_index(state))
+        await asyncio.sleep(0)
+        assert not request.done()
+
+        await _check_and_publish(
+            cast(LanguageServer, server), state, 1, debounce=False
+        )
+
+        assert state.initial_check_complete.is_set()
+        assert await request is workspace
+        assert any("boom" in message for message in logged)
+        assert shown
+
+    asyncio.run(exercise())
 
 
 def test_utf16_position_round_trip() -> None:

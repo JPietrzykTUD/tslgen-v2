@@ -69,12 +69,8 @@ def _visit_regions(
         if isinstance(segment, RawText):
             continue
         _record_region(facts, segment, selected, rendered=False)
-        _visit_regions(facts, segment.body, selected)
-        _visit_regions(facts, segment.block, selected)
-        _visit_regions(facts, segment.else_block, selected)
-        if segment.arms is not None:
-            for _label, arm in segment.arms:
-                _visit_regions(facts, arm, selected)
+        for child in segment.child_sequences():
+            _visit_regions(facts, child, selected)
 
 
 def _record_region(

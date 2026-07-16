@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import KeysView
 from dataclasses import dataclass
 
 from tslc.backend.cpp_profile import cpp_dataparallel_fixed_lane_count
@@ -415,6 +416,10 @@ class PivotPlanner:
             for name, value in zip(slot.primitive.parameters, actual_args)
         }
         substitutions = {**bindings, **local_renames}
+        for item in statements:
+            _reject_qualified_substitution_uses(
+                item, substitutions.keys(), slot.implementation.body_source
+            )
         statements = tuple(
             _replace_identifiers(item, substitutions) for item in statements
         )
@@ -909,6 +914,41 @@ def _local_renames(
 
 def _declaration_prefix(language: PivotLanguage) -> str:
     return "auto" if language is PivotLanguage.CPP else "let"
+
+
+def _reject_qualified_substitution_uses(
+    text: str,
+    names: KeysView[str] | frozenset[str],
+    source: SourceSpan | None,
+) -> None:
+    """Containment for identifier substitution.
+
+    A parameter or local whose name also appears in a qualified or member
+    position (``std::min``, ``value.min``, ``ptr->min``, ``min::item``) cannot
+    be proven a standalone binding use, so the definition is rejected instead
+    of rewritten. The regex here only locates candidates for rejection; it
+    never repairs text.
+    """
+
+    if not names:
+        return
+    for match in _IDENTIFIER_RE.finditer(text):
+        name = match.group(0)
+        if name not in names:
+            continue
+        before = text[: match.start()].rstrip()
+        after = text[match.end() :].lstrip()
+        if (
+            before.endswith("::")
+            or before.endswith(".")
+            or before.endswith("->")
+            or after.startswith("::")
+        ):
+            raise _PivotUnsupported(
+                f"substituted name {name!r} appears in a qualified or member "
+                f"position in {text!r}; PIVOT cannot substitute it safely",
+                source,
+            )
 
 
 def _replace_identifiers(text: str, replacements: dict[str, str]) -> str:

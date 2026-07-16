@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tslc.catalog.machine_profiles import load_machine_profiles
+from tslc.catalog.machine_profiles import load_machine_profiles_checked
 from tslc.diagnostics import Diagnostic
 from tslc.maintenance.coverage_ratchet import (
     _BASELINE,
@@ -162,7 +162,7 @@ def test_compute_snapshot_self_diff_is_clean(
 def test_canonical_coverage_profiles_exist_in_machine_profiles(
     machine_profiles_path: Path,
 ) -> None:
-    machine_profiles = load_machine_profiles(machine_profiles_path)
+    machine_profiles = load_machine_profiles_checked(machine_profiles_path).profiles
     assert set(PROFILES) <= set(machine_profiles)
 
 

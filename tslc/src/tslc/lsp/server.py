@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -457,10 +458,50 @@ async def _check_and_publish(
         await asyncio.sleep(_DEBOUNCE_SECONDS)
     if generation != workspace.generation:
         return
-    snapshot = await asyncio.to_thread(workspace.check, generation)
+    try:
+        snapshot = await asyncio.to_thread(workspace.check, generation)
+    except Exception as error:  # noqa: BLE001 — a wedged server is worse than a broad catch
+        _report_check_failure(server, state, generation, error)
+        return
     if snapshot is None:
         return
     _publish(server, state, snapshot)
+
+
+def _report_check_failure(
+    server: LanguageServer,
+    state: _ServerState,
+    generation: int,
+    error: Exception,
+) -> None:
+    """Release waiting requests and surface one actionable failure message.
+
+    The last successful snapshot is deliberately retained: index-backed requests
+    degrade to the previous (or empty) projection instead of hanging forever on
+    the unset initial-check event.
+    """
+
+    workspace = state.workspace
+    if workspace is not None and generation == workspace.generation:
+        state.initial_check_complete.set()
+    server.window_log_message(
+        types.LogMessageParams(
+            type=types.MessageType.Error,
+            message=(
+                "TSL corpus check failed unexpectedly: "
+                f"{error!r}\n{traceback.format_exc()}"
+            ),
+        )
+    )
+    server.window_show_message(
+        types.ShowMessageParams(
+            type=types.MessageType.Error,
+            message=(
+                "TSL corpus check failed unexpectedly; language features may use"
+                " stale results. See the TSL language server log for details."
+            ),
+        )
+    )
 
 
 def _publish(

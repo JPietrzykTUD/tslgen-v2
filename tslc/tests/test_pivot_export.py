@@ -329,6 +329,97 @@ def test_generation_loop_is_expanded_by_the_standard_lowerer(
     assert body.strip().endswith("return acc;")
 
 
+_COLLIDE_FIXTURE = (
+    "prim<v:=(v,v)> pivot_collide(min, right):\n"
+    "  impls:\n"
+    "    scalar:\n"
+    "      arith:\n"
+    "        implementation:\n"
+    '          tsil "complete(std::min(min, right));"\n'
+    "prim<v:=(v,v)> pivot_collide_user(left, right):\n"
+    "  impls:\n"
+    "    scalar:\n"
+    "      arith:\n"
+    "        implementation:\n"
+    '          tsil "complete(call<primitive=pivot_collide>(left, right));"\n'
+    "prim<v:=(v,v)> pivot_collide_rust(min, right):\n"
+    "  impls:\n"
+    "    scalar:\n"
+    "      arith:\n"
+    "        implementation:\n"
+    '          tsil "complete(i32::min(min, right));"\n'
+)
+
+
+def _export_collide_fixture(
+    tmp_path: Path,
+    data_root: Path,
+    machine_profiles_path: Path,
+    *,
+    language: PivotLanguage,
+    primitive: str,
+):
+    fixture = tmp_path / "pivot_collide.tsl"
+    fixture.write_text(_COLLIDE_FIXTURE, encoding="utf-8")
+    return export_pivot(
+        PivotExportRequest(
+            source_paths=(*_expand_sources((data_root,)), fixture),
+            machine_profiles_path=machine_profiles_path,
+            languages=(language,),
+            primitives=(primitive,),
+            profiles=("scalar",),
+            type_tags=("si32",),
+        )
+    )
+
+
+def test_qualified_parameter_collision_is_rejected_not_rewritten(
+    tmp_path: Path,
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _export_collide_fixture(
+        tmp_path,
+        data_root,
+        machine_profiles_path,
+        language=PivotLanguage.CPP,
+        primitive="pivot_collide_user",
+    )
+
+    for projection in result.projections:
+        for document in projection.documents:
+            for definition in document.definitions:
+                direct = "\n".join(definition.direct)
+                assert "std::left" not in direct
+                assert "std::(" not in direct
+    assert any(
+        "qualified or member position" in skip.reason for skip in result.skipped
+    )
+
+
+def test_rust_qualified_collision_is_rejected_not_rewritten(
+    tmp_path: Path,
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _export_collide_fixture(
+        tmp_path,
+        data_root,
+        machine_profiles_path,
+        language=PivotLanguage.RUST,
+        primitive="pivot_collide_rust",
+    )
+
+    for projection in result.projections:
+        for document in projection.documents:
+            for definition in document.definitions:
+                direct = "\n".join(definition.direct)
+                assert "i32::min" in direct or "min" not in direct
+    assert any(
+        "qualified or member position" in skip.reason for skip in result.skipped
+    )
+
+
 def test_yaml_renderer_handles_empty_inputs_without_changing_schema_shape() -> None:
     text = render_pivot_yaml(
         PivotDocument(

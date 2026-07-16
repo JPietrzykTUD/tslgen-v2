@@ -48,6 +48,29 @@ class Region:
     # selection over the const selector (``body`` holds the selector). None for other regions.
     arms: tuple[tuple[str, tuple["Segment", ...]], ...] | None = None
 
+    def statement_blocks(self) -> tuple[tuple["Segment", ...], ...]:
+        """Every brace-delimited statement sequence, in source order.
+
+        This is the one owner of "which child sequences hold statements": the
+        trailing block, the else block, and each switch arm. Walkers that only
+        care about statement position use this; walkers that also descend into
+        the ``(...)`` payload use :meth:`child_sequences`.
+        """
+
+        blocks: list[tuple[Segment, ...]] = []
+        if self.block is not None:
+            blocks.append(self.block)
+        if self.else_block is not None:
+            blocks.append(self.else_block)
+        if self.arms is not None:
+            blocks.extend(body for _label, body in self.arms)
+        return tuple(blocks)
+
+    def child_sequences(self) -> tuple[tuple["Segment", ...], ...]:
+        """The ``(...)`` payload plus every statement block, in source order."""
+
+        return (self.body, *self.statement_blocks())
+
 
 Segment = RawText | Region
 

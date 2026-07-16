@@ -12,12 +12,18 @@ from tslc.syntax.ast import ParsedBlockDeclaration
 
 
 def _build_type_groups(declaration: ParsedBlockDeclaration) -> dict[str, tuple[str, ...]]:
+    # A group without a non-empty member list is not promoted; schema validation
+    # reports it (TSL-CATALOG-TYPE-GROUP-MALFORMED). Promoting an empty group
+    # would make it the most specific selector while matching nothing.
     groups: dict[str, tuple[str, ...]] = {}
     for field in declaration.fields:
         types_field = _entry(field, "types")
         if types_field is None:
             continue
-        groups[field.key.text] = _list_text(types_field)
+        members = _list_text(types_field)
+        if not members:
+            continue
+        groups[field.key.text] = members
     return groups
 
 

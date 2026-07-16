@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
+from tslc.diagnostics import SourceSpan
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS, SCALAR_TYPE_ORDER
 from tslc.select.selector import Selector
 from tslc.syntax.ast import (
@@ -203,12 +204,12 @@ def _contextual_types(
     )
 
 
-def _same_source(left: object, right: ParsedTslSourceSpan) -> bool:
-    return bool(
+def _same_source(left: SourceSpan | None, right: ParsedTslSourceSpan) -> bool:
+    return (
         left is not None
-        and getattr(left, "path", None) == right.path
-        and getattr(left, "line", None) == right.line
-        and getattr(left, "column", None) == right.column
+        and left.path == right.path
+        and left.line == right.line
+        and left.column == right.column
     )
 
 
