@@ -236,7 +236,8 @@ def _mask_logic(case: ValueTestCasePlan) -> str:
 
 
 def _broadcast(case: ValueTestCasePlan) -> str:
-    value = rust_literal(case.inputs.scalar or "0", case.type_tag)
+    assert case.inputs.scalar is not None
+    value = rust_literal(case.inputs.scalar, case.type_tag)
     expected = rust_literal_list(case.expectation.values, case.type_tag)
     return "\n".join(
         [
@@ -253,26 +254,22 @@ def _broadcast(case: ValueTestCasePlan) -> str:
 
 
 def _mask_store(case: ValueTestCasePlan) -> str:
-    packed = case.invocation.result_kind == "packed"
     target = case.target
     memory = case.memory
-    storage_type = (
-        "<Vec as SimdVector>::ImaskType"
-        if packed
-        else (target.base_spelling if target is not None else None)
-        or case.base_spelling
-    )
-    expected_type = (
-        "ui64"
-        if packed
-        else (target.type_tag if target is not None else None) or case.type_tag
-    )
+    assert memory is not None and memory.buffer_length is not None
+    assert memory.storage is not None
+    if memory.storage == "packed":
+        storage_type = "<Vec as SimdVector>::ImaskType"
+        expected_type = "ui64"
+    else:
+        assert target is not None
+        assert target.base_spelling is not None and target.type_tag is not None
+        storage_type = target.base_spelling
+        expected_type = target.type_tag
     expected = rust_literal_list(case.expectation.values, expected_type)
     axis = axis_args(case)
-    buflen = (
-        memory.buffer_length if memory is not None else None
-    ) or len(case.expectation.values)
-    buffer_offset = memory.buffer_offset if memory is not None else 0
+    buflen = memory.buffer_length
+    buffer_offset = memory.buffer_offset
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",

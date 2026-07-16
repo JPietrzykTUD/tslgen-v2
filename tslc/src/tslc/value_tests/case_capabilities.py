@@ -81,14 +81,24 @@ _CASE_REQUIREMENTS = {
         expected="target_lanes",
         vector_inputs="non_empty",
         required_facts=frozenset(
-            {ValueTestFact.IMMEDIATE, ValueTestFact.TARGET_LANES}
+            {
+                ValueTestFact.IMMEDIATE,
+                ValueTestFact.TARGET_LANES,
+                ValueTestFact.INDEX_STYLE,
+                ValueTestFact.INDEX_LANES,
+            }
         ),
     ),
     "indexed_store": ValueTestCaseRequirements(
         expected="non_empty",
         vector_inputs="non_empty",
         required_facts=frozenset(
-            {ValueTestFact.IMMEDIATE, ValueTestFact.MEMORY_LENGTH}
+            {
+                ValueTestFact.IMMEDIATE,
+                ValueTestFact.MEMORY_LENGTH,
+                ValueTestFact.INDEX_STYLE,
+                ValueTestFact.INDEX_LANES,
+            }
         ),
     ),
     "lane_list": ValueTestCaseRequirements(
@@ -104,13 +114,17 @@ _CASE_REQUIREMENTS = {
     ),
     "mask_logic": ValueTestCaseRequirements(expected="one", mask_inputs="non_empty"),
     "mask_pointer_load": ValueTestCaseRequirements(
-        expected="one", vector_inputs="one"
+        expected="one",
+        vector_inputs="one",
+        required_facts=frozenset({ValueTestFact.MEMORY_LENGTH}),
     ),
     "mask_result": ValueTestCaseRequirements(expected="one"),
     "mask_store": ValueTestCaseRequirements(
         expected="non_empty",
         mask_inputs="one",
-        required_facts=frozenset({ValueTestFact.MEMORY_LENGTH}),
+        required_facts=frozenset(
+            {ValueTestFact.MEMORY_LENGTH, ValueTestFact.MEMORY_STORAGE}
+        ),
     ),
     "mask_to_vector": ValueTestCaseRequirements(
         expected="lanes", mask_inputs="one"

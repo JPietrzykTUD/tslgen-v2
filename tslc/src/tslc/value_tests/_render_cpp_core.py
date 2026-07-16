@@ -109,7 +109,8 @@ def _array_to_vector(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 def _broadcast(case: ValueTestCasePlan) -> str:
-    value = cpp_literal(case.inputs.scalar or "0", case.type_tag)
+    assert case.inputs.scalar is not None
+    value = cpp_literal(case.inputs.scalar, case.type_tag)
     expected = cpp_literal_list(case.expectation.values, case.type_tag)
     lines = [
         f"int {case.function_name}() {{",

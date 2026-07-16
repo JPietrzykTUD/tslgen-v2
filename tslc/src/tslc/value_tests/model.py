@@ -11,6 +11,8 @@ from tslc.value_tests.case_capabilities import (
     DEFAULT_VALUE_TEST_CASE_KINDS,
 )
 from tslc.value_tests.case_components import (
+    IndexStyle,
+    MemoryStorage,
     ValueTestCaseCapability,
     ValueTestCaseRequirements,
     ValueTestDifferential,
@@ -114,6 +116,8 @@ __all__ = (
     "DEFAULT_VALUE_TEST_CASE_CAPABILITIES",
     "DEFAULT_VALUE_TEST_CASE_KINDS",
     "HarnessPrimitiveNames",
+    "IndexStyle",
+    "MemoryStorage",
     "ValueTestBackendSupport",
     "ValueTestCaseCapability",
     "ValueTestCasePlan",

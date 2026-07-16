@@ -222,8 +222,17 @@ class ValueTestCasePlan:
             ValueTestFact.INDEX_VALUE: (
                 self.index is not None and self.index.value is not None
             ),
+            ValueTestFact.INDEX_STYLE: (
+                self.index is not None and self.index.style is not None
+            ),
+            ValueTestFact.INDEX_LANES: (
+                self.index is not None and self.index.lanes is not None
+            ),
             ValueTestFact.MEMORY_LENGTH: (
                 self.memory is not None and self.memory.buffer_length is not None
+            ),
+            ValueTestFact.MEMORY_STORAGE: (
+                self.memory is not None and self.memory.storage is not None
             ),
             ValueTestFact.TEXT_EXPECTED: self.expectation.text is not None,
             ValueTestFact.REPRESENTATION: (

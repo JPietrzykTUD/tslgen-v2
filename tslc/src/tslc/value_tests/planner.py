@@ -16,13 +16,17 @@ from tslc.value_tests._pattern_base import (
     ValueTestFuzzContext,
     unplanned_case_reason,
 )
+from tslc.value_tests.case_capabilities import DEFAULT_VALUE_TEST_CASE_REQUIREMENTS
 from tslc.value_tests.case_plans import compile_only_case
 from tslc.value_tests.coverage import (
     CoverageIdentity,
+    ValueTestCaseDrop,
+    ValueTestCaseDropCause,
     case_coverage,
     coverage_diagnostics,
     coverage_identity,
     coverage_key,
+    dropped_fuzz_coverage,
     merge_coverage,
 )
 from tslc.value_tests.harness import discover_harness_primitives
@@ -113,19 +117,28 @@ class ValueTestPlanner:
                 )
                 if primitive is None:
                     continue
-                fuzz_builder = getattr(pattern, "fuzz_cases", None) if self._fuzz else None
-                if fuzz_builder is not None:
-                    fuzz_planned = fuzz_builder(
+                if self._fuzz and pattern is not None:
+                    fuzz_planned = pattern.fuzz_cases(
                         self._fuzz_context(backend, emitted_name, specs, harness)
                     )
-                    cases.extend(
-                        self._supported_cases(
-                            fuzz_planned,
-                            backend,
-                            profile.specializations,
-                            diagnostics,
-                        )
+                    fuzz_supported, fuzz_drops = self._supported_cases(
+                        fuzz_planned,
+                        backend,
+                        profile.specializations,
+                        diagnostics,
                     )
+                    cases.extend(fuzz_supported)
+                    for drop in fuzz_drops:
+                        entry = dropped_fuzz_coverage(
+                            backend=backend,
+                            profile_name=profile.profile_name,
+                            primitive_name=source_name,
+                            drop=drop,
+                        )
+                        coverage.append(entry)
+                        coverage_locations.setdefault(
+                            coverage_identity(entry), _primitive_location(primitive)
+                        )
                 if not primitive.tests:
                     entry = ValueTestCoverageEntry(
                         backend_id=profile.backend_id,
@@ -169,7 +182,7 @@ class ValueTestPlanner:
                             )
                             for case in planned
                         )
-                    supported = self._supported_cases(
+                    supported, drops = self._supported_cases(
                         planned,
                         backend,
                         profile.specializations,
@@ -183,6 +196,7 @@ class ValueTestPlanner:
                         case_name=test_case.name,
                         planned=planned,
                         supported=supported,
+                        drops=drops,
                         unplanned_reason=unplanned_case_reason(
                             pattern, planned, case_context
                         ),
@@ -239,24 +253,50 @@ class ValueTestPlanner:
         backend: ValueTestBackendSupport,
         specializations: Mapping[str, tuple[LoweredSpecialization, ...]],
         diagnostics: list[Diagnostic],
-    ) -> tuple[ValueTestCasePlan, ...]:
+    ) -> tuple[tuple[ValueTestCasePlan, ...], tuple[ValueTestCaseDrop, ...]]:
+        """Split planned cases into renderable cases and typed per-case drops."""
+
         supported: list[ValueTestCasePlan] = []
+        drops: list[ValueTestCaseDrop] = []
         for case in cases:
             if case.kind not in backend.case_kinds:
+                cause: ValueTestCaseDropCause = (
+                    "fuzz_unsupported"
+                    if DEFAULT_VALUE_TEST_CASE_REQUIREMENTS[case.kind].fuzz_case
+                    else "renderer_unsupported"
+                )
+                drops.append(ValueTestCaseDrop(case, cause))
                 continue
-            if not _differential_harness_available(case, specializations):
+            missing_helpers = _missing_differential_helpers(case, specializations)
+            if missing_helpers:
+                assert case.differential is not None
+                drops.append(
+                    ValueTestCaseDrop(
+                        case,
+                        "differential_harness_missing",
+                        detail=(
+                            "differential harness primitive(s) "
+                            + ", ".join(repr(name) for name in missing_helpers)
+                            + " are not selected for extension "
+                            + repr(case.differential.hardware_extension)
+                            + f" and type {case.type_tag!r} in this profile"
+                        ),
+                    )
+                )
                 continue
-            planned = self._with_header_group(case, backend.backend_id, diagnostics)
-            if planned is not None:
-                supported.append(planned)
-        return tuple(supported)
+            resolved = self._with_header_group(case, backend.backend_id, diagnostics)
+            if isinstance(resolved, ValueTestCaseDrop):
+                drops.append(resolved)
+                continue
+            supported.append(resolved)
+        return tuple(supported), tuple(drops)
 
     def _with_header_group(
         self,
         case: ValueTestCasePlan,
         backend_id: str,
         diagnostics: list[Diagnostic],
-    ) -> ValueTestCasePlan | None:
+    ) -> ValueTestCasePlan | ValueTestCaseDrop:
         extension_names: set[str] = set()
         if case.differential is not None:
             extension_names.add(case.differential.hardware_extension)
@@ -294,7 +334,14 @@ class ValueTestPlanner:
                     location=source.start if source is not None else None,
                 )
             )
-            return None
+            return ValueTestCaseDrop(
+                case,
+                "header_group_conflict",
+                detail=(
+                    f"case spans incompatible generated header groups "
+                    f"{sorted(groups)} through extensions {sorted(extension_names)}"
+                ),
+            )
         compiler_features = tuple(
             sorted(
                 {
@@ -313,30 +360,34 @@ class ValueTestPlanner:
         )
 
 
-def _differential_harness_available(
+def _missing_differential_helpers(
     case: ValueTestCasePlan,
     specializations: Mapping[str, tuple[LoweredSpecialization, ...]],
-) -> bool:
+) -> tuple[str, ...]:
+    """Harness helper names the profile closure does not provide for this case."""
+
     differential = case.differential
     if differential is None:
-        return True
-    helper_names = [differential.from_array_name]
+        return ()
     if case.invocation.result_kind == "m":
-        if differential.to_integral_name is None:
-            return False
-        helper_names.append(differential.to_integral_name)
+        result_role, result_helper = "to_integral", differential.to_integral_name
     else:
-        if differential.to_array_name is None:
-            return False
-        helper_names.append(differential.to_array_name)
-    return all(
-        any(
+        result_role, result_helper = "to_array", differential.to_array_name
+    missing: list[str] = []
+    for role, helper_name in (
+        ("from_array", differential.from_array_name),
+        (result_role, result_helper),
+    ):
+        if helper_name is None:
+            missing.append(role)
+            continue
+        if not any(
             spec.extension_name == differential.hardware_extension
             and spec.type_tag == case.type_tag
             for spec in specializations.get(helper_name, ())
-        )
-        for helper_name in helper_names
-    )
+        ):
+            missing.append(helper_name)
+    return tuple(missing)
 
 
 def _duplicate_case_diagnostics(

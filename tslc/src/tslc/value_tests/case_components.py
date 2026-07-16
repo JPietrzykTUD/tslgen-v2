@@ -8,6 +8,8 @@ from typing import Literal
 
 ExpectedArity = Literal["optional", "non_empty", "one", "lanes", "target_lanes"]
 InputArity = Literal["optional", "non_empty", "one"]
+MemoryStorage = Literal["packed", "unpacked"]
+IndexStyle = Literal["register", "pointer"]
 
 
 class ValueTestFact(Enum):
@@ -19,7 +21,10 @@ class ValueTestFact(Enum):
     TARGET_LAYOUT = auto()
     TARGET_LANES = auto()
     INDEX_VALUE = auto()
+    INDEX_STYLE = auto()
+    INDEX_LANES = auto()
     MEMORY_LENGTH = auto()
+    MEMORY_STORAGE = auto()
     TEXT_EXPECTED = auto()
     REPRESENTATION = auto()
     SCALABLE_RUNTIME = auto()
@@ -108,12 +113,15 @@ class ValueTestTarget:
 
 @dataclass(frozen=True, slots=True)
 class ValueTestIndex:
-    """Immediate index and optional index-vector layout."""
+    """Immediate index and optional index-vector layout and call style."""
 
     value: str | None = None
     type_tag: str | None = None
     base_spelling: str | None = None
     lanes: int | None = None
+    # How indexed-memory calls pass the index operand: loaded into an index
+    # register or forwarded as a raw pointer. Decided once at planning.
+    style: IndexStyle | None = None
 
     def __post_init__(self) -> None:
         if (self.type_tag is None) != (self.base_spelling is None):
@@ -122,6 +130,10 @@ class ValueTestIndex:
             )
         if self.lanes is not None and self.lanes <= 0:
             raise ValueError("value-test index requires positive lanes")
+        if self.style is not None and self.style not in ("register", "pointer"):
+            raise ValueError(
+                "value-test index style must be 'register' or 'pointer'"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +144,10 @@ class ValueTestMemory:
     buffer_length: int | None = None
     source_offset: int = 0
     alignment: int | None = None
+    # Whether the stored bytes are the packed integral-mask representation or
+    # unpacked per-lane values. Decided once at planning; the primitive's real
+    # result kind stays on the invocation.
+    storage: MemoryStorage | None = None
 
     def __post_init__(self) -> None:
         if self.buffer_offset < 0 or self.source_offset < 0:
@@ -140,6 +156,10 @@ class ValueTestMemory:
             raise ValueError("value-test memory buffer length must be positive")
         if self.alignment is not None and self.alignment <= 0:
             raise ValueError("value-test memory alignment must be positive")
+        if self.storage is not None and self.storage not in ("packed", "unpacked"):
+            raise ValueError(
+                "value-test memory storage must be 'packed' or 'unpacked'"
+            )
 
 
 @dataclass(frozen=True, slots=True)

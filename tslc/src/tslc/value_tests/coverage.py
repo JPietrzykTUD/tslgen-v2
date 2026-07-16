@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Literal
 
 from tslc.diagnostics import Diagnostic, SourceLocation
 from tslc.value_tests.model import (
@@ -15,6 +17,45 @@ from tslc.value_tests.model import (
 
 CoverageIdentity = tuple[str, str, str, str | None]
 ParityIdentity = tuple[str, str, str | None]
+
+ValueTestCaseDropCause = Literal[
+    "renderer_unsupported",
+    "fuzz_unsupported",
+    "differential_harness_missing",
+    "header_group_conflict",
+]
+
+_DETAIL_CAUSES = frozenset(
+    {"differential_harness_missing", "header_group_conflict"}
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ValueTestCaseDrop:
+    """One planned case a backend profile could not accept, with its typed cause."""
+
+    case: ValueTestCasePlan
+    cause: ValueTestCaseDropCause
+    detail: str = ""
+
+    def __post_init__(self) -> None:
+        if self.cause in _DETAIL_CAUSES and not self.detail:
+            raise ValueError(
+                f"value-test case drop cause {self.cause!r} requires a detail"
+            )
+
+    def reason(self, backend_id: str) -> str:
+        if self.cause == "renderer_unsupported":
+            return (
+                f"planned case kind {self.case.kind!r} is not supported by the "
+                f"{backend_id} value-test renderer"
+            )
+        if self.cause == "fuzz_unsupported":
+            return (
+                f"synthetic fuzz case kind {self.case.kind!r} is not supported by "
+                f"the {backend_id} value-test renderer"
+            )
+        return self.detail
 
 BLOCKING_COVERAGE_STATUSES = frozenset(
     {"missing_authored_tests", "authored_unplanned", "backend_unsupported"}
@@ -38,6 +79,7 @@ def case_coverage(
     case_name: str,
     planned: tuple[ValueTestCasePlan, ...],
     supported: tuple[ValueTestCasePlan, ...],
+    drops: tuple[ValueTestCaseDrop, ...] = (),
     unplanned_reason: str | None = None,
 ) -> ValueTestCoverageEntry:
     if supported:
@@ -61,7 +103,7 @@ def case_coverage(
             primitive_name=primitive_name,
             case_name=case_name,
             status="backend_unsupported",
-            reason="planned case kind is not supported by this backend renderer",
+            reason=_drop_reason(drops, backend.backend_id),
             case_kind=_case_kinds(planned),
         )
     return ValueTestCoverageEntry(
@@ -72,6 +114,33 @@ def case_coverage(
         status="authored_unplanned",
         reason=unplanned_reason or "no value-test pattern accepted the authored case shape",
     )
+
+
+def dropped_fuzz_coverage(
+    *,
+    backend: ValueTestBackendSupport,
+    profile_name: str,
+    primitive_name: str,
+    drop: ValueTestCaseDrop,
+) -> ValueTestCoverageEntry:
+    """Coverage for a suppressed synthetic fuzz case, which has no authored case."""
+
+    return ValueTestCoverageEntry(
+        backend_id=backend.backend_id,
+        profile_name=profile_name,
+        primitive_name=primitive_name,
+        case_name=drop.case.case_name,
+        status="backend_unsupported",
+        reason=drop.reason(backend.backend_id),
+        case_kind=drop.case.kind,
+    )
+
+
+def _drop_reason(drops: tuple[ValueTestCaseDrop, ...], backend_id: str) -> str:
+    reasons = dict.fromkeys(drop.reason(backend_id) for drop in drops)
+    if not reasons:
+        return "planned case kind is not supported by this backend renderer"
+    return "; ".join(reasons)
 
 
 def merge_coverage(
@@ -190,10 +259,13 @@ __all__ = (
     "CoverageIdentity",
     "ParityIdentity",
     "SUCCESS_COVERAGE_STATUSES",
+    "ValueTestCaseDrop",
+    "ValueTestCaseDropCause",
     "case_coverage",
     "coverage_diagnostics",
     "coverage_identity",
     "coverage_key",
+    "dropped_fuzz_coverage",
     "merge_coverage",
     "parity_gaps",
     "parity_inventory",

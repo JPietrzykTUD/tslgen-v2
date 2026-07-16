@@ -27,7 +27,11 @@ from tslc.backend.emitted_names import finalize_emitted_names
 from tslc.target_text import LoweredBody
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.render.project import render_project
-from tslc.value_tests.coverage import parity_gaps, parity_inventory
+from tslc.value_tests.coverage import (
+    ValueTestCaseDrop,
+    parity_gaps,
+    parity_inventory,
+)
 from tslc.value_tests.literals import cpp_literal
 from tslc.value_tests import (
     ValueTestBackendProfileInput,
@@ -94,12 +98,14 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
         "type_tag": values.pop("index_type_tag", None),
         "base_spelling": values.pop("index_base_spelling", None),
         "lanes": values.pop("index_lanes", None),
+        "style": values.pop("index_style", None),
     }
     memory_values = {
         "buffer_offset": values.pop("buffer_offset", 0),
         "buffer_length": values.pop("buffer_length", None),
         "source_offset": values.pop("source_offset", 0),
         "alignment": values.pop("alignment", None),
+        "storage": values.pop("storage", None),
     }
     hardware_extension = values.pop("hardware_extension", None)
     from_array = values.pop("from_array_name", None)
@@ -729,6 +735,62 @@ def test_pointer_layout_planning_consumes_param_types() -> None:
     assert cases[0].target is not None
     assert cases[0].target.type_tag == "si32"
     assert cases[0].target.base_spelling == "std::int32_t"
+    # The buffer layout is a typed memory fact; the invocation keeps the
+    # primitive's honest result kind.
+    assert cases[0].invocation.result_kind == "void"
+    assert cases[0].memory is not None
+    assert cases[0].memory.storage == "unpacked"
+
+
+def test_packed_mask_store_plan_keeps_honest_result_kind(
+    render_assets: RenderAssets,
+) -> None:
+    primitive = Primitive(
+        "store_mask_repr",
+        "void:=(ptr,m)",
+        ("ptr", "mask"),
+        (),
+        (),
+        attributes={"packed": "true"},
+        tests=(
+            TslTestCase(
+                name="store_mask_repr_packed",
+                type_tag="si32",
+                tags=("layout",),
+                lanes=4,
+                inputs=(TslTestArg("mask", mask_bits="5"),),
+                expected=("5",),
+                attrs={"packed": "true"},
+            ),
+        ),
+    )
+    catalog = _catalog(primitive, *_harness_primitives())
+    spec = _spec(
+        "store_mask_repr",
+        "store_mask_repr",
+        param_kinds=("ptr", "m"),
+        result_kind="void",
+        axis=(("packed", "true"),),
+    )
+    profile = _profile(
+        cpp={"store_mask_repr": (spec,)}, rust={"store_mask_repr": (spec,)}
+    )
+
+    plan = ValueTestPlanner(catalog, _VALUE_TEST_SUPPORTS).plan(_inputs(profile))
+
+    for backend in ("cpp", "rust"):
+        case = plan.profiles_for(backend)[0].cases[0]
+        assert case.kind == "mask_store"
+        assert case.invocation.result_kind == "void"
+        assert case.memory is not None
+        assert case.memory.storage == "packed"
+        assert case.memory.buffer_length == 1
+    cpp_source = render_cpp_values_runner(plan.profiles_for("cpp")[0], render_assets)
+    rust_source = render_rust_values_file(
+        (plan.profiles_for("rust")[0],), render_assets
+    )
+    assert "typename Vec::imask_type buf[1]" in cpp_source
+    assert "<Vec as SimdVector>::ImaskType; 1]" in rust_source
 
 
 def test_pointer_layout_scalar_resolver_uses_param_type_expression_parser() -> None:
@@ -964,6 +1026,7 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         index_type_tag="ui64",
         index_base_spelling="std::uint64_t",
         index_lanes=2,
+        index_style="register",
     )
     cpp_indexed_source = render_cpp_values_runner(
         ValueTestProfilePlan("cpp", "unit-profile", (cpp_indexed_case,)),
@@ -1000,6 +1063,7 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         index_type_tag="ui64",
         index_base_spelling="std::uint64_t",
         index_lanes=8,
+        index_style="pointer",
     )
     cpp_pointer_source = render_cpp_values_runner(
         ValueTestProfilePlan("cpp", "unit-profile", (cpp_pointer_indexed_case,)),
@@ -1106,6 +1170,7 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
                         index_type_tag="ui64",
                         index_base_spelling="u64",
                         index_lanes=8,
+                        index_style="pointer",
                     ),
                 ),
             ),
@@ -1249,6 +1314,7 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         axis_args=("false", "false"),
         target_base_spelling="u32",
         buffer_length=4,
+        storage="unpacked",
     )
     rust_mask_store_source = render_rust_values_file(
         (ValueTestProfilePlan("rust", "unit-profile", (rust_mask_store_case,)),),
@@ -1499,6 +1565,65 @@ def test_value_test_case_plan_validates_kind_requirements() -> None:
             fuzz_iterations=8,
         )
 
+    with pytest.raises(ValueError, match="requires memory_length"):
+        ValueTestCasePlan(
+            kind="mask_pointer_load",
+            function_name="test_load_mask_bad",
+            case_name="load_mask_bad",
+            call_name="load_mask",
+            type_tag="ui32",
+            base_spelling="u32",
+            lanes=4,
+            vector_inputs=(("0", "1", "0", "1"),),
+            expected=("10",),
+        )
+
+    with pytest.raises(ValueError, match="requires memory_length"):
+        ValueTestCasePlan(
+            kind="indexed_store",
+            function_name="test_scatter_bad",
+            case_name="scatter_bad",
+            call_name="scatter",
+            type_tag="ui32",
+            base_spelling="u32",
+            lanes=4,
+            vector_inputs=(("1", "2"), ("0", "1")),
+            expected=("1", "2"),
+            immediate_value="4",
+            index_lanes=2,
+            index_style="register",
+        )
+
+    with pytest.raises(ValueError, match="requires index_style"):
+        ValueTestCasePlan(
+            kind="indexed_load",
+            function_name="test_gather_bad",
+            case_name="gather_bad",
+            call_name="gather",
+            type_tag="ui32",
+            base_spelling="u32",
+            lanes=4,
+            vector_inputs=(("1", "2"), ("0", "1")),
+            expected=("1", "2"),
+            immediate_value="4",
+            target_lanes=2,
+            index_lanes=2,
+        )
+
+    with pytest.raises(ValueError, match="requires memory_storage"):
+        ValueTestCasePlan(
+            kind="mask_store",
+            function_name="test_mask_store_bad",
+            case_name="mask_store_bad",
+            call_name="store_mask",
+            type_tag="ui32",
+            base_spelling="u32",
+            lanes=4,
+            mask_inputs=("5",),
+            expected=("0", "1", "0", "1"),
+            buffer_length=4,
+        )
+
 
 def test_differential_cases_require_profile_scoped_round_trip_helpers() -> None:
     primitive = Primitive(
@@ -1595,6 +1720,112 @@ def test_differential_cases_require_profile_scoped_round_trip_helpers() -> None:
         "differential_fuzz",
         "generic_golden",
     }
+    # The suppressed synthetic fuzz case gets an explicit coverage entry whose
+    # reason names the missing harness closure, not the renderer.
+    fuzz_drop = next(
+        entry for entry in missing_helpers.coverage if entry.case_name == "add:fuzz"
+    )
+    assert fuzz_drop.status == "backend_unsupported"
+    assert fuzz_drop.case_kind == "differential_fuzz"
+    assert "differential harness primitive(s) 'lane_in', 'lane_out'" in fuzz_drop.reason
+    assert "extension 'sse'" in fuzz_drop.reason
+    assert "renderer" not in fuzz_drop.reason
+    assert all(
+        entry.case_name != "add:fuzz" for entry in complete_helpers.coverage
+    )
+
+
+def test_fuzz_without_backend_fuzz_renderer_reports_explicit_coverage() -> None:
+    primitive = Primitive(
+        "add",
+        "v:=(v,v)",
+        ("left", "right"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="basic",
+                type_tag="si32",
+                tags=("basic",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("vector", values=("4", "3", "2", "1")),
+                ),
+                expected=("5", "5", "5", "5"),
+            ),
+        ),
+    )
+    catalog = Catalog(
+        primitives=(primitive, *_harness_primitives()),
+        type_groups={},
+        extensions={
+            "sse": Extension(
+                "sse",
+                "sse",
+                "x86",
+                {},
+                {},
+                backend_supported={"rust": True},
+                vector_bits=128,
+                default_test_target=True,
+            )
+        },
+        type_spellings={},
+        translations={},
+    )
+    add = _spec(
+        "add",
+        "add",
+        param_kinds=("v", "v"),
+        extension_name="sse",
+        uses_sized_vector=False,
+        lane_parameter=None,
+    )
+    lane_in = _spec(
+        "lane_in",
+        "lane_in",
+        param_kinds=("s[]",),
+        extension_name="sse",
+        uses_sized_vector=False,
+        lane_parameter=None,
+    )
+    lane_out = _spec(
+        "lane_out",
+        "lane_out",
+        param_kinds=("v",),
+        result_kind="s[]",
+        extension_name="sse",
+        uses_sized_vector=False,
+        lane_parameter=None,
+    )
+    planner = ValueTestPlanner(catalog, (RUST_VALUE_TEST_SUPPORT,), fuzz=True)
+
+    plan = planner.plan(
+        (
+            ValueTestBackendProfileInput(
+                "rust",
+                "sse",
+                {"add": (add,), "lane_in": (lane_in,), "lane_out": (lane_out,)},
+            ),
+        )
+    )
+
+    assert all(
+        case.kind != "differential_fuzz" for case in plan.profiles[0].cases
+    )
+    entry = next(item for item in plan.coverage if item.case_name == "add:fuzz")
+    assert entry.status == "backend_unsupported"
+    assert entry.case_kind == "differential_fuzz"
+    assert entry.reason == (
+        "synthetic fuzz case kind 'differential_fuzz' is not supported by "
+        "the rust value-test renderer"
+    )
+    assert any(
+        diagnostic.code == "TSL-VALUE-TEST-UNSUPPORTED-CASE"
+        and "add:fuzz" in diagnostic.message
+        for diagnostic in plan.diagnostics
+    )
 
 
 def test_wasm_rust_value_tests_render_native_differential_cases(
@@ -1736,7 +1967,10 @@ def test_incompatible_value_test_header_groups_are_diagnosed() -> None:
 
     planned = planner._with_header_group(case, "cpp", diagnostics)
 
-    assert planned is None
+    assert isinstance(planned, ValueTestCaseDrop)
+    assert planned.cause == "header_group_conflict"
+    assert "incompatible generated header groups" in planned.reason("cpp")
+    assert "first_group" in planned.reason("cpp")
     assert diagnostics == [
         Diagnostic(
             severity="error",
@@ -1955,6 +2189,8 @@ def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog(
             expected=("10", "20", "30", "40"),
             immediate_value="4",
             target_lanes=4,
+            index_lanes=4,
+            index_style="register",
         ),
         ValueTestCasePlan(
             "indexed_load",
@@ -1971,6 +2207,7 @@ def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog(
             index_type_tag="ui64",
             index_base_spelling="u64",
             index_lanes=2,
+            index_style="register",
         ),
         ValueTestCasePlan(
             "indexed_store",
@@ -1984,6 +2221,8 @@ def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog(
             expected=("10", "20", "30", "40"),
             immediate_value="4",
             buffer_length=4,
+            index_lanes=4,
+            index_style="register",
         ),
         ValueTestCasePlan(
             "stream",
@@ -2174,10 +2413,12 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
         "index_type_tag",
         "index_base_spelling",
         "index_lanes",
+        "index_style",
         "buffer_offset",
         "buffer_length",
         "source_offset",
         "alignment",
+        "storage",
         "source_extension",
         "target_extension",
         "from_array_name",

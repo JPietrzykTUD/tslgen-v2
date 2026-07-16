@@ -12,6 +12,14 @@ def _memory(case: ValueTestCasePlan) -> ValueTestMemory:
     return case.memory if case.memory is not None else ValueTestMemory()
 
 
+def _buffer_length(case: ValueTestCasePlan) -> int:
+    """The plan registry makes MEMORY_LENGTH mandatory for callers of this."""
+
+    memory = case.memory
+    assert memory is not None and memory.buffer_length is not None
+    return memory.buffer_length
+
+
 def _load(case: ValueTestCasePlan) -> str:
     memory = _memory(case)
     literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
@@ -43,7 +51,7 @@ def _store(case: ValueTestCasePlan) -> str:
     literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = rust_literal_list(case.expectation.values, case.type_tag)
     axis = axis_args(case)
-    buflen = memory.buffer_length or len(case.expectation.values)
+    buflen = _buffer_length(case)
     return "\n".join(
         [
             "    #[test]",
@@ -72,7 +80,7 @@ def _scalar_pointer_load(case: ValueTestCasePlan) -> str:
     literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = rust_literal(case.expectation.values[0], case.type_tag)
     axis = axis_args(case)
-    buflen = memory.buffer_length or len(case.inputs.vectors[0])
+    buflen = _buffer_length(case)
     return "\n".join(
         [
             "    #[test]",
@@ -95,14 +103,16 @@ def _scalar_pointer_load(case: ValueTestCasePlan) -> str:
 def _mask_pointer_load(case: ValueTestCasePlan) -> str:
     memory = _memory(case)
     target = case.target
-    input_type = (target.type_tag if target is not None else None) or case.type_tag
-    storage_type = (
-        target.base_spelling if target is not None else None
-    ) or case.base_spelling
+    if target is not None and target.type_tag is not None and target.base_spelling is not None:
+        input_type = target.type_tag
+        storage_type = target.base_spelling
+    else:
+        input_type = case.type_tag
+        storage_type = case.base_spelling
     literals = rust_literal_list(case.inputs.vectors[0], input_type)
     expected = int(case.expectation.values[0])
     axis = axis_args(case)
-    buflen = memory.buffer_length or len(case.inputs.vectors[0])
+    buflen = _buffer_length(case)
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
@@ -154,7 +164,7 @@ def _masked_pointer_store(case: ValueTestCasePlan) -> str:
     literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = rust_literal_list(case.expectation.values, case.type_tag)
     axis = axis_args(case)
-    buflen = memory.buffer_length or len(case.expectation.values)
+    buflen = _buffer_length(case)
     return "\n".join(
         [
             "    #[test]",
@@ -185,8 +195,8 @@ def _memory_copy(case: ValueTestCasePlan) -> str:
     src = rust_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = rust_literal_list(case.expectation.values, case.type_tag)
     src_len = len(case.inputs.vectors[0])
-    dst_len = memory.buffer_length or len(case.expectation.values)
-    count = rust_literal(case.inputs.scalars[0] if case.inputs.scalars else str(src_len), case.type_tag)
+    dst_len = _buffer_length(case)
+    count = rust_literal(case.inputs.scalars[0], case.type_tag)
     zero = rust_literal("0", case.type_tag)
     return "\n".join(
         [
@@ -235,7 +245,7 @@ def _pointer_lifetime(case: ValueTestCasePlan) -> str:
 
 def _pointer_free(case: ValueTestCasePlan) -> str:
     memory = _memory(case)
-    count = case.inputs.scalars[0] if case.inputs.scalars else "1"
+    count = case.inputs.scalars[0]
     if memory.alignment is None:
         alloc = f"mem_alloc({count}usize)"
     else:
@@ -255,18 +265,20 @@ def _pointer_free(case: ValueTestCasePlan) -> str:
 def _indexed_load(case: ValueTestCasePlan) -> str:
     index = case.index
     target = case.target
-    assert target is not None
+    assert target is not None and target.lanes is not None
+    assert index is not None and index.lanes is not None and index.style is not None
+    assert case.invocation.immediate is not None
     data = rust_literal_list(case.inputs.vectors[0], case.type_tag)
-    index_type = (index.type_tag if index is not None else None) or case.type_tag
+    index_type = index.type_tag if index.type_tag is not None else case.type_tag
     index_base = (
-        index.base_spelling if index is not None else None
-    ) or case.base_spelling
+        index.base_spelling if index.base_spelling is not None else case.base_spelling
+    )
     indices = rust_literal_list(case.inputs.vectors[1], index_type)
     expected = rust_literal_list(case.expectation.values, case.type_tag)
-    lanes = target.lanes or len(case.expectation.values)
-    index_lanes = (index.lanes if index is not None else None) or lanes
-    scale = case.invocation.immediate or "1"
-    pointer_indices = tuple(case.invocation.param_kinds) == ("cptr", "cptr", "sImm")
+    lanes = target.lanes
+    index_lanes = index.lanes
+    scale = case.invocation.immediate
+    pointer_indices = index.style == "pointer"
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
@@ -318,19 +330,20 @@ def _indexed_load(case: ValueTestCasePlan) -> str:
 
 
 def _indexed_store(case: ValueTestCasePlan) -> str:
-    memory = _memory(case)
     index = case.index
+    assert index is not None and index.lanes is not None
+    assert case.invocation.immediate is not None
     values = rust_literal_list(case.inputs.vectors[0], case.type_tag)
-    index_type = (index.type_tag if index is not None else None) or case.type_tag
+    index_type = index.type_tag if index.type_tag is not None else case.type_tag
     index_base = (
-        index.base_spelling if index is not None else None
-    ) or case.base_spelling
+        index.base_spelling if index.base_spelling is not None else case.base_spelling
+    )
     indices = rust_literal_list(case.inputs.vectors[1], index_type)
     expected = rust_literal_list(case.expectation.values, case.type_tag)
     lanes = case.lanes
-    index_lanes = (index.lanes if index is not None else None) or lanes
-    scale = case.invocation.immediate or "1"
-    buflen = memory.buffer_length or len(case.expectation.values)
+    index_lanes = index.lanes
+    scale = case.invocation.immediate
+    buflen = _buffer_length(case)
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
@@ -369,8 +382,9 @@ def _indexed_store(case: ValueTestCasePlan) -> str:
 
 def _stream(case: ValueTestCasePlan) -> str:
     literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
-    modifier = rust_literal(case.inputs.scalars[0] if case.inputs.scalars else "0", case.type_tag)
-    expected = rust_string_literal(case.expectation.text or "")
+    modifier = rust_literal(case.inputs.scalars[0], case.type_tag)
+    assert case.expectation.text is not None
+    expected = rust_string_literal(case.expectation.text)
     return "\n".join(
         [
             "    #[test]",

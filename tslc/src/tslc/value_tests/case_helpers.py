@@ -5,6 +5,7 @@ from __future__ import annotations
 from tslc.catalog.model import TestCase
 from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.value_tests.case_components import IndexStyle, MemoryStorage
 from tslc.value_tests.model import (
     ValueTestCasePlan,
     ValueTestExpectation,
@@ -33,6 +34,7 @@ def plan_case(
     buffer_offset: int = 0,
     buffer_length: int | None = None,
     source_offset: int = 0,
+    storage: MemoryStorage | None = None,
     text_expected: str | None = None,
     immediate_value: str | None = None,
     generic_defaults: tuple[str, ...] = (),
@@ -43,6 +45,7 @@ def plan_case(
     index_type_tag: str | None = None,
     index_base_spelling: str | None = None,
     index_lanes: int | None = None,
+    index_style: IndexStyle | None = None,
     lanes: int | None = None,
 ) -> ValueTestCasePlan:
     target = None
@@ -59,19 +62,27 @@ def plan_case(
         or index_type_tag is not None
         or index_base_spelling is not None
         or index_lanes is not None
+        or index_style is not None
     ):
         case_index = ValueTestIndex(
             value=index_value,
             type_tag=index_type_tag,
             base_spelling=index_base_spelling,
             lanes=index_lanes,
+            style=index_style,
         )
     memory = None
-    if buffer_offset or buffer_length is not None or source_offset:
+    if (
+        buffer_offset
+        or buffer_length is not None
+        or source_offset
+        or storage is not None
+    ):
         memory = ValueTestMemory(
             buffer_offset=buffer_offset,
             buffer_length=buffer_length,
             source_offset=source_offset,
+            storage=storage,
         )
     return ValueTestCasePlan(
         kind=kind,

@@ -12,9 +12,11 @@ def _convert(case: ValueTestCasePlan) -> str:
     target_plan = case.target
     index = case.index
     assert target_plan is not None and index is not None
-    target = target_plan.base_spelling or case.base_spelling
-    target_lanes = target_plan.lanes or case.lanes
-    expected_type = target_plan.type_tag or case.type_tag
+    assert target_plan.base_spelling is not None and target_plan.type_tag is not None
+    assert target_plan.lanes is not None
+    target = target_plan.base_spelling
+    target_lanes = target_plan.lanes
+    expected_type = target_plan.type_tag
     literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = rust_literal_list(case.expectation.values, expected_type)
     return "\n".join(
@@ -42,9 +44,11 @@ def _repr_cast(case: ValueTestCasePlan) -> str:
         return _fixed_extension_repr_cast(case)
     target_plan = case.target
     assert target_plan is not None
-    target = target_plan.base_spelling or case.base_spelling
-    target_lanes = target_plan.lanes or len(case.expectation.values)
-    expected_type = target_plan.type_tag or case.type_tag
+    assert target_plan.base_spelling is not None and target_plan.type_tag is not None
+    assert target_plan.lanes is not None
+    target = target_plan.base_spelling
+    target_lanes = target_plan.lanes
+    expected_type = target_plan.type_tag
     literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = rust_literal_list(case.expectation.values, expected_type)
     return "\n".join(
@@ -70,9 +74,11 @@ def _fixed_extension_repr_cast(case: ValueTestCasePlan) -> str:
     target_plan = case.target
     representation = case.representation
     assert target_plan is not None and representation is not None
-    target = target_plan.base_spelling or case.base_spelling
-    target_lanes = target_plan.lanes or len(case.expectation.values)
-    expected_type = target_plan.type_tag or case.type_tag
+    assert target_plan.base_spelling is not None and target_plan.type_tag is not None
+    assert target_plan.lanes is not None
+    target = target_plan.base_spelling
+    target_lanes = target_plan.lanes
+    expected_type = target_plan.type_tag
     literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = rust_literal_list(case.expectation.values, expected_type)
     from_array = _required_name(representation.from_array_name, "from_array_name")
@@ -101,9 +107,11 @@ def _fixed_extension_repr_cast(case: ValueTestCasePlan) -> str:
 def _load_convert(case: ValueTestCasePlan) -> str:
     target_plan = case.target
     assert target_plan is not None
-    target = target_plan.base_spelling or case.base_spelling
-    target_lanes = target_plan.lanes or len(case.expectation.values)
-    expected_type = target_plan.type_tag or case.type_tag
+    assert target_plan.base_spelling is not None and target_plan.type_tag is not None
+    assert target_plan.lanes is not None
+    target = target_plan.base_spelling
+    target_lanes = target_plan.lanes
+    expected_type = target_plan.type_tag
     literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = rust_literal_list(case.expectation.values, expected_type)
     if case.representation is not None:
