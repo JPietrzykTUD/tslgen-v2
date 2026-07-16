@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 const SAFETY_FILTERS = ["safe", "internal_unsafe", "caller_unsafe"];
 const NO_REQUIREMENT = "__no_requirement__";
 const BUILD_BRANCH = import.meta.env.VITE_TSLC_GIT_BRANCH ?? "";
 const BUILD_HASH = import.meta.env.VITE_TSLC_GIT_HASH ?? "";
+const EMPTY_RECORDS = [];
 
 function App() {
   const [payload, setPayload] = useState(null);
@@ -49,7 +50,8 @@ function App() {
       });
   }, []);
 
-  const activeSearch = search.trim().toLowerCase();
+  const deferredSearch = useDeferredValue(search);
+  const activeSearch = deferredSearch.trim().toLowerCase();
   const visibleBackends = useMemo(
     () =>
       payload
@@ -118,22 +120,38 @@ function App() {
     enabledTypes,
     payload,
   ]);
+  const filteredPrimitiveCounts = useMemo(
+    () => countRecordsByPrimitive(filteredRecords),
+    [filteredRecords]
+  );
+  const filteredRecordsByPrimitive = useMemo(
+    () => groupRecordsByPrimitive(filteredRecords),
+    [filteredRecords]
+  );
   const visiblePrimitives = useMemo(() => {
     if (!payload) return [];
-    return payload.primitives.filter((primitive) =>
-      primitiveMatchesSearch(primitive, payload.records, activeSearch)
-    );
+    if (activeSearch === "") return payload.primitives;
+    return payload.primitives.filter((primitive) => {
+      const searchText = payload.primitiveSearchText.get(primitive.name) ?? "";
+      return searchText.includes(activeSearch);
+    });
   }, [activeSearch, payload]);
-  const visibleTargetClasses = useMemo(() => {
-    if (!payload) return [];
-    const visibleKeys = new Set(filteredRecords.map((record) => record.target_class));
-    return payload.targetClasses.filter((targetClass) => visibleKeys.has(targetClass.key));
-  }, [filteredRecords, payload]);
   const activePrimitive =
     payload?.primitiveByName.get(selectedPrimitive) ?? visiblePrimitives[0] ?? null;
   const activePrimitiveRecords = activePrimitive
-    ? filteredRecords.filter((record) => record.primitive === activePrimitive.name)
+    ? filteredRecordsByPrimitive.get(activePrimitive.name) ?? EMPTY_RECORDS
     : [];
+  const activePrimitiveCellRecords = useMemo(
+    () => groupRecordsByCell(activePrimitiveRecords),
+    [activePrimitiveRecords]
+  );
+  const visibleTargetClasses = useMemo(() => {
+    if (!payload) return [];
+    const visibleKeys = new Set(
+      activePrimitiveRecords.map((record) => record.target_class)
+    );
+    return payload.targetClasses.filter((targetClass) => visibleKeys.has(targetClass.key));
+  }, [activePrimitiveRecords, payload]);
   const setDeveloperMode = (enabled) => {
     setDevMode(enabled);
     if (typeof window === "undefined") return;
@@ -211,8 +229,8 @@ function App() {
         <aside className="leftColumn">
           <PrimitiveBrowser
             primitives={visiblePrimitives}
-            records={payload.records}
-            filteredRecords={filteredRecords}
+            primitiveCounts={payload.primitiveCounts}
+            filteredPrimitiveCounts={filteredPrimitiveCounts}
             search={search}
             setSearch={setSearch}
             selectedPrimitive={activePrimitive?.name ?? null}
@@ -242,6 +260,7 @@ function App() {
               <TypeHeatmap
                 primitive={activePrimitive}
                 records={activePrimitiveRecords}
+                cellRecords={activePrimitiveCellRecords}
                 visibleTargetClasses={visibleTargetClasses}
                 visibleTypes={visibleTypes}
                 visibleBackends={visibleBackends}
@@ -291,6 +310,7 @@ function App() {
           <Drilldown
             primitive={activePrimitive}
             records={activePrimitiveRecords}
+            cellRecords={activePrimitiveCellRecords}
             activeCell={activeCell}
             visibleBackends={visibleBackends}
             typeByTag={payload.typeByTag}
@@ -303,8 +323,8 @@ function App() {
 
 function PrimitiveBrowser({
   primitives,
-  records,
-  filteredRecords,
+  primitiveCounts,
+  filteredPrimitiveCounts,
   search,
   setSearch,
   selectedPrimitive,
@@ -330,12 +350,8 @@ function PrimitiveBrowser({
           <div className="emptyList">No primitive matches.</div>
         ) : (
           primitives.map((primitive) => {
-            const totalCount = specializationCount(
-              records.filter((record) => record.primitive === primitive.name)
-            );
-            const visibleCount = specializationCount(
-              filteredRecords.filter((record) => record.primitive === primitive.name)
-            );
+            const totalCount = primitiveCounts.get(primitive.name) ?? 0;
+            const visibleCount = filteredPrimitiveCounts.get(primitive.name) ?? 0;
             const available = visibleCount > 0;
             return (
               <button
@@ -561,6 +577,7 @@ function ProfileRollup({ records }) {
 function TypeHeatmap({
   primitive,
   records,
+  cellRecords,
   visibleTargetClasses,
   visibleTypes,
   visibleBackends,
@@ -569,6 +586,10 @@ function TypeHeatmap({
   setActiveCell,
 }) {
   const rows = sortedValues(visibleTargetClasses, targetClassSortKey);
+  const visibleBackendSet = useMemo(
+    () => new Set(visibleBackends),
+    [visibleBackends]
+  );
   if (rows.length === 0 || visibleTypes.length === 0) {
     return <section className="heatmapSection emptyPanel">No visible records.</section>;
   }
@@ -609,19 +630,16 @@ function TypeHeatmap({
                   </Tooltip>
                 </th>
                 {visibleTypes.map((typeTag) => {
-                  const cellRecords = records.filter(
-                    (record) =>
-                      record.type_tag === typeTag &&
-                      record.target_class === targetClass.key
-                  );
-                  const summary = summarizeCell(cellRecords, visibleBackends);
+                  const recordsForCell =
+                    cellRecords.get(cellKey(targetClass.key, typeTag)) ?? EMPTY_RECORDS;
+                  const summary = summarizeCell(recordsForCell, visibleBackendSet);
                   const tooltip = heatCellTooltip(
                     primitive,
                     targetClass,
                     typeTag,
                     typeByTag,
                     summary,
-                    cellRecords,
+                    recordsForCell,
                     visibleBackends
                   );
                   const selected =
@@ -662,7 +680,14 @@ function TypeHeatmap({
   );
 }
 
-function Drilldown({ primitive, records, activeCell, visibleBackends, typeByTag }) {
+function Drilldown({
+  primitive,
+  records,
+  cellRecords,
+  activeCell,
+  visibleBackends,
+  typeByTag,
+}) {
   if (!primitive || !activeCell) {
     return (
       <section className="drilldownPanel">
@@ -675,12 +700,9 @@ function Drilldown({ primitive, records, activeCell, visibleBackends, typeByTag 
       </section>
     );
   }
-  const cellRecords = records.filter(
-    (record) =>
-      record.type_tag === activeCell.typeTag &&
-      record.target_class === activeCell.targetClass
-  );
-  const first = cellRecords[0];
+  const recordsForCell =
+    cellRecords.get(cellKey(activeCell.targetClass, activeCell.typeTag)) ?? EMPTY_RECORDS;
+  const first = recordsForCell[0];
   if (!first) {
     return (
       <section className="drilldownPanel">
@@ -691,10 +713,11 @@ function Drilldown({ primitive, records, activeCell, visibleBackends, typeByTag 
     );
   }
 
-  const compilerGated = cellRecords.some((record) => record.compiler_ids.length > 0);
+  const compilerGated = recordsForCell.some((record) => record.compiler_ids.length > 0);
+  const visibleBackendSet = new Set(visibleBackends);
   const supportRows = compilerGated
-    ? supportedCompilerRows(cellRecords, visibleBackends)
-    : supportedProfileRows(cellRecords, visibleBackends);
+    ? supportedCompilerRows(recordsForCell, visibleBackendSet)
+    : supportedProfileRows(recordsForCell, visibleBackendSet);
   const targetClass = first.targetClass;
   return (
     <section className="drilldownPanel">
@@ -1232,6 +1255,8 @@ function decodePayload(payload) {
     backends,
     backendLabels: new Map(backends.map((backend) => [backend.id, backend.label])),
     primitiveByName: new Map(primitives.map((primitive) => [primitive.name, primitive])),
+    primitiveCounts: countRecordsByPrimitive(records),
+    primitiveSearchText: primitiveSearchText(primitives, records),
     primitives,
     profiles,
     compilers,
@@ -1242,6 +1267,66 @@ function decodePayload(payload) {
     typeByTag,
     types: types.map((type) => type.tag),
   };
+}
+
+function groupRecordsByPrimitive(records) {
+  const grouped = new Map();
+  for (const record of records) {
+    const rows = grouped.get(record.primitive);
+    if (rows) rows.push(record);
+    else grouped.set(record.primitive, [record]);
+  }
+  return grouped;
+}
+
+function groupRecordsByCell(records) {
+  const grouped = new Map();
+  for (const record of records) {
+    const key = cellKey(record.target_class, record.type_tag);
+    const rows = grouped.get(key);
+    if (rows) rows.push(record);
+    else grouped.set(key, [record]);
+  }
+  return grouped;
+}
+
+function cellKey(targetClass, typeTag) {
+  return `${targetClass}\u0000${typeTag}`;
+}
+
+function countRecordsByPrimitive(records) {
+  const counts = new Map();
+  for (const record of records) {
+    counts.set(record.primitive, (counts.get(record.primitive) ?? 0) + record.count);
+  }
+  return counts;
+}
+
+function primitiveSearchText(primitives, records) {
+  const partsByPrimitive = new Map();
+  for (const primitive of primitives) {
+    partsByPrimitive.set(primitive.name, [
+      primitive.name,
+      primitive.source_name,
+      primitive.brief,
+      primitive.detailed,
+      primitive.semantics,
+      ...primitive.expressions.flatMap((expression) => [
+        expression.facade,
+        expression.example,
+      ]),
+    ]);
+  }
+  for (const record of records) {
+    const parts = partsByPrimitive.get(record.primitive);
+    if (parts) parts.push(recordSearchText(record));
+  }
+  return new Map(
+    [...partsByPrimitive].map(([primitive, parts]) => [
+      primitive,
+      parts.filter(Boolean).join(" ").toLowerCase(),
+    ])
+  );
 }
 
 function emptyTargetClass(key) {
@@ -1356,11 +1441,9 @@ function profileCapabilityRollups(records) {
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
-function summarizeCell(records, visibleBackends) {
-  if (visibleBackends.length === 0) return { state: "no", label: "off" };
-  const visibleRecords = records.filter((record) =>
-    visibleBackends.includes(record.backend)
-  );
+function summarizeCell(records, visibleBackendSet) {
+  if (visibleBackendSet.size === 0) return { state: "no", label: "off" };
+  const visibleRecords = records.filter((record) => visibleBackendSet.has(record.backend));
   if (visibleRecords.length === 0) return { state: "no", label: "∅" };
   const recordsByBackend = new Map();
   for (const record of visibleRecords) {
@@ -1368,15 +1451,22 @@ function summarizeCell(records, visibleBackends) {
     backendRecords.push(record);
     recordsByBackend.set(record.backend, backendRecords);
   }
-  if (!visibleBackends.every((backend) => recordsByBackend.has(backend))) {
-    return { state: "mixed", label: "part" };
+  for (const backend of visibleBackendSet) {
+    if (!recordsByBackend.has(backend)) return { state: "mixed", label: "part" };
   }
-  const allBackendsHaveNative = visibleBackends.every((backend) =>
-    recordsByBackend
-      .get(backend)
-      .some((record) => record.implementation_state === "native")
-  );
-  if (allBackendsHaveNative) return { state: "yes", label: "nat" };
+  for (const backend of visibleBackendSet) {
+    if (
+      !recordsByBackend
+        .get(backend)
+        .some((record) => record.implementation_state === "native")
+    ) {
+      return degradedCellSummary(visibleRecords);
+    }
+  }
+  return { state: "yes", label: "nat" };
+}
+
+function degradedCellSummary(visibleRecords) {
   if (visibleRecords.some((record) => record.implementation_state === "fallback")) {
     return { state: "degraded", label: "fb" };
   }
@@ -1395,8 +1485,14 @@ function heatCellTooltip(
   records,
   visibleBackends
 ) {
+  const recordsByBackend = new Map();
+  for (const record of records) {
+    const backendRecords = recordsByBackend.get(record.backend);
+    if (backendRecords) backendRecords.push(record);
+    else recordsByBackend.set(record.backend, [record]);
+  }
   const backendLines = visibleBackends.map((backend) => {
-    const backendRecords = records.filter((record) => record.backend === backend);
+    const backendRecords = recordsByBackend.get(backend) ?? EMPTY_RECORDS;
     if (backendRecords.length === 0) return `${backend}: no emission`;
     const states = sortedValues(
       new Set(backendRecords.map((record) => implementationLabel(record.implementation_state)))
@@ -1430,10 +1526,10 @@ function cellStateDescription(summary) {
   return "emitted specialization";
 }
 
-function supportedProfileRows(records, visibleBackends) {
+function supportedProfileRows(records, visibleBackendSet) {
   const grouped = new Map();
   for (const record of records) {
-    if (!visibleBackends.includes(record.backend)) continue;
+    if (!visibleBackendSet.has(record.backend)) continue;
     const row = grouped.get(record.profile) ?? {
       profile: record.profileInfo,
       records: [],
@@ -1444,10 +1540,10 @@ function supportedProfileRows(records, visibleBackends) {
   return sortedValues(grouped.values(), (row) => row.profile.name);
 }
 
-function supportedCompilerRows(records, visibleBackends) {
+function supportedCompilerRows(records, visibleBackendSet) {
   const grouped = new Map();
   for (const record of records) {
-    if (!visibleBackends.includes(record.backend)) continue;
+    if (!visibleBackendSet.has(record.backend)) continue;
     for (const compiler of record.compiler_ids) {
       const row = grouped.get(compiler) ?? { compiler, records: [] };
       row.records.push(record);
@@ -1542,6 +1638,10 @@ function primitiveMatchesSearch(primitive, records, query) {
 
 function recordMatchesSearch(record, query) {
   if (query === "") return true;
+  return recordSearchText(record).includes(query);
+}
+
+function recordSearchText(record) {
   return [
     record.primitive,
     record.backend,
@@ -1562,8 +1662,7 @@ function recordMatchesSearch(record, query) {
     safetySummary(record.safety),
   ]
     .join(" ")
-    .toLowerCase()
-    .includes(query);
+    .toLowerCase();
 }
 
 function recordRequirementsVisible(record, enabledRequirements) {
