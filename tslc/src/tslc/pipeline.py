@@ -418,6 +418,8 @@ class _GenerationSession:
                     callee_origins=slot.callee_origins,
                     emitted=id(slot) not in pruned_ids,
                     unresolved_callee=slot.unresolved_callee,
+                    selection_required_features=slot.selection_required_features,
+                    selector_source=slot.selector_source,
                 )
                 for slot in lowered_specs
             )
@@ -500,6 +502,8 @@ class _GenerationSession:
                         spec=lowered.specialization,
                         callees=callees,
                         callee_origins=callee_origins,
+                        selection_required_features=slot.required_features,
+                        selector_source=slot.implementation.selector_source,
                     )
                 )
                 discovered_dependencies.update(

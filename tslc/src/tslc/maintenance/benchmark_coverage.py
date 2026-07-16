@@ -20,14 +20,13 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from tslc.api import _ARITH_TYPE_TAGS, generate_project
+from tslc.authoring import check_catalog
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
     BenchmarkCoverageEntry,
     BenchmarkProjectPlan,
 )
-from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.model import Catalog
-from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.maintenance.benchmark_inventory import (
     BenchmarkShapeInventoryEntry,
@@ -42,8 +41,6 @@ from tslc.maintenance.benchmark_inventory import (
 )
 from tslc.maintenance import _repo_context
 from tslc.pipeline import CoverageEntry, SkippedEntry
-from tslc.sources import SourceLoader
-from tslc.syntax.parser import TslParser
 
 _BASELINE_VERSION = 1
 
@@ -435,16 +432,20 @@ def _selection_slot(entry: CoverageEntry | SkippedEntry) -> BenchmarkSlotKey:
 
 
 def _load_catalog(sources: Path) -> tuple[Catalog | None, tuple[str, ...]]:
-    parsed = TslParser(load_default_tsl_grammar()).parse(
-        SourceLoader().load_dir(sources).documents
-    )
-    built = CatalogBuilder().build(parsed)
+    """Load and validate the corpus through the authoring boundary.
+
+    The benchmark audit only generates the C++ backend, so validation is
+    scoped to the same backend as :func:`compute_benchmark_coverage_audit`'s
+    ``generate_project`` call.
+    """
+
+    checked = check_catalog((sources,), backends=("cpp",))
     errors = tuple(
         format_diagnostic(diagnostic)
-        for diagnostic in built.diagnostics
+        for diagnostic in checked.diagnostics
         if diagnostic.severity == "error"
     )
-    return built.catalog, errors
+    return checked.catalog, errors
 
 
 def compute_benchmark_coverage_audit(

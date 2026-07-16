@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import ImplementationSafety
+from tslc.diagnostics import SourceSpan
 from tslc.lower.dependencies import (
     CallDependency,
     CallDependencyOrigin,
@@ -24,6 +25,11 @@ class _LoweredSlot:
     callees: frozenset[CallDependency]
     callee_origins: tuple["CallDependencyOrigin", ...] = ()
     unresolved_callee: "CallDependencyOrigin | None" = None
+    # Selection-time facts retained for explicit analyses. Propagation rewrites
+    # ``spec.required_features``; the declared set and the authored selector
+    # entry stay available so analyses can attribute the transitive delta.
+    selection_required_features: frozenset[str] = frozenset()
+    selector_source: SourceSpan | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +43,12 @@ class LoweringTraceSlot:
     callee_origins: tuple[CallDependencyOrigin, ...]
     emitted: bool
     unresolved_callee: CallDependencyOrigin | None = None
+    # Target features the selected implementation declared in source before
+    # call-graph propagation; the delta against
+    # ``specialization.required_features`` is what dependency closure added.
+    selection_required_features: frozenset[str] = frozenset()
+    # The authored selector entry that produced this specialization, if any.
+    selector_source: SourceSpan | None = None
 
 
 @dataclass(frozen=True, slots=True)
