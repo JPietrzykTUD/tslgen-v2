@@ -5,6 +5,7 @@ const NO_REQUIREMENT = "__no_requirement__";
 const BUILD_BRANCH = import.meta.env.VITE_TSLC_GIT_BRANCH ?? "";
 const BUILD_HASH = import.meta.env.VITE_TSLC_GIT_HASH ?? "";
 const EMPTY_RECORDS = [];
+const BITSET_WORD_BITS = 32;
 
 function App() {
   const [payload, setPayload] = useState(null);
@@ -99,17 +100,32 @@ function App() {
     [payload, enabledTypes]
   );
   const filteredRecords = useMemo(() => {
-    if (!payload) return [];
-    return payload.records.filter(
-      (record) =>
-        recordRequirementsVisible(record, enabledRequirements) &&
-        (record.compiler_ids.length > 0 || enabledProfiles?.has(record.profile)) &&
-        recordCompilerVisible(record, enabledCompilers) &&
-        enabledFamilies?.has(record.family) &&
-        recordTypeVisible(record, enabledTypes, payload.typeByTag) &&
-        enabledBackends?.has(record.backend) &&
-        enabledSafety.has(safetyKind(record.safety))
-    );
+    if (
+      !payload ||
+      !enabledProfiles ||
+      !enabledCompilers ||
+      !enabledRequirements ||
+      !enabledFamilies ||
+      !enabledTypes ||
+      !enabledBackends
+    ) {
+      return null;
+    }
+    return filteredRecordMask(payload.filterIndex, {
+      enabledBackends,
+      enabledCompilers,
+      enabledFamilies,
+      enabledProfiles,
+      enabledRequirements,
+      enabledSafety,
+      enabledTypes,
+      allBackends: payload.backends.map((backend) => backend.id),
+      allCompilers: payload.compilers,
+      allFamilies: payload.families,
+      allProfiles: payload.profiles.map((profile) => profile.name),
+      allRequirements: payload.requirements,
+      allTypes: payload.types,
+    });
   }, [
     enabledBackends,
     enabledCompilers,
@@ -121,12 +137,11 @@ function App() {
     payload,
   ]);
   const filteredPrimitiveCounts = useMemo(
-    () => countRecordsByPrimitive(filteredRecords),
-    [filteredRecords]
-  );
-  const filteredRecordsByPrimitive = useMemo(
-    () => groupRecordsByPrimitive(filteredRecords),
-    [filteredRecords]
+    () =>
+      payload && filteredRecords
+        ? countRecordsByPrimitiveMask(payload.records, filteredRecords)
+        : new Map(),
+    [filteredRecords, payload]
   );
   const visiblePrimitives = useMemo(() => {
     if (!payload) return [];
@@ -138,9 +153,18 @@ function App() {
   }, [activeSearch, payload]);
   const activePrimitive =
     payload?.primitiveByName.get(selectedPrimitive) ?? visiblePrimitives[0] ?? null;
-  const activePrimitiveRecords = activePrimitive
-    ? filteredRecordsByPrimitive.get(activePrimitive.name) ?? EMPTY_RECORDS
-    : [];
+  const activePrimitiveRecords = useMemo(
+    () =>
+      payload && activePrimitive && filteredRecords
+        ? recordsForPrimitiveMask(
+            payload.records,
+            payload.recordIndexesByPrimitive,
+            filteredRecords,
+            activePrimitive.name
+          )
+        : EMPTY_RECORDS,
+    [activePrimitive, filteredRecords, payload]
+  );
   const activePrimitiveCellRecords = useMemo(
     () => groupRecordsByCell(activePrimitiveRecords),
     [activePrimitiveRecords]
@@ -1250,6 +1274,9 @@ function decodePayload(payload) {
       });
     }
   }
+  const requirements = uniqueRequirements(records);
+  const families = sortedValues(new Set(records.map((record) => record.family)));
+  const typeTags = types.map((type) => type.tag);
 
   return {
     backends,
@@ -1257,16 +1284,169 @@ function decodePayload(payload) {
     primitiveByName: new Map(primitives.map((primitive) => [primitive.name, primitive])),
     primitiveCounts: countRecordsByPrimitive(records),
     primitiveSearchText: primitiveSearchText(primitives, records),
+    filterIndex: buildFilterIndex(records, {
+      compilers,
+      families,
+      profiles: profiles.map((profile) => profile.name),
+      requirements,
+      types: typeTags,
+      backends: backends.map((backend) => backend.id),
+    }),
+    recordIndexesByPrimitive: recordIndexesByPrimitive(records),
     primitives,
     profiles,
     compilers,
     targetClasses,
     records,
-    requirements: uniqueRequirements(records),
-    families: sortedValues(new Set(records.map((record) => record.family))),
+    requirements,
+    families,
     typeByTag,
-    types: types.map((type) => type.tag),
+    types: typeTags,
   };
+}
+
+function buildFilterIndex(records, catalog) {
+  const typeTags = new Set(catalog.types);
+  const index = {
+    size: records.length,
+    all: fullBitset(records.length),
+    byBackend: new Map(),
+    byCompiler: new Map(),
+    byFamily: new Map(),
+    byProfile: new Map(),
+    byRequirement: new Map(),
+    bySafety: new Map(),
+    byType: new Map(),
+    compilerGated: emptyBitset(records.length),
+    noCompiler: emptyBitset(records.length),
+    noRequirement: emptyBitset(records.length),
+    unknownType: emptyBitset(records.length),
+  };
+  for (const [recordIndex, record] of records.entries()) {
+    setIndexedBit(index.byBackend, record.backend, recordIndex, index.size);
+    setIndexedBit(index.byFamily, record.family, recordIndex, index.size);
+    setIndexedBit(index.byProfile, record.profile, recordIndex, index.size);
+    setIndexedBit(index.bySafety, safetyKind(record.safety), recordIndex, index.size);
+    if (typeTags.has(record.type_tag)) {
+      setIndexedBit(index.byType, record.type_tag, recordIndex, index.size);
+    } else {
+      setBit(index.unknownType, recordIndex);
+    }
+
+    if (record.compiler_ids.length === 0) {
+      setBit(index.noCompiler, recordIndex);
+    } else {
+      setBit(index.compilerGated, recordIndex);
+      for (const compiler of record.compiler_ids) {
+        setIndexedBit(index.byCompiler, compiler, recordIndex, index.size);
+      }
+    }
+
+    if (record.required_features.length === 0) {
+      setBit(index.noRequirement, recordIndex);
+    } else {
+      for (const requirement of record.required_features) {
+        setIndexedBit(index.byRequirement, requirement, recordIndex, index.size);
+      }
+    }
+  }
+  return index;
+}
+
+function filteredRecordMask(index, filters) {
+  const result = cloneBitset(
+    profileMask(index, filters.enabledProfiles, filters.allProfiles)
+  );
+  andInto(
+    result,
+    compilerMask(index, filters.enabledCompilers, filters.allCompilers)
+  );
+  andInto(
+    result,
+    requirementMask(index, filters.enabledRequirements, filters.allRequirements)
+  );
+  andInto(
+    result,
+    unionMask(index, index.byFamily, filters.enabledFamilies, filters.allFamilies)
+  );
+  andInto(
+    result,
+    typeMask(index, filters.enabledTypes, filters.allTypes)
+  );
+  andInto(
+    result,
+    unionMask(index, index.byBackend, filters.enabledBackends, filters.allBackends)
+  );
+  andInto(
+    result,
+    unionMask(index, index.bySafety, filters.enabledSafety, SAFETY_FILTERS)
+  );
+  return result;
+}
+
+function profileMask(index, enabledProfiles, allProfiles) {
+  if (enabledProfiles.size === allProfiles.length) return index.all;
+  const mask = emptyBitset(index.size);
+  orInto(mask, index.compilerGated);
+  for (const profile of enabledProfiles) {
+    const profileBits = index.byProfile.get(profile);
+    if (profileBits) orInto(mask, profileBits);
+  }
+  return mask;
+}
+
+function compilerMask(index, enabledCompilers, allCompilers) {
+  if (enabledCompilers.size === allCompilers.length) return index.all;
+  const mask = cloneBitset(index.noCompiler);
+  for (const compiler of enabledCompilers) {
+    const compilerBits = index.byCompiler.get(compiler);
+    if (compilerBits) orInto(mask, compilerBits);
+  }
+  return mask;
+}
+
+function requirementMask(index, enabledRequirements, allRequirements) {
+  if (enabledRequirements.size === allRequirements.length) return index.all;
+  const mask = cloneBitset(index.all);
+  for (const requirement of allRequirements) {
+    if (enabledRequirements.has(requirement)) continue;
+    if (requirement === NO_REQUIREMENT) {
+      andNotInto(mask, index.noRequirement);
+    } else {
+      const requirementBits = index.byRequirement.get(requirement);
+      if (requirementBits) andNotInto(mask, requirementBits);
+    }
+  }
+  return mask;
+}
+
+function typeMask(index, enabledTypes, allTypes) {
+  if (enabledTypes.size === allTypes.length) return index.all;
+  const mask = cloneBitset(index.unknownType);
+  for (const typeTag of enabledTypes) {
+    const typeBits = index.byType.get(typeTag);
+    if (typeBits) orInto(mask, typeBits);
+  }
+  return mask;
+}
+
+function unionMask(index, bitsetsByValue, enabledValues, allValues) {
+  if (enabledValues.size === allValues.length) return index.all;
+  const mask = emptyBitset(index.size);
+  for (const value of enabledValues) {
+    const bits = bitsetsByValue.get(value);
+    if (bits) orInto(mask, bits);
+  }
+  return mask;
+}
+
+function setIndexedBit(bitsetsByValue, value, recordIndex, size) {
+  let bits = bitsetsByValue.get(value);
+  if (!bits) {
+    bits = emptyBitset(size);
+    bitsetsByValue.set(value, bits);
+  }
+  setBit(bits, recordIndex);
 }
 
 function groupRecordsByPrimitive(records) {
@@ -1275,6 +1455,16 @@ function groupRecordsByPrimitive(records) {
     const rows = grouped.get(record.primitive);
     if (rows) rows.push(record);
     else grouped.set(record.primitive, [record]);
+  }
+  return grouped;
+}
+
+function recordIndexesByPrimitive(records) {
+  const grouped = new Map();
+  for (const [recordIndex, record] of records.entries()) {
+    const rows = grouped.get(record.primitive);
+    if (rows) rows.push(recordIndex);
+    else grouped.set(record.primitive, [recordIndex]);
   }
   return grouped;
 }
@@ -1300,6 +1490,81 @@ function countRecordsByPrimitive(records) {
     counts.set(record.primitive, (counts.get(record.primitive) ?? 0) + record.count);
   }
   return counts;
+}
+
+function countRecordsByPrimitiveMask(records, mask) {
+  const counts = new Map();
+  forEachSetBit(mask, records.length, (recordIndex) => {
+    const record = records[recordIndex];
+    counts.set(record.primitive, (counts.get(record.primitive) ?? 0) + record.count);
+  });
+  return counts;
+}
+
+function recordsForPrimitiveMask(records, indexesByPrimitive, mask, primitive) {
+  const indexes = indexesByPrimitive.get(primitive);
+  if (!indexes) return EMPTY_RECORDS;
+  const visibleRecords = [];
+  for (const recordIndex of indexes) {
+    if (bitIsSet(mask, recordIndex)) visibleRecords.push(records[recordIndex]);
+  }
+  return visibleRecords;
+}
+
+function emptyBitset(size) {
+  return new Uint32Array(Math.ceil(size / BITSET_WORD_BITS));
+}
+
+function fullBitset(size) {
+  const bits = emptyBitset(size);
+  bits.fill(0xffffffff);
+  const remainder = size % BITSET_WORD_BITS;
+  if (remainder !== 0) {
+    bits[bits.length - 1] = 2 ** remainder - 1;
+  }
+  return bits;
+}
+
+function cloneBitset(bits) {
+  return new Uint32Array(bits);
+}
+
+function setBit(bits, index) {
+  bits[index >>> 5] |= 1 << (index & 31);
+}
+
+function bitIsSet(bits, index) {
+  return ((bits[index >>> 5] >>> (index & 31)) & 1) === 1;
+}
+
+function orInto(target, source) {
+  for (let index = 0; index < target.length; index += 1) {
+    target[index] |= source[index];
+  }
+}
+
+function andInto(target, source) {
+  for (let index = 0; index < target.length; index += 1) {
+    target[index] &= source[index];
+  }
+}
+
+function andNotInto(target, source) {
+  for (let index = 0; index < target.length; index += 1) {
+    target[index] &= ~source[index];
+  }
+}
+
+function forEachSetBit(bits, size, callback) {
+  for (let wordIndex = 0; wordIndex < bits.length; wordIndex += 1) {
+    let word = bits[wordIndex] >>> 0;
+    while (word !== 0) {
+      const bit = 31 - Math.clz32(word & -word);
+      const recordIndex = wordIndex * BITSET_WORD_BITS + bit;
+      if (recordIndex < size) callback(recordIndex);
+      word = (word & (word - 1)) >>> 0;
+    }
+  }
 }
 
 function primitiveSearchText(primitives, records) {
