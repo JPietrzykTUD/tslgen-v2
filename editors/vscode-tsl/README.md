@@ -41,7 +41,11 @@ requires the pinned packages in `runtime-requirements.txt`, freezes the same
 compiler used by contributors, smoke-tests version/preview/LSP behavior with
 external Python discovery disabled, runs client tests, emits a target-specific
 VSIX, and verifies every manifest checksum. CI performs that gate for all five
-advertised targets.
+advertised targets. On a `v*` tag, the editor workflow verifies the generated
+checksums again and attaches all five self-contained VSIX files and their
+checksums to the matching GitHub Release. The platform-neutral contributor
+preview remains a short-lived workflow artifact and is not published as a
+release asset.
 
 Commands:
 
