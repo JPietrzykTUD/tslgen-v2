@@ -2,7 +2,61 @@
 
 ## Status and basis
 
-Status: Phase 1 implemented (slices 1–8, 2026-07-16); Phases 2–3 not started.
+Status: Phases 1 and 2 implemented (slices 1–19); Phase 3 not started.
+
+Phase 2 implementation notes (one commit per slice):
+
+- Slice 9 (af85c56): TSL-BACKEND-RUST-UNSUPPORTED-MULTI-POSITION-OVERLOAD in
+  pre-render validation; C++ keeps general handling.
+- Slice 14 (67f3a2a): maintenance/_repo_context.py replaces six repo-root
+  copies; lazy resolution, argparse exit 2 outside a checkout; meta-test
+  forbids module-level probing.
+- Slice 13 (b2ebf7c): doctor consumes BackendCapability
+  verify_machine_profile/toolchain_commands hooks (fake third backend now
+  reports instead of raising); driver callbacks return frozen
+  BackendPreparation/CommandFollowUp; oneAPI/WASI paths live in the committed
+  [tslc.tools] role table with PATH-based fallbacks.
+- Slice 15 (752f1f9): metadata_audit loads via check_documents and derives
+  suggestions from pipeline.generate(render_artifacts=False) trace slots
+  (declared selection features + selector spans added to the public trace);
+  benchmark_coverage loads via check_catalog; audit output byte-identical.
+- Slice 11 (7a110a1): typed storage/index_style plan facts (no fabricated
+  result_kind); registry-required memory facts; renderer fallbacks deleted;
+  typed case-drop causes incl. suppressed fuzz cases; protocol-declared
+  pattern hooks. Full-corpus output byte-identical.
+- Slice 12 (777fe00): ValueTestScalable carries typed facts (no tsl::/ull/
+  quoting in plans); one shared scalable-facts builder; case_kinds pre-filters
+  removed (backend_unsupported, not authored_unplanned); value_tests/
+  lane_math.py owns shared lane/tiling/cross-lane/seed-mix invariants for
+  value tests and benchmarks. Output byte-identical (sve + fixed profiles).
+- Slice 16 (c1ca3f5): SignatureTypeForms member/member_parameter/
+  concrete_integral_mask forms; PIVOT, benchmark C++, and facade ladders
+  consume the shared tables; Rust VectorFor spelling has one owner. Projects
+  and PIVOT YAML byte-identical.
+- Slice 17 (8f67473): backend-owned CppProjectRenderModel decides headers,
+  guards, registrations, and the typed smoke plan; render/ formats public
+  accessors only (AST meta-test). Output byte-identical (scalar,avx2,sve).
+- Slice 10 (eac988b): explorer status from Selector.evaluate_candidates with
+  verbatim rejection reasons; catalog/selector_paths.py is the one selector-
+  path owner (builder, index, specialization context); where levels no longer
+  indexed as type groups (only observable index change: 7 corpus refs);
+  explain on public emitted_extensions; AST guards added.
+- Slice 18 (14795a6): env-through-CommandRunner (no os.environ mutation);
+  serializer completeness guard (caught two unserialized slice-11 facts);
+  cross-PYTHONHASHSEED subprocess determinism test; build-verified evidence
+  from maintenance/build_verified.py instead of AST-sniffing test source.
+- Slice 19 (c4a811b): generation_command.py core behind typed settings and a
+  pipeline seam; _cli_options.py owns CSV/assignment/toolchain-merge parsing
+  for cli, doctor, and maintenance CLIs; args mutation replaced by derived
+  settings.
+
+Known issue outside this plan: commit f0379f4 ("Refactor conditional
+expressions...") changed C++ conditional rendering without regenerating the
+committed byte-stability goldens, so
+test_profile_rendering.py::test_representative_project_shape_is_byte_stable
+fails at HEAD. All Phase 2 byte-identity proofs therefore used clean-HEAD
+worktree comparisons, which are exact regardless. The golden refresh is left
+to the author of f0379f4.
 
 Phase 1 implementation notes:
 
