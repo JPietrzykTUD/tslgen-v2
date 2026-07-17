@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+from inspect import signature
 from pathlib import Path
 
 from tslc.backend.registry import create_backend_dialect
@@ -9,7 +11,7 @@ from tslc.catalog.builder import CatalogBuildResult, CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import load_default_tsl_grammar
-from tslc.diagnostics import SourceLocation
+from tslc.diagnostics import Diagnostic, SourceLocation
 from tslc.lower.lowerer import Lowerer
 from tslc.select.selector import Selector
 from tslc.sources import SourceDocument
@@ -27,6 +29,28 @@ _TARGET_FAMILIES = (
     "    x86:\n"
     "      extension_families [x86]\n"
 )
+
+
+def test_compiler_diagnostic_producers_use_full_spans() -> None:
+    assert "location" not in signature(Diagnostic).parameters
+    source_root = Path(__file__).resolve().parents[1] / "src" / "tslc"
+    offenders: list[str] = []
+    for path in sorted(source_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            diagnostic_call = (
+                isinstance(node.func, ast.Name) and node.func.id == "Diagnostic"
+            ) or (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr == "Diagnostic"
+            )
+            if not diagnostic_call:
+                continue
+            if any(keyword.arg == "location" for keyword in node.keywords):
+                offenders.append(f"{path.relative_to(source_root)}:{node.lineno}")
+    assert offenders == []
 
 
 def _build(text: str, path: Path = Path("diagnostic_fixture.tsl")) -> CatalogBuildResult:

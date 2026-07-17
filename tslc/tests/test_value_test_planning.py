@@ -1983,7 +1983,7 @@ def test_incompatible_value_test_header_groups_are_diagnosed() -> None:
                 "header groups ['first_group', 'second_group'] through extensions "
                 "['first', 'second']"
             ),
-            location=first.source.start if first.source is not None else None,
+            span=first.source,
         )
     ]
 

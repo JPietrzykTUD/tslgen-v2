@@ -234,6 +234,24 @@ def test_backend_dialects_do_not_classify_rendered_expression_text() -> None:
         assert 'startswith("&' not in text, name
 
 
+def test_fully_typed_lowering_boundaries_do_not_use_getattr() -> None:
+    checked = (
+        _REPO_ROOT / "tslc" / "src" / "tslc" / "lower" / "_query_leaf.py",
+        _REPO_ROOT / "tslc" / "src" / "tslc" / "pivot" / "planner.py",
+    )
+    offenders: list[str] = []
+    for path in checked:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "getattr"
+            ):
+                offenders.append(f"{path.name}:{node.lineno}")
+    assert offenders == []
+
+
 def _body_text_replace_calls(path: Path, text: str) -> list[str]:
     tree = ast.parse(text, filename=str(path))
     calls: list[str] = []

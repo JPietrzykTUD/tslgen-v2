@@ -3,7 +3,7 @@
 ## Status and basis
 
 Status: Phases 1 and 2 implemented (slices 1–19); Phase 3 implemented through
-slice 24. Slices 25–27 remain.
+slice 25. Slices 26–27 remain.
 
 Phase 3 implementation notes (one commit per slice):
 
@@ -26,6 +26,11 @@ Phase 3 implementation notes (one commit per slice):
   Seven-family consistency and render-hash tests pin the additive boundary and
   byte-identical output. Only the backend render dispatch remains, so a
   scenario registry is not justified by the plan's three-owner threshold.
+- Slice 25: all compiler diagnostic producers use full `SourceSpan` values and
+  the transitional `Diagnostic(location=...)` initializer is gone; strict-mode,
+  variant, value-test, and snapshot projections preserve end ranges (snapshot
+  schema version 2). Fully typed query/PIVOT dependencies use direct access,
+  with mypy and AST inventories guarding both boundaries.
 
 Phase 2 implementation notes (one commit per slice):
 

@@ -26,7 +26,7 @@ from tslc.maintenance._repo_context import RepoContext
 from tslc.diagnostics import has_errors
 from tslc.pipeline import GenerationMode, GenerationResult
 
-_SNAPSHOT_VERSION = 1
+_SNAPSHOT_VERSION = 2
 _SNAPSHOT_FILE = "snapshot.json"
 _GENERATED_DIR = "generated"
 

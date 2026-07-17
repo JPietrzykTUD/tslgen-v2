@@ -59,6 +59,12 @@ request selection and lowering. Catalog `list`/`show` and `doctor` consume the
 same typed catalog, backend registry, machine-profile projection, and verifier
 drivers rather than maintaining parallel compiler knowledge.
 
+Compiler diagnostics carry one canonical, end-exclusive `SourceSpan`; producers
+must supply `span=` and may project its start only for point-oriented display
+APIs. Strict-mode promotion, variant context, value-test coverage, and generation
+snapshot schema version 2 preserve the complete range rather than rebuilding it
+from a start location.
+
 Editor overlays use that same boundary through
 [lsp/workspace.py](src/tslc/lsp/workspace.py). A workspace-scoped parsed cache
 reparses changed buffers and reuses unchanged documents; a per-document

@@ -19,7 +19,7 @@ from types import MappingProxyType
 from typing import Any
 
 from tslc.catalog.target_families import TargetFamilyCatalog, TargetFeatureCapability
-from tslc.diagnostics import Diagnostic, SourceLocation, sort_diagnostics
+from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
 
 # Sentinel used by the generic/scalar profile to mean "no target features".
 _NO_SIMD = "NOSIMD-INVALID"
@@ -148,7 +148,13 @@ def load_machine_profiles_checked(
                     severity="error",
                     code="TSL-PROFILE-MALFORMED-JSON",
                     message=f"could not parse machine profiles {path}: {exc.msg}",
-                    location=SourceLocation(path, exc.lineno, exc.colno),
+                    span=SourceSpan(
+                        path,
+                        exc.lineno,
+                        exc.colno,
+                        exc.lineno,
+                        exc.colno + 1,
+                    ),
                 ),
             ),
             digest=digest,
@@ -678,5 +684,5 @@ def _diagnostic(path: Path, code: str, message: str) -> Diagnostic:
         severity="error",
         code=code,
         message=message,
-        location=SourceLocation(path, 1, 1),
+        span=SourceSpan(path, 1, 1, 1, 2),
     )

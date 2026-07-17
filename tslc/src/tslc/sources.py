@@ -5,7 +5,7 @@ from hashlib import sha256
 from collections.abc import Iterable
 from pathlib import Path
 
-from tslc.diagnostics import Diagnostic, SourceLocation
+from tslc.diagnostics import Diagnostic, SourceSpan
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,7 +36,7 @@ class SourceLoader:
                         severity="error",
                         code="TSL-SOURCE-UNSUPPORTED-EXTENSION",
                         message=f"source path {resolved} is not a .tsl file",
-                        location=SourceLocation(resolved, 1, 1),
+                        span=_path_start(resolved),
                     )
                 )
                 continue
@@ -47,7 +47,7 @@ class SourceLoader:
                         severity="error",
                         code="TSL-SOURCE-NOT-FOUND",
                         message=f"source path {resolved} does not exist",
-                        location=SourceLocation(resolved, 1, 1),
+                        span=_path_start(resolved),
                     )
                 )
                 continue
@@ -60,7 +60,7 @@ class SourceLoader:
                         severity="error",
                         code="TSL-SOURCE-READ-FAILED",
                         message=f"source path {resolved} could not be read as UTF-8: {exc}",
-                        location=SourceLocation(resolved, 1, 1),
+                        span=_path_start(resolved),
                     )
                 )
                 continue
@@ -83,6 +83,10 @@ class SourceLoader:
 
         paths = tuple(sorted(root.rglob("*.tsl"), key=lambda item: item.as_posix()))
         return self.load(paths)
+
+
+def _path_start(path: Path) -> SourceSpan:
+    return SourceSpan(path, 1, 1, 1, 2)
 
 
 def expand_source_paths(source_paths: Iterable[Path | str]) -> tuple[Path, ...]:

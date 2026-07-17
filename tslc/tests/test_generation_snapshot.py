@@ -31,7 +31,7 @@ from tslc.benchmark.model import (
     BenchmarkVectorScalarScenario,
     SpecializationKey,
 )
-from tslc.diagnostics import Diagnostic, SourceLocation
+from tslc.diagnostics import Diagnostic, SourceLocation, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.maintenance import _generation_snapshot_semantics as semantics_module
 from tslc.maintenance._generation_snapshot_semantics import (
@@ -73,7 +73,7 @@ from tslc.value_tests.model import (
 
 def _document() -> dict[str, object]:
     return {
-        "version": 1,
+        "version": 2,
         "case": "focused",
         "request": {"profiles": ["avx2"], "backends": ["cpp"]},
         "input_manifest": [
@@ -107,10 +107,12 @@ def _document() -> dict[str, object]:
                     "severity": "info",
                     "code": "TSL-PROBE",
                     "message": "probe",
-                    "location": {
+                    "span": {
                         "path": "tsldata/probe.tsl",
                         "line": 3,
                         "column": 5,
+                        "end_line": 3,
+                        "end_column": 6,
                     },
                 }
             ],
@@ -195,7 +197,7 @@ def test_skip_mismatch_is_detected() -> None:
     assert any("semantics.skipped" in difference for difference in differences)
 
 
-def test_diagnostic_location_mismatch_is_detected() -> None:
+def test_diagnostic_span_mismatch_is_detected() -> None:
     baseline = _document()
     candidate = deepcopy(baseline)
     semantics = candidate["semantics"]
@@ -204,13 +206,13 @@ def test_diagnostic_location_mismatch_is_detected() -> None:
     assert isinstance(diagnostics, list)
     diagnostic = diagnostics[0]
     assert isinstance(diagnostic, dict)
-    location = diagnostic["location"]
-    assert isinstance(location, dict)
-    location["line"] = 4
+    span = diagnostic["span"]
+    assert isinstance(span, dict)
+    span["end_column"] = 7
 
     differences = compare_snapshot_documents(baseline, candidate)
 
-    assert any("location.line" in difference for difference in differences)
+    assert any("span.end_column" in difference for difference in differences)
 
 
 def test_verification_plan_mismatch_is_detected() -> None:
@@ -255,11 +257,9 @@ _DELIBERATE_OMISSIONS: dict[type, frozenset[str]] = {
     # the full generated text would duplicate the generated tree in every
     # snapshot document.
     Artifact: frozenset({"content"}),
-    # span: the span start is serialized under the "location" key; end
-    # positions follow the producer span migration (audit fix-plan slice 25).
     # related/help: secondary presentation of the same diagnostic identity
-    # (severity/code/message/position); deliberately outside snapshot compare.
-    Diagnostic: frozenset({"span", "related", "help"}),
+    # (severity/code/message/span); deliberately outside snapshot compare.
+    Diagnostic: frozenset({"related", "help"}),
     # artifacts: serialized separately via serialize_artifact in the snapshot
     # document.  rendered: decomposed into the verification/value_tests/
     # benchmarks records.  emitted_profiles: render intermediates whose
@@ -274,7 +274,8 @@ _DELIBERATE_OMISSIONS: dict[type, frozenset[str]] = {
 }
 
 _LOCATION = SourceLocation(Path("tsldata/probe.tsl"), 3, 5)
-_DIAGNOSTIC = Diagnostic("warning", "TSL-PROBE", "probe", location=_LOCATION)
+_SPAN = SourceSpan.point(_LOCATION)
+_DIAGNOSTIC = Diagnostic("warning", "TSL-PROBE", "probe", span=_SPAN)
 _COVERAGE = CoverageEntry("avx2", "cpp", "add", "avx2", "si32")
 _SKIPPED = SkippedEntry("avx2", "cpp", "add", "avx2", "si32", "not lowered")
 _VERIFY_RUNNER = VerifyRunner("sde", "avx2")

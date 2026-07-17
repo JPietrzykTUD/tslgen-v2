@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
-from tslc.diagnostics import Diagnostic, SourceLocation
+from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.value_tests.model import (
     ValueTestBackendSupport,
     ValueTestCasePlan,
@@ -206,7 +206,7 @@ def parity_gaps(
 
 def coverage_diagnostics(
     entries: tuple[ValueTestCoverageEntry, ...],
-    locations: Mapping[CoverageIdentity, SourceLocation | None],
+    locations: Mapping[CoverageIdentity, SourceSpan | None],
 ) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
     for entry in entries:
@@ -221,7 +221,7 @@ def coverage_diagnostics(
                     f"of primitive {entry.primitive_name!r} in profile {entry.profile_name!r}: "
                     f"{entry.reason}{_case_kind_suffix(entry)}"
                 ),
-                location=locations.get(coverage_identity(entry)),
+                span=locations.get(coverage_identity(entry)),
             )
         )
     return tuple(diagnostics)

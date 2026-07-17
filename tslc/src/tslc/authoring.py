@@ -13,7 +13,7 @@ from tslc.catalog.model import Catalog
 from tslc.catalog.validation import validate_catalog
 from tslc.catalog_index import CatalogIndex, CatalogIndexCache, build_catalog_index
 from tslc.compiler_assets import load_default_tsl_grammar
-from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
+from tslc.diagnostics import Diagnostic, SourceSpan, has_errors, sort_diagnostics
 from tslc.sources import SourceDocument, SourceLoader, expand_source_paths
 from tslc.syntax.ast import OuterTslParseResult, ParsedOuterTslDocument
 from tslc.syntax.parser import TslParser
@@ -267,7 +267,7 @@ def _duplicate_path(path: Path, kind: str) -> Diagnostic:
         severity="error",
         code="TSL-AUTHORING-DUPLICATE-PATH",
         message=f"duplicate normalized {kind} path {path}",
-        location=SourceLocation(path, 1, 1),
+        span=SourceSpan(path, 1, 1, 1, 2),
     )
 
 

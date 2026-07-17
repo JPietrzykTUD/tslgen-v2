@@ -36,7 +36,7 @@ from tslc.catalog.model import (
 )
 from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
 from tslc.catalog.signatures import parse_signature
-from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
+from tslc.diagnostics import Diagnostic, SourceSpan, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import dependency_sort_key
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer, LoweringResult
@@ -543,7 +543,7 @@ class _GenerationSession:
             severity="info",
             code="TSL-PIPELINE-PRUNED-SPECIALIZATION",
             message=reason,
-            location=slot.spec.source.start if slot.spec.source is not None else None,
+            span=slot.spec.source,
         )
         entry = SkippedEntry(
             profile=profile_name,
@@ -698,7 +698,7 @@ def _strict_lowering_diagnostics(entry: SkippedEntry) -> tuple[Diagnostic, ...]:
             entry,
             code=diagnostic.code,
             message=diagnostic.message,
-            location=diagnostic.location,
+            span=diagnostic.span,
         )
         for diagnostic in coverage_gaps
     )
@@ -717,13 +717,13 @@ def _strict_skip_diagnostic(
     *,
     code: str,
     message: str,
-    location: SourceLocation | None = None,
+    span: SourceSpan | None = None,
 ) -> Diagnostic:
     return Diagnostic(
         severity="error",
         code=code,
         message=f"{_skipped_label(entry)} skipped: {message}",
-        location=location,
+        span=span,
     )
 
 

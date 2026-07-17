@@ -24,7 +24,7 @@ from tslc.benchmark.model import (
     BenchmarkVectorScalarScenario,
     SpecializationKey,
 )
-from tslc.diagnostics import Diagnostic, SourceLocation
+from tslc.diagnostics import Diagnostic, SourceLocation, SourceSpan
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import (
     VerifyBackend,
@@ -165,6 +165,21 @@ def _serialize_location(
     }
 
 
+def _serialize_span(
+    span: SourceSpan | None,
+    repo_root: Path,
+) -> dict[str, object] | None:
+    if span is None:
+        return None
+    return {
+        "path": _relative_path(span.path, repo_root),
+        "line": span.line,
+        "column": span.column,
+        "end_line": span.end_line,
+        "end_column": span.end_column,
+    }
+
+
 def _serialize_diagnostic(
     diagnostic: Diagnostic,
     repo_root: Path,
@@ -173,7 +188,7 @@ def _serialize_diagnostic(
         "severity": diagnostic.severity,
         "code": diagnostic.code,
         "message": diagnostic.message,
-        "location": _serialize_location(diagnostic.location, repo_root),
+        "span": _serialize_span(diagnostic.span, repo_root),
     }
 
 

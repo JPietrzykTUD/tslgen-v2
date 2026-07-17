@@ -49,7 +49,7 @@ def resolve_query_leaf(head: str, context: LoweringSession) -> QueryValue | None
     if type_alias is not None:
         return TextValue(type_alias)
 
-    if head in getattr(context.env, "simd_type_param_names", frozenset()):
+    if head in context.env.simd_type_param_names:
         return SimdTypeParameterValue(head)
 
     if is_type_tag(head):
@@ -61,19 +61,11 @@ def resolve_query_leaf(head: str, context: LoweringSession) -> QueryValue | None
         scalar_tag = head[len(scalar_prefix) :]
         if is_type_tag(scalar_tag):
             return TypeValue(scalar_tag)
-        backend = getattr(context.env, "backend", None)
-        types = getattr(backend, "types", None)
-        if types is None:
-            return TextValue(scalar_tag)
-        spelling = types.scalar_spelling(scalar_tag)
+        spelling = context.env.backend.types.scalar_spelling(scalar_tag)
         return TextValue(spelling) if spelling is not None else None
 
     if "::" in head:
-        backend = getattr(context.env, "backend", None)
-        templates = getattr(backend, "templates", None)
-        if templates is None:
-            return None
-        spelling = templates.query_value(head)
+        spelling = context.env.backend.templates.query_value(head)
         return TextValue(spelling) if spelling is not None else None
 
     if len(head) >= 2 and head[0] == '"' == head[-1]:

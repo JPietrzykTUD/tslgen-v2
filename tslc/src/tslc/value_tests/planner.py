@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from tslc.catalog.model import Catalog, Primitive, TestCase
-from tslc.diagnostics import Diagnostic, SourceLocation
+from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.lower.lowerer import varying_positions
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
@@ -69,7 +69,7 @@ class ValueTestPlanner:
         harness = discover_harness_primitives(self._catalog)
         diagnostics = list(harness.diagnostics)
         raw_coverage: list[ValueTestCoverageEntry] = []
-        coverage_locations: dict[CoverageIdentity, SourceLocation | None] = {}
+        coverage_locations: dict[CoverageIdentity, SourceSpan | None] = {}
         profile_plans = [
             self._plan_backend_profile(
                 profile,
@@ -95,7 +95,7 @@ class ValueTestPlanner:
         profile: ValueTestBackendProfileInput,
         harness: HarnessPrimitiveNames,
         coverage: list[ValueTestCoverageEntry],
-        coverage_locations: dict[CoverageIdentity, SourceLocation | None],
+        coverage_locations: dict[CoverageIdentity, SourceSpan | None],
         diagnostics: list[Diagnostic],
     ) -> ValueTestProfilePlan:
         backend = self._backend_supports[profile.backend_id]
@@ -137,7 +137,7 @@ class ValueTestPlanner:
                         )
                         coverage.append(entry)
                         coverage_locations.setdefault(
-                            coverage_identity(entry), _primitive_location(primitive)
+                            coverage_identity(entry), _primitive_span(primitive)
                         )
                 if not primitive.tests:
                     entry = ValueTestCoverageEntry(
@@ -150,7 +150,7 @@ class ValueTestPlanner:
                     )
                     coverage.append(entry)
                     coverage_locations.setdefault(
-                        coverage_identity(entry), _primitive_location(primitive)
+                        coverage_identity(entry), _primitive_span(primitive)
                     )
                     continue
                 for index, test_case in enumerate(primitive.tests):
@@ -205,9 +205,9 @@ class ValueTestPlanner:
                     coverage_locations.setdefault(
                         coverage_identity(entry),
                         (
-                            test_case.source.start
+                            test_case.source
                             if test_case.source is not None
-                            else _primitive_location(primitive)
+                            else _primitive_span(primitive)
                         ),
                     )
         return ValueTestProfilePlan(
@@ -331,7 +331,7 @@ class ValueTestPlanner:
                         f"incompatible header groups {sorted(groups)} through extensions "
                         f"{sorted(extension_names)}"
                     ),
-                    location=source.start if source is not None else None,
+                    span=source,
                 )
             )
             return ValueTestCaseDrop(
@@ -446,8 +446,8 @@ def _value_test_spec_groups(
     return tuple(tuple(groups[key]) for key in sorted(groups))
 
 
-def _primitive_location(primitive: Primitive) -> SourceLocation | None:
-    return primitive.source.start if primitive.source is not None else None
+def _primitive_span(primitive: Primitive) -> SourceSpan | None:
+    return primitive.source
 
 
 def _representation_case_unselected(

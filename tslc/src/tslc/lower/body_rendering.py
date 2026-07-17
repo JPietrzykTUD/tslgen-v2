@@ -242,7 +242,7 @@ def _variant_diagnostics(
                 f"implementation variant {variant_name!r} for "
                 f"{primitive_name!r}: {diagnostic.message}"
             ),
-            location=diagnostic.location,
+            span=diagnostic.span,
         )
         for diagnostic in diagnostics
     )

@@ -26,6 +26,7 @@ from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
 from tslc.ir.scan import scan
 from tslc.ir.text import split_top_level
+from tslc.lower.dependencies import VectorIdentity
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.pivot._lowering import (
     PivotCallCapture,
@@ -999,12 +1000,13 @@ def _matching_brace(text: str, open_index: int) -> int | None:
     return None
 
 
-def _target_matches(candidate: SelectedImplementation, target: object) -> bool:
+def _target_matches(
+    candidate: SelectedImplementation,
+    target: VectorIdentity | None,
+) -> bool:
     if target is None:
         return candidate.to_target is None
-    base_tag = getattr(target, "base_tag", None)
-    extension_isa = getattr(target, "extension_isa", None)
-    return candidate.to_target in {base_tag, extension_isa}
+    return candidate.to_target in {target.base_tag, target.extension_isa}
 
 
 def _callable_name(slot: SelectedImplementation) -> str:

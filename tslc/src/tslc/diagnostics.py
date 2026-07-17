@@ -52,49 +52,20 @@ class RelatedLocation:
     span: SourceSpan
 
 
-@dataclass(frozen=True, slots=True, init=False)
+@dataclass(frozen=True, slots=True)
 class Diagnostic:
-    """A compiler diagnostic with one canonical full source span.
-
-    ``location=`` remains accepted while compiler producers migrate. It is
-    immediately promoted to a one-character span and is never stored as a
-    second source of truth.
-    """
+    """A compiler diagnostic with one canonical full source span."""
 
     severity: Severity
     code: str
     message: str
-    span: SourceSpan | None
-    related: tuple[RelatedLocation, ...]
-    help: str | None
-
-    def __init__(
-        self,
-        severity: Severity,
-        code: str,
-        message: str,
-        span: SourceSpan | None = None,
-        related: tuple[RelatedLocation, ...] = (),
-        help: str | None = None,
-        *,
-        location: SourceLocation | None = None,
-    ) -> None:
-        if span is not None and location is not None:
-            raise ValueError("diagnostic accepts either span or location, not both")
-        object.__setattr__(self, "severity", severity)
-        object.__setattr__(self, "code", code)
-        object.__setattr__(self, "message", message)
-        object.__setattr__(
-            self,
-            "span",
-            span or (SourceSpan.point(location) if location is not None else None),
-        )
-        object.__setattr__(self, "related", related)
-        object.__setattr__(self, "help", help)
+    span: SourceSpan | None = None
+    related: tuple[RelatedLocation, ...] = ()
+    help: str | None = None
 
     @property
     def location(self) -> SourceLocation | None:
-        """Compatibility view for callers that only need the start point."""
+        """Start-point projection for callers that intentionally display a point."""
 
         return None if self.span is None else self.span.start
 
