@@ -69,7 +69,12 @@ projections of the latest successful catalog/index. Hierarchical document
 symbols and registry-backed semantic token facts are built separately in
 [catalog_authoring_index.py](src/tslc/catalog_authoring_index.py); the core
 index retains resolvable catalog occurrences, including individual list
-selector elements and primitive-scoped result target axes. The parsed-source boundary
+selector elements and primitive-scoped result target axes. Implementation
+selector levels are classified by the catalog-owned projection in
+[catalog/selector_paths.py](src/tslc/catalog/selector_paths.py) — one
+interpretation shared by catalog promotion, indexing, and editor context — so
+target axes are recognized by name and `where` constraint levels are never
+indexed as type groups. The parsed-source boundary
 in [syntax/authoring.py](src/tslc/syntax/authoring.py) constructs a typed cursor
 context from declaration, field, selector, map, list, and value spans. Inside
 TSIL payloads it uses the recursive scanner's cursor spans to retain enclosing

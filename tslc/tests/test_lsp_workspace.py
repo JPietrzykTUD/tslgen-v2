@@ -11,6 +11,7 @@ from typing import cast
 from lsprotocol import types
 from pygls.lsp.server import LanguageServer
 
+from tslc.catalog.selector_paths import selector_head_extensions
 from tslc.diagnostics import SourceSpan
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.ir.region_registry import TSIL_REGION_KEYWORDS
@@ -360,6 +361,77 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
     )
     assert cached.selected_primitive == "sub"
     assert cached.slots
+
+
+def test_primitive_explorer_carries_selector_rejection_reasons(
+    data_root: Path,
+) -> None:
+    """A body on the slot's extension chain for the slot's type, dropped only
+    by a selector rule (unsatisfied `requires`), must surface the selector's
+    own rejection reason — not a generic missing-implementation message."""
+
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    assert snapshot.index is not None
+
+    explorer = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        mode="resolved",
+        profile="avx2",
+        backend="cpp",
+        selected_primitive="add",
+    )
+    avx512_si32 = next(
+        slot
+        for slot in explorer.slots
+        if slot.extension == "avx512" and slot.type_tag == "si32"
+    )
+    assert avx512_si32.status == "not-selected"
+    assert avx512_si32.implementations
+    detail = avx512_si32.detail or ""
+    assert (
+        "requires [avx512f] not satisfied by profile 'avx2' (missing: avx512f)"
+        in detail
+    )
+    assert "No implementation is authored" not in detail
+
+
+def test_specialization_context_extensions_agree_with_selector_path_projection(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    path = data_root / "primitives" / "arithmetic" / "fundamental.tsl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    head = "[avx512, avx2_vl, sse_vl]"
+    head_line = next(
+        index for index, line in enumerate(lines, 1) if line.strip() == f"{head}:"
+    )
+
+    context = specialization_context(
+        snapshot.catalog,
+        snapshot.parsed,
+        workspace.config.profiles,
+        backend="cpp",
+        path=path,
+        line=head_line + 1,
+        column=lines[head_line].index("?i?") + 1,
+    )
+
+    assert context.primitive == "add"
+    assert context.contextual_extensions == tuple(
+        sorted(
+            snapshot.catalog.extensions[name].isa_name
+            for name in selector_head_extensions(head)
+        )
+    )
 
 
 def test_primitive_explorer_defaults_to_authored_source_and_keeps_overloads(

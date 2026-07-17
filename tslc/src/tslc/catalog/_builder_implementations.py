@@ -16,6 +16,11 @@ from tslc.catalog.model import (
     RequirementClause,
     TargetConstraint,
 )
+from tslc.catalog.selector_paths import (
+    WHERE_KEYWORD,
+    selector_head_extensions,
+    split_target_selector,
+)
 from tslc.syntax.ast import (
     ParsedImplementationVariant,
     ParsedImplementationSelectorEntry,
@@ -46,10 +51,10 @@ def _implementations_from_entries(
         safety = parent_safety.merge(_entry_safety(entry))
         for envelope in entry.body_envelopes:
             head = envelope.selector_path[0] if envelope.selector_path else ""
-            type_group, to_target_group = _split_target_selector(
+            type_group, to_target_group = split_target_selector(
                 envelope.selector_path, target_name
             )
-            for extension in _selector_extensions(head):
+            for extension in selector_head_extensions(head):
                 implementations.append(
                     Implementation(
                         selector_path=envelope.selector_path,
@@ -143,39 +148,13 @@ def _variants(
     return tuple(promoted)
 
 
-def _split_target_selector(
-    selector_path: tuple[str, ...], target_name: str | None
-) -> tuple[str, str | None]:
-    """Split a selector path into source type-group and optional target type-group."""
-
-    if not selector_path:
-        return "", None
-    if target_name is not None and target_name in selector_path:
-        marker = selector_path.index(target_name)
-        source = selector_path[marker - 1] if marker >= 1 else ""
-        target = selector_path[marker + 1] if marker + 1 < len(selector_path) else None
-        if target == "where":
-            target = None
-        return source, target
-    return selector_path[-1], None
-
-
 def _target_constraint(
     entry: ParsedImplementationSelectorEntry, target_name: str | None
 ) -> TargetConstraint | None:
-    if target_name is None or entry.selector.text != "where":
+    if target_name is None or entry.selector.text != WHERE_KEYWORD:
         return None
     fields = {field.key.text: _field_text(field) for field in entry.fields}
     return TargetConstraint(family=fields.get("family"), width=fields.get("width"))
-
-
-def _selector_extensions(head: str) -> tuple[str, ...]:
-    """Return the extension names named by a selector head."""
-
-    head = head.strip()
-    if head.startswith("[") and head.endswith("]"):
-        return tuple(name.strip() for name in head[1:-1].split(",") if name.strip())
-    return (head,)
 
 
 def _requirements(

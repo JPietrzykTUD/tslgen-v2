@@ -27,6 +27,7 @@ from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile
 from tslc.render import cpp_build, cpp_project
 from tslc.render.project import render_project
+from tslc.select.selector import Selector
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
 from tslc.compiler_assets import load_default_tsl_grammar
@@ -483,6 +484,76 @@ def test_project_renderer_does_not_finalize_or_plan_semantics() -> None:
         "finalize_emitted_names",
         "value_test_warnings",
     }.isdisjoint(referenced_names)
+
+
+def test_authoring_tools_use_public_selector_and_selector_path_boundaries() -> None:
+    """LSP and maintenance projections consume selection facts through the
+    public Selector surface and never re-open catalog promotion internals."""
+
+    package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
+    selector_private = {
+        name
+        for name in vars(Selector)
+        if name.startswith("_") and not name.startswith("__")
+    }
+    private_import_sources = ("tslc.select", "tslc.catalog")
+    offenders: list[str] = []
+    for tree_name in ("lsp", "maintenance"):
+        for path in sorted((package_root / tree_name).rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Attribute)
+                    and node.attr in selector_private
+                ):
+                    offenders.append(
+                        f"{path}:{node.lineno}: accesses Selector.{node.attr}"
+                    )
+                elif isinstance(node, ast.Import):
+                    offenders.extend(
+                        f"{path}:{node.lineno}: imports {alias.name}"
+                        for alias in node.names
+                        if any(
+                            _is_forbidden_import(alias.name, source)
+                            for source in private_import_sources
+                        )
+                        and any(
+                            part.startswith("_") for part in alias.name.split(".")
+                        )
+                    )
+                elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                    if not any(
+                        _is_forbidden_import(node.module, source)
+                        for source in private_import_sources
+                    ):
+                        continue
+                    offenders.extend(
+                        f"{path}:{node.lineno}: imports {alias.name} from {node.module}"
+                        for alias in node.names
+                        if alias.name.startswith("_")
+                        or any(
+                            part.startswith("_") for part in node.module.split(".")
+                        )
+                    )
+
+    assert offenders == []
+
+
+def test_primitive_explorer_does_not_walk_extension_chains_itself() -> None:
+    """Slot candidate discovery belongs to the selector; the explorer must not
+    re-implement it with a second `catalog.extension_chain` walk."""
+
+    path = (
+        _REPO_ROOT / "tslc" / "src" / "tslc" / "lsp" / "primitive_explorer.py"
+    )
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    chain_walks = [
+        f"{path}:{node.lineno}"
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute) and node.attr == "extension_chain"
+    ]
+
+    assert chain_walks == []
 
 
 def test_architecture_documents_match_current_pipeline_vocabulary() -> None:

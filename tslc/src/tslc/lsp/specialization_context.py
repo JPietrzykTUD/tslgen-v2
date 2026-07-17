@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
+from tslc.catalog.selector_paths import selector_head_extensions
 from tslc.diagnostics import SourceSpan
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS, SCALAR_TYPE_ORDER
 from tslc.select.selector import Selector
@@ -162,12 +163,7 @@ def _contextual_extensions(
 ) -> tuple[str, ...]:
     if not selector_path:
         return ()
-    head = selector_path[0].strip()
-    names = (
-        tuple(item.strip() for item in head[1:-1].split(",") if item.strip())
-        if head.startswith("[") and head.endswith("]")
-        else (head,)
-    )
+    names = selector_head_extensions(selector_path[0])
     return tuple(
         sorted(
             {

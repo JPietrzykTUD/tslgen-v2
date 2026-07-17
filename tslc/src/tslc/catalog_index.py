@@ -9,6 +9,7 @@ from types import MappingProxyType
 from typing import Literal
 
 from tslc.catalog.model import Catalog
+from tslc.catalog.selector_paths import classify_selector_path
 from tslc.catalog_authoring_index import (
     DocumentSymbolKind,
     IndexedDocumentSymbol,
@@ -398,15 +399,21 @@ def _index_implementation_selectors(
     result_target: tuple[str, str, SourceSpan] | None,
     scope: str,
 ) -> None:
-    def visit(entry: ParsedImplementationSelectorEntry, depth: int) -> None:
+    target_name = result_target[1] if result_target is not None else None
+
+    def visit(
+        entry: ParsedImplementationSelectorEntry, prefix: tuple[str, ...]
+    ) -> None:
+        path = (*prefix, entry.selector.text)
+        level = classify_selector_path(path, target_name)[-1]
         items = selector_items(entry.selector)
-        if depth == 0:
+        if level.kind == "extensions":
             for name, span in items:
                 _record(references, occurrences, "extension", name, span, False)
-        elif depth == 1:
+        elif level.kind == "source-type-group":
             for name, span in items:
                 _record(references, occurrences, "type-group", name, span, False)
-        elif depth == 2 and result_target is not None:
+        elif level.kind == "target-axis":
             for name, span in items:
                 _record_scoped(
                     target_axis_references,
@@ -417,14 +424,16 @@ def _index_implementation_selectors(
                     span,
                     False,
                 )
-        elif depth == 3 and result_target is not None:
+        elif level.kind == "target-reference":
             for name, span in items:
                 _record(references, occurrences, "type-group", name, span, False)
+        # A `where` constraint level references no catalog symbol; it is never
+        # indexed as a type group.
         for child in entry.children:
-            visit(child, depth + 1)
+            visit(child, path)
 
     for entry in primitive.impl_entries:
-        visit(entry, 0)
+        visit(entry, ())
 
 
 def _index_region(

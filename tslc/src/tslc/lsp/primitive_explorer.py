@@ -407,15 +407,26 @@ def _resolved_primitive_slots(
     for extension, type_tag in sorted(keys, key=_slot_key):
         key = (extension, type_tag)
         selected_implementations = _unique_implementations(selected.get(key, ()))
-        candidates = _authored_candidates(
-            catalog, primitive_name, extension=extension, type_tag=type_tag
-        )
         if selected_implementations:
-            status: SlotStatus = "selected"
-            implementations = selected_implementations
-            detail = None
-        elif not catalog.extensions[extension].supports_backend(backend):
-            status = "backend-unsupported"
+            slots.append(
+                ExplorerSlot(
+                    extension=extension,
+                    type_tag=type_tag,
+                    status="selected",
+                    implementations=selected_implementations,
+                )
+            )
+            continue
+        candidates, rejection_reasons = _evaluated_candidates(
+            catalog,
+            selector,
+            profile,
+            primitive_name,
+            extension=extension,
+            type_tag=type_tag,
+        )
+        if not catalog.extensions[extension].supports_backend(backend):
+            status: SlotStatus = "backend-unsupported"
             implementations = candidates
             detail = f"Extension {extension!r} does not support backend {backend!r}."
         elif candidates:
@@ -426,6 +437,10 @@ def _resolved_primitive_slots(
                 f"{extension}, but profile {profile.name!r} does not select it for "
                 f"backend {backend!r}."
             )
+            if rejection_reasons:
+                detail += (
+                    " Selection rejected: " + "; ".join(rejection_reasons) + "."
+                )
         else:
             status = "missing"
             implementations = ()
@@ -466,25 +481,44 @@ def _implementation_source(item: SelectedImplementation) -> SourceSpan | None:
     )
 
 
-def _authored_candidates(
+def _evaluated_candidates(
     catalog: Catalog,
+    selector: Selector,
+    profile: MachineProfile,
     primitive_name: str,
     *,
     extension: str,
     type_tag: str,
-) -> tuple[ExplorerImplementation, ...]:
+) -> tuple[tuple[ExplorerImplementation, ...], tuple[str, ...]]:
+    """Selector-evaluated candidate bodies for one empty slot, with the
+    selector's own rejection reasons.
+
+    Candidate discovery is owned by :meth:`Selector.evaluate_candidates` (the
+    same facts the ``explain`` tool reports): usable ranked bodies plus the
+    on-chain bodies the selector rejected for this type. Rejected bodies whose
+    type-group does not contain the type belong to other slots and are not
+    candidates here — that slot is missing, not rejected.
+    """
+
     candidates: list[ExplorerImplementation] = []
-    extension_chain = set(catalog.extension_chain(extension))
+    reasons: set[str] = set()
     for primitive in catalog.primitives_named(primitive_name, unmasked=False):
-        for implementation in primitive.implementations:
-            if (
-                implementation.extension not in extension_chain
-                or not catalog.type_group_contains(implementation.type_group, type_tag)
-            ):
-                continue
+        evaluation = selector.evaluate_candidates(
+            catalog, profile, primitive, extension, type_tag, None
+        )
+        relevant = tuple(
+            (ranked.implementation, None) for ranked in evaluation.ranked
+        ) + tuple(
+            (rejected.implementation, rejected.reason)
+            for rejected in evaluation.rejected
+            if catalog.type_group_contains(rejected.implementation.type_group, type_tag)
+        )
+        for implementation, reason in relevant:
             source = _authored_implementation_source(primitive.source, implementation)
             if source is None:
                 continue
+            if reason is not None:
+                reasons.add(reason)
             candidates.append(
                 _explorer_implementation(
                     catalog,
@@ -497,7 +531,7 @@ def _authored_candidates(
                     type_tag=type_tag,
                 )
             )
-    return _unique_implementations(candidates)
+    return _unique_implementations(candidates), tuple(sorted(reasons))
 
 
 def _authored_implementation_source(

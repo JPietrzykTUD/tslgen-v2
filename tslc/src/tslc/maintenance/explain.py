@@ -170,11 +170,9 @@ def explain(
         out.blank()
 
     # The extensions actually emitted for this profile (and the requested filter, if any).
-    emitted_extensions = [
-        name
-        for name in selector._emit_extensions(catalog, machine_profile)
-        if catalog.extensions[name].supports_backend(backend)
-    ]
+    emitted_extensions = list(
+        selector.emitted_extensions(catalog, machine_profile, backend_id=backend)
+    )
     selected_slots = [
         slot
         for slot in selection.selected
