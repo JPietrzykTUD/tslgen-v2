@@ -59,6 +59,10 @@ request selection and lowering. Catalog `list`/`show` and `doctor` consume the
 same typed catalog, backend registry, machine-profile projection, and verifier
 drivers rather than maintaining parallel compiler knowledge.
 
+An omitted API/backend request resolves the live backend registry when the
+`GenerationRequest` is constructed; no import-time snapshot defines later
+requests. The project renderer consumes the request's explicit backend tuple.
+
 Compiler diagnostics carry one canonical, end-exclusive `SourceSpan`; producers
 must supply `span=` and may project its start only for point-oriented display
 APIs. Strict-mode promotion, variant context, value-test coverage, and generation
@@ -295,6 +299,12 @@ primitive. Generation-time queries (`base::in`, `vector::length`,
 type/extension being specialized.
 
 ## Lowering & assembly
+
+The [Selector](src/tslc/select/selector.py) enumerates the literal
+`(extension, type, representation-target)` axis before choosing bodies. A
+free-function primitive follows a separate path and returns the first usable
+declaration-owning extension slot in established profile order, because its
+rendered declaration has no SIMD axis.
 
 The [Lowerer](src/tslc/lower/lowerer.py) walks the segments for one
 `(primitive, extension, type, backend)` slot → a `LoweredSpecialization`

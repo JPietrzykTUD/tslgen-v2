@@ -66,6 +66,8 @@ from tslc.select.selector import SelectedImplementation
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 from tslc.support_policy_views import immediate_split_names, policy_split_names
 
+POLICY_DEFERRED_SIGNATURE_CODE = "TSL-LOWER-POLICY-DEFERRED-SIGNATURE"
+
 
 @dataclass(frozen=True, slots=True)
 class LoweredTypeParam:
@@ -260,7 +262,7 @@ class Lowerer:
         if unsupported_kinds:
             if unsupported_kinds == deferred_kinds:
                 return _skip(
-                    "TSL-LOWER-POLICY-DEFERRED-SIGNATURE",
+                    POLICY_DEFERRED_SIGNATURE_CODE,
                     f"signature {selected.primitive.signature!r} is policy-deferred for "
                     f"scalable vector extension {selected.extension.name!r} "
                     f"(deferred kinds: {', '.join(sorted(deferred_kinds))})",

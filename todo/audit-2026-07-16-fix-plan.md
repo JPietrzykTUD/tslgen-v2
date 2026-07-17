@@ -3,7 +3,7 @@
 ## Status and basis
 
 Status: Phases 1 and 2 implemented (slices 1–19); Phase 3 implemented through
-slice 25. Slices 26–27 remain.
+slice 26. Slice 27 remains product-gated and is outside the current fix scope.
 
 Phase 3 implementation notes (one commit per slice):
 
@@ -31,6 +31,13 @@ Phase 3 implementation notes (one commit per slice):
   variant, value-test, and snapshot projections preserve end ranges (snapshot
   schema version 2). Fully typed query/PIVOT dependencies use direct access,
   with mypy and AST inventories guarding both boundaries.
+- Slice 26: selection literally enumerates typed extension/type/target slots and
+  free functions return after the first declaration-owning slot; lowering owns
+  its policy-deferred diagnostic code; emitted and skipped slots share one
+  ordering projection. Generation defaults resolve from the live backend
+  registry at request construction, while rendering requires an explicit
+  backend tuple. A representative selection/coverage/skip/trace digest stayed
+  byte-identical across the refactor.
 
 Phase 2 implementation notes (one commit per slice):
 

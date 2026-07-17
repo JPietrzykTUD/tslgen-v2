@@ -7,7 +7,7 @@ import json
 from collections.abc import Iterable
 from pathlib import Path
 
-from tslc import pipeline
+from tslc import api, pipeline
 from tslc.backend import cpp_profile
 from tslc.backend.capability import BackendCapability
 from tslc.backend.cpp_capability import CPP_BACKEND
@@ -22,7 +22,10 @@ from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import RenderAssets, load_default_render_assets
-from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.lowerer import (
+    POLICY_DEFERRED_SIGNATURE_CODE,
+    LoweredSpecialization,
+)
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile
 from tslc.render import cpp_build, cpp_project
@@ -44,6 +47,50 @@ def test_pipeline_facade_keeps_input_and_closure_boundaries() -> None:
     assert pipeline._LoweredSlot.__module__ == "tslc._pipeline_closure"
     assert pipeline._prune_unresolved.__module__ == "tslc._pipeline_closure"
     assert pipeline._profile_with_required_features.__module__ == "tslc._pipeline_closure"
+
+
+def test_backend_defaults_are_resolved_at_request_construction(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(pipeline, "registered_backend_ids", lambda: ("future",))
+
+    request = pipeline.GenerationRequest(
+        source_paths=(),
+        machine_profiles_path=Path("profiles.json"),
+        primitives=(),
+        profiles=(),
+        type_tags=(),
+    )
+
+    assert request.backends == ("future",)
+
+
+def test_public_api_resolves_omitted_backends_for_each_call(monkeypatch) -> None:
+    captured: list[pipeline.GenerationRequest] = []
+
+    monkeypatch.setattr(api, "registered_backend_ids", lambda: ("future",))
+    monkeypatch.setattr(api, "generate", lambda request: captured.append(request))
+
+    api.generate_project((), machine_profiles_path=Path("profiles.json"))
+
+    assert captured[0].backends == ("future",)
+
+
+def test_pipeline_uses_lowering_owned_policy_code_and_one_slot_sort_key() -> None:
+    tree = ast.parse((_REPO_ROOT / "tslc/src/tslc/pipeline.py").read_text())
+    function_names = {
+        node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+    }
+    string_literals = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+
+    assert POLICY_DEFERRED_SIGNATURE_CODE not in string_literals
+    assert "_slot_result_key" in function_names
+    assert "_coverage_key" not in function_names
+    assert "_skipped_key" not in function_names
 
 
 def test_cpp_project_renderer_has_focused_owned_modules() -> None:

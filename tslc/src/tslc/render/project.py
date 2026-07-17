@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslc.backend.emitted_profile import EmittedProfile
-from tslc.backend.registry import backend_capabilities, registered_backend_ids
+from tslc.backend.registry import backend_capabilities
 from tslc.benchmark.model import BenchmarkProjectPlan, EMPTY_BENCHMARK_PROJECT_PLAN
 from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact, ArtifactSet
@@ -30,7 +30,7 @@ class RenderedProject:
 
 def render_project(
     profiles: tuple[EmittedProfile, ...],
-    backends: tuple[str, ...] = registered_backend_ids(),
+    backends: tuple[str, ...],
     value_tests: ValueTestProjectPlan = _EMPTY_VALUE_TEST_PLAN,
     benchmarks: BenchmarkProjectPlan = EMPTY_BENCHMARK_PROJECT_PLAN,
     *,

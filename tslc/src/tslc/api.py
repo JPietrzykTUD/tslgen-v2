@@ -30,7 +30,7 @@ def generate_project(
     profiles: Iterable[str] | None = None,
     type_tags: Iterable[str] = _ARITH_TYPE_TAGS,
     extensions: Iterable[str] | None = None,
-    backends: Iterable[str] = registered_backend_ids(),
+    backends: Iterable[str] | None = None,
     generation_mode: GenerationMode = "partial",
     test_harness: bool = False,
     value_test_warnings: bool = False,
@@ -54,7 +54,9 @@ def generate_project(
         profiles=tuple(profiles) if profiles is not None else None,
         type_tags=tuple(type_tags),
         extensions=tuple(extensions) if extensions is not None else None,
-        backends=tuple(backends),
+        backends=(
+            tuple(backends) if backends is not None else registered_backend_ids()
+        ),
         mode=generation_mode,
         test_harness=test_harness,
         value_test_warnings=value_test_warnings,

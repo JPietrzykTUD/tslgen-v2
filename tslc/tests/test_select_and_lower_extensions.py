@@ -805,5 +805,7 @@ def test_free_functions_keep_profile_owner_out_of_compiler_overlay(
         catalog, machine_profiles["skylake"], primitive, ("si32",)
     ).selected
 
-    assert selected
-    assert {slot.extension.name for slot in selected} == {"avx2_vl"}
+    assert tuple(
+        (slot.extension.name, slot.type_tag, slot.to_target)
+        for slot in selected
+    ) == (("avx2_vl", "ptr", None),)

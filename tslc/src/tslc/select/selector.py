@@ -18,6 +18,7 @@ via `requires`.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from itertools import product
 from typing import assert_never
@@ -91,6 +92,13 @@ class ProfileSelectionResult:
 class _BestBody:
     implementation: Implementation
     required_features: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
+class _SelectionSlot:
+    extension_name: str
+    type_tag: str
+    to_target: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,115 +187,168 @@ class Selector:
             self.emitted_extensions(catalog, profile, backend_id=backend_id)
         )
         for primitive in variants:
-            # A non-vector (free-function) primitive (`allocate`/`deallocate`) has no SIMD axis:
-            # its type group is a placeholder (`ptr`) that no arith tag matches, and its body is
-            # ISA-independent. Iterate its OWN type-group members (so `base::in` resolves) and
-            # emit a single slot — the free-function render emits one `tsl::name(...)`.
             shape = parse_signature(primitive.signature)
-            free_function = (
-                shape is not None and self.support.shape_is_free_function(shape)
-            )
-            primitive_type_tags = (
-                tuple(
-                    sorted(
-                        {
-                            member
-                            for impl in primitive.implementations
-                            for member in catalog.type_group_members(impl.type_group)
-                        }
+            if shape is not None and self.support.shape_is_free_function(shape):
+                selected.extend(
+                    self._select_free_function(
+                        catalog,
+                        profile,
+                        primitive,
+                        emitted_extensions,
+                        backend_id,
+                        warnings,
                     )
                 )
-                if free_function
-                else type_tags
-            )
-            emitted_free = False
-            if free_function:
-                authored_extensions = {
-                    implementation.extension
-                    for implementation in primitive.implementations
-                    if implementation.extension in emitted_extensions
-                }
-                # Free functions still need one extension-shaped selection slot,
-                # but compiler overlays live in opt-in, backend-specific headers.
-                # Keep the established profile ordering while excluding those
-                # overlays as owners of ISA-independent declarations.
-                selection_extensions = [
-                    name
-                    for name in emitted_extensions
-                    if name in authored_extensions
-                    and catalog.target_families.extension_family(
-                        catalog.extensions[name].family
-                    ).free_function_owner
-                ]
-            else:
-                selection_extensions = emitted_extensions
-            for extension_name in selection_extensions:
-                if emitted_free:
-                    break
-                for type_tag in primitive_type_tags:
-                    # A representation-change primitive has a SECOND axis (the target type /
-                    # extension); it emits one slot per (type_tag, to_target). An ordinary
-                    # primitive has a single target-less slot.
-                    to_targets = concrete_target_candidates(
+                continue
+            for slot in self._selection_slots(
+                catalog, primitive, emitted_extensions, type_tags
+            ):
+                selected.extend(
+                    self._select_slot(
                         catalog,
+                        profile,
                         primitive,
-                        extension_name,
-                        type_tag,
-                        self.support,
+                        slot,
+                        emitted_extensions,
+                        backend_id,
+                        warnings,
                     )
-                    for to_target in to_targets:
-                        best = self._best_body(
-                            catalog, profile, primitive, extension_name,
-                            type_tag, to_target, warnings,
-                        )
-                        if best is not None:
-                            extension = catalog.extensions[extension_name]
-                            for lanes in self._monomorphized_lanes(
-                                extension, best.implementation, type_tag
-                            ):
-                                for bindings in _simd_type_base_binding_sets(
-                                    catalog, primitive, type_tag
-                                ):
-                                    selected.append(
-                                        SelectedImplementation(
-                                            primitive=primitive,
-                                            implementation=best.implementation,
-                                            extension=extension,
-                                            type_tag=type_tag,
-                                            required_features=best.required_features,
-                                            to_target=to_target,
-                                            concrete_lanes=lanes,
-                                            simd_type_base_bindings=bindings,
-                                            fixed_fallback_extension=(
-                                                self._fixed_width_fallback(
-                                                    catalog,
-                                                    profile,
-                                                    primitive,
-                                                    extension,
-                                                    type_tag,
-                                                    to_target,
-                                                    emitted_extensions,
-                                                    backend_id,
-                                                )
-                                                if backend_id is not None
-                                                else None
-                                            ),
-                                            extension_family_capability=(
-                                                catalog.target_families.extension_family(
-                                                    extension.family
-                                                )
-                                            ),
-                                        )
-                                    )
-                            if free_function:
-                                # One ISA-independent slot is enough; the body is identical
-                                # across extensions and the render ignores the extension.
-                                emitted_free = True
-                                break
-                    if emitted_free:
-                        break
+                )
         return ProfileSelectionResult(
             selected=tuple(selected), diagnostics=tuple(warnings.values())
+        )
+
+    def _select_free_function(
+        self,
+        catalog: Catalog,
+        profile: MachineProfile,
+        primitive: Primitive,
+        emitted_extensions: list[str],
+        backend_id: str | None,
+        warnings: dict[str, Diagnostic],
+    ) -> tuple[SelectedImplementation, ...]:
+        """Select the first ISA-independent declaration owner in profile order."""
+
+        # Free functions have no SIMD axis. Their placeholder type groups still
+        # provide the concrete base used by queries such as `base::in`.
+        type_tags = tuple(
+            sorted(
+                {
+                    member
+                    for implementation in primitive.implementations
+                    for member in catalog.type_group_members(
+                        implementation.type_group
+                    )
+                }
+            )
+        )
+        authored_extensions = {
+            implementation.extension
+            for implementation in primitive.implementations
+            if implementation.extension in emitted_extensions
+        }
+        # Compiler overlays live in opt-in, backend-specific headers and do not
+        # own the single ISA-independent declaration.
+        owner_extensions = [
+            name
+            for name in emitted_extensions
+            if name in authored_extensions
+            and catalog.target_families.extension_family(
+                catalog.extensions[name].family
+            ).free_function_owner
+        ]
+        for slot in self._selection_slots(
+            catalog, primitive, owner_extensions, type_tags
+        ):
+            selected = self._select_slot(
+                catalog,
+                profile,
+                primitive,
+                slot,
+                emitted_extensions,
+                backend_id,
+                warnings,
+            )
+            if selected:
+                return selected
+        return ()
+
+    def _selection_slots(
+        self,
+        catalog: Catalog,
+        primitive: Primitive,
+        extension_names: list[str],
+        type_tags: tuple[str, ...],
+    ) -> Iterator[_SelectionSlot]:
+        """Enumerate the literal extension/type/representation target axis."""
+
+        for extension_name in extension_names:
+            for type_tag in type_tags:
+                for to_target in concrete_target_candidates(
+                    catalog,
+                    primitive,
+                    extension_name,
+                    type_tag,
+                    self.support,
+                ):
+                    yield _SelectionSlot(extension_name, type_tag, to_target)
+
+    def _select_slot(
+        self,
+        catalog: Catalog,
+        profile: MachineProfile,
+        primitive: Primitive,
+        slot: _SelectionSlot,
+        emitted_extensions: list[str],
+        backend_id: str | None,
+        warnings: dict[str, Diagnostic],
+    ) -> tuple[SelectedImplementation, ...]:
+        best = self._best_body(
+            catalog,
+            profile,
+            primitive,
+            slot.extension_name,
+            slot.type_tag,
+            slot.to_target,
+            warnings,
+        )
+        if best is None:
+            return ()
+        extension = catalog.extensions[slot.extension_name]
+        fallback = (
+            self._fixed_width_fallback(
+                catalog,
+                profile,
+                primitive,
+                extension,
+                slot.type_tag,
+                slot.to_target,
+                emitted_extensions,
+                backend_id,
+            )
+            if backend_id is not None
+            else None
+        )
+        family = catalog.target_families.extension_family(extension.family)
+        return tuple(
+            SelectedImplementation(
+                primitive=primitive,
+                implementation=best.implementation,
+                extension=extension,
+                type_tag=slot.type_tag,
+                required_features=best.required_features,
+                to_target=slot.to_target,
+                concrete_lanes=lanes,
+                simd_type_base_bindings=bindings,
+                fixed_fallback_extension=fallback,
+                extension_family_capability=family,
+            )
+            for lanes in self._monomorphized_lanes(
+                extension, best.implementation, slot.type_tag
+            )
+            for bindings in _simd_type_base_binding_sets(
+                catalog, primitive, slot.type_tag
+            )
         )
 
     def _fixed_width_fallback(
