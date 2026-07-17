@@ -25,6 +25,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from tslc._cli_options import split_csv
 from tslc.backend.capability import (
     DocumentationSiteInput,
     GeneratedDocumentationBuilder,
@@ -238,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
     context = _repo_context.require_repo_context(parser)
     report = document_generated(
         args.output_root,
-        _split(args.backends),
+        split_csv(args.backends),
         repo_root=context.root,
         project_name=args.project_name,
         doxygen=args.doxygen,
@@ -826,10 +827,6 @@ def _resolve_tool(tool: str) -> str | None:
     if candidate.parent != Path("."):
         return str(candidate) if candidate.exists() else None
     return shutil.which(tool)
-
-
-def _split(value: str) -> tuple[str, ...]:
-    return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 if __name__ == "__main__":  # pragma: no cover

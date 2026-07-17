@@ -12,6 +12,7 @@ import subprocess
 import sys
 from typing import Any
 
+from tslc._cli_options import merge_toolchains, parse_assignments, split_csv
 from tslc.authoring import check_catalog
 from tslc.backend.registry import backend_capabilities
 from tslc.catalog.machine_profiles import load_machine_profiles_checked
@@ -57,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         sources=settings.sources,
         machine_profiles=settings.machine_profiles,
         backends=settings.backends,
-        profiles=tuple(args.profile) or (_split(args.profiles) if args.profiles else None),
+        profiles=tuple(args.profile) or (split_csv(args.profiles) if args.profiles else None),
         work_root=settings.work_root,
         toolchains=settings.toolchains,
         runner_paths=settings.runner_paths,
@@ -117,25 +118,20 @@ def _settings(args: argparse.Namespace, project: ProjectConfig | None) -> _Setti
             "doctor requires sources and machine profiles; configure tslc.toml or pass both"
         )
     backends = tuple(args.backend) or (
-        _split(args.backends)
+        split_csv(args.backends)
         if args.backends
         else project.backends
         if project is not None
         else ("cpp", "rust")
     )
-    compilers = _assignments(args.compiler, "--compiler")
-    targets = _assignments(args.target, "--target")
-    linkers = _assignments(args.linker, "--linker")
-    base_toolchains = dict(project.toolchains) if project is not None else {}
-    for backend_id in compilers.keys() | targets.keys() | linkers.keys():
-        previous = base_toolchains.get(backend_id, BackendToolchain())
-        base_toolchains[backend_id] = BackendToolchain.create(
-            compiler=compilers.get(backend_id) or previous.compiler,
-            target=targets.get(backend_id) or previous.target,
-            linker=linkers.get(backend_id) or previous.linker,
-        )
+    base_toolchains = merge_toolchains(
+        project.toolchains if project is not None else {},
+        parse_assignments(args.compiler, "--compiler"),
+        parse_assignments(args.target, "--target"),
+        parse_assignments(args.linker, "--linker"),
+    )
     runners = dict(project.runner_paths) if project is not None else {}
-    runners.update(_assignments(args.runner, "--runner"))
+    runners.update(parse_assignments(args.runner, "--runner"))
     tools = dict(project.tool_paths) if project is not None else {}
     if args.work_root:
         work_root = Path(args.work_root)
@@ -349,22 +345,6 @@ def _version(command: tuple[str, ...]) -> str | None:
         return None
     text = completed.stdout.strip() or completed.stderr.strip()
     return text.splitlines()[0] if text else None
-
-
-def _assignments(values: list[str], option: str) -> dict[str, str]:
-    result: dict[str, str] = {}
-    for value in values:
-        name, separator, setting = value.partition("=")
-        if not separator or not name.strip() or not setting.strip():
-            raise ValueError(f"{option} expects NAME=VALUE, got {value!r}")
-        if name.strip() in result:
-            raise ValueError(f"{option} repeats name {name.strip()!r}")
-        result[name.strip()] = setting.strip()
-    return result
-
-
-def _split(value: str) -> tuple[str, ...]:
-    return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 def _format_text(report: dict[str, Any]) -> str:

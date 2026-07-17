@@ -16,6 +16,7 @@ from pathlib import Path
 import sys
 from typing import Literal, TextIO, cast
 
+from tslc._cli_options import split_csv
 from tslc.authoring import check_documents
 from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.model import ImplementationSafety
@@ -216,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    checks = tuple(_split_csv(args.checks))
+    checks = tuple(split_csv(args.checks))
     invalid = sorted(set(checks) - {"safety", "requires"})
     if invalid:
         print(f"[error] unknown check(s): {', '.join(invalid)}", file=sys.stderr)
@@ -226,10 +227,10 @@ def main(argv: list[str] | None = None) -> int:
         [Path(path) for path in args.sources],
         checks=cast(tuple[SuggestionKind, ...], checks),
         machine_profiles_path=Path(args.machine_profiles),
-        profiles=tuple(_split_csv(args.profiles)),
-        primitives=tuple(_split_csv(args.primitives)) if args.primitives else None,
-        type_tags=tuple(_split_csv(args.types)),
-        backends=tuple(_split_csv(args.backends)),
+        profiles=tuple(split_csv(args.profiles)),
+        primitives=tuple(split_csv(args.primitives)) if args.primitives else None,
+        type_tags=tuple(split_csv(args.types)),
+        backends=tuple(split_csv(args.backends)),
     )
     for diagnostic in result.diagnostics:
         print(format_diagnostic(diagnostic), file=sys.stderr)
@@ -715,10 +716,6 @@ def _suggestion_sort_key(
         suggestion.subject,
         suggestion.reason,
     )
-
-
-def _split_csv(value: str) -> tuple[str, ...]:
-    return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 if __name__ == "__main__":  # pragma: no cover

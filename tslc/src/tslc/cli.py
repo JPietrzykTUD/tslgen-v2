@@ -1,25 +1,21 @@
-"""Thin CLI: parse options, run the pipeline, write, optionally verify, exit."""
+"""Thin CLI: route installed commands, keep legacy flat generation, own process exit."""
 
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable, Mapping
-import shlex
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
 
+from tslc._cli_options import merge_toolchains, parse_assignments, split_csv
 from tslc.api import generate_project, verify_project, write_artifacts
-from tslc.diagnostics import format_diagnostic, has_errors
-from tslc.output.verify import BuildVerificationReport
-from tslc.output.verify_model import BackendToolchain
-from tslc.pipeline import GenerationResult
+from tslc.generation_command import (
+    GenerationCommandSettings,
+    GenerationPipeline,
+    run_generation_command,
+)
 from tslc.project_config import ProjectConfig, load_project_config
 from tslc.version import package_version
-
-if TYPE_CHECKING:
-    from tslc.output.summary import ProfileValueTestSummary
-
 
 _COMMANDS = (
     "generate",
@@ -140,6 +136,28 @@ def _generation_main(
     use_project_config: bool,
     command: str = "generate",
 ) -> int:
+    parser = _generation_parser(use_project_config=use_project_config, command=command)
+    args = parser.parse_args(argv)
+    try:
+        project = (
+            load_project_config(args.config) if use_project_config else None
+        )
+        settings = _generation_command_settings(args, project, command)
+    except ValueError as exc:
+        parser.error(str(exc))
+    pipeline = GenerationPipeline(
+        generate=generate_project,
+        write=write_artifacts,
+        verify=verify_project,
+    )
+    return run_generation_command(settings, pipeline)
+
+
+def _generation_parser(
+    *,
+    use_project_config: bool,
+    command: str,
+) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="tslc" if not use_project_config else f"tslc {command}",
         description="Compile TSL data to C++/Rust.",
@@ -247,195 +265,48 @@ def _generation_main(
         default=None,
         help="append a Markdown generation/verification summary to this path",
     )
-    args = parser.parse_args(argv)
-    try:
-        project = (
-            load_project_config(args.config) if use_project_config else None
-        )
-        sources, machine_profiles, configured_backends, output_root = (
-            _generation_settings(args, project, command)
-        )
-        toolchains = _merge_toolchains(
-            project.toolchains if project is not None else {},
-            _assignments(args.compiler, "--compiler"),
-            _assignments(args.target, "--target"),
-            _assignments(args.linker, "--linker"),
-        )
-        runner_paths = dict(project.runner_paths) if project is not None else {}
-        runner_paths.update(_assignments(args.runner, "--runner"))
-        tool_paths = dict(project.tool_paths) if project is not None else {}
-    except ValueError as exc:
-        parser.error(str(exc))
+    return parser
 
-    if command == "build":
-        args.verify = True
-    elif command == "test":
-        args.test = True
-    args.output_root = output_root
 
-    # Fuzzing only matters once the value tests are built and run, and it needs the test harness
-    # (round-trip primitives) pulled into the closure — so --fuzz implies --test.
-    if args.fuzz:
-        args.test = True
-
-    if args.test and args.output_root is None:
-        print(
-            "[error] --test requires --output-root so generated artifacts can "
-            "be written before value-test verification",
-            file=sys.stderr,
-        )
-        return 1
-
-    generate_kwargs = {
-        "machine_profiles_path": machine_profiles,
-        "type_tags": _split(args.types),
-        "backends": configured_backends,
-        "generation_mode": args.generation_mode,
-        "test_harness": args.test,
-        "value_test_warnings": args.value_test_warnings or args.test,
-        "value_test_fuzz": args.fuzz,
-    }
-    if args.profiles is not None:
-        generate_kwargs["profiles"] = _split(args.profiles)
-    if args.primitives is not None:
-        generate_kwargs["primitives"] = _split(args.primitives)
-
-    result = generate_project(
-        sources,
-        **generate_kwargs,
+def _generation_command_settings(
+    args: argparse.Namespace,
+    project: ProjectConfig | None,
+    command: str,
+) -> GenerationCommandSettings:
+    sources, machine_profiles, backends, output_root = _generation_settings(
+        args, project, command
     )
-    verify_report: BuildVerificationReport | None = None
-    summary_written = False
-
-    def write_summary_once() -> None:
-        nonlocal summary_written
-        if summary_written:
-            return
-        summary_written = True
-        _write_summary_file(args.summary_file, result, verify_report, args.test)
-
-    for diagnostic in result.diagnostics:
-        print(format_diagnostic(diagnostic), file=sys.stderr)
-
-    print(
-        f"generated {len(result.coverage)} specializations across "
-        f"{len(result.artifacts.artifacts)} artifacts"
+    toolchains = merge_toolchains(
+        project.toolchains if project is not None else {},
+        parse_assignments(args.compiler, "--compiler"),
+        parse_assignments(args.target, "--target"),
+        parse_assignments(args.linker, "--linker"),
     )
-
-    if args.coverage:
-        from tslc.coverage import format_coverage_report
-
-        print(format_coverage_report(result))
-
-    if has_errors(result.diagnostics):
-        write_summary_once()
-        return 1
-
-    if args.output_root is not None:
-        write_report = write_artifacts(result.artifacts, args.output_root)
-        for diagnostic in write_report.diagnostics:
-            print(format_diagnostic(diagnostic), file=sys.stderr)
-        if has_errors(write_report.diagnostics):
-            write_summary_once()
-            return 1
-        print(f"wrote {len(write_report.written)} files under {write_report.output_root}")
-
-        if args.format:
-            from tslc.output.format import format_generated
-
-            format_report = format_generated(args.output_root, tuple(configured_backends))
-            for note in format_report.notes:
-                print(f"[format-skip] {note}", file=sys.stderr)
-            if format_report.formatted:
-                print(f"formatted {', '.join(format_report.formatted)}")
-
-        if (args.verify or args.test) and result.rendered is not None:
-            if args.test:
-                runners = _configured_runner_labels(runner_paths)
-                if runners:
-                    print(
-                        "building and running generated value tests through "
-                        + ", ".join(runners)
-                    )
-                else:
-                    print("building and running generated value tests")
-            verify_report = verify_project(
-                args.output_root,
-                result.rendered.verify,
-                toolchains=toolchains,
-                runner_paths=runner_paths,
-                tool_paths=tool_paths,
-                run_value_tests=args.test,
-            )
-            for note in verify_report.skipped:
-                print(f"[verify-skip] {note}", file=sys.stderr)
-            for diagnostic in verify_report.diagnostics:
-                print(format_diagnostic(diagnostic), file=sys.stderr)
-            if args.test:
-                _print_test_output(verify_report)
-            incomplete_value_tests = (
-                _incomplete_value_test_profiles(result, verify_report)
-                if args.test
-                else ()
-            )
-            for profile in incomplete_value_tests:
-                print(
-                    "[verify-incomplete] "
-                    f"{profile.backend_id} profile {profile.profile_name} "
-                    f"{profile.failed_or_blocked_cases}/{profile.planned_cases} "
-                    f"planned value-test cases {profile.status}",
-                    file=sys.stderr,
-                )
-            write_summary_once()
-            if has_errors(verify_report.diagnostics) or (
-                args.test
-                and (
-                    verify_report.diagnostics
-                    or verify_report.skipped
-                    or incomplete_value_tests
-                )
-            ):
-                return 1
-            verified = "build/test-verified" if args.test else "build-verified"
-            print(f"{verified} {len(verify_report.commands)} commands")
-
-    write_summary_once()
-    return 0
-
-
-def _split(value: str) -> list[str]:
-    return [item.strip() for item in value.split(",") if item.strip()]
-
-
-def _assignments(values: list[str], option: str) -> dict[str, str]:
-    assignments: dict[str, str] = {}
-    for value in values:
-        key, separator, setting = value.partition("=")
-        key = key.strip()
-        setting = setting.strip()
-        if not separator or not key or not setting:
-            raise ValueError(f"{option} expects NAME=VALUE, got {value!r}")
-        if key in assignments:
-            raise ValueError(f"{option} repeats name {key!r}")
-        assignments[key] = setting
-    return assignments
-
-
-def _merge_toolchains(
-    configured: Mapping[str, BackendToolchain],
-    compilers: dict[str, str],
-    targets: dict[str, str],
-    linkers: dict[str, str],
-) -> dict[str, BackendToolchain]:
-    base = dict(configured)
-    for backend_id in sorted(compilers.keys() | targets.keys() | linkers.keys()):
-        previous = base.get(backend_id, BackendToolchain())
-        base[backend_id] = BackendToolchain.create(
-            compiler=compilers.get(backend_id) or previous.compiler,
-            target=targets.get(backend_id) or previous.target,
-            linker=linkers.get(backend_id) or previous.linker,
-        )
-    return base
+    runner_paths = dict(project.runner_paths) if project is not None else {}
+    runner_paths.update(parse_assignments(args.runner, "--runner"))
+    tool_paths = dict(project.tool_paths) if project is not None else {}
+    # `tslc build` implies verification; `tslc test` and --fuzz imply value tests
+    # (fuzzing needs the test harness pulled into the closure to run at all).
+    return GenerationCommandSettings(
+        sources=sources,
+        machine_profiles=machine_profiles,
+        type_tags=split_csv(args.types),
+        backends=tuple(backends),
+        generation_mode=args.generation_mode,
+        primitives=split_csv(args.primitives) if args.primitives is not None else None,
+        profiles=split_csv(args.profiles) if args.profiles is not None else None,
+        output_root=output_root,
+        verify=args.verify or command == "build",
+        run_value_tests=args.test or command == "test" or args.fuzz,
+        fuzz=args.fuzz,
+        coverage=args.coverage,
+        value_test_warnings=args.value_test_warnings,
+        format_artifacts=args.format,
+        summary_file=args.summary_file,
+        toolchains=toolchains,
+        runner_paths=runner_paths,
+        tool_paths=tool_paths,
+    )
 
 
 def _generation_settings(
@@ -463,7 +334,7 @@ def _generation_settings(
             "--machine-profiles or create tslc.toml"
         )
     backends = (
-        _split(args.backends)
+        list(split_csv(args.backends))
         if args.backends is not None
         else list(project.backends)
         if project is not None
@@ -560,77 +431,6 @@ def _export_group(arguments: list[str]) -> int:
         return _run_configured_maintenance(pivot_main, rest)
     print(f"unknown tslc export target {target!r}", file=sys.stderr)
     return 2
-
-
-def _configured_runner_labels(runner_paths: dict[str, str]) -> list[str]:
-    return [f"{kind}: {path}" for kind, path in sorted(runner_paths.items())]
-
-
-def _print_test_output(report: BuildVerificationReport) -> None:
-    for result in report.commands:
-        if result.command.step != "test":
-            continue
-        command = result.command
-        print(
-            f"[test-output] {command.backend_id} {command.profile_name}: "
-            f"{shlex.join(command.argv)}"
-        )
-        _print_captured_stream("stdout", result.stdout)
-        _print_captured_stream("stderr", result.stderr)
-
-
-def _print_captured_stream(label: str, text: str) -> None:
-    stripped = text.strip()
-    if stripped:
-        print(f"[{label}]")
-        print(stripped)
-
-
-def _incomplete_value_test_profiles(
-    result: GenerationResult,
-    verify_report: BuildVerificationReport,
-) -> tuple["ProfileValueTestSummary", ...]:
-    if result.rendered is None:
-        return ()
-    test_plan = getattr(result.rendered, "value_tests", None)
-    if test_plan is None:
-        return ()
-    from tslc.output.summary import value_test_profile_summaries
-
-    return tuple(
-        profile
-        for profile in value_test_profile_summaries(
-            test_plan,
-            verify_report,
-            run_value_tests=True,
-        )
-        if profile.planned_cases > 0 and profile.status != "passed"
-    )
-
-
-def _write_summary_file(
-    summary_file: str | None,
-    result: GenerationResult,
-    verify_report: BuildVerificationReport | None,
-    run_value_tests: bool,
-) -> None:
-    if summary_file is None:
-        return
-    from tslc.output.summary import (
-        append_markdown_summary,
-        render_value_test_markdown_summary,
-    )
-
-    test_plan = result.rendered.value_tests if result.rendered is not None else None
-    append_markdown_summary(
-        summary_file,
-        render_value_test_markdown_summary(
-            test_plan,
-            verify_report,
-            run_value_tests=run_value_tests,
-        ),
-    )
-    print(f"wrote Markdown summary to {summary_file}")
 
 
 if __name__ == "__main__":
