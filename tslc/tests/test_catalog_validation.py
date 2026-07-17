@@ -1606,3 +1606,106 @@ def test_machine_profile_runner_kinds_come_from_target_families(tmp_path: Path) 
     )
     assert "declared for family 'x86'" in diagnostic.message
     assert "sde" in diagnostic.message
+
+
+def _param_types_catalog_and_diagnostics(condition_key: str):
+    text = (
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v>[aligned=*] id(data):\n"
+        "  param_types:\n"
+        "    data:\n"
+        f'      {condition_key} "type(base::in)"\n'
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+    document = SourceDocument(Path("catalog_validation_fixture.tsl"), text, "d", "tsl")
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+    return result.catalog, (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=("cpp", "rust")),
+    )
+
+
+@pytest.mark.parametrize(
+    ("condition_key", "accepted"),
+    (
+        # Accepted grammar: the unconditional default rule (bare or quoted) and
+        # quoted `if attribute=value` conditions.
+        ("default", True),
+        ('"default"', True),
+        ('"if aligned=true"', True),
+        ('"if aligned=false"', True),
+        ('"if  aligned=true"', True),
+        # Rejected grammar: anything else must be diagnosed by validation and
+        # dropped by promotion — through the same shared parser.
+        ("defaults", False),
+        ('"if aligned = true"', False),
+        ('"if aligned=*"', False),
+        ('"if aligned="', False),
+        ('"if =true"', False),
+        ('"iff aligned=true"', False),
+        ('"if 1aligned=true"', False),
+        ('"if aligned=true "', False),
+    ),
+)
+def test_param_type_condition_acceptance_and_promotion_agree(
+    condition_key: str, accepted: bool
+) -> None:
+    """Validator acceptance and builder promotion share one condition grammar."""
+
+    catalog, diagnostics = _param_types_catalog_and_diagnostics(condition_key)
+
+    rejected = any(
+        diagnostic.code == "TSL-CATALOG-PARAM-TYPES-BAD-CONDITION"
+        for diagnostic in diagnostics
+    )
+    variants = catalog.primitives_named("id", unmasked=False)
+    assert variants
+    promoted_rule_counts = {len(variant.param_type_rules) for variant in variants}
+
+    assert rejected == (not accepted)
+    assert promoted_rule_counts == ({1} if accepted else {0})
+
+
+def test_validator_kind_sets_derive_from_typed_catalog_kinds() -> None:
+    from typing import get_args
+
+    from tslc.catalog import model
+    from tslc.catalog.validation import _schema_primitives, _schema_tests
+    from tslc.catalog.validation import _schema_extensions as schema_extensions
+
+    assert _schema_primitives.KNOWN_GENERIC_PARAM_KINDS == frozenset(
+        get_args(model.GenericParamKind)
+    ) == {"bool", "int", "simd_type"}
+    assert _schema_tests.KNOWN_TEST_ROLES == frozenset(
+        get_args(model.TestCaseRole)
+    ) == {"value", "compile"}
+    assert schema_extensions.KNOWN_MASK_POLICY_KINDS == frozenset(
+        get_args(model.MaskPolicyKind)
+    ) == {
+        "bool",
+        "boolean_lane_vector",
+        "comparison_lane_vector",
+        "exact_lane_bitmask",
+        "lane_bitmask",
+        "native_predicate",
+        "native_predicate_by_lanes",
+    }
+    assert schema_extensions.KNOWN_IMASK_POLICY_KINDS == frozenset(
+        get_args(model.ImaskPolicyKind)
+    ) == {"lane_bitmask", "same_as_mask_type", "unsigned_scalar"}
+    assert frozenset(get_args(model.TestArgKind)) == {"vector", "mask", "scalar"}

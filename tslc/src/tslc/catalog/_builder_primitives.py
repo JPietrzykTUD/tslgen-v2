@@ -2,29 +2,32 @@
 
 from __future__ import annotations
 
-import re
+from typing import cast
 
-from tslc.catalog._builder_common import (
-    _bool_field,
-    _child,
-    _children,
-    _field_text,
-    _list_text,
-    _source_span,
-)
+from tslc.catalog._builder_common import _bool_field
 from tslc.catalog._builder_implementations import _implementations_from_entries
 from tslc.catalog.benchmark_promotion import build_benchmark_spec
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     GenericParam,
     GenericParamBaseWidthConstraint,
+    GenericParamKind,
     ImmediateParam,
     ParamTypeRule,
     Primitive,
 )
+from tslc.catalog.param_types import (
+    parse_base_width_constraint,
+    parse_param_type_condition,
+)
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.test_promotion import build_test_cases
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
+from tslc.syntax.access import child as _child
+from tslc.syntax.access import children as _children
+from tslc.syntax.access import field_text as _field_text
+from tslc.syntax.access import list_text as _list_text
+from tslc.syntax.access import source_span as _source_span
 from tslc.syntax.ast import (
     ParsedPrimitiveDeclaration,
     ParsedTslAttribute,
@@ -34,10 +37,6 @@ from tslc.syntax.ast import (
 
 
 _BOOLEAN_WILDCARD_VALUES = ("true", "false")
-_PARAM_TYPE_CONDITION_RE = re.compile(r"^if\s+([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_]+)$")
-_BASE_WIDTH_CONSTRAINT_RE = re.compile(
-    r"^width\(self::base\)\s*(>=|>|==)\s*width\(base::in\)$"
-)
 
 
 def _build_primitives(
@@ -137,7 +136,9 @@ def _param_type_rules(declaration: ParsedPrimitiveDeclaration) -> tuple[ParamTyp
     for field in declaration.fields_by_name("param_types"):
         for parameter in _children(field.field):
             for entry in _children(parameter):
-                condition = _parse_param_type_condition(entry.key.text)
+                # Rejected conditions/empty types are dropped here; the schema
+                # validator diagnoses them through the same shared grammar.
+                condition = parse_param_type_condition(entry.key.text)
                 type_expr = _field_text(entry)
                 if condition is None or not type_expr:
                     continue
@@ -155,26 +156,6 @@ def _param_type_rules(declaration: ParsedPrimitiveDeclaration) -> tuple[ParamTyp
 
 
 
-def _parse_param_type_condition(
-    text: str,
-) -> tuple[str | None, str | None] | None:
-    condition = _unquote_key(text)
-    if condition == "default":
-        return (None, None)
-    match = _PARAM_TYPE_CONDITION_RE.fullmatch(condition)
-    if match is None:
-        return None
-    return match.group(1), match.group(2)
-
-
-
-def _unquote_key(text: str) -> str:
-    if len(text) >= 2 and text[0] == text[-1] == '"':
-        return text[1:-1]
-    return text
-
-
-
 def _generic_params(declaration: ParsedPrimitiveDeclaration) -> tuple[GenericParam, ...]:
     """The free template parameters from a `generic_params` block: each entry's `kind` +
     `default` (e.g. `PreserveSign {kind bool, default true}`)."""
@@ -185,7 +166,9 @@ def _generic_params(declaration: ParsedPrimitiveDeclaration) -> tuple[GenericPar
     return tuple(
         GenericParam(
             name=entry.key.text,
-            kind=_field_text(_child(entry, "kind")) or "bool",
+            # Typing-only narrow: schema validation diagnoses kinds outside
+            # GenericParamKind.
+            kind=cast(GenericParamKind, _field_text(_child(entry, "kind")) or "bool"),
             default=_field_text(_child(entry, "default")) or "false",
             base_type_constraints=_generic_param_base_types(entry),
             specialize_base=_bool_field(_child(entry, "specialize_base")),
@@ -210,12 +193,12 @@ def _generic_param_base_width_constraints(
         return ()
     result: list[GenericParamBaseWidthConstraint] = []
     for field in _children(constraints):
-        match = _BASE_WIDTH_CONSTRAINT_RE.fullmatch(field.key.text)
-        if match is None:
+        relation = parse_base_width_constraint(field.key.text)
+        if relation is None:
             continue
         result.append(
             GenericParamBaseWidthConstraint(
-                relation=match.group(1),
+                relation=relation,
                 source=_source_span(field.key.source),
             )
         )

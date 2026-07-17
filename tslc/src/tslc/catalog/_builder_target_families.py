@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-from tslc.catalog._builder_common import (
-    _child,
-    _children,
-    _field_text,
-    _list_text,
-    _list_text_set,
-    _opt_int,
-    _source_span,
-)
+from tslc.catalog._builder_common import _list_text_set, _opt_int
+from tslc.syntax.access import child as _child
+from tslc.syntax.access import children as _children
+from tslc.syntax.access import field_text as _field_text
+from tslc.syntax.access import list_text as _list_text
+from tslc.syntax.access import source_span as _source_span
 from tslc.catalog.target_families import (
     BackendProfileFamily,
     ExtensionFamilyCapability,

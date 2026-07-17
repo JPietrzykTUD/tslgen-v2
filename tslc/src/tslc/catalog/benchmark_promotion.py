@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Literal, cast
 
-from tslc.catalog._builder_common import _child, _children, _field_text, _source_span
+from tslc.syntax.access import child as _child
+from tslc.syntax.access import children as _children
+from tslc.syntax.access import field_text as _field_text
+from tslc.syntax.access import source_span as _source_span
 from tslc.catalog.model import (
     PrimitiveBenchmarkOperandDomain,
     PrimitiveBenchmarkSpec,

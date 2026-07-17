@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Collection
+from typing import get_args
 
+from tslc.catalog.model import GenericParamKind
+from tslc.catalog.param_types import (
+    parse_base_width_constraint,
+    parse_param_type_condition,
+    unquote_key,
+)
 from tslc.catalog.validation._schema_common import (
     KNOWN_BOOLEAN_VALUES,
     diagnose_duplicate_fields,
     invalid_enum,
     is_non_empty_scalar_list,
-    unquote_key,
     validate_known_fields,
 )
 from tslc.catalog.validation._schema_implementation import (
@@ -19,7 +24,7 @@ from tslc.catalog.validation._schema_implementation import (
 from tslc.catalog.validation._schema_benchmarks import validate_benchmarks
 from tslc.catalog.validation._schema_tests import validate_tests
 from tslc.catalog.validation.requires_validation import validate_requires
-from tslc.catalog.validation.source_spans import (
+from tslc.syntax.access import (
     attribute_scalar_text,
     child,
     children,
@@ -33,16 +38,14 @@ from tslc.syntax.ast import (
     ParsedTslField,
 )
 
-KNOWN_GENERIC_PARAM_KINDS = frozenset({"bool", "int", "simd_type"})
+# Derived from the typed catalog kind so the validator cannot drift from the model.
+KNOWN_GENERIC_PARAM_KINDS: frozenset[str] = frozenset(get_args(GenericParamKind))
 KNOWN_IMMEDIATE_DISPATCH = frozenset({"literal_match"})
 KNOWN_GENERIC_PARAM_FIELDS = frozenset(
     {"kind", "default", "base_types", "specialize_base", "constraints"}
 )
 KNOWN_IMMEDIATE_PARAM_FIELDS = frozenset({"type", "value_range", "dispatch"})
 KNOWN_RETURN_TYPE_FIELDS = frozenset({"base", "extension"})
-_BASE_WIDTH_CONSTRAINT_RE = re.compile(
-    r"^width\(self::base\)\s*(>=|>|==)\s*width\(base::in\)$"
-)
 KNOWN_PRIMITIVE_FIELDS = frozenset(
     {
         "benchmarks",
@@ -70,7 +73,6 @@ KNOWN_PRIMITIVE_ATTRIBUTES = {
     "packed": frozenset({"true", "false", "*"}),
     "value": frozenset({"zero", "undef", "all"}),
 }
-_PARAM_TYPE_CONDITION_RE = re.compile(r"^if\s+([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_]+)$")
 
 
 def validate_primitive(
@@ -277,7 +279,7 @@ def _validate_generic_param_constraints(
         key = field.key.text
         if key == "base_types":
             continue
-        if _BASE_WIDTH_CONSTRAINT_RE.fullmatch(key):
+        if parse_base_width_constraint(key) is not None:
             width_constraint_count += 1
             if kind != "simd_type":
                 diagnostics.append(
@@ -385,7 +387,7 @@ def _validate_param_types(
                     )
                 )
             for entry in children(parameter):
-                parsed = _parse_param_type_condition(entry.key.text)
+                parsed = parse_param_type_condition(entry.key.text)
                 if parsed is None:
                     diagnostics.append(
                         diagnostic_at(
@@ -481,18 +483,6 @@ def _validate_param_types(
                             source=source_span(entry.source),
                         )
                     )
-
-
-def _parse_param_type_condition(
-    text: str,
-) -> tuple[str | None, str | None] | None:
-    condition = unquote_key(text)
-    if condition == "default":
-        return (None, None)
-    match = _PARAM_TYPE_CONDITION_RE.fullmatch(condition)
-    if match is None:
-        return None
-    return match.group(1), match.group(2)
 
 
 def _validate_return_type(

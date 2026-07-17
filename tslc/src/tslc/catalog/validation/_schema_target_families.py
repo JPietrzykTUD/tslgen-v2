@@ -10,7 +10,7 @@ from tslc.catalog.validation._schema_common import (
     validate_backend_key_fields,
     validate_known_fields,
 )
-from tslc.catalog.validation.source_spans import child, children, field_text, source_span
+from tslc.syntax.access import child, children, field_text, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.ast import ParsedTslField, ParsedTslListValue, ParsedTslScalarValue
 

@@ -6,7 +6,7 @@ import re
 
 from collections.abc import Callable
 
-from tslc.catalog.validation.source_spans import source_span
+from tslc.syntax.access import source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS, region_shell_validator
 from tslc.ir.region_syntax import (

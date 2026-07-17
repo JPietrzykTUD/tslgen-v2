@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from tslc.catalog._builder_common import (
-    _bool_field,
-    _children,
-    _field_text,
-    _list_text,
-    _source_span,
-)
+from tslc.catalog._builder_common import _bool_field
+from tslc.syntax.access import children as _children
+from tslc.syntax.access import field_text as _field_text
+from tslc.syntax.access import list_text as _list_text
+from tslc.syntax.access import source_span as _source_span
 from tslc.catalog.model import (
     Implementation,
     ImplementationSafety,

@@ -23,7 +23,9 @@ class MaskLowerer:
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
         extension = context.env.extension
-        repr_kind = extension.mask_policy.kind
+        # A template key seeded from the policy kind; "lane_register" below is a
+        # lowering-only key, so this is wider than MaskPolicyKind.
+        repr_kind: str = extension.mask_policy.kind
         # Lane-bitmask policies lower through the same per-lane bit operations. Fixed-width
         # x86 masks are register-backed, so a real vector width gets its own template key.
         if extension.mask_policy.lowers_as_lane_bitmask():

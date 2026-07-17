@@ -277,7 +277,7 @@ def _query_scope_symbols(
         if context.declaration_name is None
         else catalog.primitives_named(context.declaration_name, unmasked=False)
     )
-    generic_kinds = {
+    generic_kinds: dict[str, str] = {
         parameter.name: parameter.kind
         for primitive in primitives
         for parameter in primitive.generic_params

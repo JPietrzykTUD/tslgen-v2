@@ -126,3 +126,32 @@ def test_undecodable_string_in_one_document_keeps_other_documents_parsed(
 
     assert [doc.path for doc in result.documents] == [good_path]
     assert [d.code for d in result.diagnostics] == ["TSL-OUTER-PARSE-BAD-STRING"]
+
+
+def test_field_children_agree_between_inline_map_and_indented_block(
+    tsl_grammar: str,
+) -> None:
+    """The shared accessors erase the inline-``{}`` vs indented-block spelling."""
+
+    from tslc.syntax.access import children, field_text, list_text
+    from tslc.syntax.ast import ParsedBlockDeclaration
+
+    inline = 'types:\n  ints {types [si32, ui32], label "x"}\n'
+    indented = 'types:\n  ints:\n    types [si32, ui32]\n    label "x"\n'
+
+    def child_shapes(text: str) -> list[tuple[str, str | None, tuple[str, ...]]]:
+        document = SourceDocument(Path("spelling.tsl"), text, "d", "tsl")
+        result = TslParser(tsl_grammar).parse((document,))
+        assert result.diagnostics == ()
+        declaration = result.documents[0].declarations[0]
+        assert isinstance(declaration, ParsedBlockDeclaration)
+        (field,) = declaration.fields
+        return [
+            (entry.key.text, field_text(entry), list_text(entry))
+            for entry in children(field)
+        ]
+
+    assert child_shapes(inline) == child_shapes(indented) == [
+        ("types", None, ("si32", "ui32")),
+        ("label", "x", ()),
+    ]

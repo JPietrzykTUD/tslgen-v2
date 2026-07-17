@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tslc.catalog.validation.source_spans import children, source_span
+from tslc.syntax.access import children, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.ast import (
     ParsedImplementationSelectorEntry,

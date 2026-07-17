@@ -1,16 +1,24 @@
-"""Source-owned ``param_types`` expression helpers.
+"""Source-owned ``param_types`` expression and condition-key grammar.
 
 ``param_types`` entries are authored as TSIL-ish type expressions, with an
 optional C-like pointer suffix because the source corpus is C-family today. This
-module owns that source syntax so lowering and value-test planning do not each
-grow their own string conventions.
+module owns that source syntax — the type expressions, the ``default`` /
+``if attribute=value`` rule-condition keys, and the related generic-parameter
+base-width constraint keys — so catalog promotion, schema validation, lowering,
+and value-test planning share one grammar instead of drifting copies.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from tslc.catalog.scalar_types import signed_of, unsigned_of
+
+_PARAM_TYPE_CONDITION_RE = re.compile(r"^if\s+([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_]+)$")
+_BASE_WIDTH_CONSTRAINT_RE = re.compile(
+    r"^width\(self::base\)\s*(>=|>|==)\s*width\(base::in\)$"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +35,43 @@ class ParamTypeExpression:
 class ParamTypeScalarResolution:
     type_tag: str | None = None
     reason: str | None = None
+
+
+def unquote_key(text: str) -> str:
+    """A parse-tree field key with its surrounding quotes removed, if quoted."""
+
+    if len(text) >= 2 and text[0] == text[-1] == '"':
+        return text[1:-1]
+    return text
+
+
+def parse_param_type_condition(text: str) -> tuple[str | None, str | None] | None:
+    """Parse a ``param_types`` rule-condition key (a possibly quoted field key).
+
+    Returns ``(None, None)`` for the unconditional ``default`` rule,
+    ``(attribute, value)`` for an ``if attribute=value`` condition, and ``None``
+    when the key matches neither form. Promotion drops rejected keys and schema
+    validation diagnoses them, both through this one parser.
+    """
+
+    condition = unquote_key(text)
+    if condition == "default":
+        return (None, None)
+    match = _PARAM_TYPE_CONDITION_RE.fullmatch(condition)
+    if match is None:
+        return None
+    return match.group(1), match.group(2)
+
+
+def parse_base_width_constraint(text: str) -> str | None:
+    """The relation of a ``width(self::base) <op> width(base::in)`` constraint key.
+
+    Returns ``">="``, ``">"``, or ``"=="``; ``None`` when the key is not a
+    base-width constraint.
+    """
+
+    match = _BASE_WIDTH_CONSTRAINT_RE.fullmatch(text)
+    return None if match is None else match.group(1)
 
 
 def parse_param_type_expression(type_expr: str) -> ParamTypeExpression:
@@ -126,6 +171,9 @@ def _split_head_arg(text: str) -> tuple[str, str] | None:
 __all__ = (
     "ParamTypeExpression",
     "ParamTypeScalarResolution",
+    "parse_base_width_constraint",
+    "parse_param_type_condition",
     "parse_param_type_expression",
     "resolve_param_type_scalar_tag",
+    "unquote_key",
 )

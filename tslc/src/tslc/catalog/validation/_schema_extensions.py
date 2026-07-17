@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable
+from typing import get_args
 
+from tslc.catalog.model import ImaskPolicyKind, MaskPolicyKind
 from tslc.catalog.target_families import TargetFamilyCatalog
 from tslc.catalog.validation._schema_common import (
     diagnose_duplicate_fields,
@@ -11,7 +13,7 @@ from tslc.catalog.validation._schema_common import (
     validate_backend_key_fields,
     validate_known_fields,
 )
-from tslc.catalog.validation.source_spans import child, children, field_text, source_span
+from tslc.syntax.access import child, children, field_text, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.ast import ParsedBlockDeclaration, ParsedTslField
 
@@ -68,20 +70,9 @@ KNOWN_COMPILE_GUARD_FIELDS = frozenset(
     {"macro", "equals", "hint_flag", "diagnostic"}
 )
 KNOWN_TEST_FILTER_FIELDS = frozenset({"exclude_templates"})
-KNOWN_MASK_POLICY_KINDS = frozenset(
-    {
-        "bool",
-        "exact_lane_bitmask",
-        "lane_bitmask",
-        "native_predicate",
-        "native_predicate_by_lanes",
-        "comparison_lane_vector",
-        "boolean_lane_vector",
-    }
-)
-KNOWN_IMASK_POLICY_KINDS = frozenset(
-    {"lane_bitmask", "same_as_mask_type", "unsigned_scalar"}
-)
+# Derived from the typed catalog kinds so the validator cannot drift from the model.
+KNOWN_MASK_POLICY_KINDS: frozenset[str] = frozenset(get_args(MaskPolicyKind))
+KNOWN_IMASK_POLICY_KINDS: frozenset[str] = frozenset(get_args(ImaskPolicyKind))
 
 
 def known_extension_fields(backend_ids: Iterable[str] = ()) -> frozenset[str]:

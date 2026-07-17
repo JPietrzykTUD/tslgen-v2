@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from tslc.catalog._builder_common import (
-    _entry,
-    _field_text,
-    _list_text,
-    _scalar_text,
-)
+from tslc.syntax.access import child as _child
+from tslc.syntax.access import field_text as _field_text
+from tslc.syntax.access import list_text as _list_text
 from tslc.syntax.ast import ParsedBlockDeclaration
 
 
@@ -17,7 +14,7 @@ def _build_type_groups(declaration: ParsedBlockDeclaration) -> dict[str, tuple[s
     # would make it the most specific selector while matching nothing.
     groups: dict[str, tuple[str, ...]] = {}
     for field in declaration.fields:
-        types_field = _entry(field, "types")
+        types_field = _child(field, "types")
         if types_field is None:
             continue
         members = _list_text(types_field)
@@ -31,8 +28,8 @@ def _build_type_groups(declaration: ParsedBlockDeclaration) -> dict[str, tuple[s
 def _build_type_spellings(declaration: ParsedBlockDeclaration) -> dict[str, str]:
     spellings: dict[str, str] = {}
     for field in declaration.fields:
-        type_entry = _entry(field, "type")
-        text = _scalar_text(type_entry) if type_entry is not None else None
+        type_entry = _child(field, "type")
+        text = _field_text(type_entry) if type_entry is not None else None
         if text is not None:
             spellings[field.key.text] = text
     return spellings
@@ -44,7 +41,7 @@ def _build_translations(declaration: ParsedBlockDeclaration) -> dict[str, str]:
 
     templates: dict[str, str] = {}
     for field in declaration.fields:
-        text = _scalar_text(field)
+        text = _field_text(field)
         if text is not None:
             templates[field.key.text] = text
     return templates

@@ -12,7 +12,7 @@ from tslc.catalog.signatures import (
     SignatureTerm,
     parse_signature,
 )
-from tslc.catalog.validation.source_spans import (
+from tslc.syntax.access import (
     child,
     child_from_sequence,
     source_span,

@@ -7,7 +7,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from tslc.catalog.validation.source_spans import source_span
+from tslc.syntax.access import source_span
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.sources import SourceDocument
 from tslc.syntax.ast import (

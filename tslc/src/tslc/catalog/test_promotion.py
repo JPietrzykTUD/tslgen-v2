@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from tslc.catalog.model import TestArg, TestCase
+from typing import cast
+
+from tslc.catalog._builder_common import _opt_int
+from tslc.catalog.model import TestArg, TestCase, TestCaseRole
 from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.catalog.test_cases import derive_test_case_name, infer_test_lane_count
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
+from tslc.syntax.access import child as _child
+from tslc.syntax.access import field_text as _field_text
+from tslc.syntax.access import list_text as _list_text
+from tslc.syntax.access import source_span as _source_span
 from tslc.syntax.ast import (
     ParsedPrimitiveDeclaration,
     ParsedTslAttributeListValue,
@@ -13,7 +20,6 @@ from tslc.syntax.ast import (
     ParsedTslListValue,
     ParsedTslMapValue,
     ParsedTslScalarValue,
-    ParsedTslSourceSpan,
 )
 
 
@@ -35,7 +41,7 @@ def build_test_cases(
             continue
         entries = {entry.key.text: entry for entry in item.entries}
         case_field = entries.get("case")
-        tags = _tag_list(entries.get("tags"))
+        tags = _list_text(entries.get("tags"))
         case_id = _field_text(entries.get("id"))
         shape = parse_signature(declaration.signature)
         inputs = _test_inputs(_child(case_field, "inputs"), shape)
@@ -73,7 +79,9 @@ def build_test_cases(
                 id=case_id,
                 inputs=inputs,
                 expected=expected,
-                role=_field_text(entries.get("role")) or "value",
+                # Typing-only narrow: schema validation diagnoses roles outside
+                # TestCaseRole.
+                role=cast(TestCaseRole, _field_text(entries.get("role")) or "value"),
                 lanes=lanes,
                 extension=_field_text(entries.get("extension")),
                 expected_rule=_field_text(entries.get("expected_rule")),
@@ -138,12 +146,6 @@ def _test_param_kind(param_kinds: tuple[str, ...], position: int) -> str | None:
     return param_kinds[min(position, len(param_kinds) - 1)]
 
 
-def _tag_list(field: ParsedTslField | None) -> tuple[str, ...]:
-    if field is None or not isinstance(field.value, ParsedTslListValue):
-        return ()
-    return tuple(item.text for item in field.value.items if isinstance(item, ParsedTslScalarValue))
-
-
 def _attr_map(field: ParsedTslField | None) -> dict[str, str]:
     if field is None or not isinstance(field.value, ParsedTslAttributeListValue):
         return {}
@@ -182,58 +184,10 @@ def _diagnose_duplicate_test_names(
         )
 
 
-def _child(field: ParsedTslField | None, key: str) -> ParsedTslField | None:
-    if field is None:
-        return None
-    for child in field.children:
-        if child.key.text == key:
-            return child
-    if isinstance(field.value, ParsedTslMapValue):
-        for child in field.value.entries:
-            if child.key.text == key:
-                return child
-    return None
-
-
-def _field_text(field: ParsedTslField | None) -> str | None:
-    if field is not None and isinstance(field.value, ParsedTslScalarValue):
-        return field.value.text
-    return None
-
-
 def _expected_tokens(field: ParsedTslField | None) -> tuple[str, ...]:
     if field is not None and isinstance(field.value, ParsedTslScalarValue):
         return (field.value.text,)
     return _list_text(field)
-
-
-def _list_text(field: ParsedTslField | None) -> tuple[str, ...]:
-    if field is None or not isinstance(field.value, ParsedTslListValue):
-        return ()
-    return tuple(
-        item.text for item in field.value.items if isinstance(item, ParsedTslScalarValue)
-    )
-
-
-def _opt_int(text: str | None) -> int | None:
-    if text is None:
-        return None
-    try:
-        return int(text)
-    except ValueError:
-        return None
-
-
-def _source_span(source: ParsedTslSourceSpan | None) -> SourceSpan | None:
-    if source is None:
-        return None
-    return SourceSpan(
-        path=source.path,
-        line=source.line,
-        column=source.column,
-        end_line=source.end_line,
-        end_column=source.end_column,
-    )
 
 
 __all__ = ("build_test_cases",)

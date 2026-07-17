@@ -20,7 +20,7 @@ from tslc.catalog.validation._schema_extensions import (
 )
 from tslc.catalog.validation._schema_primitives import validate_primitive
 from tslc.catalog.validation._schema_target_families import validate_target_families
-from tslc.catalog.validation.source_spans import child, children, source_span
+from tslc.syntax.access import child, children, source_span
 from tslc.diagnostics import Diagnostic, RelatedLocation, diagnostic_at
 from tslc.syntax.ast import (
     OuterTslParseResult,

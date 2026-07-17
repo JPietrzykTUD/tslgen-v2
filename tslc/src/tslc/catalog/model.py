@@ -30,6 +30,22 @@ BOOLEAN_WILDCARD_ATTRIBUTES = frozenset({"aligned", "packed"})
 RESULT_DIM_BASE = "base"
 RESULT_DIM_EXTENSION = "extension"
 
+# Closed catalog vocabularies. Schema validators derive their allowed-value sets
+# from these aliases (`typing.get_args`), so the model owns each vocabulary once.
+GenericParamKind = Literal["bool", "int", "simd_type"]
+TestArgKind = Literal["vector", "mask", "scalar"]
+TestCaseRole = Literal["value", "compile"]
+MaskPolicyKind = Literal[
+    "bool",
+    "boolean_lane_vector",
+    "comparison_lane_vector",
+    "exact_lane_bitmask",
+    "lane_bitmask",
+    "native_predicate",
+    "native_predicate_by_lanes",
+]
+ImaskPolicyKind = Literal["lane_bitmask", "same_as_mask_type", "unsigned_scalar"]
+
 
 @dataclass(frozen=True, slots=True)
 class RequirementClause:
@@ -259,7 +275,7 @@ class GenericParam:
     """A `generic_params` entry: a free template/const parameter."""
 
     name: str
-    kind: str  # "bool", "int", or "simd_type"
+    kind: GenericParamKind
     default: str  # e.g. "true"
     # For `kind simd_type`, optional source-level constraints on the parameter's
     # associated base type. Entries are scalar type tags or catalog type-group
@@ -303,7 +319,7 @@ class TestArg:
     ``"scalar"`` arg is a single non-mask scalar token such as an immediate, size, or base value.
     """
 
-    kind: str  # "vector" | "mask" | "scalar"
+    kind: TestArgKind
     values: tuple[str, ...] = ()  # vector: per-lane literal tokens
     mask_bits: str | None = None  # mask: the bitmask literal token
     scalar: str | None = None  # scalar: the literal token
@@ -334,7 +350,7 @@ class TestCase:
     tags: tuple[str, ...]
     inputs: tuple[TestArg, ...]
     expected: tuple[str, ...]
-    role: str = "value"
+    role: TestCaseRole = "value"
     lanes: int | None = None
     id: str | None = None
     extension: str | None = None
@@ -377,7 +393,7 @@ class MaskPolicy:
       extends source data without changing this model.
     """
 
-    kind: str = "lane_bitmask"
+    kind: MaskPolicyKind = "lane_bitmask"
     backend_spelling: Mapping[str, str] = field(default_factory=dict)
     backend_spelling_by_lanes: Mapping[str, Mapping[int, str]] = field(default_factory=dict)
     source: SourceSpan | None = None
@@ -418,7 +434,7 @@ class ImaskPolicy:
     so their declared policy (``unsigned_scalar`` / ``lane_bitmask``) is not consumed here.
     """
 
-    kind: str = "lane_bitmask"
+    kind: ImaskPolicyKind = "lane_bitmask"
 
 
 @dataclass(frozen=True, slots=True)
