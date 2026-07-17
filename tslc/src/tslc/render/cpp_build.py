@@ -14,8 +14,10 @@ from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.compiler_assets import RenderAssets
 from tslc.output.verify_model import VerifyProfile, VerifyRunner
 from tslc.render._common import slug
-from tslc.backend.cpp_profile import _cpp_compile_guard_condition
-from tslc.backend.cpp_profile import cpp_header_group
+from tslc.backend.cpp_profile import (
+    cpp_compile_guard_condition,
+    cpp_header_group,
+)
 
 _CMAKE_CXX_FEATURE_FLAG_COMPILERS = "GNU,Clang,AppleClang,IntelLLVM"
 
@@ -440,7 +442,7 @@ def _x86_profile_detection_source(
         for feature in sorted(profile.features)
     ]
     if guards:
-        checks.append(_cpp_compile_guard_condition(guards))
+        checks.append(cpp_compile_guard_condition(guards))
     condition = " && ".join(checks) if checks else "1"
     return "\n".join(
         (
@@ -462,7 +464,7 @@ def _aarch64_profile_detection_source(
 ) -> str | None:
     if "sve" in profile.features:
         guard_condition = (
-            f" && {_cpp_compile_guard_condition(guards)}" if guards else ""
+            f" && {cpp_compile_guard_condition(guards)}" if guards else ""
         )
         return "\n".join(
             (

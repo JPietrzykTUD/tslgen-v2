@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
-from tslc.backend.cpp_validation import resolve_cpp_compile_guards
 from tslc.backend.emitted_profile import EmittedProfile, used_vector_type_specs
 from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.target_capability import (
@@ -13,7 +12,6 @@ from tslc.backend.target_capability import (
 )
 from tslc.catalog.model import BackendCompileGuard, Extension
 from tslc.catalog.scalar_types import scalar_bit_width_or_default
-from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.target_text import TemplateApplication
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
@@ -72,24 +70,6 @@ def _cpp_includes(
     return "\n".join(lines) + "\n"
 
 
-def _cpp_primitive_tags(
-    profiles: tuple[EmittedProfile, ...],
-    assets: RenderAssets,
-) -> str:
-    names = sorted(
-        {
-            primitive
-            for emitted_profile in profiles
-            for primitive in emitted_profile.specializations("cpp")
-        }
-    )
-    declarations = "\n".join(f"struct {name} {{}};" for name in names)
-    return assets.fill(
-        "cpp_primitive_tags.hpp.tmpl",
-        declarations=f"\n{declarations}" if declarations else "",
-    )
-
-
 def cpp_profiles_support_algorithm(profiles: tuple[EmittedProfile, ...]) -> bool:
     """Whether every emitted C++ profile can expose the static algorithm facade."""
 
@@ -101,33 +81,18 @@ def cpp_profiles_support_algorithm(profiles: tuple[EmittedProfile, ...]) -> bool
     )
 
 
-def _guard_cpp_profile(
-    content: str,
-    emitted_exts: Sequence[str],
-    extensions: Mapping[str, Extension],
-) -> str:
-    guards = resolve_cpp_compile_guards(emitted_exts, extensions).guards
-    if not guards:
-        return content
-    condition = _cpp_compile_guard_condition(guards)
-    diagnostic = "; ".join(_cpp_compile_guard_diagnostic(guard) for guard in guards)
-    return (
-        f"#if {condition}\n"
-        f"{content}"
-        "#else\n"
-        f'#  error "{diagnostic}"\n'
-        "#endif\n"
-    )
+def cpp_compile_guard_condition(guards: Sequence[BackendCompileGuard]) -> str:
+    """The C++ preprocessor condition proving every compile guard is satisfied."""
 
-
-def _cpp_compile_guard_condition(guards: Sequence[BackendCompileGuard]) -> str:
     return " && ".join(
         f"defined({guard.macro}) && {guard.macro} == {guard.equals}"
         for guard in guards
     )
 
 
-def _cpp_compile_guard_diagnostic(guard: BackendCompileGuard) -> str:
+def cpp_compile_guard_diagnostic(guard: BackendCompileGuard) -> str:
+    """The author-facing message emitted when one compile guard is unsatisfied."""
+
     if guard.diagnostic:
         return guard.diagnostic
     if guard.hint_flag:

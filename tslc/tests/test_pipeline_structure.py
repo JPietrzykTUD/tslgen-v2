@@ -402,6 +402,34 @@ def test_backend_semantics_do_not_import_project_rendering() -> None:
     assert _forbidden_imports(paths, "tslc.render") == []
 
 
+def test_render_modules_import_no_private_backend_names() -> None:
+    """render/ formats backend-decided models; `_`-private backend names stay backend-internal."""
+
+    render_root = _REPO_ROOT / "tslc" / "src" / "tslc" / "render"
+    offenders: list[str] = []
+    for path in sorted(render_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                offenders.extend(
+                    f"{path}:{node.lineno}: {alias.name}"
+                    for alias in node.names
+                    if _is_forbidden_import(alias.name, "tslc.backend")
+                    and any(part.startswith("_") for part in alias.name.split("."))
+                )
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                if not _is_forbidden_import(node.module, "tslc.backend"):
+                    continue
+                offenders.extend(
+                    f"{path}:{node.lineno}: {alias.name}"
+                    for alias in node.names
+                    if alias.name.startswith("_")
+                    or any(part.startswith("_") for part in node.module.split("."))
+                )
+
+    assert offenders == []
+
+
 def test_renderers_do_not_own_backend_helper_admission() -> None:
     package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
     render_paths = sorted((package_root / "render").rglob("*.py"))

@@ -10,6 +10,7 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.backend import translation_common
+from tslc.backend.cpp_profile_model import cpp_project_render_model
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.lower.lowerer import Lowerer
@@ -267,6 +268,72 @@ def test_lowered_body_model_does_not_scan_for_semantic_spellings() -> None:
     assert "_rust_vector_placeholders" not in text
     assert "::<Self>" not in text
     assert "Self::RegisterType" not in text
+
+
+def test_cpp_profile_render_model_decides_smoke_and_guard_facts(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    """Smoke instantiations and compile-guard grouping are backend-decided data."""
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add", "store"],
+        profiles=["avx2", "sve", "sve512"],
+    )
+    model = cpp_project_render_model(result.emitted_profiles)
+    by_name = {profile.profile_name: profile for profile in model.profiles}
+
+    base = by_name["avx2"].base_header
+    assert base.header_group is None
+    assert base.includes is not None
+    assert base.registrations
+
+    templated = [entry for entry in base.smoke if entry.template_arguments]
+    assert templated
+    for entry in templated:
+        assert entry.symbol.startswith("tsl::")
+        assert entry.lane_count is not None
+        assert entry.lane_count > 0
+        assert all(argument for argument in entry.template_arguments)
+    # Overload dispatch arguments arrive as concrete spellings, not kind tokens.
+    assert any(
+        argument.endswith("::register_type") or argument.endswith("::base_type")
+        for entry in templated
+        for argument in entry.template_arguments
+    )
+    # A LANES-parametric sized slot is exercised at the decided 16-lane count.
+    sized = [
+        entry
+        for entry in by_name["sve"].base_header.smoke
+        if entry.template_arguments and "<16>" in entry.template_arguments[0]
+    ]
+    assert sized
+    assert all(entry.lane_count == 16 for entry in sized)
+
+    # Definitions arrive pre-grouped under their availability condition.
+    assert base.definition_groups
+    for group in base.definition_groups:
+        assert group.specializations
+        assert group.condition is None or isinstance(group.condition, str)
+
+    guard = by_name["sve512"].base_header.guard
+    assert guard is not None
+    assert "__ARM_FEATURE_SVE_BITS" in guard.condition
+    assert guard.diagnostic
+
+
+def test_cpp_project_renderer_formats_without_deciding_smoke_semantics() -> None:
+    """render/cpp_project.py must not consult the support policy or type ladders."""
+
+    source = (
+        _REPO_ROOT / "tslc" / "src" / "tslc" / "render" / "cpp_project.py"
+    ).read_text(encoding="utf-8")
+
+    assert "windowed_lane_count" not in source
+    assert "DEFAULT_SUPPORT_POLICY" not in source
+    assert "support_policy" not in source
+    assert "_concrete_arg_type" not in source
 
 
 def test_generated_artifacts_have_no_unresolved_template_placeholders(
