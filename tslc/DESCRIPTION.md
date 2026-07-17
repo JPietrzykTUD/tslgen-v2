@@ -97,6 +97,11 @@ last valid parsed structure without replacing current diagnostics. The
 editor-neutral pygls transport is in `lsp/`; an initially invalid overlay uses
 the valid saved corpus for catalog facts, parsed context, and definitions while
 retaining parseable overlay occurrence spans.
+
+Backend translation entries named `query_value::<namespace>::<name>` add typed
+value leaves to both lowering and catalog-aware completion. The generic query
+resolver delegates their spelling to the active backend template dialect, so a
+new target namespace does not require a resolver branch.
 [lsp/specialization_context.py](src/tslc/lsp/specialization_context.py)
 combines the parsed cursor scope with the real selector to expose valid
 `(profile, extension, type)` slots to editor clients without duplicating source
@@ -196,8 +201,11 @@ prim<v:=(v,v)> add(left, right):
   source-named extension families—fallback classification, free-function
   ownership, declared-register requirements, and index-vector support—and for
   profile families, including whether a profile runs natively without an
-  emulator. Selection, lowering, translation, and verification consume those
-  typed roles instead of recognizing family-name strings.
+  emulator. It also owns documentation family/order labels and the catalog of
+  accepted target features plus their default/backend compiler spellings;
+  machine profiles retain only genuine profile-specific overrides. Selection,
+  lowering, translation, documentation, and verification consume those typed
+  roles instead of recognizing family or feature-name patterns.
 - **Fixed-width SVE**: `sve128`/`sve256`/`sve512` inherit scalable `sve` bodies
   but supersede `sve` in their fixed profiles, so one profile emits one SVE
   model. The fixed width is a compile mode (`sve_vector_bits_N`) plus C++ flags

@@ -59,6 +59,10 @@ def _resolve_extension_inheritance(
             backend_supported={**parent.backend_supported, **ext.backend_supported},
             metadata=replace(
                 ext.metadata,
+                documentation_width=(
+                    ext.metadata.documentation_width
+                    or parent.metadata.documentation_width
+                ),
                 backend=_merge_backend_metadata(
                     parent.metadata.backend,
                     ext.metadata.backend,
@@ -232,6 +236,7 @@ def _extension_metadata(
 ) -> ExtensionMetadata:
     return ExtensionMetadata(
         native_sort_order=_opt_int(_field_text(fields.get("native_sort_order"))),
+        documentation_width=_field_text(fields.get("documentation_width")),
         backend=_backend_extension_metadata(fields, backend_ids),
     )
 

@@ -12,17 +12,34 @@ from tslc.catalog.validation._schema_common import (
 )
 from tslc.syntax.access import child, children, field_text, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
-from tslc.syntax.ast import ParsedTslField, ParsedTslListValue, ParsedTslScalarValue
+from tslc.syntax.ast import (
+    ParsedTslField,
+    ParsedTslListValue,
+    ParsedTslMapValue,
+    ParsedTslScalarValue,
+)
 
 KNOWN_TARGET_FAMILIES_FIELDS = frozenset(
     {
         "extension_family_capabilities",
         "known_extension_families",
+        "known_target_features",
         "universal_extension_families",
         "profile_families",
+        "target_feature_spellings",
     }
 )
 KNOWN_EXTENSION_FAMILY_FIELDS = frozenset(
+    {
+        "free_function_owner",
+        "implementation_fallback",
+        "index_vector_register",
+        "documentation_family",
+        "documentation_sort_order",
+        "requires_declared_vector_register",
+    }
+)
+BOOLEAN_EXTENSION_FAMILY_FIELDS = frozenset(
     {
         "free_function_owner",
         "implementation_fallback",
@@ -59,7 +76,11 @@ def validate_target_families(
     diagnose_duplicate_fields(
         target_fields, diagnostics, label="target_families field"
     )
-    for list_name in ("known_extension_families", "universal_extension_families"):
+    for list_name in (
+        "known_extension_families",
+        "known_target_features",
+        "universal_extension_families",
+    ):
         list_field = child(field, list_name)
         if list_field is not None and not is_scalar_list(list_field):
             diagnostics.append(
@@ -75,6 +96,13 @@ def validate_target_families(
     extension_families = child(field, "extension_family_capabilities")
     known_extension_families = _scalar_list_values(
         child(field, "known_extension_families")
+    )
+    known_target_features = _scalar_list_values(child(field, "known_target_features"))
+    _validate_target_feature_spellings(
+        child(field, "target_feature_spellings"),
+        known_target_features,
+        backend_ids,
+        diagnostics,
     )
     diagnose_duplicate_fields(
         children(extension_families),
@@ -107,10 +135,37 @@ def validate_target_families(
         )
         _validate_boolean_fields(
             extension_family,
-            KNOWN_EXTENSION_FAMILY_FIELDS,
+            BOOLEAN_EXTENSION_FAMILY_FIELDS,
             diagnostics,
             owner,
         )
+        documentation_family = child(extension_family, "documentation_family")
+        if documentation_family is not None and not field_text(documentation_family):
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TARGET-FAMILIES-MALFORMED-DOCUMENTATION-FAMILY",
+                    message=f"{owner} documentation_family must be a non-empty string",
+                    source=source_span(documentation_family.source),
+                )
+            )
+        documentation_order = child(extension_family, "documentation_sort_order")
+        documentation_order_text = field_text(documentation_order)
+        if (
+            documentation_order is not None
+            and (
+                documentation_order_text is None
+                or not documentation_order_text.isdigit()
+            )
+        ):
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TARGET-FAMILIES-MALFORMED-SORT-ORDER",
+                    message=f"{owner} documentation_sort_order must be an integer",
+                    source=source_span(documentation_order.source),
+                )
+            )
     diagnose_duplicate_fields(
         children(profiles),
         diagnostics,
@@ -212,4 +267,76 @@ def _scalar_list_values(field: ParsedTslField | None) -> frozenset[str]:
         item.text
         for item in field.value.items
         if isinstance(item, ParsedTslScalarValue)
+    )
+
+
+def _validate_target_feature_spellings(
+    field: ParsedTslField | None,
+    known_features: frozenset[str],
+    backend_ids: frozenset[str],
+    diagnostics: list[Diagnostic],
+) -> None:
+    if field is not None and not children(field) and not isinstance(
+        field.value, ParsedTslMapValue
+    ):
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-TARGET-FEATURE-SPELLING-MALFORMED",
+                message="target_feature_spellings must be a map",
+                source=source_span(field.source),
+            )
+        )
+        return
+    entries = children(field)
+    diagnose_duplicate_fields(entries, diagnostics, label="target feature spelling")
+    for entry in entries:
+        owner = f"target feature spelling {entry.key.text!r}"
+        if entry.key.text not in known_features:
+            invalid_enum(
+                diagnostics,
+                entry,
+                owner,
+                sorted(known_features),
+            )
+        if isinstance(entry.value, ParsedTslScalarValue):
+            if not entry.value.text:
+                _empty_target_feature_spelling(entry, diagnostics)
+            continue
+        if not children(entry) and not isinstance(entry.value, ParsedTslMapValue):
+            _empty_target_feature_spelling(entry, diagnostics)
+            continue
+        spelling_fields = children(entry)
+        validate_backend_key_fields(
+            tuple(item for item in spelling_fields if item.key.text != "default"),
+            backend_ids,
+            diagnostics,
+            owner=owner,
+        )
+        diagnose_duplicate_fields(
+            spelling_fields,
+            diagnostics,
+            label=f"{owner} backend",
+        )
+        for spelling in spelling_fields:
+            if (
+                not isinstance(spelling.value, ParsedTslScalarValue)
+                or not spelling.value.text
+            ):
+                _empty_target_feature_spelling(spelling, diagnostics)
+
+
+def _empty_target_feature_spelling(
+    field: ParsedTslField,
+    diagnostics: list[Diagnostic],
+) -> None:
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-CATALOG-TARGET-FEATURE-SPELLING-MALFORMED",
+            message=(
+                f"target feature spelling {field.key.text!r} must be a non-empty string"
+            ),
+            source=source_span(field.source),
+        )
     )

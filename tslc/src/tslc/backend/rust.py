@@ -23,7 +23,7 @@ from tslc.backend.rust_type_params import (
 )
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.backend.rust_translation import rust_raw_identifier
-from tslc.backend.target_capability import feature_spelling, rust_extension_tag
+from tslc.backend.target_capability import rust_extension_tag
 from tslc.lower.lowerer import (
     LoweredSpecialization,
     effective_param_types,
@@ -42,10 +42,10 @@ class RustBackend:
     def __init__(
         self,
         *,
-        feature_alternatives: Mapping[str, str] | None = None,
+        feature_spellings: Mapping[str, str] | None = None,
         emit_target_features: bool = True,
     ) -> None:
-        self._feature_alternatives = dict(feature_alternatives or {})
+        self._feature_spellings = dict(feature_spellings or {})
         self._emit_target_features = emit_target_features
 
     def render_primitive(
@@ -586,7 +586,7 @@ class RustBackend:
         if not self._emit_target_features or not spec.required_features:
             return ()
         return tuple(
-            f'#[target_feature(enable = "{feature_spelling(feature, self._feature_alternatives, backend_id="rust")}")]'
+            f'#[target_feature(enable = "{self._feature_spellings.get(feature, feature)}")]'
             for feature in sorted(spec.required_features)
         )
 

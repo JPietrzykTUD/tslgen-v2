@@ -2,7 +2,20 @@
 
 ## Status and basis
 
-Status: Phases 1 and 2 implemented (slices 1–19); Phase 3 not started.
+Status: Phases 1 and 2 implemented (slices 1–19); Phase 3 implemented through
+slice 22. Slices 23–27 remain.
+
+Phase 3 implementation notes (one commit per slice):
+
+- Slice 20 (6ada3f0): one catalog condition parser and syntax accessor layer;
+  typed catalog vocabularies keep validators and promotion aligned.
+- Slice 21 (704e349): typed boolean/query/loop syntax, exact generic scope
+  symbols, and construction-time width-relation diagnostics.
+- Slice 22: `target_families:` owns accepted target features, shared compiler
+  spellings, and documentation family/order facts; scalar type metadata owns
+  documentation labels/order; profile alternatives are profile-only overrides;
+  backend `query_value::<namespace>::<name>` translations add query leaves
+  without generic resolver branches.
 
 Phase 2 implementation notes (one commit per slice):
 

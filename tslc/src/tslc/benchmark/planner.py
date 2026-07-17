@@ -510,7 +510,9 @@ def _manifest_hash(
             "name": profile.profile.name,
             "family": profile.profile.family,
             "features": sorted(profile.profile.features),
-            "feature_spellings": sorted(profile.profile.alternatives.items()),
+            "feature_spellings": sorted(
+                profile.profile.feature_spellings("cpp").items()
+            ),
             "compile_modes": sorted(profile.profile.compile_modes),
             "cpp_flags": profile.profile.flags_for_backend("cpp"),
         },

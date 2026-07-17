@@ -1,17 +1,42 @@
 target_families:
   known_extension_families [scalar, generic_like, compiler_builtin, x86, arm, cuda, wasm]
+  known_target_features [avx, avx2, avx512_bf16, avx512_bitalg, avx512_fp16, avx512_gfni, avx512_vaes, avx512_vbmi2, avx512_vnni, avx512_vp2intersect, avx512_vpclmulqdq, avx512_vpopcntdq, avx512bw, avx512cd, avx512dq, avx512f, avx512ifma, avx512vbmi, avx512vl, neon, rdrand, simd128, sse, sse2, sse4_1, sse4_2, ssse3, sve]
+  target_feature_spellings:
+    avx512_bf16 "avx512bf16"
+    avx512_bitalg "avx512bitalg"
+    avx512_fp16 "avx512fp16"
+    avx512_gfni "gfni"
+    avx512_vaes "vaes"
+    avx512_vbmi2 "avx512vbmi2"
+    avx512_vnni "avx512vnni"
+    avx512_vp2intersect "avx512vp2intersect"
+    avx512_vpclmulqdq "vpclmulqdq"
+    avx512_vpopcntdq "avx512vpopcntdq"
+    rdrand:
+      cpp "rdrnd"
+    sse4_1 "sse4.1"
+    sse4_2 "sse4.2"
   universal_extension_families [scalar, generic_like, compiler_builtin]
   extension_family_capabilities:
     scalar:
       implementation_fallback true
       requires_declared_vector_register false
+      documentation_family "scalar"
+      documentation_sort_order 0
     generic_like:
       implementation_fallback true
       requires_declared_vector_register false
+      documentation_family "generic"
+      documentation_sort_order 1
     compiler_builtin:
       free_function_owner false
+      documentation_family "compiler_builtin"
+      documentation_sort_order 90
     x86:
       index_vector_register true
+      documentation_family "x86"
+    arm:
+      documentation_family "aarch64"
   profile_families:
     generic:
       extension_families []

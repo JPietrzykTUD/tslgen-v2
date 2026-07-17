@@ -10,7 +10,11 @@ import pytest
 
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import load_machine_profiles_checked
-from tslc.catalog.target_families import ProfileFamilyCapability, TargetFamilyCatalog
+from tslc.catalog.target_families import (
+    ProfileFamilyCapability,
+    TargetFamilyCatalog,
+    TargetFeatureCapability,
+)
 from tslc.catalog.validation import validate_catalog
 from tslc.catalog.validation._schema_extensions import known_extension_fields
 from tslc.compiler_assets import load_default_tsl_grammar
@@ -1073,6 +1077,38 @@ def test_target_family_typos_are_still_diagnosed() -> None:
     assert "rvv" in diagnostic.message
 
 
+def test_unknown_target_feature_spellings_and_uses_are_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        "target_families:\n"
+        "  known_extension_families [scalar]\n"
+        "  known_target_features [known]\n"
+        "  target_feature_spellings:\n"
+        '    typo "compiler-typo"\n'
+        "  universal_extension_families [scalar]\n"
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "  active_when:\n"
+        "    target_features [active_typo]\n"
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        requires [requires_typo]\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+
+    messages = [diagnostic.message for diagnostic in diagnostics]
+    assert any("target feature spelling 'typo'" in message for message in messages)
+    assert any("active_when uses unknown target feature 'active_typo'" in message for message in messages)
+    assert any("requires uses unknown target feature 'requires_typo'" in message for message in messages)
+
+
 def test_missing_backend_spellings_are_diagnosed() -> None:
     diagnostics = _diagnostics(
         "types:\n"
@@ -1553,6 +1589,36 @@ def test_machine_profile_target_features_are_validated(tmp_path: Path) -> None:
     assert "TSL-PROFILE-MALFORMED-TARGET-FEATURES" in {
         d.code for d in result.diagnostics
     }
+
+
+def test_machine_profile_features_and_overrides_use_target_feature_catalog(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{"x86": [{"name": "demo", "target_features": "known typo", '
+        '"alternatives": {"known": "profile-known", "unused": "profile-unused"}}]}\n',
+        encoding="utf-8",
+    )
+    families = TargetFamilyCatalog(
+        profile_families={"x86": ProfileFamilyCapability("x86")},
+        target_features={
+            "known": TargetFeatureCapability(
+                "known",
+                default_spelling="source-known",
+                backend_spellings={"cpp": "cpp-known"},
+            )
+        },
+    )
+
+    result = load_machine_profiles_checked(path, families)
+
+    assert {diagnostic.code for diagnostic in result.diagnostics} >= {
+        "TSL-PROFILE-UNKNOWN-ALTERNATIVE",
+        "TSL-PROFILE-UNKNOWN-TARGET-FEATURE",
+    }
+    profile = result.profiles["demo"]
+    assert profile.feature_spelling("known", "cpp") == "profile-known"
 
 
 def test_machine_profile_compile_modes_are_validated(tmp_path: Path) -> None:

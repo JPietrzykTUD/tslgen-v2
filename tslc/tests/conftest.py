@@ -75,8 +75,8 @@ def machine_profiles_path() -> Path:
 
 
 @pytest.fixture(scope="session")
-def machine_profiles() -> Mapping[str, MachineProfile]:
-    result = load_machine_profiles_checked(_MACHINE_PROFILES)
+def machine_profiles(catalog: Catalog) -> Mapping[str, MachineProfile]:
+    result = load_machine_profiles_checked(_MACHINE_PROFILES, catalog.target_families)
     assert result.diagnostics == ()
     return result.profiles
 

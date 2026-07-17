@@ -12,6 +12,7 @@ from tslc.catalog.target_families import (
     BackendProfileFamily,
     ExtensionFamilyCapability,
     ProfileFamilyCapability,
+    TargetFeatureCapability,
     TargetFamilyCatalog,
 )
 from tslc.syntax.ast import ParsedTslField
@@ -22,9 +23,18 @@ def _build_target_families(fields: list[ParsedTslField]) -> TargetFamilyCatalog:
     universal: set[str] = set()
     extension_capabilities: dict[str, ExtensionFamilyCapability] = {}
     profiles: dict[str, ProfileFamilyCapability] = {}
+    known_target_features: set[str] = set()
+    target_feature_spellings: dict[str, ParsedTslField] = {}
     for field in fields:
         known.update(_list_text(_child(field, "known_extension_families")))
         universal.update(_list_text(_child(field, "universal_extension_families")))
+        known_target_features.update(_list_text(_child(field, "known_target_features")))
+        target_feature_spellings.update(
+            {
+                entry.key.text: entry
+                for entry in _children(_child(field, "target_feature_spellings"))
+            }
+        )
         extension_families = _child(field, "extension_family_capabilities")
         for entry in _children(extension_families):
             extension_capabilities[entry.key.text] = ExtensionFamilyCapability(
@@ -40,6 +50,12 @@ def _build_target_families(fields: list[ParsedTslField]) -> TargetFamilyCatalog:
                 ),
                 index_vector_register=_bool_field(
                     _child(entry, "index_vector_register"), default=False
+                ),
+                documentation_family=_field_text(
+                    _child(entry, "documentation_family")
+                ),
+                documentation_sort_order=_opt_int(
+                    _field_text(_child(entry, "documentation_sort_order"))
                 ),
                 source=_source_span(entry.source),
             )
@@ -61,6 +77,36 @@ def _build_target_families(fields: list[ParsedTslField]) -> TargetFamilyCatalog:
         universal_extension_families=frozenset(universal),
         extension_families=extension_capabilities,
         profile_families=profiles,
+        target_features={
+            name: _build_target_feature(name, target_feature_spellings.get(name))
+            for name in sorted(known_target_features)
+        },
+    )
+
+
+def _build_target_feature(
+    name: str,
+    field: ParsedTslField | None,
+) -> TargetFeatureCapability:
+    if field is None:
+        return TargetFeatureCapability(name=name)
+    scalar_spelling = _field_text(field)
+    if scalar_spelling is not None:
+        return TargetFeatureCapability(
+            name=name,
+            default_spelling=scalar_spelling,
+            source=_source_span(field.source),
+        )
+    values = {
+        entry.key.text: (_field_text(entry) or "")
+        for entry in _children(field)
+        if _field_text(entry) is not None
+    }
+    return TargetFeatureCapability(
+        name=name,
+        default_spelling=values.pop("default", None),
+        backend_spellings=values,
+        source=_source_span(field.source),
     )
 
 

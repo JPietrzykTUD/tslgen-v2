@@ -351,6 +351,14 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert "avx2" in machine_profiles["avx2"].features
     assert "avx2" not in machine_profiles["avx"].features
     assert "avx512f" in machine_profiles["skylake"].features
+    assert machine_profiles["avx2"].feature_spelling("sse4_1", "cpp") == "sse4.1"
+    assert machine_profiles["avx2"].feature_spelling("rdrand", "cpp") == "rdrnd"
+    assert (
+        machine_profiles["icelake_rockerlake"].feature_spelling(
+            "avx512_vpclmulqdq", "rust"
+        )
+        == "vpclmulqdq"
+    )
     assert machine_profiles["neon"].flags_for_backend("cpp") == ()
     assert machine_profiles["sve"].features == frozenset({"sve"})
     assert machine_profiles["sve"].flags_for_backend("cpp") == ("-mcpu=a64fx",)
@@ -405,6 +413,16 @@ def test_target_families_promoted(catalog: Catalog) -> None:
     assert families.extension_family("generic_like").implementation_fallback
     assert not families.extension_family("compiler_builtin").free_function_owner
     assert families.extension_family("x86").index_vector_register
+    assert families.extension_family("scalar").documented_sort_order == 0
+    assert families.extension_family("generic_like").documented_family == "generic"
+    assert families.extension_family("generic_like").documented_sort_order == 1
+    assert families.extension_family("arm").documented_family == "aarch64"
+    assert families.extension_family("arm").documented_sort_order == 20
+    sse4_1 = families.target_feature("sse4_1")
+    rdrand = families.target_feature("rdrand")
+    assert sse4_1 is not None and sse4_1.spelling("cpp") == "sse4.1"
+    assert rdrand is not None and rdrand.spelling("cpp") == "rdrnd"
+    assert rdrand.spelling("rust") == "rdrand"
     assert families.profile_families["generic"].native_without_runner
     assert families.profile_families["x86"].extension_families == frozenset({"x86"})
     assert families.profile_families["aarch64"].extension_families == frozenset({"arm"})
@@ -416,6 +434,10 @@ def test_target_families_promoted(catalog: Catalog) -> None:
     assert families.profile_families["wasm32"].runner_kinds == frozenset({"wasmtime"})
     assert families.profile_families["wasm32"].backend("cpp").target == "wasm32-wasip1"
     assert families.profile_families["wasm32"].backend("rust").target == "wasm32-wasip1"
+
+    assert catalog.extensions["sve"].metadata.documentation_width == "SVE"
+    assert catalog.extensions["sve512"].metadata.documentation_width == "SVE"
+    assert catalog.extensions["neon"].family_capability.documented_family == "aarch64"
 
 
 def test_clang_vector_extensions_are_cpp_opt_in_overlays(catalog: Catalog) -> None:

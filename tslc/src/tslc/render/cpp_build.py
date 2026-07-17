@@ -7,7 +7,6 @@ from collections.abc import Sequence
 from tslc.backend.cpp_detection import CPP_PROFILE_DETECTION_KINDS
 from tslc.backend.cpp_validation import resolve_cpp_compile_guards
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
-from tslc.backend.target_capability import feature_spelling
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import BackendCompileGuard
 from tslc.catalog.target_families import ProfileFamilyCapability
@@ -59,7 +58,7 @@ def cpp_flags(
         return profile.flags_for_backend("cpp")
     return (
         *(
-            f"-m{feature_spelling(feature, profile.alternatives, backend_id='cpp')}"
+            f"-m{profile.feature_spelling(feature, 'cpp')}"
             for feature in sorted(profile.features)
         ),
         *profile.flags_for_backend("cpp"),
@@ -438,7 +437,7 @@ def _x86_profile_detection_source(
     guards: Sequence[BackendCompileGuard] = (),
 ) -> str:
     checks = [
-        f'__builtin_cpu_supports("{feature_spelling(feature, profile.alternatives, backend_id="cpp")}")'
+        f'__builtin_cpu_supports("{profile.feature_spelling(feature, "cpp")}")'
         for feature in sorted(profile.features)
     ]
     if guards:

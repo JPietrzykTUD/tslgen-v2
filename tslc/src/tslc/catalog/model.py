@@ -8,12 +8,15 @@ What it is not is plumbing — there are no result/handoff wrappers here.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Literal, TypeVar
 
 from tslc.diagnostics import SourceSpan
-from tslc.catalog.target_families import TargetFamilyCatalog
+from tslc.catalog.target_families import (
+    ExtensionFamilyCapability,
+    TargetFamilyCatalog,
+)
 
 _K = TypeVar("_K")
 _V = TypeVar("_V")
@@ -493,6 +496,7 @@ class ExtensionMetadata:
     """Shared and backend-specific extension facts consumed by the compiler."""
 
     native_sort_order: int | None = None
+    documentation_width: str | None = None
     backend: Mapping[str, BackendExtensionMetadata] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -536,6 +540,9 @@ class Extension:
     family: str  # "x86" | "arm" | "scalar" | … — picks the Rust core::arch module
     compose_prefix: Mapping[str, str]  # backend_id -> intrinsic prefix
     compose_suffix_by_type: Mapping[str, str]  # type tag -> suffix fragment
+    family_capability: ExtensionFamilyCapability = field(
+        default_factory=lambda: ExtensionFamilyCapability("")
+    )
     vector_register_types: Mapping[str, Mapping[str, str]] = field(
         default_factory=dict
     )  # type tag/group -> backend_id -> register type
@@ -667,7 +674,21 @@ class Catalog:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "type_groups", _freeze_mapping(self.type_groups))
-        object.__setattr__(self, "extensions", _freeze_mapping(self.extensions))
+        object.__setattr__(
+            self,
+            "extensions",
+            _freeze_mapping(
+                {
+                    name: replace(
+                        extension,
+                        family_capability=self.target_families.extension_family(
+                            extension.family
+                        ),
+                    )
+                    for name, extension in self.extensions.items()
+                }
+            ),
+        )
         object.__setattr__(
             self,
             "type_spellings",

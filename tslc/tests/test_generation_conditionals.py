@@ -9,7 +9,7 @@ all delivering the SIMD comparison family (signed + unsigned + float) on sse/avx
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 
 import pytest
@@ -116,6 +116,24 @@ def test_type_is_same_query(catalog: Catalog) -> None:
     assert ev.evaluate("type::is_same(type(base::in), ui8)", ctx) == BoolValue(False)
     assert ev.evaluate("type::same_size(base::in, si16)", ctx) == BoolValue(True)
     assert ev.evaluate("type::same_size(base::in, si32)", ctx) == BoolValue(False)
+
+
+def test_query_value_namespaces_are_backend_translation_data(catalog: Catalog) -> None:
+    translations = {
+        backend_id: dict(entries)
+        for backend_id, entries in catalog.translations.items()
+    }
+    translations["cpp"]["query_value::neon::round_to_zero"] = "NEON_ROUND_ZERO"
+    synthetic = replace(catalog, translations=translations)
+
+    assert QueryEvaluator().evaluate(
+        "neon::round_to_zero",
+        _ctx(synthetic, "neon", "si32"),
+    ) == TextValue("NEON_ROUND_ZERO")
+    assert QueryEvaluator().evaluate(
+        "x86::mm_fround_to_zero",
+        _ctx(catalog, "avx2", "si32"),
+    ) == TextValue("_MM_FROUND_TO_ZERO")
 
 
 def test_unsigned_type_query_handles_integer_and_float_inputs(catalog: Catalog) -> None:

@@ -69,7 +69,12 @@ def validate_parsed_documents(
                     type_group_fields.extend(declaration.fields)
             elif isinstance(declaration, ParsedPrimitiveDeclaration):
                 _validate_duplicate_primitive(declaration, seen_primitives, diagnostics)
-                validate_primitive(declaration, backend_ids, diagnostics)
+                validate_primitive(
+                    declaration,
+                    backend_ids,
+                    diagnostics,
+                    target_families.target_feature_names,
+                )
             elif (
                 isinstance(declaration, ParsedFieldDeclaration)
                 and declaration.field.key.text == "target_families"

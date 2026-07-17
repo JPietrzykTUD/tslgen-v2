@@ -15,12 +15,18 @@ from tslc.catalog.validation._schema_common import (
 )
 from tslc.syntax.access import child, children, field_text, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
-from tslc.syntax.ast import ParsedBlockDeclaration, ParsedTslField
+from tslc.syntax.ast import (
+    ParsedBlockDeclaration,
+    ParsedTslField,
+    ParsedTslListValue,
+    ParsedTslScalarValue,
+)
 
 KNOWN_EXTENSION_FIELDS = frozenset(
     {
         "active_when",
         "default_test_target",
+        "documentation_width",
         "extension_name",
         "family",
         "inherits",
@@ -180,6 +186,11 @@ def validate_extension_block(
             diagnostics,
             label="active_when field",
         )
+        _validate_active_target_features(
+            child(active_when, "target_features"),
+            target_families.target_feature_names,
+            diagnostics,
+        )
     size_parameter = fields.get("size_parameter")
     if size_parameter is not None:
         validate_known_fields(
@@ -303,6 +314,33 @@ def _validate_compile_guards(
                         source=source_span(guard.source),
                     )
                 )
+
+
+def _validate_active_target_features(
+    field: ParsedTslField | None,
+    known_target_features: Collection[str],
+    diagnostics: list[Diagnostic],
+) -> None:
+    if not known_target_features or field is None:
+        return
+    if not isinstance(field.value, ParsedTslListValue):
+        return
+    for item in field.value.items:
+        if (
+            isinstance(item, ParsedTslScalarValue)
+            and item.text not in known_target_features
+        ):
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-UNKNOWN-TARGET-FEATURE",
+                    message=(
+                        f"active_when uses unknown target feature {item.text!r}; "
+                        f"expected one of: {', '.join(sorted(known_target_features))}"
+                    ),
+                    source=source_span(item.source),
+                )
+            )
 
 
 def _validate_policy_block(

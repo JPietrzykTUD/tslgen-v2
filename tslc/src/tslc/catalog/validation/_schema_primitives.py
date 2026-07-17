@@ -81,6 +81,7 @@ def validate_primitive(
     declaration: ParsedPrimitiveDeclaration,
     backend_ids: Collection[str],
     diagnostics: list[Diagnostic],
+    known_target_features: Collection[str] = (),
 ) -> None:
     fields = tuple(field.field for field in declaration.fields)
     validate_known_fields(
@@ -107,7 +108,7 @@ def validate_primitive(
     _validate_return_type(declaration, diagnostics)
     validate_benchmarks(declaration, diagnostics)
     validate_tests(declaration, diagnostics)
-    validate_requires(declaration, diagnostics)
+    validate_requires(declaration, diagnostics, known_target_features)
 
 
 def _validate_attributes(

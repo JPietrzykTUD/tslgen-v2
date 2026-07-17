@@ -85,76 +85,41 @@
     {
       "name": "icelake_rockerlake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
-      "runner": {"kind": "sde", "profile": "icl"},
-      "alternatives": {
-        "avx512_vpclmulqdq": "vpclmulqdq",
-        "avx512_gfni": "gfni",
-        "avx512_vaes": "vaes"
-      }
+      "runner": {"kind": "sde", "profile": "icl"}
     },
     {
       "name": "icelake_rockerlake-oneapi",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
       "runner": {"kind": "sde", "profile": "icl"},
       "compile_modes": "oneapi_fpga",
-      "auto_detect_gate": "oneapi_fpga",
-      "alternatives": {
-        "avx512_vpclmulqdq": "vpclmulqdq",
-        "avx512_gfni": "gfni",
-        "avx512_vaes": "vaes"
-      }
+      "auto_detect_gate": "oneapi_fpga"
     },
     {
       "name": "tigerlake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
-      "runner": {"kind": "sde", "profile": "tgl"},
-      "alternatives": {
-        "avx512_vpclmulqdq": "vpclmulqdq",
-        "avx512_gfni": "gfni",
-        "avx512_vaes": "vaes"
-      }
+      "runner": {"kind": "sde", "profile": "tgl"}
     },
     {
       "name": "zen4",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
-      "runner": {"kind": "sde", "profile": "future"},
-      "alternatives": {
-        "avx512_vpclmulqdq": "vpclmulqdq",
-        "avx512_gfni": "gfni",
-        "avx512_vaes": "vaes"
-      }
+      "runner": {"kind": "sde", "profile": "future"}
     },
     {
       "name": "sapphire_emerald_granite_rapids",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_fp16",
-      "runner": {"kind": "sde", "profile": "spr"},
-      "alternatives": {
-        "avx512_vpclmulqdq": "vpclmulqdq",
-        "avx512_gfni": "gfni",
-        "avx512_vaes": "vaes"
-      }
+      "runner": {"kind": "sde", "profile": "spr"}
     },
     {
       "name": "sapphire_emerald_granite_rapids-oneapi",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_fp16",
       "runner": {"kind": "sde", "profile": "spr"},
       "compile_modes": "oneapi_fpga",
-      "auto_detect_gate": "oneapi_fpga",
-      "alternatives": {
-        "avx512_vpclmulqdq": "vpclmulqdq",
-        "avx512_gfni": "gfni",
-        "avx512_vaes": "vaes"
-      }
+      "auto_detect_gate": "oneapi_fpga"
     },
     {
       "name": "zen5",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
-      "runner": {"kind": "sde", "profile": "future"},
-      "alternatives": {
-        "avx512_vpclmulqdq": "vpclmulqdq",
-        "avx512_gfni": "gfni",
-        "avx512_vaes": "vaes"
-      }
+      "runner": {"kind": "sde", "profile": "future"}
     }
   ],
   "aarch64": [

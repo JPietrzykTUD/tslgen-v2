@@ -68,13 +68,12 @@ def resolve_query_leaf(head: str, context: LoweringSession) -> QueryValue | None
         spelling = types.scalar_spelling(scalar_tag)
         return TextValue(spelling) if spelling is not None else None
 
-    if head.startswith("x86::"):
+    if "::" in head:
         backend = getattr(context.env, "backend", None)
         templates = getattr(backend, "templates", None)
         if templates is None:
             return None
-        key = f"value_{head[len('x86::') :]}"
-        spelling = templates.template(key)
+        spelling = templates.query_value(head)
         return TextValue(spelling) if spelling is not None else None
 
     if len(head) >= 2 and head[0] == '"' == head[-1]:

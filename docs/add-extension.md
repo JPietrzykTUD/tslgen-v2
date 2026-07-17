@@ -32,7 +32,7 @@ The first slice must prove the whole path.
 
 ```text
 target_families.tsl
-  -> admits an extension family for a profile family
+  -> admits extension/feature families and owns shared compiler spellings
 
 machine_profiles.json
   -> selects concrete target features, flags, and a runner
@@ -64,6 +64,21 @@ Add the extension family:
 known_extension_families [scalar, generic_like, x86, arm, cuda, wasm]
 ```
 
+Declare each machine-profile and `requires` feature once. Add a shared compiler
+spelling only when it differs from the source token:
+
+```tsl
+known_target_features [simd128]
+target_feature_spellings:
+  source_name:
+    cpp "cpp-spelling"
+    rust "rust-spelling"
+```
+
+The scalar form (`source_name "shared-spelling"`) applies to every backend.
+Machine-profile `alternatives` are reserved for genuine profile-specific
+overrides; do not repeat a shared spelling in every profile.
+
 Add or update the profile family:
 
 ```tsl
@@ -81,7 +96,8 @@ profile_families:
         target "wasm32-wasip1"
 ```
 
-This file owns routing and capabilities.
+This file owns routing, documentation classification, and shared target-feature
+capabilities.
 
 It does not own primitive selection.
 

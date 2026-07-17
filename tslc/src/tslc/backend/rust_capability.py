@@ -82,7 +82,7 @@ def rust_primitive_preview(
 ) -> str:
     family = profile.profile_family
     return RustBackend(
-        feature_alternatives=profile.profile.alternatives,
+        feature_spellings=profile.profile.feature_spellings("rust"),
         emit_target_features=(
             family.backend("rust").feature_flags if family is not None else True
         ),

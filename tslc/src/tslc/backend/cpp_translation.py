@@ -149,6 +149,12 @@ class _CppTemplates:
     def template(self, key: str) -> str | None:
         return common.template(self.catalog, self.backend_id, key)
 
+    def query_value(self, source_name: str) -> str | None:
+        return common.query_value(self.catalog, self.backend_id, source_name)
+
+    def query_value_names(self) -> tuple[str, ...]:
+        return common.query_value_names(self.catalog, self.backend_id)
+
     def render_template(
         self, key: str, fallback: str | None = None, /, **fields: RenderField
     ) -> RenderText:

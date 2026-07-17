@@ -244,7 +244,12 @@ class AuthoringWorkspace:
                 result.diagnostics,
                 paths,
                 versions,
-                self.config.target_features,
+                (
+                    tuple(sorted(catalog.target_families.target_feature_names))
+                    if catalog is not None
+                    and catalog.target_families.target_feature_names
+                    else self.config.target_features
+                ),
                 parsed,
             )
             self._latest = snapshot
