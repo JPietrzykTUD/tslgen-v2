@@ -75,7 +75,7 @@ def test_oneapi_exact_lane_mask_policy_lowers_lane_bitmask_operations(
 
     assert cpp is not None
     assert "typename Vec::mask_type result = 0;" in cpp.body_text
-    assert "result |= (1ull << i);" in cpp.body_text
+    assert "result |= (1ull << (i));" in cpp.body_text
     assert "typename Vec::register_type result" not in cpp.body_text
 
 
