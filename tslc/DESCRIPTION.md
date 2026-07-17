@@ -374,7 +374,13 @@ structured skip coverage for unsupported signature shapes, and renders a
 standalone native benchmark/policy tool. Value-test tags do not control
 benchmark admission. Workload semantics are resolved in
 [benchmark/scenarios.py](src/tslc/benchmark/scenarios.py) before rendering:
-pure-register scenarios carry
+each typed scenario and correctness case validates its own structural and
+specialization compatibility and owns its canonical policy identity. Candidate
+sets only enforce homogeneous matching families. Harness discovery/closure is
+checked through one planner boundary, while C++ scenario renderers supply typed
+fragments to one shared timing skeleton; the remaining family dispatch selects
+genuinely different input construction and invocation behavior. Pure-register
+scenarios carry
 their operand generators and dependency parameter, vector-plus-scalar scenarios
 keep the scalar input independent, immediate scenarios carry an authored
 concrete value, indexed-load scenarios carry a SIMD index binding and bounded

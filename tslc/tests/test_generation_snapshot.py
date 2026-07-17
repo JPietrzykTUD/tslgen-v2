@@ -297,7 +297,7 @@ _VALUE_TEST_PLAN = ValueTestProjectPlan(
     profiles=(_VALUE_TEST_PROFILE,), coverage=(_VALUE_TEST_COVERAGE,)
 )
 _SPECIALIZATION_KEY = SpecializationKey(
-    "cpp", "avx2", "add", "add", "avx2", "si32", "v", ("v", "v")
+    "cpp", "avx2", "add", "add", "avx2", "si32", "v", ("v", "v"), lanes=1
 )
 _BENCHMARK_TIMING = BenchmarkTiming(seed=7)
 _BENCHMARK_SCENARIOS = (
@@ -323,7 +323,9 @@ _BENCHMARK_SCENARIOS = (
     BenchmarkReductionScenario("reduction", _BENCHMARK_TIMING, "bounded_random"),
 )
 _BENCHMARK_CORRECTNESS_CASES = (
-    BenchmarkVectorCorrectnessCase("c", (("1",),), ("1",), "from_array", "to_array"),
+    BenchmarkVectorCorrectnessCase(
+        "c", (("1",), ("1",)), ("1",), "from_array", "to_array"
+    ),
     BenchmarkVectorScalarCorrectnessCase(
         "c", ("1",), "2", ("3",), "from_array", "to_array"
     ),

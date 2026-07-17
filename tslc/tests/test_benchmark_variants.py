@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 import os
 from pathlib import Path
 import platform
@@ -10,11 +11,16 @@ import shlex
 import shutil
 import subprocess
 import textwrap
+from types import SimpleNamespace
+from typing import cast, get_args
 
 import pytest
 
 from tslc.api import generate_project, write_artifacts
 from tslc.benchmark.model import (
+    BenchmarkCandidate,
+    BenchmarkCandidateSet,
+    BenchmarkCorrectnessCase,
     BenchmarkMaskCorrectnessCase,
     BenchmarkMaskDensityScenario,
     BenchmarkMaskResultScenario,
@@ -25,11 +31,184 @@ from tslc.benchmark.model import (
     BenchmarkReductionCorrectnessCase,
     BenchmarkReductionScenario,
     BenchmarkRegisterScenario,
+    BenchmarkScenario,
+    BenchmarkTiming,
+    BenchmarkVectorCorrectnessCase,
     BenchmarkVectorMaskCorrectnessCase,
     BenchmarkVectorScalarCorrectnessCase,
     BenchmarkVectorScalarScenario,
+    SpecializationKey,
 )
+from tslc.benchmark.render_cpp_scenarios import render_scenario
 from tslc.diagnostics import has_errors
+from tslc.lower.lowerer import LoweredSpecialization
+
+
+def test_supported_benchmark_scenario_families_are_consistent() -> None:
+    scenario_types = get_args(BenchmarkScenario)
+    correctness_types = get_args(BenchmarkCorrectnessCase)
+
+    assert {scenario_type.family for scenario_type in scenario_types} == {
+        "register",
+        "vector_scalar",
+        "immediate",
+        "indexed_load",
+        "mask_density",
+        "mask_result",
+        "reduction",
+    }
+    assert {scenario_type.correctness_type for scenario_type in scenario_types} == set(
+        correctness_types
+    )
+    assert all(
+        scenario_type.family == scenario_type.correctness_type.family
+        and callable(scenario_type.canonical_fields)
+        and callable(scenario_type.validate_key)
+        and callable(scenario_type.manifest_fields)
+        for scenario_type in scenario_types
+    )
+    assert all(
+        callable(correctness_type.canonical_fields)
+        and callable(correctness_type.validate_key)
+        for correctness_type in correctness_types
+    )
+
+
+def test_representative_timing_scenarios_are_byte_stable() -> None:
+    timing = BenchmarkTiming(seed=7)
+    samples = (
+        _timing_sample(
+            SpecializationKey(
+                "cpp", "p", "add", "add", "e", "si32", "v", ("v", "v"), lanes=2
+            ),
+            BenchmarkVectorCorrectnessCase(
+                "c", (("1", "2"), ("3", "4")), ("4", "6"), "from_array", "to_array"
+            ),
+            BenchmarkRegisterScenario(
+                "throughput", "throughput", timing, ("bounded_random", "bounded_random")
+            ),
+        ),
+        _timing_sample(
+            SpecializationKey(
+                "cpp", "p", "shift", "shift", "e", "si32", "v", ("v", "s"), lanes=2
+            ),
+            BenchmarkVectorScalarCorrectnessCase(
+                "c", ("1", "2"), "1", ("2", "4"), "from_array", "to_array"
+            ),
+            BenchmarkVectorScalarScenario(
+                "latency",
+                "latency",
+                timing,
+                "bounded_random",
+                "bounded_shift_count",
+                0,
+            ),
+        ),
+        _timing_sample(
+            SpecializationKey(
+                "cpp",
+                "p",
+                "shift_imm",
+                "shift_imm",
+                "e",
+                "si32",
+                "v",
+                ("v", "sImm"),
+                immediate="1",
+                lanes=2,
+            ),
+            BenchmarkImmediateCorrectnessCase(
+                "c", ("1", "2"), ("2", "4"), "from_array", "to_array"
+            ),
+            BenchmarkImmediateScenario(
+                "latency", "latency", timing, "bounded_random", 0
+            ),
+        ),
+        _timing_sample(
+            SpecializationKey(
+                "cpp",
+                "p",
+                "gather",
+                "gather",
+                "e",
+                "si32",
+                "v",
+                ("cptr", "vidx", "sImm"),
+                immediate="4",
+                simd_type_base_bindings=(("Index", "si32"),),
+                lanes=2,
+            ),
+            BenchmarkIndexedLoadCorrectnessCase(
+                "c",
+                ("1", "2"),
+                ("0", "1"),
+                ("1", "2"),
+                "si32",
+                "int32_t",
+                "from_array",
+                "to_array",
+            ),
+            BenchmarkIndexedLoadScenario("throughput", timing, 64, 2),
+        ),
+        _timing_sample(
+            SpecializationKey(
+                "cpp", "p", "to_mask", "to_mask", "e", "si32", "m", ("im",), lanes=2
+            ),
+            BenchmarkMaskCorrectnessCase("c", ("1",), "1", "to_integral"),
+            BenchmarkMaskDensityScenario("balanced", timing, 0, 1),
+        ),
+        _timing_sample(
+            SpecializationKey(
+                "cpp", "p", "less", "less", "e", "si32", "m", ("v", "v"), lanes=2
+            ),
+            BenchmarkVectorMaskCorrectnessCase(
+                "c", (("1", "2"), ("2", "1")), "1", "from_array", "to_integral"
+            ),
+            BenchmarkMaskResultScenario(
+                "throughput", timing, ("bounded_random", "bounded_random")
+            ),
+        ),
+        _timing_sample(
+            SpecializationKey(
+                "cpp", "p", "hadd", "hadd", "e", "si32", "s", ("v",), lanes=2
+            ),
+            BenchmarkReductionCorrectnessCase("c", ("1", "2"), "3", "from_array"),
+            BenchmarkReductionScenario("throughput", timing, "bounded_random"),
+        ),
+    )
+    assert {
+        sample.scenarios[0].family: sha256(
+            render_scenario(0, 0, sample, sample.scenarios[0]).encode("utf-8")
+        ).hexdigest()
+        for sample in samples
+    } == {
+        "register": "111c97f41c90e8f326ca08c8ec12e6ae2fe45bdd43d25b24f39e084ea4f14620",
+        "vector_scalar": "30073bd5bfa3ad2f70629e31130305164ee94878f9cc51fee38880f35a4d4f99",
+        "immediate": "d15fe29d6d4ee4b82679af613ff7fd9a77c61e0838ba853663f42b5497a9bb50",
+        "indexed_load": "be417ff5f260515d47b95b8ebcb1e090d6ce5b774fee555bb2fe0142fe0c1a90",
+        "mask_density": "42fbfbd543c40ea64196bd85b9f83a78a664ac34ea5425f48853dd7c849c3e84",
+        "mask_result": "111c97f41c90e8f326ca08c8ec12e6ae2fe45bdd43d25b24f39e084ea4f14620",
+        "reduction": "039fa946eb5547b4b112b8bbe02bc11713ae158a13e34fc11f7cc9b077a189e1",
+    }
+
+
+def _timing_sample(
+    key: SpecializationKey,
+    correctness: BenchmarkCorrectnessCase,
+    scenario: BenchmarkScenario,
+) -> BenchmarkCandidateSet:
+    specialization = cast(
+        LoweredSpecialization,
+        SimpleNamespace(param_kinds=key.param_kinds),
+    )
+    return BenchmarkCandidateSet(
+        key=key,
+        specialization=specialization,
+        candidates=(BenchmarkCandidate("default", "hash"),),
+        correctness_cases=(correctness,),
+        scenarios=(scenario,),
+        stable_id="stable",
+    )
 
 
 @pytest.fixture(scope="module")

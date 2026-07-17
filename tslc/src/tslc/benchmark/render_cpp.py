@@ -11,15 +11,9 @@ from tslc.backend.cpp import (
 from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
-    BenchmarkImmediateScenario,
-    BenchmarkIndexedLoadScenario,
-    BenchmarkMaskDensityScenario,
-    BenchmarkMaskResultScenario,
     BenchmarkProfilePlan,
     BenchmarkProjectPlan,
-    BenchmarkReductionScenario,
-    BenchmarkRegisterScenario,
-    BenchmarkVectorScalarScenario,
+    BenchmarkScenario,
 )
 from tslc.benchmark.planner import BENCHMARK_PROTOCOL_VERSION
 from tslc.benchmark.render_cpp_candidate import (
@@ -136,17 +130,7 @@ def _render_manifest(profile: BenchmarkProfilePlan) -> str:
     return json.dumps(payload, indent=2, sort_keys=True) + "\n"
 
 
-def _scenario_manifest(
-    scenario: (
-        BenchmarkRegisterScenario
-        | BenchmarkMaskDensityScenario
-        | BenchmarkMaskResultScenario
-        | BenchmarkReductionScenario
-        | BenchmarkVectorScalarScenario
-        | BenchmarkImmediateScenario
-        | BenchmarkIndexedLoadScenario
-    ),
-) -> dict[str, object]:
+def _scenario_manifest(scenario: BenchmarkScenario) -> dict[str, object]:
     timing = scenario.timing
     payload: dict[str, object] = {
         "id": scenario.scenario_id,
@@ -156,61 +140,7 @@ def _scenario_manifest(
         "rounds": timing.rounds,
         "minimum_sample_ns": timing.minimum_sample_ns,
     }
-    if isinstance(scenario, BenchmarkRegisterScenario):
-        payload.update(
-            {
-                "family": "register",
-                "operand_generators": scenario.operand_generators,
-                "dependency_parameter": scenario.dependency_parameter,
-            }
-        )
-    elif isinstance(scenario, BenchmarkImmediateScenario):
-        payload.update(
-            {
-                "family": "immediate",
-                "operand_generator": scenario.operand_generator,
-                "dependency_parameter": scenario.dependency_parameter,
-            }
-        )
-    elif isinstance(scenario, BenchmarkIndexedLoadScenario):
-        payload.update(
-            {
-                "family": "indexed_load",
-                "memory_bytes": scenario.memory_bytes,
-                "index_lanes": scenario.index_lanes,
-            }
-        )
-    elif isinstance(scenario, BenchmarkVectorScalarScenario):
-        payload.update(
-            {
-                "family": "vector_scalar",
-                "vector_generator": scenario.vector_generator,
-                "scalar_generator": scenario.scalar_generator,
-                "dependency_parameter": scenario.dependency_parameter,
-            }
-        )
-    elif isinstance(scenario, BenchmarkMaskResultScenario):
-        payload.update(
-            {
-                "family": "mask_result",
-                "operand_generators": scenario.operand_generators,
-            }
-        )
-    elif isinstance(scenario, BenchmarkMaskDensityScenario):
-        payload.update(
-            {
-                "family": "mask_density",
-                "parameter_index": scenario.parameter_index,
-                "active_lanes": scenario.active_lanes,
-            }
-        )
-    else:
-        payload.update(
-            {
-                "family": "reduction",
-                "operand_generator": scenario.operand_generator,
-            }
-        )
+    payload.update(scenario.manifest_fields())
     return payload
 
 

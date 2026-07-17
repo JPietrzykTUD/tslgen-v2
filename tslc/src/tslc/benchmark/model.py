@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import ClassVar, Literal
 
 from tslc.diagnostics import Diagnostic
 from tslc.lower.lowerer import LoweredSpecialization
 
 BenchmarkCoverageStatus = Literal["emitted", "unsupported", "missing_correctness"]
 BenchmarkScenarioKind = Literal["throughput", "latency"]
+BenchmarkScenarioFamily = Literal[
+    "register",
+    "vector_scalar",
+    "immediate",
+    "indexed_load",
+    "mask_density",
+    "mask_result",
+    "reduction",
+]
 BenchmarkOperandGenerator = Literal[
     "bounded_random",
     "bounded_nonzero",
@@ -83,6 +92,42 @@ class BenchmarkVectorCorrectnessCase:
     from_array_name: str
     to_array_name: str
 
+    family: ClassVar[Literal["register"]] = "register"
+
+    def __post_init__(self) -> None:
+        if (
+            not self.case_name
+            or not self.vector_inputs
+            or not self.expected
+            or not self.from_array_name
+            or not self.to_array_name
+        ):
+            raise ValueError("vector correctness cases require complete facts")
+        if any(len(values) != len(self.expected) for values in self.vector_inputs):
+            raise ValueError("vector correctness operands must match the result lanes")
+
+    def validate_key(self, key: SpecializationKey) -> None:
+        lanes = key.lanes
+        if (
+            key.result_kind != "v"
+            or not key.param_kinds
+            or not all(kind == "v" for kind in key.param_kinds)
+            or len(self.vector_inputs) != len(key.param_kinds)
+            or lanes is None
+            or len(self.expected) != lanes
+        ):
+            raise ValueError("register correctness does not match the specialization")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "vector",
+            self.case_name,
+            self.vector_inputs,
+            self.expected,
+            self.from_array_name,
+            self.to_array_name,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkVectorScalarCorrectnessCase:
@@ -95,6 +140,41 @@ class BenchmarkVectorScalarCorrectnessCase:
     from_array_name: str
     to_array_name: str
 
+    family: ClassVar[Literal["vector_scalar"]] = "vector_scalar"
+
+    def __post_init__(self) -> None:
+        if (
+            not self.case_name
+            or not self.vector_input
+            or not self.scalar_input
+            or not self.expected
+            or not self.from_array_name
+            or not self.to_array_name
+        ):
+            raise ValueError("vector-scalar correctness cases require complete facts")
+        if len(self.vector_input) != len(self.expected):
+            raise ValueError("vector-scalar correctness lanes must match")
+
+    def validate_key(self, key: SpecializationKey) -> None:
+        if (
+            key.result_kind != "v"
+            or key.param_kinds != ("v", "s")
+            or key.lanes is None
+            or len(self.expected) != key.lanes
+        ):
+            raise ValueError("vector-scalar correctness does not match the specialization")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "vector_scalar",
+            self.case_name,
+            self.vector_input,
+            self.scalar_input,
+            self.expected,
+            self.from_array_name,
+            self.to_array_name,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkImmediateCorrectnessCase:
@@ -105,6 +185,40 @@ class BenchmarkImmediateCorrectnessCase:
     expected: tuple[str, ...]
     from_array_name: str
     to_array_name: str
+
+    family: ClassVar[Literal["immediate"]] = "immediate"
+
+    def __post_init__(self) -> None:
+        if (
+            not self.case_name
+            or not self.vector_input
+            or not self.expected
+            or not self.from_array_name
+            or not self.to_array_name
+        ):
+            raise ValueError("immediate correctness cases require complete facts")
+        if len(self.vector_input) != len(self.expected):
+            raise ValueError("immediate correctness lanes must match")
+
+    def validate_key(self, key: SpecializationKey) -> None:
+        if (
+            key.result_kind != "v"
+            or key.param_kinds != ("v", "sImm")
+            or key.immediate is None
+            or key.lanes is None
+            or len(self.expected) != key.lanes
+        ):
+            raise ValueError("immediate correctness does not match the specialization")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "immediate",
+            self.case_name,
+            self.vector_input,
+            self.expected,
+            self.from_array_name,
+            self.to_array_name,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +234,46 @@ class BenchmarkIndexedLoadCorrectnessCase:
     from_array_name: str
     to_array_name: str
 
+    family: ClassVar[Literal["indexed_load"]] = "indexed_load"
+
+    def __post_init__(self) -> None:
+        if (
+            not self.case_name
+            or not self.memory_values
+            or not self.index_values
+            or not self.expected
+            or not self.index_type_tag
+            or not self.index_base_spelling
+            or not self.from_array_name
+            or not self.to_array_name
+        ):
+            raise ValueError("indexed-load correctness cases require complete facts")
+
+    def validate_key(self, key: SpecializationKey) -> None:
+        if (
+            key.result_kind != "v"
+            or key.param_kinds != ("cptr", "vidx", "sImm")
+            or key.immediate is None
+            or len(key.simd_type_base_bindings) != 1
+            or key.simd_type_base_bindings[0][1] != self.index_type_tag
+            or key.lanes is None
+            or len(self.expected) != key.lanes
+        ):
+            raise ValueError("indexed-load correctness does not match the specialization")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "indexed_load",
+            self.case_name,
+            self.memory_values,
+            self.index_values,
+            self.expected,
+            self.index_type_tag,
+            self.index_base_spelling,
+            self.from_array_name,
+            self.to_array_name,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkMaskCorrectnessCase:
@@ -129,6 +283,35 @@ class BenchmarkMaskCorrectnessCase:
     mask_inputs: tuple[str, ...]
     expected_mask: str
     to_integral_name: str
+
+    family: ClassVar[Literal["mask_density"]] = "mask_density"
+
+    def __post_init__(self) -> None:
+        if (
+            not self.case_name
+            or not self.mask_inputs
+            or not self.expected_mask
+            or not self.to_integral_name
+        ):
+            raise ValueError("mask correctness cases require complete facts")
+
+    def validate_key(self, key: SpecializationKey) -> None:
+        if (
+            key.result_kind != "m"
+            or key.param_kinds != ("im",)
+            or key.lanes is None
+            or len(self.mask_inputs) != len(key.param_kinds)
+        ):
+            raise ValueError("mask correctness does not match the specialization")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "mask",
+            self.case_name,
+            self.mask_inputs,
+            self.expected_mask,
+            self.to_integral_name,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +324,43 @@ class BenchmarkVectorMaskCorrectnessCase:
     from_array_name: str
     to_integral_name: str
 
+    family: ClassVar[Literal["mask_result"]] = "mask_result"
+
+    def __post_init__(self) -> None:
+        if (
+            not self.case_name
+            or not self.vector_inputs
+            or not self.expected_mask
+            or not self.from_array_name
+            or not self.to_integral_name
+        ):
+            raise ValueError("vector-mask correctness cases require complete facts")
+        lane_counts = {len(values) for values in self.vector_inputs}
+        if 0 in lane_counts or len(lane_counts) != 1:
+            raise ValueError("vector-mask correctness operands must share lane counts")
+
+    def validate_key(self, key: SpecializationKey) -> None:
+        lanes = key.lanes
+        if (
+            key.result_kind != "m"
+            or not key.param_kinds
+            or not all(kind == "v" for kind in key.param_kinds)
+            or len(self.vector_inputs) != len(key.param_kinds)
+            or lanes is None
+            or len(self.vector_inputs[0]) != lanes
+        ):
+            raise ValueError("vector-mask correctness does not match the specialization")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "vector_mask",
+            self.case_name,
+            self.vector_inputs,
+            self.expected_mask,
+            self.from_array_name,
+            self.to_integral_name,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkReductionCorrectnessCase:
@@ -150,6 +370,35 @@ class BenchmarkReductionCorrectnessCase:
     vector_input: tuple[str, ...]
     expected: str
     from_array_name: str
+
+    family: ClassVar[Literal["reduction"]] = "reduction"
+
+    def __post_init__(self) -> None:
+        if (
+            not self.case_name
+            or not self.vector_input
+            or not self.expected
+            or not self.from_array_name
+        ):
+            raise ValueError("reduction correctness cases require complete facts")
+
+    def validate_key(self, key: SpecializationKey) -> None:
+        if (
+            key.result_kind != "s"
+            or key.param_kinds != ("v",)
+            or key.lanes is None
+            or len(self.vector_input) != key.lanes
+        ):
+            raise ValueError("reduction correctness does not match the specialization")
+
+    def canonical_fields(self) -> tuple[object, ...]:
+        return (
+            "reduction",
+            self.case_name,
+            self.vector_input,
+            self.expected,
+            self.from_array_name,
+        )
 
 
 BenchmarkCorrectnessCase = (
@@ -196,6 +445,11 @@ class BenchmarkRegisterScenario:
     operand_generators: tuple[BenchmarkOperandGenerator, ...]
     dependency_parameter: int | None = None
 
+    family: ClassVar[Literal["register"]] = "register"
+    correctness_type: ClassVar[type[BenchmarkVectorCorrectnessCase]] = (
+        BenchmarkVectorCorrectnessCase
+    )
+
     def __post_init__(self) -> None:
         if not self.scenario_id or not self.operand_generators:
             raise ValueError("register benchmark scenarios require an id and operands")
@@ -218,6 +472,22 @@ class BenchmarkRegisterScenario:
             self.dependency_parameter,
         )
 
+    def validate_key(self, key: SpecializationKey) -> None:
+        if (
+            key.result_kind != "v"
+            or not key.param_kinds
+            or not all(kind == "v" for kind in key.param_kinds)
+            or len(self.operand_generators) != len(key.param_kinds)
+        ):
+            raise ValueError("register scenario operands must match the specialization")
+
+    def manifest_fields(self) -> dict[str, object]:
+        return {
+            "family": self.family,
+            "operand_generators": self.operand_generators,
+            "dependency_parameter": self.dependency_parameter,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkVectorScalarScenario:
@@ -229,6 +499,11 @@ class BenchmarkVectorScalarScenario:
     vector_generator: BenchmarkOperandGenerator
     scalar_generator: BenchmarkOperandGenerator
     dependency_parameter: Literal[0] | None = None
+
+    family: ClassVar[Literal["vector_scalar"]] = "vector_scalar"
+    correctness_type: ClassVar[type[BenchmarkVectorScalarCorrectnessCase]] = (
+        BenchmarkVectorScalarCorrectnessCase
+    )
 
     def __post_init__(self) -> None:
         if not self.scenario_id:
@@ -249,6 +524,18 @@ class BenchmarkVectorScalarScenario:
             self.dependency_parameter,
         )
 
+    def validate_key(self, key: SpecializationKey) -> None:
+        if key.result_kind != "v" or key.param_kinds != ("v", "s"):
+            raise ValueError("vector-scalar scenario does not match the specialization")
+
+    def manifest_fields(self) -> dict[str, object]:
+        return {
+            "family": self.family,
+            "vector_generator": self.vector_generator,
+            "scalar_generator": self.scalar_generator,
+            "dependency_parameter": self.dependency_parameter,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkImmediateScenario:
@@ -259,6 +546,11 @@ class BenchmarkImmediateScenario:
     timing: BenchmarkTiming
     operand_generator: BenchmarkOperandGenerator
     dependency_parameter: Literal[0] | None = None
+
+    family: ClassVar[Literal["immediate"]] = "immediate"
+    correctness_type: ClassVar[type[BenchmarkImmediateCorrectnessCase]] = (
+        BenchmarkImmediateCorrectnessCase
+    )
 
     def __post_init__(self) -> None:
         if not self.scenario_id:
@@ -278,6 +570,21 @@ class BenchmarkImmediateScenario:
             self.dependency_parameter,
         )
 
+    def validate_key(self, key: SpecializationKey) -> None:
+        if (
+            key.result_kind != "v"
+            or key.param_kinds != ("v", "sImm")
+            or key.immediate is None
+        ):
+            raise ValueError("immediate scenario does not match the specialization")
+
+    def manifest_fields(self) -> dict[str, object]:
+        return {
+            "family": self.family,
+            "operand_generator": self.operand_generator,
+            "dependency_parameter": self.dependency_parameter,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkIndexedLoadScenario:
@@ -288,6 +595,11 @@ class BenchmarkIndexedLoadScenario:
     memory_bytes: int
     index_lanes: int
     kind: Literal["throughput"] = "throughput"
+
+    family: ClassVar[Literal["indexed_load"]] = "indexed_load"
+    correctness_type: ClassVar[type[BenchmarkIndexedLoadCorrectnessCase]] = (
+        BenchmarkIndexedLoadCorrectnessCase
+    )
 
     def __post_init__(self) -> None:
         if not self.scenario_id or self.memory_bytes <= 0 or self.index_lanes <= 0:
@@ -303,6 +615,22 @@ class BenchmarkIndexedLoadScenario:
             self.index_lanes,
         )
 
+    def validate_key(self, key: SpecializationKey) -> None:
+        if (
+            key.result_kind != "v"
+            or key.param_kinds != ("cptr", "vidx", "sImm")
+            or key.immediate is None
+            or len(key.simd_type_base_bindings) != 1
+        ):
+            raise ValueError("indexed-load scenario does not match the specialization")
+
+    def manifest_fields(self) -> dict[str, object]:
+        return {
+            "family": self.family,
+            "memory_bytes": self.memory_bytes,
+            "index_lanes": self.index_lanes,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkMaskDensityScenario:
@@ -313,6 +641,11 @@ class BenchmarkMaskDensityScenario:
     parameter_index: int
     active_lanes: int
     kind: Literal["throughput"] = "throughput"
+
+    family: ClassVar[Literal["mask_density"]] = "mask_density"
+    correctness_type: ClassVar[type[BenchmarkMaskCorrectnessCase]] = (
+        BenchmarkMaskCorrectnessCase
+    )
 
     def __post_init__(self) -> None:
         if not self.scenario_id:
@@ -330,6 +663,25 @@ class BenchmarkMaskDensityScenario:
             self.active_lanes,
         )
 
+    def validate_key(self, key: SpecializationKey) -> None:
+        lanes = key.lanes
+        if (
+            key.result_kind != "m"
+            or key.param_kinds != ("im",)
+            or lanes is None
+            or self.parameter_index >= len(key.param_kinds)
+            or key.param_kinds[self.parameter_index] != "im"
+            or self.active_lanes > lanes
+        ):
+            raise ValueError("mask-density scenario does not match the specialization")
+
+    def manifest_fields(self) -> dict[str, object]:
+        return {
+            "family": self.family,
+            "parameter_index": self.parameter_index,
+            "active_lanes": self.active_lanes,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkMaskResultScenario:
@@ -339,6 +691,11 @@ class BenchmarkMaskResultScenario:
     timing: BenchmarkTiming
     operand_generators: tuple[BenchmarkOperandGenerator, ...]
     kind: Literal["throughput"] = "throughput"
+
+    family: ClassVar[Literal["mask_result"]] = "mask_result"
+    correctness_type: ClassVar[type[BenchmarkVectorMaskCorrectnessCase]] = (
+        BenchmarkVectorMaskCorrectnessCase
+    )
 
     def __post_init__(self) -> None:
         if not self.scenario_id or not self.operand_generators:
@@ -353,6 +710,21 @@ class BenchmarkMaskResultScenario:
             self.operand_generators,
         )
 
+    def validate_key(self, key: SpecializationKey) -> None:
+        if (
+            key.result_kind != "m"
+            or not key.param_kinds
+            or not all(kind == "v" for kind in key.param_kinds)
+            or len(self.operand_generators) != len(key.param_kinds)
+        ):
+            raise ValueError("mask-result scenario does not match the specialization")
+
+    def manifest_fields(self) -> dict[str, object]:
+        return {
+            "family": self.family,
+            "operand_generators": self.operand_generators,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkReductionScenario:
@@ -362,6 +734,11 @@ class BenchmarkReductionScenario:
     timing: BenchmarkTiming
     operand_generator: BenchmarkOperandGenerator
     kind: Literal["throughput"] = "throughput"
+
+    family: ClassVar[Literal["reduction"]] = "reduction"
+    correctness_type: ClassVar[type[BenchmarkReductionCorrectnessCase]] = (
+        BenchmarkReductionCorrectnessCase
+    )
 
     def __post_init__(self) -> None:
         if not self.scenario_id:
@@ -375,6 +752,16 @@ class BenchmarkReductionScenario:
             self.timing.canonical_fields(),
             self.operand_generator,
         )
+
+    def validate_key(self, key: SpecializationKey) -> None:
+        if key.result_kind != "s" or key.param_kinds != ("v",):
+            raise ValueError("reduction scenario does not match the specialization")
+
+    def manifest_fields(self) -> dict[str, object]:
+        return {
+            "family": self.family,
+            "operand_generator": self.operand_generator,
+        }
 
 
 BenchmarkScenario = (
@@ -407,136 +794,20 @@ class BenchmarkCandidateSet:
         ids = tuple(candidate.variant_id for candidate in self.candidates)
         if len(set(ids)) != len(ids):
             raise ValueError(f"duplicate benchmark candidate IDs: {ids!r}")
-        if isinstance(self.scenarios[0], BenchmarkRegisterScenario):
-            register_scenarios = tuple(
-                scenario
-                for scenario in self.scenarios
-                if isinstance(scenario, BenchmarkRegisterScenario)
-            )
-            if len(register_scenarios) != len(self.scenarios) or not all(
-                isinstance(case, BenchmarkVectorCorrectnessCase)
-                for case in self.correctness_cases
-            ):
-                raise ValueError("register candidate sets require register-only facts")
-            if any(
-                len(scenario.operand_generators) != len(self.key.param_kinds)
-                for scenario in register_scenarios
-            ):
-                raise ValueError("register scenario operands must match the specialization")
-            return
-        if isinstance(self.scenarios[0], BenchmarkVectorScalarScenario):
-            vector_scalar_scenarios = tuple(
-                scenario
-                for scenario in self.scenarios
-                if isinstance(scenario, BenchmarkVectorScalarScenario)
-            )
-            if (
-                len(vector_scalar_scenarios) != len(self.scenarios)
-                or not all(
-                    isinstance(case, BenchmarkVectorScalarCorrectnessCase)
-                    for case in self.correctness_cases
-                )
-                or self.key.result_kind != "v"
-                or self.key.param_kinds != ("v", "s")
-            ):
-                raise ValueError(
-                    "vector-scalar candidate sets require vector/scalar facts"
-                )
-            return
-        if isinstance(self.scenarios[0], BenchmarkImmediateScenario):
-            immediate_scenarios = tuple(
-                scenario
-                for scenario in self.scenarios
-                if isinstance(scenario, BenchmarkImmediateScenario)
-            )
-            if (
-                len(immediate_scenarios) != len(self.scenarios)
-                or not all(
-                    isinstance(case, BenchmarkImmediateCorrectnessCase)
-                    for case in self.correctness_cases
-                )
-                or self.key.result_kind != "v"
-                or self.key.param_kinds != ("v", "sImm")
-                or self.key.immediate is None
-            ):
-                raise ValueError("immediate candidate sets require immediate-only facts")
-            return
-        if isinstance(self.scenarios[0], BenchmarkIndexedLoadScenario):
-            indexed_load_scenarios = tuple(
-                scenario
-                for scenario in self.scenarios
-                if isinstance(scenario, BenchmarkIndexedLoadScenario)
-            )
-            if (
-                len(indexed_load_scenarios) != len(self.scenarios)
-                or not all(
-                    isinstance(case, BenchmarkIndexedLoadCorrectnessCase)
-                    for case in self.correctness_cases
-                )
-                or self.key.result_kind != "v"
-                or self.key.param_kinds != ("cptr", "vidx", "sImm")
-                or self.key.immediate is None
-                or len(self.key.simd_type_base_bindings) != 1
-            ):
-                raise ValueError("indexed-load candidate sets require indexed-load facts")
-            return
-        if isinstance(self.scenarios[0], BenchmarkMaskResultScenario):
-            mask_result_scenarios = tuple(
-                scenario
-                for scenario in self.scenarios
-                if isinstance(scenario, BenchmarkMaskResultScenario)
-            )
-            if (
-                len(mask_result_scenarios) != len(self.scenarios)
-                or not all(
-                    isinstance(case, BenchmarkVectorMaskCorrectnessCase)
-                    for case in self.correctness_cases
-                )
-                or self.key.result_kind != "m"
-                or not self.key.param_kinds
-                or not all(kind == "v" for kind in self.key.param_kinds)
-                or any(
-                    len(scenario.operand_generators) != len(self.key.param_kinds)
-                    for scenario in mask_result_scenarios
-                )
-            ):
-                raise ValueError("mask-result candidate sets require vector-to-mask facts")
-            return
-        if isinstance(self.scenarios[0], BenchmarkReductionScenario):
-            reduction_scenarios = tuple(
-                scenario
-                for scenario in self.scenarios
-                if isinstance(scenario, BenchmarkReductionScenario)
-            )
-            if (
-                len(reduction_scenarios) != len(self.scenarios)
-                or not all(
-                    isinstance(case, BenchmarkReductionCorrectnessCase)
-                    for case in self.correctness_cases
-                )
-                or self.key.result_kind != "s"
-                or self.key.param_kinds != ("v",)
-            ):
-                raise ValueError("reduction candidate sets require reduction-only facts")
-            return
-        mask_scenarios = tuple(
-            scenario
-            for scenario in self.scenarios
-            if isinstance(scenario, BenchmarkMaskDensityScenario)
-        )
-        if len(mask_scenarios) != len(self.scenarios) or not all(
-            isinstance(case, BenchmarkMaskCorrectnessCase)
-            for case in self.correctness_cases
+        scenario_type = type(self.scenarios[0])
+        if any(type(scenario) is not scenario_type for scenario in self.scenarios):
+            raise ValueError("benchmark candidate sets require one scenario family")
+        correctness_type = self.scenarios[0].correctness_type
+        if any(
+            not isinstance(case, correctness_type) for case in self.correctness_cases
         ):
-            raise ValueError("mask-density candidate sets require mask-only facts")
-        lanes = self.key.lanes
-        if lanes is None or any(
-            scenario.parameter_index >= len(self.key.param_kinds)
-            or self.key.param_kinds[scenario.parameter_index] != "im"
-            or scenario.active_lanes > lanes
-            for scenario in mask_scenarios
-        ):
-            raise ValueError("mask-density scenario does not match the specialization")
+            raise ValueError(
+                f"{self.scenarios[0].family} candidate sets require matching correctness facts"
+            )
+        for case in self.correctness_cases:
+            case.validate_key(self.key)
+        for scenario in self.scenarios:
+            scenario.validate_key(self.key)
 
 
 @dataclass(frozen=True, slots=True)
@@ -607,6 +878,7 @@ __all__ = (
     "BenchmarkReductionCorrectnessCase",
     "BenchmarkReductionScenario",
     "BenchmarkScenario",
+    "BenchmarkScenarioFamily",
     "BenchmarkScenarioKind",
     "BenchmarkTiming",
     "BenchmarkVectorCorrectnessCase",

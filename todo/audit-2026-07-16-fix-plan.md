@@ -3,7 +3,7 @@
 ## Status and basis
 
 Status: Phases 1 and 2 implemented (slices 1–19); Phase 3 implemented through
-slice 23. Slices 24–27 remain.
+slice 24. Slices 25–27 remain.
 
 Phase 3 implementation notes (one commit per slice):
 
@@ -20,6 +20,12 @@ Phase 3 implementation notes (one commit per slice):
   projection and one registration discovery; a compiler-owned reserved-name
   manifest replaces production regex discovery and is checked exactly against
   the static wrapper asset; generated Rust stays hash-identical.
+- Slice 24: benchmark correctness/scenario values own validation and canonical
+  identity; candidate-set checks are family-generic; one planner helper owns
+  harness discovery/closure and one C++ timing skeleton owns measurement flow.
+  Seven-family consistency and render-hash tests pin the additive boundary and
+  byte-identical output. Only the backend render dispatch remains, so a
+  scenario registry is not justified by the plan's three-owner threshold.
 
 Phase 2 implementation notes (one commit per slice):
 

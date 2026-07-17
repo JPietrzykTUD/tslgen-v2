@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 
 from tslc.benchmark.model import (
@@ -15,12 +16,25 @@ from tslc.benchmark.model import (
     BenchmarkReductionCorrectnessCase,
     BenchmarkReductionScenario,
     BenchmarkRegisterScenario,
+    BenchmarkScenario,
     BenchmarkTiming,
     BenchmarkVectorCorrectnessCase,
     BenchmarkVectorMaskCorrectnessCase,
     BenchmarkVectorScalarCorrectnessCase,
     BenchmarkVectorScalarScenario,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _CppTimingParts:
+    """Already-rendered C++ fragments placed by the shared timing skeleton."""
+
+    input_members: str
+    make_inputs_body: str
+    result_setup: str
+    loop_body: str
+    result_consume: str
+    constants: str = ""
 
 
 def render_scenario(
@@ -92,9 +106,6 @@ def _render_vector_operand_scenario(
         )
         for parameter, generator in enumerate(scenario.operand_generators)
     )
-    input_type = f"Inputs_{index}_{scenario_index}"
-    make_inputs = f"make_inputs_{index}_{scenario_index}"
-    measure_template = f"measure_candidate_{index}_{scenario_index}"
     arguments = [
         f"inputs.vectors[{parameter}][position]" for parameter in range(inputs)
     ]
@@ -114,38 +125,25 @@ def _render_vector_operand_scenario(
         )
         result_setup = f"    Result_{index} result{{}};"
         result_consume = f"    tsl::benchmark::do_not_optimize(result);"
-    return f'''constexpr std::size_t kBatch_{index}_{scenario_index} = {timing.batch_size};
-
-struct {input_type} {{
-    Reg_{index} vectors[{inputs}][kBatch_{index}_{scenario_index}]{{}};
-}};
-
-{input_type} {make_inputs}() {{
-    {input_type} inputs;
-    std::uint64_t state = {timing.seed}ULL;
-{input_initializers}
-    tsl::benchmark::do_not_optimize(inputs);
-    return inputs;
-}}
-
-template <std::size_t Candidate>
-std::uint64_t {measure_template}({input_type} const& inputs,
-                                 std::size_t iterations) {{
-{result_setup}
-    const auto begin = tsl::benchmark::clock::now();
-    for (std::size_t iteration = 0; iteration < iterations; ++iteration) {{
-        for (std::size_t position = 0; position < kBatch_{index}_{scenario_index}; ++position) {{
-{loop_body}
-        }}
-    }}
-    const auto end = tsl::benchmark::clock::now();
-{result_consume}
-    return tsl::benchmark::elapsed_ns(begin, end);
-}}
-
-{_render_measure_dispatch(index, scenario_index, candidate_set, input_type)}
-
-{_render_scenario_runner(index, scenario_index, candidate_set, scenario.scenario_id, timing, input_type, make_inputs)}'''
+    return _render_timing_scenario(
+        index,
+        scenario_index,
+        candidate_set,
+        scenario,
+        _CppTimingParts(
+            input_members=(
+                f"    Reg_{index} vectors[{inputs}]"
+                f"[kBatch_{index}_{scenario_index}]{{}};"
+            ),
+            make_inputs_body=(
+                f"    std::uint64_t state = {timing.seed}ULL;\n"
+                f"{input_initializers}"
+            ),
+            result_setup=result_setup,
+            loop_body=loop_body,
+            result_consume=result_consume,
+        ),
+    )
 
 
 def _render_register_operand_input(
@@ -183,9 +181,6 @@ def _render_vector_scalar_scenario(
     vector_generator = _operand_generator_function(scenario.vector_generator)
     scalar_generator = _operand_generator_function(scenario.scalar_generator)
     timing = scenario.timing
-    input_type = f"Inputs_{index}_{scenario_index}"
-    make_inputs = f"make_inputs_{index}_{scenario_index}"
-    measure_template = f"measure_candidate_{index}_{scenario_index}"
     if scenario.kind == "latency":
         result_setup = f"    Reg_{index} current = inputs.vectors[0];"
         loop_body = (
@@ -200,16 +195,15 @@ def _render_vector_scalar_scenario(
             "            tsl::benchmark::do_not_optimize(result);"
         )
         result_consume = "    tsl::benchmark::do_not_optimize(result);"
-    return f'''constexpr std::size_t kBatch_{index}_{scenario_index} = {timing.batch_size};
-
-struct {input_type} {{
-    Reg_{index} vectors[kBatch_{index}_{scenario_index}]{{}};
-    Base_{index} scalars[kBatch_{index}_{scenario_index}]{{}};
-}};
-
-{input_type} {make_inputs}() {{
-    {input_type} inputs;
-    std::uint64_t state = {timing.seed}ULL;
+    return _render_timing_scenario(
+        index,
+        scenario_index,
+        candidate_set,
+        scenario,
+        _CppTimingParts(
+            input_members=f'''    Reg_{index} vectors[kBatch_{index}_{scenario_index}]{{}};
+    Base_{index} scalars[kBatch_{index}_{scenario_index}]{{}};''',
+            make_inputs_body=f'''    std::uint64_t state = {timing.seed}ULL;
     for (std::size_t position = 0; position < kBatch_{index}_{scenario_index}; ++position) {{
         typename tsl::array_for<Vec_{index}>::type lanes{{}};
         for (std::size_t lane = 0; lane < {lanes}; ++lane)
@@ -218,29 +212,12 @@ struct {input_type} {{
             tsl::{correctness.from_array_name}<Vec_{index}>(lanes);
         inputs.scalars[position] =
             tsl::benchmark::{scalar_generator}<Base_{index}>(state);
-    }}
-    tsl::benchmark::do_not_optimize(inputs);
-    return inputs;
-}}
-
-template <std::size_t Candidate>
-std::uint64_t {measure_template}({input_type} const& inputs,
-                                 std::size_t iterations) {{
-{result_setup}
-    const auto begin = tsl::benchmark::clock::now();
-    for (std::size_t iteration = 0; iteration < iterations; ++iteration) {{
-        for (std::size_t position = 0; position < kBatch_{index}_{scenario_index}; ++position) {{
-{loop_body}
-        }}
-    }}
-    const auto end = tsl::benchmark::clock::now();
-{result_consume}
-    return tsl::benchmark::elapsed_ns(begin, end);
-}}
-
-{_render_measure_dispatch(index, scenario_index, candidate_set, input_type)}
-
-{_render_scenario_runner(index, scenario_index, candidate_set, scenario.scenario_id, timing, input_type, make_inputs)}'''
+    }}''',
+            result_setup=result_setup,
+            loop_body=loop_body,
+            result_consume=result_consume,
+        ),
+    )
 
 
 def _operand_generator_function(generator: str) -> str:
@@ -265,9 +242,6 @@ def _render_immediate_scenario(
         raise ValueError("immediate benchmark input requires a fixed lane count")
     generator = _operand_generator_function(scenario.operand_generator)
     timing = scenario.timing
-    input_type = f"Inputs_{index}_{scenario_index}"
-    make_inputs = f"make_inputs_{index}_{scenario_index}"
-    measure_template = f"measure_candidate_{index}_{scenario_index}"
     if scenario.kind == "latency":
         result_setup = f"    Reg_{index} current = inputs.vectors[0];"
         loop_body = f"            current = invoke_{index}<Candidate>(current);"
@@ -279,44 +253,28 @@ def _render_immediate_scenario(
             "            tsl::benchmark::do_not_optimize(result);"
         )
         result_consume = "    tsl::benchmark::do_not_optimize(result);"
-    return f'''constexpr std::size_t kBatch_{index}_{scenario_index} = {timing.batch_size};
-
-struct {input_type} {{
-    Reg_{index} vectors[kBatch_{index}_{scenario_index}]{{}};
-}};
-
-{input_type} {make_inputs}() {{
-    {input_type} inputs;
-    std::uint64_t state = {timing.seed}ULL;
+    return _render_timing_scenario(
+        index,
+        scenario_index,
+        candidate_set,
+        scenario,
+        _CppTimingParts(
+            input_members=(
+                f"    Reg_{index} vectors[kBatch_{index}_{scenario_index}]{{}};"
+            ),
+            make_inputs_body=f'''    std::uint64_t state = {timing.seed}ULL;
     for (std::size_t position = 0; position < kBatch_{index}_{scenario_index}; ++position) {{
         typename tsl::array_for<Vec_{index}>::type lanes{{}};
         for (std::size_t lane = 0; lane < {lanes}; ++lane)
             lanes[lane] = tsl::benchmark::{generator}<Base_{index}>(state);
         inputs.vectors[position] =
             tsl::{correctness.from_array_name}<Vec_{index}>(lanes);
-    }}
-    tsl::benchmark::do_not_optimize(inputs);
-    return inputs;
-}}
-
-template <std::size_t Candidate>
-std::uint64_t {measure_template}({input_type} const& inputs,
-                                 std::size_t iterations) {{
-{result_setup}
-    const auto begin = tsl::benchmark::clock::now();
-    for (std::size_t iteration = 0; iteration < iterations; ++iteration) {{
-        for (std::size_t position = 0; position < kBatch_{index}_{scenario_index}; ++position) {{
-{loop_body}
-        }}
-    }}
-    const auto end = tsl::benchmark::clock::now();
-{result_consume}
-    return tsl::benchmark::elapsed_ns(begin, end);
-}}
-
-{_render_measure_dispatch(index, scenario_index, candidate_set, input_type)}
-
-{_render_scenario_runner(index, scenario_index, candidate_set, scenario.scenario_id, timing, input_type, make_inputs)}'''
+    }}''',
+            result_setup=result_setup,
+            loop_body=loop_body,
+            result_consume=result_consume,
+        ),
+    )
 
 
 def _render_indexed_load_scenario(
@@ -332,25 +290,21 @@ def _render_indexed_load_scenario(
     if immediate is None:
         raise ValueError("indexed-load scenarios require a concrete scale")
     timing = scenario.timing
-    input_type = f"Inputs_{index}_{scenario_index}"
-    make_inputs = f"make_inputs_{index}_{scenario_index}"
-    measure_template = f"measure_candidate_{index}_{scenario_index}"
-    return f'''constexpr std::size_t kBatch_{index}_{scenario_index} = {timing.batch_size};
-constexpr std::size_t kMemoryBytes_{index}_{scenario_index} = {scenario.memory_bytes};
+    return _render_timing_scenario(
+        index,
+        scenario_index,
+        candidate_set,
+        scenario,
+        _CppTimingParts(
+            constants=f'''constexpr std::size_t kMemoryBytes_{index}_{scenario_index} = {scenario.memory_bytes};
 constexpr std::size_t kElements_{index}_{scenario_index} =
     kMemoryBytes_{index}_{scenario_index} / sizeof(Base_{index});
 constexpr std::size_t kScale_{index}_{scenario_index} = {immediate};
 static_assert(kElements_{index}_{scenario_index} > 0);
-static_assert(kScale_{index}_{scenario_index} > 0);
-
-struct {input_type} {{
-    alignas(64) Base_{index} memory[kElements_{index}_{scenario_index}]{{}};
-    IndexReg_{index} indices[kBatch_{index}_{scenario_index}]{{}};
-}};
-
-{input_type} {make_inputs}() {{
-    {input_type} inputs;
-    std::uint64_t state = {timing.seed}ULL;
+static_assert(kScale_{index}_{scenario_index} > 0);''',
+            input_members=f'''    alignas(64) Base_{index} memory[kElements_{index}_{scenario_index}]{{}};
+    IndexReg_{index} indices[kBatch_{index}_{scenario_index}]{{}};''',
+            make_inputs_body=f'''    std::uint64_t state = {timing.seed}ULL;
     for (std::size_t element = 0; element < kElements_{index}_{scenario_index}; ++element)
         inputs.memory[element] = tsl::benchmark::next_value<Base_{index}>(state);
     constexpr std::size_t max_index =
@@ -363,30 +317,16 @@ struct {input_type} {{
                 tsl::benchmark::splitmix64(state) % (max_index + 1));
         inputs.indices[position] =
             tsl::{correctness.from_array_name}<IndexVec_{index}>(lanes);
-    }}
-    tsl::benchmark::do_not_optimize(inputs);
-    return inputs;
-}}
-
-template <std::size_t Candidate>
-std::uint64_t {measure_template}({input_type} const& inputs,
-                                 std::size_t iterations) {{
-    Result_{index} result{{}};
-    const auto begin = tsl::benchmark::clock::now();
-    for (std::size_t iteration = 0; iteration < iterations; ++iteration) {{
-        for (std::size_t position = 0; position < kBatch_{index}_{scenario_index}; ++position) {{
-            result = invoke_{index}<Candidate>(inputs.memory, inputs.indices[position]);
-            tsl::benchmark::do_not_optimize(result);
-        }}
-    }}
-    const auto end = tsl::benchmark::clock::now();
-    tsl::benchmark::do_not_optimize(result);
-    return tsl::benchmark::elapsed_ns(begin, end);
-}}
-
-{_render_measure_dispatch(index, scenario_index, candidate_set, input_type)}
-
-{_render_scenario_runner(index, scenario_index, candidate_set, scenario.scenario_id, timing, input_type, make_inputs)}'''
+    }}''',
+            result_setup=f"    Result_{index} result{{}};",
+            loop_body=(
+                f"            result = invoke_{index}<Candidate>("
+                "inputs.memory, inputs.indices[position]);\n"
+                "            tsl::benchmark::do_not_optimize(result);"
+            ),
+            result_consume="    tsl::benchmark::do_not_optimize(result);",
+        ),
+    )
 
 
 def _render_reduction_scenario(
@@ -401,48 +341,32 @@ def _render_reduction_scenario(
     if not isinstance(correctness, BenchmarkReductionCorrectnessCase):
         raise ValueError("reduction scenarios require reduction correctness cases")
     timing = scenario.timing
-    input_type = f"Inputs_{index}_{scenario_index}"
-    make_inputs = f"make_inputs_{index}_{scenario_index}"
-    measure_template = f"measure_candidate_{index}_{scenario_index}"
-    return f'''constexpr std::size_t kBatch_{index}_{scenario_index} = {timing.batch_size};
-
-struct {input_type} {{
-    Reg_{index} vectors[kBatch_{index}_{scenario_index}]{{}};
-}};
-
-{input_type} {make_inputs}() {{
-    {input_type} inputs;
-    std::uint64_t state = {timing.seed}ULL;
+    return _render_timing_scenario(
+        index,
+        scenario_index,
+        candidate_set,
+        scenario,
+        _CppTimingParts(
+            input_members=(
+                f"    Reg_{index} vectors[kBatch_{index}_{scenario_index}]{{}};"
+            ),
+            make_inputs_body=f'''    std::uint64_t state = {timing.seed}ULL;
     for (std::size_t position = 0; position < kBatch_{index}_{scenario_index}; ++position) {{
         typename tsl::array_for<Vec_{index}>::type lanes{{}};
         for (std::size_t lane = 0; lane < {candidate_set.key.lanes}; ++lane)
             lanes[lane] = tsl::benchmark::next_value<Base_{index}>(state);
         inputs.vectors[position] =
             tsl::{correctness.from_array_name}<Vec_{index}>(lanes);
-    }}
-    tsl::benchmark::do_not_optimize(inputs);
-    return inputs;
-}}
-
-template <std::size_t Candidate>
-std::uint64_t {measure_template}({input_type} const& inputs,
-                                 std::size_t iterations) {{
-    Result_{index} result{{}};
-    const auto begin = tsl::benchmark::clock::now();
-    for (std::size_t iteration = 0; iteration < iterations; ++iteration) {{
-        for (std::size_t position = 0; position < kBatch_{index}_{scenario_index}; ++position) {{
-            result = invoke_{index}<Candidate>(inputs.vectors[position]);
-            tsl::benchmark::do_not_optimize(result);
-        }}
-    }}
-    const auto end = tsl::benchmark::clock::now();
-    tsl::benchmark::do_not_optimize(result);
-    return tsl::benchmark::elapsed_ns(begin, end);
-}}
-
-{_render_measure_dispatch(index, scenario_index, candidate_set, input_type)}
-
-{_render_scenario_runner(index, scenario_index, candidate_set, scenario.scenario_id, timing, input_type, make_inputs)}'''
+    }}''',
+            result_setup=f"    Result_{index} result{{}};",
+            loop_body=(
+                f"            result = invoke_{index}<Candidate>("
+                "inputs.vectors[position]);\n"
+                "            tsl::benchmark::do_not_optimize(result);"
+            ),
+            result_consume="    tsl::benchmark::do_not_optimize(result);",
+        ),
+    )
 
 
 def _render_mask_density_scenario(
@@ -452,28 +376,58 @@ def _render_mask_density_scenario(
     scenario: BenchmarkMaskDensityScenario,
 ) -> str:
     timing = scenario.timing
-    input_type = f"Inputs_{index}_{scenario_index}"
-    make_inputs = f"make_inputs_{index}_{scenario_index}"
-    measure_template = f"measure_candidate_{index}_{scenario_index}"
     arguments = [
         "inputs.values[position]" if parameter == scenario.parameter_index else ""
         for parameter, _kind in enumerate(candidate_set.specialization.param_kinds)
     ]
     if any(not argument for argument in arguments):
         raise ValueError("mask-density scenario does not provide every call argument")
-    return f'''constexpr std::size_t kBatch_{index}_{scenario_index} = {timing.batch_size};
+    return _render_timing_scenario(
+        index,
+        scenario_index,
+        candidate_set,
+        scenario,
+        _CppTimingParts(
+            input_members=(
+                f"    Imask_{index} values[kBatch_{index}_{scenario_index}]{{}};"
+            ),
+            make_inputs_body=f'''    for (std::size_t position = 0; position < kBatch_{index}_{scenario_index}; ++position) {{
+        const std::uint64_t bits = tsl::benchmark::rotating_mask_bits(
+            {candidate_set.key.lanes}, {scenario.active_lanes}, position);
+        inputs.values[position] = static_cast<Imask_{index}>(bits);
+    }}''',
+            result_setup=f"    Result_{index} result{{}};",
+            loop_body=(
+                f"            result = invoke_{index}<Candidate>("
+                f"{', '.join(arguments)});\n"
+                "            tsl::benchmark::do_not_optimize(result);"
+            ),
+            result_consume="    tsl::benchmark::do_not_optimize(result);",
+        ),
+    )
 
+
+def _render_timing_scenario(
+    index: int,
+    scenario_index: int,
+    candidate_set: BenchmarkCandidateSet,
+    scenario: BenchmarkScenario,
+    parts: _CppTimingParts,
+) -> str:
+    timing = scenario.timing
+    input_type = f"Inputs_{index}_{scenario_index}"
+    make_inputs = f"make_inputs_{index}_{scenario_index}"
+    measure_template = f"measure_candidate_{index}_{scenario_index}"
+    constants = f"{parts.constants}\n" if parts.constants else ""
+    return f'''constexpr std::size_t kBatch_{index}_{scenario_index} = {timing.batch_size};
+{constants}
 struct {input_type} {{
-    Imask_{index} values[kBatch_{index}_{scenario_index}]{{}};
+{parts.input_members}
 }};
 
 {input_type} {make_inputs}() {{
     {input_type} inputs;
-    for (std::size_t position = 0; position < kBatch_{index}_{scenario_index}; ++position) {{
-        const std::uint64_t bits = tsl::benchmark::rotating_mask_bits(
-            {candidate_set.key.lanes}, {scenario.active_lanes}, position);
-        inputs.values[position] = static_cast<Imask_{index}>(bits);
-    }}
+{parts.make_inputs_body}
     tsl::benchmark::do_not_optimize(inputs);
     return inputs;
 }}
@@ -481,16 +435,15 @@ struct {input_type} {{
 template <std::size_t Candidate>
 std::uint64_t {measure_template}({input_type} const& inputs,
                                  std::size_t iterations) {{
-    Result_{index} result{{}};
+{parts.result_setup}
     const auto begin = tsl::benchmark::clock::now();
     for (std::size_t iteration = 0; iteration < iterations; ++iteration) {{
         for (std::size_t position = 0; position < kBatch_{index}_{scenario_index}; ++position) {{
-            result = invoke_{index}<Candidate>({', '.join(arguments)});
-            tsl::benchmark::do_not_optimize(result);
+{parts.loop_body}
         }}
     }}
     const auto end = tsl::benchmark::clock::now();
-    tsl::benchmark::do_not_optimize(result);
+{parts.result_consume}
     return tsl::benchmark::elapsed_ns(begin, end);
 }}
 
