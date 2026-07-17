@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
 
 from tslc.backend.primitive_facade import (
@@ -119,10 +118,6 @@ def _rust_algorithm_memory_facade(
     raise AssertionError(f"unsupported Rust memory facade: {function_name}")
 
 
-def rust_public_function_names(source: str) -> frozenset[str]:
-    return frozenset(re.findall(r"pub (?:unsafe )?fn ([A-Za-z_][A-Za-z0-9_]*)", source))
-
-
 def _rust_facade_result_type(result_kind: str, vec: str) -> str:
     return RUST_SIGNATURE_TYPES.owner_type(result_kind, owner=f"<{vec} as SimdVector>")
 
@@ -138,5 +133,4 @@ def _rust_facade_param_type(param_kind: str, vec: str, target_vec: str | None) -
 __all__ = (
     "rust_algorithm_primitive_facades",
     "rust_primitive_tag_name",
-    "rust_public_function_names",
 )

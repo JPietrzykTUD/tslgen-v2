@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from hashlib import sha256
 import re
 from pathlib import Path
 
@@ -456,6 +457,10 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     cargo = specialization_artifacts["rust/Cargo.toml"]
     avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
+
+    assert sha256(avx2.encode()).hexdigest() == (
+        "35f0031f5d5ec26b356fe4b84abe41300b0f15f886e799186fd8ea6cd62df627"
+    )
 
     assert 'name = "tsl"' in cargo
     assert 'default = ["scalar"]' in cargo

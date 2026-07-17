@@ -3,7 +3,7 @@
 ## Status and basis
 
 Status: Phases 1 and 2 implemented (slices 1–19); Phase 3 implemented through
-slice 22. Slices 23–27 remain.
+slice 23. Slices 24–27 remain.
 
 Phase 3 implementation notes (one commit per slice):
 
@@ -16,6 +16,10 @@ Phase 3 implementation notes (one commit per slice):
   documentation labels/order; profile alternatives are profile-only overrides;
   backend `query_value::<namespace>::<name>` translations add query leaves
   without generic resolver branches.
+- Slice 23: Rust algorithm Scalar/Generic/concrete impls share one typed target
+  projection and one registration discovery; a compiler-owned reserved-name
+  manifest replaces production regex discovery and is checked exactly against
+  the static wrapper asset; generated Rust stays hash-identical.
 
 Phase 2 implementation notes (one commit per slice):
 

@@ -349,7 +349,12 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   Generated rustdoc uses a `cfg(doc)` profile-neutral facade containing one
   public signature per emitted Rust primitive; concrete profile availability
   stays in the specialization explorer, while normal builds retain their
-  Cargo-feature-selected `profile` alias.
+  Cargo-feature-selected `profile` alias. Profile-local algorithm trait impls
+  share typed Scalar/Generic/concrete render targets in
+  [backend/rust_algorithm.py](src/tslc/backend/rust_algorithm.py). Static
+  algorithm-wrapper names are reserved by the compiler manifest in
+  [backend/rust_algorithm_manifest.py](src/tslc/backend/rust_algorithm_manifest.py),
+  with an asset-consistency test preventing drift.
 
 A static substrate ships as assets
 ([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),
