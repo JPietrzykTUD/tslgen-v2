@@ -87,7 +87,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
     core = {name: values.pop(name) for name in names}
 
     source_extension = values.pop("source_extension", None)
-    runtime_lanes = values.pop("runtime_lanes_expr", None)
+    runtime_lanes = values.pop("runtime_lanes_template", None)
     target_values = {
         "type_tag": values.pop("expected_type_tag", None),
         "base_spelling": values.pop("target_base_spelling", None),
@@ -147,9 +147,11 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
         scalable=(
             ValueTestScalable(
                 source_extension=source_extension,
-                runtime_lanes_expr=runtime_lanes,
-                mask_from_bits_exprs=values.pop("mask_from_bits_exprs", ()),
-                mask_check_expr=values.pop("mask_check_expr", None),
+                runtime_lanes_template=runtime_lanes,
+                mask_from_bits_template=values.pop("mask_from_bits_template", None),
+                mask_check_template=values.pop("mask_check_template", None),
+                mask_bits=values.pop("mask_bits", ()),
+                expected_mask_bits=values.pop("expected_mask_bits", None),
                 load_name=values.pop("load_name", None),
                 store_name=values.pop("store_name", None),
             )
@@ -1090,7 +1092,7 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         source_extension="sve",
         load_name="load",
         store_name="store",
-        runtime_lanes_expr="svcntb() / sizeof(std::int32_t)",
+        runtime_lanes_template="svcntb() / sizeof({base_type})",
     )
     cpp_scalable_source = render_cpp_values_runner(
         ValueTestProfilePlan("cpp", "unit-profile", (cpp_scalable_case,)),
@@ -1528,7 +1530,8 @@ def test_value_test_case_plan_validates_kind_requirements() -> None:
             param_kinds=("v",),
             source_extension="sve",
             load_name="load",
-            mask_check_expr="true",
+            mask_check_template="true",
+            expected_mask_bits=5,
         )
 
     with pytest.raises(ValueError, match="requires to_array_name for value results"):
@@ -2037,6 +2040,214 @@ def test_scalable_tiling_is_gated_on_corpus_cross_lane_fact() -> None:
     assert tiling_is_safe((unknown,), catalog) is False
 
 
+def _scalable_test_extension() -> Extension:
+    return Extension(
+        "sve",
+        "sve",
+        "arm",
+        {},
+        {},
+        backend_supported={"cpp": True},
+        vector_bits_kind="scalable",
+        default_test_target=True,
+        test_runtime_lanes={"cpp": "svcntb() / sizeof({base_type})"},
+        test_mask_from_bits={
+            "cpp": "make_mask<{vec}>({mask_bits}, {authored_lanes}, {lanes})"
+        },
+        test_mask_check={
+            "cpp": "check_mask_bits<{vec}>({case_name}, {mask}, {expected_bits}, "
+            "{authored_lanes}, {lanes})"
+        },
+    )
+
+
+def test_scalable_plan_facts_stay_backend_neutral_for_sve_case() -> None:
+    # Planned scalable facts carry raw extension templates, integer mask bits, and the
+    # unquoted authored case name. The C++ renderer alone spells `tsl::simd<...>`,
+    # appends `ull` suffixes, and quotes names, so no planned scalable fact may contain
+    # backend text or filled placeholders.
+    add = Primitive(
+        "add",
+        "v:=(v,v)",
+        ("left", "right"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="basic",
+                type_tag="si32",
+                tags=("basic",),
+                lanes=2,
+                inputs=(
+                    TslTestArg("vector", values=("1", "2")),
+                    TslTestArg("vector", values=("3", "4")),
+                ),
+                expected=("4", "6"),
+            ),
+        ),
+    )
+    mask_and = Primitive(
+        "mask_and",
+        "m:=(m,m)",
+        ("left", "right"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="basic",
+                type_tag="si32",
+                tags=("basic",),
+                lanes=2,
+                inputs=(
+                    TslTestArg("mask", mask_bits="3"),
+                    TslTestArg("mask", mask_bits="1"),
+                ),
+                expected=("1",),
+            ),
+        ),
+    )
+    catalog = Catalog(
+        primitives=(add, mask_and, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+    specs = {
+        "add": (
+            _spec(
+                "add",
+                "add",
+                param_kinds=("v", "v"),
+                extension_name="sve",
+                uses_sized_vector=False,
+                lane_parameter=None,
+            ),
+        ),
+        "mask_and": (
+            _spec(
+                "mask_and",
+                "mask_and",
+                param_kinds=("m", "m"),
+                result_kind="m",
+                extension_name="sve",
+                uses_sized_vector=False,
+                lane_parameter=None,
+            ),
+        ),
+    }
+    planner = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,))
+    plan = planner.plan((ValueTestBackendProfileInput("cpp", "sve", specs),))
+
+    scalable_cases = [
+        case
+        for profile in plan.profiles
+        for case in profile.cases
+        if case.scalable is not None
+    ]
+    assert {case.kind for case in scalable_cases} == {
+        "scalable_golden",
+        "scalable_mask_logic",
+    }
+    for case in scalable_cases:
+        scalable = case.scalable
+        assert scalable is not None
+        facts = (
+            scalable.source_extension,
+            scalable.runtime_lanes_template,
+            scalable.mask_from_bits_template or "",
+            scalable.mask_check_template or "",
+            scalable.load_name or "",
+            scalable.store_name or "",
+            case.case_name,
+        )
+        assert not any("tsl::" in fact for fact in facts)
+        assert not any("ull" in fact for fact in facts)
+        assert '"' not in case.case_name
+    logic = next(case for case in scalable_cases if case.kind == "scalable_mask_logic")
+    assert logic.scalable is not None
+    assert logic.scalable.mask_bits == (3, 1)
+    assert logic.scalable.expected_mask_bits == 1
+    assert logic.scalable.mask_from_bits_template is not None
+    assert "{vec}" in logic.scalable.mask_from_bits_template
+    assert logic.scalable.mask_check_template is not None
+    assert "{expected_bits}" in logic.scalable.mask_check_template
+
+
+def test_scalable_only_case_reports_backend_unsupported_without_scalable_kinds() -> None:
+    # A case only plannable as a scalable kind (the mask operand is authored as a scalar
+    # token, which the fixed masked-mask-result shape rejects) must surface as
+    # `backend_unsupported` through the planner's central drop machinery when the backend
+    # lacks scalable kinds — not as `authored_unplanned`.
+    masked_cmp = Primitive(
+        "cmpeq_mask",
+        "m:=(m,v,v)",
+        ("mask", "left", "right"),
+        ("mask",),
+        (),
+        attributes={"mask": "zero"},
+        tests=(
+            TslTestCase(
+                name="basic",
+                type_tag="si32",
+                tags=("basic",),
+                lanes=2,
+                inputs=(
+                    TslTestArg("scalar", scalar="1"),
+                    TslTestArg("vector", values=("1", "2")),
+                    TslTestArg("vector", values=("1", "3")),
+                ),
+                expected=("1", "0"),
+            ),
+        ),
+    )
+    catalog = Catalog(
+        primitives=(masked_cmp, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+    specs = {
+        "cmpeq_mask": (
+            _spec(
+                "cmpeq_mask",
+                "cmpeq_mask",
+                param_kinds=("m", "v", "v"),
+                result_kind="m",
+                mask_policy="zero",
+                extension_name="sve",
+                uses_sized_vector=False,
+                lane_parameter=None,
+            ),
+        ),
+    }
+    profile_inputs = (ValueTestBackendProfileInput("cpp", "sve", specs),)
+
+    full = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(profile_inputs)
+    full_entry = next(
+        entry for entry in full.coverage if entry.primitive_name == "cmpeq_mask"
+    )
+    assert full_entry.status == "emitted"
+    assert full_entry.case_kind == "scalable_masked_mask_result"
+
+    without_scalable = ValueTestBackendSupport(
+        backend_id="cpp",
+        case_kinds=frozenset(
+            kind
+            for kind in CPP_VALUE_TEST_SUPPORT.case_kinds
+            if not kind.startswith("scalable_")
+        ),
+    )
+    restricted = ValueTestPlanner(catalog, (without_scalable,)).plan(profile_inputs)
+    entry = next(
+        entry for entry in restricted.coverage if entry.primitive_name == "cmpeq_mask"
+    )
+    assert entry.status == "backend_unsupported"
+    assert entry.case_kind == "scalable_masked_mask_result"
+    assert "not supported by the cpp value-test renderer" in entry.reason
+
+
 def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog(
     render_assets: RenderAssets,
 ) -> None:
@@ -2425,9 +2636,11 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
         "to_array_name",
         "to_integral_name",
         "hardware_extension",
-        "runtime_lanes_expr",
-        "mask_from_bits_exprs",
-        "mask_check_expr",
+        "runtime_lanes_template",
+        "mask_from_bits_template",
+        "mask_check_template",
+        "mask_bits",
+        "expected_mask_bits",
         "load_name",
         "store_name",
         "fuzz_seed",

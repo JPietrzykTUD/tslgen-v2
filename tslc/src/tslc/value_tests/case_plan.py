@@ -142,15 +142,15 @@ class ValueTestCasePlan:
                         f"value-test case {self.function_name!r} kind {self.kind!r} "
                         f"requires vector_inputs[{index}] to have {self.lanes} values"
                     )
-        mask_exprs = self.scalable.mask_from_bits_exprs if self.scalable else ()
+        mask_bits = self.scalable.mask_bits if self.scalable else ()
         if (
-            mask_exprs
+            mask_bits
             and self.inputs.masks
-            and len(mask_exprs) != len(self.inputs.masks)
+            and len(mask_bits) != len(self.inputs.masks)
         ):
             raise ValueError(
                 f"value-test case {self.function_name!r} kind {self.kind!r} "
-                "requires one mask_from_bits expression per mask input"
+                "requires one mask-bits value per mask input"
             )
 
     def _validate_tuple_arity(self, field_name: str, arity: InputArity) -> None:
@@ -244,11 +244,11 @@ class ValueTestCasePlan:
                 self.scalable is not None and self.scalable.value_harness_ready
             ),
             ValueTestFact.SCALABLE_MASK_CHECK: (
-                self.scalable is not None and self.scalable.mask_check_expr is not None
+                self.scalable is not None
+                and self.scalable.mask_check_template is not None
             ),
             ValueTestFact.SCALABLE_MASK_INPUTS: (
-                self.scalable is not None
-                and bool(self.scalable.mask_from_bits_exprs)
+                self.scalable is not None and bool(self.scalable.mask_bits)
             ),
             ValueTestFact.SCALABLE_LOAD: (
                 self.scalable is not None and self.scalable.load_name is not None

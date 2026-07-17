@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.value_tests.lane_math import runtime_tile_index as _runtime_tile_index
 from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestMemory
 from tslc.value_tests.render_cpp_helpers import (
@@ -9,6 +10,7 @@ from tslc.value_tests.render_cpp_helpers import (
     cast_literal_list as _cast_literal_list,
     cpp_string_literal as _cpp_string_literal,
     scalable_header as _scalable_header,
+    scalable_mask_from_bits as _scalable_mask_from_bits,
     uint_literal as _uint_literal,
 )
 
@@ -376,7 +378,7 @@ def _scalable_mask_store(case: ValueTestCasePlan) -> str:
     memory = _memory(case)
     scalable = case.scalable
     target = case.target
-    if scalable is None or not scalable.mask_from_bits_exprs or target is None:
+    if scalable is None or not scalable.mask_bits or target is None:
         raise ValueError(
             "scalable mask-store C++ value test requires extension, lanes, "
             "mask input, and storage layout"
@@ -390,14 +392,14 @@ def _scalable_mask_store(case: ValueTestCasePlan) -> str:
     lines = _scalable_header(case)
     lines.extend(
         [
-            f"  typename Vec::mask_type mask = {scalable.mask_from_bits_exprs[0]};",
+            f"  typename Vec::mask_type mask = {_scalable_mask_from_bits(case, 0)};",
             f"  static const {storage_type} authored_expected[{authored_len}] = {{{expected}}};",
             f"  std::vector<{storage_type}> actual({memory.buffer_offset} + lanes);",
             f"  std::vector<{storage_type}> expected({memory.buffer_offset} + lanes);",
             f"  for (std::size_t i = 0; i < {memory.buffer_offset}; ++i) "
             "expected[i] = authored_expected[i];",
             f"  for (std::size_t i = 0; i < lanes; ++i) expected[{memory.buffer_offset} + i] = "
-            f"authored_expected[{memory.buffer_offset} + (i % {case.lanes})];",
+            f"authored_expected[{memory.buffer_offset} + ({_runtime_tile_index('i', case.lanes)})];",
             f"  tsl::{case.call_name}<Vec{axis}>("
             "reinterpret_cast<typename Vec::base_type *>(actual.data() + "
             f"{memory.buffer_offset}), mask);",

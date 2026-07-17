@@ -34,12 +34,15 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from tslc.value_tests.lane_math import runtime_tile_index
 from tslc.value_tests.literals import cpp_literal_list, token_truthy
 from tslc.value_tests.model import ValueTestCasePlan
 from tslc.value_tests.render_cpp_helpers import (
     append_call_args,
     append_runtime_vector_input,
     scalable_header,
+    scalable_mask_check,
+    scalable_mask_from_bits,
 )
 
 
@@ -141,7 +144,7 @@ class _ScalableLaneModel(LaneModel):
             elif kind == "m":
                 lines.append(
                     f"  typename Vec::mask_type m{mask_index} = "
-                    f"{scalable.mask_from_bits_exprs[mask_index]};"
+                    f"{scalable_mask_from_bits(case, mask_index)};"
                 )
                 args.append(f"m{mask_index}")
                 mask_index += 1
@@ -169,7 +172,7 @@ class _ScalableLaneModel(LaneModel):
                 f"  std::vector<{case.base_spelling}> expected(lanes);",
                 f"  std::vector<{case.base_spelling}> actual(lanes);",
                 f"  for (std::size_t i = 0; i < lanes; ++i) expected[i] = "
-                f"authored_expected[i % {case.lanes}];",
+                f"authored_expected[{runtime_tile_index('i', case.lanes)}];",
                 f"  typename Vec::register_type result = {call};",
                 f"  tsl::{scalable.store_name}<Vec, false>(actual.data(), result);",
                 f'  return tsl::test::check_lanes<{case.base_spelling}>('
@@ -179,9 +182,9 @@ class _ScalableLaneModel(LaneModel):
 
     def verify_mask(self, lines: list[str], case: ValueTestCasePlan) -> None:
         scalable = case.scalable
-        if scalable is None or scalable.mask_check_expr is None:
+        if scalable is None or scalable.mask_check_template is None:
             raise ValueError("scalable mask result requires a mask-check fact")
-        lines.append(f"  return {scalable.mask_check_expr};")
+        lines.append(f"  return {scalable_mask_check(case)};")
 
 
 _FIXED = _FixedLaneModel()
@@ -240,7 +243,7 @@ def render_mask_conversion(case: ValueTestCasePlan) -> str:
     result_type = (
         "typename Vec::mask_type" if case.invocation.result_kind == "m" else "typename Vec::imask_type"
     )
-    lines.append(f"  {input_type} input = {scalable.mask_from_bits_exprs[0]};")
+    lines.append(f"  {input_type} input = {scalable_mask_from_bits(case, 0)};")
     lines.append(f"  {result_type} result = tsl::{case.call_name}<Vec>(input);")
     model.verify_mask(lines, case)
     lines.append("}")

@@ -51,6 +51,7 @@ from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.catalog.signatures import parse_signature
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.value_tests.harness import discover_harness_primitives
+from tslc.value_tests.lane_math import tiling_preserves_lane_semantics, whole_lanes
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestProjectPlan
 
 _STABLE_ID_RE = re.compile(r"[^0-9A-Za-z_]+")
@@ -171,8 +172,8 @@ class CppBenchmarkPlanner:
         assert primitive is not None and extension is not None
         bits = scalar_bit_width(spec.type_tag)
         assert bits is not None and extension.vector_bits > 0
-        lanes = extension.vector_bits // bits
-        if lanes <= 0:
+        lanes = whole_lanes(extension.vector_bits, spec.type_tag)
+        if lanes is None:
             return None, "extension width does not contain a complete scalar lane", False
         key = SpecializationKey(
             backend_id="cpp",
@@ -221,8 +222,8 @@ class CppBenchmarkPlanner:
                     True,
                 )
             index_type_tag = simd_type_base_bindings[0][1]
-            index_bits = scalar_bit_width(index_type_tag)
-            if index_bits is None or extension.vector_bits % index_bits:
+            index_lanes = whole_lanes(extension.vector_bits, index_type_tag)
+            if index_lanes is None:
                 return None, "indexed-load type does not have a fixed lane count", False
             if not all(
                 _has_vector_specialization(
@@ -238,7 +239,6 @@ class CppBenchmarkPlanner:
                     "indexed-load SIMD-type harness specializations are not in the emitted closure",
                     True,
                 )
-            index_lanes = extension.vector_bits // index_bits
             correctness = _indexed_load_correctness_cases(
                 cases,
                 spec,
@@ -273,7 +273,7 @@ class CppBenchmarkPlanner:
             )
             scenarios = immediate_scenarios(primitive, spec, seed)
         elif spec.result_kind == "v" and spec.param_kinds == ("v", "s"):
-            if primitive.cross_lane:
+            if not tiling_preserves_lane_semantics(primitive):
                 return (
                     None,
                     "cross-lane vector results require a dedicated benchmark scenario",
@@ -300,7 +300,7 @@ class CppBenchmarkPlanner:
         elif spec.result_kind == "v" and spec.param_kinds and all(
             kind == "v" for kind in spec.param_kinds
         ):
-            if primitive.cross_lane:
+            if not tiling_preserves_lane_semantics(primitive):
                 return (
                     None,
                     "cross-lane vector results require a dedicated benchmark scenario",
@@ -414,7 +414,7 @@ def _common_unsupported_reason(
 ) -> str | None:
     if primitive is None:
         return "source primitive is not present in the catalog"
-    if primitive.cross_lane and not (
+    if not tiling_preserves_lane_semantics(primitive) and not (
         (spec.result_kind == "s" and spec.param_kinds == ("v",))
         or _is_indexed_load_shape(spec)
     ):

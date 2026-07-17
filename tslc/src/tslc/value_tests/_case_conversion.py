@@ -13,10 +13,10 @@ from tslc.value_tests.case_helpers import (
     repr_cast_match as _repr_cast_match,
     sanitize as _sanitize,
     scalar_inputs as _scalar_inputs,
-    type_bits_for_tag as _type_bits,
     valid_generic_lanes as _valid_generic_lanes,
     vector_inputs as _vector_inputs,
 )
+from tslc.value_tests.lane_math import SEED_MIX_64, whole_lanes as _whole_lanes
 from tslc.value_tests.model import (
     HarnessPrimitiveNames,
     ValueTestCasePlan,
@@ -211,7 +211,6 @@ def extension_repr_case(
 # the values binary fast while covering far more of the input space than the handful of authored
 # cases. Deterministic: the seed is derived from the function name, so a failure reproduces.
 FUZZ_ITERATIONS = 256
-_FUZZ_BASE_SEED = 0x9E3779B97F4A7C15
 
 
 def _fuzz_seed(function_name: str) -> int:
@@ -221,7 +220,7 @@ def _fuzz_seed(function_name: str) -> int:
     digest = 0xCBF29CE484222325
     for byte in function_name.encode("utf-8"):
         digest = ((digest ^ byte) * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
-    return (digest ^ _FUZZ_BASE_SEED) & 0xFFFFFFFFFFFFFFFF or 1  # xorshift must not start at 0
+    return (digest ^ SEED_MIX_64) & 0xFFFFFFFFFFFFFFFF or 1  # xorshift must not start at 0
 
 
 def differential_fuzz_cases(
@@ -254,12 +253,9 @@ def differential_fuzz_cases(
             or extension.vector_bits <= 0
         ):
             continue
-        type_bits = _type_bits(spec.type_tag)
+        lanes = _whole_lanes(extension.vector_bits, spec.type_tag)
         base_spelling = _base_spelling((spec,), spec.type_tag)
-        if type_bits is None or base_spelling is None:
-            continue
-        lanes = extension.vector_bits // type_bits
-        if lanes <= 0:
+        if lanes is None or base_spelling is None:
             continue
         function_name = f"fuzz_diff_{spec.extension_name}_{_sanitize(name)}_{spec.type_tag}"
         emitted.append(
@@ -301,9 +297,8 @@ def differential_cases(
     if harness.from_array is None:
         return []
     base_spelling = _base_spelling(specs, case.type_tag)
-    type_bits = _type_bits(case.type_tag)
     vector_inputs = _vector_inputs(case)
-    if base_spelling is None or type_bits is None:
+    if base_spelling is None:
         return []
     if len(vector_inputs) != len(specs[0].param_kinds):
         return []
@@ -321,7 +316,7 @@ def differential_cases(
             continue
         if spec.type_tag != case.type_tag:
             continue
-        if extension.vector_bits != case.lanes * type_bits:
+        if _whole_lanes(extension.vector_bits, case.type_tag) != case.lanes:
             continue
         emitted.append(
             ValueTestCasePlan(

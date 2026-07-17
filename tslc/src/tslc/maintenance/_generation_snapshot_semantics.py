@@ -365,9 +365,11 @@ def _serialize_value_test_scalable(
         return None
     return {
         "source_extension": value.source_extension,
-        "runtime_lanes_expr": value.runtime_lanes_expr,
-        "mask_from_bits_exprs": value.mask_from_bits_exprs,
-        "mask_check_expr": value.mask_check_expr,
+        "runtime_lanes_template": value.runtime_lanes_template,
+        "mask_from_bits_template": value.mask_from_bits_template,
+        "mask_check_template": value.mask_check_template,
+        "mask_bits": value.mask_bits,
+        "expected_mask_bits": value.expected_mask_bits,
         "load_name": value.load_name,
         "store_name": value.store_name,
     }

@@ -15,8 +15,7 @@ from tslc.benchmark.model import (
 )
 from tslc.catalog.model import Primitive
 from tslc.lower.lowerer import LoweredSpecialization
-
-_LATENCY_SEED_MIX = 0x9E3779B97F4A7C15
+from tslc.value_tests.lane_math import SEED_MIX_64
 
 
 def register_scenarios(
@@ -45,7 +44,7 @@ def register_scenarios(
             BenchmarkRegisterScenario(
                 scenario_id="latency_dependency_chain",
                 kind="latency",
-                timing=BenchmarkTiming(seed ^ _LATENCY_SEED_MIX),
+                timing=BenchmarkTiming(seed ^ SEED_MIX_64),
                 operand_generators=generators,
                 dependency_parameter=dependency,
             )
@@ -74,7 +73,7 @@ def vector_scalar_scenarios(
             BenchmarkVectorScalarScenario(
                 scenario_id="latency_dependency_chain",
                 kind="latency",
-                timing=BenchmarkTiming(seed ^ _LATENCY_SEED_MIX),
+                timing=BenchmarkTiming(seed ^ SEED_MIX_64),
                 vector_generator=vector_generator,
                 scalar_generator=scalar_generator,
                 dependency_parameter=0,
@@ -99,7 +98,7 @@ def immediate_scenarios(
         BenchmarkImmediateScenario(
             scenario_id="latency_dependency_chain",
             kind="latency",
-            timing=BenchmarkTiming(seed ^ _LATENCY_SEED_MIX),
+            timing=BenchmarkTiming(seed ^ SEED_MIX_64),
             operand_generator=generator,
             dependency_parameter=0,
         ),
@@ -139,7 +138,7 @@ def mask_density_scenarios(
             BenchmarkMaskDensityScenario(
                 scenario_id=scenario_id,
                 timing=BenchmarkTiming(
-                    (seed ^ ((index + 1) * _LATENCY_SEED_MIX))
+                    (seed ^ ((index + 1) * SEED_MIX_64))
                     & 0xFFFFFFFFFFFFFFFF
                 ),
                 parameter_index=0,

@@ -186,19 +186,42 @@ class ValueTestRepresentation:
 
 @dataclass(frozen=True, slots=True)
 class ValueTestScalable:
-    """Scalable-extension runtime and harness expressions."""
+    """Backend-neutral scalable-extension facts.
+
+    Carries the extension's raw per-backend test templates, integer mask-bit values,
+    and harness primitive names. Backend renderers substitute the template
+    placeholders and own all final spelling (SIMD type, literal suffixes, quoting).
+    """
 
     source_extension: str
-    runtime_lanes_expr: str
-    mask_from_bits_exprs: tuple[str, ...] = ()
-    mask_check_expr: str | None = None
+    runtime_lanes_template: str
+    mask_from_bits_template: str | None = None
+    mask_check_template: str | None = None
+    mask_bits: tuple[int, ...] = ()
+    expected_mask_bits: int | None = None
     load_name: str | None = None
     store_name: str | None = None
 
     def __post_init__(self) -> None:
-        if not self.source_extension or not self.runtime_lanes_expr:
+        if not self.source_extension or not self.runtime_lanes_template:
             raise ValueError(
-                "scalable value-test plan requires extension and runtime lanes"
+                "scalable value-test plan requires extension and runtime-lanes template"
+            )
+        if bool(self.mask_bits) != (self.mask_from_bits_template is not None):
+            raise ValueError(
+                "scalable value-test mask bits and mask-from-bits template "
+                "must be provided together"
+            )
+        if any(bits < 0 for bits in self.mask_bits):
+            raise ValueError("scalable value-test mask bits must be non-negative")
+        if (self.expected_mask_bits is None) != (self.mask_check_template is None):
+            raise ValueError(
+                "scalable value-test expected mask bits and mask-check template "
+                "must be provided together"
+            )
+        if self.expected_mask_bits is not None and self.expected_mask_bits < 0:
+            raise ValueError(
+                "scalable value-test expected mask bits must be non-negative"
             )
 
     @property
