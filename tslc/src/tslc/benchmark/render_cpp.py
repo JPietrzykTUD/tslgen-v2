@@ -8,6 +8,7 @@ from tslc.backend.cpp import (
     variant_enum_name,
     variant_selector_name,
 )
+from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
     BenchmarkImmediateScenario,
@@ -277,17 +278,7 @@ def _render_policy_branch(candidate_set: BenchmarkCandidateSet) -> str:
 
 
 def _policy_parameter_type(kind: str, vector: str) -> str:
-    return {
-        "v": f"typename ::tsl::reg_param<{vector}>::type",
-        "s": f"typename {vector}::base_type",
-        "m": f"typename {vector}::mask_type",
-        "im": f"typename {vector}::imask_type",
-        "usize": "std::size_t",
-        "ptr": f"typename {vector}::base_type*",
-        "ptr+": f"typename {vector}::base_type*",
-        "cptr": f"typename {vector}::base_type const*",
-        "cptr+": f"typename {vector}::base_type const*",
-    }[kind]
+    return CPP_SIGNATURE_TYPES.member_parameter_type(kind, vector=vector)
 
 
 def _render_policy_read(candidate_set: BenchmarkCandidateSet) -> str:

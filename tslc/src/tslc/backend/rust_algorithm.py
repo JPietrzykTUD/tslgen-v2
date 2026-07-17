@@ -701,6 +701,20 @@ def rust_dataparallel_fixed_lane_count(
     return DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
 
 
+def rust_fixed_vector_spelling(base: str, lane_count: int) -> str:
+    """Crate-external spelling of the ``Fixed<N>`` vector admitted by VectorFor.
+
+    Consumers outside the generated ``tsl`` crate (such as the PIVOT exporter)
+    address the dataparallel policy and algorithm profile through their fully
+    qualified paths.
+    """
+
+    return (
+        f"<tsl::dataparallel::Fixed<{lane_count}> as "
+        f"tsl::tsl_algorithm::VectorFor<tsl::profile::algo::Profile, {base}>>::Vec"
+    )
+
+
 def _rust_algorithm_vector_type(extension: Extension, base: str) -> str:
     if extension.family == "scalar":
         return f"Simd<{base}, Scalar>"

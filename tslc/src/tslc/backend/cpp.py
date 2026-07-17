@@ -532,35 +532,14 @@ def _dataparallel_memory_facade_wrapper(
 
 
 def _dataparallel_facade_result_type(result_kind: str, vec: str) -> str:
-    if result_kind == "v":
-        return f"typename {vec}::register_type"
-    if result_kind == "m":
-        return f"typename {vec}::mask_type"
-    if result_kind == "s":
-        return f"typename {vec}::base_type"
-    if result_kind == "usize":
-        return "std::size_t"
-    if result_kind == "void":
-        return "void"
-    raise AssertionError(f"unsupported dataparallel facade result kind: {result_kind}")
+    return CPP_SIGNATURE_TYPES.member_type(result_kind, vector=vec)
 
 
 def _dataparallel_facade_param_type(
     param_kind: str, vec: str, target_vec: str | None
 ) -> str:
-    if param_kind == "v":
-        return f"typename ::tsl::reg_param<{vec}>::type"
-    if param_kind == "vt" and target_vec is not None:
-        return f"typename ::tsl::reg_param<{target_vec}>::type"
-    if param_kind == "m":
-        return f"typename {vec}::mask_type"
-    if param_kind == "s":
-        return f"typename {vec}::base_type"
-    if param_kind == "cptr":
-        return f"typename {vec}::base_type const*"
-    if param_kind == "ptr":
-        return f"typename {vec}::base_type*"
-    raise AssertionError(f"unsupported dataparallel facade parameter kind: {param_kind}")
+    vector = target_vec if param_kind == "vt" and target_vec is not None else vec
+    return CPP_SIGNATURE_TYPES.member_parameter_type(param_kind, vector=vector)
 
 
 def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:

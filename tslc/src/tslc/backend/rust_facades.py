@@ -15,6 +15,7 @@ from tslc.backend.rust_names import (
     rust_primitive_trait_name,
 )
 from tslc.backend.rust_translation import rust_raw_identifier
+from tslc.backend.signature_types import RUST_SIGNATURE_TYPES
 from tslc.lower.lowerer import LoweredSpecialization
 
 
@@ -123,29 +124,15 @@ def rust_public_function_names(source: str) -> frozenset[str]:
 
 
 def _rust_facade_result_type(result_kind: str, vec: str) -> str:
-    vec = f"<{vec} as SimdVector>"
-    if result_kind == "v":
-        return f"{vec}::RegisterType"
-    if result_kind == "m":
-        return f"{vec}::MaskType"
-    if result_kind == "s":
-        return f"{vec}::BaseType"
-    if result_kind == "usize":
-        return "usize"
-    raise AssertionError(f"unsupported Rust facade result kind: {result_kind}")
+    return RUST_SIGNATURE_TYPES.owner_type(result_kind, owner=f"<{vec} as SimdVector>")
 
 
 def _rust_facade_param_type(param_kind: str, vec: str, target_vec: str | None) -> str:
-    vec = f"<{vec} as SimdVector>"
-    if param_kind == "v":
-        return f"{vec}::RegisterType"
     if param_kind == "vt" and target_vec is not None:
-        return f"<{target_vec} as SimdVector>::RegisterType"
-    if param_kind == "m":
-        return f"{vec}::MaskType"
-    if param_kind == "s":
-        return f"{vec}::BaseType"
-    raise AssertionError(f"unsupported Rust facade parameter kind: {param_kind}")
+        vec = target_vec
+    return RUST_SIGNATURE_TYPES.parameter_type(
+        param_kind, owner=f"<{vec} as SimdVector>"
+    )
 
 
 __all__ = (

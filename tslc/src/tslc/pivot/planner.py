@@ -8,8 +8,16 @@ from dataclasses import dataclass
 
 from tslc.backend.cpp_profile import cpp_dataparallel_fixed_lane_count
 from tslc.backend.registry import create_backend_dialect
-from tslc.backend.rust_algorithm import rust_dataparallel_fixed_lane_count
+from tslc.backend.rust_algorithm import (
+    rust_dataparallel_fixed_lane_count,
+    rust_fixed_vector_spelling,
+)
 from tslc.backend.rust_translation import rust_raw_identifier
+from tslc.backend.signature_types import (
+    BackendSignatureTypes,
+    CPP_SIGNATURE_TYPES,
+    RUST_SIGNATURE_TYPES,
+)
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import BOOLEAN_WILDCARD_ATTRIBUTES, Catalog
@@ -664,16 +672,23 @@ def _eligible_shape(slot: SelectedImplementation) -> SignatureShape:
     return shape
 
 
+def _signature_types(language: PivotLanguage) -> BackendSignatureTypes:
+    return (
+        CPP_SIGNATURE_TYPES
+        if language is PivotLanguage.CPP
+        else RUST_SIGNATURE_TYPES
+    )
+
+
 def _concrete_type(
     language: PivotLanguage,
     kind: str,
     spec: LoweredSpecialization,
     slot: SelectedImplementation,
 ) -> str:
-    if kind == "s":
-        return spec.base_type_spelling
-    if kind == "usize":
-        return "std::size_t" if language is PivotLanguage.CPP else "usize"
+    types = _signature_types(language)
+    if kind in ("s", "usize"):
+        return types.concrete_type(kind, base=spec.base_type_spelling)
     register = spec.native_register_spelling
     if spec.register_is_base:
         register = spec.base_type_spelling
@@ -693,7 +708,7 @@ def _concrete_type(
             return mask
         lanes = DEFAULT_SUPPORT_POLICY.lane_count(slot.extension, slot.type_tag) or 1
         width = 8 if lanes <= 8 else 16 if lanes <= 16 else 32 if lanes <= 32 else 64
-        return f"std::uint{width}_t" if language is PivotLanguage.CPP else f"u{width}"
+        return types.concrete_integral_mask_type("im", width=str(width))
     raise _PivotUnsupported(
         f"PIVOT has no concrete type projection for signature kind {kind!r}",
         slot.primitive.signature_source,
@@ -706,33 +721,14 @@ def _fixed_type(
     vector: str,
     base: str,
 ) -> str:
+    types = _signature_types(language)
+    if kind in ("s", "usize"):
+        return types.concrete_type(kind, base=base)
     if language is PivotLanguage.RUST:
-        if kind == "v":
-            return f"<{vector} as tsl::tsl_core::SimdVector>::RegisterType"
-        if kind == "m":
-            return f"<{vector} as tsl::tsl_core::SimdVector>::MaskType"
-        if kind == "im":
-            return f"<{vector} as tsl::tsl_core::SimdVector>::ImaskType"
-        if kind == "s":
-            return base
-        if kind == "usize":
-            return "usize"
-        raise _PivotUnsupported(
-            f"PIVOT has no Rust fixed-policy type projection for signature kind {kind!r}"
+        return types.owner_type(
+            kind, owner=f"<{vector} as tsl::tsl_core::SimdVector>"
         )
-    if kind == "v":
-        return f"typename {vector}::register_type"
-    if kind == "m":
-        return f"typename {vector}::mask_type"
-    if kind == "im":
-        return f"typename {vector}::imask_type"
-    if kind == "s":
-        return base
-    if kind == "usize":
-        return "std::size_t"
-    raise _PivotUnsupported(
-        f"PIVOT has no fixed-policy type projection for signature kind {kind!r}"
-    )
+    return types.member_type(kind, vector=vector)
 
 
 def _mask_type(
@@ -780,10 +776,7 @@ def _fixed_vector_spelling(
 ) -> str | None:
     if language is PivotLanguage.CPP:
         return dialect.types.fixed_vector_spelling(base, lanes)
-    return (
-        f"<tsl::dataparallel::Fixed<{lanes}> as "
-        f"tsl::tsl_algorithm::VectorFor<tsl::profile::algo::Profile, {base}>>::Vec"
-    )
+    return rust_fixed_vector_spelling(base, lanes)
 
 
 def _fixed_callable_name(language: PivotLanguage, name: str) -> str:
