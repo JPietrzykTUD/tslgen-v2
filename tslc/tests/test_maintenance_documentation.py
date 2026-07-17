@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import stat
+import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -102,6 +103,55 @@ def test_document_generated_writes_assets_and_runs_tools(
     assert "npm run build" in log_text
     assert "VITE_TSLC_GIT_BRANCH=" in log_text
     assert "VITE_TSLC_GIT_HASH=" in log_text
+
+
+def test_runner_receives_command_environment_without_mutating_os_environ(
+    monkeypatch, tmp_path
+) -> None:
+    """Git provenance flows to the runner as data, never through os.environ."""
+
+    monkeypatch.delenv("VITE_TSLC_GIT_BRANCH", raising=False)
+    monkeypatch.delenv("VITE_TSLC_GIT_HASH", raising=False)
+    output_root = _generated_project(tmp_path / "generated")
+    tools = tmp_path / "bin"
+    tools.mkdir()
+    for name in ("doxygen", "sphinx-build", "npm"):
+        (tools / name).write_text("", encoding="utf-8")
+
+    calls: list[tuple[str, dict[str, str] | None, bool]] = []
+
+    def runner(argv, cwd, extra_env):
+        tool = Path(argv[0]).name
+        step = tool + ("-" + argv[1] if tool == "npm" else "")
+        leaked = any(key.startswith("VITE_TSLC_GIT_") for key in os.environ)
+        calls.append((step, dict(extra_env) if extra_env else None, leaked))
+        if tool == "doxygen":
+            (output_root / "cpp/docs/doxygen/xml").mkdir(parents=True, exist_ok=True)
+        elif tool == "sphinx-build":
+            Path(argv[-1]).mkdir(parents=True, exist_ok=True)
+        return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+    report = document_generated(
+        output_root,
+        ("cpp",),
+        doxygen=str(tools / "doxygen"),
+        sphinx_build=str(tools / "sphinx-build"),
+        npm=str(tools / "npm"),
+        runner=runner,
+    )
+
+    assert report.errors == ()
+    by_step = {step: env for step, env, _ in calls}
+    assert set(by_step) == {"doxygen", "npm-ci", "npm-run", "sphinx-build"}
+    assert by_step["doxygen"] is None
+    assert by_step["npm-ci"] is None
+    build_env = by_step["npm-run"]
+    assert build_env is not None
+    assert build_env["VITE_TSLC_GIT_BRANCH"]
+    assert build_env["VITE_TSLC_GIT_HASH"]
+    assert all(not leaked for _, _, leaked in calls)
+    assert "VITE_TSLC_GIT_BRANCH" not in os.environ
+    assert "VITE_TSLC_GIT_HASH" not in os.environ
 
 
 def test_document_generated_site_only_skips_backend_docs_and_npm_ci(tmp_path) -> None:

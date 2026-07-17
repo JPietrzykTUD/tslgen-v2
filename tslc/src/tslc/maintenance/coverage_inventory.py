@@ -9,7 +9,6 @@ repository-wide canonical probe so the committed report remains reproducible.
 from __future__ import annotations
 
 import argparse
-import ast
 from pathlib import Path
 import sys
 
@@ -18,6 +17,7 @@ from tslc.authoring import check_catalog
 from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.machine_profiles import load_machine_profiles_checked
 from tslc.diagnostics import Diagnostic, format_diagnostic, has_errors
+from tslc.maintenance.build_verified import build_verified_primitives
 from tslc.maintenance.coverage_inventory_report import (
     CoverageInventory,
     build_coverage_inventory,
@@ -40,44 +40,6 @@ def canonical_report_path(context: RepoContext) -> Path:
     """The tracked Markdown report maintained by ``--update``/``--check``."""
 
     return context.coverage_root / "primitive-coverage-inventory.md"
-
-
-def _has_skip_decorator(fn: ast.FunctionDef) -> bool:
-    """Return whether a test function is explicitly skipped."""
-
-    for decorator in fn.decorator_list:
-        target = decorator.func if isinstance(decorator, ast.Call) else decorator
-        while isinstance(target, ast.Attribute):
-            if target.attr == "skip":
-                return True
-            target = target.value
-    return False
-
-
-def _build_verified_primitives(repo_root: Path | None) -> frozenset[str]:
-    """Primitive names covered by at least one non-skipped generated build test."""
-
-    if repo_root is None:
-        return frozenset()
-    build_test = repo_root / "tslc" / "tests" / "test_build_verify.py"
-    tree = ast.parse(build_test.read_text(encoding="utf-8"))
-    verified: set[str] = set()
-    for fn in tree.body:
-        if not isinstance(fn, ast.FunctionDef) or _has_skip_decorator(fn):
-            continue
-        for node in ast.walk(fn):
-            if (
-                isinstance(node, ast.keyword)
-                and node.arg == "primitives"
-                and isinstance(node.value, ast.List)
-            ):
-                verified.update(
-                    element.value
-                    for element in node.value.elts
-                    if isinstance(element, ast.Constant)
-                    and isinstance(element.value, str)
-                )
-    return frozenset(verified)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -131,7 +93,6 @@ def _run_canonical(
         profiles=PROFILES,
         backends=registered_backend_ids(),
         type_tags=_ARITH_TYPE_TAGS,
-        repo_root=context.root,
     )
     if inventory is None:
         for error in errors:
@@ -193,18 +154,14 @@ def collect_inventory(
     profiles: tuple[str, ...] | None,
     backends: tuple[str, ...],
     type_tags: tuple[str, ...],
-    repo_root: Path | None = None,
 ) -> tuple[CoverageInventory | None, tuple[str, ...]]:
     """Load configured inputs, run lowering only, and calculate the inventory.
 
-    ``repo_root`` locates the checkout's build-verification evidence; when
-    omitted, the enclosing checkout is discovered lazily and running outside
-    one simply reports no build-verified primitives.
+    Build-verification evidence comes from the typed
+    ``tslc.maintenance.build_verified`` constant the generated-build tests
+    consume, so no checkout probing is required.
     """
 
-    if repo_root is None:
-        found = _repo_context.find_repo_context()
-        repo_root = found.root if found is not None else None
     catalog_result = check_catalog(sources, backends=backends)
     if catalog_result.catalog is None or has_errors(catalog_result.diagnostics):
         return None, _diagnostic_lines(catalog_result.diagnostics)
@@ -244,7 +201,7 @@ def collect_inventory(
             machine_profiles=selected_profile_models,
             backends=backends,
             type_tags=type_tags,
-            verified_primitives=_build_verified_primitives(repo_root),
+            verified_primitives=build_verified_primitives(),
         ),
         (),
     )

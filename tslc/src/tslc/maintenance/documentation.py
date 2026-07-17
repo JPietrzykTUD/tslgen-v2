@@ -33,7 +33,10 @@ from tslc.backend.capability import (
 from tslc.backend.registry import backend_capability
 from tslc.maintenance import _repo_context
 
-CommandRunner = Callable[[Sequence[str], Path], subprocess.CompletedProcess[str]]
+CommandRunner = Callable[
+    [Sequence[str], Path, Mapping[str, str] | None],
+    subprocess.CompletedProcess[str],
+]
 
 
 def _required_repo_root(explicit: Path | None) -> Path:
@@ -730,19 +733,7 @@ def _execute(
 ) -> bool:
     if dry_run:
         return True
-    if extra_env:
-        previous = {key: os.environ.get(key) for key in extra_env}
-        os.environ.update(extra_env)
-        try:
-            completed = runner(command.argv, command.cwd)
-        finally:
-            for key, old_value in previous.items():
-                if old_value is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = old_value
-    else:
-        completed = runner(command.argv, command.cwd)
+    completed = runner(command.argv, command.cwd, extra_env)
     if completed.returncode == 0:
         return True
     errors.append(
@@ -777,11 +768,15 @@ def _record_outputs(
 
 
 def _run_subprocess(
-    argv: Sequence[str], cwd: Path
+    argv: Sequence[str],
+    cwd: Path,
+    extra_env: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["LC_ALL"] = "C.UTF-8"
     env["LANG"] = "C.UTF-8"
+    if extra_env:
+        env.update(extra_env)
     return subprocess.run(
         list(argv),
         cwd=cwd,

@@ -331,6 +331,7 @@ def _serialize_value_test_index(value: ValueTestIndex | None) -> dict[str, objec
         "type_tag": value.type_tag,
         "base_spelling": value.base_spelling,
         "lanes": value.lanes,
+        "style": value.style,
     }
 
 
@@ -342,6 +343,7 @@ def _serialize_value_test_memory(value: ValueTestMemory | None) -> dict[str, obj
         "buffer_length": value.buffer_length,
         "source_offset": value.source_offset,
         "alignment": value.alignment,
+        "storage": value.storage,
     }
 
 

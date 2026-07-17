@@ -16,8 +16,19 @@ import pytest
 
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.diagnostics import has_errors
+from tslc.maintenance.build_verified import BUILD_VERIFIED_PRIMITIVE_SETS
 
 pytestmark = pytest.mark.generated_build
+
+
+def _build_verified(test_name: str) -> list[str]:
+    """The typed evidence entry this test compiles; keys mirror test names.
+
+    ``coverage_inventory`` reports the same constant as build-verified, so a
+    test may only consume the entry named after itself.
+    """
+
+    return list(BUILD_VERIFIED_PRIMITIVE_SETS[test_name])
 
 
 def _cmake_env(tmp_path: Path) -> dict[str, str]:
@@ -64,7 +75,7 @@ def test_generated_profiles_build(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["add", "hadd"],
+        primitives=_build_verified("test_generated_profiles_build"),
         # Include an exotic-flag profile so feature-flag-spelling regressions
         # are caught by the build, not just inspection.
         profiles=["scalar", "sse2", "avx", "avx2", "skylake", "icelake_rockerlake"],
@@ -91,22 +102,7 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=[
-            "abs",
-            "add",
-            "blend",
-            "equal",
-            "hadd",
-            "mask_binary_and",
-            "mask_binary_not",
-            "mask_binary_or",
-            "mask_binary_xor",
-            "mask_false",
-            "mask_population_count",
-            "mask_true",
-            "to_integral",
-            "to_mask",
-        ],
+        primitives=_build_verified("test_clang_vector_overlay_builds_and_runs_through_opt_in_target"),
         profiles=["sse2"],
         backends=["cpp"],
     )
@@ -314,7 +310,7 @@ def test_cpp_fetch_content_consumer_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["add"],
+        primitives=_build_verified("test_cpp_fetch_content_consumer_builds"),
         profiles=["scalar"],
         backends=["cpp"],
     )
@@ -386,7 +382,7 @@ def test_cpp_auto_profile_configures(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["add"],
+        primitives=_build_verified("test_cpp_auto_profile_configures"),
         profiles=["scalar", "avx2"],
         backends=["cpp"],
     )
@@ -422,15 +418,7 @@ def test_scalar_mask_comparison_family_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=[
-            "equal",
-            "nequal",
-            "less_than",
-            "greater_than",
-            "less_than_or_equal",
-            "greater_than_or_equal",
-            "unequal_zero",
-        ],
+        primitives=_build_verified("test_scalar_mask_comparison_family_builds"),
         profiles=["scalar"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -453,15 +441,7 @@ def test_simd_comparison_family_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=[
-            "equal",
-            "nequal",
-            "less_than",
-            "greater_than",
-            "less_than_or_equal",
-            "greater_than_or_equal",
-            "unequal_zero",
-        ],
+        primitives=_build_verified("test_simd_comparison_family_builds"),
         profiles=["sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -481,7 +461,7 @@ def test_blend_native_builds(data_root: Path, machine_profiles_path: Path, tmp_p
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["blend"],
+        primitives=_build_verified("test_blend_native_builds"),
         profiles=["skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -506,7 +486,7 @@ def test_to_from_array_roundtrip_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["to_array", "from_array"],
+        primitives=_build_verified("test_to_from_array_roundtrip_builds"),
         profiles=["scalar", "avx", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -529,7 +509,7 @@ def test_blend_select_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["mul", "blend", "mov", "min", "max"],
+        primitives=_build_verified("test_blend_select_builds"),
         profiles=["scalar", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -554,15 +534,7 @@ def test_generic_masks_build(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=[
-            "equal",
-            "nequal",
-            "less_than",
-            "greater_than",
-            "less_than_or_equal",
-            "greater_than_or_equal",
-            "unequal_zero",
-        ],
+        primitives=_build_verified("test_generic_masks_build"),
         profiles=["scalar", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -587,7 +559,7 @@ def test_generic_extension_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["add", "sub"],
+        primitives=_build_verified("test_generic_extension_builds"),
         profiles=["scalar", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -615,16 +587,7 @@ def test_elementwise_bitwise_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=[
-            "add",
-            "sub",
-            "mul",
-            "div",
-            "binary_and",
-            "binary_andnot",
-            "binary_or",
-            "binary_xor",
-        ],
+        primitives=_build_verified("test_elementwise_bitwise_builds"),
         profiles=["scalar", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -645,7 +608,7 @@ def test_reductions_build(data_root: Path, machine_profiles_path: Path, tmp_path
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["hadd", "hmax", "hmin"],
+        primitives=_build_verified("test_reductions_build"),
         profiles=["scalar", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -665,7 +628,7 @@ def test_load_store_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["load", "store"],
+        primitives=_build_verified("test_load_store_builds"),
         profiles=["scalar", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -690,7 +653,7 @@ def test_convert_builds(data_root: Path, machine_profiles_path: Path, tmp_path: 
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["convert_up", "convert_down", "load_convert_up"],
+        primitives=_build_verified("test_convert_builds"),
         profiles=["scalar", "sse2", "avx", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -715,7 +678,7 @@ def test_cast_reinterpret_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["cast", "reinterpret"],
+        primitives=_build_verified("test_cast_reinterpret_builds"),
         profiles=["scalar", "sse2", "avx", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -733,7 +696,7 @@ def test_sequence_builds(data_root: Path, machine_profiles_path: Path, tmp_path:
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["sequence"],
+        primitives=_build_verified("test_sequence_builds"),
         profiles=["scalar", "sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -755,7 +718,7 @@ def test_extract_value_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["extract_value"],
+        primitives=_build_verified("test_extract_value_builds"),
         profiles=["scalar", "sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -776,7 +739,7 @@ def test_max_min_builds(data_root: Path, machine_profiles_path: Path, tmp_path: 
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["max", "min"],
+        primitives=_build_verified("test_max_min_builds"),
         profiles=["scalar", "sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -802,7 +765,7 @@ def test_gather_scatter_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["gather", "scatter"],
+        primitives=_build_verified("test_gather_scatter_builds"),
         profiles=["scalar", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -825,7 +788,7 @@ def test_to_integral_builds(data_root: Path, machine_profiles_path: Path, tmp_pa
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["to_integral"],
+        primitives=_build_verified("test_to_integral_builds"),
         profiles=["scalar", "sse2", "avx", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -845,7 +808,7 @@ def test_to_mask_builds(data_root: Path, machine_profiles_path: Path, tmp_path: 
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["to_mask"],
+        primitives=_build_verified("test_to_mask_builds"),
         profiles=["scalar", "avx2"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -867,7 +830,7 @@ def test_to_vector_builds(data_root: Path, machine_profiles_path: Path, tmp_path
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["to_vector"],
+        primitives=_build_verified("test_to_vector_builds"),
         profiles=["scalar", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -894,7 +857,7 @@ def test_masked_value_ops_build(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["binary_and", "add", "inv", "shift_left", "mul_imm"],
+        primitives=_build_verified("test_masked_value_ops_build"),
         profiles=["scalar", "sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -917,7 +880,7 @@ def test_masked_comparisons_build(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["equal", "less_than", "greater_than_or_equal", "between_inclusive"],
+        primitives=_build_verified("test_masked_comparisons_build"),
         profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -942,7 +905,7 @@ def test_masked_load_store_build(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["load", "store"],
+        primitives=_build_verified("test_masked_load_store_build"),
         profiles=["scalar", "sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -963,7 +926,7 @@ def test_mul_imm_builds(data_root: Path, machine_profiles_path: Path, tmp_path: 
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["mul_imm"],
+        primitives=_build_verified("test_mul_imm_builds"),
         profiles=["scalar", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -987,7 +950,7 @@ def test_shift_left_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["shift_left"],
+        primitives=_build_verified("test_shift_left_builds"),
         profiles=["scalar", "sse2", "avx", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1013,7 +976,7 @@ def test_shift_right_scalar_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["shift_right"],
+        primitives=_build_verified("test_shift_right_scalar_builds"),
         profiles=["scalar"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1037,7 +1000,7 @@ def test_shift_right_imask_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["shift_right_imask"],
+        primitives=_build_verified("test_shift_right_imask_builds"),
         profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1066,7 +1029,7 @@ def test_shift_right_delegation_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["shift_right"],
+        primitives=_build_verified("test_shift_right_delegation_builds"),
         profiles=["scalar", "sse2", "avx2"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1092,7 +1055,7 @@ def test_shift_right_avx512_immediate_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["shift_right"],
+        primitives=_build_verified("test_shift_right_avx512_immediate_builds"),
         profiles=["skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1115,7 +1078,7 @@ def test_set1_avx512_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["set1"],
+        primitives=_build_verified("test_set1_avx512_builds"),
         profiles=["skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1139,7 +1102,7 @@ def test_shift_float_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["shift_left", "shift_right"],
+        primitives=_build_verified("test_shift_float_builds"),
         profiles=["scalar", "sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1165,7 +1128,7 @@ def test_reinterpret_integer_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["reinterpret"],
+        primitives=_build_verified("test_reinterpret_integer_builds"),
         profiles=["scalar", "sse2", "avx2"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1190,7 +1153,7 @@ def test_extract_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["extract"],
+        primitives=_build_verified("test_extract_builds"),
         profiles=["sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1215,7 +1178,7 @@ def test_insert_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["insert"],
+        primitives=_build_verified("test_insert_builds"),
         profiles=["sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1234,7 +1197,7 @@ def test_mask_binary_and_builds(data_root: Path, machine_profiles_path: Path, tm
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["mask_binary_and"],
+        primitives=_build_verified("test_mask_binary_and_builds"),
         profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1254,12 +1217,7 @@ def test_range_comparisons_build(data_root: Path, machine_profiles_path: Path, t
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=[
-            "between_inclusive",
-            "between_left_inclusive",
-            "between_right_inclusive",
-            "between_exclusive",
-        ],
+        primitives=_build_verified("test_range_comparisons_build"),
         profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1282,7 +1240,7 @@ def test_mask_boolean_algebra_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["mask_binary_or", "mask_binary_xor", "mask_binary_not"],
+        primitives=_build_verified("test_mask_boolean_algebra_builds"),
         profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1303,7 +1261,7 @@ def test_mask_true_builds(data_root: Path, machine_profiles_path: Path, tmp_path
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["mask_true"],
+        primitives=_build_verified("test_mask_true_builds"),
         profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1325,7 +1283,7 @@ def test_imask_ops_build(data_root: Path, machine_profiles_path: Path, tmp_path:
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["test_imask", "insert_imask", "extract_imask"],
+        primitives=_build_verified("test_imask_ops_build"),
         profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1348,7 +1306,7 @@ def test_mask_population_count_builds(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["mask_population_count"],
+        primitives=_build_verified("test_mask_population_count_builds"),
         profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1370,7 +1328,7 @@ def test_nullary_constants_build(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["set_zero", "set_undef", "mask_false"],
+        primitives=_build_verified("test_nullary_constants_build"),
         profiles=["scalar", "sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1392,7 +1350,7 @@ def test_simple_memory_build(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["load_scalar"],
+        primitives=_build_verified("test_simple_memory_build"),
         profiles=["scalar", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1413,7 +1371,7 @@ def test_modulo_build(data_root: Path, machine_profiles_path: Path, tmp_path: Pa
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["mod", "mod_imm"],
+        primitives=_build_verified("test_modulo_build"),
         profiles=["scalar", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1436,7 +1394,7 @@ def test_blend_add_sequence_build(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["blend_add", "custom_sequence"],
+        primitives=_build_verified("test_blend_add_sequence_build"),
         profiles=["scalar", "sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1459,7 +1417,7 @@ def test_conflict_counting_build(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["conflict", "conflict_free", "count_matches"],
+        primitives=_build_verified("test_conflict_counting_build"),
         profiles=["avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1483,7 +1441,7 @@ def test_bit_reductions_build(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["popcnt", "hand", "hor", "tzc"],
+        primitives=_build_verified("test_bit_reductions_build"),
         profiles=["sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1509,7 +1467,7 @@ def test_leading_zeros_build(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["lzc", "lzc_imask", "lzc_scalar"],
+        primitives=_build_verified("test_leading_zeros_build"),
         profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1537,10 +1495,7 @@ def test_masked_memory_build(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=[
-            "load_mask_repr", "store_mask_repr", "masked_set1", "compress", "compress_store",
-            "expand_load",
-        ],
+        primitives=_build_verified("test_masked_memory_build"),
         profiles=["sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1563,7 +1518,7 @@ def test_memory_cp_builds(data_root: Path, machine_profiles_path: Path, tmp_path
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["memory_cp"],
+        primitives=_build_verified("test_memory_cp_builds"),
         profiles=["scalar", "sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1585,7 +1540,7 @@ def test_allocate_family_builds(data_root: Path, machine_profiles_path: Path, tm
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["allocate", "allocate_aligned", "deallocate"],
+        primitives=_build_verified("test_allocate_family_builds"),
         profiles=["scalar", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1605,7 +1560,7 @@ def test_set_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["set"],
+        primitives=_build_verified("test_set_builds"),
         profiles=["scalar", "sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1626,7 +1581,7 @@ def test_to_ostream_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["to_ostream"],
+        primitives=_build_verified("test_to_ostream_builds"),
         profiles=["scalar", "sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
