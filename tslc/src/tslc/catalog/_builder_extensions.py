@@ -18,6 +18,7 @@ from tslc.catalog.model import (
     ImaskPolicyKind,
     MaskPolicy,
     MaskPolicyKind,
+    VectorBitsKind,
 )
 from tslc.syntax.access import child as _child
 from tslc.syntax.access import children as _children
@@ -442,10 +443,11 @@ def _int_text(field: ParsedTslField | None) -> int:
 
 
 
-def _vector_bits_kind(field: ParsedTslField | None) -> str:
+def _vector_bits_kind(field: ParsedTslField | None) -> VectorBitsKind:
     text = _field_text(field)
     if text is None:
         return ""
     if text.lstrip("-").isdigit():
         return "fixed"
-    return text
+    # Typing-only narrow: schema validation diagnoses spellings outside VectorBitsKind.
+    return cast(VectorBitsKind, text)

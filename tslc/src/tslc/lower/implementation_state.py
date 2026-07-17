@@ -6,6 +6,7 @@ import re
 from typing import TYPE_CHECKING, Protocol
 
 from tslc.catalog.signatures import parse_signature
+from tslc.ir.region_syntax import parse_loop_selector
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower.implementation_facts import (
     ImplementationState,
@@ -91,10 +92,10 @@ def _record_region(
     elif effect is RegionImplementationEffect.CALL:
         recorder.mark_call()
     elif effect is RegionImplementationEffect.LOOP:
-        selector = region.selector_text.split(",", 1)[0].strip()
-        if selector == "backend":
+        selector = parse_loop_selector(region.selector_text)
+        if selector.variant == "backend":
             recorder.mark_fallback()
-        elif not rendered or selector != "generation":
+        elif not rendered or selector.variant != "generation":
             recorder.mark_composition()
     elif effect is RegionImplementationEffect.COMPOSITION:
         recorder.mark_composition()

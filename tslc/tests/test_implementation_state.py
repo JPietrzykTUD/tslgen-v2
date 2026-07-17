@@ -12,17 +12,18 @@ from tslc.catalog.model import (
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.target_families import ExtensionFamilyCapability
 from tslc.ir.region_registry import TSIL_REGION_KEYWORDS
+from tslc.ir.region_syntax import segments_text
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region
 from tslc.lower.body_rendering import body_context, render_body
-from tslc.lower.context import LoweringEnv, LoweringScope
+from tslc.lower.context import LoweringEnv, LoweringScope, LoweringSession
 from tslc.lower.implementation_state import (
     IMPLEMENTATION_STATE_CLASSIFIED_KEYWORDS,
     ImplementationState,
     infer_direct_implementation_state,
 )
-from tslc.lower.region_handlers.control import IfLowerer, SwitchLowerer
-from tslc.target_text import render_sequence
+from tslc.lower.region_handlers.control import IfLowerer, LoopLowerer, SwitchLowerer
+from tslc.target_text import literal_text, render_sequence, render_text
 from tslc.select.selector import SelectedImplementation
 
 
@@ -167,6 +168,34 @@ def test_rendered_state_ignores_unselected_literal_switch_arm() -> None:
     result = _render_state(selected)
 
     assert result is ImplementationState.NATIVE
+
+
+def test_loop_selector_classification_and_lowering_share_one_parse() -> None:
+    body = "loop< generation ,   scoped >(i, 0, 2, 1) { complete(data); }"
+    region = scan(body)[0]
+    assert isinstance(region, Region)
+
+    # State classification reads the odd-whitespace selector as a generation
+    # loop: composition, not a backend-loop fallback.
+    assert _state("native", body) is ImplementationState.COMPOSED
+
+    # Lowering tokenizes the same selector through the same parser and expands
+    # the loop instead of skipping it as unsupported.
+    selected = _selected("native", body)
+    context = LoweringSession(
+        env=LoweringEnv(
+            catalog=SimpleNamespace(),
+            backend=SimpleNamespace(),
+            extension=selected.extension,
+            type_tag=selected.type_tag,
+        )
+    )
+    rendered = LoopLowerer().lower(
+        region, context, lambda segments: literal_text(segments_text(segments))
+    )
+
+    assert not context.effects.diagnostics
+    assert render_text(rendered).count("complete(data)") == 2
 
 
 def test_rendered_state_classifies_direct_identity_return() -> None:

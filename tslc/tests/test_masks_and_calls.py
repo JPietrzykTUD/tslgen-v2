@@ -10,7 +10,7 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.backend.registry import create_backend_dialect
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import Catalog, GenericParam
 from tslc.diagnostics import has_errors
 from tslc.ir.region_syntax import ParsedCallSelector, parse_call_selector
 from tslc.lower.dependencies import (
@@ -145,6 +145,48 @@ def test_call_selector_parser_keeps_syntax_only_shape() -> None:
     )
     assert parse_call_selector("primitive=@self[Vec] attrs[mask=zero]") is None
     assert parse_call_selector("primitive=set_zero trailing") is None
+
+
+def test_call_bracket_args_require_exact_generic_param_references(
+    catalog: Catalog, machine_profiles
+) -> None:
+    def _lowering_with_param(body: str):
+        slot = next(
+            selected
+            for selected in Selector()
+            .select_profile(catalog, machine_profiles["avx2"], "add", ("si32",))
+            .selected
+            if selected.extension.name == "avx2"
+            and selected.primitive.attributes.get("mask") is None
+        )
+        slot = replace(
+            slot,
+            primitive=replace(
+                slot.primitive,
+                generic_params=(
+                    GenericParam(name="PreserveSign", kind="bool", default="true"),
+                ),
+            ),
+            implementation=replace(slot.implementation, body_text=body),
+        )
+        return Lowerer().lower(slot, catalog, create_backend_dialect(catalog, "cpp"))
+
+    exact = _lowering_with_param(
+        "complete(call<primitive=@self[Vec, PreserveSign]>(left, right));"
+    )
+    assert exact.specialization is not None, exact.diagnostics
+    assert "PreserveSign" in exact.specialization.body_text
+
+    # merely *mentioning* the declared param is not a symbolic reference: skip
+    # instead of forwarding unresolved text into the emitted call.
+    mention = _lowering_with_param(
+        "complete(call<primitive=@self[Vec, foo(PreserveSign)]>(left, right));"
+    )
+    assert mention.specialization is None
+    assert any(
+        diagnostic.code == "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS"
+        for diagnostic in mention.diagnostics
+    )
 
 
 def test_lowering_records_dependencies_after_resolving_type_aliases(

@@ -7,6 +7,8 @@ from typing import get_args
 
 from tslc.catalog.model import GenericParamKind
 from tslc.catalog.param_types import (
+    BASE_WIDTH_RELATIONS,
+    base_width_relation_text,
     parse_base_width_constraint,
     parse_param_type_condition,
     unquote_key,
@@ -278,6 +280,23 @@ def _validate_generic_param_constraints(
     for field in constraint_fields:
         key = field.key.text
         if key == "base_types":
+            continue
+        relation_text = base_width_relation_text(key)
+        if relation_text is not None and parse_base_width_constraint(key) is None:
+            # The key is base-width shaped but its relation is mistyped (`<`, `=>`).
+            # Diagnose the relation itself so the author fixes the operator, not the key.
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-BASE-WIDTH-RELATION",
+                    message=(
+                        f"generic parameter {name!r} base-width constraint uses "
+                        f"unknown relation {relation_text!r}; expected one of: "
+                        f"{', '.join(BASE_WIDTH_RELATIONS)}"
+                    ),
+                    source=source_span(field.source),
+                )
+            )
             continue
         if parse_base_width_constraint(key) is not None:
             width_constraint_count += 1

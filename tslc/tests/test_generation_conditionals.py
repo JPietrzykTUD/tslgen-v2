@@ -30,7 +30,9 @@ from tslc.lower._query_model import (
     _cached_parse_query,
     QueryParser,
 )
+from tslc.ir.region_syntax import segments_text
 from tslc.lower.region_handlers.casts import CastLowerer
+from tslc.lower.region_handlers.control import IfLowerer
 from tslc.lower.queries import (
     DEFAULT_QUERY_FUNCTIONS,
     BoolValue,
@@ -41,7 +43,7 @@ from tslc.lower.queries import (
 from tslc.select.selector import Selector
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region
-from tslc.target_text import literal_text
+from tslc.target_text import literal_text, render_text
 
 
 def _spec(catalog, machine_profiles, profile, primitive, ext, type_tag, backend="cpp"):
@@ -339,6 +341,62 @@ def test_lowering_env_freezes_simd_type_param_names(catalog: Catalog) -> None:
 
     assert env.simd_type_param_names == frozenset({"IndexVec"})
     assert dict(env.simd_type_param_base_bindings) == {"IndexVec": "ui32"}
+
+
+# --- if<compile> symbolic generic-param predicates ---------------------------
+
+
+def _generic_param_ctx(catalog: Catalog) -> LoweringSession:
+    return LoweringSession(
+        env=LoweringEnv(
+            catalog=catalog,
+            backend=create_backend_dialect(catalog, "cpp"),
+            extension=catalog.extensions["avx2"],
+            type_tag="si32",
+            generic_param_names=("PreserveSign",),
+        )
+    )
+
+
+def test_compile_if_renders_exact_symbolic_generic_param_leaves(
+    catalog: Catalog,
+) -> None:
+    region = scan(
+        "if<compile>(( value(type::is_signed(base::in)) ) && (!PreserveSign))"
+        " { taken; } else { other; }"
+    )[0]
+    assert isinstance(region, Region)
+    context = _generic_param_ctx(catalog)
+
+    rendered = render_text(
+        IfLowerer().lower(
+            region, context, lambda segments: literal_text(segments_text(segments))
+        )
+    )
+
+    # si32 folds the query leaf to a literal; the exact `!PreserveSign` reference
+    # survives verbatim, and both arms are kept for the target compiler.
+    assert "if constexpr (true && !PreserveSign)" in rendered
+    assert "taken;" in rendered
+    assert "other;" in rendered
+    assert not context.effects.diagnostics
+
+
+def test_compile_if_skips_non_exact_generic_param_expression(
+    catalog: Catalog,
+) -> None:
+    region = scan("if<compile>(foo(PreserveSign)) { taken; }")[0]
+    assert isinstance(region, Region)
+    context = _generic_param_ctx(catalog)
+
+    result = IfLowerer().lower(
+        region, context, lambda segments: literal_text(segments_text(segments))
+    )
+
+    assert result == region.full_text
+    assert [diagnostic.code for diagnostic in context.effects.diagnostics] == [
+        "TSL-LOWER-UNRESOLVED-IF-CONDITION"
+    ]
 
 
 # --- if<generation> lowering (taken branch only) -----------------------------

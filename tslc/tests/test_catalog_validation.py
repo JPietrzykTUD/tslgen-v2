@@ -572,6 +572,82 @@ def test_simd_type_base_width_constraint_requires_specialization() -> None:
     assert "base-width constraints require specialize_base true" in diagnostic.message
 
 
+def test_base_width_constraint_unknown_relation_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  generic_params:\n"
+            "    IndexVec:\n"
+            "      kind simd_type\n"
+            "      specialize_base true\n"
+            "      constraints:\n"
+            "        base_types [si32]\n"
+            "        width(self::base) < width(base::in)\n"
+            "  impls:\n",
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-BASE-WIDTH-RELATION"
+    )
+    assert "unknown relation '<'" in diagnostic.message
+    assert ">=" in diagnostic.message
+    # the mistyped relation is diagnosed as such, not as an unrelated unknown field
+    assert not any(
+        d.code == "TSL-CATALOG-UNKNOWN-FIELD" and "width(self::base)" in d.message
+        for d in diagnostics
+    )
+
+
+def test_base_width_constraint_known_relations_are_accepted() -> None:
+    for relation in (">=", ">", "=="):
+        diagnostics = _diagnostics(
+            _base_source().replace(
+                "  impls:\n",
+                "  generic_params:\n"
+                "    IndexVec:\n"
+                "      kind simd_type\n"
+                "      specialize_base true\n"
+                "      constraints:\n"
+                "        base_types [si32]\n"
+                f"        width(self::base) {relation} width(base::in)\n"
+                "  impls:\n",
+            )
+        )
+
+        assert diagnostics == (), (relation, diagnostics)
+
+
+def test_extension_vector_bits_unknown_spelling_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            '  family "scalar"\n',
+            '  family "scalar"\n  vector_bits "huge"\n',
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-MALFORMED-VECTOR-BITS"
+    )
+    assert "'huge'" in diagnostic.message
+    assert "scalable" in diagnostic.message
+    assert "sized" in diagnostic.message
+
+
+def test_extension_vector_bits_accepts_numeric_sized_and_scalable() -> None:
+    for value in ("128", '"sized"', '"scalable"'):
+        diagnostics = _diagnostics(
+            _base_source().replace(
+                '  family "scalar"\n',
+                f'  family "scalar"\n  vector_bits {value}\n',
+            )
+        )
+
+        assert not any(
+            d.code == "TSL-CATALOG-MALFORMED-VECTOR-BITS" for d in diagnostics
+        ), (value, diagnostics)
+
+
 def test_simd_type_base_constraints_cannot_duplicate_base_types_location() -> None:
     diagnostics = _diagnostics(
         _base_source().replace(

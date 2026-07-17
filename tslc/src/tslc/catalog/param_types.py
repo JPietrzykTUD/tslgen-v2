@@ -12,12 +12,25 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import cast, get_args
 
+from tslc.catalog.model import BaseWidthRelation
 from tslc.catalog.scalar_types import signed_of, unsigned_of
 
 _PARAM_TYPE_CONDITION_RE = re.compile(r"^if\s+([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_]+)$")
+# Allowed relations come from the typed vocabulary; longest-first so ">=" wins over ">".
+BASE_WIDTH_RELATIONS: tuple[str, ...] = tuple(
+    sorted(get_args(BaseWidthRelation), key=len, reverse=True)
+)
 _BASE_WIDTH_CONSTRAINT_RE = re.compile(
-    r"^width\(self::base\)\s*(>=|>|==)\s*width\(base::in\)$"
+    r"^width\(self::base\)\s*("
+    + "|".join(re.escape(relation) for relation in BASE_WIDTH_RELATIONS)
+    + r")\s*width\(base::in\)$"
+)
+# The same key shape with *any* relation token, so validation can distinguish a
+# base-width constraint with an unknown relation from an unrelated unknown field.
+_BASE_WIDTH_SHAPE_RE = re.compile(
+    r"^width\(self::base\)\s*(\S+?)\s*width\(base::in\)$"
 )
 
 
@@ -63,14 +76,26 @@ def parse_param_type_condition(text: str) -> tuple[str | None, str | None] | Non
     return match.group(1), match.group(2)
 
 
-def parse_base_width_constraint(text: str) -> str | None:
+def parse_base_width_constraint(text: str) -> BaseWidthRelation | None:
     """The relation of a ``width(self::base) <op> width(base::in)`` constraint key.
 
     Returns ``">="``, ``">"``, or ``"=="``; ``None`` when the key is not a
-    base-width constraint.
+    base-width constraint with a known relation.
     """
 
     match = _BASE_WIDTH_CONSTRAINT_RE.fullmatch(text)
+    # The regex alternation is derived from BaseWidthRelation, so the group is a member.
+    return None if match is None else cast(BaseWidthRelation, match.group(1))
+
+
+def base_width_relation_text(text: str) -> str | None:
+    """The raw relation token of a base-width-*shaped* constraint key, known or not.
+
+    Validation uses this to diagnose a mistyped relation (``<``, ``=>``) with a
+    clear message instead of reporting the whole key as an unknown field.
+    """
+
+    match = _BASE_WIDTH_SHAPE_RE.fullmatch(text)
     return None if match is None else match.group(1)
 
 
@@ -169,8 +194,10 @@ def _split_head_arg(text: str) -> tuple[str, str] | None:
 
 
 __all__ = (
+    "BASE_WIDTH_RELATIONS",
     "ParamTypeExpression",
     "ParamTypeScalarResolution",
+    "base_width_relation_text",
     "parse_base_width_constraint",
     "parse_param_type_condition",
     "parse_param_type_expression",

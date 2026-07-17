@@ -25,7 +25,10 @@ TRANSLATION: "translation"
 GENERIC_PARAMS: "generic_params"
 LANE_SET: "lane_set"
 EXTENSION: "extension"
-BASE_WIDTH_CONSTRAINT.3: /width\(self::base\)[ \t]*(>=|>|==)[ \t]*width\(base::in\)/
+// Accepts the key *shape* with any relation token; the allowed relation
+// vocabulary is owned by the catalog (BaseWidthRelation) so a mistyped
+// relation gets a clear catalog diagnostic instead of an outer parse error.
+BASE_WIDTH_CONSTRAINT.3: /width\(self::base\)[ \t]*[<>=!]{1,2}[ \t]*width\(base::in\)/
 
 NAME.1: /(?!prim\b)(?!template\b)(?!types\b)(?!flags\b)(?!language\b)(?!operation\b)(?!translation\b)(?!generic_params\b)(?!lane_set\b)(?!extension\b)(?!body\b)(?!native\b)[a-zA-Z_?][a-zA-Z0-9_?.]*(::[a-zA-Z_?][a-zA-Z0-9_?.]*)*/
 SIGNATURE.2: /[a-zA-Z_?][^:=]*:=(?:[^<>]|<[^<>]*(?:<[^<>]*>[^<>]*)*>)+/

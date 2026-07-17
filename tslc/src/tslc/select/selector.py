@@ -20,9 +20,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import product
+from typing import assert_never
 
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
+    BaseWidthRelation,
     Catalog,
     Extension,
     GenericParam,
@@ -705,11 +707,15 @@ def _base_width_constraints_match(
     )
 
 
-def _compare_widths(left: int, relation: str, right: int) -> bool:
+def _compare_widths(left: int, relation: BaseWidthRelation, right: int) -> bool:
+    """Exhaustive over BaseWidthRelation: catalog promotion diagnoses unknown
+    relations, so an unhandled member here is a programming error, not a
+    silently-empty selection."""
+
     if relation == ">=":
         return left >= right
     if relation == ">":
         return left > right
     if relation == "==":
         return left == right
-    return False
+    assert_never(relation)

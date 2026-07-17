@@ -45,6 +45,11 @@ MaskPolicyKind = Literal[
     "native_predicate_by_lanes",
 ]
 ImaskPolicyKind = Literal["lane_bitmask", "same_as_mask_type", "unsigned_scalar"]
+# The relation of a `width(self::base) <op> width(base::in)` generic-param constraint.
+BaseWidthRelation = Literal[">=", ">", "=="]
+# How an extension's `vector_bits` declares register width: "fixed" is promoted from a
+# numeric width, "sized"/"scalable" are declared spellings, "" means no declared width.
+VectorBitsKind = Literal["fixed", "sized", "scalable", ""]
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,7 +299,7 @@ class GenericParam:
 class GenericParamBaseWidthConstraint:
     """`width(self::base) <op> width(base::in)` for a SIMD type generic param."""
 
-    relation: str
+    relation: BaseWidthRelation
     source: SourceSpan | None = None
 
 
@@ -543,7 +548,7 @@ class Extension:
     active_when: ExtensionActivation = field(default_factory=ExtensionActivation)
     supersedes: frozenset[str] = frozenset()
     vector_bits: int = 0  # register width (sse=128, avx2=256, avx512=512); 0 for scalar
-    vector_bits_kind: str = "fixed"  # fixed | sized | scalable | ""
+    vector_bits_kind: VectorBitsKind = "fixed"
     size_parameter_name: str | None = None
     vector_register_type_policy: str = ""
     mask_policy: MaskPolicy = field(default_factory=MaskPolicy)  # how masks are represented

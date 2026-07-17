@@ -5,9 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
-from tslc.ir.region_syntax import segments_text, split_arg_groups
+from tslc.ir.region_syntax import (
+    ConditionAnd,
+    ConditionOr,
+    ConditionTerm,
+    parse_condition,
+    parse_generic_param_reference,
+    parse_loop_selector,
+    segments_text,
+    split_arg_groups,
+    strip_outer_parens,
+)
 from tslc.ir.segments import Region, Segment
-from tslc.ir.text import skip_string, split_top_level
 from tslc.lower.context import LoweringSession
 from tslc.lower.generation import evaluate_generation_int_segments
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue
@@ -20,57 +29,6 @@ from tslc.target_text import (
     render_sequence,
     render_text,
 )
-
-
-def _split_top_level_op(text: str, op: str) -> list[str]:
-    """Split ``text`` on the two-char operator ``op`` at paren/bracket/string depth
-    zero (so an operator inside a nested call is not a split point)."""
-
-    parts: list[str] = []
-    depth = 0
-    start = 0
-    i = 0
-    n = len(text)
-    while i < n:
-        ch = text[i]
-        if ch == '"':
-            i = skip_string(text, i)
-            continue
-        if ch in "(<[":
-            depth += 1
-        elif ch in ")>]":
-            depth -= 1
-        elif depth == 0 and text[i : i + 2] == op:
-            parts.append(text[start:i])
-            i += 2
-            start = i
-            continue
-        i += 1
-    parts.append(text[start:])
-    return [part.strip() for part in parts if part.strip()]
-
-
-def _strip_outer_parens(text: str) -> str:
-    """Remove balanced parentheses that wrap the *whole* expression, e.g.
-    ``( A && B )`` -> ``A && B``. A leading ``(`` that closes before the end
-    (``( A ) && B``) is left intact — it isn't wrapping the whole text."""
-
-    text = text.strip()
-    while text.startswith("(") and text.endswith(")"):
-        depth = 0
-        wraps = True
-        for i, ch in enumerate(text):
-            if ch == "(":
-                depth += 1
-            elif ch == ")":
-                depth -= 1
-                if depth == 0 and i != len(text) - 1:
-                    wraps = False
-                    break
-        if not wraps:
-            break
-        text = text[1:-1].strip()
-    return text
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,7 +47,7 @@ class _RuntimeCondition:
             if isinstance(self.content, str)
             else self.content.render(context)
         )
-        return _strip_outer_parens(text)
+        return strip_outer_parens(text)
 
 
 class IfLowerer:
@@ -122,7 +80,7 @@ class IfLowerer:
         if selector not in self._SPLICE_SELECTORS:
             return self._runtime(region, context, render)
 
-        condition = segments_text(region.body)
+        condition = parse_condition(segments_text(region.body))
         taken = self._evaluate_condition(condition, context)
         if taken is not None:
             # Fully generation-resolvable: splice only the taken branch (no surviving `if`).
@@ -225,55 +183,52 @@ class IfLowerer:
         with context.scope.lexical_scope():
             return render(segments)
 
-    def _evaluate_condition(self, text: str, context: LoweringSession) -> bool | None:
-        """Evaluate a generation-time boolean condition. Supports ``||`` / ``&&`` of
-        query sub-conditions (``&&`` binds tighter), e.g.
+    def _evaluate_condition(
+        self, term: ConditionTerm, context: LoweringSession
+    ) -> bool | None:
+        """Evaluate a parsed generation-time boolean condition, e.g.
         ``is_same(..., si64) || is_same(..., ui64)``. Returns None if unresolvable."""
 
-        text = _strip_outer_parens(text)
-        ors = _split_top_level_op(text, "||")
-        if len(ors) > 1:
-            results = [self._evaluate_condition(part, context) for part in ors]
+        if isinstance(term, ConditionOr):
+            results = [self._evaluate_condition(part, context) for part in term.terms]
             if any(r is True for r in results):  # short-circuit: True dominates ||
                 return True
             return None if None in results else False
-        ands = _split_top_level_op(text, "&&")
-        if len(ands) > 1:
-            results = [self._evaluate_condition(part, context) for part in ands]
+        if isinstance(term, ConditionAnd):
+            results = [self._evaluate_condition(part, context) for part in term.terms]
             if any(r is False for r in results):  # short-circuit: False dominates &&
                 return False
             return None if None in results else True
-        value = self._evaluator.evaluate(text.strip(), context)
+        value = self._evaluator.evaluate(term.text, context)
         return value.value if isinstance(value, BoolValue) else None
 
-    def _render_condition(self, text: str, context: LoweringSession) -> str | None:
+    def _render_condition(
+        self, term: ConditionTerm, context: LoweringSession
+    ) -> str | None:
         """Render a partially-symbolic `if<compile>` predicate as a target expression: each
-        leaf is either a generation-time query (folded to ``true``/``false``) or a symbolic
-        ``generic_params`` reference (`!PreserveSign`) passed through verbatim. Returns None
-        if a leaf is neither (so the caller skips rather than emitting an undefined name)."""
+        leaf is either a generation-time query (folded to ``true``/``false``) or an exact
+        symbolic ``generic_params`` reference (`PreserveSign` / `!PreserveSign`) passed
+        through verbatim. Returns None if a leaf is neither (so the caller skips rather
+        than emitting an unresolved expression)."""
 
-        text = _strip_outer_parens(text)
-        ors = _split_top_level_op(text, "||")
-        if len(ors) > 1:
-            parts = [self._render_condition(part, context) for part in ors]
+        if isinstance(term, ConditionOr):
+            parts = [self._render_condition(part, context) for part in term.terms]
             if any(part is None for part in parts):
                 return None
             return " || ".join(part for part in parts if part is not None)
-        ands = _split_top_level_op(text, "&&")
-        if len(ands) > 1:
-            parts = [self._render_condition(part, context) for part in ands]
+        if isinstance(term, ConditionAnd):
+            parts = [self._render_condition(part, context) for part in term.terms]
             if any(part is None for part in parts):
                 return None
             return " && ".join(part for part in parts if part is not None)
-        leaf = text.strip()
-        value = self._evaluator.evaluate(leaf, context)
+        value = self._evaluator.evaluate(term.text, context)
         if isinstance(value, BoolValue):
             return "true" if value.value else "false"
-        if any(
-            re.search(rf"\b{re.escape(name)}\b", leaf)
-            for name in context.env.generic_param_names
-        ):
-            return leaf  # a symbolic generic_params predicate; the param is in scope
+        reference = parse_generic_param_reference(
+            term.text, context.env.generic_param_names
+        )
+        if reference is not None:
+            return term.text  # a symbolic generic_params predicate; the param is in scope
         return None
 
 
@@ -344,11 +299,10 @@ class LoopLowerer:
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        terms = split_top_level(region.selector_text.strip())
-        variant = terms[0] if terms else ""
-        if variant == "generation":
-            scoped = terms[1:] == ["scoped"]
-            if len(terms) != 1 and not scoped:
+        selector = parse_loop_selector(region.selector_text)
+        if selector.variant == "generation":
+            scoped = selector.modifiers == ("scoped",)
+            if selector.modifiers and not scoped:
                 context.effects.skip(
                     "TSL-LOWER-UNSUPPORTED-LOOP",
                     f"unsupported loop selector {region.selector_text!r}: "
@@ -358,8 +312,10 @@ class LoopLowerer:
                 return region.full_text
             return self._generation(region, context, render, scoped=scoped)
 
-        unroll = "unroll" in terms[1:]
-        if variant != "backend" or any(term != "unroll" for term in terms[1:]):
+        unroll = "unroll" in selector.modifiers
+        if selector.variant != "backend" or any(
+            term != "unroll" for term in selector.modifiers
+        ):
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-LOOP",
                 f"unsupported loop selector {region.selector_text!r}: "
@@ -372,7 +328,7 @@ class LoopLowerer:
         if context.env.backend.templates.template(key) is None:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-LOOP",
-                f"unsupported loop<{variant}>: {region.full_text!r}",
+                f"unsupported loop<{selector.variant}>: {region.full_text!r}",
                 source=region.source,
             )
             return region.full_text
