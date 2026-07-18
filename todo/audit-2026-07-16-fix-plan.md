@@ -85,13 +85,11 @@ Phase 2 implementation notes (one commit per slice):
   for cli, doctor, and maintenance CLIs; args mutation replaced by derived
   settings.
 
-Known issue outside this plan: commit f0379f4 ("Refactor conditional
-expressions...") changed C++ conditional rendering without regenerating the
-committed byte-stability goldens, so
-test_profile_rendering.py::test_representative_project_shape_is_byte_stable
-fails at HEAD. All Phase 2 byte-identity proofs therefore used clean-HEAD
-worktree comparisons, which are exact regardless. The golden refresh is left
-to the author of f0379f4.
+Follow-up: the byte-stability golden omitted by commit f0379f4 ("Refactor
+conditional expressions...") is refreshed. Direct generation at f0379f4's
+parent reproduced the old hash, while generation at f0379f4 reproduced the
+current hash; the associated conditional and lane-mask tests prove the changed
+parentheses fix C++ operator precedence.
 
 Phase 1 implementation notes:
 
