@@ -76,6 +76,11 @@ diagnostics, and coverage baseline.
   including fixed wrappers and nominal collisions; hidden shadow failures,
   malformed/lost capture acceptance, or an unexplained semantic digest change
   block the slice.
+- Treat `tests/baselines/differential_census.json` as the 27C parser/inliner
+  authority while legacy export remains the production oracle. Every legacy
+  definition occurrence must be reproduced byte-for-byte; definition, order,
+  artifact, skip-source, and skip-reason differences must be explicitly
+  classified and deterministically hashed.
 
 ## Validation
 
@@ -98,10 +103,10 @@ the source-normalized shadow census digest.
 Validate ordinary generation remains unchanged from outside the compiler
 package.
 
-Regenerate the durable production and typed-shadow manifests only through
-`python tools/pivot/scripts/update_full_export_baseline.py`. The updater must
-remain fail-closed for removed entries, reduced multiplicity, or replaced
-`direct` hashes, and for any typed-shadow evidence change. Its
+Regenerate the durable production, typed-shadow, and differential manifests
+only through `python tools/pivot/scripts/update_full_export_baseline.py`. The
+updater must remain fail-closed for removed entries, reduced multiplicity, or
+replaced `direct` hashes, and for any typed-shadow or differential evidence change. Its
 incompatible-baseline override requires an explicit reviewed product or
 correctness decision.
 

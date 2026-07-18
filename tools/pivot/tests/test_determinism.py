@@ -13,6 +13,9 @@ import sys
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _BASELINE = Path(__file__).parent / "baselines" / "full_export.json"
 _SHADOW_BASELINE = Path(__file__).parent / "baselines" / "shadow_census.json"
+_DIFFERENTIAL_BASELINE = (
+    Path(__file__).parent / "baselines" / "differential_census.json"
+)
 _FULL_EXPORT_DIGEST_SCRIPT = """
 from hashlib import sha256
 import json
@@ -27,6 +30,7 @@ from tslc_pivot.baseline import (
 )
 from tslc_pivot.body_ir import pivot_shadow_census_digest
 from tslc_pivot.exporter import export_pivot
+from tslc_pivot.differential import pivot_differential_digest
 from tslc_pivot.model import PivotLanguage
 from tslc_pivot.render_stream import build_pivot_body
 from tslc_pivot.shadow_lowering import CAPTURE_CLOSE, CAPTURE_OPEN, PivotShadowCapture
@@ -41,6 +45,12 @@ print(sha256(rendered).hexdigest())
 print(
     pivot_shadow_census_digest(
         result.shadow_censuses,
+        source_root=repository_root,
+    )
+)
+print(
+    pivot_differential_digest(
+        result.differentials,
         source_root=repository_root,
     )
 )
@@ -80,7 +90,10 @@ def test_full_export_manifest_is_identical_across_hash_seeds() -> None:
     expected_shadow_digest = json.loads(
         _SHADOW_BASELINE.read_text(encoding="utf-8")
     )["digest"]
-    digests: list[tuple[str, str, str]] = []
+    expected_differential_digest = json.loads(
+        _DIFFERENTIAL_BASELINE.read_text(encoding="utf-8")
+    )["digest"]
+    digests: list[tuple[str, str, str, str]] = []
     for hash_seed in ("0", "12345"):
         env = os.environ.copy()
         env["PYTHONHASHSEED"] = hash_seed
@@ -108,8 +121,8 @@ def test_full_export_manifest_is_identical_across_hash_seeds() -> None:
         assert completed.returncode == 0, completed.stderr + completed.stdout
         assert completed.stderr == ""
         lines = completed.stdout.splitlines()
-        assert len(lines) == 3
-        digests.append((lines[0], lines[1], lines[2]))
+        assert len(lines) == 4
+        digests.append((lines[0], lines[1], lines[2], lines[3]))
 
     assert digests[0] == digests[1]
     assert tuple(item[0] for item in digests) == (expected_digest, expected_digest)
@@ -117,12 +130,16 @@ def test_full_export_manifest_is_identical_across_hash_seeds() -> None:
         expected_shadow_digest,
         expected_shadow_digest,
     )
+    assert tuple(item[2] for item in digests) == (
+        expected_differential_digest,
+        expected_differential_digest,
+    )
     expected_failure = (
         '["TSL-PIVOT-SHADOW-UNKNOWN-CAPTURE",'
         '"PIVOT render stream refers to an unknown capture token",'
         '"body_construction",["determinism.tsl",1,1,1,2]]'
     )
-    assert tuple(item[2] for item in digests) == (
+    assert tuple(item[3] for item in digests) == (
         expected_failure,
         expected_failure,
     )

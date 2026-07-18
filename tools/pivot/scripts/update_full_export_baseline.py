@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the reviewed production and typed-shadow PIVOT manifests."""
+"""Regenerate the reviewed production, typed-shadow, and differential manifests."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ sys.path[:0] = [
 
 from tslc.diagnostics import format_diagnostic  # noqa: E402
 from tslc_pivot.baseline import (  # noqa: E402
+    build_differential_census_manifest,
     build_full_export_manifest,
     build_shadow_census_manifest,
     canonical_full_export,
@@ -40,6 +41,14 @@ _SHADOW_BASELINE_PATH = (
     / "baselines"
     / "shadow_census.json"
 )
+_DIFFERENTIAL_BASELINE_PATH = (
+    _REPOSITORY_ROOT
+    / "tools"
+    / "pivot"
+    / "tests"
+    / "baselines"
+    / "differential_census.json"
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -51,7 +60,8 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=(
             "allow removed definitions, replaced direct hashes, or changed typed-"
-            "shadow facts after an explicit product or correctness review"
+            "shadow/differential facts after an explicit product or correctness "
+            "review"
         ),
     )
     args = parser.parse_args(argv)
@@ -68,12 +78,18 @@ def main(argv: list[str] | None = None) -> int:
         result,
         source_root=_REPOSITORY_ROOT,
     )
+    differential_manifest = build_differential_census_manifest(
+        result,
+        source_root=_REPOSITORY_ROOT,
+    )
     try:
         update_pivot_baselines(
             _BASELINE_PATH,
             manifest,
             _SHADOW_BASELINE_PATH,
             shadow_manifest,
+            _DIFFERENTIAL_BASELINE_PATH,
+            differential_manifest,
             allow_reviewed_incompatible_baseline=(
                 args.allow_reviewed_incompatible_baseline
             ),
@@ -88,6 +104,14 @@ def main(argv: list[str] | None = None) -> int:
         f"{summary['documents']} documents, "
         f"{summary['definitions']} definitions, "
         f"{summary['skips']} skips"
+    )
+    differential_summary = differential_manifest["summary"]
+    assert isinstance(differential_summary, dict)
+    print(
+        f"wrote {_DIFFERENTIAL_BASELINE_PATH.relative_to(_REPOSITORY_ROOT)}: "
+        f"{differential_summary['exact_shared_definitions']} exact shared "
+        "definitions, "
+        f"{differential_summary['direct_mismatches']} direct mismatches"
     )
     shadow_summary = shadow_manifest["summary"]
     assert isinstance(shadow_summary, dict)

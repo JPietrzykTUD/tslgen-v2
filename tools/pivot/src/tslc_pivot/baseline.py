@@ -16,6 +16,7 @@ from tslc_pivot.cli import (
     render_cli_command,
     resolve_cli_invocation,
 )
+from tslc_pivot.differential import pivot_differential_digest
 from tslc_pivot.exporter import PivotExportRequest
 from tslc_pivot.model import PivotExportResult
 
@@ -372,6 +373,119 @@ def render_shadow_census_manifest(manifest: Mapping[str, object]) -> str:
     )
 
 
+def build_differential_census_manifest(
+    result: PivotExportResult,
+    *,
+    source_root: Path,
+) -> dict[str, object]:
+    """Build the durable 27C structured-vs-legacy differential census."""
+
+    transitions: Counter[tuple[str, str, str, str]] = Counter()
+    for report in result.differentials:
+        for difference in report.differences:
+            if difference.legacy_skip is None or difference.structured_skip is None:
+                continue
+            transitions[
+                (
+                    report.language.value,
+                    difference.kind.value,
+                    difference.legacy_skip.reason,
+                    difference.structured_skip.reason,
+                )
+            ] += 1
+    return {
+        "schema": "tslc-pivot-differential-census-v1",
+        "digest": pivot_differential_digest(
+            result.differentials,
+            source_root=source_root,
+        ),
+        "summary": {
+            "legacy_definitions": sum(
+                report.legacy_definition_count for report in result.differentials
+            ),
+            "structured_definitions": sum(
+                report.structured_definition_count for report in result.differentials
+            ),
+            "exact_shared_definitions": sum(
+                report.exact_shared_definition_count
+                for report in result.differentials
+            ),
+            "direct_mismatches": sum(
+                report.direct_mismatch_count for report in result.differentials
+            ),
+            "legacy_only_definitions": sum(
+                report.legacy_only_definition_count
+                for report in result.differentials
+            ),
+            "structured_only_definitions": sum(
+                report.structured_only_definition_count
+                for report in result.differentials
+            ),
+            "exact_shared_skips": sum(
+                report.exact_shared_skip_count for report in result.differentials
+            ),
+            "skip_reason_mismatches": sum(
+                report.skip_reason_mismatch_count
+                for report in result.differentials
+            ),
+            "skip_source_mismatches": sum(
+                report.skip_source_mismatch_count
+                for report in result.differentials
+            ),
+            "legacy_only_skips": sum(
+                report.legacy_only_skip_count for report in result.differentials
+            ),
+            "structured_only_skips": sum(
+                report.structured_only_skip_count
+                for report in result.differentials
+            ),
+        },
+        "languages": {
+            report.language.value: {
+                "legacy_definitions": report.legacy_definition_count,
+                "structured_definitions": report.structured_definition_count,
+                "exact_shared_definitions": report.exact_shared_definition_count,
+                "direct_mismatches": report.direct_mismatch_count,
+                "legacy_only_definitions": report.legacy_only_definition_count,
+                "structured_only_definitions": report.structured_only_definition_count,
+                "legacy_skips": len(
+                    next(
+                        projection.skipped
+                        for projection in result.projections
+                        if projection.language is report.language
+                    )
+                ),
+                "structured_skips": len(report.structured_skipped),
+                "exact_shared_skips": report.exact_shared_skip_count,
+                "skip_source_mismatches": report.skip_source_mismatch_count,
+                "skip_reason_mismatches": report.skip_reason_mismatch_count,
+                "legacy_only_skips": report.legacy_only_skip_count,
+                "structured_only_skips": report.structured_only_skip_count,
+                "document_order_equal": report.document_order_equal,
+                "yaml_artifacts_equal": report.yaml_artifacts_equal,
+            }
+            for report in result.differentials
+        },
+        "skip_fact_transitions": [
+            {
+                "language": language,
+                "kind": kind,
+                "legacy": legacy,
+                "structured": structured,
+                "count": count,
+            }
+            for (language, kind, legacy, structured), count in sorted(
+                transitions.items()
+            )
+        ],
+    }
+
+
+def render_differential_census_manifest(manifest: Mapping[str, object]) -> str:
+    _validate_differential_census_manifest(manifest)
+    return json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+
+
 def _definition_records(
     result: PivotExportResult,
 ) -> tuple[
@@ -667,18 +781,40 @@ def validate_shadow_census_baseline_update(
     )
 
 
+def validate_differential_census_baseline_update(
+    previous: Mapping[str, object],
+    candidate: Mapping[str, object],
+    *,
+    allow_reviewed_incompatible_baseline: bool = False,
+) -> None:
+    """Require review for every structured differential evidence change."""
+
+    _validate_differential_census_manifest(previous)
+    _validate_differential_census_manifest(candidate)
+    if allow_reviewed_incompatible_baseline or previous == candidate:
+        return
+    raise ValueError(
+        "differential-census baseline facts changed. Pass "
+        "--allow-reviewed-incompatible-baseline only after an explicit "
+        "parser, inliner, coverage, or corpus review."
+    )
+
+
 def update_pivot_baselines(
     full_export_path: Path,
     full_export_candidate: dict[str, object],
     shadow_census_path: Path,
     shadow_census_candidate: dict[str, object],
+    differential_census_path: Path,
+    differential_census_candidate: dict[str, object],
     *,
     allow_reviewed_incompatible_baseline: bool = False,
 ) -> None:
-    """Validate both durable manifests before writing either candidate."""
+    """Validate all durable manifests before writing any candidate."""
 
     _manifest_definition_inventory(full_export_candidate)
     _validate_shadow_census_manifest(shadow_census_candidate)
+    _validate_differential_census_manifest(differential_census_candidate)
     if full_export_path.exists():
         validate_full_export_baseline_update(
             _load_manifest(full_export_path),
@@ -695,15 +831,30 @@ def update_pivot_baselines(
                 allow_reviewed_incompatible_baseline
             ),
         )
+    if differential_census_path.exists():
+        validate_differential_census_baseline_update(
+            _load_manifest(differential_census_path),
+            differential_census_candidate,
+            allow_reviewed_incompatible_baseline=(
+                allow_reviewed_incompatible_baseline
+            ),
+        )
 
     full_export_rendered = render_full_export_manifest(full_export_candidate)
     shadow_census_rendered = render_shadow_census_manifest(
         shadow_census_candidate
     )
+    differential_census_rendered = render_differential_census_manifest(
+        differential_census_candidate
+    )
     full_export_path.parent.mkdir(parents=True, exist_ok=True)
     shadow_census_path.parent.mkdir(parents=True, exist_ok=True)
+    differential_census_path.parent.mkdir(parents=True, exist_ok=True)
     full_export_path.write_text(full_export_rendered, encoding="utf-8")
     shadow_census_path.write_text(shadow_census_rendered, encoding="utf-8")
+    differential_census_path.write_text(
+        differential_census_rendered, encoding="utf-8"
+    )
 
 
 def _load_manifest(path: Path) -> dict[str, object]:
@@ -772,6 +923,65 @@ def _validate_shadow_census_manifest(manifest: Mapping[str, object]) -> None:
         raise ValueError("shadow-census baseline languages must be an object")
 
 
+def _validate_differential_census_manifest(
+    manifest: Mapping[str, object],
+) -> None:
+    if manifest.get("schema") != "tslc-pivot-differential-census-v1":
+        raise ValueError("differential-census baseline has an unsupported schema")
+    digest = manifest.get("digest")
+    if (
+        not isinstance(digest, str)
+        or len(digest) != 64
+        or any(character not in "0123456789abcdef" for character in digest)
+    ):
+        raise ValueError("differential-census baseline has an invalid digest")
+    summary = manifest.get("summary")
+    if not isinstance(summary, dict):
+        raise ValueError("differential-census baseline summary must be an object")
+    if summary.get("direct_mismatches") != 0:
+        raise ValueError(
+            "differential-census baseline cannot record shared direct mismatches"
+        )
+    if summary.get("legacy_only_definitions") != 0:
+        raise ValueError(
+            "differential-census baseline cannot lose legacy definition occurrences"
+        )
+    legacy = summary.get("legacy_definitions")
+    structured = summary.get("structured_definitions")
+    exact = summary.get("exact_shared_definitions")
+    if (
+        not isinstance(legacy, int)
+        or legacy < 0
+        or not isinstance(structured, int)
+        or structured < legacy
+        or exact != legacy
+    ):
+        raise ValueError(
+            "differential-census baseline must reproduce every legacy definition"
+        )
+    count_fields = (
+        "structured_only_definitions",
+        "exact_shared_skips",
+        "skip_source_mismatches",
+        "skip_reason_mismatches",
+        "legacy_only_skips",
+        "structured_only_skips",
+    )
+    if any(
+        not isinstance(summary.get(field), int) or summary[field] < 0
+        for field in count_fields
+    ):
+        raise ValueError(
+            "differential-census baseline summary has an invalid count"
+        )
+    if not isinstance(manifest.get("languages"), dict):
+        raise ValueError("differential-census baseline languages must be an object")
+    if not isinstance(manifest.get("skip_fact_transitions"), list):
+        raise ValueError(
+            "differential-census baseline skip transitions must be a list"
+        )
+
+
 def _portable_path(path: Path, repository_root: Path) -> str:
     resolved = path.resolve()
     try:
@@ -799,14 +1009,17 @@ __all__ = (
     "CANONICAL_FULL_EXPORT_ARGV",
     "CANONICAL_FULL_EXPORT_COMMAND",
     "CanonicalFullExport",
+    "build_differential_census_manifest",
     "build_shadow_census_manifest",
     "build_full_export_manifest",
     "canonical_full_export",
     "classify_skip_reason",
     "render_full_export_manifest",
+    "render_differential_census_manifest",
     "render_shadow_census_manifest",
     "update_full_export_baseline",
     "update_pivot_baselines",
     "validate_full_export_baseline_update",
+    "validate_differential_census_baseline_update",
     "validate_shadow_census_baseline_update",
 )

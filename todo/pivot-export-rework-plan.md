@@ -2,7 +2,7 @@
 
 ## Status and decision record
 
-Status: architecture approved; slices 27A and 27B are implemented and verified.
+Status: architecture approved; slices 27A, 27B, and 27C are implemented and verified.
 Slice 27C has not started.
 
 This plan replaces the original in-compiler direction for audit fix-plan slice
@@ -473,6 +473,50 @@ legacy engine only as a differential oracle.
   tests.
 - The new engine contains no context-blind identifier replacement, regex
   statement splitting, marker parenthesis scanning, or raw-text alpha-renaming.
+
+**Implemented evidence (2026-07-18):**
+
+- `target_expression.py` now owns deterministic, token-preserving C++ and Rust
+  residual-expression parsing. Binding uses become body-local identity nodes;
+  qualified/path names, members, callables, Rust raw identifiers and macros,
+  literals, trivia, delimiter groups, and retained calls remain distinct.
+  Comments, strings, control flow, blocks, pragmas, casts, unresolved generated
+  library names, malformed delimiters, and forward local references fail
+  closed with PIVOT-owned source context.
+- `structured_inliner.py` binds arguments by `PivotBindingId`, preallocates
+  locals in deterministic legacy-compatible order, expands typed calls
+  left-to-right through the existing compiler-selected dependency resolver,
+  detects cycles and arity/resolution failures, and emits one flattened list.
+  Parenthesization and Rust return-group normalization are typed renderer rules;
+  compiler backend syntax remains the sole renderer for synthetic fixed calls.
+- The planner runs the structured lowering/parser/inliner independently beside
+  the legacy production engine. A structured failure, including a synthetic
+  fixed-wrapper failure, cannot remove a legacy production definition. Safe
+  qualified/member collision fixtures demonstrate coverage that the old text
+  rewriter could not prove, without changing the canonical production corpus.
+- The canonical structured projection reproduces all 17,060 legacy definition
+  occurrences, including all 328 nominal-identity collision groups, with zero
+  missing or additional canonical entries, zero `direct` mismatches, identical
+  definition order, and byte-identical YAML artifacts. The production artifact
+  digest remains
+  `846ffd8955e3b7860f1bc7c2980d4fc2bd8618efa259fbe1824923c3293dc747`.
+- `tests/baselines/differential_census.json` pins the complete structured
+  projection and classified comparison with digest
+  `1afaa193cd567b0b7b1e48581f8e915569a86b8dabc4c92a5aaf5a852d102b1b`.
+  Of 27,823 skip records, 20,571 are exact, 4,582 retain the same reason with a
+  different typed source span, and 2,670 have a different fail-closed typed
+  reason; neither side has an unmatched skip specialization. The guarded
+  updater validates production, shadow, and differential candidates before
+  writing any of them, and two hash seeds reproduce all three digests.
+- Focused tests cover qualified/member/callable collisions, C++ `::`, `.` and
+  `->`, Rust paths/raw identifiers/macros, nested delimiters and calls, lexical
+  shadowing and forward references, parameter-expression parentheses, comments,
+  strings, casts, unresolved constructs, control flow, cycles, arity failures,
+  fixed-wrapper isolation, exact recursive output, collision ordering, and skip
+  fact classification. The complete tool suite passes 84 tests in 297.34
+  seconds; tool mypy passes 18 files. Core isolation
+  passes 1,988 tests with 70 skips, mypy on 247 files, and corpus checking on
+  42 TSL files. There are no `tslc/` or `tsldata/` changes.
 
 ### 27D. Cut over, delete the rewrite engine, and finish module ownership
 

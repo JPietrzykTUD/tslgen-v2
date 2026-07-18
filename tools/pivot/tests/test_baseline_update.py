@@ -8,11 +8,13 @@ import pytest
 
 from tslc_pivot.baseline import (
     classify_skip_reason,
+    render_differential_census_manifest,
     render_full_export_manifest,
     render_shadow_census_manifest,
     update_full_export_baseline,
     update_pivot_baselines,
     validate_full_export_baseline_update,
+    validate_differential_census_baseline_update,
     validate_shadow_census_baseline_update,
 )
 
@@ -47,6 +49,28 @@ def _shadow_manifest(digest: str = _HASH_A) -> dict[str, object]:
         "digest": digest,
         "summary": {"entries": 1, "failures": 0},
         "languages": {},
+    }
+
+
+def _differential_manifest(digest: str = _HASH_A) -> dict[str, object]:
+    return {
+        "schema": "tslc-pivot-differential-census-v1",
+        "digest": digest,
+        "summary": {
+            "legacy_definitions": 1,
+            "structured_definitions": 1,
+            "exact_shared_definitions": 1,
+            "direct_mismatches": 0,
+            "legacy_only_definitions": 0,
+            "structured_only_definitions": 0,
+            "exact_shared_skips": 0,
+            "skip_source_mismatches": 0,
+            "skip_reason_mismatches": 0,
+            "legacy_only_skips": 0,
+            "structured_only_skips": 0,
+        },
+        "languages": {},
+        "skip_fact_transitions": [],
     }
 
 
@@ -106,26 +130,70 @@ def test_shadow_census_changes_require_explicit_review() -> None:
     )
 
 
-def test_combined_updater_validates_both_baselines_before_writing(
+def test_differential_census_changes_require_explicit_review() -> None:
+    with pytest.raises(ValueError, match="differential-census baseline facts changed"):
+        validate_differential_census_baseline_update(
+            _differential_manifest(_HASH_A),
+            _differential_manifest(_HASH_B),
+        )
+
+    validate_differential_census_baseline_update(
+        _differential_manifest(_HASH_A),
+        _differential_manifest(_HASH_B),
+        allow_reviewed_incompatible_baseline=True,
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    (
+        ("direct_mismatches", 1, "shared direct mismatches"),
+        ("legacy_only_definitions", 1, "lose legacy definition"),
+        ("exact_shared_definitions", 0, "reproduce every legacy definition"),
+    ),
+)
+def test_differential_census_cannot_hide_definition_drift(
+    field: str,
+    value: int,
+    message: str,
+) -> None:
+    manifest = _differential_manifest()
+    summary = manifest["summary"]
+    assert isinstance(summary, dict)
+    summary[field] = value
+
+    with pytest.raises(ValueError, match=message):
+        render_differential_census_manifest(manifest)
+
+
+def test_combined_updater_validates_all_baselines_before_writing(
     tmp_path: Path,
 ) -> None:
     full_path = tmp_path / "full_export.json"
     shadow_path = tmp_path / "shadow_census.json"
+    differential_path = tmp_path / "differential_census.json"
     full_text = render_full_export_manifest(_manifest(_definition("kept")))
     shadow_text = render_shadow_census_manifest(_shadow_manifest(_HASH_A))
+    differential_text = render_differential_census_manifest(
+        _differential_manifest(_HASH_A)
+    )
     full_path.write_text(full_text, encoding="utf-8")
     shadow_path.write_text(shadow_text, encoding="utf-8")
+    differential_path.write_text(differential_text, encoding="utf-8")
 
-    with pytest.raises(ValueError, match="shadow-census baseline facts changed"):
+    with pytest.raises(ValueError, match="differential-census baseline facts changed"):
         update_pivot_baselines(
             full_path,
             _manifest(_definition("kept"), _definition("added")),
             shadow_path,
-            _shadow_manifest(_HASH_B),
+            _shadow_manifest(_HASH_A),
+            differential_path,
+            _differential_manifest(_HASH_B),
         )
 
     assert full_path.read_text(encoding="utf-8") == full_text
     assert shadow_path.read_text(encoding="utf-8") == shadow_text
+    assert differential_path.read_text(encoding="utf-8") == differential_text
 
 
 def test_updater_never_overwrites_before_guard_passes(tmp_path: Path) -> None:

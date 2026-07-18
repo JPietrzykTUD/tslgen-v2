@@ -14,17 +14,26 @@ from tslc.output.artifacts import ArtifactSet
 from tslc_pivot.baseline import (
     CANONICAL_FULL_EXPORT_ARGV,
     CANONICAL_FULL_EXPORT_COMMAND,
+    build_differential_census_manifest,
     build_full_export_manifest,
     build_shadow_census_manifest,
     canonical_full_export,
 )
 from tslc_pivot.exporter import export_pivot
-from tslc_pivot.model import PivotExportResult, PivotLanguage, PivotProjection
+from tslc_pivot.model import (
+    PivotDifferentialKind,
+    PivotExportResult,
+    PivotLanguage,
+    PivotProjection,
+)
 
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 _BASELINE_PATH = Path(__file__).parent / "baselines" / "full_export.json"
 _SHADOW_BASELINE_PATH = Path(__file__).parent / "baselines" / "shadow_census.json"
+_DIFFERENTIAL_BASELINE_PATH = (
+    Path(__file__).parent / "baselines" / "differential_census.json"
+)
 
 
 def test_full_corpus_export_matches_exact_manifest() -> None:
@@ -32,11 +41,15 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     expected_shadow: dict[str, Any] = json.loads(
         _SHADOW_BASELINE_PATH.read_text(encoding="utf-8")
     )
+    expected_differential: dict[str, Any] = json.loads(
+        _DIFFERENTIAL_BASELINE_PATH.read_text(encoding="utf-8")
+    )
     run = canonical_full_export(_REPOSITORY_ROOT)
     result = export_pivot(run.request)
 
     assert result.diagnostics == ()
     _assert_complete_shadow_census(result, expected, expected_shadow)
+    _assert_structured_differential(result, expected_differential)
     actual = build_full_export_manifest(run, result)
 
     assert actual["schema"] == expected["schema"]
@@ -270,6 +283,69 @@ def _assert_complete_shadow_census(
         source_root=_REPOSITORY_ROOT,
     )
     assert actual_shadow == shadow_baseline
+
+
+def _assert_structured_differential(
+    result: PivotExportResult,
+    baseline: dict[str, Any],
+) -> None:
+    assert tuple(report.language.value for report in result.differentials) == (
+        "cpp",
+        "rust",
+    )
+    projections = {
+        projection.language: projection for projection in result.projections
+    }
+    expected = {
+        PivotLanguage.CPP: (10_291, 18_568, 13_232, 3_324, 2_012),
+        PivotLanguage.RUST: (6_769, 9_255, 7_339, 1_258, 658),
+    }
+    for report in result.differentials:
+        projection = projections[report.language]
+        (
+            definitions,
+            skips,
+            exact_skips,
+            source_mismatches,
+            reason_mismatches,
+        ) = expected[report.language]
+        assert report.structured_documents == projection.documents
+        assert report.legacy_definition_count == definitions
+        assert report.structured_definition_count == definitions
+        assert report.exact_shared_definition_count == definitions
+        assert report.direct_mismatch_count == 0
+        assert report.legacy_only_definition_count == 0
+        assert report.structured_only_definition_count == 0
+        assert report.shared_definitions_are_exact
+        assert len(projection.skipped) == skips
+        assert len(report.structured_skipped) == skips
+        assert report.exact_shared_skip_count == exact_skips
+        assert report.skip_source_mismatch_count == source_mismatches
+        assert report.skip_reason_mismatch_count == reason_mismatches
+        assert report.legacy_only_skip_count == 0
+        assert report.structured_only_skip_count == 0
+        assert report.document_order_equal
+        assert report.yaml_artifacts_equal
+        assert len(report.differences) == source_mismatches + reason_mismatches
+        assert sum(
+            difference.kind is PivotDifferentialKind.SKIP_SOURCE_MISMATCH
+            for difference in report.differences
+        ) == source_mismatches
+        assert sum(
+            difference.kind is PivotDifferentialKind.SKIP_REASON_MISMATCH
+            for difference in report.differences
+        ) == reason_mismatches
+        assert all(
+            "__tslc_pivot_call_" not in statement and "\x00" not in statement
+            for document in report.structured_documents
+            for definition in document.definitions
+            for statement in definition.direct
+        )
+    actual = build_differential_census_manifest(
+        result,
+        source_root=_REPOSITORY_ROOT,
+    )
+    assert actual == baseline
 
 
 def test_manifest_rejects_inputs_changed_after_snapshot(tmp_path: Path) -> None:
