@@ -69,7 +69,6 @@ _EXPECTED_COMPILER_IMPORTS = (
     ),
     ("tslc.ir.scan", ("scan",)),
     ("tslc.ir.segments", ("Region",)),
-    ("tslc.ir.text", ("split_top_level",)),
     ("tslc.lower.context", ("LoweringSession",)),
     (
         "tslc.lower.dependencies",
@@ -87,7 +86,6 @@ _EXPECTED_COMPILER_IMPORTS = (
         "tslc.lower.region_handlers",
         ("DEFAULT_REGION_LOWERERS", "RegionLowerer"),
     ),
-    ("tslc.lower.region_handlers.declarations", ("VarLowerer",)),
     ("tslc.lower.region_handlers.protocol", ("RenderBody",)),
     ("tslc.output.artifacts", ("Artifact", "ArtifactSet")),
     (
@@ -111,8 +109,6 @@ _EXPECTED_COMPILER_IMPORTS = (
             "TemplateRenderError",
             "TrimmedText",
             "UnsafeBlockText",
-            "literal_text",
-            "render_sequence",
             "render_text",
             "unsafe_block",
         ),

@@ -1,4 +1,4 @@
-"""PIVOT-local lowerers retaining calls, admitted locals, and final results."""
+"""PIVOT-local lowering adapters retaining calls, locals, and final results."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from threading import Lock
 
 from tslc.diagnostics import SourceSpan
 from tslc.ir.region_syntax import (
+    ParsedCallSelector,
     parse_call_selector,
     parse_var_selector,
     split_arg_groups,
@@ -23,6 +24,7 @@ from tslc.lower.dependencies import (
     CallDependency,
     CallDependencyOrigin,
     resolve_lowered_call_dependency,
+    resolve_lowered_call_vector,
 )
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue
 from tslc.lower.region_handlers import DEFAULT_REGION_LOWERERS, RegionLowerer
@@ -34,7 +36,6 @@ from tslc.target_text import (
     render_text,
     unsafe_block,
 )
-from tslc_pivot._lowering import pivot_call_type_args_supported
 from tslc_pivot.body_ir import PivotBinding, PivotBindingId, PivotUnsupported
 
 
@@ -50,7 +51,7 @@ _CAPTURE_IDS_LOCK = Lock()
 
 
 @dataclass(frozen=True, slots=True)
-class PivotShadowCallText:
+class PivotCapturedCall:
     token: str
     dependency: CallDependency
     attrs: tuple[tuple[str, str], ...]
@@ -64,7 +65,7 @@ class PivotShadowCallText:
 
 
 @dataclass(frozen=True, slots=True)
-class PivotShadowLocalText:
+class PivotCapturedLocal:
     token: str
     binding: PivotBinding
     mutable: bool
@@ -77,7 +78,7 @@ class PivotShadowLocalText:
 
 
 @dataclass(frozen=True, slots=True)
-class PivotShadowCompleteText:
+class PivotCapturedResult:
     token: str
     value: RenderText
     source: SourceSpan | None
@@ -87,20 +88,20 @@ class PivotShadowCompleteText:
         return self.token
 
 
-type PivotShadowText = (
-    PivotShadowCallText | PivotShadowLocalText | PivotShadowCompleteText
+type PivotCaptureNode = (
+    PivotCapturedCall | PivotCapturedLocal | PivotCapturedResult
 )
 
 
 @dataclass(frozen=True, slots=True)
-class PivotShadowCapture:
+class PivotBodyCapture:
     parameters: tuple[PivotBinding, ...]
-    nodes: tuple[PivotShadowText, ...]
+    nodes: tuple[PivotCaptureNode, ...]
     namespace: str
 
     def __post_init__(self) -> None:
         if re.fullmatch(r"[0-9a-f]{24}", self.namespace) is None:
-            raise ValueError("a PIVOT shadow capture requires a 24-digit namespace")
+            raise ValueError("a PIVOT body capture requires a 24-digit namespace")
 
 
 @dataclass(slots=True)
@@ -109,7 +110,7 @@ class _CaptureBuilder:
     next_binding: int
     namespace: str
     next_node: int = 0
-    nodes: list[PivotShadowText] = field(default_factory=list)
+    nodes: list[PivotCaptureNode] = field(default_factory=list)
 
     def reserve_token(self, kind: str) -> str:
         token = (
@@ -119,7 +120,7 @@ class _CaptureBuilder:
         self.next_node += 1
         return token
 
-    def add_node(self, node: PivotShadowText) -> None:
+    def add_node(self, node: PivotCaptureNode) -> None:
         self.nodes.append(node)
 
     def allocate_binding(
@@ -131,21 +132,21 @@ class _CaptureBuilder:
         self.next_binding += 1
         return binding
 
-    def freeze(self) -> PivotShadowCapture:
-        return PivotShadowCapture(
+    def freeze(self) -> PivotBodyCapture:
+        return PivotBodyCapture(
             self.parameters,
             tuple(self.nodes),
             self.namespace,
         )
 
 
-class PivotShadowCaptureScope:
-    """Bind one fresh capture builder to each shadow lowering operation."""
+class PivotBodyCaptureScope:
+    """Bind one fresh capture builder to each body lowering operation."""
 
     def __init__(self, namespace_salt: str) -> None:
         self._namespace_salt = namespace_salt
         self._active: ContextVar[_CaptureBuilder | None] = ContextVar(
-            "tslc_pivot_shadow_capture", default=None
+            "tslc_pivot_body_capture", default=None
         )
 
     @contextmanager
@@ -180,16 +181,16 @@ class PivotShadowCaptureScope:
     def current(self) -> _CaptureBuilder:
         builder = self._active.get()
         if builder is None:
-            raise RuntimeError("PIVOT shadow lowering requires an active capture scope")
+            raise RuntimeError("PIVOT body lowering requires an active capture scope")
         return builder
 
 
-class PivotShadowCallLowerer:
+class PivotCallCaptureLowerer:
     keyword = "call"
 
     def __init__(
         self,
-        capture: PivotShadowCaptureScope,
+        capture: PivotBodyCaptureScope,
         evaluator: QueryEvaluator | None = None,
     ) -> None:
         self._capture = capture
@@ -234,7 +235,7 @@ class PivotShadowCallLowerer:
             if len(groups) == 1 and not groups[0]
             else tuple(render(group) for group in groups)
         )
-        node = PivotShadowCallText(
+        node = PivotCapturedCall(
             token,
             dependency,
             attrs,
@@ -256,10 +257,27 @@ class PivotShadowCallLowerer:
         return value
 
 
-class PivotShadowVarLowerer:
+def pivot_call_type_args_supported(
+    selector: ParsedCallSelector,
+    context: LoweringSession,
+    evaluator: QueryEvaluator,
+) -> bool:
+    """Accept only the one resolvable vector selector PIVOT can inline."""
+
+    if len(selector.type_args) > 1:
+        return False
+    if not selector.type_args:
+        return True
+    return (
+        resolve_lowered_call_vector(selector.type_args[0], context, evaluator)
+        is not None
+    )
+
+
+class PivotLocalCaptureLowerer:
     keyword = "var"
 
-    def __init__(self, capture: PivotShadowCaptureScope) -> None:
+    def __init__(self, capture: PivotBodyCaptureScope) -> None:
         self._capture = capture
 
     def lower(
@@ -285,7 +303,7 @@ class PivotShadowVarLowerer:
             return region.full_text
         builder = self._capture.current()
         token = builder.reserve_token("local")
-        node = PivotShadowLocalText(
+        node = PivotCapturedLocal(
             token=token,
             binding=builder.allocate_binding(name, region.source),
             mutable=selector.variant == "infer",
@@ -300,10 +318,10 @@ class PivotShadowVarLowerer:
         return rendered
 
 
-class PivotShadowCompleteLowerer:
+class PivotResultCaptureLowerer:
     keyword = "complete"
 
-    def __init__(self, capture: PivotShadowCaptureScope) -> None:
+    def __init__(self, capture: PivotBodyCaptureScope) -> None:
         self._capture = capture
 
     def lower(
@@ -312,7 +330,7 @@ class PivotShadowCompleteLowerer:
         del context
         builder = self._capture.current()
         token = builder.reserve_token("complete")
-        node = PivotShadowCompleteText(token, render(region.body), region.source)
+        node = PivotCapturedResult(token, render(region.body), region.source)
         builder.add_node(node)
         return node
 
@@ -321,17 +339,17 @@ class PivotShadowCompleteLowerer:
         return rendered
 
 
-def pivot_shadow_region_lowerers(
-    capture: PivotShadowCaptureScope,
+def pivot_capture_region_lowerers(
+    capture: PivotBodyCaptureScope,
 ) -> tuple[RegionLowerer, ...]:
     lowerers: list[RegionLowerer] = []
     for lowerer in DEFAULT_REGION_LOWERERS:
         if lowerer.keyword == "call":
-            lowerers.append(PivotShadowCallLowerer(capture))
+            lowerers.append(PivotCallCaptureLowerer(capture))
         elif lowerer.keyword == "var":
-            lowerers.append(PivotShadowVarLowerer(capture))
+            lowerers.append(PivotLocalCaptureLowerer(capture))
         elif lowerer.keyword == "complete":
-            lowerers.append(PivotShadowCompleteLowerer(capture))
+            lowerers.append(PivotResultCaptureLowerer(capture))
         else:
             lowerers.append(lowerer)
     return tuple(lowerers)
@@ -382,13 +400,13 @@ def _namespace_seed(
 __all__ = (
     "CAPTURE_CLOSE",
     "CAPTURE_OPEN",
-    "PivotShadowCallText",
-    "PivotShadowCapture",
-    "PivotShadowCaptureScope",
-    "PivotShadowCompleteText",
-    "PivotShadowLocalText",
-    "PivotShadowText",
+    "PivotCapturedCall",
+    "PivotBodyCapture",
+    "PivotBodyCaptureScope",
+    "PivotCapturedResult",
+    "PivotCapturedLocal",
+    "PivotCaptureNode",
     "capture_source_collision",
     "parse_capture_token",
-    "pivot_shadow_region_lowerers",
+    "pivot_capture_region_lowerers",
 )

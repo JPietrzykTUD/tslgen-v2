@@ -14,42 +14,29 @@ from tslc.output.artifacts import ArtifactSet
 from tslc_pivot.baseline import (
     CANONICAL_FULL_EXPORT_ARGV,
     CANONICAL_FULL_EXPORT_COMMAND,
-    build_differential_census_manifest,
     build_full_export_manifest,
-    build_shadow_census_manifest,
+    build_body_census_manifest,
     canonical_full_export,
 )
 from tslc_pivot.exporter import export_pivot
-from tslc_pivot.model import (
-    PivotDifferentialKind,
-    PivotExportResult,
-    PivotLanguage,
-    PivotProjection,
-)
+from tslc_pivot.model import PivotExportResult, PivotLanguage, PivotProjection
 
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 _BASELINE_PATH = Path(__file__).parent / "baselines" / "full_export.json"
-_SHADOW_BASELINE_PATH = Path(__file__).parent / "baselines" / "shadow_census.json"
-_DIFFERENTIAL_BASELINE_PATH = (
-    Path(__file__).parent / "baselines" / "differential_census.json"
-)
+_BODY_BASELINE_PATH = Path(__file__).parent / "baselines" / "body_census.json"
 
 
 def test_full_corpus_export_matches_exact_manifest() -> None:
     expected: dict[str, Any] = json.loads(_BASELINE_PATH.read_text(encoding="utf-8"))
-    expected_shadow: dict[str, Any] = json.loads(
-        _SHADOW_BASELINE_PATH.read_text(encoding="utf-8")
-    )
-    expected_differential: dict[str, Any] = json.loads(
-        _DIFFERENTIAL_BASELINE_PATH.read_text(encoding="utf-8")
+    expected_body: dict[str, Any] = json.loads(
+        _BODY_BASELINE_PATH.read_text(encoding="utf-8")
     )
     run = canonical_full_export(_REPOSITORY_ROOT)
     result = export_pivot(run.request)
 
     assert result.diagnostics == ()
-    _assert_complete_shadow_census(result, expected, expected_shadow)
-    _assert_structured_differential(result, expected_differential)
+    _assert_complete_body_census(result, expected, expected_body)
     actual = build_full_export_manifest(run, result)
 
     assert actual["schema"] == expected["schema"]
@@ -103,10 +90,10 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     assert category_counts == {
         "callee_resolution": 304,
         "forwarded_call_arguments": 3_180,
-        "local_declaration": 738,
+        "local_declaration": 818,
         "residual_target_text": 7_172,
         "schema_conflict": 650,
-        "signature_admissibility": 11_023,
+        "signature_admissibility": 10_943,
         "specialization_admissibility": 4_756,
     }
     assert actual["skip_fields"] == [
@@ -137,28 +124,28 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         actual["skip_inventory_sha256"]
     )
     assert actual["skip_inventory_sha256"] == (
-        "0e51087f1ee11050507fd0f2fca2158a6a58446b7f70005b12fc941ccc9ad445"
+        "1f3a6ff9b2f5096536b931baaa01960bdf48191beb578f7eed37b639d3c1bedd"
     )
 
 
-def _assert_complete_shadow_census(
+def _assert_complete_body_census(
     result: PivotExportResult,
     full_export_baseline: dict[str, Any],
-    shadow_baseline: dict[str, Any],
+    body_baseline: dict[str, Any],
 ) -> None:
-    assert tuple(census.language.value for census in result.shadow_censuses) == (
+    assert tuple(census.language.value for census in result.body_censuses) == (
         "cpp",
         "rust",
     )
-    assert tuple(len(census.entries) for census in result.shadow_censuses) == (
+    assert tuple(len(census.entries) for census in result.body_censuses) == (
         10_291,
         6_769,
     )
-    assert tuple(census.multi_statement_count for census in result.shadow_censuses) == (
+    assert tuple(census.multi_statement_count for census in result.body_censuses) == (
         3_061,
         1_669,
     )
-    assert tuple(census.category_counts for census in result.shadow_censuses) == (
+    assert tuple(census.category_counts for census in result.body_censuses) == (
         (
             ("call_and_local", 89),
             ("call_only", 2_962),
@@ -176,7 +163,7 @@ def _assert_complete_shadow_census(
     )
     assert Counter(
         entry.category.value
-        for census in result.shadow_censuses
+        for census in result.body_censuses
         for entry in census.entries
         if entry.category is not None
     ) == {
@@ -187,12 +174,12 @@ def _assert_complete_shadow_census(
         "call_and_local": 94,
     }
     assert sum(
-        census.multi_statement_count for census in result.shadow_censuses
+        census.multi_statement_count for census in result.body_censuses
     ) == 4_730
-    assert all(census.failures == () for census in result.shadow_censuses)
+    assert all(census.failures == () for census in result.body_censuses)
     assert all(
         body.body is not None
-        for census in result.shadow_censuses
+        for census in result.body_censuses
         for entry in census.entries
         for body in (entry.body, *entry.inlined_bodies)
     )
@@ -200,7 +187,7 @@ def _assert_complete_shadow_census(
     projection_by_language = {
         projection.language: projection for projection in result.projections
     }
-    for census in result.shadow_censuses:
+    for census in result.body_censuses:
         projection = projection_by_language[census.language]
         expected = Counter(
             (document.name, definition)
@@ -220,7 +207,7 @@ def _assert_complete_shadow_census(
             entry.definition.dtype,
             entry.definition.signature,
         )
-        for census in result.shadow_censuses
+        for census in result.body_censuses
         for entry in census.entries
     )
     collisions = tuple(count for count in nominal_identities.values() if count > 1)
@@ -242,7 +229,7 @@ def _assert_complete_shadow_census(
         )
         for record in full_export_baseline["definitions"]
     )
-    shadow_definitions = Counter(
+    body_definitions = Counter(
         (
             census.language.value,
             entry.document,
@@ -253,13 +240,13 @@ def _assert_complete_shadow_census(
                 _canonical_json(list(entry.definition.direct)).encode("utf-8")
             ).hexdigest(),
         )
-        for census in result.shadow_censuses
+        for census in result.body_censuses
         for entry in census.entries
     )
-    assert shadow_definitions == expected_definitions
+    assert body_definitions == expected_definitions
 
     occurrences: dict[tuple[object, ...], list[int]] = {}
-    for census in result.shadow_censuses:
+    for census in result.body_censuses:
         for entry in census.entries:
             key = (
                 census.language,
@@ -274,78 +261,17 @@ def _assert_complete_shadow_census(
     )
     assert sum(
         entry.occurrence == 1
-        for census in result.shadow_censuses
+        for census in result.body_censuses
         for entry in census.entries
     ) == 328
 
-    actual_shadow = build_shadow_census_manifest(
+    actual_body = build_body_census_manifest(
         result,
         source_root=_REPOSITORY_ROOT,
     )
-    assert actual_shadow == shadow_baseline
+    assert actual_body == body_baseline
 
 
-def _assert_structured_differential(
-    result: PivotExportResult,
-    baseline: dict[str, Any],
-) -> None:
-    assert tuple(report.language.value for report in result.differentials) == (
-        "cpp",
-        "rust",
-    )
-    projections = {
-        projection.language: projection for projection in result.projections
-    }
-    expected = {
-        PivotLanguage.CPP: (10_291, 18_568, 13_232, 3_324, 2_012),
-        PivotLanguage.RUST: (6_769, 9_255, 7_339, 1_258, 658),
-    }
-    for report in result.differentials:
-        projection = projections[report.language]
-        (
-            definitions,
-            skips,
-            exact_skips,
-            source_mismatches,
-            reason_mismatches,
-        ) = expected[report.language]
-        assert report.structured_documents == projection.documents
-        assert report.legacy_definition_count == definitions
-        assert report.structured_definition_count == definitions
-        assert report.exact_shared_definition_count == definitions
-        assert report.direct_mismatch_count == 0
-        assert report.legacy_only_definition_count == 0
-        assert report.structured_only_definition_count == 0
-        assert report.shared_definitions_are_exact
-        assert len(projection.skipped) == skips
-        assert len(report.structured_skipped) == skips
-        assert report.exact_shared_skip_count == exact_skips
-        assert report.skip_source_mismatch_count == source_mismatches
-        assert report.skip_reason_mismatch_count == reason_mismatches
-        assert report.legacy_only_skip_count == 0
-        assert report.structured_only_skip_count == 0
-        assert report.document_order_equal
-        assert report.yaml_artifacts_equal
-        assert len(report.differences) == source_mismatches + reason_mismatches
-        assert sum(
-            difference.kind is PivotDifferentialKind.SKIP_SOURCE_MISMATCH
-            for difference in report.differences
-        ) == source_mismatches
-        assert sum(
-            difference.kind is PivotDifferentialKind.SKIP_REASON_MISMATCH
-            for difference in report.differences
-        ) == reason_mismatches
-        assert all(
-            "__tslc_pivot_call_" not in statement and "\x00" not in statement
-            for document in report.structured_documents
-            for definition in document.definitions
-            for statement in definition.direct
-        )
-    actual = build_differential_census_manifest(
-        result,
-        source_root=_REPOSITORY_ROOT,
-    )
-    assert actual == baseline
 
 
 def test_manifest_rejects_inputs_changed_after_snapshot(tmp_path: Path) -> None:

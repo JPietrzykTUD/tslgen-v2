@@ -21,14 +21,13 @@ from tslc.select.selector import Selector
 from tslc.sources import expand_source_paths
 from tslc_pivot import PivotExportRequest, PivotLanguage, export_pivot
 from tslc_pivot import cli as pivot_cli
-from tslc_pivot._lowering import PivotCallCaptureScope, pivot_region_lowerers
 from tslc_pivot.model import PivotDefinition, PivotDocument
-from tslc_pivot.planner import _SUPPORTED_KINDS, _contributing_indexes, _fixed_type
-from tslc_pivot.profiles import profiles_for_distinct_feature_sets
+from tslc_pivot.planner import _SUPPORTED_KINDS, _fixed_type
+from tslc_pivot.profiles import contributing_indexes, profiles_for_distinct_feature_sets
 from tslc_pivot.render_yaml import render_pivot_yaml
-from tslc_pivot.structured_inliner import (
-    PivotStructuredError,
-    PivotStructuredInliner,
+from tslc_pivot.inliner import (
+    PivotInliningError,
+    PivotInliner,
 )
 
 
@@ -81,7 +80,7 @@ def test_profiles_are_projected_to_distinct_hardware_feature_sets() -> None:
 
 
 def test_only_feature_sets_that_add_an_implementation_are_retained() -> None:
-    indexes = _contributing_indexes(
+    indexes = contributing_indexes(
         (
             frozenset({1, 2}),
             frozenset({2, 3}),
@@ -174,21 +173,21 @@ def test_tsl_fixed_512_definition_uses_lane_count_not_bit_width(
     )
 
 
-def test_structured_fixed_failure_cannot_remove_legacy_production(
+def test_fixed_wrapper_failure_keeps_native_definitions_and_reports_skips(
     monkeypatch: pytest.MonkeyPatch,
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
     def fail_fixed(
-        self: PivotStructuredInliner, *args: object, **kwargs: object
+        self: PivotInliner, *args: object, **kwargs: object
     ) -> object:
         del self, args, kwargs
-        raise PivotStructuredError(
+        raise PivotInliningError(
             "TSL-PIVOT-TEST-FIXED",
-            "synthetic structured failure",
+            "synthetic typed failure",
         )
 
-    monkeypatch.setattr(PivotStructuredInliner, "emit_retained_body", fail_fixed)
+    monkeypatch.setattr(PivotInliner, "emit_retained_body", fail_fixed)
 
     result = _export_add(data_root, machine_profiles_path)
     document = next(
@@ -196,14 +195,13 @@ def test_structured_fixed_failure_cannot_remove_legacy_production(
     )
 
     assert {definition.isa for definition in document.definitions} >= {
-        "tsl_128",
-        "tsl_256",
+        "sse2",
+        "avx2",
     }
-    report = result.differentials[0]
-    assert report.legacy_only_definition_count >= 2
+    assert not any(definition.isa.startswith("tsl_") for definition in document.definitions)
     assert any(
-        skip.reason == "synthetic structured failure"
-        for skip in report.structured_skipped
+        skip.reason == "synthetic typed failure"
+        for skip in result.skipped
     )
 
 
@@ -309,21 +307,9 @@ def test_primitive_calls_are_recursively_inlined_into_direct_flow(
     assert "::tsl::" not in direct
     assert "__tslc_pivot_call_" not in direct
     assert definition.direct[-1].startswith("res = ")
-    structured_document = next(
-        item
-        for item in result.differentials[0].structured_documents
-        if item.name == "add_maskz"
-    )
-    structured = next(
-        item
-        for item in structured_document.definitions
-        if (item.isa, item.dtype, item.signature)
-        == (definition.isa, definition.dtype, definition.signature)
-    )
-    assert structured.direct == definition.direct
 
 
-def test_residual_control_and_casts_are_skipped_after_normal_lowering(
+def test_residual_control_and_casts_are_reported_by_typed_lowering(
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
@@ -332,7 +318,7 @@ def test_residual_control_and_casts_are_skipped_after_normal_lowering(
     assert any(
         skip.primitive == "add_maskz"
         and skip.extension == "scalar"
-        and "residual control flow" in skip.reason
+        and "unsupported compiler render value" in skip.reason
         for skip in result.skipped
     )
     assert any(
@@ -359,23 +345,20 @@ def test_generation_loop_is_expanded_by_the_standard_lowerer(
         if item.extension.isa_name == "avx2"
         and item.primitive.attributes.get("mask") is None
     )
-    capture_scope = PivotCallCaptureScope()
-    lowerer = Lowerer(region_lowerers=pivot_region_lowerers(capture_scope))
-    with capture_scope.capture() as capture:
-        result = lowerer.lower(
-            slot,
-            catalog,
-            CppBackendDialect(catalog),
-            body_segments=scan(
-                """
-                var<infer>(acc, left);
-                loop<generation>(i, 0, 2, 1) {
-                  acc = op<add>(acc, right);
-                }
-                complete(acc);
-                """
-            ),
-        )
+    result = Lowerer().lower(
+        slot,
+        catalog,
+        CppBackendDialect(catalog),
+        body_segments=scan(
+            """
+            var<infer>(acc, left);
+            loop<generation>(i, 0, 2, 1) {
+              acc = op<add>(acc, right);
+            }
+            complete(acc);
+            """
+        ),
+    )
 
     assert result.diagnostics == ()
     assert result.specialization is not None
@@ -384,7 +367,6 @@ def test_generation_loop_is_expanded_by_the_standard_lowerer(
     assert "{" not in body
     assert body.count("acc = (acc + right);") == 2
     assert body.strip().endswith("return acc;")
-    assert capture.sites == []
 
 
 _COLLIDE_FIXTURE = (
@@ -408,7 +390,7 @@ _COLLIDE_FIXTURE = (
     '          tsil "complete(i32::min(min, right));"\n'
 )
 
-_STRUCTURED_FIXTURE = (
+_INLINER_FIXTURE = (
     "prim<v:=(v,v)> pivot_expr_inner(a, b):\n"
     "  impls:\n"
     "    scalar:\n"
@@ -477,25 +459,16 @@ def test_qualified_parameter_collision_is_rejected_not_rewritten(
         primitive="pivot_collide_user",
     )
 
-    for projection in result.projections:
-        for document in projection.documents:
-            for definition in document.definitions:
-                direct = "\n".join(definition.direct)
-                assert "std::left" not in direct
-                assert "std::(" not in direct
-    assert any(
-        "qualified or member position" in skip.reason for skip in result.skipped
-    )
-    structured = next(
+    document = next(
         document
-        for document in result.differentials[0].structured_documents
+        for document in result.projections[0].documents
         if document.name == "pivot_collide_user"
     )
-    assert structured.definitions[0].direct == (
+    assert document.definitions[0].direct == (
         "auto __pivot_tmp_0 = std::min(left, right);",
         "res = __pivot_tmp_0;",
     )
-    assert result.differentials[0].structured_only_definition_count == 1
+    assert not any("qualified or member position" in skip.reason for skip in result.skipped)
 
 
 def test_rust_qualified_collision_is_rejected_not_rewritten(
@@ -511,30 +484,22 @@ def test_rust_qualified_collision_is_rejected_not_rewritten(
         primitive="pivot_collide_rust",
     )
 
-    for projection in result.projections:
-        for document in projection.documents:
-            for definition in document.definitions:
-                direct = "\n".join(definition.direct)
-                assert "i32::min" in direct or "min" not in direct
-    assert any(
-        "qualified or member position" in skip.reason for skip in result.skipped
-    )
-    structured = next(
+    document = next(
         document
-        for document in result.differentials[0].structured_documents
+        for document in result.projections[0].documents
         if document.name == "pivot_collide_rust"
     )
-    assert structured.definitions[0].direct == ("res = i32::min(min, right);",)
-    assert result.differentials[0].structured_only_definition_count == 1
+    assert document.definitions[0].direct == ("res = i32::min(min, right);",)
+    assert not any("qualified or member position" in skip.reason for skip in result.skipped)
 
 
-def test_structured_inliner_parenthesizes_arguments_and_reports_cycles(
+def test_typed_inliner_parenthesizes_arguments_and_reports_cycles(
     tmp_path: Path,
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
-    fixture = tmp_path / "pivot_structured.tsl"
-    fixture.write_text(_STRUCTURED_FIXTURE, encoding="utf-8")
+    fixture = tmp_path / "pivot_typed.tsl"
+    fixture.write_text(_INLINER_FIXTURE, encoding="utf-8")
     request = PivotExportRequest(
         source_paths=(*expand_source_paths((data_root,)), fixture),
         machine_profiles_path=machine_profiles_path,
@@ -545,21 +510,15 @@ def test_structured_inliner_parenthesizes_arguments_and_reports_cycles(
     )
     expression_result = export_pivot(request)
 
-    structured = next(
-        document
-        for document in expression_result.differentials[0].structured_documents
-        if document.name == "pivot_expr_user"
-    )
-    assert structured.definitions[0].direct == (
-        "auto __pivot_tmp_0 = (left + right) * (right - left);",
-        "res = __pivot_tmp_0;",
-    )
-    legacy = next(
+    document = next(
         document
         for document in expression_result.projections[0].documents
         if document.name == "pivot_expr_user"
     )
-    assert structured == legacy
+    assert document.definitions[0].direct == (
+        "auto __pivot_tmp_0 = (left + right) * (right - left);",
+        "res = __pivot_tmp_0;",
+    )
 
     cycle_result = export_pivot(
         PivotExportRequest(
@@ -571,11 +530,10 @@ def test_structured_inliner_parenthesizes_arguments_and_reports_cycles(
             type_tags=("si32",),
         )
     )
-    report = cycle_result.differentials[0]
-    assert report.structured_documents == ()
+    assert cycle_result.projections[0].documents == ()
     assert any(
         "recursive primitive-call cycle cannot be inlined" in skip.reason
-        for skip in report.structured_skipped
+        for skip in cycle_result.skipped
     )
 
     arity_result = export_pivot(
@@ -590,7 +548,7 @@ def test_structured_inliner_parenthesizes_arguments_and_reports_cycles(
     )
     assert any(
         "no exact specialization found while inlining call" in skip.reason
-        for skip in arity_result.differentials[0].structured_skipped
+        for skip in arity_result.skipped
     )
 
 

@@ -334,7 +334,7 @@ def normalize_target_text(value: str) -> str:
 
 
 def is_simple_target_value(value: str) -> bool:
-    """Match the legacy no-parentheses cases without reparsing an expression."""
+    """Match the simple no-parentheses cases without reparsing an expression."""
 
     text = value.strip()
     if not text:
@@ -733,7 +733,7 @@ def _node_spelling(item: PivotExpressionNode) -> str:
         return item.text
     if isinstance(item, PivotBindingReference):
         return item.binding.authored_name
-    return "<structured>"
+    return "<expression>"
 
 
 def _previous_significant(

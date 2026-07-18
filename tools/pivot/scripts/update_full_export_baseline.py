@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the reviewed production, typed-shadow, and differential manifests."""
+"""Regenerate the reviewed production and typed-body manifests."""
 
 from __future__ import annotations
 
@@ -16,9 +16,8 @@ sys.path[:0] = [
 
 from tslc.diagnostics import format_diagnostic  # noqa: E402
 from tslc_pivot.baseline import (  # noqa: E402
-    build_differential_census_manifest,
+    build_body_census_manifest,
     build_full_export_manifest,
-    build_shadow_census_manifest,
     canonical_full_export,
     update_pivot_baselines,
 )
@@ -33,21 +32,13 @@ _BASELINE_PATH = (
     / "baselines"
     / "full_export.json"
 )
-_SHADOW_BASELINE_PATH = (
+_BODY_BASELINE_PATH = (
     _REPOSITORY_ROOT
     / "tools"
     / "pivot"
     / "tests"
     / "baselines"
-    / "shadow_census.json"
-)
-_DIFFERENTIAL_BASELINE_PATH = (
-    _REPOSITORY_ROOT
-    / "tools"
-    / "pivot"
-    / "tests"
-    / "baselines"
-    / "differential_census.json"
+    / "body_census.json"
 )
 
 
@@ -60,8 +51,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=(
             "allow removed definitions, replaced direct hashes, or changed typed-"
-            "shadow/differential facts after an explicit product or correctness "
-            "review"
+            "body facts after an explicit product or correctness review"
         ),
     )
     args = parser.parse_args(argv)
@@ -74,11 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     manifest = build_full_export_manifest(run, result)
-    shadow_manifest = build_shadow_census_manifest(
-        result,
-        source_root=_REPOSITORY_ROOT,
-    )
-    differential_manifest = build_differential_census_manifest(
+    body_manifest = build_body_census_manifest(
         result,
         source_root=_REPOSITORY_ROOT,
     )
@@ -86,10 +72,8 @@ def main(argv: list[str] | None = None) -> int:
         update_pivot_baselines(
             _BASELINE_PATH,
             manifest,
-            _SHADOW_BASELINE_PATH,
-            shadow_manifest,
-            _DIFFERENTIAL_BASELINE_PATH,
-            differential_manifest,
+            _BODY_BASELINE_PATH,
+            body_manifest,
             allow_reviewed_incompatible_baseline=(
                 args.allow_reviewed_incompatible_baseline
             ),
@@ -105,20 +89,12 @@ def main(argv: list[str] | None = None) -> int:
         f"{summary['definitions']} definitions, "
         f"{summary['skips']} skips"
     )
-    differential_summary = differential_manifest["summary"]
-    assert isinstance(differential_summary, dict)
+    body_summary = body_manifest["summary"]
+    assert isinstance(body_summary, dict)
     print(
-        f"wrote {_DIFFERENTIAL_BASELINE_PATH.relative_to(_REPOSITORY_ROOT)}: "
-        f"{differential_summary['exact_shared_definitions']} exact shared "
-        "definitions, "
-        f"{differential_summary['direct_mismatches']} direct mismatches"
-    )
-    shadow_summary = shadow_manifest["summary"]
-    assert isinstance(shadow_summary, dict)
-    print(
-        f"wrote {_SHADOW_BASELINE_PATH.relative_to(_REPOSITORY_ROOT)}: "
-        f"{shadow_summary['entries']} entries, "
-        f"{shadow_summary['failures']} failures"
+        f"wrote {_BODY_BASELINE_PATH.relative_to(_REPOSITORY_ROOT)}: "
+        f"{body_summary['entries']} entries, "
+        f"{body_summary['failures']} failures"
     )
     return 0
 

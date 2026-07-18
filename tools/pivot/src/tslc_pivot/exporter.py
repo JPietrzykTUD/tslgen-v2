@@ -83,8 +83,7 @@ def export_pivot(request: PivotExportRequest) -> PivotExportResult:
 
     selected_profiles = profiles_for_distinct_feature_sets(tuple(profiles))
     projections: list[PivotProjection] = []
-    shadow_censuses = []
-    differentials = []
+    body_censuses = []
     plan_diagnostics: list[Diagnostic] = []
     for language in languages:
         plan = PivotPlanner(catalog_inputs.catalog, language).plan(
@@ -93,8 +92,7 @@ def export_pivot(request: PivotExportRequest) -> PivotExportResult:
             type_tags=request.type_tags,
         )
         plan_diagnostics.extend(plan.diagnostics)
-        shadow_censuses.append(plan.shadow_census)
-        differentials.append(plan.differential)
+        body_censuses.append(plan.body_census)
         projections.append(
             PivotProjection(
                 language=language,
@@ -118,8 +116,7 @@ def export_pivot(request: PivotExportRequest) -> PivotExportResult:
         artifacts=artifacts,
         projections=tuple(projections),
         diagnostics=all_diagnostics,
-        shadow_censuses=tuple(shadow_censuses),
-        differentials=tuple(differentials),
+        body_censuses=tuple(body_censuses),
     )
 
 

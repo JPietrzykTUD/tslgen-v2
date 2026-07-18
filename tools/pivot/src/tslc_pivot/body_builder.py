@@ -1,4 +1,4 @@
-"""Convert shadow-lowered render streams into immutable PIVOT body values."""
+"""Convert captured lowering streams into immutable PIVOT body values."""
 
 from __future__ import annotations
 
@@ -32,19 +32,19 @@ from tslc_pivot.body_ir import (
     PivotUnsupported,
 )
 from tslc_pivot.model import PivotLanguage
-from tslc_pivot.shadow_lowering import (
+from tslc_pivot.lowering_capture import (
     CAPTURE_CLOSE,
     CAPTURE_OPEN,
-    PivotShadowCallText,
-    PivotShadowCapture,
-    PivotShadowCompleteText,
-    PivotShadowLocalText,
-    PivotShadowText,
+    PivotCapturedCall,
+    PivotBodyCapture,
+    PivotCapturedResult,
+    PivotCapturedLocal,
+    PivotCaptureNode,
     parse_capture_token,
 )
 
 
-type _DecodedPiece = str | PivotShadowText
+type _DecodedPiece = str | PivotCaptureNode
 
 
 class _BodyBuildError(ValueError):
@@ -56,12 +56,12 @@ class _BodyBuildError(ValueError):
 def build_pivot_body(
     language: PivotLanguage,
     lowered: LoweredBody,
-    capture: PivotShadowCapture,
+    capture: PivotBodyCapture,
     source: SourceSpan | None,
     *,
     alternative_sources: tuple[SourceSpan, ...] = (),
 ) -> PivotBodyBuildResult:
-    """Build a shadow body without rendering compiler-added unsafe framing."""
+    """Build a body body without rendering compiler-added unsafe framing."""
 
     try:
         nodes = _capture_nodes(capture, source, alternative_sources)
@@ -75,18 +75,18 @@ def build_pivot_body(
             if result is not None:
                 if isinstance(piece, str) and not piece.strip():
                     continue
-                if isinstance(piece, PivotShadowCompleteText):
+                if isinstance(piece, PivotCapturedResult):
                     raise _failure(
-                        "TSL-PIVOT-SHADOW-DUPLICATE-COMPLETE",
-                        "PIVOT shadow body contains more than one complete(...) result",
+                        "TSL-PIVOT-BODY-DUPLICATE-COMPLETE",
+                        "PIVOT body body contains more than one complete(...) result",
                         piece.source or source,
                     )
                 raise _failure(
-                    "TSL-PIVOT-SHADOW-NONFINAL-COMPLETE",
+                    "TSL-PIVOT-BODY-NONFINAL-COMPLETE",
                     "PIVOT complete(...) must be the final body item",
                     source,
                 )
-            if isinstance(piece, PivotShadowLocalText):
+            if isinstance(piece, PivotCapturedLocal):
                 _flush_residual(statements, residual, nodes, seen, source)
                 initializer = _expression_from_render_text(
                     piece.initializer,
@@ -103,7 +103,7 @@ def build_pivot_body(
                     )
                 )
                 continue
-            if isinstance(piece, PivotShadowCompleteText):
+            if isinstance(piece, PivotCapturedResult):
                 _flush_residual(statements, residual, nodes, seen, source)
                 result = PivotFinalResult(
                     _expression_from_render_text(
@@ -120,8 +120,8 @@ def build_pivot_body(
         _flush_residual(statements, residual, nodes, seen, source)
         if result is None:
             raise _failure(
-                "TSL-PIVOT-SHADOW-NO-COMPLETE",
-                "PIVOT shadow body has no typed final complete(...) result",
+                "TSL-PIVOT-BODY-NO-COMPLETE",
+                "PIVOT body body has no typed final complete(...) result",
                 source,
             )
         _ensure_all_captures_consumed(nodes, seen, source)
@@ -194,7 +194,7 @@ def synthetic_pivot_body(
 def _flush_residual(
     statements: list[PivotLocal | PivotResidualStatementSequence],
     residual: list[_DecodedPiece],
-    nodes: dict[str, PivotShadowText],
+    nodes: dict[str, PivotCaptureNode],
     seen: set[str],
     source: SourceSpan | None,
 ) -> None:
@@ -210,7 +210,7 @@ def _flush_residual(
 
 def _expression_from_render_text(
     value: RenderText,
-    nodes: dict[str, PivotShadowText],
+    nodes: dict[str, PivotCaptureNode],
     seen: set[str],
     source: SourceSpan | None,
 ) -> PivotExpression:
@@ -224,7 +224,7 @@ def _expression_from_render_text(
 
 def _expression_from_decoded(
     decoded: Iterable[_DecodedPiece],
-    nodes: dict[str, PivotShadowText],
+    nodes: dict[str, PivotCaptureNode],
     seen: set[str],
     source: SourceSpan | None,
 ) -> PivotExpression:
@@ -233,7 +233,7 @@ def _expression_from_decoded(
         if isinstance(piece, str):
             pieces.append(piece)
             continue
-        if isinstance(piece, PivotShadowCallText):
+        if isinstance(piece, PivotCapturedCall):
             arguments = tuple(
                 _expression_from_render_text(
                     argument,
@@ -255,11 +255,11 @@ def _expression_from_decoded(
             continue
         kind = (
             "local declaration"
-            if isinstance(piece, PivotShadowLocalText)
+            if isinstance(piece, PivotCapturedLocal)
             else "complete"
         )
         raise _failure(
-            "TSL-PIVOT-SHADOW-NESTED-STATEMENT",
+            "TSL-PIVOT-BODY-NESTED-STATEMENT",
             f"PIVOT found a typed {kind} in expression position",
             piece.source or source,
         )
@@ -297,7 +297,7 @@ def _normalize_expression(
             normalized.pop()
     if not normalized:
         raise _failure(
-            "TSL-PIVOT-SHADOW-EMPTY-EXPRESSION",
+            "TSL-PIVOT-BODY-EMPTY-EXPRESSION",
             "PIVOT captured an empty expression",
             source,
         )
@@ -305,20 +305,20 @@ def _normalize_expression(
 
 
 def _capture_nodes(
-    capture: PivotShadowCapture,
+    capture: PivotBodyCapture,
     source: SourceSpan | None,
     alternative_sources: tuple[SourceSpan, ...],
-) -> dict[str, PivotShadowText]:
-    nodes: dict[str, PivotShadowText] = {}
+) -> dict[str, PivotCaptureNode]:
+    nodes: dict[str, PivotCaptureNode] = {}
     tokens: set[str] = set()
     ordinals: set[int] = set()
     for node in capture.nodes:
         token = node.token
         kind = (
             "call"
-            if isinstance(node, PivotShadowCallText)
+            if isinstance(node, PivotCapturedCall)
             else "local"
-            if isinstance(node, PivotShadowLocalText)
+            if isinstance(node, PivotCapturedLocal)
             else "complete"
         )
         parsed = parse_capture_token(token)
@@ -328,7 +328,7 @@ def _capture_nodes(
             or parsed[2] in ordinals
         ):
             raise _failure(
-                "TSL-PIVOT-SHADOW-MALFORMED-CAPTURE",
+                "TSL-PIVOT-BODY-MALFORMED-CAPTURE",
                 "PIVOT lowering produced a malformed reserved capture token",
                 node.source or source,
             )
@@ -336,7 +336,7 @@ def _capture_nodes(
         ordinals.add(ordinal)
         if token in tokens:
             raise _failure(
-                "TSL-PIVOT-SHADOW-DUPLICATE-CAPTURE",
+                "TSL-PIVOT-BODY-DUPLICATE-CAPTURE",
                 "PIVOT lowering produced duplicate reserved capture tokens",
                 node.source or source,
             )
@@ -351,14 +351,14 @@ def _capture_nodes(
                 # adapter consumes the default ``LoweredSpecialization.body``.
                 continue
             raise _failure(
-                "TSL-PIVOT-SHADOW-OUT-OF-BODY-CAPTURE",
+                "TSL-PIVOT-BODY-OUT-OF-BODY-CAPTURE",
                 "PIVOT lowering captured a typed node outside the selected body",
                 node.source,
             )
         nodes[token] = node
     if ordinals != set(range(len(capture.nodes))):
         raise _failure(
-            "TSL-PIVOT-SHADOW-MALFORMED-CAPTURE",
+            "TSL-PIVOT-BODY-MALFORMED-CAPTURE",
             "PIVOT lowering produced a non-contiguous capture ordinal set",
             source,
         )
@@ -377,7 +377,7 @@ def _span_contains(container: SourceSpan, child: SourceSpan) -> bool:
 
 def _decode_render_text(
     value: RenderText,
-    nodes: dict[str, PivotShadowText],
+    nodes: dict[str, PivotCaptureNode],
     seen: set[str],
     source: SourceSpan | None,
 ) -> tuple[_DecodedPiece, ...]:
@@ -385,7 +385,7 @@ def _decode_render_text(
 
     if isinstance(
         value,
-        (PivotShadowCallText, PivotShadowLocalText, PivotShadowCompleteText),
+        (PivotCapturedCall, PivotCapturedLocal, PivotCapturedResult),
     ):
         _consume_node(value, nodes, seen, source)
         return (value,)
@@ -414,7 +414,7 @@ def _decode_render_text(
             name = getattr(segment, "name", None)
             if not isinstance(name, str) or name not in value.fields:
                 raise _failure(
-                    "TSL-PIVOT-SHADOW-MALFORMED-TEMPLATE",
+                    "TSL-PIVOT-BODY-MALFORMED-TEMPLATE",
                     f"PIVOT cannot adapt unresolved template {value.key!r}",
                     source,
                 )
@@ -428,15 +428,14 @@ def _decode_render_text(
             value.render()
         except TemplateRenderError as exc:
             raise _failure(
-                "TSL-PIVOT-SHADOW-MALFORMED-TEMPLATE",
+                "TSL-PIVOT-BODY-MALFORMED-TEMPLATE",
                 str(exc),
                 source,
             ) from exc
         return tuple(pieces)
     raise _failure(
-        "TSL-PIVOT-SHADOW-UNKNOWN-RENDER-TEXT",
-        "PIVOT has no lockstep adapter for compiler render value "
-        f"{type(value).__module__}.{type(value).__qualname__}",
+        "TSL-PIVOT-BODY-UNKNOWN-RENDER-TEXT",
+        "PIVOT body contains an unsupported compiler render value",
         source,
     )
 
@@ -456,32 +455,32 @@ def _contains_unsafe(value: RenderText) -> bool:
             if isinstance((name := getattr(segment, "name", None)), str)
             if (field := value.fields.get(name)) is not None
         )
-    if isinstance(value, PivotShadowCallText):
+    if isinstance(value, PivotCapturedCall):
         return value.requires_unsafe or any(
             _contains_unsafe(argument) for argument in value.arguments
         )
-    if isinstance(value, PivotShadowLocalText):
+    if isinstance(value, PivotCapturedLocal):
         return _contains_unsafe(value.initializer)
-    if isinstance(value, PivotShadowCompleteText):
+    if isinstance(value, PivotCapturedResult):
         return _contains_unsafe(value.value)
     return False
 
 
 def _consume_node(
-    node: PivotShadowText,
-    nodes: dict[str, PivotShadowText],
+    node: PivotCaptureNode,
+    nodes: dict[str, PivotCaptureNode],
     seen: set[str],
     source: SourceSpan | None,
 ) -> None:
     if nodes.get(node.token) is not node:
         raise _failure(
-            "TSL-PIVOT-SHADOW-FOREIGN-CAPTURE",
+            "TSL-PIVOT-BODY-FOREIGN-CAPTURE",
             "PIVOT render node belongs to a different lowering capture",
             node.source or source,
         )
     if node.token in seen:
         raise _failure(
-            "TSL-PIVOT-SHADOW-REPEATED-CAPTURE",
+            "TSL-PIVOT-BODY-REPEATED-CAPTURE",
             "PIVOT render stream repeats a capture token",
             node.source or source,
         )
@@ -489,7 +488,7 @@ def _consume_node(
 
 
 def _ensure_all_captures_consumed(
-    nodes: dict[str, PivotShadowText],
+    nodes: dict[str, PivotCaptureNode],
     seen: set[str],
     source: SourceSpan | None,
 ) -> None:
@@ -498,7 +497,7 @@ def _ensure_all_captures_consumed(
         return
     node = nodes[missing]
     raise _failure(
-        "TSL-PIVOT-SHADOW-UNCONSUMED-CAPTURE",
+        "TSL-PIVOT-BODY-UNCONSUMED-CAPTURE",
         "PIVOT lowering captured a typed node that was lost from the render stream",
         node.source or source,
     )
@@ -523,7 +522,7 @@ def _trim_decoded(pieces: tuple[_DecodedPiece, ...]) -> tuple[_DecodedPiece, ...
 
 def _decode(
     text: str,
-    nodes: dict[str, PivotShadowText],
+    nodes: dict[str, PivotCaptureNode],
     seen: set[str],
     source: SourceSpan | None,
 ) -> tuple[_DecodedPiece, ...]:
@@ -534,7 +533,7 @@ def _decode(
         stray_sentinel = text.find(CAPTURE_CLOSE, cursor)
         if stray_sentinel != -1 and stray_sentinel != opening:
             raise _failure(
-                "TSL-PIVOT-SHADOW-MALFORMED-CAPTURE",
+                "TSL-PIVOT-BODY-MALFORMED-CAPTURE",
                 "PIVOT render stream contains an unexpected capture sentinel",
                 source,
             )
@@ -542,7 +541,7 @@ def _decode(
             tail = text[cursor:]
             if CAPTURE_CLOSE in tail:
                 raise _failure(
-                    "TSL-PIVOT-SHADOW-MALFORMED-CAPTURE",
+                    "TSL-PIVOT-BODY-MALFORMED-CAPTURE",
                     "PIVOT render stream contains a malformed capture delimiter",
                     source,
                 )
@@ -554,7 +553,7 @@ def _decode(
         closing = text.find(CAPTURE_CLOSE, opening + len(CAPTURE_OPEN))
         if closing == -1:
             raise _failure(
-                "TSL-PIVOT-SHADOW-MALFORMED-CAPTURE",
+                "TSL-PIVOT-BODY-MALFORMED-CAPTURE",
                 "PIVOT render stream contains an unterminated capture token",
                 source,
             )
@@ -562,7 +561,7 @@ def _decode(
         node = nodes.get(token)
         if node is None:
             raise _failure(
-                "TSL-PIVOT-SHADOW-UNKNOWN-CAPTURE",
+                "TSL-PIVOT-BODY-UNKNOWN-CAPTURE",
                 "PIVOT render stream refers to an unknown capture token",
                 source,
             )

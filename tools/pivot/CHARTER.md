@@ -61,6 +61,7 @@ corruption is never an acceptable way to preserve coverage.
 
 ## 7. PIVOT Owns Its Evidence
 
-The tool owns package-isolation, parser, inliner, schema, golden or differential,
-determinism, compatibility, and full-export ratchet tests. Core compiler tests
-prove compiler behavior; they are not substitutes for PIVOT consumer evidence.
+The tool owns package-isolation, lowering-capture, body-census, parser, inliner,
+schema, determinism, compatibility, and full-export ratchet tests. Core compiler
+tests prove compiler behavior; they are not substitutes for PIVOT consumer
+evidence.

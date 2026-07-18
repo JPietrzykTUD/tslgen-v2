@@ -2,11 +2,12 @@
 
 ## Status and basis
 
-Status: Phases 1 and 2 implemented (slices 1–19); Phase 3 implemented through
-slice 26. The architecture for slice 27 is now approved and replanned as an
-independently packaged downstream PIVOT tool; slice 27A is implemented and
-verified, slice 27B is implemented and verified, and slice 27C has not started.
-See [`pivot-export-rework-plan.md`](pivot-export-rework-plan.md).
+Status: Phases 1 and 2 implemented (slices 1–19); Phase 3 implemented and
+verified through slice 27. PIVOT is an independently packaged downstream tool,
+and slices 27A through 27D are complete. External-consumer validation remains
+the one explicit gap because no PIVOT prototype executable or authoritative
+parser fixture is available. See
+[`pivot-export-rework-plan.md`](pivot-export-rework-plan.md).
 
 Phase 3 implementation notes (one commit per slice):
 
@@ -56,6 +57,17 @@ Phase 3 implementation notes (one commit per slice):
   changed. One guarded maintenance command validates both production and shadow
   manifests before writing either; shadow semantic changes require explicit
   review.
+- Slice 27C: bounded C++/Rust residual-expression parsing and identity-based
+  recursive inlining reproduce all 17,060 definition occurrences, every
+  collision, document order, `direct` list, and YAML artifact byte-for-byte.
+  Adversarial collision, syntax, cycle, arity, and fail-closed cases establish
+  the typed path before cutover.
+- Slice 27D: the typed path is the sole exporter. The marker/regex rewrite and
+  differential engine are deleted; profile cover and document/body assembly
+  have literal module owners. The production and body manifests retain all
+  definitions, 4,730 multi-statement entries, and zero body failures. Standalone
+  tool, core isolation, corpus, determinism, installed-command, and wheel gates
+  pass without a `tslc/` or `tsldata/` change.
 
 Phase 2 implementation notes (one commit per slice):
 

@@ -1,4 +1,4 @@
-"""Typed PIVOT body retention beside the unchanged legacy exporter."""
+"""Typed PIVOT lowering, body construction, and inlining tests."""
 
 from __future__ import annotations
 
@@ -24,7 +24,6 @@ from tslc.target_text import (
     UnsafeBlockText,
     literal_text,
 )
-from tslc_pivot._lowering import PivotCallCaptureScope, pivot_region_lowerers
 from tslc_pivot.body_ir import (
     PivotBody,
     PivotBodyBuildResult,
@@ -33,28 +32,28 @@ from tslc_pivot.body_ir import (
     PivotLocal,
     PivotResidualStatementSequence,
     PivotResidualText,
-    PivotShadowCategory,
-    PivotShadowCensus,
-    PivotShadowEntry,
-    PivotShadowOrigin,
-    pivot_shadow_census_digest,
+    PivotBodyCategory,
+    PivotBodyCensus,
+    PivotBodyEntry,
+    PivotBodyOrigin,
+    pivot_body_census_digest,
 )
 from tslc_pivot.model import PivotDefinition, PivotLanguage
-from tslc_pivot.render_stream import build_pivot_body, synthetic_pivot_body
-from tslc_pivot.shadow_lowering import (
+from tslc_pivot.body_builder import build_pivot_body, synthetic_pivot_body
+from tslc_pivot.lowering_capture import (
     CAPTURE_CLOSE,
     CAPTURE_OPEN,
-    PivotShadowCallText,
-    PivotShadowCapture,
-    PivotShadowCaptureScope,
-    PivotShadowCompleteText,
-    PivotShadowText,
+    PivotCapturedCall,
+    PivotBodyCapture,
+    PivotBodyCaptureScope,
+    PivotCapturedResult,
+    PivotCaptureNode,
     capture_source_collision,
-    pivot_shadow_region_lowerers,
+    pivot_capture_region_lowerers,
 )
 
 
-_SOURCE = SourceSpan(Path("shadow-body.tsl"), 10, 3, 30, 1)
+_SOURCE = SourceSpan(Path("body-pipeline.tsl"), 10, 3, 30, 1)
 _DEPENDENCY = CallDependency(
     primitive="add",
     mask_policy=None,
@@ -70,20 +69,20 @@ def _token(kind: str, ordinal: int) -> str:
     )
 
 
-def _capture(*nodes: PivotShadowText) -> PivotShadowCapture:
-    return PivotShadowCapture(
+def _capture(*nodes: PivotCaptureNode) -> PivotBodyCapture:
+    return PivotBodyCapture(
         (),
         tuple(nodes),
         _CAPTURE_NAMESPACE,
     )
 
 
-def test_shadow_lowering_retains_nested_calls_locals_shadowing_and_result(
+def test_body_lowering_retains_nested_calls_local_shadowing_and_result(
     catalog: Catalog,
     machine_profiles: Mapping[str, MachineProfile],
 ) -> None:
     slot = _add_slot(catalog, machine_profiles)
-    result, capture = _lower_shadow(
+    result, capture = _lower_body(
         catalog,
         slot,
         PivotLanguage.CPP,
@@ -140,7 +139,7 @@ def test_raw_assignment_remains_an_ordered_residual_statement_sequence(
     catalog: Catalog,
     machine_profiles: Mapping[str, MachineProfile],
 ) -> None:
-    result, _captured = _lower_shadow(
+    result, _captured = _lower_body(
         catalog,
         _add_slot(catalog, machine_profiles),
         PivotLanguage.CPP,
@@ -165,7 +164,7 @@ def test_generation_loop_produces_distinct_typed_call_occurrences(
     catalog: Catalog,
     machine_profiles: Mapping[str, MachineProfile],
 ) -> None:
-    result, capture = _lower_shadow(
+    result, capture = _lower_body(
         catalog,
         _add_slot(catalog, machine_profiles),
         PivotLanguage.CPP,
@@ -179,20 +178,20 @@ def test_generation_loop_produces_distinct_typed_call_occurrences(
 
     body = _body(result)
     assert body.call_count == 2
-    call_nodes = [node for node in capture.nodes if isinstance(node, PivotShadowCallText)]
+    call_nodes = [node for node in capture.nodes if isinstance(node, PivotCapturedCall)]
     assert len(call_nodes) == 2
     assert call_nodes[0].token != call_nodes[1].token
 
 
 def test_rust_unsafe_framing_and_template_fields_stay_structural() -> None:
-    call = PivotShadowCallText(
+    call = PivotCapturedCall(
         _token("call", 0),
         _DEPENDENCY,
         (),
         (),
         _SOURCE,
     )
-    complete = PivotShadowCompleteText(
+    complete = PivotCapturedResult(
         _token("complete", 1),
         TemplateApplication("test", "wrap({value})", {"value": call}),
         _SOURCE,
@@ -217,7 +216,7 @@ def test_rust_unsafe_framing_and_template_fields_stay_structural() -> None:
 
 
 def test_template_validation_stays_fail_closed() -> None:
-    missing = PivotShadowCompleteText(
+    missing = PivotCapturedResult(
         _token("complete", 0),
         TemplateApplication("missing", "wrap({value})", {}),
         _SOURCE,
@@ -229,10 +228,10 @@ def test_template_validation_stays_fail_closed() -> None:
         _SOURCE,
     )
     assert _unsupported_code(missing_result) == (
-        "TSL-PIVOT-SHADOW-MALFORMED-TEMPLATE"
+        "TSL-PIVOT-BODY-MALFORMED-TEMPLATE"
     )
 
-    unresolved = PivotShadowCompleteText(
+    unresolved = PivotCapturedResult(
         _token("complete", 0),
         TemplateApplication("unresolved", "{value}", {"value": "{other}"}),
         _SOURCE,
@@ -244,7 +243,7 @@ def test_template_validation_stays_fail_closed() -> None:
         _SOURCE,
     )
     assert _unsupported_code(unresolved_result) == (
-        "TSL-PIVOT-SHADOW-MALFORMED-TEMPLATE"
+        "TSL-PIVOT-BODY-MALFORMED-TEMPLATE"
     )
 
     class FutureRenderText:
@@ -252,7 +251,7 @@ def test_template_validation_stays_fail_closed() -> None:
             del context
             raise RuntimeError("an unknown render value must not be invoked")
 
-    unknown = PivotShadowCompleteText(
+    unknown = PivotCapturedResult(
         _token("complete", 0),
         TemplateApplication(
             "unknown", "wrap({value})", {"value": FutureRenderText()}
@@ -266,10 +265,10 @@ def test_template_validation_stays_fail_closed() -> None:
         _SOURCE,
     )
     assert _unsupported_code(unknown_result) == (
-        "TSL-PIVOT-SHADOW-UNKNOWN-RENDER-TEXT"
+        "TSL-PIVOT-BODY-UNKNOWN-RENDER-TEXT"
     )
 
-    used_only = PivotShadowCompleteText(
+    used_only = PivotCapturedResult(
         _token("complete", 0),
         TemplateApplication(
             "unused",
@@ -316,7 +315,7 @@ def test_synthetic_fixed_wrapper_is_an_explicit_typed_call() -> None:
     assert tuple(argument_texts) == ("left", "right")
 
 
-def test_shadow_digest_normalizes_source_roots_but_retains_relative_paths(
+def test_body_digest_normalizes_source_roots_but_retains_relative_paths(
     tmp_path: Path,
 ) -> None:
     left_root = tmp_path / "checkout-a"
@@ -325,19 +324,19 @@ def test_shadow_digest_normalizes_source_roots_but_retains_relative_paths(
     right = _fixed_census(right_root, Path("sources/demo.tsl"))
     moved = _fixed_census(right_root, Path("sources/moved.tsl"))
 
-    left_digest = pivot_shadow_census_digest((left,), source_root=left_root)
-    right_digest = pivot_shadow_census_digest((right,), source_root=right_root)
-    moved_digest = pivot_shadow_census_digest((moved,), source_root=right_root)
+    left_digest = pivot_body_census_digest((left,), source_root=left_root)
+    right_digest = pivot_body_census_digest((right,), source_root=right_root)
+    moved_digest = pivot_body_census_digest((moved,), source_root=right_root)
 
     assert left_digest == right_digest
     assert moved_digest != right_digest
 
 
-def test_shadow_call_retains_compiler_caller_unsafe_fact(
+def test_body_call_retains_compiler_caller_unsafe_fact(
     catalog: Catalog,
     machine_profiles: Mapping[str, MachineProfile],
 ) -> None:
-    result, _captured = _lower_shadow(
+    result, _captured = _lower_body(
         catalog,
         _add_slot(catalog, machine_profiles),
         PivotLanguage.RUST,
@@ -350,7 +349,7 @@ def test_shadow_call_retains_compiler_caller_unsafe_fact(
     assert call.requires_unsafe is True
     assert body.requires_unsafe is True
 
-    flattened_call = PivotShadowCallText(
+    flattened_call = PivotCapturedCall(
         _token("call", 0),
         _DEPENDENCY,
         (),
@@ -358,7 +357,7 @@ def test_shadow_call_retains_compiler_caller_unsafe_fact(
         _SOURCE,
         True,
     )
-    flattened_complete = PivotShadowCompleteText(
+    flattened_complete = PivotCapturedResult(
         _token("complete", 1),
         literal_text(flattened_call.token),
         _SOURCE,
@@ -381,26 +380,26 @@ def test_shadow_call_retains_compiler_caller_unsafe_fact(
         (
             LoweredBody.from_text("value;"),
             _capture(),
-            "TSL-PIVOT-SHADOW-NO-COMPLETE",
+            "TSL-PIVOT-BODY-NO-COMPLETE",
         ),
         (
             LoweredBody.from_render_text(
-                PivotShadowCompleteText(
+                PivotCapturedResult(
                     _token("complete", 0), literal_text("  "), _SOURCE
                 )
             ),
             _capture(
-                PivotShadowCompleteText(
+                PivotCapturedResult(
                     _token("complete", 0), literal_text("  "), _SOURCE
                 ),
             ),
-            "TSL-PIVOT-SHADOW-FOREIGN-CAPTURE",
+            "TSL-PIVOT-BODY-FOREIGN-CAPTURE",
         ),
     ),
 )
-def test_missing_or_foreign_final_result_is_structured(
+def test_missing_or_foreign_final_result_is_typed(
     lowered: LoweredBody,
-    capture: PivotShadowCapture,
+    capture: PivotBodyCapture,
     code: str,
 ) -> None:
     result = build_pivot_body(PivotLanguage.CPP, lowered, capture, _SOURCE)
@@ -411,7 +410,7 @@ def test_missing_or_foreign_final_result_is_structured(
 
 
 def test_final_result_must_be_nonempty_unique_and_last() -> None:
-    empty = PivotShadowCompleteText(
+    empty = PivotCapturedResult(
         _token("complete", 0), literal_text("  "), _SOURCE
     )
     empty_result = build_pivot_body(
@@ -420,12 +419,12 @@ def test_final_result_must_be_nonempty_unique_and_last() -> None:
         _capture(empty),
         _SOURCE,
     )
-    assert _unsupported_code(empty_result) == "TSL-PIVOT-SHADOW-EMPTY-EXPRESSION"
+    assert _unsupported_code(empty_result) == "TSL-PIVOT-BODY-EMPTY-EXPRESSION"
 
-    first = PivotShadowCompleteText(
+    first = PivotCapturedResult(
         _token("complete", 0), literal_text("left"), _SOURCE
     )
-    second = PivotShadowCompleteText(
+    second = PivotCapturedResult(
         _token("complete", 1), literal_text("right"), _SOURCE
     )
     duplicate_result = build_pivot_body(
@@ -435,7 +434,7 @@ def test_final_result_must_be_nonempty_unique_and_last() -> None:
         _SOURCE,
     )
     assert _unsupported_code(duplicate_result) == (
-        "TSL-PIVOT-SHADOW-DUPLICATE-COMPLETE"
+        "TSL-PIVOT-BODY-DUPLICATE-COMPLETE"
     )
 
     nonfinal_result = build_pivot_body(
@@ -445,19 +444,19 @@ def test_final_result_must_be_nonempty_unique_and_last() -> None:
         _SOURCE,
     )
     assert _unsupported_code(nonfinal_result) == (
-        "TSL-PIVOT-SHADOW-NONFINAL-COMPLETE"
+        "TSL-PIVOT-BODY-NONFINAL-COMPLETE"
     )
 
 
 def test_capture_adapter_rejects_malformed_unknown_repeated_and_lost_nodes() -> None:
-    malformed = PivotShadowCompleteText("not-a-token", literal_text("x"), _SOURCE)
+    malformed = PivotCapturedResult("not-a-token", literal_text("x"), _SOURCE)
     malformed_result = build_pivot_body(
         PivotLanguage.CPP,
         LoweredBody.from_render_text(malformed),
         _capture(malformed),
         _SOURCE,
     )
-    assert _unsupported_code(malformed_result) == "TSL-PIVOT-SHADOW-MALFORMED-CAPTURE"
+    assert _unsupported_code(malformed_result) == "TSL-PIVOT-BODY-MALFORMED-CAPTURE"
 
     unknown_result = build_pivot_body(
         PivotLanguage.CPP,
@@ -465,7 +464,7 @@ def test_capture_adapter_rejects_malformed_unknown_repeated_and_lost_nodes() -> 
         _capture(),
         _SOURCE,
     )
-    assert _unsupported_code(unknown_result) == "TSL-PIVOT-SHADOW-UNKNOWN-CAPTURE"
+    assert _unsupported_code(unknown_result) == "TSL-PIVOT-BODY-UNKNOWN-CAPTURE"
 
     truncated_result = build_pivot_body(
         PivotLanguage.CPP,
@@ -474,10 +473,10 @@ def test_capture_adapter_rejects_malformed_unknown_repeated_and_lost_nodes() -> 
         _SOURCE,
     )
     assert _unsupported_code(truncated_result) == (
-        "TSL-PIVOT-SHADOW-MALFORMED-CAPTURE"
+        "TSL-PIVOT-BODY-MALFORMED-CAPTURE"
     )
 
-    complete = PivotShadowCompleteText(
+    complete = PivotCapturedResult(
         _token("complete", 0), literal_text("x"), _SOURCE
     )
     repeated_result = build_pivot_body(
@@ -487,10 +486,10 @@ def test_capture_adapter_rejects_malformed_unknown_repeated_and_lost_nodes() -> 
         _SOURCE,
     )
     assert _unsupported_code(repeated_result) == (
-        "TSL-PIVOT-SHADOW-REPEATED-CAPTURE"
+        "TSL-PIVOT-BODY-REPEATED-CAPTURE"
     )
 
-    lost = PivotShadowCallText(_token("call", 1), _DEPENDENCY, (), (), _SOURCE)
+    lost = PivotCapturedCall(_token("call", 1), _DEPENDENCY, (), (), _SOURCE)
     lost_result = build_pivot_body(
         PivotLanguage.CPP,
         LoweredBody.from_render_text(complete),
@@ -498,7 +497,7 @@ def test_capture_adapter_rejects_malformed_unknown_repeated_and_lost_nodes() -> 
         _SOURCE,
     )
     assert _unsupported_code(lost_result) == (
-        "TSL-PIVOT-SHADOW-UNCONSUMED-CAPTURE"
+        "TSL-PIVOT-BODY-UNCONSUMED-CAPTURE"
     )
 
 
@@ -512,7 +511,7 @@ def test_capture_adapter_rejects_malformed_unknown_repeated_and_lost_nodes() -> 
     ),
 )
 def test_capture_records_require_exact_token_grammar(token: str) -> None:
-    complete = PivotShadowCompleteText(token, literal_text("x"), _SOURCE)
+    complete = PivotCapturedResult(token, literal_text("x"), _SOURCE)
     result = build_pivot_body(
         PivotLanguage.CPP,
         LoweredBody.from_render_text(complete),
@@ -520,15 +519,15 @@ def test_capture_records_require_exact_token_grammar(token: str) -> None:
         _SOURCE,
     )
 
-    assert _unsupported_code(result) == "TSL-PIVOT-SHADOW-MALFORMED-CAPTURE"
+    assert _unsupported_code(result) == "TSL-PIVOT-BODY-MALFORMED-CAPTURE"
 
 
 def test_only_declared_variant_captures_are_ignored() -> None:
-    complete = PivotShadowCompleteText(
+    complete = PivotCapturedResult(
         _token("complete", 0), literal_text("x"), _SOURCE
     )
     variant_source = SourceSpan(_SOURCE.path, 40, 1, 45, 1)
-    variant_call = PivotShadowCallText(
+    variant_call = PivotCapturedCall(
         _token("call", 1), _DEPENDENCY, (), (), variant_source
     )
     capture = _capture(complete, variant_call)
@@ -541,7 +540,7 @@ def test_only_declared_variant_captures_are_ignored() -> None:
         _SOURCE,
     )
     assert _unsupported_code(unexpected) == (
-        "TSL-PIVOT-SHADOW-OUT-OF-BODY-CAPTURE"
+        "TSL-PIVOT-BODY-OUT-OF-BODY-CAPTURE"
     )
 
     accepted = build_pivot_body(
@@ -560,11 +559,11 @@ def test_capture_scope_is_fresh_reentrant_and_failure_safe(
     catalog: Catalog,
     machine_profiles: Mapping[str, MachineProfile],
 ) -> None:
-    scope = PivotShadowCaptureScope("test")
+    scope = PivotBodyCaptureScope("test")
     slot = _add_slot(catalog, machine_profiles)
     source = "var<infer>(tmp, left); complete(tmp);"
 
-    first, first_capture = _lower_shadow(
+    first, first_capture = _lower_body(
         catalog, slot, PivotLanguage.CPP, source, scope=scope
     )
     with scope.capture(("outer",), _SOURCE) as outer:
@@ -577,7 +576,7 @@ def test_capture_scope_is_fresh_reentrant_and_failure_safe(
             raise RuntimeError("deliberate failed operation")
     except RuntimeError:
         pass
-    second, second_capture = _lower_shadow(
+    second, second_capture = _lower_body(
         catalog, slot, PivotLanguage.CPP, source, scope=scope
     )
 
@@ -594,7 +593,7 @@ def test_capture_scope_is_fresh_reentrant_and_failure_safe(
         _SOURCE,
     )
     assert _unsupported_code(foreign_result) == (
-        "TSL-PIVOT-SHADOW-UNKNOWN-CAPTURE"
+        "TSL-PIVOT-BODY-UNKNOWN-CAPTURE"
     )
     assert tuple(
         statement.binding.identity.ordinal
@@ -607,7 +606,7 @@ def test_capture_scope_is_fresh_reentrant_and_failure_safe(
         _body(first).requires_unsafe = True  # type: ignore[misc]
 
 
-def test_unresolved_explicit_call_vector_is_rejected_by_all_lowering_paths(
+def test_unresolved_explicit_call_vector_is_rejected_by_pivot_lowering(
     catalog: Catalog,
     machine_profiles: Mapping[str, MachineProfile],
 ) -> None:
@@ -620,25 +619,16 @@ def test_unresolved_explicit_call_vector_is_rejected_by_all_lowering_paths(
 
     standard = Lowerer().lower(slot, catalog, backend, body_segments=source)
 
-    legacy_scope = PivotCallCaptureScope()
-    with legacy_scope.capture():
-        legacy = Lowerer(
-            region_lowerers=pivot_region_lowerers(legacy_scope)
-        ).lower(slot, catalog, backend, body_segments=source)
-
-    shadow_scope = PivotShadowCaptureScope("test")
-    with shadow_scope.capture(tuple(slot.primitive.parameters), _SOURCE):
-        shadow = Lowerer(
-            region_lowerers=pivot_shadow_region_lowerers(shadow_scope)
+    body_scope = PivotBodyCaptureScope("test")
+    with body_scope.capture(tuple(slot.primitive.parameters), _SOURCE):
+        body = Lowerer(
+            region_lowerers=pivot_capture_region_lowerers(body_scope)
         ).lower(slot, catalog, backend, body_segments=source)
 
     assert tuple(item.code for item in standard.diagnostics) == (
         "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
     )
-    assert tuple(item.code for item in legacy.diagnostics) == (
-        "TSL-PIVOT-UNSUPPORTED-CALL-TYPEARGS",
-    )
-    assert tuple(item.code for item in shadow.diagnostics) == (
+    assert tuple(item.code for item in body.diagnostics) == (
         "TSL-PIVOT-UNSUPPORTED-CALL-TYPEARGS",
     )
 
@@ -671,16 +661,16 @@ def _add_slot(
     )
 
 
-def _lower_shadow(
+def _lower_body(
     catalog: Catalog,
     slot: SelectedImplementation,
     language: PivotLanguage,
     source_text: str,
     *,
-    scope: PivotShadowCaptureScope | None = None,
-) -> tuple[PivotBodyBuildResult, PivotShadowCapture]:
-    active_scope = scope or PivotShadowCaptureScope("test")
-    lowerer = Lowerer(region_lowerers=pivot_shadow_region_lowerers(active_scope))
+    scope: PivotBodyCaptureScope | None = None,
+) -> tuple[PivotBodyBuildResult, PivotBodyCapture]:
+    active_scope = scope or PivotBodyCaptureScope("test")
+    lowerer = Lowerer(region_lowerers=pivot_capture_region_lowerers(active_scope))
     with active_scope.capture(tuple(slot.primitive.parameters), _SOURCE) as builder:
         lowered = lowerer.lower(
             slot,
@@ -708,7 +698,7 @@ def _body(result: PivotBodyBuildResult) -> PivotBody:
     return result.body
 
 
-def _fixed_census(root: Path, relative_source: Path) -> PivotShadowCensus:
+def _fixed_census(root: Path, relative_source: Path) -> PivotBodyCensus:
     source = SourceSpan(root / relative_source, 1, 1, 2, 1)
     body = synthetic_pivot_body(
         PivotLanguage.CPP,
@@ -717,10 +707,10 @@ def _fixed_census(root: Path, relative_source: Path) -> PivotShadowCensus:
         "__m128i",
         source,
     )
-    return PivotShadowCensus(
+    return PivotBodyCensus(
         PivotLanguage.CPP,
         (
-            PivotShadowEntry(
+            PivotBodyEntry(
                 document="demo",
                 definition=PivotDefinition(
                     isa="tsl_128",
@@ -729,8 +719,8 @@ def _fixed_census(root: Path, relative_source: Path) -> PivotShadowCensus:
                     direct=("result = demo<__m128i>(value);",),
                 ),
                 occurrence=0,
-                origin=PivotShadowOrigin.FIXED_WRAPPER,
-                category=PivotShadowCategory.SYNTHETIC_FIXED,
+                origin=PivotBodyOrigin.FIXED_WRAPPER,
+                category=PivotBodyCategory.SYNTHETIC_FIXED,
                 body=body,
             ),
         ),

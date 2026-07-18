@@ -2,8 +2,10 @@
 
 ## Status and decision record
 
-Status: architecture approved; slices 27A, 27B, and 27C are implemented and verified.
-Slice 27C has not started.
+Status: slices 27A through 27D are implemented and verified. No external PIVOT
+prototype executable or authoritative parser fixture is available in the
+repository or current `PATH`, so external-consumer validation remains the one
+explicit verification gap allowed by the acceptance criteria.
 
 This plan replaces the original in-compiler direction for audit fix-plan slice
 27. The historical audit remains unchanged as evidence. The agreed decisions
@@ -554,6 +556,48 @@ remove transitional complexity.
 - Tool and core validation below pass; external-consumer validation passes or
   is reported as the sole explicit verification gap.
 
+**Implemented evidence (2026-07-18):**
+
+- `export_pivot` now has one production path: compiler selection and ordinary
+  lowering feed PIVOT-local typed capture, immutable bodies, bounded C++/Rust
+  expression parsing, binding-aware recursive inlining, document assembly, and
+  YAML formatting. Profile-cover policy is isolated in `profiles.py`, while
+  schema conflicts, exact deduplication, collision occurrences, skip ordering,
+  and body association are isolated in `documents.py`.
+- The marker rewrite implementation, regex statement splitter, context-blind
+  identifier replacement, unsafe-block text surgery, marker-parenthesis scan,
+  parallel differential planner, differential models/baseline/tests, and
+  transitional modules are deleted. Production modules and result fields no
+  longer use shadow or differential terminology.
+- The lowering adapter uses a fresh contextual capture per operation. Reserved
+  NUL-delimited tokens are collision-checked against all implementation text,
+  decoded into typed capture nodes during body construction, rejected when
+  foreign/repeated/malformed/lost, and forbidden from emitted artifacts by the
+  full-corpus tests.
+- A read-only pre-refresh comparison proved equality of the complete 17,060-
+  occurrence definition/direct-hash multiset, all 328 collision groups,
+  document order, and the artifact inventory. All 4,730 multi-statement
+  definitions remain emitted. The ordered YAML digest remains
+  `846ffd8955e3b7860f1bc7c2980d4fc2bd8618efa259fbe1824923c3293dc747`;
+  the typed body census has zero failures and digest
+  `e29e9b9835ca3f76059fb92b8298996e18d1654695b00452eb19819d1a4d37af`.
+  The production skip count remains 27,823; typed reasons and source facts are
+  now canonical under inventory digest
+  `1f3a6ff9b2f5096536b931baaa01960bdf48191beb578f7eed37b639d3c1bedd`.
+- The restarted post-change audit passes 78 PIVOT tests in 211.19 seconds,
+  mypy on 17 tool modules, 1,988 core tests with 70 generated-gate skips in
+  466.97 seconds, mypy on 247 core modules, and corpus checking on 42 sources.
+  Installed command help and isolated core/tool wheels preserve the one-way
+  package boundary. Neither `tslc/` nor `tsldata/` changed.
+- The combined baseline updater now also refuses changed artifact, collision,
+  diagnostic, or exact skip facts when there is no coverage addition. Safe
+  additions remain a ratchet increase, while the accompanying body-census
+  change still requires the explicit reviewed override.
+- Repository and `PATH` searches found no external PIVOT prototype executable
+  or authoritative consumer/parser fixture. External-consumer validation is
+  therefore the sole remaining verification gap; internal parser, schema,
+  artifact, definition, determinism, and compiler checks were not weakened.
+
 ## Validation matrix
 
 Run focused tests for each slice, then the relevant independent suites.
@@ -607,7 +651,7 @@ artifacts stay below `tslctmp/pivot-rework/`.
 | Count stays constant while definitions change | Ratchet the exact nominal-identity/direct-hash multiset and collision multiplicities |
 | Private `tslc` imports break | Explicit lockstep compatibility, exact version test, tool owns adaptation |
 | A parser becomes another rewrite ladder | Typed token/statement/binding model, fail-closed tests, no global substitution |
-| Coverage is sacrificed for architectural cleanliness | Shadow/differential gates require every baseline entry and multiplicity before cutover |
+| Coverage is sacrificed for architectural cleanliness | Full-export and body-census gates retain every baseline entry and multiplicity |
 | PIVOT policy leaks into compiler facts | Ownership table, one-way imports, no global mutation, post-change design review |
 | The downstream exception weakens ordinary projections | Scope root guidance and design-review checks to declared independently packaged tools |
 | Corpus changes race the redesign | Rebase and refresh evidence in an isolated baseline change before continuing |

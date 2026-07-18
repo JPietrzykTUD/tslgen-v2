@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import replace
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 
 from tslc.catalog.machine_profiles import MachineProfile
+from tslc.select.selector import SelectedImplementation
+
+
+@dataclass(frozen=True, slots=True)
+class SelectedProfile:
+    profile: MachineProfile
+    slots: tuple[SelectedImplementation, ...]
 
 
 def profiles_for_distinct_feature_sets(
@@ -45,4 +53,59 @@ def profiles_for_distinct_feature_sets(
     return tuple(sorted(projected, key=lambda item: item.name))
 
 
-__all__ = ("profiles_for_distinct_feature_sets",)
+def contributing_profiles(
+    selections: tuple[SelectedProfile, ...],
+    *,
+    slot_identity: Callable[[SelectedImplementation], tuple[object, ...]],
+) -> tuple[SelectedProfile, ...]:
+    """Choose a deterministic cover of distinct selected implementations."""
+
+    identities: dict[tuple[object, ...], int] = {}
+    coverage: list[frozenset[int]] = []
+    for selection in selections:
+        covered: set[int] = set()
+        for slot in selection.slots:
+            key = slot_identity(slot)
+            identity = identities.get(key)
+            if identity is None:
+                identity = len(identities)
+                identities[key] = identity
+            covered.add(identity)
+        coverage.append(frozenset(covered))
+
+    indexes = contributing_indexes(tuple(coverage))
+    return tuple(selections[index] for index in indexes)
+
+
+def contributing_indexes(
+    coverage: tuple[frozenset[int], ...],
+) -> tuple[int, ...]:
+    """Greedily cover all implementations; each retained set adds coverage."""
+
+    remaining = set().union(*coverage) if coverage else set()
+    candidates = set(range(len(coverage)))
+    selected: list[int] = []
+    while remaining:
+        best = min(
+            candidates,
+            key=lambda index: (
+                -len(coverage[index] & remaining),
+                -len(coverage[index]),
+                index,
+            ),
+        )
+        added = coverage[best] & remaining
+        if not added:
+            break
+        selected.append(best)
+        remaining.difference_update(added)
+        candidates.remove(best)
+    return tuple(selected)
+
+
+__all__ = (
+    "SelectedProfile",
+    "contributing_indexes",
+    "contributing_profiles",
+    "profiles_for_distinct_feature_sets",
+)

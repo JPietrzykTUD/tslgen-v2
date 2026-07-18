@@ -35,13 +35,13 @@ from tslc_pivot.target_expression import (
 
 
 @dataclass(frozen=True, slots=True)
-class PivotStructuredSlot:
+class PivotInlineSlot:
     specialization: LoweredSpecialization
     body: PivotBodyBuildResult
 
 
 @dataclass(frozen=True, slots=True)
-class PivotStructuredEmission:
+class PivotEmission:
     direct: tuple[str, ...]
     specialization: LoweredSpecialization
     body_trace: tuple[PivotBodyBuildResult, ...]
@@ -71,7 +71,7 @@ class PivotNameAllocator:
         return value
 
 
-class PivotStructuredError(ValueError):
+class PivotInliningError(ValueError):
     def __init__(
         self,
         code: str,
@@ -83,36 +83,36 @@ class PivotStructuredError(ValueError):
         self.source = source
 
 
-type LoadStructuredSlot = Callable[[SelectedImplementation], PivotStructuredSlot]
-type ResolveStructuredCall = Callable[
+type LoadInlineSlot = Callable[[SelectedImplementation], PivotInlineSlot]
+type ResolveInlineCall = Callable[
     [MachineProfile, SelectedImplementation, PivotCall, int],
     SelectedImplementation,
 ]
 type SlotIdentity = Callable[[SelectedImplementation], tuple[object, ...]]
-type RenderStructuredFixedCall = Callable[
+type RenderInlineFixedCall = Callable[
     [PivotFixedCall, tuple[str, ...]],
     str,
 ]
 
 
-class PivotStructuredInliner:
+class PivotInliner:
     """Flatten retained calls and lexical bindings without rewriting text."""
 
     def __init__(
         self,
         language: PivotLanguage,
         *,
-        load_slot: LoadStructuredSlot,
-        resolve_call: ResolveStructuredCall,
+        load_slot: LoadInlineSlot,
+        resolve_call: ResolveInlineCall,
         slot_identity: SlotIdentity,
-        render_fixed_call: RenderStructuredFixedCall,
+        render_fixed_call: RenderInlineFixedCall,
     ) -> None:
         self.language = language
         self._load_slot = load_slot
         self._resolve_call = resolve_call
         self._slot_identity = slot_identity
         self._render_fixed_call_text = render_fixed_call
-        self._parsed: dict[tuple[object, ...], PivotParsedBody | PivotStructuredError] = {}
+        self._parsed: dict[tuple[object, ...], PivotParsedBody | PivotInliningError] = {}
 
     def emit(
         self,
@@ -122,7 +122,7 @@ class PivotStructuredInliner:
         *,
         destination: str,
         declare_destination: bool,
-    ) -> PivotStructuredEmission:
+    ) -> PivotEmission:
         allocator = PivotNameAllocator()
         trace: list[PivotBodyBuildResult] = []
         direct, specialization = self._emit_slot(
@@ -135,7 +135,7 @@ class PivotStructuredInliner:
             allocator=allocator,
             trace=trace,
         )
-        return PivotStructuredEmission(direct, specialization, tuple(trace))
+        return PivotEmission(direct, specialization, tuple(trace))
 
     def emit_retained_body(
         self,
@@ -147,19 +147,19 @@ class PivotStructuredInliner:
         *,
         destination: str,
         declare_destination: bool,
-    ) -> PivotStructuredEmission:
+    ) -> PivotEmission:
         """Render a PIVOT-owned synthetic body through the same typed renderer."""
 
         key = ("synthetic", *self._slot_identity(slot))
         body = self._parsed_body(key, retained)
         if body.statements:
-            raise PivotStructuredError(
+            raise PivotInliningError(
                 "TSL-PIVOT-SYNTHETIC-STATEMENTS",
                 "a synthetic PIVOT wrapper cannot contain local statements",
                 body.source,
             )
         if len(actual_args) != len(body.parameters):
-            raise PivotStructuredError(
+            raise PivotInliningError(
                 "TSL-PIVOT-CALL-ARITY",
                 f"synthetic wrapper supplies {len(actual_args)} arguments but "
                 f"expects {len(body.parameters)}",
@@ -188,7 +188,7 @@ class PivotStructuredInliner:
             )
         else:
             direct.append(f"{destination} = {result.text};")
-        return PivotStructuredEmission(
+        return PivotEmission(
             tuple(direct),
             specialization,
             tuple(trace),
@@ -209,7 +209,7 @@ class PivotStructuredInliner:
         key = self._slot_identity(slot)
         if key in stack:
             cycle = " -> ".join(str(item[0]) for item in (*stack, key))
-            raise PivotStructuredError(
+            raise PivotInliningError(
                 "TSL-PIVOT-RECURSIVE-CALL",
                 f"recursive primitive-call cycle cannot be inlined: {cycle}",
                 slot.implementation.body_source,
@@ -218,7 +218,7 @@ class PivotStructuredInliner:
         loaded = self._load_slot(slot)
         body = self._parsed_body(key, loaded.body)
         if len(actual_args) != len(body.parameters):
-            raise PivotStructuredError(
+            raise PivotInliningError(
                 "TSL-PIVOT-CALL-ARITY",
                 f"call supplies {len(actual_args)} arguments but "
                 f"{slot.primitive.name!r} expects {len(body.parameters)}",
@@ -282,12 +282,12 @@ class PivotStructuredInliner:
     ) -> PivotParsedBody:
         cached = self._parsed.get(key)
         if cached is not None:
-            if isinstance(cached, PivotStructuredError):
+            if isinstance(cached, PivotInliningError):
                 raise cached
             return cached
         if result.body is None:
             unsupported = result.unsupported[0]
-            error = PivotStructuredError(
+            error = PivotInliningError(
                 unsupported.code,
                 unsupported.message,
                 unsupported.source,
@@ -297,7 +297,7 @@ class PivotStructuredInliner:
         try:
             parsed = parse_pivot_body(result.body)
         except PivotTargetParseError as exc:
-            error = PivotStructuredError(exc.code, str(exc), exc.source)
+            error = PivotInliningError(exc.code, str(exc), exc.source)
             self._parsed[key] = error
             raise error from exc
         self._parsed[key] = parsed
@@ -329,7 +329,7 @@ class PivotStructuredInliner:
         )
         normalized = normalize_target_text(text)
         if not normalized:
-            raise PivotStructuredError(
+            raise PivotInliningError(
                 "TSL-PIVOT-EMPTY-EXPRESSION",
                 "PIVOT expression is empty after rendering",
                 expression.source,
@@ -358,7 +358,7 @@ class PivotStructuredInliner:
             if isinstance(node, PivotBindingReference):
                 value = environment.get(node.binding.identity)
                 if value is None:
-                    raise PivotStructuredError(
+                    raise PivotInliningError(
                         "TSL-PIVOT-UNBOUND-IDENTITY",
                         f"PIVOT binding {node.binding.authored_name!r} is out of scope",
                         node.binding.source,
@@ -404,7 +404,7 @@ class PivotStructuredInliner:
                 output.extend(fixed_output)
                 fragments.append(fixed)
                 continue
-            raise PivotStructuredError(
+            raise PivotInliningError(
                 "TSL-PIVOT-UNKNOWN-EXPRESSION-NODE",
                 "PIVOT inliner found an unknown expression node",
                 caller.implementation.body_source,
@@ -522,8 +522,8 @@ def _rust_return_nodes(
 __all__ = (
     "PivotNameAllocator",
     "PivotRenderedExpression",
-    "PivotStructuredEmission",
-    "PivotStructuredError",
-    "PivotStructuredInliner",
-    "PivotStructuredSlot",
+    "PivotEmission",
+    "PivotInliningError",
+    "PivotInliner",
+    "PivotInlineSlot",
 )

@@ -54,54 +54,45 @@ blocks, casts, comments, string literals, unresolved generated-library names,
 and ambiguous substitutions are rejected. Only inferred locals and captured
 primitive calls participate in recursive inlining.
 
-## Structured migration state
+## Implementation Pipeline
 
-Slice 27B retained the statement facts needed by the replacement engine in a
-PIVOT-owned immutable `PivotBody` beside the unchanged production exporter.
-Parameters and admitted locals have body-local identities independent of their
-authored names; calls retain the compiler's typed dependency, resolved attrs,
-arguments, caller-unsafe fact, and source span; the final `complete` result is
-structurally separate from ordered local or residual statement sequences.
-Synthetic fixed-vector wrappers are represented as explicit PIVOT calls rather
-than rediscovered from rendered text.
+The production exporter has one typed, PIVOT-owned path:
 
-Legacy PIVOT planning still produces the public `direct` lists during slice
-27C, so the YAML contract and content remain byte-identical. A
-PIVOT-local render-stream adapter preserves typed nodes through compiler render
-values, records Rust unsafe framing structurally, and uses a collision-checked
-reserved token only where a compiler value eagerly renders its child. Its
-private namespace is unique to one lowering operation, while the constructed
-typed body and emitted evidence remain deterministic. Unknown, foreign,
-repeated, malformed, or lost captures fail closed and no token may reach YAML.
+1. `exporter.py` loads one compiler catalog snapshot and machine profiles.
+2. `planner.py` asks compiler selectors and lowerers for concrete backend slots;
+   `profiles.py` chooses the deterministic contributing profile cover.
+3. `lowering_capture.py` replaces only the `call`, inferred `var`, and final
+   `complete` TSIL handlers. It retains binding identities, typed dependencies,
+   resolved attributes, arguments, source spans, and unsafe facts.
+4. `body_builder.py` converts the captured compiler render stream into an
+   immutable `PivotBody`. A per-lowering, collision-checked reserved token is
+   decoded immediately to its typed capture node wherever an eager compiler
+   render value made a token necessary. Foreign, repeated, malformed, lost, or
+   unconsumed tokens fail closed; tests prove that no token reaches YAML.
+5. `target_expression.py` parses the bounded residual C++ or Rust expression
+   subset. Binding references carry `PivotBindingId` values; qualified paths,
+   members, callable names, raw identifiers, literals, trivia, and delimiter
+   groups remain distinct nodes.
+6. `inliner.py` recursively composes typed calls from compiler-selected
+   dependencies, allocates locals and call results deterministically, detects
+   cycles and arity failures, and renders one flattened instruction list.
+7. `documents.py` owns schema conflicts, exact definition deduplication,
+   collision occurrences, skip ordering, and body-census association;
+   `render_yaml.py` only formats those decided documents.
 
-Slice 27C additionally parses residual expressions into token-preserving C++
-or Rust nodes. Lexical binding references carry `PivotBindingId` values;
-qualified paths, members, callable names, raw identifiers, literals, trivia,
-and delimiter groups remain distinct target nodes. Typed primitive calls are
-recursively composed left-to-right using the compiler's selected dependency
-facts, while local and result names are allocated deterministically. Argument
-parentheses and Rust return-group normalization are renderer rules over those
-nodes, not identifier replacement or marker surgery. Compiler backend syntax
-still renders synthetic fixed-vector calls.
+Argument parentheses and Rust return-group normalization are renderer rules
+over parsed nodes. There is no statement regex splitter, context-blind
+identifier replacement, marker-parenthesis scanner, or raw-text alpha-renamer.
+Compiler backend syntax remains the sole spelling owner for synthetic
+fixed-vector calls.
 
-The structured planner now runs independently beside the legacy planner for
-every selected specialization. The canonical corpus has 17,060 exact shared
-definitions, zero missing or changed definitions, identical definition order,
-and byte-identical YAML artifacts. Qualified/member collision fixtures also
-prove that the structured path can safely accept forms the legacy rewrite
-engine rejects. Production cutover and deletion of that engine remain slice
-27D work.
-
-The canonical shadow census in
-`tests/baselines/shadow_census.json` covers every emitted definition and its
-nominal-collision occurrence. It ratchets typed-body construction, source-
-normalized semantic digest, origins, feature combinations, the 4,730
-multi-statement definitions, and zero hidden shadow failures. The companion
-`tests/baselines/differential_census.json` hashes the complete structured
-projection and classifies every skip difference. Of 27,823 skip records,
-20,571 are byte-identical, 4,582 retain the same reason with a more precise
-typed source span, and 2,670 have a different fail-closed typed reason; neither
-path has an unmatched skip specialization.
+The canonical corpus emits 188 documents and 17,060 definition occurrences,
+including 4,730 multi-statement definitions and 328 nominal-identity collision
+groups. `tests/baselines/full_export.json` ratchets every definition occurrence,
+`direct` hash, artifact, and exact skip fact. `tests/baselines/body_census.json`
+associates a successfully constructed typed body with every emitted occurrence;
+it records zero construction failures. The ordered artifact digest is
+`846ffd8955e3b7860f1bc7c2980d4fc2bd8618efa259fbe1824923c3293dc747`.
 
 ## YAML Schema
 
@@ -150,12 +141,12 @@ The manifest retains exact skip reasons and an inventory hash. Its
 families; this is a manifest-only classification until runtime skips gain typed
 categories in the rework.
 
-The shadow and differential censuses are transitional architectural evidence
-rather than part of the external YAML schema. Any reviewed change to typed
-body, parser, or inliner semantics must update their digests and classifications
-without weakening the full-export definition and artifact ratchets.
+The body census is architectural evidence rather than part of the external
+YAML schema. Any reviewed change to lowering capture, body construction,
+parsing, or inlining must update its digest without weakening the full-export
+definition and artifact ratchets.
 
-Regenerate all three committed authorities only through their guarded
+Regenerate both committed authorities only through their guarded
 maintenance tool:
 
 ```bash
@@ -164,8 +155,8 @@ python tools/pivot/scripts/update_full_export_baseline.py
 
 The production ratchet accepts added entries but refuses removed entries,
 reduced multiplicity, or replaced `direct` hashes. Because an addition also
-changes the complete typed-shadow and differential censuses, the combined
-command still requires explicit review for that evidence change. Use
+changes the complete body census, the combined command still requires explicit
+review for that evidence change. Use
 `--allow-reviewed-incompatible-baseline` only after the explicit product or
 correctness review named by the tool charter.
 

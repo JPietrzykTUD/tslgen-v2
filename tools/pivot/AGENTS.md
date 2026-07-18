@@ -71,16 +71,13 @@ diagnostics, and coverage baseline.
 - Keep skips and diagnostics structured, actionable, source-located where
   practical, stably ordered, and clearly identified as PIVOT-owned.
 - Never preserve coverage by emitting a guessed or silently corrupted mapping.
-- Treat `tests/baselines/shadow_census.json` as the 27B typed-body authority.
-  Every emitted definition occurrence must have a constructed shadow body,
-  including fixed wrappers and nominal collisions; hidden shadow failures,
-  malformed/lost capture acceptance, or an unexplained semantic digest change
-  block the slice.
-- Treat `tests/baselines/differential_census.json` as the 27C parser/inliner
-  authority while legacy export remains the production oracle. Every legacy
-  definition occurrence must be reproduced byte-for-byte; definition, order,
-  artifact, skip-source, and skip-reason differences must be explicitly
-  classified and deterministically hashed.
+- Treat `tests/baselines/body_census.json` as the typed-body authority. Every
+  emitted definition occurrence must have a constructed body, including fixed
+  wrappers and nominal collisions; hidden failures, malformed or lost capture
+  acceptance, or an unexplained semantic digest change blocks the slice.
+- Keep `tests/baselines/full_export.json` authoritative for production parser
+  and inliner output. Definition occurrence, order, artifact, exact skip, or
+  `direct`-hash changes require explicit review under the charter.
 
 ## Validation
 
@@ -93,22 +90,21 @@ PYTHONPATH=tslc/src:tools/pivot/src python -m pytest -q tools/pivot/tests
 ```
 
 The tool suite must cover package/CLI isolation, compiler-registry and default
-immutability, exact compiler-version compatibility, parser edge cases,
-fail-closed rejection, recursive inlining, YAML schema/goldens, full-export
-entry-multiset and hash ratchets, and cross-`PYTHONHASHSEED` determinism.
-While the typed path is in shadow mode, it must additionally cover fresh
-lowering state, calls/locals/final results, alternative implementation variants,
-unsafe framing, reserved-token corruption, exact shadow-entry association, and
-the source-normalized shadow census digest.
+immutability, exact compiler-version compatibility, fresh lowering state,
+calls, locals, final results, alternative variants, unsafe framing, reserved-
+token corruption, parser edge cases, fail-closed rejection, recursive inlining,
+exact body-entry association, YAML schema/goldens, full-export entry-multiset
+and hash ratchets, source-normalized body-census digest, and cross-
+`PYTHONHASHSEED` determinism.
 Validate ordinary generation remains unchanged from outside the compiler
 package.
 
-Regenerate the durable production, typed-shadow, and differential manifests
+Regenerate the durable production and typed-body manifests
 only through `python tools/pivot/scripts/update_full_export_baseline.py`. The
 updater must remain fail-closed for removed entries, reduced multiplicity, or
-replaced `direct` hashes, and for any typed-shadow or differential evidence change. Its
-incompatible-baseline override requires an explicit reviewed product or
-correctness decision.
+replaced `direct` hashes, and for any body-evidence change. Its incompatible-
+baseline override requires an explicit reviewed product or correctness
+decision.
 
 For packaging and command checks:
 

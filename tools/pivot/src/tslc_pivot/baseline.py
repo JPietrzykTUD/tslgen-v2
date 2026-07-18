@@ -10,13 +10,12 @@ import json
 from pathlib import Path
 
 from tslc.diagnostics import SourceSpan
-from tslc_pivot.body_ir import pivot_shadow_census_digest
+from tslc_pivot.body_ir import pivot_body_census_digest
 from tslc_pivot.cli import (
     PivotCliInvocation,
     render_cli_command,
     resolve_cli_invocation,
 )
-from tslc_pivot.differential import pivot_differential_digest
 from tslc_pivot.exporter import PivotExportRequest
 from tslc_pivot.model import PivotExportResult
 
@@ -32,6 +31,18 @@ CANONICAL_FULL_EXPORT_ARGV = (
 )
 CANONICAL_FULL_EXPORT_COMMAND = render_cli_command(CANONICAL_FULL_EXPORT_ARGV)
 _SKIP_CATEGORY_SCHEME = "reason-prefix-v1"
+_STABLE_PRODUCT_FACT_FIELDS = (
+    "artifacts",
+    "definition_identity_collisions",
+    "diagnostics",
+    "skip_category_scheme",
+    "skip_fields",
+    "skip_inventory_sha256",
+    "skips",
+    "skips_by_language_and_category",
+    "skips_by_language_and_reason",
+    "unclassified_skip_count",
+)
 
 type _DefinitionIdentity = tuple[
     str,
@@ -306,7 +317,7 @@ def render_full_export_manifest(manifest: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def build_shadow_census_manifest(
+def build_body_census_manifest(
     result: PivotExportResult,
     *,
     source_root: Path,
@@ -321,29 +332,29 @@ def build_shadow_census_manifest(
             entry.definition.dtype,
             entry.definition.signature,
         )
-        for census in result.shadow_censuses
+        for census in result.body_censuses
         for entry in census.entries
     )
     collisions = tuple(count for count in nominal_identities.values() if count > 1)
     return {
-        "schema": "tslc-pivot-shadow-census-v1",
-        "digest": pivot_shadow_census_digest(
-            result.shadow_censuses,
+        "schema": "tslc-pivot-body-census-v1",
+        "digest": pivot_body_census_digest(
+            result.body_censuses,
             source_root=source_root,
         ),
         "summary": {
             "entries": sum(
-                len(census.entries) for census in result.shadow_censuses
+                len(census.entries) for census in result.body_censuses
             ),
             "failures": sum(
-                len(census.failures) for census in result.shadow_censuses
+                len(census.failures) for census in result.body_censuses
             ),
             "multi_statement": sum(
-                census.multi_statement_count for census in result.shadow_censuses
+                census.multi_statement_count for census in result.body_censuses
             ),
             "fixed_wrappers": sum(
                 dict(census.origin_counts).get("fixed_wrapper", 0)
-                for census in result.shadow_censuses
+                for census in result.body_censuses
             ),
             "nominal_collision_groups": len(collisions),
             "nominal_collision_entries": sum(collisions),
@@ -361,129 +372,20 @@ def build_shadow_census_manifest(
                     for features, count in census.feature_combination_counts
                 ],
             }
-            for census in result.shadow_censuses
+            for census in result.body_censuses
         },
     }
 
 
-def render_shadow_census_manifest(manifest: Mapping[str, object]) -> str:
-    _validate_shadow_census_manifest(manifest)
+def render_body_census_manifest(manifest: Mapping[str, object]) -> str:
+    _validate_body_census_manifest(manifest)
     return (
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     )
 
 
-def build_differential_census_manifest(
-    result: PivotExportResult,
-    *,
-    source_root: Path,
-) -> dict[str, object]:
-    """Build the durable 27C structured-vs-legacy differential census."""
-
-    transitions: Counter[tuple[str, str, str, str]] = Counter()
-    for report in result.differentials:
-        for difference in report.differences:
-            if difference.legacy_skip is None or difference.structured_skip is None:
-                continue
-            transitions[
-                (
-                    report.language.value,
-                    difference.kind.value,
-                    difference.legacy_skip.reason,
-                    difference.structured_skip.reason,
-                )
-            ] += 1
-    return {
-        "schema": "tslc-pivot-differential-census-v1",
-        "digest": pivot_differential_digest(
-            result.differentials,
-            source_root=source_root,
-        ),
-        "summary": {
-            "legacy_definitions": sum(
-                report.legacy_definition_count for report in result.differentials
-            ),
-            "structured_definitions": sum(
-                report.structured_definition_count for report in result.differentials
-            ),
-            "exact_shared_definitions": sum(
-                report.exact_shared_definition_count
-                for report in result.differentials
-            ),
-            "direct_mismatches": sum(
-                report.direct_mismatch_count for report in result.differentials
-            ),
-            "legacy_only_definitions": sum(
-                report.legacy_only_definition_count
-                for report in result.differentials
-            ),
-            "structured_only_definitions": sum(
-                report.structured_only_definition_count
-                for report in result.differentials
-            ),
-            "exact_shared_skips": sum(
-                report.exact_shared_skip_count for report in result.differentials
-            ),
-            "skip_reason_mismatches": sum(
-                report.skip_reason_mismatch_count
-                for report in result.differentials
-            ),
-            "skip_source_mismatches": sum(
-                report.skip_source_mismatch_count
-                for report in result.differentials
-            ),
-            "legacy_only_skips": sum(
-                report.legacy_only_skip_count for report in result.differentials
-            ),
-            "structured_only_skips": sum(
-                report.structured_only_skip_count
-                for report in result.differentials
-            ),
-        },
-        "languages": {
-            report.language.value: {
-                "legacy_definitions": report.legacy_definition_count,
-                "structured_definitions": report.structured_definition_count,
-                "exact_shared_definitions": report.exact_shared_definition_count,
-                "direct_mismatches": report.direct_mismatch_count,
-                "legacy_only_definitions": report.legacy_only_definition_count,
-                "structured_only_definitions": report.structured_only_definition_count,
-                "legacy_skips": len(
-                    next(
-                        projection.skipped
-                        for projection in result.projections
-                        if projection.language is report.language
-                    )
-                ),
-                "structured_skips": len(report.structured_skipped),
-                "exact_shared_skips": report.exact_shared_skip_count,
-                "skip_source_mismatches": report.skip_source_mismatch_count,
-                "skip_reason_mismatches": report.skip_reason_mismatch_count,
-                "legacy_only_skips": report.legacy_only_skip_count,
-                "structured_only_skips": report.structured_only_skip_count,
-                "document_order_equal": report.document_order_equal,
-                "yaml_artifacts_equal": report.yaml_artifacts_equal,
-            }
-            for report in result.differentials
-        },
-        "skip_fact_transitions": [
-            {
-                "language": language,
-                "kind": kind,
-                "legacy": legacy,
-                "structured": structured,
-                "count": count,
-            }
-            for (language, kind, legacy, structured), count in sorted(
-                transitions.items()
-            )
-        ],
-    }
 
 
-def render_differential_census_manifest(manifest: Mapping[str, object]) -> str:
-    _validate_differential_census_manifest(manifest)
-    return json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
 def _definition_records(
@@ -681,7 +583,7 @@ def _file_evidence(path: Path, repository_root: Path) -> _FileEvidence:
 def classify_skip_reason(reason: str) -> str:
     """Group current planner reason families without discarding raw evidence."""
 
-    if reason.startswith("PIVOT body "):
+    if reason.startswith(("PIVOT body ", "PIVOT expression ")):
         return "residual_target_text"
     if reason.startswith(
         "PIVOT call inlining does not support forwarded immediate or generic arguments:"
@@ -727,16 +629,30 @@ def validate_full_export_baseline_update(
         return
     previous_inventory = _manifest_definition_inventory(previous)
     removed = previous_inventory - candidate_inventory
-    if not removed:
+    if removed:
+        record, missing_count = sorted(removed.items())[0]
+        raise ValueError(
+            "full-export baseline update would remove or replace "
+            f"{sum(removed.values())} definition occurrence(s); first missing "
+            f"record ({missing_count}x): {record}. Pass "
+            "--allow-reviewed-incompatible-baseline only after an explicit "
+            "product or correctness review."
+        )
+    added = candidate_inventory - previous_inventory
+    if added:
         return
-    record, missing_count = sorted(removed.items())[0]
-    raise ValueError(
-        "full-export baseline update would remove or replace "
-        f"{sum(removed.values())} definition occurrence(s); first missing "
-        f"record ({missing_count}x): {record}. Pass "
-        "--allow-reviewed-incompatible-baseline only after an explicit "
-        "product or correctness review."
+    changed = tuple(
+        field
+        for field in _STABLE_PRODUCT_FACT_FIELDS
+        if previous.get(field) != candidate.get(field)
     )
+    if changed:
+        raise ValueError(
+            "full-export baseline product facts changed without a coverage "
+            f"addition: {', '.join(changed)}. Pass "
+            "--allow-reviewed-incompatible-baseline only after an explicit "
+            "product or correctness review."
+        )
 
 
 def update_full_export_baseline(
@@ -762,7 +678,7 @@ def update_full_export_baseline(
     path.write_text(rendered, encoding="utf-8")
 
 
-def validate_shadow_census_baseline_update(
+def validate_body_census_baseline_update(
     previous: Mapping[str, object],
     candidate: Mapping[str, object],
     *,
@@ -770,51 +686,31 @@ def validate_shadow_census_baseline_update(
 ) -> None:
     """Require explicit review for every typed-body evidence change."""
 
-    _validate_shadow_census_manifest(previous)
-    _validate_shadow_census_manifest(candidate)
+    _validate_body_census_manifest(previous)
+    _validate_body_census_manifest(candidate)
     if allow_reviewed_incompatible_baseline or previous == candidate:
         return
     raise ValueError(
-        "shadow-census baseline facts changed. Pass "
+        "body-census baseline facts changed. Pass "
         "--allow-reviewed-incompatible-baseline only after an explicit "
         "typed-body semantics or corpus review."
     )
 
 
-def validate_differential_census_baseline_update(
-    previous: Mapping[str, object],
-    candidate: Mapping[str, object],
-    *,
-    allow_reviewed_incompatible_baseline: bool = False,
-) -> None:
-    """Require review for every structured differential evidence change."""
-
-    _validate_differential_census_manifest(previous)
-    _validate_differential_census_manifest(candidate)
-    if allow_reviewed_incompatible_baseline or previous == candidate:
-        return
-    raise ValueError(
-        "differential-census baseline facts changed. Pass "
-        "--allow-reviewed-incompatible-baseline only after an explicit "
-        "parser, inliner, coverage, or corpus review."
-    )
 
 
 def update_pivot_baselines(
     full_export_path: Path,
     full_export_candidate: dict[str, object],
-    shadow_census_path: Path,
-    shadow_census_candidate: dict[str, object],
-    differential_census_path: Path,
-    differential_census_candidate: dict[str, object],
+    body_census_path: Path,
+    body_census_candidate: dict[str, object],
     *,
     allow_reviewed_incompatible_baseline: bool = False,
 ) -> None:
     """Validate all durable manifests before writing any candidate."""
 
     _manifest_definition_inventory(full_export_candidate)
-    _validate_shadow_census_manifest(shadow_census_candidate)
-    _validate_differential_census_manifest(differential_census_candidate)
+    _validate_body_census_manifest(body_census_candidate)
     if full_export_path.exists():
         validate_full_export_baseline_update(
             _load_manifest(full_export_path),
@@ -823,38 +719,22 @@ def update_pivot_baselines(
                 allow_reviewed_incompatible_baseline
             ),
         )
-    if shadow_census_path.exists():
-        validate_shadow_census_baseline_update(
-            _load_manifest(shadow_census_path),
-            shadow_census_candidate,
+    if body_census_path.exists():
+        validate_body_census_baseline_update(
+            _load_manifest(body_census_path),
+            body_census_candidate,
             allow_reviewed_incompatible_baseline=(
                 allow_reviewed_incompatible_baseline
             ),
         )
-    if differential_census_path.exists():
-        validate_differential_census_baseline_update(
-            _load_manifest(differential_census_path),
-            differential_census_candidate,
-            allow_reviewed_incompatible_baseline=(
-                allow_reviewed_incompatible_baseline
-            ),
-        )
-
     full_export_rendered = render_full_export_manifest(full_export_candidate)
-    shadow_census_rendered = render_shadow_census_manifest(
-        shadow_census_candidate
-    )
-    differential_census_rendered = render_differential_census_manifest(
-        differential_census_candidate
+    body_census_rendered = render_body_census_manifest(
+        body_census_candidate
     )
     full_export_path.parent.mkdir(parents=True, exist_ok=True)
-    shadow_census_path.parent.mkdir(parents=True, exist_ok=True)
-    differential_census_path.parent.mkdir(parents=True, exist_ok=True)
+    body_census_path.parent.mkdir(parents=True, exist_ok=True)
     full_export_path.write_text(full_export_rendered, encoding="utf-8")
-    shadow_census_path.write_text(shadow_census_rendered, encoding="utf-8")
-    differential_census_path.write_text(
-        differential_census_rendered, encoding="utf-8"
-    )
+    body_census_path.write_text(body_census_rendered, encoding="utf-8")
 
 
 def _load_manifest(path: Path) -> dict[str, object]:
@@ -901,85 +781,28 @@ def _manifest_definition_inventory(
     return inventory
 
 
-def _validate_shadow_census_manifest(manifest: Mapping[str, object]) -> None:
-    if manifest.get("schema") != "tslc-pivot-shadow-census-v1":
-        raise ValueError("shadow-census baseline has an unsupported schema")
+def _validate_body_census_manifest(manifest: Mapping[str, object]) -> None:
+    if manifest.get("schema") != "tslc-pivot-body-census-v1":
+        raise ValueError("body-census baseline has an unsupported schema")
     digest = manifest.get("digest")
     if (
         not isinstance(digest, str)
         or len(digest) != 64
         or any(character not in "0123456789abcdef" for character in digest)
     ):
-        raise ValueError("shadow-census baseline has an invalid digest")
+        raise ValueError("body-census baseline has an invalid digest")
     summary = manifest.get("summary")
     if not isinstance(summary, dict):
-        raise ValueError("shadow-census baseline summary must be an object")
+        raise ValueError("body-census baseline summary must be an object")
     failures = summary.get("failures")
     if failures != 0:
         raise ValueError(
-            "shadow-census baseline cannot record hidden construction failures"
+            "body-census baseline cannot record hidden construction failures"
         )
     if not isinstance(manifest.get("languages"), dict):
-        raise ValueError("shadow-census baseline languages must be an object")
+        raise ValueError("body-census baseline languages must be an object")
 
 
-def _validate_differential_census_manifest(
-    manifest: Mapping[str, object],
-) -> None:
-    if manifest.get("schema") != "tslc-pivot-differential-census-v1":
-        raise ValueError("differential-census baseline has an unsupported schema")
-    digest = manifest.get("digest")
-    if (
-        not isinstance(digest, str)
-        or len(digest) != 64
-        or any(character not in "0123456789abcdef" for character in digest)
-    ):
-        raise ValueError("differential-census baseline has an invalid digest")
-    summary = manifest.get("summary")
-    if not isinstance(summary, dict):
-        raise ValueError("differential-census baseline summary must be an object")
-    if summary.get("direct_mismatches") != 0:
-        raise ValueError(
-            "differential-census baseline cannot record shared direct mismatches"
-        )
-    if summary.get("legacy_only_definitions") != 0:
-        raise ValueError(
-            "differential-census baseline cannot lose legacy definition occurrences"
-        )
-    legacy = summary.get("legacy_definitions")
-    structured = summary.get("structured_definitions")
-    exact = summary.get("exact_shared_definitions")
-    if (
-        not isinstance(legacy, int)
-        or legacy < 0
-        or not isinstance(structured, int)
-        or structured < legacy
-        or exact != legacy
-    ):
-        raise ValueError(
-            "differential-census baseline must reproduce every legacy definition"
-        )
-    count_fields = (
-        "structured_only_definitions",
-        "exact_shared_skips",
-        "skip_source_mismatches",
-        "skip_reason_mismatches",
-        "legacy_only_skips",
-        "structured_only_skips",
-    )
-    if any(
-        not isinstance(summary.get(field), int) or summary[field] < 0
-        for field in count_fields
-    ):
-        raise ValueError(
-            "differential-census baseline summary has an invalid count"
-        )
-    if not isinstance(manifest.get("languages"), dict):
-        raise ValueError("differential-census baseline languages must be an object")
-    if not isinstance(manifest.get("skip_fact_transitions"), list):
-        raise ValueError(
-            "differential-census baseline skip transitions must be a list"
-        )
 
 
 def _portable_path(path: Path, repository_root: Path) -> str:
@@ -1009,17 +832,14 @@ __all__ = (
     "CANONICAL_FULL_EXPORT_ARGV",
     "CANONICAL_FULL_EXPORT_COMMAND",
     "CanonicalFullExport",
-    "build_differential_census_manifest",
-    "build_shadow_census_manifest",
+    "build_body_census_manifest",
     "build_full_export_manifest",
     "canonical_full_export",
     "classify_skip_reason",
     "render_full_export_manifest",
-    "render_differential_census_manifest",
-    "render_shadow_census_manifest",
+    "render_body_census_manifest",
     "update_full_export_baseline",
     "update_pivot_baselines",
     "validate_full_export_baseline_update",
-    "validate_differential_census_baseline_update",
-    "validate_shadow_census_baseline_update",
+    "validate_body_census_baseline_update",
 )

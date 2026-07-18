@@ -1,5 +1,5 @@
 {
-  "digest": "543092ed759bd8d313d137bc381514f8eaf72a72db93ea6edf7dda5cfb1ba5ea",
+  "digest": "e29e9b9835ca3f76059fb92b8298996e18d1654695b00452eb19819d1a4d37af",
   "languages": {
     "cpp": {
       "categories": {
@@ -16,7 +16,7 @@
           "count": 1,
           "features": [
             "call_and_local",
-            "legacy_multi_statement",
+            "multi_statement",
             "multiple_locals",
             "nested_typed_call",
             "residual_expression",
@@ -28,7 +28,7 @@
           "count": 2,
           "features": [
             "call_and_local",
-            "legacy_multi_statement",
+            "multi_statement",
             "multiple_locals",
             "residual_expression",
             "typed_call",
@@ -39,7 +39,7 @@
           "count": 60,
           "features": [
             "call_and_local",
-            "legacy_multi_statement",
+            "multi_statement",
             "nested_typed_call",
             "residual_expression",
             "result_only",
@@ -51,7 +51,7 @@
           "count": 24,
           "features": [
             "call_and_local",
-            "legacy_multi_statement",
+            "multi_statement",
             "nested_typed_call",
             "residual_expression",
             "typed_call",
@@ -62,7 +62,7 @@
           "count": 2,
           "features": [
             "call_and_local",
-            "legacy_multi_statement",
+            "multi_statement",
             "residual_expression",
             "typed_call",
             "typed_local"
@@ -71,7 +71,7 @@
         {
           "count": 2228,
           "features": [
-            "legacy_multi_statement",
+            "multi_statement",
             "nested_typed_call",
             "residual_expression",
             "result_only",
@@ -81,7 +81,7 @@
         {
           "count": 734,
           "features": [
-            "legacy_multi_statement",
+            "multi_statement",
             "residual_expression",
             "result_only",
             "typed_call"
@@ -90,7 +90,7 @@
         {
           "count": 10,
           "features": [
-            "legacy_multi_statement",
+            "multi_statement",
             "residual_expression",
             "typed_local"
           ]
@@ -122,7 +122,7 @@
       ],
       "features": {
         "call_and_local": 89,
-        "legacy_multi_statement": 3061,
+        "multi_statement": 3061,
         "multiple_locals": 3,
         "nested_typed_call": 2313,
         "residual_expression": 10141,
@@ -152,7 +152,7 @@
           "count": 1,
           "features": [
             "call_and_local",
-            "legacy_multi_statement",
+            "multi_statement",
             "multiple_locals",
             "nested_typed_call",
             "residual_expression",
@@ -165,7 +165,7 @@
           "count": 2,
           "features": [
             "call_and_local",
-            "legacy_multi_statement",
+            "multi_statement",
             "multiple_locals",
             "residual_expression",
             "rust_unsafe_frame",
@@ -177,7 +177,7 @@
           "count": 2,
           "features": [
             "call_and_local",
-            "legacy_multi_statement",
+            "multi_statement",
             "residual_expression",
             "rust_unsafe_frame",
             "typed_call",
@@ -187,7 +187,7 @@
         {
           "count": 1390,
           "features": [
-            "legacy_multi_statement",
+            "multi_statement",
             "nested_typed_call",
             "residual_expression",
             "result_only",
@@ -198,7 +198,7 @@
         {
           "count": 100,
           "features": [
-            "legacy_multi_statement",
+            "multi_statement",
             "nested_typed_call",
             "residual_expression",
             "result_only",
@@ -208,7 +208,7 @@
         {
           "count": 164,
           "features": [
-            "legacy_multi_statement",
+            "multi_statement",
             "residual_expression",
             "result_only",
             "rust_unsafe_frame",
@@ -218,7 +218,7 @@
         {
           "count": 10,
           "features": [
-            "legacy_multi_statement",
+            "multi_statement",
             "residual_expression",
             "typed_local"
           ]
@@ -258,7 +258,7 @@
       ],
       "features": {
         "call_and_local": 5,
-        "legacy_multi_statement": 1669,
+        "multi_statement": 1669,
         "multiple_locals": 3,
         "nested_typed_call": 1491,
         "residual_expression": 6619,
@@ -275,7 +275,7 @@
       }
     }
   },
-  "schema": "tslc-pivot-shadow-census-v1",
+  "schema": "tslc-pivot-body-census-v1",
   "summary": {
     "entries": 17060,
     "failures": 0,

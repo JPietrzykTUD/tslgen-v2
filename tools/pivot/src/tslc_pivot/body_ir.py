@@ -1,4 +1,4 @@
-"""Immutable PIVOT-owned body values retained by slice 27B shadow lowering."""
+"""Immutable PIVOT-owned body and evidence values."""
 
 from __future__ import annotations
 
@@ -188,7 +188,7 @@ class PivotBodyBuildResult:
             )
 
 
-class PivotShadowCategory(str, Enum):
+class PivotBodyCategory(str, Enum):
     SYNTHETIC_FIXED = "synthetic_fixed"
     NATIVE_LEAF = "native_leaf"
     CALL_ONLY = "call_only"
@@ -196,48 +196,48 @@ class PivotShadowCategory(str, Enum):
     CALL_AND_LOCAL = "call_and_local"
 
 
-class PivotShadowOrigin(str, Enum):
+class PivotBodyOrigin(str, Enum):
     LOWERED_SOURCE = "lowered_source"
     FIXED_WRAPPER = "fixed_wrapper"
 
 
 @dataclass(frozen=True, slots=True)
-class PivotShadowEntry:
+class PivotBodyEntry:
     document: str
     definition: PivotDefinition
     occurrence: int
-    origin: PivotShadowOrigin
-    category: PivotShadowCategory | None
+    origin: PivotBodyOrigin
+    category: PivotBodyCategory | None
     body: PivotBodyBuildResult
     inlined_bodies: tuple[PivotBodyBuildResult, ...] = ()
 
     def __post_init__(self) -> None:
         if self.occurrence < 0:
-            raise ValueError("a shadow occurrence cannot be negative")
+            raise ValueError("a body occurrence cannot be negative")
         failed = any(
             result.body is None for result in (self.body, *self.inlined_bodies)
         )
         if failed == (self.category is not None):
-            raise ValueError("a shadow failure must not have a category, and vice versa")
-        fixed_category = self.category is PivotShadowCategory.SYNTHETIC_FIXED
-        fixed_origin = self.origin is PivotShadowOrigin.FIXED_WRAPPER
+            raise ValueError("a body failure must not have a category, and vice versa")
+        fixed_category = self.category is PivotBodyCategory.SYNTHETIC_FIXED
+        fixed_origin = self.origin is PivotBodyOrigin.FIXED_WRAPPER
         if not failed and fixed_category != fixed_origin:
-            raise ValueError("a successful fixed-wrapper shadow needs its fixed category")
+            raise ValueError("a successful fixed-wrapper body needs its fixed category")
 
     @property
     def features(self) -> tuple[str, ...]:
         root = self.body.body
         if root is None or any(item.body is None for item in self.inlined_bodies):
-            return ("shadow_failure",)
+            return ("body_failure",)
         bodies = (
             root,
             *(item.body for item in self.inlined_bodies if item.body is not None),
         )
         features: set[str] = set()
-        if self.origin is PivotShadowOrigin.FIXED_WRAPPER:
+        if self.origin is PivotBodyOrigin.FIXED_WRAPPER:
             features.add("synthetic_fixed")
         if len(self.definition.direct) > 1:
-            features.add("legacy_multi_statement")
+            features.add("multi_statement")
         if root.call_count:
             features.add("typed_call")
         if root.call_depth > 1 or any(body.call_count for body in bodies[1:]):
@@ -263,9 +263,9 @@ class PivotShadowEntry:
 
 
 @dataclass(frozen=True, slots=True)
-class PivotShadowCensus:
+class PivotBodyCensus:
     language: PivotLanguage
-    entries: tuple[PivotShadowEntry, ...]
+    entries: tuple[PivotBodyEntry, ...]
 
     @property
     def failures(self) -> tuple[PivotUnsupported, ...]:
@@ -305,25 +305,25 @@ class PivotShadowCensus:
         return sum(len(entry.definition.direct) > 1 for entry in self.entries)
 
 
-def classify_shadow_trace(
+def classify_body_trace(
     body: PivotBody,
     inlined_bodies: tuple[PivotBodyBuildResult, ...],
-) -> PivotShadowCategory:
+) -> PivotBodyCategory:
     has_calls = body.call_count > 0
     has_locals = body.local_count > 0 or any(
         result.body is not None and result.body.local_count > 0
         for result in inlined_bodies
     )
     if has_calls and has_locals:
-        return PivotShadowCategory.CALL_AND_LOCAL
+        return PivotBodyCategory.CALL_AND_LOCAL
     if has_calls:
-        return PivotShadowCategory.CALL_ONLY
+        return PivotBodyCategory.CALL_ONLY
     if has_locals:
-        return PivotShadowCategory.LOCAL_ONLY
-    return PivotShadowCategory.NATIVE_LEAF
+        return PivotBodyCategory.LOCAL_ONLY
+    return PivotBodyCategory.NATIVE_LEAF
 
 
-def pivot_shadow_trace_semantic_digest(
+def pivot_body_trace_semantic_digest(
     body: PivotBodyBuildResult,
     inlined_bodies: tuple[PivotBodyBuildResult, ...],
 ) -> str:
@@ -332,12 +332,12 @@ def pivot_shadow_trace_semantic_digest(
     )
 
 
-def pivot_shadow_census_digest(
-    censuses: tuple[PivotShadowCensus, ...],
+def pivot_body_census_digest(
+    censuses: tuple[PivotBodyCensus, ...],
     *,
     source_root: Path,
 ) -> str:
-    """Hash exact shadow facts with source paths relative to ``source_root``."""
+    """Hash exact body facts with source paths relative to ``source_root``."""
 
     normalized_root = source_root.resolve()
     return _digest(
@@ -601,7 +601,7 @@ def _span(value: SourceSpan | None, source_root: Path | None) -> object:
             path = path.resolve().relative_to(source_root)
         except ValueError as exc:
             raise ValueError(
-                f"PIVOT shadow source {path} is outside digest root {source_root}"
+                f"PIVOT body source {path} is outside digest root {source_root}"
             ) from exc
     return (
         path.as_posix(),
@@ -624,12 +624,12 @@ __all__ = (
     "PivotLocal",
     "PivotResidualStatementSequence",
     "PivotResidualText",
-    "PivotShadowCategory",
-    "PivotShadowCensus",
-    "PivotShadowEntry",
-    "PivotShadowOrigin",
+    "PivotBodyCategory",
+    "PivotBodyCensus",
+    "PivotBodyEntry",
+    "PivotBodyOrigin",
     "PivotUnsupported",
-    "classify_shadow_trace",
-    "pivot_shadow_census_digest",
-    "pivot_shadow_trace_semantic_digest",
+    "classify_body_trace",
+    "pivot_body_census_digest",
+    "pivot_body_trace_semantic_digest",
 )
