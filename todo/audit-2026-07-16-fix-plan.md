@@ -3,7 +3,10 @@
 ## Status and basis
 
 Status: Phases 1 and 2 implemented (slices 1–19); Phase 3 implemented through
-slice 26. Slice 27 remains product-gated and is outside the current fix scope.
+slice 26. The architecture for slice 27 is now approved and replanned as an
+independently packaged downstream PIVOT tool; slice 27A is implemented and
+verified, and slice 27B has not started.
+See [`pivot-export-rework-plan.md`](pivot-export-rework-plan.md).
 
 Phase 3 implementation notes (one commit per slice):
 
@@ -38,6 +41,11 @@ Phase 3 implementation notes (one commit per slice):
   registry at request construction, while rendering requires an explicit
   backend tuple. A representative selection/coverage/skip/trace digest stayed
   byte-identical across the refactor.
+- Slice 27A: PIVOT is extracted to the separately packaged `tslc-pivot` tool;
+  core CLI/package/docs no longer know it. Wheel, reverse-import, mutation,
+  exact-version, full-corpus multiset/hash, and two-hash-seed tests enforce the
+  one-way boundary. The pre/post export remains byte-identical at 188 documents,
+  17,060 definitions, and 27,823 skips.
 
 Phase 2 implementation notes (one commit per slice):
 
@@ -160,7 +168,7 @@ repair than the audit proposes:
 | F4 | Relevant, urgent correctness | Make switch-arm scanning use the scanner's opaque-text rules and preserve clean label spans. |
 | F5 | Relevant preventive guard | This is not a currently exercised corpus failure, but unsupported Rust multi-position overloads must fail during backend validation before rendering. |
 | F6 | Relevant, urgent correctness | Carry address-of and mutability as typed cast facts; backend rendering must not infer them from rendered text. |
-| F7 | Relevant, highest PIVOT risk | The suggested typed call nodes are necessary but insufficient: parameter substitution, local renaming, statement splitting, and return rewriting would still parse target text. Add immediate reject-not-corrupt containment, then choose an honest typed PIVOT subset before removing the rewrite engine. |
+| F7 | Relevant, highest PIVOT risk | The immediate reject-not-corrupt containment remains valid. The product decision now moves PIVOT outside core `tslc`: the downstream tool owns a typed straight-line IR and bounded, fail-closed target parser/inliner, with no loss of an existing emitted definition and no PIVOT-driven source/compiler changes. |
 | F8 | Relevant extensibility | `doctor` must consume backend-owned verification/profile/toolchain projections rather than backend IDs. |
 | F9 | Relevant boundary drift | Replace private cross-package imports with a small backend-owned C++ profile render model/API; merely removing leading underscores would not move decisions to their owner. |
 | F10 | Relevant robustness | Repository-only maintenance commands need not magically gain packaged corpus data, but importing the installed package must be safe and a missing checkout context must produce an argparse error rather than an import-time exception. |
@@ -210,8 +218,9 @@ boundary and does not expand a planned slice.
   silent fallback.
 - Prefer an existing typed owner over a new registry or handoff object. Add a
   type only when it carries an invariant or a decided compiler fact.
-- Update `tslc/DESCRIPTION.md` only when the implemented PIVOT, backend,
-  maintenance, or planning contract changes.
+- Update the documentation owned by the changed component. After extraction,
+  PIVOT behavior belongs in `tools/pivot/`; `tslc/DESCRIPTION.md` must not retain
+  an external-tool architecture contract.
 - Keep the audit report unchanged as evidence. Record implementation status in
   this plan only if work on a slice actually begins.
 
@@ -607,33 +616,27 @@ projection, and make default-backend behavior an explicit request/configuration
 decision rather than an import-time registry snapshot. Preserve selection,
 coverage, skip, and trace ordering byte-for-byte.
 
-### 27. PIVOT typed subset and module split (F7, F24a, F22b-part)
+### 27. Extract and rework PIVOT as a downstream tool (F7, F24a, F22b-part)
 
-This slice has a product gate because safe recursive inlining of arbitrary raw
-C++/Rust expressions is incompatible with the compiler charter.
+The product gate is resolved: PIVOT is external to the coordinated `tslc` and
+`tsldata` compiler product. It will move to a separately packaged
+`tools/pivot/` distribution with one-way `tslc_pivot -> tslc` dependencies and
+its own command, charter, instructions, tests, CI, target-text interpretation,
+flattening, YAML contract, diagnostics, and coverage ratchet. Core `tslc` will
+remove the PIVOT subcommand, package, tests, and architecture contract without
+adding a compatibility shim or plugin framework.
 
-Recommended direction:
+The extraction must preserve the complete current artifact tree and definition
+entry multiset, including nominal-identity collisions, before any inliner
+redesign. Subsequent PIVOT-only slices retain
+statement semantics as typed nodes, add bounded C++/Rust expression parsing and
+binding-aware recursive inlining in differential mode, then delete the legacy
+marker/regex rewrite engine only after the full-corpus gate shows no definition
+loss. No PIVOT-driven `tsldata`, TSIL, lowering, backend, or public compiler API
+change is authorized.
 
-1. Measure current PIVOT corpus coverage and identify which exported definitions
-   require calls, locals, or multiple statements.
-2. Make the default supported form a typed straight-line leaf expression: a
-   PIVOT lowerer captures the final result and typed call sites before body text
-   is flattened; raw target text is retained only as opaque expression pieces
-   that are never identifier-rewritten.
-3. Reject calls/locals/multi-statement bodies unless their dataflow is expressed
-   by existing or newly justified typed TSIL semantics. If composed PIVOT output
-   is a required product feature, add those typed source semantics first; do not
-   write a C++/Rust lexer in PIVOT.
-4. Remove marker rediscovery, identifier substitution, statement splitting,
-   unsafe-block stripping, and shared mutable capture state.
-5. Split the remaining planner into profile-cover selection, eligibility,
-   typed lowering/inlining, and YAML assembly modules only after responsibilities
-   are reduced.
-
-Acceptance: no regex mutates target text; all regexes are validation/rejection
-only; call sites remain typed end-to-end; recursive cycles diagnose; existing
-supported leaf output is stable; coverage loss from the safer subset is
-explicit and accepted before implementation is called complete.
+The detailed ownership, slices, baseline, stop conditions, and validation gates
+are in [`pivot-export-rework-plan.md`](pivot-export-rework-plan.md).
 
 ## Validation gates
 
@@ -674,7 +677,7 @@ Relevant focused suites include:
   `test_coverage_inventory.py`, `test_generation_snapshot.py`, `test_cli.py`;
 - editor: `test_lsp_workspace.py`, `test_lsp_protocol.py`,
   `test_catalog_index_authoring.py`;
-- PIVOT: `test_pivot_export.py`.
+- PIVOT: `tools/pivot/tests`.
 
 A skipped generated gate is a reported verification gap, not a pass.
 
@@ -690,5 +693,6 @@ The audit remediation is complete only when:
 - full Python tests, mypy, compileall, corpus checking, and diff checks pass;
 - affected generated C++/Rust gates pass, or unavailable toolchain gaps are
   listed in the final review packet;
-- `tslc/DESCRIPTION.md` and command documentation match any changed PIVOT,
-  installed-command, or backend capability contract.
+- compiler documentation contains no PIVOT command or architecture contract,
+  while `tools/pivot/` documentation matches its standalone command, package,
+  parser/inliner, and compatibility contract.

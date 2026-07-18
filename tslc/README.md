@@ -50,9 +50,6 @@ tslc generate --primitives add,sub --profiles scalar,avx2
 tslc build --primitives add,sub --profiles scalar,avx2
 tslc preview --primitive add --profile avx2 --type si32 --backend cpp
 tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
-tslc export pivot --primitives add --profiles avx2 --types si32 \
-  --language cpp,rust \
-  --output-root ./tslctmp/pivot
 
 # Build and run generated value tests.
 # The CLI prints captured ctest/cargo test output for the test steps.
@@ -64,11 +61,6 @@ workspace-output defaults. `PYTHONPATH=tslc/src python -m tslc ...` exposes the
 same commands without installation. See the full
 [command-line tools guide](../docs/tslc-cli.md) for `check --watch`, JSON
 diagnostics, catalog discovery, `doctor`, inspection, audits, and exit codes.
-
-PIVOT YAML is an explicit corpus export, not a registered compiler backend.
-`tslc export pivot` has its own subset planner, lowering policy, renderer, and
-output root. Its required language selection writes YAML below `cpp/` and/or
-`rust/`; invoking it does not enter or modify ordinary C++/Rust generation.
 
 Install the optional editor server without the repository-wide requirements:
 

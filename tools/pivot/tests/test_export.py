@@ -5,27 +5,31 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
-from tslc import cli
-from tslc.api import _expand_sources, generate_project
+from tslc.api import generate_project
 from tslc.backend.cpp_translation import CppBackendDialect
 from tslc.backend.registry import registered_backend_ids
+from tslc.backend.signature_types import CPP_SIGNATURE_TYPES, RUST_SIGNATURE_TYPES
+from tslc.catalog import scalar_types
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
 from tslc.ir.scan import scan
+from tslc.lower import region_handlers
 from tslc.lower.lowerer import Lowerer
-from tslc.pivot import PivotExportRequest, PivotLanguage, export_pivot
-from tslc.pivot._lowering import PivotCallCapture, pivot_region_lowerers
-from tslc.pivot.model import PivotDefinition, PivotDocument
-from tslc.pivot.planner import _contributing_indexes
-from tslc.pivot.profiles import profiles_for_distinct_feature_sets
-from tslc.pivot.render_yaml import render_pivot_yaml
 from tslc.select.selector import Selector
+from tslc.sources import expand_source_paths
+from tslc_pivot import PivotExportRequest, PivotLanguage, export_pivot
+from tslc_pivot import cli as pivot_cli
+from tslc_pivot._lowering import PivotCallCapture, pivot_region_lowerers
+from tslc_pivot.model import PivotDefinition, PivotDocument
+from tslc_pivot.planner import _SUPPORTED_KINDS, _contributing_indexes, _fixed_type
+from tslc_pivot.profiles import profiles_for_distinct_feature_sets
+from tslc_pivot.render_yaml import render_pivot_yaml
 
 
 def _export_add(data_root: Path, machine_profiles_path: Path):
     return export_pivot(
         PivotExportRequest(
-            source_paths=_expand_sources((data_root,)),
+            source_paths=expand_source_paths((data_root,)),
             machine_profiles_path=machine_profiles_path,
             languages=(PivotLanguage.CPP,),
             primitives=("add",),
@@ -141,7 +145,7 @@ def test_tsl_fixed_512_definition_uses_lane_count_not_bit_width(
 ) -> None:
     result = export_pivot(
         PivotExportRequest(
-            source_paths=_expand_sources((data_root,)),
+            source_paths=expand_source_paths((data_root,)),
             machine_profiles_path=machine_profiles_path,
             languages=(PivotLanguage.CPP,),
             primitives=("add",),
@@ -170,7 +174,7 @@ def test_rust_projection_uses_backend_intrinsics_and_fixed_vector_for(
 ) -> None:
     result = export_pivot(
         PivotExportRequest(
-            source_paths=_expand_sources((data_root,)),
+            source_paths=expand_source_paths((data_root,)),
             machine_profiles_path=machine_profiles_path,
             languages=(PivotLanguage.RUST,),
             primitives=("add",),
@@ -224,7 +228,7 @@ def test_tsl_call_definition_remains_when_plain_body_contains_a_cast(
 ) -> None:
     result = export_pivot(
         PivotExportRequest(
-            source_paths=_expand_sources((data_root,)),
+            source_paths=expand_source_paths((data_root,)),
             machine_profiles_path=machine_profiles_path,
             languages=(PivotLanguage.CPP,),
             primitives=("set1",),
@@ -363,7 +367,7 @@ def _export_collide_fixture(
     fixture.write_text(_COLLIDE_FIXTURE, encoding="utf-8")
     return export_pivot(
         PivotExportRequest(
-            source_paths=(*_expand_sources((data_root,)), fixture),
+            source_paths=(*expand_source_paths((data_root,)), fixture),
             machine_profiles_path=machine_profiles_path,
             languages=(language,),
             primitives=(primitive,),
@@ -451,23 +455,75 @@ def test_yaml_renderer_handles_empty_inputs_without_changing_schema_shape() -> N
     )
 
 
+def test_fixed_types_match_the_backend_projection() -> None:
+    cpp_expected = {
+        "v": "typename MyVec::register_type",
+        "m": "typename MyVec::mask_type",
+        "im": "typename MyVec::imask_type",
+        "s": "base_t",
+        "usize": "std::size_t",
+    }
+    rust_expected = {
+        "v": "<MyVec as tsl::tsl_core::SimdVector>::RegisterType",
+        "m": "<MyVec as tsl::tsl_core::SimdVector>::MaskType",
+        "im": "<MyVec as tsl::tsl_core::SimdVector>::ImaskType",
+        "s": "base_t",
+        "usize": "usize",
+    }
+    assert set(cpp_expected) == set(_SUPPORTED_KINDS)
+    assert set(rust_expected) == set(_SUPPORTED_KINDS)
+    for kind in sorted(_SUPPORTED_KINDS):
+        assert (
+            _fixed_type(PivotLanguage.CPP, kind, "MyVec", "base_t")
+            == cpp_expected[kind]
+        )
+        assert (
+            _fixed_type(PivotLanguage.RUST, kind, "MyVec", "base_t")
+            == rust_expected[kind]
+        )
+        if kind in {"v", "m", "im", "usize"}:
+            assert CPP_SIGNATURE_TYPES.member_type(kind, vector="MyVec") == (
+                cpp_expected[kind]
+            )
+            assert RUST_SIGNATURE_TYPES.owner_type(
+                kind, owner="<MyVec as tsl::tsl_core::SimdVector>"
+            ) == rust_expected[kind]
+
+
 def test_pivot_export_does_not_mutate_normal_generation(
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
+    default_type_tags = scalar_types.DEFAULT_SCALAR_TYPE_TAGS
+    default_region_lowerers = region_handlers.DEFAULT_REGION_LOWERERS
     kwargs = {
         "machine_profiles_path": machine_profiles_path,
         "primitives": ("add",),
         "profiles": ("avx2",),
         "type_tags": ("si8",),
-        "backends": ("cpp",),
+        "backends": ("cpp", "rust"),
     }
     before = generate_project((data_root,), **kwargs)
-    pivot = _export_add(data_root, machine_profiles_path)
+    pivot = export_pivot(
+        PivotExportRequest(
+            source_paths=expand_source_paths((data_root,)),
+            machine_profiles_path=machine_profiles_path,
+            languages=(PivotLanguage.CPP, PivotLanguage.RUST),
+            primitives=("add",),
+            profiles=("avx2",),
+            type_tags=("si8",),
+        )
+    )
     after = generate_project((data_root,), **kwargs)
 
-    assert pivot.projections[0].documents
+    assert tuple(item.language for item in pivot.projections) == (
+        PivotLanguage.CPP,
+        PivotLanguage.RUST,
+    )
+    assert all(item.documents for item in pivot.projections)
     assert registered_backend_ids() == ("cpp", "rust")
+    assert scalar_types.DEFAULT_SCALAR_TYPE_TAGS is default_type_tags
+    assert region_handlers.DEFAULT_REGION_LOWERERS is default_region_lowerers
     assert before.artifacts.digest_manifest() == after.artifacts.digest_manifest()
     assert before.coverage == after.coverage
     assert before.skipped == after.skipped
@@ -481,10 +537,8 @@ def test_explicit_export_command_writes_only_pivot_artifacts(
 ) -> None:
     output = tmp_path / "pivot"
 
-    status = cli.main(
+    status = pivot_cli.main(
         [
-            "export",
-            "pivot",
             "--sources",
             str(data_root),
             "--machine-profiles",

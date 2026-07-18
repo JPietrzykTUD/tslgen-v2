@@ -1,11 +1,11 @@
-"""Isolated PIVOT YAML export support.
+"""Standalone downstream PIVOT YAML export support.
 
-PIVOT is an explicit corpus projection, not a registered generated backend.
-Ordinary C++/Rust generation never imports or invokes this package.
+PIVOT is not a registered generated backend. The compiler and ordinary
+C++/Rust generation never import this package.
 """
 
-from tslc.pivot.exporter import PivotExportRequest, export_pivot
-from tslc.pivot.model import (
+from tslc_pivot.exporter import PivotExportRequest, export_pivot
+from tslc_pivot.model import (
     PivotDefinition,
     PivotDocument,
     PivotExportResult,

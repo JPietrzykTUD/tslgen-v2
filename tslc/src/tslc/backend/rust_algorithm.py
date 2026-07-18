@@ -544,9 +544,8 @@ def rust_dataparallel_fixed_lane_count(
 def rust_fixed_vector_spelling(base: str, lane_count: int) -> str:
     """Crate-external spelling of the ``Fixed<N>`` vector admitted by VectorFor.
 
-    Consumers outside the generated ``tsl`` crate (such as the PIVOT exporter)
-    address the dataparallel policy and algorithm profile through their fully
-    qualified paths.
+    Consumers outside the generated ``tsl`` crate address the dataparallel
+    policy and algorithm profile through their fully qualified paths.
     """
 
     return (

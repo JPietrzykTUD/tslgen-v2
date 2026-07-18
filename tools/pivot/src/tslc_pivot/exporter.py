@@ -10,10 +10,10 @@ from tslc.catalog.machine_profiles import load_machine_profiles_checked
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.diagnostics import Diagnostic, has_errors, sort_diagnostics
 from tslc.output.artifacts import Artifact, ArtifactSet
-from tslc.pivot.model import PivotExportResult, PivotLanguage, PivotProjection
-from tslc.pivot.planner import PivotPlanner
-from tslc.pivot.profiles import profiles_for_distinct_feature_sets
-from tslc.pivot.render_yaml import render_pivot_yaml
+from tslc_pivot.model import PivotExportResult, PivotLanguage, PivotProjection
+from tslc_pivot.planner import PivotPlanner
+from tslc_pivot.profiles import profiles_for_distinct_feature_sets
+from tslc_pivot.render_yaml import render_pivot_yaml
 
 
 @dataclass(frozen=True, slots=True)

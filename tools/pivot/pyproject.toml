@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tslc-pivot"
+version = "0.1.0a1"
+description = "Standalone PIVOT YAML exporter for TSL compiler data"
+readme = "README.md"
+requires-python = ">=3.14"
+license = { file = "LICENSE" }
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+]
+dependencies = [
+  "tslc==0.1.0a1",
+]
+
+[project.scripts]
+tslc-pivot = "tslc_pivot.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["tslc_pivot*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "../../tslc/src"]
+addopts = "--basetemp=tslctmp/pivot-pytest -p no:cacheprovider"
+
+[tool.mypy]
+python_version = "3.14"
+files = [
+  "src/tslc_pivot",
+  "scripts",
+]
+mypy_path = ["src", "../../tslc/src"]
+follow_imports = "silent"
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unused_ignores = true
+show_error_codes = true
+cache_dir = "../../tslctmp/mypy-pivot-cache"

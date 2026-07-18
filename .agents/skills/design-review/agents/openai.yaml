@@ -1,4 +1,4 @@
 interface:
   display_name: "Design Review"
-  short_description: "Review tslc design drift and extension health."
-  default_prompt: "Use $design-review to review tslc for design drift and weak extension points."
+  short_description: "Review compiler and downstream-tool design drift."
+  default_prompt: "Use $design-review to review the scoped compiler or downstream tool for architecture drift and weak extension points."

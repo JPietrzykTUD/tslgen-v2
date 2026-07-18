@@ -178,37 +178,6 @@ def test_rust_facade_types_come_from_the_shared_table() -> None:
     )
 
 
-def test_pivot_fixed_types_match_the_backend_projection() -> None:
-    from tslc.pivot.model import PivotLanguage
-    from tslc.pivot.planner import _SUPPORTED_KINDS, _fixed_type
-
-    cpp_expected = {
-        "v": "typename MyVec::register_type",
-        "m": "typename MyVec::mask_type",
-        "im": "typename MyVec::imask_type",
-        "s": "base_t",
-        "usize": "std::size_t",
-    }
-    rust_expected = {
-        "v": "<MyVec as tsl::tsl_core::SimdVector>::RegisterType",
-        "m": "<MyVec as tsl::tsl_core::SimdVector>::MaskType",
-        "im": "<MyVec as tsl::tsl_core::SimdVector>::ImaskType",
-        "s": "base_t",
-        "usize": "usize",
-    }
-    assert set(cpp_expected) == set(_SUPPORTED_KINDS)
-    assert set(rust_expected) == set(_SUPPORTED_KINDS)
-    for kind in sorted(_SUPPORTED_KINDS):
-        assert (
-            _fixed_type(PivotLanguage.CPP, kind, "MyVec", "base_t")
-            == cpp_expected[kind]
-        )
-        assert (
-            _fixed_type(PivotLanguage.RUST, kind, "MyVec", "base_t")
-            == rust_expected[kind]
-        )
-
-
 def test_rust_fixed_vector_spelling_is_owned_by_the_rust_backend() -> None:
     from tslc.backend.rust_algorithm import rust_fixed_vector_spelling
 

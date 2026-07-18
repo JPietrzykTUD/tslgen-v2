@@ -235,10 +235,7 @@ def test_backend_dialects_do_not_classify_rendered_expression_text() -> None:
 
 
 def test_fully_typed_lowering_boundaries_do_not_use_getattr() -> None:
-    checked = (
-        _REPO_ROOT / "tslc" / "src" / "tslc" / "lower" / "_query_leaf.py",
-        _REPO_ROOT / "tslc" / "src" / "tslc" / "pivot" / "planner.py",
-    )
+    checked = (_REPO_ROOT / "tslc" / "src" / "tslc" / "lower" / "_query_leaf.py",)
     offenders: list[str] = []
     for path in checked:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))

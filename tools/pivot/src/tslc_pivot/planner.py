@@ -28,12 +28,12 @@ from tslc.ir.scan import scan
 from tslc.ir.text import split_top_level
 from tslc.lower.dependencies import VectorIdentity
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
-from tslc.pivot._lowering import (
+from tslc_pivot._lowering import (
     PivotCallCapture,
     PivotCallSite,
     pivot_region_lowerers,
 )
-from tslc.pivot.model import PivotDefinition, PivotDocument, PivotLanguage, PivotSkip
+from tslc_pivot.model import PivotDefinition, PivotDocument, PivotLanguage, PivotSkip
 from tslc.select.selector import SelectedImplementation, Selector
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.target_text import render_text

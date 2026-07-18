@@ -156,29 +156,6 @@ normal primitive renderer. It does not load project render assets, plan tests
 or benchmarks, write a generated project, or invoke a toolchain. `tslc explain`
 remains the detailed selection/lowering diagnostic view.
 
-The [PIVOT exporter](src/tslc/pivot/) is a sibling projection rather than a
-registered backend. `tslc export pivot` reuses the immutable catalog, profile
-selection, standard TSIL region lowerers, and the selected C++ or Rust
-intrinsic/type translation,
-but replaces call lowering to retain typed sites for recursive inlining and
-validates the resulting lowered body for straight-line dataflow. Generation-time
-control therefore expands normally; only constructs that survive lowering are
-rejected. For fixed-width C++ vectors participating in dataparallel inference,
-the projection also emits width-labelled `tsl_128`/`tsl_256`/`tsl_512`
-definitions whose calls and `fixed<N>` vector types use the existing C++
-dialect, with `N` resolved as the scalar-type-specific lane count. It produces
-standalone YAML artifacts. Multiple requested machine profiles (including the
-implicit all-profiles case) are first projected to distinct target-family and
-hardware-feature-set combinations, with compiler modes combined within each
-combination. This avoids repeating the same PIVOT selection for profile aliases
-without changing ordinary generation. From those combinations it retains a
-deterministic cover of selected corpus implementations, so a feature set that
-adds no implementation is not lowered or rendered. The exporter
-does not construct a normal generation request, enter the generation session,
-register a backend, render a generated project, or affect default C++/Rust
-output. Its required comma-separated `--language` selection writes independent
-YAML trees below `<output-root>/cpp/` and/or `<output-root>/rust/`.
-
 ## The input language (two nested languages)
 
 ### 1. The outer TSL data language

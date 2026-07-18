@@ -19,7 +19,6 @@ from tslc.version import package_version
 
 _COMMANDS = (
     "generate",
-    "export",
     "check",
     "build",
     "test",
@@ -51,8 +50,6 @@ def main(argv: list[str] | None = None) -> int:
     command, rest = arguments[0], arguments[1:]
     if command == "generate":
         return _generation_main(rest, use_project_config=True, command="generate")
-    if command == "export":
-        return _export_group(rest)
     if command == "build":
         return _generation_main(rest, use_project_config=True, command="build")
     if command == "test":
@@ -110,7 +107,6 @@ def _root_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
     descriptions = {
         "generate": "render configured generated projects",
-        "export": "export an isolated external-framework projection",
         "check": "validate the corpus without rendering",
         "build": "generate and build-verify",
         "test": "generate, build, and run value tests",
@@ -417,19 +413,6 @@ def _maintenance_group(group: str, arguments: list[str]) -> int:
 
         return inventory_main(rest)
     print(f"unknown tslc {group} command {action!r}", file=sys.stderr)
-    return 2
-
-
-def _export_group(arguments: list[str]) -> int:
-    if not arguments or arguments[0] in ("-h", "--help"):
-        print("usage: tslc export {pivot} [options]")
-        return 0
-    target, rest = arguments[0], arguments[1:]
-    if target == "pivot":
-        from tslc.pivot.cli import main as pivot_main
-
-        return _run_configured_maintenance(pivot_main, rest)
-    print(f"unknown tslc export target {target!r}", file=sys.stderr)
     return 2
 
 
