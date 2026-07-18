@@ -20,7 +20,11 @@ description: Add, complete, or refactor a specialization of an existing TSL prim
    the closest existing implementations for the same primitive family and
    extension family.
 2. Identify the exact coverage gap: primitive, signature shape, attributes, mask policy, extension/profile, data type or type group, backend, and failing render/build/value evidence.
-3. Define the supported matrix from current catalog data, support policy, generated profiles, and existing backend capabilities. Aim to cover every supported extension/profile and data type, but produce explicit diagnostics or skips for unsupported combinations rather than pretending they work.
+3. Audit the supported matrix from current catalog data, the real `Selector`,
+   support policy, generated profiles, and backend capabilities. Implement and
+   verify the requested affected slots; broaden only when an honest shared
+   abstraction requires it. Keep every other unsupported combination explicit
+   rather than pretending it works.
 4. Choose the implementation strategy in this priority order:
    - A direct hardware intrinsic leaf when one intrinsic exactly implements the complete primitive contract for the concrete extension/type/backend.
    - Otherwise, decompose the implementation into independently meaningful, target-independent semantic operations. Call an existing TSL primitive for every such operation, preserving signedness, floating behavior, masks, lanes, safety, undefined-behavior rules, immediates, and attributes. Do not reproduce that primitive's intrinsic implementation in the parent body.
@@ -32,7 +36,10 @@ description: Add, complete, or refactor a specialization of an existing TSL prim
 6. Treat a new primitive as public domain vocabulary. Name it after observable semantics, never after an intrinsic, ISA, register shape, algorithm, or implementation recipe. The skill may recommend a contract, signature, attributes, and preferred name, but a TSL maintainer owns the decision to add it. Proceed without another checkpoint only when the user already authorized the prerequisite primitive explicitly.
 7. Update `.tsl` source data first. Do not add renderer or backend hacks to compensate for missing primitive bodies, malformed source, or unsupported semantics.
 8. Add or update value tests that exercise the specialization's real edge cases: width, sign, floating corner behavior, masks, zero/pass-through policy, shift counts, immediates, lane order, and aliasing or alignment when relevant.
-9. Verify the implementation renders, builds, and passes generated value tests for every supported backend/language/profile/type affected by the change. Treat skipped generated cases as verification gaps that must be summarized, not as silent success.
+9. Verify the implementation renders, builds, and passes generated value tests
+   for every backend/language/profile/type affected by the change. Treat skipped
+   generated cases as verification gaps that must be summarized, not as silent
+   success. Preserve shared selected/skipped ordering and coverage identity.
 
 ## Checks
 
@@ -76,8 +83,10 @@ description: Add, complete, or refactor a specialization of an existing TSL prim
 rg -n "prim<.* NAME|NAME\\(" tsldata/primitives tslc/tests
 ./dev.sh explain --primitive NAME --profile PROFILE --type TYPE --backend cpp
 ./dev.sh dump --stage lowered --primitive NAME --profile PROFILE --type TYPE --backend cpp
+./dev.sh check --primitive NAME --profile PROFILE --backend cpp --type TYPE
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog_validation.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower*.py tslc/tests/test_lower_text.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_coverage.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
 ./dev.sh build --primitives NAME --profiles PROFILE --backends cpp,rust

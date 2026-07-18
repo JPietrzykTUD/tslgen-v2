@@ -9,7 +9,9 @@ description: Add or change generated build and value-test verification in tslc. 
 
 1. Read `AGENTS.md`, `CHARTER.md`, `PLANS.md`, `tslc/AGENTS.md`,
    `tslc/CHARTER.md`, the existing `tslc/src/tslc/output/` verifier model,
-   drivers/configuration/runners, backend capability registration,
+   drivers/configuration/runners, `tslc/src/tslc/backend/capability.py`,
+   `tslc/src/tslc/project_config.py`, `tslc/src/tslc/_cli_options.py`,
+   `tslc/src/tslc/doctor.py`, `tslc.toml`,
    `supplementary/buildsystem/machine_profiles.json`, `dev.sh`, and relevant CI
    helpers/tests. Read `docs/add-extension.md` when a target extension is in
    scope.
@@ -18,8 +20,9 @@ description: Add or change generated build and value-test verification in tslc. 
    preflight, generated build/test command, or report/skip behavior.
 3. Keep caller overrides in backend-keyed `BuildVerifierConfig`; keep target and
    runner requirements in typed emitted profiles derived from source/profile
-   data; keep backend orchestration in the registered verifier driver. Avoid
-   generic backend/profile name checks.
+   data; keep repository tool-role defaults in `tslc.toml` through
+   `project_config.py`; keep backend orchestration in the registered verifier
+   driver. Avoid generic backend/profile name checks.
 4. Add runner-kind command construction in the focused runner boundary and
    validate allowed kinds through target/profile capabilities. If another
    similar addition would extend scattered conditionals, consolidate the
@@ -37,10 +40,11 @@ description: Add or change generated build and value-test verification in tslc. 
    host dependencies.
 8. Update `dev.sh`, container setup, or CI only when the capability is part of
    the supported shared workflow; keep local-only tools optional.
-9. Test command construction, override precedence, missing tools, runner
-   prefixes, target/environment projection, skip/failure reporting, and backend
-   driver dispatch. Run the smallest real generated build/value gate that can
-   prove the new path.
+9. Test command construction, override precedence, tool-role configuration,
+   missing tools, runner prefixes, target/environment projection, skip/failure
+   reporting, doctor parity, and backend driver dispatch. Use a fake third
+   backend to prove generic routing, then run the smallest real generated
+   build/value gate that can prove the new path.
 
 ## Checks
 
@@ -56,8 +60,8 @@ description: Add or change generated build and value-test verification in tslc. 
 
 ```bash
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify_config.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_authoring_tools.py tslc/tests/test_pipeline_structure.py
 PYTHONPATH=tslc/src python -m tslc doctor --profile scalar
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
 git diff --check
 ```

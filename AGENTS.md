@@ -93,7 +93,14 @@ ownership remains defined above.
 - TSIL keyword region: `.agents/skills/add-tsil-region/SKILL.md`.
 - Generated value-test shape: `.agents/skills/add-value-test-shape/SKILL.md`.
 - Toolchain/runner verification: `.agents/skills/extend-tslc-verification/SKILL.md`.
+- Compiler-owned authoring/LSP feature: `.agents/skills/extend-tslc-authoring/SKILL.md`.
 - Architecture/extensibility review: `.agents/skills/design-review/SKILL.md`.
+
+Use `design-review` before designing and after focused validation for a new or
+expanded semantic projection that has no exact task skill, such as an analysis
+command, maintenance report, documentation generator, benchmark consumer, or
+sibling exporter. Identify the typed compiler owner for every projected fact;
+the projection may format or filter those facts but must not re-derive them.
 
 Read instructions for every subtree touched. Keep detailed paths, checks, and
 commands in the applicable skill. Claude exposes the same skill names through

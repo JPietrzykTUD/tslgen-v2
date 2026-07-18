@@ -23,10 +23,13 @@ between two functions, don't.
 
 ## 3. New types are gated on delivered behavior
 
-A type earns its place when it lets a primitive **compile** that couldn't
-before — not when a second call site references it. Progress is tracked by a
-coverage table (primitive × extension × backend → compiles?), not by the number
-of internal abstractions.
+A type earns its place when it delivers supported compiler behavior, carries a
+domain invariant or decided compiler fact that would otherwise be re-derived,
+prevents silent corruption, or establishes a proven additive extension point.
+A second call site alone is not sufficient, and wrapper-only transport types
+remain prohibited. Progress is tracked by a coverage table (primitive ×
+extension × backend → compiles?), actionable diagnostics, and generated
+artifacts that verify — not by the number of internal abstractions.
 
 ## 4. The body model is a segment sequence, not an AST
 

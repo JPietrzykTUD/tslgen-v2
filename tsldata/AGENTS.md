@@ -67,6 +67,8 @@ as the style and shape reference.
   `.agents/skills/add-tsil-region/SKILL.md` and `tslc/AGENTS.md`.
 - New backend language/detail data:
   `.agents/skills/add-tslc-backend/SKILL.md` and `tslc/AGENTS.md`.
+- Source schema, selector, query, or TSIL vocabulary exposed through authoring:
+  `.agents/skills/extend-tslc-authoring/SKILL.md` and `tslc/AGENTS.md`.
 
 Start primitive work in source data. If the parser, catalog, selection,
 lowering, backend, or value-test planner cannot represent the required

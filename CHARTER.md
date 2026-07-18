@@ -68,12 +68,18 @@ start. Top-level `docs/` contains human-authored maintainer guides.
 `supplementary/docs/` contains inputs used to build generated TSL
 documentation. Keep these roles distinct.
 
-## 8. Authoring Tools Reuse Compiler Semantics
+## 8. Authoring And Analysis Tools Reuse Compiler Semantics
 
 Interactive diagnostics, catalog discovery, navigation, hover, completion, and
 preview are projections of compiler-owned parsed documents, typed catalogs,
-registries, selection, and lowering. Editor clients may own transport and UI,
-but must not grow a second TSL parser or TSIL vocabulary. Ordinary live
-features read the latest successful source index and never render projects or
-invoke generated-code toolchains. Concrete specialization preview is an
-explicit, cancellable saved-file action outside the language-server process.
+registries, selection, and lowering. Batch analysis commands, maintenance
+reports, documentation generators, and sibling exporters likewise consume
+public typed compiler projections. They may filter and format their own output,
+but selection, capabilities, target spellings, dependency closure, and source
+validation remain owned by their compiler stages.
+
+Editor clients may own transport and UI, but must not grow a second TSL parser
+or TSIL vocabulary. Ordinary live features read the latest successful source
+index and never render projects or invoke generated-code toolchains. Concrete
+specialization preview is an explicit, cancellable saved-file action outside
+the language-server process.

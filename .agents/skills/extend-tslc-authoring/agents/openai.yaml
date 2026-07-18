@@ -1,0 +1,4 @@
+interface:
+  display_name: "Extend TSLC Authoring"
+  short_description: "Extend compiler-owned authoring and LSP features."
+  default_prompt: "Use $extend-tslc-authoring to add or change a compiler-owned authoring or LSP feature."

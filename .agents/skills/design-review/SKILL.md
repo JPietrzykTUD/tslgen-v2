@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: Review tslc design health and detect drift from the repository and compiler charters, scoped AGENTS.md files, PLANS.md, and tslc/DESCRIPTION.md. Use when asked for a design review, architecture drift audit, extensibility review, maintainability review, KISS/DRY review, or pre/post-check after adding primitives, TSIL regions, backend support, or major compiler pipeline changes.
+description: Review tslc design health and detect drift from the repository and compiler charters, scoped AGENTS.md files, PLANS.md, and tslc/DESCRIPTION.md. Use when asked for a design review, architecture drift audit, extensibility review, maintainability review, KISS/DRY review, or a pre/post-check for compiler features, semantic projections, authoring/LSP work, maintenance tools, sibling exporters, or major pipeline changes.
 ---
 
 # Design Review
@@ -27,7 +27,10 @@ evidence.
    organization.
 4. Sample implementation details where drift is likely: parsing/catalog
    promotion, selection, TSIL scan/lowering, backend translation, render
-   templates, diagnostics, maintenance tools, and generated-output boundaries.
+   templates, diagnostics, authoring/LSP projections, maintenance tools,
+   benchmark consumers, sibling exporters, and generated-output boundaries.
+   For a projection, inventory every consumed fact, its canonical typed owner,
+   and the decisions that legitimately remain local to the output format.
 5. Report findings first, ordered by severity. Include file/line references and
    explain the design rule being violated.
 6. For each finding, describe the smallest design correction and the tests that
@@ -45,10 +48,16 @@ evidence.
   config, or explicit metadata boundaries into domain logic.
 - **Object ownership**: stateful concepts have small classes or protocols that
   own invariants; simple stateless transformations remain functions.
+- **Projection ownership**: tools and derived views consume public typed facts
+  from their owning compiler stages; they do not reimplement selection,
+  capability, target-spelling, dependency, or validation decisions.
 - **Extensibility**: adding a primitive, backend capability, or TSIL region
   mostly adds focused code rather than modifying unrelated stages.
+- **Additive probe**: a synthetic next backend, family, namespace, region, or
+  case kind exercises generic consumers without unrelated edits.
 - **TSIL integrity**: body handling goes through the shared recursive segment
-  and region path; new semantics become typed regions or lowered values.
+  and region path; new semantics become typed regions or lowered values, and
+  opaque target text is never parsed or rewritten by a projection.
 - **Backend boundary**: backend rules translate typed lowered values; templates
   only format decided render models.
 - **Diagnostics**: malformed or unsupported input produces structured,
@@ -59,6 +68,8 @@ evidence.
   unrelated responsibilities.
 - **Tests**: risky behavior has focused tests at the right boundary plus
   integration/golden coverage when output changes.
+- **Guidance currency**: changes to ownership, workflow, or canonical commands
+  update each affected task skill in the same slice.
 - **Docs/code alignment**: project guides describe what the code actually does,
   and code does not rely on undocumented design exceptions.
 

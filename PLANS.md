@@ -37,6 +37,8 @@ Before substantial implementation, write down or hold in working memory:
 - **Boundary**: the stages that own the behavior.
 - **Data model**: domain objects or typed records involved.
 - **Extension point**: what future backend/primitive/region becomes easier.
+- **Projection**: for a tool or derived view, the typed owner of every consumed
+  fact and the decisions, if any, that legitimately remain local.
 - **Validation**: exact tests and commands to run.
 - **Risk**: likely regressions, nondeterminism, diagnostic gaps, or unavailable
   toolchains.
@@ -55,8 +57,12 @@ expand into a broad rewrite.
 5. Broaden validation when the change crosses stages or affects generated
    artifacts.
 6. Re-read the diff for scope, ownership, diagnostics, and determinism.
-7. Update guidance only when behavior, workflow, or architecture changed.
-8. Report the result, validation, limitations, and meaningful follow-ups.
+7. For a new semantic projection or shared registry with no exact task skill,
+   run `design-review` again after focused tests and before calling the slice
+   complete.
+8. Update guidance when behavior, workflow, ownership, or canonical validation
+   commands changed. Update every affected task skill in the same slice.
+9. Report the result, validation, limitations, and meaningful follow-ups.
 
 The charters and applicable `AGENTS.md` files own architecture invariants. Task
 skills own detailed feature procedures and command lists. Do not reproduce
@@ -75,6 +81,11 @@ Select validation proportionally:
 - Compiler logic changes: run `compileall` and focused pytest at the owning
   boundary; run mypy when typed models, protocols, or public signatures change.
 - Cross-stage compiler changes: broaden to the full Python suite.
+- New semantic projections or shared registries without an exact task skill:
+  add an owner-equivalence test and an additive probe using the next plausible
+  backend, family, namespace, region, or case kind. If raw target text is in
+  scope, prove that it remains opaque or that unsupported semantics are rejected
+  without rewriting it.
 - Generated layout, backend codegen, verification, or executable value-test
   changes: run the opt-in generated build/value gates for the smallest useful
   primitive/profile/backend matrix.
