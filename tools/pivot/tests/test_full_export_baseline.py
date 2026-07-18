@@ -15,6 +15,7 @@ from tslc_pivot.baseline import (
     CANONICAL_FULL_EXPORT_ARGV,
     CANONICAL_FULL_EXPORT_COMMAND,
     build_full_export_manifest,
+    build_shadow_census_manifest,
     canonical_full_export,
 )
 from tslc_pivot.exporter import export_pivot
@@ -23,14 +24,19 @@ from tslc_pivot.model import PivotExportResult, PivotLanguage, PivotProjection
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 _BASELINE_PATH = Path(__file__).parent / "baselines" / "full_export.json"
+_SHADOW_BASELINE_PATH = Path(__file__).parent / "baselines" / "shadow_census.json"
 
 
 def test_full_corpus_export_matches_exact_manifest() -> None:
     expected: dict[str, Any] = json.loads(_BASELINE_PATH.read_text(encoding="utf-8"))
+    expected_shadow: dict[str, Any] = json.loads(
+        _SHADOW_BASELINE_PATH.read_text(encoding="utf-8")
+    )
     run = canonical_full_export(_REPOSITORY_ROOT)
     result = export_pivot(run.request)
 
     assert result.diagnostics == ()
+    _assert_complete_shadow_census(result, expected, expected_shadow)
     actual = build_full_export_manifest(run, result)
 
     assert actual["schema"] == expected["schema"]
@@ -120,6 +126,150 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     assert actual["skip_inventory_sha256"] == (
         "0e51087f1ee11050507fd0f2fca2158a6a58446b7f70005b12fc941ccc9ad445"
     )
+
+
+def _assert_complete_shadow_census(
+    result: PivotExportResult,
+    full_export_baseline: dict[str, Any],
+    shadow_baseline: dict[str, Any],
+) -> None:
+    assert tuple(census.language.value for census in result.shadow_censuses) == (
+        "cpp",
+        "rust",
+    )
+    assert tuple(len(census.entries) for census in result.shadow_censuses) == (
+        10_291,
+        6_769,
+    )
+    assert tuple(census.multi_statement_count for census in result.shadow_censuses) == (
+        3_061,
+        1_669,
+    )
+    assert tuple(census.category_counts for census in result.shadow_censuses) == (
+        (
+            ("call_and_local", 89),
+            ("call_only", 2_962),
+            ("local_only", 10),
+            ("native_leaf", 4_442),
+            ("synthetic_fixed", 2_788),
+        ),
+        (
+            ("call_and_local", 5),
+            ("call_only", 1_654),
+            ("local_only", 10),
+            ("native_leaf", 2_336),
+            ("synthetic_fixed", 2_764),
+        ),
+    )
+    assert Counter(
+        entry.category.value
+        for census in result.shadow_censuses
+        for entry in census.entries
+        if entry.category is not None
+    ) == {
+        "synthetic_fixed": 5_552,
+        "native_leaf": 6_778,
+        "call_only": 4_616,
+        "local_only": 20,
+        "call_and_local": 94,
+    }
+    assert sum(
+        census.multi_statement_count for census in result.shadow_censuses
+    ) == 4_730
+    assert all(census.failures == () for census in result.shadow_censuses)
+    assert all(
+        body.body is not None
+        for census in result.shadow_censuses
+        for entry in census.entries
+        for body in (entry.body, *entry.inlined_bodies)
+    )
+
+    projection_by_language = {
+        projection.language: projection for projection in result.projections
+    }
+    for census in result.shadow_censuses:
+        projection = projection_by_language[census.language]
+        expected = Counter(
+            (document.name, definition)
+            for document in projection.documents
+            for definition in document.definitions
+        )
+        actual = Counter(
+            (entry.document, entry.definition) for entry in census.entries
+        )
+        assert actual == expected
+
+    nominal_identities = Counter(
+        (
+            census.language,
+            entry.document,
+            entry.definition.isa,
+            entry.definition.dtype,
+            entry.definition.signature,
+        )
+        for census in result.shadow_censuses
+        for entry in census.entries
+    )
+    collisions = tuple(count for count in nominal_identities.values() if count > 1)
+    assert len(collisions) == 328
+    assert sum(collisions) == 656
+    assert all(count == 2 for count in collisions)
+    assert all(
+        "\x00" not in artifact.content for artifact in result.artifacts.artifacts
+    )
+
+    expected_definitions = Counter(
+        (
+            record[0],
+            record[1],
+            record[2],
+            record[3],
+            tuple(tuple(item) for item in record[4]),
+            record[5],
+        )
+        for record in full_export_baseline["definitions"]
+    )
+    shadow_definitions = Counter(
+        (
+            census.language.value,
+            entry.document,
+            entry.definition.isa,
+            entry.definition.dtype,
+            entry.definition.signature,
+            sha256(
+                _canonical_json(list(entry.definition.direct)).encode("utf-8")
+            ).hexdigest(),
+        )
+        for census in result.shadow_censuses
+        for entry in census.entries
+    )
+    assert shadow_definitions == expected_definitions
+
+    occurrences: dict[tuple[object, ...], list[int]] = {}
+    for census in result.shadow_censuses:
+        for entry in census.entries:
+            key = (
+                census.language,
+                entry.document,
+                entry.definition.isa,
+                entry.definition.dtype,
+                entry.definition.signature,
+            )
+            occurrences.setdefault(key, []).append(entry.occurrence)
+    assert all(
+        sorted(items) == list(range(len(items))) for items in occurrences.values()
+    )
+    assert sum(
+        entry.occurrence == 1
+        for census in result.shadow_censuses
+        for entry in census.entries
+    ) == 328
+
+    actual_shadow = build_shadow_census_manifest(
+        result,
+        source_root=_REPOSITORY_ROOT,
+    )
+    assert actual_shadow == shadow_baseline
 
 
 def test_manifest_rejects_inputs_changed_after_snapshot(tmp_path: Path) -> None:

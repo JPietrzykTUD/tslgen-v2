@@ -5,7 +5,7 @@
 Status: Phases 1 and 2 implemented (slices 1–19); Phase 3 implemented through
 slice 26. The architecture for slice 27 is now approved and replanned as an
 independently packaged downstream PIVOT tool; slice 27A is implemented and
-verified, and slice 27B has not started.
+verified, slice 27B is implemented and verified, and slice 27C has not started.
 See [`pivot-export-rework-plan.md`](pivot-export-rework-plan.md).
 
 Phase 3 implementation notes (one commit per slice):
@@ -46,6 +46,16 @@ Phase 3 implementation notes (one commit per slice):
   exact-version, full-corpus multiset/hash, and two-hash-seed tests enforce the
   one-way boundary. The pre/post export remains byte-identical at 188 documents,
   17,060 definitions, and 27,823 skips.
+- Slice 27B: a PIVOT-owned immutable body model retains bindings, typed calls,
+  admitted locals, residual statement sequences, final results, fixed-wrapper
+  calls, unsafe facts, and structured failures beside the unchanged legacy
+  renderer. Fresh lowering scopes and a fail-closed render adapter construct all
+  17,060 baseline occurrences, including 4,730 multi-statement definitions and
+  328 nominal collision groups, with zero shadow failures across two hash
+  seeds. Production YAML remains byte-identical; no compiler or source-data file
+  changed. One guarded maintenance command validates both production and shadow
+  manifests before writing either; shadow semantic changes require explicit
+  review.
 
 Phase 2 implementation notes (one commit per slice):
 

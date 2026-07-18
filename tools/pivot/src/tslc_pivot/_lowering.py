@@ -2,22 +2,37 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 
 from tslc.diagnostics import SourceSpan
-from tslc.ir.region_syntax import parse_call_selector, parse_var_selector, split_arg_groups
+from tslc.ir.region_syntax import (
+    ParsedCallSelector,
+    parse_call_selector,
+    parse_var_selector,
+    split_arg_groups,
+)
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
 from tslc.lower.dependencies import (
     CallDependency,
     CallDependencyOrigin,
     resolve_lowered_call_dependency,
+    resolve_lowered_call_vector,
 )
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue
 from tslc.lower.region_handlers import DEFAULT_REGION_LOWERERS, RegionLowerer
 from tslc.lower.region_handlers.declarations import VarLowerer
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.target_text import RenderField, RenderText, literal_text, render_sequence, render_text
+from tslc.target_text import (
+    RenderField,
+    RenderText,
+    literal_text,
+    render_sequence,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class PivotCallSite:
@@ -35,9 +50,6 @@ class PivotCallSite:
 class PivotCallCapture:
     sites: list[PivotCallSite] = field(default_factory=list)
 
-    def reset(self) -> None:
-        self.sites.clear()
-
     def add(
         self,
         dependency: CallDependency,
@@ -49,6 +61,36 @@ class PivotCallCapture:
         return site
 
 
+class PivotCallCaptureScope:
+    """Supply one fresh legacy marker capture to each lowering operation."""
+
+    def __init__(self) -> None:
+        self._active: ContextVar[PivotCallCapture | None] = ContextVar(
+            "tslc_pivot_legacy_call_capture",
+            default=None,
+        )
+
+    @contextmanager
+    def capture(self) -> Iterator[PivotCallCapture]:
+        capture = PivotCallCapture()
+        token = self._active.set(capture)
+        try:
+            yield capture
+        finally:
+            self._active.reset(token)
+
+    def add(
+        self,
+        dependency: CallDependency,
+        attrs: tuple[tuple[str, str], ...],
+        source: SourceSpan | None,
+    ) -> PivotCallSite:
+        capture = self._active.get()
+        if capture is None:
+            raise RuntimeError("PIVOT call lowering requires an active capture scope")
+        return capture.add(dependency, attrs, source)
+
+
 class PivotCallLowerer:
     """Capture a typed call edge while leaving a private marker in target text."""
 
@@ -56,7 +98,7 @@ class PivotCallLowerer:
 
     def __init__(
         self,
-        capture: PivotCallCapture,
+        capture: PivotCallCaptureScope,
         evaluator: QueryEvaluator | None = None,
     ) -> None:
         self._capture = capture
@@ -73,7 +115,7 @@ class PivotCallLowerer:
                 source=region.source,
             )
             return region.full_text
-        if len(parsed.type_args) > 1:
+        if not pivot_call_type_args_supported(parsed, context, self._evaluator):
             context.effects.skip(
                 "TSL-PIVOT-UNSUPPORTED-CALL-TYPEARGS",
                 "PIVOT call inlining does not support forwarded immediate or generic "
@@ -111,6 +153,23 @@ class PivotCallLowerer:
         return value
 
 
+def pivot_call_type_args_supported(
+    selector: ParsedCallSelector,
+    context: LoweringSession,
+    evaluator: QueryEvaluator,
+) -> bool:
+    """Accept only the one resolvable vector selector PIVOT can inline."""
+
+    if len(selector.type_args) > 1:
+        return False
+    if not selector.type_args:
+        return True
+    return (
+        resolve_lowered_call_vector(selector.type_args[0], context, evaluator)
+        is not None
+    )
+
+
 class PivotVarLowerer:
     """Admit only inferred locals, which remain plain dataflow assignments."""
 
@@ -138,7 +197,7 @@ class PivotVarLowerer:
         return self._delegate.finish_statement(rendered, region)
 
 
-def pivot_region_lowerers(capture: PivotCallCapture) -> tuple[RegionLowerer, ...]:
+def pivot_region_lowerers(capture: PivotCallCaptureScope) -> tuple[RegionLowerer, ...]:
     """Reuse normal TSIL semantics, replacing only handlers PIVOT must constrain.
 
     In particular, the normal control lowerers get the opportunity to splice
@@ -162,6 +221,8 @@ def pivot_region_lowerers(capture: PivotCallCapture) -> tuple[RegionLowerer, ...
 
 __all__ = (
     "PivotCallCapture",
+    "PivotCallCaptureScope",
     "PivotCallSite",
+    "pivot_call_type_args_supported",
     "pivot_region_lowerers",
 )

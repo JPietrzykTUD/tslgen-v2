@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the reviewed full-corpus PIVOT coverage manifest."""
+"""Regenerate the reviewed production and typed-shadow PIVOT manifests."""
 
 from __future__ import annotations
 
@@ -17,8 +17,9 @@ sys.path[:0] = [
 from tslc.diagnostics import format_diagnostic  # noqa: E402
 from tslc_pivot.baseline import (  # noqa: E402
     build_full_export_manifest,
+    build_shadow_census_manifest,
     canonical_full_export,
-    update_full_export_baseline,
+    update_pivot_baselines,
 )
 from tslc_pivot.exporter import export_pivot  # noqa: E402
 
@@ -31,18 +32,26 @@ _BASELINE_PATH = (
     / "baselines"
     / "full_export.json"
 )
+_SHADOW_BASELINE_PATH = (
+    _REPOSITORY_ROOT
+    / "tools"
+    / "pivot"
+    / "tests"
+    / "baselines"
+    / "shadow_census.json"
+)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Regenerate the guarded full-corpus PIVOT coverage baseline."
+        description="Regenerate the guarded full-corpus PIVOT baselines."
     )
     parser.add_argument(
         "--allow-reviewed-incompatible-baseline",
         action="store_true",
         help=(
-            "allow removed definitions or replaced direct hashes after an explicit "
-            "product or correctness review"
+            "allow removed definitions, replaced direct hashes, or changed typed-"
+            "shadow facts after an explicit product or correctness review"
         ),
     )
     args = parser.parse_args(argv)
@@ -55,10 +64,16 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     manifest = build_full_export_manifest(run, result)
+    shadow_manifest = build_shadow_census_manifest(
+        result,
+        source_root=_REPOSITORY_ROOT,
+    )
     try:
-        update_full_export_baseline(
+        update_pivot_baselines(
             _BASELINE_PATH,
             manifest,
+            _SHADOW_BASELINE_PATH,
+            shadow_manifest,
             allow_reviewed_incompatible_baseline=(
                 args.allow_reviewed_incompatible_baseline
             ),
@@ -73,6 +88,13 @@ def main(argv: list[str] | None = None) -> int:
         f"{summary['documents']} documents, "
         f"{summary['definitions']} definitions, "
         f"{summary['skips']} skips"
+    )
+    shadow_summary = shadow_manifest["summary"]
+    assert isinstance(shadow_summary, dict)
+    print(
+        f"wrote {_SHADOW_BASELINE_PATH.relative_to(_REPOSITORY_ROOT)}: "
+        f"{shadow_summary['entries']} entries, "
+        f"{shadow_summary['failures']} failures"
     )
     return 0
 

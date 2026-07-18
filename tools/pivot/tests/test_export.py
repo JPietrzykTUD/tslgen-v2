@@ -19,7 +19,7 @@ from tslc.select.selector import Selector
 from tslc.sources import expand_source_paths
 from tslc_pivot import PivotExportRequest, PivotLanguage, export_pivot
 from tslc_pivot import cli as pivot_cli
-from tslc_pivot._lowering import PivotCallCapture, pivot_region_lowerers
+from tslc_pivot._lowering import PivotCallCaptureScope, pivot_region_lowerers
 from tslc_pivot.model import PivotDefinition, PivotDocument
 from tslc_pivot.planner import _SUPPORTED_KINDS, _contributing_indexes, _fixed_type
 from tslc_pivot.profiles import profiles_for_distinct_feature_sets
@@ -308,21 +308,23 @@ def test_generation_loop_is_expanded_by_the_standard_lowerer(
         if item.extension.isa_name == "avx2"
         and item.primitive.attributes.get("mask") is None
     )
-    capture = PivotCallCapture()
-    result = Lowerer(region_lowerers=pivot_region_lowerers(capture)).lower(
-        slot,
-        catalog,
-        CppBackendDialect(catalog),
-        body_segments=scan(
-            """
-            var<infer>(acc, left);
-            loop<generation>(i, 0, 2, 1) {
-              acc = op<add>(acc, right);
-            }
-            complete(acc);
-            """
-        ),
-    )
+    capture_scope = PivotCallCaptureScope()
+    lowerer = Lowerer(region_lowerers=pivot_region_lowerers(capture_scope))
+    with capture_scope.capture() as capture:
+        result = lowerer.lower(
+            slot,
+            catalog,
+            CppBackendDialect(catalog),
+            body_segments=scan(
+                """
+                var<infer>(acc, left);
+                loop<generation>(i, 0, 2, 1) {
+                  acc = op<add>(acc, right);
+                }
+                complete(acc);
+                """
+            ),
+        )
 
     assert result.diagnostics == ()
     assert result.specialization is not None
@@ -331,6 +333,7 @@ def test_generation_loop_is_expanded_by_the_standard_lowerer(
     assert "{" not in body
     assert body.count("acc = (acc + right);") == 2
     assert body.strip().endswith("return acc;")
+    assert capture.sites == []
 
 
 _COLLIDE_FIXTURE = (

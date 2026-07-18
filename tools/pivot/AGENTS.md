@@ -71,6 +71,11 @@ diagnostics, and coverage baseline.
 - Keep skips and diagnostics structured, actionable, source-located where
   practical, stably ordered, and clearly identified as PIVOT-owned.
 - Never preserve coverage by emitting a guessed or silently corrupted mapping.
+- Treat `tests/baselines/shadow_census.json` as the 27B typed-body authority.
+  Every emitted definition occurrence must have a constructed shadow body,
+  including fixed wrappers and nominal collisions; hidden shadow failures,
+  malformed/lost capture acceptance, or an unexplained semantic digest change
+  block the slice.
 
 ## Validation
 
@@ -86,14 +91,19 @@ The tool suite must cover package/CLI isolation, compiler-registry and default
 immutability, exact compiler-version compatibility, parser edge cases,
 fail-closed rejection, recursive inlining, YAML schema/goldens, full-export
 entry-multiset and hash ratchets, and cross-`PYTHONHASHSEED` determinism.
+While the typed path is in shadow mode, it must additionally cover fresh
+lowering state, calls/locals/final results, alternative implementation variants,
+unsafe framing, reserved-token corruption, exact shadow-entry association, and
+the source-normalized shadow census digest.
 Validate ordinary generation remains unchanged from outside the compiler
 package.
 
-Regenerate the durable manifest only through
+Regenerate the durable production and typed-shadow manifests only through
 `python tools/pivot/scripts/update_full_export_baseline.py`. The updater must
 remain fail-closed for removed entries, reduced multiplicity, or replaced
-`direct` hashes. Its incompatible-baseline override requires an explicit
-reviewed product or correctness decision.
+`direct` hashes, and for any typed-shadow evidence change. Its
+incompatible-baseline override requires an explicit reviewed product or
+correctness decision.
 
 For packaging and command checks:
 

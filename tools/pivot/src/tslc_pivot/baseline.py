@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 from tslc.diagnostics import SourceSpan
+from tslc_pivot.body_ir import pivot_shadow_census_digest
 from tslc_pivot.cli import (
     PivotCliInvocation,
     render_cli_command,
@@ -304,6 +305,73 @@ def render_full_export_manifest(manifest: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def build_shadow_census_manifest(
+    result: PivotExportResult,
+    *,
+    source_root: Path,
+) -> dict[str, object]:
+    """Build the durable 27B typed-body census from one canonical export."""
+
+    nominal_identities = Counter(
+        (
+            census.language.value,
+            entry.document,
+            entry.definition.isa,
+            entry.definition.dtype,
+            entry.definition.signature,
+        )
+        for census in result.shadow_censuses
+        for entry in census.entries
+    )
+    collisions = tuple(count for count in nominal_identities.values() if count > 1)
+    return {
+        "schema": "tslc-pivot-shadow-census-v1",
+        "digest": pivot_shadow_census_digest(
+            result.shadow_censuses,
+            source_root=source_root,
+        ),
+        "summary": {
+            "entries": sum(
+                len(census.entries) for census in result.shadow_censuses
+            ),
+            "failures": sum(
+                len(census.failures) for census in result.shadow_censuses
+            ),
+            "multi_statement": sum(
+                census.multi_statement_count for census in result.shadow_censuses
+            ),
+            "fixed_wrappers": sum(
+                dict(census.origin_counts).get("fixed_wrapper", 0)
+                for census in result.shadow_censuses
+            ),
+            "nominal_collision_groups": len(collisions),
+            "nominal_collision_entries": sum(collisions),
+        },
+        "languages": {
+            census.language.value: {
+                "entries": len(census.entries),
+                "failures": len(census.failures),
+                "multi_statement": census.multi_statement_count,
+                "categories": dict(census.category_counts),
+                "origins": dict(census.origin_counts),
+                "features": dict(census.feature_counts),
+                "feature_combinations": [
+                    {"features": list(features), "count": count}
+                    for features, count in census.feature_combination_counts
+                ],
+            }
+            for census in result.shadow_censuses
+        },
+    }
+
+
+def render_shadow_census_manifest(manifest: Mapping[str, object]) -> str:
+    _validate_shadow_census_manifest(manifest)
+    return (
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    )
+
+
 def _definition_records(
     result: PivotExportResult,
 ) -> tuple[
@@ -580,6 +648,64 @@ def update_full_export_baseline(
     path.write_text(rendered, encoding="utf-8")
 
 
+def validate_shadow_census_baseline_update(
+    previous: Mapping[str, object],
+    candidate: Mapping[str, object],
+    *,
+    allow_reviewed_incompatible_baseline: bool = False,
+) -> None:
+    """Require explicit review for every typed-body evidence change."""
+
+    _validate_shadow_census_manifest(previous)
+    _validate_shadow_census_manifest(candidate)
+    if allow_reviewed_incompatible_baseline or previous == candidate:
+        return
+    raise ValueError(
+        "shadow-census baseline facts changed. Pass "
+        "--allow-reviewed-incompatible-baseline only after an explicit "
+        "typed-body semantics or corpus review."
+    )
+
+
+def update_pivot_baselines(
+    full_export_path: Path,
+    full_export_candidate: dict[str, object],
+    shadow_census_path: Path,
+    shadow_census_candidate: dict[str, object],
+    *,
+    allow_reviewed_incompatible_baseline: bool = False,
+) -> None:
+    """Validate both durable manifests before writing either candidate."""
+
+    _manifest_definition_inventory(full_export_candidate)
+    _validate_shadow_census_manifest(shadow_census_candidate)
+    if full_export_path.exists():
+        validate_full_export_baseline_update(
+            _load_manifest(full_export_path),
+            full_export_candidate,
+            allow_reviewed_incompatible_baseline=(
+                allow_reviewed_incompatible_baseline
+            ),
+        )
+    if shadow_census_path.exists():
+        validate_shadow_census_baseline_update(
+            _load_manifest(shadow_census_path),
+            shadow_census_candidate,
+            allow_reviewed_incompatible_baseline=(
+                allow_reviewed_incompatible_baseline
+            ),
+        )
+
+    full_export_rendered = render_full_export_manifest(full_export_candidate)
+    shadow_census_rendered = render_shadow_census_manifest(
+        shadow_census_candidate
+    )
+    full_export_path.parent.mkdir(parents=True, exist_ok=True)
+    shadow_census_path.parent.mkdir(parents=True, exist_ok=True)
+    full_export_path.write_text(full_export_rendered, encoding="utf-8")
+    shadow_census_path.write_text(shadow_census_rendered, encoding="utf-8")
+
+
 def _load_manifest(path: Path) -> dict[str, object]:
     try:
         value: object = json.loads(path.read_text(encoding="utf-8"))
@@ -624,6 +750,28 @@ def _manifest_definition_inventory(
     return inventory
 
 
+def _validate_shadow_census_manifest(manifest: Mapping[str, object]) -> None:
+    if manifest.get("schema") != "tslc-pivot-shadow-census-v1":
+        raise ValueError("shadow-census baseline has an unsupported schema")
+    digest = manifest.get("digest")
+    if (
+        not isinstance(digest, str)
+        or len(digest) != 64
+        or any(character not in "0123456789abcdef" for character in digest)
+    ):
+        raise ValueError("shadow-census baseline has an invalid digest")
+    summary = manifest.get("summary")
+    if not isinstance(summary, dict):
+        raise ValueError("shadow-census baseline summary must be an object")
+    failures = summary.get("failures")
+    if failures != 0:
+        raise ValueError(
+            "shadow-census baseline cannot record hidden construction failures"
+        )
+    if not isinstance(manifest.get("languages"), dict):
+        raise ValueError("shadow-census baseline languages must be an object")
+
+
 def _portable_path(path: Path, repository_root: Path) -> str:
     resolved = path.resolve()
     try:
@@ -651,10 +799,14 @@ __all__ = (
     "CANONICAL_FULL_EXPORT_ARGV",
     "CANONICAL_FULL_EXPORT_COMMAND",
     "CanonicalFullExport",
+    "build_shadow_census_manifest",
     "build_full_export_manifest",
     "canonical_full_export",
     "classify_skip_reason",
     "render_full_export_manifest",
+    "render_shadow_census_manifest",
     "update_full_export_baseline",
+    "update_pivot_baselines",
     "validate_full_export_baseline_update",
+    "validate_shadow_census_baseline_update",
 )

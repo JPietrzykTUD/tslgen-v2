@@ -60,7 +60,12 @@ _EXPECTED_COMPILER_IMPORTS = (
     ),
     (
         "tslc.ir.region_syntax",
-        ("parse_call_selector", "parse_var_selector", "split_arg_groups"),
+        (
+            "ParsedCallSelector",
+            "parse_call_selector",
+            "parse_var_selector",
+            "split_arg_groups",
+        ),
     ),
     ("tslc.ir.scan", ("scan",)),
     ("tslc.ir.segments", ("Region",)),
@@ -73,6 +78,7 @@ _EXPECTED_COMPILER_IMPORTS = (
             "CallDependencyOrigin",
             "VectorIdentity",
             "resolve_lowered_call_dependency",
+            "resolve_lowered_call_vector",
         ),
     ),
     ("tslc.lower.lowerer", ("LoweredSpecialization", "Lowerer")),
@@ -93,7 +99,23 @@ _EXPECTED_COMPILER_IMPORTS = (
     ("tslc.support_policy", ("DEFAULT_SUPPORT_POLICY",)),
     (
         "tslc.target_text",
-        ("RenderField", "RenderText", "literal_text", "render_sequence", "render_text"),
+        (
+            "LiteralText",
+            "LoweredBody",
+            "RenderContext",
+            "RenderField",
+            "RenderPlaceholder",
+            "RenderSequence",
+            "RenderText",
+            "TemplateApplication",
+            "TemplateRenderError",
+            "TrimmedText",
+            "UnsafeBlockText",
+            "literal_text",
+            "render_sequence",
+            "render_text",
+            "unsafe_block",
+        ),
     ),
 )
 

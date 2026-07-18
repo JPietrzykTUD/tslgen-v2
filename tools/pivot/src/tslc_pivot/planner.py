@@ -29,11 +29,27 @@ from tslc.ir.text import split_top_level
 from tslc.lower.dependencies import VectorIdentity
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc_pivot._lowering import (
-    PivotCallCapture,
+    PivotCallCaptureScope,
     PivotCallSite,
     pivot_region_lowerers,
 )
+from tslc_pivot.body_ir import (
+    PivotBodyBuildResult,
+    PivotShadowCategory,
+    PivotShadowCensus,
+    PivotShadowEntry,
+    PivotShadowOrigin,
+    PivotUnsupported,
+    classify_shadow_trace,
+    pivot_shadow_trace_semantic_digest,
+)
 from tslc_pivot.model import PivotDefinition, PivotDocument, PivotLanguage, PivotSkip
+from tslc_pivot.render_stream import build_pivot_body, synthetic_pivot_body
+from tslc_pivot.shadow_lowering import (
+    PivotShadowCaptureScope,
+    capture_source_collision,
+    pivot_shadow_region_lowerers,
+)
 from tslc.select.selector import SelectedImplementation, Selector
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.target_text import render_text
@@ -85,12 +101,24 @@ class PivotPlan:
     documents: tuple[PivotDocument, ...]
     skipped: tuple[PivotSkip, ...]
     diagnostics: tuple[Diagnostic, ...]
+    shadow_census: PivotShadowCensus
 
 
 @dataclass(frozen=True, slots=True)
 class _LoweredPivotBody:
     spec: LoweredSpecialization
     call_sites: tuple[PivotCallSite, ...]
+    shadow: PivotBodyBuildResult
+
+
+@dataclass(frozen=True, slots=True)
+class _PlannedDefinition:
+    definition: PivotDefinition
+    shadow: PivotBodyBuildResult
+    origin: PivotShadowOrigin
+    category: PivotShadowCategory | None
+    semantic_digest: str
+    inlined_bodies: tuple[PivotBodyBuildResult, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,18 +154,22 @@ class PivotPlanner:
             catalog, language.value
         )
         self.standard_lowerer = Lowerer()
-        self._call_capture = PivotCallCapture()
+        self._call_capture = PivotCallCaptureScope()
         self._pivot_lowerer = Lowerer(
             region_lowerers=pivot_region_lowerers(self._call_capture)
+        )
+        self._shadow_capture = PivotShadowCaptureScope(language.value)
+        self._shadow_lowerer = Lowerer(
+            region_lowerers=pivot_shadow_region_lowerers(self._shadow_capture)
         )
         self._lowered: dict[
             tuple[object, ...], _LoweredPivotBody | _PivotUnsupported
         ] = {}
         self._leaf_definitions: dict[
-            tuple[object, ...], PivotDefinition | _PivotUnsupported
+            tuple[object, ...], _PlannedDefinition | _PivotUnsupported
         ] = {}
         self._fixed_definitions: dict[
-            tuple[object, ...], PivotDefinition | None | _PivotUnsupported
+            tuple[object, ...], _PlannedDefinition | None | _PivotUnsupported
         ] = {}
         self._callee_selections: dict[
             tuple[object, ...], tuple[SelectedImplementation, ...]
@@ -161,7 +193,10 @@ class PivotPlanner:
                 key=lambda tag: (SCALAR_TYPE_ORDER.get(tag, 99), tag),
             )
         )
-        documents: dict[str, tuple[tuple[str, ...], set[PivotDefinition]]] = {}
+        documents: dict[
+            str,
+            tuple[tuple[str, ...], dict[PivotDefinition, _PlannedDefinition]],
+        ] = {}
         skipped: dict[tuple[object, ...], PivotSkip] = {}
         diagnostics: list[Diagnostic] = []
 
@@ -198,7 +233,7 @@ class PivotPlanner:
             profile = selected_profile.profile
             for slot in selected_profile.slots:
                 callable_name = _callable_name(slot)
-                slot_definitions: list[PivotDefinition] = []
+                slot_definitions: list[_PlannedDefinition] = []
                 try:
                     slot_definitions.append(self._definition(profile, slot))
                 except _PivotUnsupported as exc:
@@ -238,9 +273,29 @@ class PivotPlanner:
                     skipped.setdefault(_skip_identity(skip), skip)
                     continue
                 if existing is None:
-                    documents[callable_name] = (inputs, set(slot_definitions))
+                    definitions: dict[PivotDefinition, _PlannedDefinition] = {}
+                    documents[callable_name] = (inputs, definitions)
                 else:
-                    existing[1].update(slot_definitions)
+                    definitions = existing[1]
+                for candidate in slot_definitions:
+                    previous = definitions.get(candidate.definition)
+                    if (
+                        previous is not None
+                        and previous.semantic_digest != candidate.semantic_digest
+                    ):
+                        diagnostics.append(
+                            Diagnostic(
+                                severity="error",
+                                code="TSL-PIVOT-SHADOW-DEFINITION-CONFLICT",
+                                message=(
+                                    "the same emitted PIVOT definition has different "
+                                    "shadow body facts"
+                                ),
+                                span=slot.implementation.body_source,
+                            )
+                        )
+                        continue
+                    definitions.setdefault(candidate.definition, candidate)
 
         planned_documents = tuple(
             PivotDocument(
@@ -256,13 +311,14 @@ class PivotPlanner:
             documents=planned_documents,
             skipped=tuple(sorted(skipped.values(), key=_skip_key)),
             diagnostics=sort_diagnostics(diagnostics),
+            shadow_census=_shadow_census(self.language, planned_documents, documents),
         )
 
     def _definition(
         self,
         profile: MachineProfile,
         slot: SelectedImplementation,
-    ) -> PivotDefinition:
+    ) -> _PlannedDefinition:
         _eligible_shape(slot)
         key = _slot_key(slot)
         lowered = self._lower(slot)
@@ -285,9 +341,10 @@ class PivotPlanner:
         self,
         profile: MachineProfile,
         slot: SelectedImplementation,
-    ) -> PivotDefinition:
+    ) -> _PlannedDefinition:
         shape = _eligible_shape(slot)
         allocator = _NameAllocator()
+        shadow_trace: list[PivotBodyBuildResult] = []
         direct, spec = self._emit_slot(
             profile,
             slot,
@@ -296,6 +353,7 @@ class PivotPlanner:
             declare_destination=False,
             stack=(),
             allocator=allocator,
+            shadow_trace=shadow_trace,
         )
         signature = tuple(
             (
@@ -309,16 +367,24 @@ class PivotPlanner:
                 _concrete_type(self.language, shape.result_kind, spec, slot),
             ),
         )
-        return PivotDefinition(
+        definition = PivotDefinition(
             isa=_isa_label(slot),
             dtype=_DTYPE.get(slot.type_tag, slot.type_tag),
             signature=signature,
             direct=direct,
         )
+        shadow = self._lower(slot).shadow
+        if not shadow_trace or shadow_trace[0] is not shadow:
+            raise RuntimeError("PIVOT shadow trace did not start with the root body")
+        return _planned_definition(
+            definition,
+            shadow,
+            inlined_bodies=tuple(shadow_trace[1:]),
+        )
 
     def _tsl_fixed_definition(
         self, slot: SelectedImplementation
-    ) -> PivotDefinition | None:
+    ) -> _PlannedDefinition | None:
         key = _slot_key(slot)
         if key in self._fixed_definitions:
             cached = self._fixed_definitions[key]
@@ -335,7 +401,7 @@ class PivotPlanner:
 
     def _build_tsl_fixed_definition(
         self, slot: SelectedImplementation
-    ) -> PivotDefinition | None:
+    ) -> _PlannedDefinition | None:
         shape = _eligible_shape(slot)
         lane_count = _fixed_lane_count(self.language, slot)
         vector_bits = slot.extension.vector_bits
@@ -378,11 +444,24 @@ class PivotPlanner:
                 vec_override=vector,
             )
         ).strip()
-        return PivotDefinition(
+        definition = PivotDefinition(
             isa=f"tsl_{vector_bits}",
             dtype=_DTYPE.get(slot.type_tag, slot.type_tag),
             signature=signature,
             direct=(f"{_OUTPUT_NAME} = {call};",),
+        )
+        shadow = synthetic_pivot_body(
+            self.language,
+            tuple(slot.primitive.parameters),
+            _fixed_callable_name(self.language, _callable_name(slot)),
+            vector,
+            slot.implementation.body_source,
+        )
+        return _planned_definition(
+            definition,
+            shadow,
+            origin=PivotShadowOrigin.FIXED_WRAPPER,
+            category=PivotShadowCategory.SYNTHETIC_FIXED,
         )
 
     def _emit_slot(
@@ -395,6 +474,7 @@ class PivotPlanner:
         declare_destination: bool,
         stack: tuple[tuple[object, ...], ...],
         allocator: _NameAllocator,
+        shadow_trace: list[PivotBodyBuildResult],
     ) -> tuple[tuple[str, ...], LoweredSpecialization]:
         shape = _eligible_shape(slot)
         if len(actual_args) != len(slot.primitive.parameters):
@@ -412,6 +492,7 @@ class PivotPlanner:
             )
 
         lowered = self._lower(slot)
+        shadow_trace.append(lowered.shadow)
         body = _prepare_body(
             self.language,
             lowered.spec.body_text,
@@ -444,6 +525,7 @@ class PivotPlanner:
                 slot,
                 (*stack, key),
                 allocator,
+                shadow_trace,
             )
             output.extend(prepended)
             stripped = _single_line(expanded)
@@ -494,6 +576,7 @@ class PivotPlanner:
         caller: SelectedImplementation,
         stack: tuple[tuple[object, ...], ...],
         allocator: _NameAllocator,
+        shadow_trace: list[PivotBodyBuildResult],
     ) -> tuple[tuple[str, ...], str]:
         prepended: list[str] = []
         expanded = statement
@@ -519,6 +602,7 @@ class PivotPlanner:
                 declare_destination=True,
                 stack=stack,
                 allocator=allocator,
+                shadow_trace=shadow_trace,
             )
             prepended.extend(callee_direct)
             expanded = expanded[:start] + temp + expanded[end:]
@@ -598,17 +682,17 @@ class PivotPlanner:
         return lowered
 
     def _lower_uncached(self, slot: SelectedImplementation) -> _LoweredPivotBody:
-        self._call_capture.reset()
         segments = scan(
             slot.implementation.body_text,
             source=slot.implementation.body_source,
         )
-        result = self._pivot_lowerer.lower(
-            slot,
-            self.catalog,
-            self.dialect,
-            body_segments=segments,
-        )
+        with self._call_capture.capture() as call_capture:
+            result = self._pivot_lowerer.lower(
+                slot,
+                self.catalog,
+                self.dialect,
+                body_segments=segments,
+            )
         if result.specialization is None:
             reason = next(
                 (diagnostic.message for diagnostic in result.diagnostics),
@@ -623,10 +707,150 @@ class PivotPlanner:
                 slot.implementation.body_source,
             )
             raise _PivotUnsupported(reason, source)
+
+        collision = next(
+            (
+                collision_reason
+                for text, source in (
+                    (slot.implementation.body_text, slot.implementation.body_source),
+                    *(
+                        (variant.body_text, variant.body_source)
+                        for variant in slot.implementation.variants
+                    ),
+                )
+                if (
+                    collision_reason := capture_source_collision(text, source)
+                ) is not None
+            ),
+            None,
+        )
+        if collision is not None:
+            shadow = PivotBodyBuildResult(unsupported=(collision,))
+        else:
+            with self._shadow_capture.capture(
+                tuple(slot.primitive.parameters),
+                slot.primitive.signature_source,
+            ) as shadow_capture:
+                shadow_result = self._shadow_lowerer.lower(
+                    slot,
+                    self.catalog,
+                    self.dialect,
+                    body_segments=segments,
+                )
+                captured = shadow_capture.freeze()
+            if shadow_result.specialization is None:
+                shadow = _shadow_lowering_failure(
+                    shadow_result.diagnostics,
+                    slot.implementation.body_source,
+                )
+            else:
+                shadow = build_pivot_body(
+                    self.language,
+                    shadow_result.specialization.body,
+                    captured,
+                    slot.implementation.body_source,
+                    alternative_sources=tuple(
+                        variant.body_source
+                        for variant in slot.implementation.variants
+                        if variant.body_source is not None
+                    ),
+                )
         return _LoweredPivotBody(
             result.specialization,
-            tuple(self._call_capture.sites),
+            tuple(call_capture.sites),
+            shadow,
         )
+
+
+def _planned_definition(
+    definition: PivotDefinition,
+    shadow: PivotBodyBuildResult,
+    *,
+    origin: PivotShadowOrigin = PivotShadowOrigin.LOWERED_SOURCE,
+    category: PivotShadowCategory | None = None,
+    inlined_bodies: tuple[PivotBodyBuildResult, ...] = (),
+) -> _PlannedDefinition:
+    body = shadow.body
+    failed = body is None or any(result.body is None for result in inlined_bodies)
+    return _PlannedDefinition(
+        definition=definition,
+        shadow=shadow,
+        origin=origin,
+        category=(
+            None
+            if failed or body is None
+            else category or classify_shadow_trace(body, inlined_bodies)
+        ),
+        semantic_digest=pivot_shadow_trace_semantic_digest(
+            shadow,
+            inlined_bodies,
+        ),
+        inlined_bodies=inlined_bodies,
+    )
+
+
+def _shadow_census(
+    language: PivotLanguage,
+    planned_documents: tuple[PivotDocument, ...],
+    candidates: dict[
+        str,
+        tuple[tuple[str, ...], dict[PivotDefinition, _PlannedDefinition]],
+    ],
+) -> PivotShadowCensus:
+    occurrences: dict[tuple[object, ...], int] = {}
+    entries: list[PivotShadowEntry] = []
+    for document in planned_documents:
+        by_definition = candidates[document.name][1]
+        for definition in document.definitions:
+            key = (
+                document.name,
+                definition.isa,
+                definition.dtype,
+                definition.signature,
+            )
+            occurrence = occurrences.get(key, 0)
+            occurrences[key] = occurrence + 1
+            candidate = by_definition[definition]
+            entries.append(
+                PivotShadowEntry(
+                    document=document.name,
+                    definition=definition,
+                    occurrence=occurrence,
+                    origin=candidate.origin,
+                    category=candidate.category,
+                    body=candidate.shadow,
+                    inlined_bodies=candidate.inlined_bodies,
+                )
+            )
+    return PivotShadowCensus(language, tuple(entries))
+
+
+def _shadow_lowering_failure(
+    diagnostics: tuple[Diagnostic, ...],
+    source: SourceSpan | None,
+) -> PivotBodyBuildResult:
+    diagnostic = next(iter(diagnostics), None)
+    code = (
+        diagnostic.code
+        if diagnostic is not None and diagnostic.code.startswith("TSL-PIVOT-")
+        else "TSL-PIVOT-SHADOW-LOWERING"
+    )
+    message = (
+        diagnostic.message
+        if diagnostic is not None
+        else "PIVOT shadow lowering did not produce a specialization"
+    )
+    span = diagnostic.span if diagnostic is not None else source
+    return PivotBodyBuildResult(
+        unsupported=(
+            PivotUnsupported(
+                code,
+                message,
+                span or source,
+                phase="lowering",
+            ),
+        )
+    )
 
 
 def _eligible_shape(slot: SelectedImplementation) -> SignatureShape:

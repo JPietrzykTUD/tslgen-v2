@@ -2,8 +2,8 @@
 
 ## Status and decision record
 
-Status: architecture approved; slice 27A is implemented and verified. Slice
-27B has not started.
+Status: architecture approved; slices 27A and 27B are implemented and verified.
+Slice 27C has not started.
 
 This plan replaces the original in-compiler direction for audit fix-plan slice
 27. The historical audit remains unchanged as evidence. The agreed decisions
@@ -350,8 +350,9 @@ text that the following slice will interpret.
   Rust unsafe framing structurally. Do not add a visitor or PIVOT node to core.
 - If a concrete compiler render value necessarily flattens a PIVOT node before
   the adapter can consume it, use a reserved non-source token tied to a typed
-  capture record. Validate collisions and convert it during lexing in the next
-  slice; do not rediscover markers with regex or parenthesis surgery.
+  capture record. Validate source collisions and decode the exact token in the
+  render-stream adapter; do not rediscover markers with regex or parenthesis
+  surgery.
 - Inventory every currently emitted top-level statement that does not originate
   in these typed regions. It must receive an explicit PIVOT-local model before
   cutover; it may not be silently rejected if that removes a baseline entry.
@@ -375,6 +376,49 @@ text that the following slice will interpret.
   active renderer in this slice.
 - No `tslc/` or `tsldata/` file changes are needed. If one appears necessary,
   stop and propose a separate projection-neutral compiler decision.
+
+**Implemented evidence (2026-07-18):**
+
+- `body_ir.py`, `shadow_lowering.py`, and `render_stream.py` now own immutable
+  body, binding, call, local, residual-sequence, final-result, fixed-wrapper,
+  unsupported, and shadow-census values. Production `direct` rendering remains
+  on the legacy planner path.
+- Both legacy marker capture and typed capture use fresh operation-local
+  `ContextVar` scopes. The shadow configuration overrides only `call`, admitted
+  `var`, and `complete`; all other TSIL lowering remains compiler-owned. A
+  locked process-local nonce makes only the private fallback-token namespace
+  unique, so flattened tokens from another operation fail closed; the nonce is
+  absent from typed bodies, evidence digests, diagnostics, and output.
+- Both PIVOT call overrides reuse the compiler's vector-selector resolver, so an
+  unresolvable explicit call vector cannot bypass ordinary compiler rejection.
+- The lockstep render adapter preserves known compiler `RenderText` structures,
+  records unsafe framing, rejects unknown structures, and decodes only exact
+  collision-checked NUL-delimited tokens where eager rendering is unavoidable.
+  Alternative implementation variants are identified by their declared source
+  spans rather than mistaken for lost default-body captures.
+- The canonical census constructs all 17,060 emitted definition occurrences
+  with zero failures: 5,552 synthetic fixed wrappers, 6,778 native leaves,
+  4,616 call-only definitions, 20 local-only definitions, and 94 definitions
+  with calls plus reachable locals. It accounts for all 4,730 multi-statement
+  definitions and all 328 nominal-identity collision groups (656 entries).
+- `tests/baselines/shadow_census.json` pins the source-normalized typed-body
+  digest
+  `543092ed759bd8d313d137bc381514f8eaf72a72db93ea6edf7dda5cfb1ba5ea`,
+  origins, feature combinations, and zero-failure requirement across two hash
+  seeds. The production artifact digest remains
+  `846ffd8955e3b7860f1bc7c2980d4fc2bd8618efa259fbe1824923c3293dc747`.
+- The existing guarded baseline command now builds and validates the production
+  and shadow manifests before writing either one. Any typed-shadow fact change
+  requires the explicit reviewed-incompatibility flag, preventing a manual or
+  partial evidence refresh.
+- Focused tests cover nested and generated-loop calls, same-named bindings,
+  inferred/const locals, raw residual assignments, final-result invariants,
+  synthetic wrappers, caller-unsafe facts, template compatibility, source and
+  token corruption, alternative variants, immutability, and failure-safe
+  reentrancy. The complete tool suite passes 58 tests; tool mypy passes 15
+  files. Core isolation passes 1,988 tests with 70 skips, mypy on 247 files,
+  and corpus checking on 42 TSL files. There are no `tslc/` or `tsldata/`
+  changes.
 
 ### 27C. Add bounded expression parsers, structured inlining, and differential export
 

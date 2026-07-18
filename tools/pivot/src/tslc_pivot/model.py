@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.output.artifacts import ArtifactSet
+
+if TYPE_CHECKING:
+    from tslc_pivot.body_ir import PivotShadowCensus
 
 
 class PivotLanguage(str, Enum):
@@ -53,6 +57,7 @@ class PivotExportResult:
     artifacts: ArtifactSet
     projections: tuple[PivotProjection, ...]
     diagnostics: tuple[Diagnostic, ...]
+    shadow_censuses: tuple[PivotShadowCensus, ...] = ()
 
     @property
     def skipped(self) -> tuple[PivotSkip, ...]:
