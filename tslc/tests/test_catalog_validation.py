@@ -123,6 +123,35 @@ def test_target_constraint_relations_are_validated() -> None:
     assert any("target constraint width" in diagnostic.message for diagnostic in diagnostics)
 
 
+def test_exact_double_target_constraint_relation_is_accepted() -> None:
+    source = _base_source().replace(
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n',
+        "prim<v:=v> id(data):\n"
+        "  return_type:\n"
+        "    extension: ToExtension\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        ToExtension:\n"
+        "          where:\n"
+        "            family same_as\n"
+        "            width twice_as_wide\n"
+        "            implementation:\n"
+        '              tsil "complete(data);"\n',
+    )
+
+    diagnostics = _diagnostics(source)
+
+    assert not any(
+        diagnostic.code == "TSL-CATALOG-INVALID-ENUM" for diagnostic in diagnostics
+    )
+
+
 def test_primitive_documentation_fields_are_accepted_and_promoted() -> None:
     source = _base_source().replace(
         "  impls:\n",

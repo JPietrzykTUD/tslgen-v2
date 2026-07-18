@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from tslc.catalog.model import Catalog, Primitive
 from tslc.catalog.scalar_types import normalize_scalar_tag
+from tslc.catalog.signatures import parse_signature
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import SupportPolicy
 from tslc.value_tests._case_conversion import differential_cases, differential_fuzz_cases
@@ -133,12 +134,19 @@ class _MaskedPattern(_BasePattern):
             spec.result_kind == "v"
             and spec.mask_policy in ("zero", "pass_through")
             and spec.param_kinds.count("m") == 1
-            and all(kind in ("m", "v") for kind in spec.param_kinds)
+            and all(kind in ("m", "v", "vidx") for kind in spec.param_kinds)
+            and spec.param_kinds.count("vidx") <= 1
             and spec.target is None
             and not spec.axis
             and spec.immediate is None
             and not spec.generic_params
-            and not spec.type_params
+            and (
+                not spec.type_params
+                or (
+                    spec.param_kinds.count("vidx") == 1
+                    and len(spec.type_params) == 1
+                )
+            )
         )
 
     def source_primitive(
@@ -148,29 +156,42 @@ class _MaskedPattern(_BasePattern):
         spec: LoweredSpecialization,
     ) -> Primitive | None:
         for primitive in catalog.primitives_named(source_name, unmasked=False):
-            if primitive.attributes.get("mask") == spec.mask_policy:
+            shape = parse_signature(primitive.signature)
+            if (
+                primitive.attributes.get("mask") == spec.mask_policy
+                and shape is not None
+                and shape.result_kind == spec.result_kind
+                and shape.param_kinds == spec.param_kinds
+            ):
                 return primitive
         return None
 
     def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        index_base_spelling = None
+        if "vidx" in context.specs[0].param_kinds and context.case.index_type is not None:
+            index_base_spelling = context.catalog.type_spellings.get(
+                context.backend.backend_id, {}
+            ).get(normalize_scalar_tag(context.case.index_type))
         plan = masked_case(
             context.emitted_name,
             context.index,
             context.case,
             context.specs,
+            index_base_spelling,
         )
         plans = [plan] if plan is not None else []
-        plans.extend(
-            scalable_masked_cases(
-                context.emitted_name,
-                context.index,
-                context.case,
-                context.specs,
-                context.catalog,
-                context.harness,
-                context.backend,
+        if "vidx" not in context.specs[0].param_kinds:
+            plans.extend(
+                scalable_masked_cases(
+                    context.emitted_name,
+                    context.index,
+                    context.case,
+                    context.specs,
+                    context.catalog,
+                    context.harness,
+                    context.backend,
+                )
             )
-        )
         return tuple(plans)
 
 

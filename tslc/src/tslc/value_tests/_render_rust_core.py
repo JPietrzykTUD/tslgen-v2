@@ -170,16 +170,27 @@ def _mask_to_vector(case: ValueTestCasePlan) -> str:
 
 def _masked(case: ValueTestCasePlan) -> str:
     expected = rust_literal_list(case.expectation.values, case.type_tag)
+    has_index_vector = "vidx" in case.invocation.param_kinds
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
+    if has_index_vector:
+        index = case.index
+        if index is None or index.base_spelling is None or index.lanes is None:
+            raise ValueError("indexed Rust value test requires an index-vector layout")
+        lines.append(
+            f"        type Indices = Simd<{index.base_spelling}, Generic<{index.lanes}>>;"
+        )
     args = append_call_args(lines, case)
     lines.append(f"        let expected: [{case.base_spelling}; {case.lanes}] = [{expected}];")
+    template_args = ["Vec"]
+    if has_index_vector:
+        template_args.append("Indices")
     lines.append(
         f"        let result = {rust_raw_identifier(case.call_name)}"
-        f"::<Vec>({', '.join(args)});"
+        f"::<{', '.join(template_args)}>({', '.join(args)});"
     )
     lines.append(_lane_assert(case, case.lanes, "result"))
     lines.append("    }")

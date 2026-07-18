@@ -51,6 +51,15 @@ def test_clang_representation_change_constraints_select_every_valid_width_pair(
         for target, target_width in clang_widths.items()
         if target_width > source_width
     }
+    assert pairs("resize_down") == pairs("extract")
+    assert pairs("resize_up_undef") == pairs("insert")
+    assert pairs("resize_up_zero") == pairs("insert")
+    assert pairs("concat") == {
+        (source, target)
+        for source, source_width in clang_widths.items()
+        for target, target_width in clang_widths.items()
+        if target_width == 2 * source_width
+    }
 
     slot = next(
         slot
@@ -69,6 +78,16 @@ def test_clang_representation_change_constraints_select_every_valid_width_pair(
     assert "result[0] = data[start + 0]" in lowered.body_text
     assert "result[3] = data[start + 3]" in lowered.body_text
     assert "std::memcpy" not in lowered.body_text
+
+    concat_slot = next(
+        slot
+        for slot in _slots(catalog, profile, "concat")
+        if slot.type_tag == "si32"
+        and slot.extension.name == "clang_v128"
+        and slot.to_target == "clang_v256"
+    )
+    assert concat_slot.implementation.target_constraint is not None
+    assert concat_slot.implementation.target_constraint.width == "twice_as_wide"
 
 
 def test_clang_overlay_has_authored_coverage_for_every_supported_corpus_slot(

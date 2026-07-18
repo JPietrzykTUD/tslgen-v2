@@ -1235,6 +1235,156 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
             complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
           """
 
+prim<v:=(m,v,v,vidx)>[mask=pass_through] permute_lanes(mask, src, data, indexes):
+  brief_description "Permutes lanes under a mask and preserves inactive lanes from a source register."
+  detailed_description """
+    Applies the same one-source indexed permutation as the unmasked overload.
+    Active mask lanes receive the permuted value; inactive lanes retain the
+    corresponding lane from `src`.
+    """
+  semantics """
+    input: mask mask, register src, register data, integral index register indexes
+    for each lane i:
+      if mask[i] is active:
+        source = unsigned(indexes[i]) modulo lane_count(data)
+        result[i] = data[source]
+      else:
+        result[i] = src[i]
+    return result
+    """
+  cross_lane true
+  generic_params:
+    IndicesType:
+      kind simd_type
+      specialize_base true
+      constraints:
+        base_types [?i?]
+        width(self::base) == width(base::in)
+  tests:
+    - {tags [masked, basic], type "si32", index_type "ui32", case {inputs [170, [100, 200, 300, 400, 500, 600, 700, 800], [10, 20, 30, 40, 50, 60, 70, 80], [7, 0, 9, 2, 11, 4, 13, 6]], expected [100, 10, 300, 30, 500, 50, 700, 70]}}
+    - {tags [masked, signed_index], type "ui64", index_type "si64", case {inputs [5, [100, 200, 300, 400], [10, 20, 30, 40], [-1, -2, 4, 5]], expected [40, 200, 10, 400]}}
+  impls:
+    avx512:
+      arith:
+        requires:
+          ?i8 [avx512f, avx512vbmi]
+          ?i16 [avx512f, avx512bw]
+          ?i32 [avx512f]
+          ?i64 [avx512f]
+          f32 [avx512f]
+          f64 [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if<generation>(type::is_same(base::in, f32) || type::is_same(base::in, f64)) {
+              complete(intrin<mask_permutexvar, build[suffix=base::in]>(src, mask, indexes, data));
+            } else<generation> {
+              complete(intrin<mask_permutexvar, build[suffix=base::signed_of(base::in)]>(src, mask, indexes, data));
+            }
+          """
+    [avx512, avx2, sse, neon, sve, wasm128, generic, clang_v128, oneapi_fpga, scalar]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          avx2 [avx]
+          sse [sse, sse2]
+          neon [neon]
+          sve [sve]
+          wasm128 [simd128]
+          generic []
+          clang_v128 []
+          oneapi_fpga []
+          scalar []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mov, attrs[mask=pass_through]>(
+              mask,
+              src,
+              call<primitive=permute_lanes[Vec, IndicesType]>(data, indexes)
+            ));
+          """
+
+prim<v:=(m,v,vidx)>[mask=zero] permute_lanes(mask, data, indexes):
+  brief_description "Permutes lanes under a mask and zeros inactive lanes."
+  detailed_description """
+    Applies the same one-source indexed permutation as the unmasked overload.
+    Active mask lanes receive the permuted value; inactive lanes are zero.
+    """
+  semantics """
+    input: mask mask, register data, integral index register indexes
+    for each lane i:
+      if mask[i] is active:
+        source = unsigned(indexes[i]) modulo lane_count(data)
+        result[i] = data[source]
+      else:
+        result[i] = 0
+    return result
+    """
+  cross_lane true
+  generic_params:
+    IndicesType:
+      kind simd_type
+      specialize_base true
+      constraints:
+        base_types [?i?]
+        width(self::base) == width(base::in)
+  tests:
+    - {tags [maskz, basic], type "si32", index_type "ui32", case {inputs [170, [10, 20, 30, 40, 50, 60, 70, 80], [7, 0, 9, 2, 11, 4, 13, 6]], expected [0, 10, 0, 30, 0, 50, 0, 70]}}
+    - {tags [maskz, signed_index], type "ui64", index_type "si64", case {inputs [5, [10, 20, 30, 40], [-1, -2, 4, 5]], expected [40, 0, 10, 0]}}
+  impls:
+    avx512:
+      arith:
+        requires:
+          ?i8 [avx512f, avx512vbmi]
+          ?i16 [avx512f, avx512bw]
+          ?i32 [avx512f]
+          ?i64 [avx512f]
+          f32 [avx512f]
+          f64 [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if<generation>(type::is_same(base::in, f32) || type::is_same(base::in, f64)) {
+              complete(intrin<maskz_permutexvar, build[suffix=base::in]>(mask, indexes, data));
+            } else<generation> {
+              complete(intrin<maskz_permutexvar, build[suffix=base::signed_of(base::in)]>(mask, indexes, data));
+            }
+          """
+    [avx512, avx2, sse, neon, sve, wasm128, generic, clang_v128, oneapi_fpga, scalar]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          avx2 [avx]
+          sse [sse, sse2]
+          neon [neon]
+          sve [sve]
+          wasm128 [simd128]
+          generic []
+          clang_v128 []
+          oneapi_fpga []
+          scalar []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mov, attrs[mask=zero]>(
+              mask,
+              call<primitive=permute_lanes[Vec, IndicesType]>(data, indexes)
+            ));
+          """
+
 prim<v:=(v,vidx,v)> table_lookup(left, indexes, right):
   brief_description "Permutes lanes from two sources using same-width integral indices."
   detailed_description """

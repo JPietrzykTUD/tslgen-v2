@@ -89,6 +89,80 @@ def test_call_primitive_renders_wrapper_call(catalog: Catalog, machine_profiles)
     assert rust.body_text == "return nequal::<Self>(data, set_zero::<Self>());"
 
 
+def test_runtime_indexed_call_ignores_split_immediate_overload(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["avx2"],
+            "permute_lanes",
+            ("si32",),
+        )
+        .selected
+        if selected.extension.name == "avx2"
+        and selected.primitive.signature == "v:=(m,v,v,vidx)"
+    )
+
+    lowered = Lowerer().lower(
+        slot,
+        catalog,
+        create_backend_dialect(catalog, "rust"),
+    )
+
+    assert lowered.specialization is not None, lowered.diagnostics
+    assert lowered.specialization.type_params[0].bounds == ("to_array",)
+    assert "permute_lanes::<Self, IndicesType>(data, indexes)" in (
+        lowered.specialization.body_text
+    )
+    assert "IndicesType, _>" not in lowered.specialization.body_text
+
+
+@pytest.mark.parametrize(
+    ("signature", "expected_body"),
+    (
+        (
+            "v:=(m,v,v,vidx)",
+            "return _mm512_mask_permutexvar_epi64(src, mask, indexes, data);",
+        ),
+        (
+            "v:=(m,v,vidx)",
+            "return _mm512_maskz_permutexvar_epi64(mask, indexes, data);",
+        ),
+    ),
+)
+def test_avx512_indexed_masked_permute_uses_native_intrinsic(
+    catalog: Catalog,
+    machine_profiles,
+    signature: str,
+    expected_body: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["skylake"],
+            "permute_lanes",
+            ("si64",),
+        )
+        .selected
+        if selected.extension.name == "avx512"
+        and selected.primitive.signature == signature
+    )
+
+    lowered = Lowerer().lower(
+        slot,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    )
+
+    assert lowered.specialization is not None, lowered.diagnostics
+    assert lowered.specialization.body_text == expected_body
+
+
 def test_dependency_closure_pulls_callees(data_root: Path, machine_profiles_path: Path) -> None:
     result = generate_project(
         [data_root],

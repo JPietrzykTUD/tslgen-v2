@@ -132,6 +132,8 @@ class TargetConstraint:
             return 0 < target.vector_bits < source.vector_bits
         if self.width == "larger_than":
             return target.vector_bits > source.vector_bits > 0
+        if self.width == "twice_as_wide":
+            return target.vector_bits == 2 * source.vector_bits > 0
         return False
 
 

@@ -232,6 +232,9 @@ def test_representation_target_axis_and_where_are_contextual(
     assert "family" not in where_fields
     assert "width" not in where_fields
 
+    width_edit = where_baseline.replace("width smaller_than", "width tw")
+    assert "twice_as_wide" in _labels(catalog, where_baseline, width_edit)
+
 
 def test_results_are_unique_sorted_and_carry_replacement_ranges(
     catalog: Catalog,

@@ -30,6 +30,7 @@ from tslc.value_tests._pattern_base import CasePlanBuilder, ValueTestPattern
 from tslc.value_tests._pattern_conversion import (
     _ConvertPattern,
     _ExtensionReprPattern,
+    _ExtensionResultPattern,
     _LoadConvertPattern,
     _ReprCastPattern,
 )
@@ -181,6 +182,7 @@ def default_value_test_patterns(
         _simple(stream_case, "o", ("o", "v", "s"), support=support),
         _ConvertPattern(support),
         _ReprCastPattern(),
+        _ExtensionResultPattern(),
         _ExtensionReprPattern(support),
     )
 

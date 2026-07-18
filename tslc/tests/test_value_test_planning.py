@@ -415,6 +415,81 @@ def test_planner_uses_source_identity_for_emitted_mask_name() -> None:
     assert cpp_profiles[0].cases[0].kind == "masked"
 
 
+def test_masked_indexed_permute_plans_and_renders_for_both_backends() -> None:
+    zero_overload = Primitive(
+        "permute_lanes",
+        "v:=(m,v,vidx)",
+        ("mask", "data", "indexes"),
+        ("mask",),
+        (),
+        attributes={"mask": "pass_through"},
+    )
+    pass_through = Primitive(
+        "permute_lanes",
+        "v:=(m,v,v,vidx)",
+        ("mask", "src", "data", "indexes"),
+        ("mask",),
+        (),
+        attributes={"mask": "pass_through"},
+        tests=(
+            TslTestCase(
+                name="masked_indexed",
+                type_tag="si32",
+                tags=("masked",),
+                lanes=4,
+                index_type="ui32",
+                inputs=(
+                    TslTestArg("mask", mask_bits="5"),
+                    TslTestArg("vector", values=("100", "200", "300", "400")),
+                    TslTestArg("vector", values=("10", "20", "30", "40")),
+                    TslTestArg("vector", values=("3", "2", "1", "0")),
+                ),
+                expected=("40", "200", "20", "400"),
+            ),
+        ),
+    )
+    catalog = Catalog(
+        primitives=(zero_overload, pass_through, *_harness_primitives()),
+        type_groups={},
+        extensions={},
+        type_spellings={
+            "cpp": {"u32": "std::uint32_t"},
+            "rust": {"u32": "u32"},
+        },
+        translations={},
+    )
+    cpp_spec = _spec(
+        "permute_lanes_mask",
+        "permute_lanes",
+        param_kinds=("m", "v", "v", "vidx"),
+        mask_policy="pass_through",
+    )
+    rust_spec = replace(
+        cpp_spec,
+        backend_id="rust",
+        base_type_spelling="i32",
+        register_spelling="[i32; 4]",
+    )
+    profile = _profile(
+        cpp={"permute_lanes_mask": (cpp_spec,)},
+        rust={"permute_lanes_mask": (rust_spec,)},
+    )
+
+    plan = ValueTestPlanner(catalog, _VALUE_TEST_SUPPORTS).plan(_inputs(profile))
+
+    assert plan.diagnostics == ()
+    cpp_case = plan.profiles_for("cpp")[0].cases[0]
+    rust_case = plan.profiles_for("rust")[0].cases[0]
+    assert cpp_case.kind == rust_case.kind == "masked"
+    assert cpp_case.index is not None and cpp_case.index.type_tag == "ui32"
+    cpp_source = CPP_VALUE_TEST_RENDERER.render_case(cpp_case)
+    rust_source = RUST_VALUE_TEST_RENDERER.render_case(rust_case)
+    assert "using Indices = tsl::simd<std::uint32_t, tsl::generic<4>>;" in cpp_source
+    assert "permute_lanes_mask<Vec, Indices>(m0, v0, v1, v2)" in cpp_source
+    assert "type Indices = Simd<u32, Generic<4>>;" in rust_source
+    assert "permute_lanes_mask::<Vec, Indices>(m0, v0, v1, v2)" in rust_source
+
+
 def test_planner_preserves_trailing_masks_for_indexed_memory_cases(
     render_assets: RenderAssets,
 ) -> None:
@@ -1454,6 +1529,58 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
     assert "let hw = to_array::<Hw>(add::<Hw>(" in rust_diff_source
     assert "let reference = add::<Ref>(r0, r1);" in rust_diff_source
     assert "hw[i].lane_eq(reference[i])" in rust_diff_source
+
+
+def test_extension_result_renderers_use_distinct_fixed_extensions(
+    render_assets: RenderAssets,
+) -> None:
+    concat = ValueTestCasePlan(
+        "extension_result",
+        "test_concat",
+        "concat",
+        "concat",
+        "si32",
+        "std::int32_t",
+        4,
+        vector_inputs=(("1", "2", "3", "4"), ("5", "6", "7", "8")),
+        expected=("1", "2", "3", "4", "5", "6", "7", "8"),
+        result_kind="v",
+        param_kinds=("v", "v"),
+        expected_type_tag="si32",
+        target_base_spelling="std::int32_t",
+        target_lanes=8,
+        source_extension="sse",
+        target_extension="avx2",
+        from_array_name="from_array",
+        to_array_name="to_array",
+    )
+    cpp_source = render_cpp_values_runner(
+        ValueTestProfilePlan("cpp", "unit-profile", (concat,)), render_assets
+    )
+    assert "using Vec = tsl::simd<std::int32_t, tsl::sse>;" in cpp_source
+    assert "using ToVec = tsl::simd<std::int32_t, tsl::avx2>;" in cpp_source
+    assert "tsl::concat<Vec, ToVec>(" in cpp_source
+    assert '"concat", hout, expected, 8' in cpp_source
+
+    undefined_upper = replace(
+        concat,
+        function_name="test_resize_up_undef",
+        case_name="resize_up_undef",
+        call_name="resize_up_undef",
+        base_spelling="i32",
+        inputs=ValueTestInputs(vectors=(("1", "2", "3", "4"),)),
+        expectation=ValueTestExpectation(values=("1", "2", "3", "4")),
+        invocation=ValueTestInvocation(result_kind="v", param_kinds=("v",)),
+        target=ValueTestTarget(type_tag="si32", base_spelling="i32", lanes=8),
+    )
+    rust_source = render_rust_values_file(
+        (ValueTestProfilePlan("rust", "unit-profile", (undefined_upper,)),),
+        render_assets,
+    )
+    assert "type Vec = Simd<i32, Sse>;" in rust_source
+    assert "type ToVec = Simd<i32, Avx2>;" in rust_source
+    assert "resize_up_undef::<Vec, ToVec>(" in rust_source
+    assert "for i in 0..4" in rust_source
 
 
 def test_value_test_case_plan_validates_kind_requirements() -> None:

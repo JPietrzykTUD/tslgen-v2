@@ -101,6 +101,13 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
         "test_reinterpret_integer_builds": ("reinterpret",),
         "test_extract_builds": ("extract",),
         "test_insert_builds": ("insert",),
+        "test_resize_and_indexed_permute_builds": (
+            "resize_down",
+            "resize_up_undef",
+            "resize_up_zero",
+            "concat",
+            "permute_lanes",
+        ),
         "test_mask_binary_and_builds": ("mask_binary_and",),
         "test_range_comparisons_build": (
             "between_inclusive",

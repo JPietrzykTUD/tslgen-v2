@@ -16,6 +16,7 @@ this file.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 
@@ -197,6 +198,9 @@ class _LowererCatalogFacts:
     primitive_arg_generics: MappingProxyType[str, int]
     primitive_caller_unsafe: MappingProxyType[str, bool]
     primitive_borrowed_arg_positions: MappingProxyType[str, tuple[int, ...]]
+    primitive_type_param_bounds: MappingProxyType[
+        tuple[str, str, int], tuple[str, ...]
+    ]
     policy_split_names: frozenset[str]
     immediate_split_names: frozenset[str]
 
@@ -208,12 +212,17 @@ class _LowererCatalogFacts:
     ) -> "_LowererCatalogFacts":
         return cls(
             primitive_axes=MappingProxyType(_primitive_axes(catalog)),
-            primitive_arg_generics=MappingProxyType(_primitive_arg_generics(catalog)),
+            primitive_arg_generics=MappingProxyType(
+                _primitive_arg_generics(catalog, support)
+            ),
             primitive_caller_unsafe=MappingProxyType(
                 _primitive_caller_unsafe(catalog, support)
             ),
             primitive_borrowed_arg_positions=MappingProxyType(
                 _primitive_borrowed_arg_positions(catalog, support)
+            ),
+            primitive_type_param_bounds=MappingProxyType(
+                _primitive_type_param_bounds(catalog)
             ),
             policy_split_names=policy_split_names(catalog, support),
             immediate_split_names=immediate_split_names(catalog, support),
@@ -567,7 +576,12 @@ class Lowerer:
                             {
                                 bound
                                 for body in type_param_segments
-                                for bound in _type_param_bounds(body, gp.name)
+                                for bound in _type_param_bounds(
+                                    body,
+                                    gp.name,
+                                    catalog_facts.primitive_type_param_bounds,
+                                    selected.extension.name,
+                                )
                             }
                         )
                     ),
@@ -718,21 +732,41 @@ def _resolve_immediate(
 
 
 def _type_param_bounds(
-    body: str | tuple[Segment, ...], type_param_name: str
+    body: str | tuple[Segment, ...],
+    type_param_name: str,
+    forwarded_bounds: Mapping[tuple[str, str, int], tuple[str, ...]] | None = None,
+    forwarded_extension: str | None = None,
 ) -> tuple[str, ...]:
     """The primitive names a body calls *on* a free SIMD type param (`primitive=NAME[<param>]`).
     Each is a trait the type param must satisfy in Rust (`to_array[IndicesType]` ->
     `IndicesType: To_arrayImpl`); C++ templates are duck-typed and ignore them. Derived from the
     TSIL segment stream and the shared call selector parser so neither backend needs to know which
-    primitives a body invokes — the Rust backend only maps a recorded name to its trait spelling."""
+    primitives a body invokes — the Rust backend only maps a recorded name to its trait spelling.
+
+    A type parameter forwarded as an extra generic argument also inherits the
+    callee parameter's catalog-derived bounds. For example,
+    `permute_lanes[Vec, IndicesType]` carries the `to_array` requirement of the
+    indexed permutation implementation into its caller.
+    """
 
     segments = scan(body) if isinstance(body, str) else body
-    return tuple(sorted(_type_param_bound_names(segments, type_param_name)))
+    return tuple(
+        sorted(
+            _type_param_bound_names(
+                segments,
+                type_param_name,
+                forwarded_bounds or {},
+                forwarded_extension,
+            )
+        )
+    )
 
 
 def _type_param_bound_names(
     segments: tuple[Segment, ...] | None,
     type_param_name: str,
+    forwarded_bounds: Mapping[tuple[str, str, int], tuple[str, ...]],
+    forwarded_extension: str | None,
 ) -> frozenset[str]:
     if segments is None:
         return frozenset()
@@ -749,9 +783,71 @@ def _type_param_bound_names(
                 and parsed.type_args[0].strip() == type_param_name
             ):
                 names.add(parsed.primitive_ref)
+            if parsed is not None and not parsed.primitive_ref.startswith("@"):
+                for index, argument in enumerate(parsed.type_args[1:]):
+                    if argument.strip() == type_param_name:
+                        names.update(
+                            forwarded_bounds.get(
+                                (
+                                    forwarded_extension or "",
+                                    parsed.primitive_ref,
+                                    index,
+                                ),
+                                (),
+                            )
+                        )
         for child in segment.child_sequences():
-            names.update(_type_param_bound_names(child, type_param_name))
+            names.update(
+                _type_param_bound_names(
+                    child,
+                    type_param_name,
+                    forwarded_bounds,
+                    forwarded_extension,
+                )
+            )
     return frozenset(names)
+
+
+def _primitive_type_param_bounds(
+    catalog: Catalog,
+) -> dict[tuple[str, str, int], tuple[str, ...]]:
+    """Direct Rust bounds for each extension's SIMD generic argument slots."""
+
+    direct: dict[tuple[str, str, int], set[str]] = {}
+    for primitive in catalog.primitives:
+        extra_offset = 1 if primitive.result_target is not None else 0
+        type_params = tuple(
+            param for param in primitive.generic_params if param.kind == "simd_type"
+        )
+        for index, param in enumerate(type_params):
+            for implementation in primitive.implementations:
+                key = (
+                    implementation.extension,
+                    primitive.name,
+                    extra_offset + index,
+                )
+                bounds = direct.setdefault(key, set())
+                bodies = (
+                    implementation.body_text,
+                    *(variant.body_text for variant in implementation.variants),
+                )
+                for body in bodies:
+                    bounds.update(_type_param_bounds(body, param.name))
+
+    collected: dict[tuple[str, str, int], set[str]] = {}
+    for extension_name in catalog.extensions:
+        chain = catalog.extension_chain(extension_name)
+        for (implementation_extension, primitive_name, index), bounds in direct.items():
+            if implementation_extension not in chain:
+                continue
+            collected.setdefault(
+                (extension_name, primitive_name, index),
+                set(),
+            ).update(bounds)
+    return {
+        key: tuple(sorted(bounds))
+        for key, bounds in sorted(collected.items())
+    }
 
 
 def _primitive_axes(catalog: Catalog) -> dict[str, tuple[str, ...]]:
@@ -766,17 +862,32 @@ def _primitive_axes(catalog: Catalog) -> dict[str, tuple[str, ...]]:
     return axes
 
 
-def _primitive_arg_generics(catalog: Catalog) -> dict[str, int]:
-    """Each primitive's count of overload-dispatch generic params: the parameter
-    positions whose kind varies across its same-arity signatures (e.g. store's
-    `(ptr,v)`/`(ptr,s)` vary at position 1 -> 1). A Rust call site spells one inferred
-    `_` turbofish arg per such position; non-overloaded callees contribute none."""
+def _primitive_arg_generics(
+    catalog: Catalog,
+    support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
+) -> dict[str, int]:
+    """Each emitted callable's count of overload-dispatch generic params.
+
+    Mask-policy and immediate forms can share an authored primitive name while
+    rendering as distinct callables. Count varying parameter positions only
+    within those emitted families so Rust calls do not receive inference
+    placeholders for overloads that have already been split by name.
+    """
 
     by_name: dict[str, list[tuple[str, ...]]] = {}
+    policy_names = policy_split_names(catalog, support)
+    immediate_names = immediate_split_names(catalog, support)
     for primitive in catalog.primitives:
         shape = parse_signature(primitive.signature)
-        if shape is not None:
-            by_name.setdefault(primitive.name, []).append(shape.param_kinds)
+        if shape is None:
+            continue
+        name = primitive.name
+        mask_policy = primitive.attributes.get("mask")
+        if mask_policy is not None and name in policy_names:
+            name = f"{name}{support.mask_suffix(mask_policy)}"
+        if primitive.name in immediate_names and support.has_immediate_operand(shape):
+            name = f"{name}_imm"
+        by_name.setdefault(name, []).append(shape.param_kinds)
     counts: dict[str, int] = {}
     for name, kinds in by_name.items():
         arity = len(kinds[0])

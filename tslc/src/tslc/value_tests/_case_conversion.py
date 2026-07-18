@@ -29,6 +29,77 @@ from tslc.value_tests.model import (
     ValueTestTarget,
 )
 
+
+def extension_result_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+    catalog: Catalog,
+    harness: HarnessPrimitiveNames,
+    *,
+    undefined_upper: bool,
+) -> ValueTestCasePlan | None:
+    """Plan a fixed-extension result with one or more source-width vectors.
+
+    Undefined-width growth still has a deterministic low prefix.  The planner
+    decides that comparison width here; renderers only compare the authored
+    expectation carried by the plan.
+    """
+
+    if case.expected_rule is not None or case.lanes is None:
+        return None
+    if not harness.round_trip_ready:
+        return None
+    match = _extension_repr_match(case, specs)
+    if match is None or case.to_extension is None:
+        return None
+    target_extension = catalog.extensions.get(case.to_extension)
+    if (
+        target_extension is None
+        or target_extension.vector_bits_kind != "fixed"
+        or target_extension.vector_bits <= 0
+    ):
+        return None
+    target_lanes = _whole_lanes(target_extension.vector_bits, case.type_tag)
+    if target_lanes is None:
+        return None
+    vector_inputs = _vector_inputs(case)
+    if (
+        len(vector_inputs) != len(match.param_kinds)
+        or any(len(values) != case.lanes for values in vector_inputs)
+    ):
+        return None
+    expected_lanes = case.lanes if undefined_upper else target_lanes
+    if len(case.expected) != expected_lanes:
+        return None
+    return ValueTestCasePlan(
+        kind="extension_result",
+        function_name=_function_name(name, index, case),
+        case_name=case.name,
+        call_name=name,
+        type_tag=case.type_tag,
+        base_spelling=match.base_type_spelling,
+        lanes=case.lanes,
+        inputs=ValueTestInputs(vectors=vector_inputs),
+        expectation=ValueTestExpectation(values=case.expected),
+        invocation=ValueTestInvocation(
+            result_kind=match.result_kind,
+            param_kinds=match.param_kinds,
+        ),
+        target=ValueTestTarget(
+            type_tag=case.type_tag,
+            base_spelling=match.base_type_spelling,
+            lanes=target_lanes,
+        ),
+        representation=ValueTestRepresentation(
+            source_extension=case.extension or match.extension_name,
+            target_extension=case.to_extension,
+            from_array_name=harness.from_array,
+            to_array_name=harness.to_array,
+        ),
+    )
+
 def load_convert_case(
     name: str,
     index: int,

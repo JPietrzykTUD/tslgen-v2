@@ -68,6 +68,13 @@ _CASE_REQUIREMENTS = {
             {ValueTestFact.REPRESENTATION, ValueTestFact.INDEX_VALUE}
         ),
     ),
+    "extension_result": ValueTestCaseRequirements(
+        expected="non_empty",
+        vector_inputs="non_empty",
+        required_facts=_CONVERSION_TARGET_FACTS
+        | frozenset({ValueTestFact.REPRESENTATION, ValueTestFact.RESULT_KIND}),
+        vector_inputs_match_lanes=True,
+    ),
     "generic_golden": ValueTestCaseRequirements(
         expected="lanes", required_facts=_RESULT, vector_inputs_match_lanes=True
     ),

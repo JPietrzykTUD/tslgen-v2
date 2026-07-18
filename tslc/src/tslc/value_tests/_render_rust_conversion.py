@@ -234,6 +234,47 @@ def _extension_insert(case: ValueTestCasePlan) -> str:
     )
 
 
+def _extension_result(case: ValueTestCasePlan) -> str:
+    target = case.target
+    representation = case.representation
+    assert target is not None and representation is not None
+    assert target.lanes is not None
+    from_array = _required_name(representation.from_array_name, "from_array_name")
+    to_array = _required_name(representation.to_array_name, "to_array_name")
+    expected_lanes = len(case.expectation.values)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
+    lines = [
+        "    #[test]",
+        f"    fn {case.function_name}() {{",
+        f"        type Vec = Simd<{case.base_spelling}, {rust_extension_tag(representation.source_extension)}>;",
+        f"        type ToVec = Simd<{case.base_spelling}, {rust_extension_tag(representation.target_extension)}>;",
+    ]
+    args: list[str] = []
+    for position, values in enumerate(case.inputs.vectors):
+        literals = rust_literal_list(values, case.type_tag)
+        lines.extend(
+            [
+                f"        let in{position}: [{case.base_spelling}; {case.lanes}] = [{literals}];",
+                f"        let mut h{position}: <Vec as SimdVector>::Array = Default::default();",
+                f"        for i in 0..{case.lanes} {{ h{position}[i] = in{position}[i]; }}",
+            ]
+        )
+        args.append(f"{from_array}::<Vec>(&h{position})")
+    lines.extend(
+        [
+            f"        let result = {rust_raw_identifier(case.call_name)}"
+            f"::<Vec, ToVec>({', '.join(args)});",
+            f"        let out = {to_array}::<ToVec>(result);",
+            f"        let expected: [{case.base_spelling}; {expected_lanes}] = [{expected}];",
+            f"        for i in 0..{expected_lanes} {{ assert!(out[i].lane_eq(expected[i]), "
+            f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
+            "i, expected[i], out[i]); }",
+            "    }",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _differential(case: ValueTestCasePlan) -> str:
     differential = case.differential
     assert differential is not None

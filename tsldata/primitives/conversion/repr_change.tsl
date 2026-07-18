@@ -477,6 +477,454 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
                   }
                   complete(result);
                 """
+prim<v:=v> resize_down(data):
+  brief_description "Reinterprets the low lanes of a vector register as a smaller extension register."
+  detailed_description """
+    Returns the low target-width portion of `data` without changing the base
+    type or lane values. On x86 this is represented by the corresponding cast
+    intrinsic, which does not require a data-manipulation instruction.
+    """
+  semantics """
+    require target_vector_bits < source_vector_bits
+    for each target lane i:
+      result[i] = data[i]
+    return result
+    """
+  return_type:
+    extension: ToExtension
+  tests:
+    - {tags [low, x86], extension "avx2", type "si32", to_extension "sse", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4]}}
+    - {tags [low, x86], extension "avx512", type "f64", to_extension "avx2", case {inputs [[1.0, 2.0, 3.0, 4.0, -1.0, -2.0, -3.0, -4.0]], expected [1.0, 2.0, 3.0, 4.0]}}
+    - {tags [low, clang], extension "clang_v512", type "si32", to_extension "clang_v128", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4]}}
+  impls:
+    avx2:
+      ?i?:
+        requires [avx]
+        ToExtension:
+          sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm256_castsi256_si128>(data));"
+      f32:
+        requires [avx]
+        ToExtension:
+          sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm256_castps256_ps128>(data));"
+      f64:
+        requires [avx]
+        ToExtension:
+          sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm256_castpd256_pd128>(data));"
+    avx512:
+      ?i?:
+        requires [avx512f]
+        ToExtension:
+          avx2:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_castsi512_si256>(data));"
+          sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_castsi512_si128>(data));"
+      f32:
+        requires [avx512f]
+        ToExtension:
+          avx2:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_castps512_ps256>(data));"
+          sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_castps512_ps128>(data));"
+      f64:
+        requires [avx512f]
+        ToExtension:
+          avx2:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_castpd512_pd256>(data));"
+          sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_castpd512_pd128>(data));"
+    clang_v128:
+      arith:
+        requires []
+        ToExtension:
+          where:
+            family same_as
+            width smaller_than
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsl """
+                  let<type>(OutVec, vector::as_extension(ToExtension));
+                  var<infer>(result, call<primitive=set_zero[OutVec]>());
+                  loop<generation, scoped>(i, 0, value(generic::length(OutVec)), 1) {
+                    result[value(i)] = data[value(i)];
+                  }
+                  complete(result);
+                """
+prim<v:=v>[value=undef] resize_up_undef(data):
+  brief_description "Reinterprets a vector register as a larger extension register with undefined upper lanes."
+  detailed_description """
+    Preserves the source lanes in the low part of the target register. All
+    additional upper lanes are unspecified and must not be observed unless
+    overwritten by a later operation. On x86 the implementation is a cast
+    intrinsic and therefore does not require a data-manipulation instruction.
+    """
+  semantics """
+    require target_vector_bits > source_vector_bits
+    for each source lane i:
+      result[i] = data[i]
+    for each remaining target lane i:
+      result[i] = undefined
+    return result
+    """
+  return_type:
+    extension: ToExtension
+  tests:
+    - {tags [undef, x86], extension "sse", type "si32", to_extension "avx2", case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4]}}
+    - {tags [undef, x86], extension "avx2", type "f64", to_extension "avx512", case {inputs [[1.0, 2.0, 3.0, 4.0]], expected [1.0, 2.0, 3.0, 4.0]}}
+    - {tags [undef, clang], extension "clang_v128", type "si32", to_extension "clang_v512", case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4]}}
+  impls:
+    sse:
+      ?i?:
+        requires [avx]
+        ToExtension:
+          avx2:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm256_castsi128_si256>(data));"
+          avx512:
+            requires [avx512f]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_castsi128_si512>(data));"
+      f32:
+        requires [avx]
+        ToExtension:
+          avx2:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm256_castps128_ps256>(data));"
+          avx512:
+            requires [avx512f]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_castps128_ps512>(data));"
+      f64:
+        requires [avx]
+        ToExtension:
+          avx2:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm256_castpd128_pd256>(data));"
+          avx512:
+            requires [avx512f]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_castpd128_pd512>(data));"
+    avx2:
+      ?i?:
+        requires [avx512f]
+        ToExtension:
+          avx512:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_castsi256_si512>(data));"
+      f32:
+        requires [avx512f]
+        ToExtension:
+          avx512:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_castps256_ps512>(data));"
+      f64:
+        requires [avx512f]
+        ToExtension:
+          avx512:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_castpd256_pd512>(data));"
+    clang_v128:
+      arith:
+        requires []
+        ToExtension:
+          where:
+            family same_as
+            width larger_than
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsl """
+                  let<type>(OutVec, vector::as_extension(ToExtension));
+                  var<infer>(result, call<primitive=set_undef[OutVec]>());
+                  loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                    result[value(i)] = data[value(i)];
+                  }
+                  complete(result);
+                """
+prim<v:=v>[value=zero] resize_up_zero(data):
+  brief_description "Reinterprets a vector register as a larger extension register and zeros upper lanes."
+  detailed_description """
+    Preserves the source lanes in the low part of the target register and sets
+    every additional upper lane to zero. The x86 zero-extension intrinsics
+    preserve this semantic distinction from an undefined-upper cast.
+    """
+  semantics """
+    require target_vector_bits > source_vector_bits
+    for each source lane i:
+      result[i] = data[i]
+    for each remaining target lane i:
+      result[i] = 0
+    return result
+    """
+  return_type:
+    extension: ToExtension
+  tests:
+    - {tags [zero, x86], extension "sse", type "si32", to_extension "avx2", case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4, 0, 0, 0, 0]}}
+    - {tags [zero, x86], extension "avx2", type "f64", to_extension "avx512", case {inputs [[1.0, 2.0, 3.0, 4.0]], expected [1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0]}}
+    - {tags [zero, clang], extension "clang_v128", type "si32", to_extension "clang_v512", case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+  impls:
+    sse:
+      ?i?:
+        requires [avx]
+        ToExtension:
+          avx2:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm256_zextsi128_si256>(data));"
+          avx512:
+            requires [avx512f]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_zextsi128_si512>(data));"
+      f32:
+        requires [avx]
+        ToExtension:
+          avx2:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm256_zextps128_ps256>(data));"
+          avx512:
+            requires [avx512f]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_zextps128_ps512>(data));"
+      f64:
+        requires [avx]
+        ToExtension:
+          avx2:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm256_zextpd128_pd256>(data));"
+          avx512:
+            requires [avx512f]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_zextpd128_pd512>(data));"
+    avx2:
+      ?i?:
+        requires [avx512f]
+        ToExtension:
+          avx512:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_zextsi256_si512>(data));"
+      f32:
+        requires [avx512f]
+        ToExtension:
+          avx512:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_zextps256_ps512>(data));"
+      f64:
+        requires [avx512f]
+        ToExtension:
+          avx512:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil "complete(intrin<_mm512_zextpd256_pd512>(data));"
+    clang_v128:
+      arith:
+        requires []
+        ToExtension:
+          where:
+            family same_as
+            width larger_than
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsl """
+                  let<type>(OutVec, vector::as_extension(ToExtension));
+                  var<infer>(result, call<primitive=set_zero[OutVec]>());
+                  loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                    result[value(i)] = data[value(i)];
+                  }
+                  complete(result);
+                """
+prim<v:=(v,v)> concat(low, high):
+  brief_description "Concatenates two vector registers into one register with twice the extension width."
+  detailed_description """
+    Places `low` in the low half and `high` in the high half of the result. The
+    target extension must be in the same family and exactly twice as wide as
+    the source extension.
+    """
+  semantics """
+    require target_vector_bits == 2 * source_vector_bits
+    for each source lane i:
+      result[i] = low[i]
+      result[source_vector_lane_count + i] = high[i]
+    return result
+    """
+  return_type:
+    extension: ToExtension
+  tests:
+    - {tags [concat, x86], extension "sse", type "si32", to_extension "avx2", case {inputs [[1, 2, 3, 4], [5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [concat, x86], extension "avx2", type "f64", to_extension "avx512", case {inputs [[1.0, 2.0, 3.0, 4.0], [-1.0, -2.0, -3.0, -4.0]], expected [1.0, 2.0, 3.0, 4.0, -1.0, -2.0, -3.0, -4.0]}}
+    - {tags [concat, clang], extension "clang_v128", type "si32", to_extension "clang_v256", case {inputs [[1, 2, 3, 4], [5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+  impls:
+    sse:
+      arith:
+        requires [avx]
+        ToExtension:
+          avx2:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsl """
+                  let<type>(OutVec, vector::as_extension(ToExtension));
+                  var<infer>(result, call<primitive=resize_up_undef[Vec, OutVec]>(low));
+                  complete(call<primitive=insert[Vec, OutVec, 1]>(result, high));
+                """
+    avx2:
+      arith:
+        requires [avx512f]
+        ToExtension:
+          avx512:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsl """
+                  let<type>(OutVec, vector::as_extension(ToExtension));
+                  var<infer>(result, call<primitive=resize_up_undef[Vec, OutVec]>(low));
+                  complete(call<primitive=insert[Vec, OutVec, 1]>(result, high));
+                """
+    clang_v128:
+      arith:
+        requires []
+        ToExtension:
+          where:
+            family same_as
+            width twice_as_wide
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsl """
+                  let<type>(OutVec, vector::as_extension(ToExtension));
+                  var<infer>(result, call<primitive=resize_up_undef[Vec, OutVec]>(low));
+                  complete(call<primitive=insert[Vec, OutVec, 1]>(result, high));
+                """
 prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
   brief_description "Converts one source vector chunk to a target vector with wider lane types."
   detailed_description """

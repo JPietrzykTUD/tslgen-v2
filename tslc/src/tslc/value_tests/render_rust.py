@@ -9,6 +9,7 @@ from tslc.value_tests._render_rust_conversion import (
     _differential,
     _extension_extract,
     _extension_insert,
+    _extension_result,
     _load_convert,
     _repr_cast,
 )
@@ -88,6 +89,7 @@ RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "differential": _differential,
         "extension_extract": _extension_extract,
         "extension_insert": _extension_insert,
+        "extension_result": _extension_result,
         "generic_golden": _generic_golden,
         "immediate": _immediate,
         "indexed_load": _indexed_load,

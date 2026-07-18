@@ -12,7 +12,7 @@ from tslc.catalog._builder_implementations import _implementations_from_entries
 from tslc.catalog._builder_primitives import _build_primitives
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import Catalog, TargetConstraint
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
@@ -59,6 +59,19 @@ def test_scalar_extension_has_no_intrinsic_compose(catalog: Catalog) -> None:
     scalar = catalog.extensions["scalar"]
     assert scalar.family == "scalar"
     assert scalar.compose_prefix == {}  # scalar has no intrinsic prefix
+
+
+def test_target_constraint_matches_exact_double_width(catalog: Catalog) -> None:
+    constraint = TargetConstraint(family="same_as", width="twice_as_wide")
+
+    assert constraint.matches(catalog.extensions["sse"], catalog.extensions["avx2"])
+    assert constraint.matches(catalog.extensions["avx2"], catalog.extensions["avx512"])
+    assert not constraint.matches(
+        catalog.extensions["sse"], catalog.extensions["avx512"]
+    )
+    assert not constraint.matches(
+        catalog.extensions["neon"], catalog.extensions["avx2"]
+    )
 
 
 @pytest.mark.parametrize(("name", "operation"), (("mul_imm", "mul"), ("mod_imm", "mod")))

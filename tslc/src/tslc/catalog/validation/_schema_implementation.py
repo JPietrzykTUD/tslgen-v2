@@ -31,7 +31,9 @@ KNOWN_TARGET_CONSTRAINT_FIELDS = frozenset(
     {"family", "width", "safety", "implementation", "variants"}
 )
 KNOWN_TARGET_FAMILY_RELATIONS = frozenset({"same_as"})
-KNOWN_TARGET_WIDTH_RELATIONS = frozenset({"smaller_than", "larger_than"})
+KNOWN_TARGET_WIDTH_RELATIONS = frozenset(
+    {"smaller_than", "larger_than", "twice_as_wide"}
+)
 
 
 def known_implementation_selector_fields() -> frozenset[str]:

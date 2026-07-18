@@ -27,6 +27,7 @@ from tslc.value_tests._render_cpp_conversion import (
     _differential_fuzz,
     _extension_extract,
     _extension_insert,
+    _extension_result,
     _load_convert,
     _repr_cast,
 )
@@ -63,6 +64,7 @@ CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "differential_fuzz": _differential_fuzz,
         "extension_extract": _extension_extract,
         "extension_insert": _extension_insert,
+        "extension_result": _extension_result,
         "generic_golden": render_value_case,
         "immediate": _immediate,
         "indexed_load": _indexed_load,

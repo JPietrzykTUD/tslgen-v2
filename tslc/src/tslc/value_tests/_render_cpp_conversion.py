@@ -149,6 +149,43 @@ def _extension_insert(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 
+def _extension_result(case: ValueTestCasePlan) -> str:
+    target = case.target
+    representation = case.representation
+    assert target is not None and representation is not None
+    assert target.lanes is not None
+    expected_lanes = len(case.expectation.values)
+    expected = cpp_literal_list(case.expectation.values, case.type_tag)
+    lines = [
+        f"int {case.function_name}() {{",
+        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::{representation.source_extension}>;",
+        f"  using ToVec = tsl::simd<{case.base_spelling}, tsl::{representation.target_extension}>;",
+    ]
+    args: list[str] = []
+    for position, values in enumerate(case.inputs.vectors):
+        literals = cpp_literal_list(values, case.type_tag)
+        lines.extend(
+            [
+                f"  static const {case.base_spelling} in{position}[{case.lanes}] = {{{literals}}};",
+                f"  typename tsl::array_for<Vec>::type h{position};",
+                f"  for (std::size_t i = 0; i < {case.lanes}; ++i) h{position}[i] = in{position}[i];",
+            ]
+        )
+        args.append(f"tsl::{representation.from_array_name}<Vec>(h{position})")
+    lines.extend(
+        [
+            f"  auto result = tsl::{case.call_name}<Vec, ToVec>({', '.join(args)});",
+            f"  typename tsl::array_for<ToVec>::type hout = "
+            f"tsl::{representation.to_array_name}<ToVec>(result);",
+            f"  static const {case.base_spelling} expected[{expected_lanes}] = {{{expected}}};",
+            f'  return tsl::test::check_lanes<{case.base_spelling}>('
+            f'"{case.case_name}", hout, expected, {expected_lanes});',
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _load_convert(case: ValueTestCasePlan) -> str:
     if case.representation is not None:
         return _fixed_extension_load_convert(case)
