@@ -23,6 +23,7 @@ from tslc.catalog.model import (
 from tslc.compiler_assets import RenderAssets
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.target_vectors import TargetVector
 from tslc.backend.emitted_names import finalize_emitted_names
 from tslc.target_text import LoweredBody
 from tslc.backend.emitted_profile import EmittedProfile
@@ -361,6 +362,99 @@ def test_status_pointer_case_checks_runtime_contract_for_both_backends() -> None
     assert "status == 0 && value != before" in cpp_source
     assert "let status = unsafe { random_step(&mut value) };" in rust_source
     assert "if status == 0" in rust_source
+
+
+def test_target_imask_case_uses_source_and_target_mask_layouts() -> None:
+    primitive = Primitive(
+        "insert_imask",
+        "im:=(imt,im,usize)",
+        ("orig", "data", "position"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="replace",
+                type_tag="si32",
+                tags=("extension",),
+                extension="sse",
+                to_extension="avx2",
+                inputs=(
+                    TslTestArg("mask", mask_bits="255"),
+                    TslTestArg("mask", mask_bits="0"),
+                    TslTestArg("scalar", scalar="2"),
+                ),
+                expected=("195",),
+            ),
+        ),
+    )
+    extensions = {
+        name: Extension(
+            name,
+            name,
+            "x86",
+            {},
+            {},
+            backend_supported={"cpp": True, "rust": True},
+            vector_bits=bits,
+        )
+        for name, bits in (("sse", 128), ("avx2", 256))
+    }
+    catalog = Catalog(
+        primitives=(primitive, *_harness_primitives()),
+        type_groups={},
+        extensions=extensions,
+        type_spellings={},
+        translations={},
+    )
+    target = TargetVector(
+        "target-vector",
+        "target-register",
+        "avx2",
+        "si32",
+        "std::int32_t",
+    )
+    cpp_spec = replace(
+        _spec(
+            "insert_imask",
+            "insert_imask",
+            param_kinds=("imt", "im", "usize"),
+            result_kind="im",
+            extension_name="sse",
+            uses_sized_vector=False,
+            lane_parameter=None,
+        ),
+        target=target,
+    )
+    rust_spec = replace(
+        cpp_spec,
+        backend_id="rust",
+        base_type_spelling="i32",
+        target=replace(target, base_spelling="i32"),
+    )
+
+    plan = ValueTestPlanner(catalog, _VALUE_TEST_SUPPORTS).plan(
+        _inputs(
+            _profile(
+                cpp={"insert_imask": (cpp_spec,)},
+                rust={"insert_imask": (rust_spec,)},
+            )
+        )
+    )
+
+    assert plan.diagnostics == ()
+    assert {entry.status for entry in plan.coverage} == {"emitted"}
+    cpp_case = plan.profiles_for("cpp")[0].cases[0]
+    rust_case = plan.profiles_for("rust")[0].cases[0]
+    assert cpp_case.kind == rust_case.kind == "target_imask"
+    assert cpp_case.lanes == 4
+    assert cpp_case.target is not None and cpp_case.target.lanes == 8
+    cpp_source = CPP_VALUE_TEST_RENDERER.render_case(cpp_case)
+    rust_source = RUST_VALUE_TEST_RENDERER.render_case(rust_case)
+    assert "typename ToVec::imask_type a0" in cpp_source
+    assert "typename Vec::imask_type a1" in cpp_source
+    assert "tsl::insert_imask<Vec, ToVec>(a0, a1, a2)" in cpp_source
+    assert "<ToVec as SimdVector>::ImaskType" in rust_source
+    assert "insert_imask::<Vec, ToVec>(a0, a1, a2)" in rust_source
 
 
 def test_different_arity_leading_mask_form_gets_portable_emitted_name() -> None:

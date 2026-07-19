@@ -101,8 +101,8 @@ class CppBackend:
             # A non-vector primitive: a plain prototype (the definition follows in
             # render_definitions), so a free function can still call any wrapper.
             return _free_function(shape, define=False)
-        # A representation-change primitive carries a SECOND vector type (the target): the
-        # result is `ToVec::register_type` and `ToVec` is a free template param the caller binds.
+        # A representation-change primitive carries a SECOND vector type (the target).
+        # Its result kind projects through `ToVec`, which the caller binds.
         decl_params = "class Vec" + (
             ", class ToVec" if shape.target is not None else ""
         )
@@ -293,7 +293,7 @@ class CppBackend:
         if not applies:
             return ""
         # A representation-change spec exposes `ToVec` (the target vector) in the impl so a
-        # `tv` param / the result can project through it (`typename ToVec::register_type`).
+        # target-owned params and the result can project through it.
         to_vec = (
             f"    using ToVec = {first.target.vector_spelling};\n"
             if first.target is not None
@@ -423,9 +423,9 @@ def _wrapper_signature(
     selector_args = impl_args + "".join(
         f", {parameter_type}" for parameter_type in selector_parameter_types
     )
-    # The wrapper's result projects through the caller-bound `ToVec` param.
+    # The wrapper's result kind projects through the caller-bound `ToVec` param.
     result_type = (
-        "typename ToVec::register_type"
+        CPP_SIGNATURE_TYPES.member_type(shape.result_kind, vector="ToVec")
         if has_target
         else _result_type(shape.result_kind)
     )
@@ -538,7 +538,12 @@ def _dataparallel_facade_result_type(result_kind: str, vec: str) -> str:
 def _dataparallel_facade_param_type(
     param_kind: str, vec: str, target_vec: str | None
 ) -> str:
-    vector = target_vec if param_kind == "vt" and target_vec is not None else vec
+    vector = (
+        target_vec
+        if DEFAULT_SUPPORT_POLICY.is_target_vector_parameter_kind(param_kind)
+        and target_vec is not None
+        else vec
+    )
     return CPP_SIGNATURE_TYPES.member_parameter_type(param_kind, vector=vector)
 
 
@@ -741,11 +746,13 @@ def _axis_name(key: str) -> str:
 
 
 def _apply_result_type(spec: LoweredSpecialization) -> str:
-    """The `apply` result type. A representation-change spec returns the (concrete) target
-    register; otherwise the kind projects through `Vec`."""
+    """The `apply` result type, projected through the source or target vector."""
 
     if spec.target is not None:
-        return spec.target.register_spelling
+        return CPP_SIGNATURE_TYPES.member_type(
+            spec.result_kind,
+            vector=spec.target.vector_spelling,
+        )
     return _result_type(spec.result_kind)
 
 

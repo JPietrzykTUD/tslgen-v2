@@ -27,6 +27,7 @@ class ValueTestFact(Enum):
     MEMORY_STORAGE = auto()
     TEXT_EXPECTED = auto()
     REPRESENTATION = auto()
+    REPRESENTATION_LAYOUT = auto()
     SCALABLE_RUNTIME = auto()
     SCALABLE_VALUE_HARNESS = auto()
     SCALABLE_MASK_CHECK = auto()
@@ -182,6 +183,10 @@ class ValueTestRepresentation:
             and self.from_array_name is not None
             and self.to_array_name is not None
         )
+
+    @property
+    def has_layout(self) -> bool:
+        return self.target_extension is not None
 
 
 @dataclass(frozen=True, slots=True)

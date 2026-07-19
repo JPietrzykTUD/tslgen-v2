@@ -6,6 +6,8 @@ from collections.abc import Collection
 from typing import get_args
 
 from tslc.catalog.model import GenericParamKind
+from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS
+from tslc.catalog.signatures import parse_signature
 from tslc.catalog.param_types import (
     BASE_WIDTH_RELATIONS,
     base_width_relation_text,
@@ -509,10 +511,49 @@ def _validate_return_type(
     declaration: ParsedPrimitiveDeclaration,
     diagnostics: list[Diagnostic],
 ) -> None:
+    target_fields: list[ParsedTslField] = []
     for field in declaration.fields_by_name("return_type"):
+        target_fields.extend(
+            child_field
+            for child_field in children(field.field)
+            if child_field.key.text in KNOWN_RETURN_TYPE_FIELDS
+        )
         validate_known_fields(
             children(field.field),
             KNOWN_RETURN_TYPE_FIELDS,
             diagnostics,
             owner="return_type",
+        )
+    shape = parse_signature(declaration.signature)
+    if shape is None:
+        return
+    target_param_kinds = tuple(
+        kind
+        for kind in shape.param_kinds
+        if DEFAULT_SIGNATURE_KINDS.is_target_vector_parameter(kind)
+    )
+    if DEFAULT_SIGNATURE_KINDS.is_target_vector_parameter(shape.result_kind):
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-TARGET-KIND-RESULT",
+                message=(
+                    f"target-vector signature kind {shape.result_kind!r} is valid only "
+                    "for parameters"
+                ),
+                source=source_span(declaration.signature_source),
+            )
+        )
+    if target_param_kinds and len(target_fields) != 1:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-TARGET-PARAM-RETURN-TYPE",
+                message=(
+                    f"primitive {declaration.name!r} uses target-vector parameter kind(s) "
+                    f"{', '.join(repr(kind) for kind in target_param_kinds)} and must "
+                    "declare exactly one return_type base or extension target"
+                ),
+                source=source_span(declaration.signature_source),
+            )
         )

@@ -213,6 +213,12 @@ class SupportPolicy:
     def is_borrowed_parameter_kind(self, kind: str) -> bool:
         return self.signature_kinds.is_borrowed_parameter(kind)
 
+    def is_target_vector_parameter_kind(self, kind: str) -> bool:
+        return self.signature_kinds.is_target_vector_parameter(kind)
+
+    def is_test_mask_argument_kind(self, kind: str) -> bool:
+        return self.signature_kinds.is_test_mask_argument(kind)
+
     def signature_kind_requires_vector_axis(self, kind: str) -> bool:
         return self.signature_kinds.requires_vector_axis(kind)
 

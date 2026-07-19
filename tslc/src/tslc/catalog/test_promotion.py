@@ -7,6 +7,7 @@ from typing import cast
 from tslc.catalog._builder_common import _opt_int
 from tslc.catalog.model import TestArg, TestCase, TestCaseRole
 from tslc.catalog.signatures import SignatureShape, parse_signature
+from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS
 from tslc.catalog.test_cases import derive_test_case_name, infer_test_lane_count
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
 from tslc.syntax.access import child as _child
@@ -130,7 +131,10 @@ def _test_inputs(
             scalar_position += 1
         elif isinstance(item, ParsedTslScalarValue):
             param_kind = _test_param_kind(param_kinds, scalar_position)
-            if param_kind in {"m", "im"}:
+            if (
+                param_kind is not None
+                and DEFAULT_SIGNATURE_KINDS.is_test_mask_argument(param_kind)
+            ):
                 args.append(TestArg(kind="mask", mask_bits=item.text))
             else:
                 args.append(TestArg(kind="scalar", scalar=item.text))

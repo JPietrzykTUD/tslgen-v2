@@ -34,6 +34,14 @@ def test_backend_emitters_own_signature_type_projections() -> None:
     assert RUST_SIGNATURE_TYPES.owner_type("s", owner="Simd") == "Simd::BaseType"
     assert RUST_SIGNATURE_TYPES.parameter_type("s[]", owner="Simd") == "&Simd::Array"
     assert (
+        CPP_SIGNATURE_TYPES.parameter_type("imt", target_vector="ToVec")
+        == "typename ToVec::imask_type"
+    )
+    assert (
+        RUST_SIGNATURE_TYPES.parameter_type("imt", owner="ToVec")
+        == "ToVec::ImaskType"
+    )
+    assert (
         RUST_SIGNATURE_TYPES.concrete_type(
             "v",
             base="i32",
@@ -157,6 +165,9 @@ def test_cpp_dataparallel_facade_types_come_from_the_shared_table() -> None:
     assert _dataparallel_facade_param_type("vt", "MyVec", "ToVec") == (
         CPP_SIGNATURE_TYPES.member_parameter_type("vt", vector="ToVec")
     )
+    assert _dataparallel_facade_param_type("imt", "MyVec", "ToVec") == (
+        CPP_SIGNATURE_TYPES.member_parameter_type("imt", vector="ToVec")
+    )
 
 
 def test_rust_facade_types_come_from_the_shared_table() -> None:
@@ -175,6 +186,9 @@ def test_rust_facade_types_come_from_the_shared_table() -> None:
         )
     assert _rust_facade_param_type("vt", "V", "W") == (
         RUST_SIGNATURE_TYPES.parameter_type("vt", owner="<W as SimdVector>")
+    )
+    assert _rust_facade_param_type("imt", "V", "W") == (
+        RUST_SIGNATURE_TYPES.parameter_type("imt", owner="<W as SimdVector>")
     )
 
 

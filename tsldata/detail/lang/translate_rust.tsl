@@ -77,6 +77,8 @@ translation rust:
   helper_ctz "crate::tsl_core::detail::helpers::ctz({args})"
   helper_clz "crate::tsl_core::detail::helpers::clz({args})"
   helper_random_step_u64 "crate::tsl_core::detail::helpers::random_step_u64({args})"
+  helper_imask_insert "crate::tsl_core::detail::helpers::imask_insert::{template}({args})"
+  helper_imask_extract "crate::tsl_core::detail::helpers::imask_extract::{template}({args})"
   mask_none_lane_bitmask "0"
   mask_all_lane_bitmask "if LANES >= 64 { u64::MAX } else { (1u64 << LANES) - 1u64 }"
   mask_set_lane_bitmask "{name} |= 1u64 << {index}"

@@ -16,6 +16,7 @@ from tslc.backend.rust_names import (
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
 def rust_algorithm_primitive_facades(
@@ -123,7 +124,10 @@ def _rust_facade_result_type(result_kind: str, vec: str) -> str:
 
 
 def _rust_facade_param_type(param_kind: str, vec: str, target_vec: str | None) -> str:
-    if param_kind == "vt" and target_vec is not None:
+    if (
+        DEFAULT_SUPPORT_POLICY.is_target_vector_parameter_kind(param_kind)
+        and target_vec is not None
+    ):
         vec = target_vec
     return RUST_SIGNATURE_TYPES.parameter_type(
         param_kind, owner=f"<{vec} as SimdVector>"

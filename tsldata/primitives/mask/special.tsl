@@ -1,11 +1,12 @@
-prim<im:=(im,im)> test_imask(mask, position):
+prim<im:=(im,usize)> test_imask(mask, position):
   brief_description "Tests whether the mask bit at the supplied position is active."
   detailed_description """
     Extracts the bit at a runtime position from an integral mask value and
-    returns it as an integral truth value.
+    returns it as an integral truth value. An out-of-range position returns zero.
     """
   semantics """
-    input: integral mask mask, scalar position
+    input: integral mask mask, size position
+    if position >= source_lane_count: return 0
     return (mask >> position) & 1
     """
   tests:
@@ -17,6 +18,7 @@ prim<im:=(im,im)> test_imask(mask, position):
     - {tags [edge], extension "avx512", type "ui32", lane_count 16, case {inputs [43690, 0], expected 0}}
     - {tags [basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 1], expected 1}}
     - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 0], expected 0}}
+    - {tags [out_of_range], extension "avx512", type "ui64", lane_count 8, case {inputs [255, 8], expected 0}}
   impls:
     [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneapi_fpga, wasm128]:
       arith:
@@ -37,26 +39,35 @@ prim<im:=(im,im)> test_imask(mask, position):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(vector::imask, mask<test, imask>(mask, position)));"
-prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
-  brief_description "Inserts one integral mask value into another at the supplied bit position."
+          tsil """
+              if (position >= value(vector::runtime_length)) {
+                complete(cast<static>(vector::imask, 0));
+              }
+              complete(cast<static>(vector::imask, mask<test, imask>(mask, position)));
+            """
+
+prim<im:=(im,im,usize)> overlay_imask(mask_a, mask_b, position):
+  brief_description "Overlays one integral mask onto another at a runtime bit position."
   detailed_description """
-    Combines one integral mask with another integral mask shifted left by a
-    runtime position.
+    ORs the shifted bits of `mask_b` into `mask_a`. Existing set bits are never
+    cleared; use `insert_imask` when the destination window must be replaced.
+    An out-of-range position leaves `mask_a` unchanged.
     """
   semantics """
-    input: integral mask mask_a, integral mask mask_b, scalar position
-    return mask_a | (mask_b << position)
+    input: integral masks mask_a and mask_b, size position
+    if position >= lane_count: return mask_a
+    return mask_a | (mask_b << position), truncated to the mask storage type
     """
   tests:
     - {tags [basic], extension "avx512", type "ui8", lane_count 64, case {inputs [15, 3, 4], expected 63}}
-    - {tags [edge], extension "avx512", type "ui8", lane_count 64, case {inputs [240, 15, 0], expected 255}}
+    - {tags [preserve], extension "avx512", type "ui8", lane_count 64, case {inputs [15, 0, 0], expected 15}}
     - {tags [basic], extension "avx512", type "ui16", lane_count 32, case {inputs [15, 3, 4], expected 63}}
-    - {tags [edge], extension "avx512", type "ui16", lane_count 32, case {inputs [240, 15, 0], expected 255}}
+    - {tags [preserve], extension "avx512", type "ui16", lane_count 32, case {inputs [15, 0, 0], expected 15}}
     - {tags [basic], extension "avx512", type "ui32", lane_count 16, case {inputs [15, 3, 4], expected 63}}
-    - {tags [edge], extension "avx512", type "ui32", lane_count 16, case {inputs [240, 15, 0], expected 255}}
+    - {tags [preserve], extension "avx512", type "ui32", lane_count 16, case {inputs [15, 0, 0], expected 15}}
     - {tags [basic], extension "avx512", type "ui64", lane_count 8, case {inputs [15, 3, 4], expected 63}}
-    - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [240, 15, 0], expected 255}}
+    - {tags [preserve], extension "avx512", type "ui64", lane_count 8, case {inputs [15, 0, 0], expected 15}}
+    - {tags [out_of_range], extension "avx512", type "ui64", lane_count 8, case {inputs [15, 255, 8], expected 15}}
   impls:
     [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneapi_fpga, wasm128]:
       arith:
@@ -77,29 +88,38 @@ prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a | (mask_b << position));"
-prim<im:=(im,im)> extract_imask(mask, position):
-  brief_description "Extracts a sub-mask from an integral mask value by shifting from the supplied bit position."
+          tsil """
+              if (position >= value(vector::runtime_length)) {
+                complete(mask_a);
+              }
+              complete(cast<static>(vector::imask, mask_a | (mask_b << position)));
+            """
+
+prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
+  brief_description "Replaces a target-mask window with the bits from a smaller source mask."
   detailed_description """
-    Shifts an integral mask right by a runtime position, making the selected
-    bit range start at bit zero.
+    Inserts the logical source-lane mask into the larger target mask at a
+    runtime bit position. The selected destination window is cleared before
+    insertion. Bits that extend beyond the target lane count are discarded.
     """
   semantics """
-    input: integral mask mask, scalar position
-    return mask >> position
+    input: target integral mask orig, source integral mask data, size position
+    copied = min(source_lane_count, target_lane_count - position)
+    window = low_bits(copied) << position
+    return (orig & ~window) | ((data & low_bits(copied)) << position)
     """
+  return_type:
+    base: ToBase
   tests:
-    - {tags [basic], extension "avx512", type "ui8", lane_count 64, case {inputs [176, 4], expected 11}}
-    - {tags [edge], extension "avx512", type "ui8", lane_count 64, case {inputs [176, 0], expected 176}}
-    - {tags [basic], extension "avx512", type "ui16", lane_count 32, case {inputs [176, 4], expected 11}}
-    - {tags [edge], extension "avx512", type "ui16", lane_count 32, case {inputs [176, 0], expected 176}}
-    - {tags [basic], extension "avx512", type "ui32", lane_count 16, case {inputs [176, 4], expected 11}}
-    - {tags [edge], extension "avx512", type "ui32", lane_count 16, case {inputs [176, 0], expected 176}}
-    - {tags [basic], extension "avx512", type "ui64", lane_count 8, case {inputs [176, 4], expected 11}}
-    - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [176, 0], expected 176}}
+    - {tags [base_replace], extension "avx512", type "ui64", to_type "ui8", case {inputs [65535, 0, 4], expected 61455}}
+    - {tags [base_insert], extension "avx512", type "ui64", to_type "ui8", case {inputs [0, 165, 8], expected 42240}}
+    - {tags [extension_replace], extension "sse", type "ui32", to_extension "avx2", case {inputs [255, 0, 2], expected 195}}
+    - {tags [extension_insert], extension "sse", type "ui32", to_extension "avx2", case {inputs [0, 11, 4], expected 176}}
+    - {tags [extension_clipped], extension "sse", type "ui32", to_extension "avx2", case {inputs [0, 15, 6], expected 192}}
+    - {tags [clang], extension "clang_v128", type "ui32", to_extension "clang_v256", case {inputs [255, 0, 2], expected 195}}
   impls:
-    [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneapi_fpga, wasm128]:
-      arith:
+    [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128]:
+      qword:
         requires:
           clang_v128 []
           avx512 [avx512f]
@@ -108,13 +128,263 @@ prim<im:=(im,im)> extract_imask(mask, position):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
-          scalar []
-          generic []
-          oneapi_fpga []
           wasm128 [simd128]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil "complete(mask >> position);"
+        ToBase:
+          bword:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                  let<type>(OutVec, vector::as_base(ToBase));
+                  complete(helper<imask_insert, type(OutVec)>(
+                    cast<static>(ui64, orig), cast<static>(ui64, data), position,
+                    value(vector::length), value(generic::length(OutVec))
+                  ));
+                """
+          dword:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                  let<type>(OutVec, vector::as_base(ToBase));
+                  complete(helper<imask_insert, type(OutVec)>(
+                    cast<static>(ui64, orig), cast<static>(ui64, data), position,
+                    value(vector::length), value(generic::length(OutVec))
+                  ));
+                """
+      dword:
+        requires:
+          clang_v128 []
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+          wasm128 [simd128]
+        ToBase:
+          bword:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                  let<type>(OutVec, vector::as_base(ToBase));
+                  complete(helper<imask_insert, type(OutVec)>(
+                    cast<static>(ui64, orig), cast<static>(ui64, data), position,
+                    value(vector::length), value(generic::length(OutVec))
+                  ));
+                """
+      ?i16:
+        requires:
+          clang_v128 []
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+          wasm128 [simd128]
+        ToBase:
+          ?i8:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                  let<type>(OutVec, vector::as_base(ToBase));
+                  complete(helper<imask_insert, type(OutVec)>(
+                    cast<static>(ui64, orig), cast<static>(ui64, data), position,
+                    value(vector::length), value(generic::length(OutVec))
+                  ));
+                """
+
+prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
+  brief_description "Replaces a target-mask window with the bits from a smaller source mask."
+  detailed_description """
+    This extension-target specialization widens the register extension while
+    preserving the base type. Its public semantics are identical to the
+    base-target specialization.
+    """
+  semantics """
+    replace the target mask window at position with the logical source mask bits
+    """
+  return_type:
+    extension: ToExtension
+  impls:
+    [clang_v128, avx2_vl, sse_vl, avx2, sse]:
+      arith:
+        requires:
+          clang_v128 []
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx2]
+          sse [sse2]
+        ToExtension:
+          where:
+            family same_as
+            width larger_than
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                  let<type>(OutVec, vector::as_extension(ToExtension));
+                  complete(helper<imask_insert, type(OutVec)>(
+                    cast<static>(ui64, orig), cast<static>(ui64, data), position,
+                    value(vector::length), value(generic::length(OutVec))
+                  ));
+                """
+
+prim<im:=(im,usize)> extract_imask(data, position):
+  brief_description "Extracts a smaller target mask from a larger source mask."
+  detailed_description """
+    Selects target-lane-count bits from the source integral mask beginning at
+    `position` and normalizes the selected window to bit zero. Missing high bits
+    are zero when the requested window extends beyond the source lane count.
+    """
+  semantics """
+    input: source integral mask data, size position
+    copied = min(target_lane_count, source_lane_count - position)
+    return (data >> position) & low_bits(copied)
+    """
+  return_type:
+    base: ToBase
+  tests:
+    - {tags [base], extension "avx512", type "ui8", to_type "ui64", case {inputs [2816, 8], expected 11}}
+    - {tags [base_zero], extension "avx512", type "ui8", to_type "ui64", case {inputs [255, 64], expected 0}}
+    - {tags [ext], extension "avx2", type "ui32", to_extension "sse", case {inputs [176, 4], expected 11}}
+    - {tags [extension_low], extension "avx2", type "ui32", to_extension "sse", case {inputs [171, 0], expected 11}}
+    - {tags [extension_clipped], extension "avx2", type "ui32", to_extension "sse", case {inputs [192, 6], expected 3}}
+    - {tags [clang], extension "clang_v256", type "ui32", to_extension "clang_v128", case {inputs [176, 4], expected 11}}
+  impls:
+    [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128]:
+      ?i8:
+        requires:
+          clang_v128 []
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+          wasm128 [simd128]
+        ToBase:
+          ?i16:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                  let<type>(OutVec, vector::as_base(ToBase));
+                  complete(helper<imask_extract, type(OutVec)>(
+                    cast<static>(ui64, data), position,
+                    value(vector::length), value(generic::length(OutVec))
+                  ));
+                """
+          dqword:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                  let<type>(OutVec, vector::as_base(ToBase));
+                  complete(helper<imask_extract, type(OutVec)>(
+                    cast<static>(ui64, data), position,
+                    value(vector::length), value(generic::length(OutVec))
+                  ));
+                """
+      ?i16:
+        requires:
+          clang_v128 []
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+          wasm128 [simd128]
+        ToBase:
+          dqword:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                  let<type>(OutVec, vector::as_base(ToBase));
+                  complete(helper<imask_extract, type(OutVec)>(
+                    cast<static>(ui64, data), position,
+                    value(vector::length), value(generic::length(OutVec))
+                  ));
+                """
+      dword:
+        requires:
+          clang_v128 []
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+          wasm128 [simd128]
+        ToBase:
+          qword:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                  let<type>(OutVec, vector::as_base(ToBase));
+                  complete(helper<imask_extract, type(OutVec)>(
+                    cast<static>(ui64, data), position,
+                    value(vector::length), value(generic::length(OutVec))
+                  ));
+                """
+
+prim<im:=(im,usize)> extract_imask(data, position):
+  brief_description "Extracts a smaller target mask from a larger source mask."
+  detailed_description """
+    This extension-target specialization narrows the register extension while
+    preserving the base type. Its public semantics are identical to the
+    base-target specialization.
+    """
+  semantics """
+    select target-lane-count bits beginning at position and normalize to bit zero
+    """
+  return_type:
+    extension: ToExtension
+  impls:
+    [clang_v128, avx512, avx2_vl, avx2]:
+      arith:
+        requires:
+          clang_v128 []
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          avx2 [avx2]
+        ToExtension:
+          where:
+            family same_as
+            width smaller_than
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                  let<type>(OutVec, vector::as_extension(ToExtension));
+                  complete(helper<imask_extract, type(OutVec)>(
+                    cast<static>(ui64, data), position,
+                    value(vector::length), value(generic::length(OutVec))
+                  ));
+                """

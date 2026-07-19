@@ -191,6 +191,10 @@ CPP_SIGNATURE_TYPES = BackendSignatureTypes(
             parameter="typename tsl::reg_param<{target_vector}>::type",
             member_parameter="typename ::tsl::reg_param<{vector}>::type",
         ),
+        "imt": SignatureTypeForms(
+            parameter="typename {target_vector}::imask_type",
+            member_parameter="typename {vector}::imask_type",
+        ),
         "vidx": SignatureTypeForms(
             parameter="typename tsl::reg_param<{index_type}>::type"
         ),
@@ -275,6 +279,11 @@ RUST_SIGNATURE_TYPES = BackendSignatureTypes(
         "vt": SignatureTypeForms(
             owner="{owner}::RegisterType",
             parameter="{owner}::RegisterType",
+            concrete="{register}",
+        ),
+        "imt": SignatureTypeForms(
+            owner="{owner}::ImaskType",
+            parameter="{owner}::ImaskType",
             concrete="{register}",
         ),
         "vidx": SignatureTypeForms(

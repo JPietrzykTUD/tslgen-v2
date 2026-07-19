@@ -149,9 +149,8 @@ class LoweredSpecialization:
     # parameter are distinct on SIMD but identical here).
     register_is_base: bool = False
     # The TARGET vector of a representation-change primitive, or None for ordinary primitives.
-    # When set, the backend emits it as a SECOND type parameter (keyed per source+target) and the
-    # result type is its register — so `target is None` (not `result_kind`) is the signal that a
-    # primitive returns a different vector. See :class:`TargetVector`.
+    # When set, the backend emits it as a SECOND type parameter (keyed per source+target) and
+    # projects the result kind through that vector. See :class:`TargetVector`.
     target: "TargetVector | None" = None
     # The `[mask=…]` policy of a masked variant (`"zero"`/`"pass_through"`), or None for an
     # unmasked spec. Survives lowering (the boolean `axis` does not carry it) so pruning can match

@@ -121,7 +121,12 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "mask_binary_not",
         ),
         "test_mask_true_builds": ("mask_true",),
-        "test_imask_ops_build": ("test_imask", "insert_imask", "extract_imask"),
+        "test_imask_ops_build": (
+            "test_imask",
+            "overlay_imask",
+            "insert_imask",
+            "extract_imask",
+        ),
         "test_mask_population_count_builds": ("mask_population_count",),
         "test_nullary_constants_build": ("set_zero", "set_undef", "mask_false"),
         "test_simple_memory_build": ("load_scalar",),

@@ -26,6 +26,7 @@ export interface ExplorerImplementation {
   readonly primitive: string;
   readonly signature: string;
   readonly parameters: readonly string[];
+  readonly attributes: Readonly<Record<string, string>>;
   readonly extension: string;
   readonly typeGroup: string;
   readonly selectorPath: readonly string[];
@@ -34,6 +35,10 @@ export interface ExplorerImplementation {
 }
 
 export interface ExplorerSlot {
+  readonly primitive: string;
+  readonly signature: string;
+  readonly parameters: readonly string[];
+  readonly attributes: Readonly<Record<string, string>>;
   readonly extension: string;
   readonly type: string;
   readonly status: SlotStatus;
@@ -152,6 +157,22 @@ export function slotStatusDescription(slot: ExplorerSlot): string {
 export function implementationLabel(
   implementation: ExplorerImplementation,
 ): string {
-  const callable = `${implementation.primitive}(${implementation.parameters.join(", ")})`;
-  return `${callable} • ${implementation.extension} / ${implementation.typeGroup}`;
+  return `${callableLabel(implementation)} • ${implementation.extension} / ${implementation.typeGroup}`;
+}
+
+export function slotCallableLabel(slot: ExplorerSlot): string {
+  return callableLabel(slot);
+}
+
+function callableLabel(callable: {
+  readonly primitive: string;
+  readonly parameters: readonly string[];
+  readonly attributes: Readonly<Record<string, string>>;
+}): string {
+  const name = `${callable.primitive}(${callable.parameters.join(", ")})`;
+  const attributes = Object.entries(callable.attributes)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `[${key}=${value}]`)
+    .join(" ");
+  return attributes ? `${name} ${attributes}` : name;
 }

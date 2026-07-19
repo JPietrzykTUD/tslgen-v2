@@ -134,7 +134,14 @@ def _result_summary(spec: LoweredSpecialization, *, concrete: bool) -> str:
         )
     if concrete:
         result_type = (
-            cpp_target_register_doc(spec)
+            (
+                cpp_target_register_doc(spec)
+                if spec.result_kind == "v"
+                else CPP_SIGNATURE_TYPES.member_type(
+                    spec.result_kind,
+                    vector=spec.target.vector_spelling,
+                )
+            )
             if spec.target is not None
             else cpp_register_doc(spec)
             if spec.result_kind == "v"
@@ -142,7 +149,10 @@ def _result_summary(spec: LoweredSpecialization, *, concrete: bool) -> str:
         )
         return result_summary(spec.result_kind, result_type)
     if spec.target is not None:
-        return result_summary(spec.result_kind, "typename ToVec::register_type")
+        return result_summary(
+            spec.result_kind,
+            CPP_SIGNATURE_TYPES.member_type(spec.result_kind, vector="ToVec"),
+        )
     return result_summary(spec.result_kind, CPP_SIGNATURE_TYPES.result_type(spec.result_kind))
 
 
@@ -159,4 +169,3 @@ def _native_register_doc(
     if register_is_base:
         return base_spelling
     return fallback
-

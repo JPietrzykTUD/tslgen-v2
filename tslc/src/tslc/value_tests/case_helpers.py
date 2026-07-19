@@ -5,6 +5,7 @@ from __future__ import annotations
 from tslc.catalog.model import TestCase
 from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.value_tests.case_components import IndexStyle, MemoryStorage
 from tslc.value_tests.model import (
     ValueTestCasePlan,
@@ -222,9 +223,17 @@ def args_match(case: TestCase, param_kinds: tuple[str, ...]) -> bool:
     vector_count = sum(
         1
         for kind in param_kinds
-        if kind in {"v", "vt", "ptr", "cptr", "ptr+", "cptr+", "vidx", "s[]"}
+        if kind in {"v", "ptr", "cptr", "ptr+", "cptr+", "vidx", "s[]"}
+        or (
+            DEFAULT_SUPPORT_POLICY.is_target_vector_parameter_kind(kind)
+            and not DEFAULT_SUPPORT_POLICY.is_test_mask_argument_kind(kind)
+        )
     )
-    mask_count = sum(1 for kind in param_kinds if kind in {"m", "im"})
+    mask_count = sum(
+        1
+        for kind in param_kinds
+        if DEFAULT_SUPPORT_POLICY.is_test_mask_argument_kind(kind)
+    )
     scalar_count = sum(1 for kind in param_kinds if kind in {"s", "sImm", "usize"})
     if len(vector_inputs(case)) != vector_count:
         return False

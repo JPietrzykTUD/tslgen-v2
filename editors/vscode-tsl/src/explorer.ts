@@ -15,6 +15,7 @@ import {
   countDescription,
   groupSlots,
   implementationLabel,
+  slotCallableLabel,
   slotStatusDescription,
   type ExplorerMode,
   type ExplorerLocation,
@@ -514,6 +515,17 @@ export class TslExplorer implements vscode.Disposable {
       await this.showUnavailableReason(element);
       return;
     }
+    if (element.slot.status === "selected") {
+      const implementation = element.slot.implementations[0];
+      if (element.slot.implementations.length !== 1 || !implementation) {
+        void vscode.window.showErrorMessage(
+          `The compiler returned multiple winning definitions for ${slotCallableLabel(element.slot)}<${element.slot.type}>.`,
+        );
+        return;
+      }
+      await openLocation(implementation.location);
+      return;
+    }
     const choices = element.slot.implementations.map((implementation) => ({
       label: implementationLabel(implementation),
       description: `${implementation.signature} • ${implementation.selectorPath.join(" / ")}`,
@@ -525,11 +537,8 @@ export class TslExplorer implements vscode.Disposable {
         ? choices[0]?.location
         : (
             await vscode.window.showQuickPick(choices, {
-              title: `${this.selectedPrimitive ?? "Primitive"}<${element.slot.type}> implementation`,
-              placeHolder:
-                element.slot.status === "selected"
-                  ? "Select the winning source body to open"
-                  : "Select an authored source body to open",
+              title: `${slotCallableLabel(element.slot)}<${element.slot.type}> implementation`,
+              placeHolder: "Select an authored source body to open",
               matchOnDescription: true,
               matchOnDetail: true,
             })
@@ -970,7 +979,7 @@ class SlotTreeProvider
     }
     const slot = element.slot;
     const item = new vscode.TreeItem(slot.type, vscode.TreeItemCollapsibleState.None);
-    item.description = slotStatusDescription(slot);
+    item.description = `${slotCallableLabel(slot)} • ${slotStatusDescription(slot)}`;
     item.contextValue =
       slot.status === "selected"
         ? "tslSelectedSlot"
@@ -1205,6 +1214,8 @@ function primitiveTooltip(
 function slotTooltip(slot: ExplorerSlot): vscode.MarkdownString {
   const value = new vscode.MarkdownString();
   value.appendMarkdown(`**${slot.extension} / ${slot.type}**\n\n`);
+  value.appendMarkdown(`${code(slotCallableLabel(slot))}\n\n`);
+  value.appendMarkdown(`Signature: ${code(slot.signature)}\n\n`);
   value.appendMarkdown(`${slotStatusDescription(slot)}.\n\n`);
   if (slot.detail) {
     value.appendMarkdown(`${slot.detail}\n\n`);

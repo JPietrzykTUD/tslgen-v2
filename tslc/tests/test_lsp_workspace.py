@@ -434,7 +434,7 @@ def test_specialization_context_extensions_agree_with_selector_path_projection(
     )
 
 
-def test_primitive_explorer_defaults_to_authored_source_and_keeps_overloads(
+def test_primitive_explorer_keeps_authored_candidates_and_splits_resolved_callables(
     data_root: Path,
 ) -> None:
     workspace = AuthoringWorkspace.from_root(data_root.parent)
@@ -492,18 +492,47 @@ def test_primitive_explorer_defaults_to_authored_source_and_keeps_overloads(
         backend="cpp",
         selected_primitive="hmax",
     )
-    hmax_slot = next(
+    hmax_slots = tuple(
         slot
         for slot in hmax.slots
         if slot.extension == "clang_v128" and slot.type_tag == "si8"
     )
     assert {
-        (implementation.signature, implementation.parameters)
-        for implementation in hmax_slot.implementations
+        (slot.signature, slot.parameters)
+        for slot in hmax_slots
     } == {
         ("s:=v", ("vec",)),
         ("s:=(m,v)", ("mask", "vec")),
     }
+    assert all(len(slot.implementations) == 1 for slot in hmax_slots)
+    assert all(
+        slot.implementations[0].signature == slot.signature for slot in hmax_slots
+    )
+
+    add = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        mode="resolved",
+        profile="avx2",
+        backend="cpp",
+        selected_primitive="add",
+    )
+    add_slots = tuple(
+        slot
+        for slot in add.slots
+        if slot.extension == "clang_v128" and slot.type_tag == "si8"
+    )
+    assert {
+        (slot.signature, slot.attributes) for slot in add_slots
+    } == {
+        ("v:=(v,v)", ()),
+        ("v:=(m,v,v)", (("mask", "zero"),)),
+        ("v:=(m,v,v)", (("mask", "pass_through"),)),
+    }
+    assert all(slot.status == "selected" for slot in add_slots)
+    assert all(len(slot.implementations) == 1 for slot in add_slots)
 
     resolved = primitive_explorer(
         snapshot.catalog,

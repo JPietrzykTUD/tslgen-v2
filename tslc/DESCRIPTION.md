@@ -137,8 +137,11 @@ write the document. Ambiguous diagnostics yield non-editing guide actions.
 [lsp/primitive_explorer.py](src/tslc/lsp/primitive_explorer.py)
 projects File/Corpus primitive lists in either authored-source or concrete
 profile mode. It owns authored, selected, profile-rejected, missing, and
-backend-unsupported slot states plus implementation origins and source spans
-from the same catalog, selector, and index. Direct Calls/Called By relationships
+backend-unsupported slot states plus callable identity (signature and sorted
+primitive attributes), implementation origins, and source spans from the same
+catalog, selector, and index. A resolved callable slot has one selected source
+body, so editor navigation opens it directly; authored candidate bodies remain
+explicit when no profile has selected a winner. Direct Calls/Called By relationships
 are indexed from registered `call` regions. The VS Code tree providers render
 those typed facts and never reconstruct selector or dependency rules.
 Explicit concrete explorer analysis runs `tslc analyze` as a saved-corpus
@@ -177,8 +180,11 @@ prim<v:=(v,v)> add(left, right):
           tsil "complete(intrin<add, build[suffix=base::signed_of(base::in)]>(left, right));"
 ```
 
-- **Signatures** (`v:=(v,v)`): `v` vector, `m` mask, `s` scalar, `ptr`/`usize`
-  (presence makes it a free function), `lanes<s>` a lane list.
+- **Signatures** (`v:=(v,v)`): `v` vector, `m` mask, `im` integral mask, `s`
+  scalar, `ptr`/`usize` (presence makes it a free function), `lanes<s>` a lane
+  list. Representation changes may use target-owned operands such as `vt`
+  (target register) and `imt` (target integral mask); a target result projects
+  the declared result kind through the target vector.
 - **Type-group keys**: `?i?` (any int), `f?` (any float), `arith` (all), plus
   concrete tags. Ranked by **specificity** — `si32` beats `?i?` beats `arith`.
 - **Extension fallback**: extensions form `inherits` chains (e.g. `avx2_vl →

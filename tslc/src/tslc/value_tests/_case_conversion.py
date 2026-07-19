@@ -5,11 +5,13 @@ from __future__ import annotations
 from tslc.catalog.model import Catalog, TestCase
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests.case_helpers import (
+    args_match as _args_match,
     base_spelling as _base_spelling,
     convert_match as _convert_match,
     extension_repr_match as _extension_repr_match,
     function_name as _function_name,
     load_convert_match as _load_convert_match,
+    mask_inputs as _mask_inputs,
     repr_cast_match as _repr_cast_match,
     sanitize as _sanitize,
     scalar_inputs as _scalar_inputs,
@@ -277,6 +279,104 @@ def extension_repr_case(
             to_array_name=harness.to_array,
         ),
     )
+
+
+def target_imask_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+    catalog: Catalog,
+) -> ValueTestCasePlan | None:
+    """Plan a direct integral-mask operation whose result belongs to ToVec."""
+
+    if (
+        case.expected_rule is not None
+        or len(case.expected) != 1
+        or case.extension is None
+        or (case.to_type is None) == (case.to_extension is None)
+    ):
+        return None
+    match = next(
+        (
+            spec
+            for spec in specs
+            if spec.type_tag == case.type_tag
+            and spec.extension_name == case.extension
+            and spec.target is not None
+            and (
+                (
+                    case.to_type is not None
+                    and spec.target.base_tag == case.to_type
+                    and spec.target.extension_isa == spec.extension_name
+                )
+                or (
+                    case.to_extension is not None
+                    and spec.target.base_tag == case.type_tag
+                    and spec.target.extension_isa == case.to_extension
+                )
+            )
+        ),
+        None,
+    )
+    if match is None or match.target is None or not _args_match(case, match.param_kinds):
+        return None
+    source_bits = _fixed_extension_bits(catalog, match.extension_name)
+    target_bits = _fixed_extension_bits(catalog, match.target.extension_isa)
+    source_lanes = (
+        _whole_lanes(source_bits, match.type_tag) if source_bits is not None else None
+    )
+    target_lanes = (
+        _whole_lanes(target_bits, match.target.base_tag)
+        if target_bits is not None
+        else None
+    )
+    mask_inputs = _mask_inputs(case)
+    scalar_inputs = _scalar_inputs(case)
+    if source_lanes is None or target_lanes is None or len(scalar_inputs) != 1:
+        return None
+    return ValueTestCasePlan(
+        kind="target_imask",
+        function_name=_function_name(name, index, case),
+        case_name=case.name,
+        call_name=name,
+        type_tag=match.type_tag,
+        base_spelling=match.base_type_spelling,
+        lanes=source_lanes,
+        inputs=ValueTestInputs(masks=mask_inputs, scalars=scalar_inputs),
+        expectation=ValueTestExpectation(values=case.expected),
+        invocation=ValueTestInvocation(
+            result_kind=match.result_kind,
+            param_kinds=match.param_kinds,
+        ),
+        target=ValueTestTarget(
+            type_tag=match.target.base_tag,
+            base_spelling=match.target.base_spelling,
+            lanes=target_lanes,
+        ),
+        representation=ValueTestRepresentation(
+            source_extension=match.extension_name,
+            target_extension=match.target.extension_isa,
+        ),
+    )
+
+
+def _fixed_extension_bits(catalog: Catalog, name: str) -> int | None:
+    extension = catalog.extensions.get(name)
+    if extension is not None:
+        return (
+            extension.vector_bits
+            if extension.vector_bits_kind == "fixed" and extension.vector_bits > 0
+            else None
+        )
+    widths = {
+        candidate.vector_bits
+        for candidate in catalog.extensions.values()
+        if candidate.isa_name == name
+        and candidate.vector_bits_kind == "fixed"
+        and candidate.vector_bits > 0
+    }
+    return next(iter(widths)) if len(widths) == 1 else None
 
 # Random inputs swept per (primitive, type, extension) by one compiled fuzz function. 256 keeps
 # the values binary fast while covering far more of the input space than the handful of authored

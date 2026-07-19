@@ -28,6 +28,8 @@ class SignatureKindCapability:
     immediate_operand: bool = False
     lane_list: bool = False
     index_vector: bool = False
+    target_vector_parameter: bool = False
+    test_mask_argument: bool = False
     scalable_deferred: bool = False
     requires_vector_axis: bool = True
     overload_token: str = "base"
@@ -145,6 +147,22 @@ class SignatureKindCatalog:
         )
 
     @property
+    def target_vector_parameter_kinds(self) -> frozenset[str]:
+        return frozenset(
+            capability.kind
+            for capability in self.capabilities
+            if capability.target_vector_parameter
+        )
+
+    @property
+    def test_mask_argument_kinds(self) -> frozenset[str]:
+        return frozenset(
+            capability.kind
+            for capability in self.capabilities
+            if capability.test_mask_argument
+        )
+
+    @property
     def immediate_kind(self) -> str:
         return self._immediate_kind
 
@@ -173,6 +191,14 @@ class SignatureKindCatalog:
     def is_borrowed_parameter(self, kind: str) -> bool:
         capability = self.by_kind.get(kind)
         return capability is not None and capability.borrowed_parameter
+
+    def is_target_vector_parameter(self, kind: str) -> bool:
+        capability = self.by_kind.get(kind)
+        return capability is not None and capability.target_vector_parameter
+
+    def is_test_mask_argument(self, kind: str) -> bool:
+        capability = self.by_kind.get(kind)
+        return capability is not None and capability.test_mask_argument
 
     def requires_vector_axis(self, kind: str) -> bool:
         return self._capability(kind).requires_vector_axis
@@ -221,9 +247,14 @@ DEFAULT_SIGNATURE_KINDS = SignatureKindCatalog(
         SignatureKindCapability(
             "m",
             maskable_result=True,
+            test_mask_argument=True,
             overload_token="mask",
         ),
-        SignatureKindCapability("im", maskable_result=True),
+        SignatureKindCapability(
+            "im",
+            maskable_result=True,
+            test_mask_argument=True,
+        ),
         SignatureKindCapability(
             "usize",
             requires_vector_axis=False,
@@ -271,7 +302,17 @@ DEFAULT_SIGNATURE_KINDS = SignatureKindCatalog(
             scalable_deferred=True,
             overload_token="lane_list",
         ),
-        SignatureKindCapability("vt", overload_token="target_register"),
+        SignatureKindCapability(
+            "vt",
+            target_vector_parameter=True,
+            overload_token="target_register",
+        ),
+        SignatureKindCapability(
+            "imt",
+            target_vector_parameter=True,
+            test_mask_argument=True,
+            overload_token="target_imask",
+        ),
         SignatureKindCapability(
             "vidx",
             index_vector=True,

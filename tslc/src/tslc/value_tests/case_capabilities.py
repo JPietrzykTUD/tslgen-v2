@@ -237,6 +237,19 @@ _CASE_REQUIREMENTS = {
         required_facts=frozenset({ValueTestFact.MEMORY_LENGTH}),
         vector_inputs_match_lanes=True,
     ),
+    "target_imask": ValueTestCaseRequirements(
+        expected="one",
+        mask_inputs="non_empty",
+        scalar_inputs="one",
+        required_facts=frozenset(
+            {
+                ValueTestFact.RESULT_KIND,
+                ValueTestFact.TARGET_LAYOUT,
+                ValueTestFact.TARGET_LANES,
+                ValueTestFact.REPRESENTATION_LAYOUT,
+            }
+        ),
+    ),
     "status_pointer": ValueTestCaseRequirements(
         scalar_inputs="one", required_facts=_RESULT
     ),

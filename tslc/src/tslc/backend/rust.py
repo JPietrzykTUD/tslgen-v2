@@ -370,17 +370,22 @@ class RustBackend:
         # and the immediate is a free param (`MulImmImpl<const factor: u32>`).
         decls = _generic_decls(shape)
         ret = _kind_type(shape.result_kind, "Self")
-        vt_type: str | None = None
-        # A representation-change primitive takes the target vector as a first generic `ToVec`
-        # and returns (and may take, via a `vt` param) its register type.
+        target_owner: str | None = None
+        # A representation-change primitive takes the target vector as a first generic
+        # `ToVec`; its result and target-owned parameters project through that vector.
         if shape.target is not None:
             decls = ["ToVec: StaticSimdVector", *decls]
-            ret = "ToVec::RegisterType"
-            vt_type = "ToVec::RegisterType"
+            ret = _kind_type(shape.result_kind, "ToVec")
+            target_owner = "ToVec"
         # Free SIMD type params (gather's `IndicesType`) — a `vidx` param projects through one.
         decls = _type_param_decls(shape) + _type_param_base_key_decls(shape) + decls
         vidx_type = f"{shape.type_params[0].name}::RegisterType" if shape.type_params else None
-        params = _params(shape, "Self", vt_type=vt_type, vidx_type=vidx_type)
+        params = _params(
+            shape,
+            "Self",
+            target_owner=target_owner,
+            vidx_type=vidx_type,
+        )
         generics = f"<{', '.join(decls)}>" if decls else ""
         trait_header = (
             f"pub trait {rust_primitive_trait_name(primitive_name)}{generics}: "
@@ -413,20 +418,25 @@ class RustBackend:
         impl_generics = f"<{', '.join(impl_parts)}>" if impl_parts else ""
         targs = _trait_args_by_value(spec)
         ret = _kind_type(spec.result_kind, "Self")
-        vt_type: str | None = None
-        # The target vector is concrete in the impl's trait args; the result (and any `vt`
-        # param) is its concrete register.
+        target_owner: str | None = None
+        # The target vector is concrete in the impl's trait args; the result and
+        # target-owned parameters project through that concrete vector.
         if spec.target is not None:
             targs = [spec.target.vector_spelling, *targs]
-            ret = spec.target.register_spelling
-            vt_type = spec.target.register_spelling
+            target_owner = f"<{spec.target.vector_spelling} as SimdVector>"
+            ret = _kind_type(spec.result_kind, target_owner)
         targs = [
             *_type_param_names(spec),
             *_type_param_base_key_args(spec, mode="concrete"),
             *targs,
         ]
         vidx_type = f"{spec.type_params[0].name}::RegisterType" if spec.type_params else None
-        params = _params(spec, "Self", vt_type=vt_type, vidx_type=vidx_type)
+        params = _params(
+            spec,
+            "Self",
+            target_owner=target_owner,
+            vidx_type=vidx_type,
+        )
         trait_args = f"<{', '.join(targs)}>" if targs else ""
         # Native index intrinsics take the concrete integer-register type for the selected ISA.
         # Lowering resolves it from source extension metadata; scalar/generic stay opaque.
@@ -446,13 +456,13 @@ class RustBackend:
             params=_params(
                 spec,
                 concrete_owner,
-                vt_type=vt_type,
+                target_owner=target_owner,
                 vidx_type=vidx_type,
             ),
             args=_runtime_names(spec),
             return_type=(
-                spec.target.register_spelling
-                if spec.target is not None
+                _kind_type(spec.result_kind, target_owner)
+                if target_owner is not None
                 else _kind_type(spec.result_kind, concrete_owner)
             ),
             generic_decls=impl_parts,
@@ -500,15 +510,15 @@ class RustBackend:
         decl_list = _generic_decls(shape)
         ret = _kind_type(shape.result_kind, "S")
         call = ""
-        vt_type: str | None = None
+        target_owner: str | None = None
         # A representation-change primitive takes the target vector `T` as a generic, bounds `S`
-        # on `…Impl<T, …>`, and returns (and may take, via a `vt` param) `T`'s register; the
-        # call is qualified to pin the target.
+        # on `…Impl<T, …>`, and projects the result and target-owned parameters through `T`;
+        # the call is qualified to pin the target.
         if shape.target is not None:
             targs = ["T", *targs]
             decl_list = ["T: StaticSimdVector", *decl_list]
-            ret = "T::RegisterType"
-            vt_type = "T::RegisterType"
+            ret = _kind_type(shape.result_kind, "T")
+            target_owner = "T"
             call = (
                 f"<S as {_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}"
                 f"<{', '.join(targs)}>>::apply({names})"
@@ -532,7 +542,12 @@ class RustBackend:
             )
         else:
             vidx_type = None
-        params = _params(shape, "S", vt_type=vt_type, vidx_type=vidx_type)
+        params = _params(
+            shape,
+            "S",
+            target_owner=target_owner,
+            vidx_type=vidx_type,
+        )
         trait_args = f"<{', '.join(targs)}>" if targs else ""
         decls = "".join(f", {d}" for d in decl_list)
         call = (
@@ -641,11 +656,11 @@ def _documentation_wrapper(
 ) -> str:
     declarations = _generic_decls(shape)
     result_type = _kind_type(shape.result_kind, "S")
-    target_type: str | None = None
+    target_owner: str | None = None
     if shape.target is not None:
         declarations = ["T: StaticSimdVector", *declarations]
-        result_type = "T::RegisterType"
-        target_type = "T::RegisterType"
+        result_type = _kind_type(shape.result_kind, "T")
+        target_owner = "T"
     index_type: str | None = None
     if shape.type_params:
         declarations = [
@@ -657,7 +672,7 @@ def _documentation_wrapper(
     params = _params(
         shape,
         "S",
-        vt_type=target_type,
+        target_owner=target_owner,
         vidx_type=index_type,
     )
     doc = _rust_doc(shape, context="Rust documentation facade", concrete=False)
@@ -937,14 +952,13 @@ def _params(
     shape: LoweredSpecialization,
     owner: str,
     *,
-    vt_type: str | None = None,
+    target_owner: str | None = None,
     vidx_type: str | None = None,
 ) -> str:
     # A body that needs a mutable `s[]` borrow should introduce a mutable local explicitly
     # in source (`var<infer>(local, data)`), keeping read-only array parameters const in
-    # generated Rust. A `vt` (target-axis vector) param uses `vt_type` —
-    # the per-context target register spelling (trait `ToVec::RegisterType` / impl concrete /
-    # wrapper `T::RegisterType`); a `vidx` (index vector) param uses `vidx_type`
+    # generated Rust. A target-owned parameter projects its own kind through
+    # `target_owner`; a `vidx` (index vector) param uses `vidx_type`
     # (`IndicesType::RegisterType` — the generic name is the same in every context).
     parts: list[str] = []
     for index, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds)):
@@ -953,9 +967,9 @@ def _params(
         override = shape.effective_param_type_overrides[index]
         if override is not None:
             typ = override
-        elif kind == "vt":
-            assert vt_type is not None
-            typ = vt_type
+        elif DEFAULT_SUPPORT_POLICY.is_target_vector_parameter_kind(kind):
+            assert target_owner is not None
+            typ = _param_kind_type(kind, target_owner)
         elif kind == DEFAULT_SUPPORT_POLICY.index_vector_kind:
             assert vidx_type is not None
             typ = vidx_type

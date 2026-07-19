@@ -638,6 +638,10 @@ def _primitive_explorer_payload(
         ],
         "slots": [
             {
+                "primitive": slot.primitive,
+                "signature": slot.signature,
+                "parameters": list(slot.parameters),
+                "attributes": dict(slot.attributes),
                 "extension": slot.extension,
                 "type": slot.type_tag,
                 "status": slot.status,
@@ -651,6 +655,7 @@ def _primitive_explorer_payload(
                         "primitive": implementation.primitive,
                         "signature": implementation.signature,
                         "parameters": list(implementation.parameters),
+                        "attributes": dict(implementation.attributes),
                         "extension": implementation.extension,
                         "typeGroup": implementation.type_group,
                         "selectorPath": list(implementation.selector_path),

@@ -383,7 +383,7 @@ def test_cpp_auto_profile_configures(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=_build_verified("test_cpp_auto_profile_configures"),
-        profiles=["scalar", "avx2"],
+        profiles=["scalar", "avx2", "sapphire_emerald_granite_rapids"],
         backends=["cpp"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1296,12 +1296,10 @@ def test_mask_true_builds(data_root: Path, machine_profiles_path: Path, tmp_path
 
 
 def test_imask_ops_build(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
-    # The imask bit-manipulation ops, typed with the `im` (integral-mask) kind so they operate on
-    # the integer mask, not the element type: `test_imask` `(mask >> position) & 1`, `insert_imask`
-    # `a | (b << position)`, `extract_imask` `mask >> position` — all on `imask_type` (`__mmaskN` on
-    # avx512, the lane-bitmask integer elsewhere), so float vectors shift by an integer (base-type
-    # typing would shift by a float — illegal). Named `_imask` (not `_mask`) because they manipulate
-    # the integral value, matching `shift_right_imask`/`lzc_imask`. Both backends.
+    # The imask bit-manipulation ops operate on integral mask storage, not the element type.
+    # `overlay_imask` preserves the former OR-overlay behavior; `insert_imask` and
+    # `extract_imask` directly change mask width through a target vector type and replacement/
+    # normalized-window semantics. Both backends.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,

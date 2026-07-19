@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.value_tests._render_rust_helpers import rust_extension_tag
-from tslc.value_tests.literals import rust_literal_list
+from tslc.value_tests.literals import rust_literal, rust_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 
 
@@ -68,6 +68,50 @@ def _repr_cast(case: ValueTestCasePlan) -> str:
             "    }",
         ]
     )
+
+
+def _target_imask(case: ValueTestCasePlan) -> str:
+    target = case.target
+    representation = case.representation
+    assert target is not None and representation is not None
+    assert target.base_spelling is not None
+    assert representation.target_extension is not None
+    lines = [
+        "    #[test]",
+        f"    fn {case.function_name}() {{",
+        f"        type Vec = Simd<{case.base_spelling}, {rust_extension_tag(representation.source_extension)}>;",
+        f"        type ToVec = Simd<{target.base_spelling}, {rust_extension_tag(representation.target_extension)}>;",
+    ]
+    args: list[str] = []
+    mask_index = 0
+    scalar_index = 0
+    for position, kind in enumerate(case.invocation.param_kinds):
+        if kind in {"im", "imt"}:
+            owner = "ToVec" if kind == "imt" else "Vec"
+            value = rust_literal(case.inputs.masks[mask_index], "ui64")
+            lines.append(
+                f"        let a{position}: <{owner} as SimdVector>::ImaskType = "
+                f"({value}) as <{owner} as SimdVector>::ImaskType;"
+            )
+            mask_index += 1
+        else:
+            assert kind == "usize"
+            value = case.inputs.scalars[scalar_index]
+            lines.append(f"        let a{position}: usize = ({value}) as usize;")
+            scalar_index += 1
+        args.append(f"a{position}")
+    expected = rust_literal(case.expectation.values[0], "ui64")
+    lines.extend(
+        [
+            f"        let result: <ToVec as SimdVector>::ImaskType = "
+            f"{rust_raw_identifier(case.call_name)}::<Vec, ToVec>({', '.join(args)});",
+            "        let expected: <ToVec as SimdVector>::ImaskType = "
+            f"({expected}) as <ToVec as SimdVector>::ImaskType;",
+            f'        assert_eq!(result, expected, "{case.case_name}: expected {{:?}}, got {{:?}}", expected, result);',
+            "    }",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _fixed_extension_repr_cast(case: ValueTestCasePlan) -> str:
@@ -356,4 +400,5 @@ __all__ = (
     "_fixed_extension_repr_cast",
     "_load_convert",
     "_repr_cast",
+    "_target_imask",
 )

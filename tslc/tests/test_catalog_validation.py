@@ -796,6 +796,52 @@ def test_primitive_overloads_and_attribute_variants_are_not_duplicates() -> None
     assert "TSL-CATALOG-DUPLICATE-PRIMITIVE" not in {d.code for d in diagnostics}
 
 
+def test_base_and_extension_target_declarations_share_one_callable_name() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "prim<im:=(imt,im,usize)> resize_mask(orig, data, position):\n"
+            "  return_type:\n"
+            "    base: ToBase\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        ToBase:\n"
+            "          ints:\n"
+            "            implementation:\n"
+            '              tsil "complete(orig);"\n'
+            "prim<im:=(imt,im,usize)> resize_mask(orig, data, position):\n"
+            "  return_type:\n"
+            "    extension: ToExtension\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        ToExtension:\n"
+            "          scalar:\n"
+            "            implementation:\n"
+            '              tsil "complete(orig);"\n'
+        )
+    )
+
+    assert "TSL-CATALOG-DUPLICATE-PRIMITIVE" not in {d.code for d in diagnostics}
+
+
+def test_target_owned_signature_parameter_requires_return_type_axis() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "prim<im:=(imt,im,usize)> resize_mask(orig, data, position):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(orig);"\n'
+        )
+    )
+
+    assert "TSL-CATALOG-TARGET-PARAM-RETURN-TYPE" in {
+        diagnostic.code for diagnostic in diagnostics
+    }
+
+
 def test_type_group_without_member_list_is_diagnosed() -> None:
     diagnostics = _diagnostics(
         _base_source(

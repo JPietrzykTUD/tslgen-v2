@@ -557,6 +557,7 @@ def _signature_kind_phrase(kind: str) -> str:
     labels = {
         "v": "SIMD register",
         "vt": "target SIMD register",
+        "imt": "target integral mask",
         "m": "mask",
         "im": "integral mask",
         "s": "scalar",

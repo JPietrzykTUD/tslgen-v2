@@ -173,6 +173,7 @@ def test_signature_kind_capabilities_own_language_neutral_rules() -> None:
         "s[]",
         policy.lane_list_kind,
         "vt",
+        "imt",
         "vidx",
         "o",
     }
@@ -182,6 +183,10 @@ def test_signature_kind_capabilities_own_language_neutral_rules() -> None:
     )
     assert not policy.signature_kind_requires_vector_axis("ptr")
     assert policy.signature_kind_requires_vector_axis("s")
+    assert policy.is_target_vector_parameter_kind("vt")
+    assert policy.is_target_vector_parameter_kind("imt")
+    assert policy.is_test_mask_argument_kind("im")
+    assert policy.is_test_mask_argument_kind("imt")
     assert policy.is_free_function_signature("ptr", ("usize",))
     assert not policy.is_free_function_signature("void", ("ptr", "s", "s"))
     assert policy.overload_identity_token("v", register_is_base=True) == "base"

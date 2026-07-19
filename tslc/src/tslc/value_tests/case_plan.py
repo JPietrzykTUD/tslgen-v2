@@ -239,6 +239,10 @@ class ValueTestCasePlan:
                 self.representation is not None
                 and self.representation.round_trip_ready
             ),
+            ValueTestFact.REPRESENTATION_LAYOUT: (
+                self.representation is not None
+                and self.representation.has_layout
+            ),
             ValueTestFact.SCALABLE_RUNTIME: self.scalable is not None,
             ValueTestFact.SCALABLE_VALUE_HARNESS: (
                 self.scalable is not None and self.scalable.value_harness_ready

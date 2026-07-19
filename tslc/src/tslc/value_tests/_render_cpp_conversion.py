@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tslc.value_tests.literals import cpp_literal_list
+from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 
 
@@ -59,6 +59,50 @@ def _repr_cast(case: ValueTestCasePlan) -> str:
         f'"{case.case_name}", result, expected, {target_lanes});',
         "}",
     ]
+    return "\n".join(lines)
+
+
+def _target_imask(case: ValueTestCasePlan) -> str:
+    target = case.target
+    representation = case.representation
+    assert target is not None and representation is not None
+    assert target.base_spelling is not None
+    assert representation.target_extension is not None
+    lines = [
+        f"int {case.function_name}() {{",
+        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::{representation.source_extension}>;",
+        f"  using ToVec = tsl::simd<{target.base_spelling}, tsl::{representation.target_extension}>;",
+        "  using Result = typename ToVec::imask_type;",
+    ]
+    args: list[str] = []
+    mask_index = 0
+    scalar_index = 0
+    for position, kind in enumerate(case.invocation.param_kinds):
+        if kind in {"im", "imt"}:
+            owner = "ToVec" if kind == "imt" else "Vec"
+            value = cpp_literal(case.inputs.masks[mask_index], "ui64")
+            lines.append(
+                f"  typename {owner}::imask_type a{position} = "
+                f"static_cast<typename {owner}::imask_type>({value});"
+            )
+            mask_index += 1
+        else:
+            assert kind == "usize"
+            value = case.inputs.scalars[scalar_index]
+            lines.append(
+                f"  std::size_t a{position} = static_cast<std::size_t>({value});"
+            )
+            scalar_index += 1
+        args.append(f"a{position}")
+    expected = cpp_literal(case.expectation.values[0], "ui64")
+    lines.extend(
+        [
+            f"  Result result = tsl::{case.call_name}<Vec, ToVec>({', '.join(args)});",
+            f"  Result expected = static_cast<Result>({expected});",
+            f'  return tsl::test::check_scalar<Result>("{case.case_name}", result, expected);',
+            "}",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -346,6 +390,7 @@ def _differential_fuzz(case: ValueTestCasePlan) -> str:
 __all__ = (
     "_convert",
     "_repr_cast",
+    "_target_imask",
     "_fixed_extension_repr_cast",
     "_extension_extract",
     "_extension_insert",

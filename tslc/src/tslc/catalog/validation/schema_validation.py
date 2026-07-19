@@ -136,15 +136,17 @@ def _validate_named_block_duplicates(
     )
 
 
-# The callable identity of one primitive declaration: name, overload shape, and
-# concrete attribute items. Distinct signatures are legal overloads (`store(ptr, v)`
-# vs `store(ptr, s)`); distinct attribute values are legal variants (masking,
-# `[aligned=true]` vs `[aligned=false]`). Wildcards stay unexpanded, so two
-# `[aligned=*]` declarations of one callable collide.
+# The source identity of one primitive declaration: name, overload shape, concrete
+# attribute items, and the optional target dimension. Distinct signatures are legal
+# overloads (`store(ptr, v)` vs `store(ptr, s)`); distinct attribute values are legal
+# variants (masking, `[aligned=true]` vs `[aligned=false]`). Base- and extension-target
+# declarations may implement the same public callable. Wildcards stay unexpanded, so
+# two `[aligned=*]` declarations of one callable and target dimension collide.
 type _PrimitiveIdentity = tuple[
     str,
     tuple[str, tuple[str, ...]] | str,
     tuple[tuple[str, str, str], ...],
+    str | None,
 ]
 
 
@@ -161,7 +163,18 @@ def _primitive_identity(
         declaration.name,
         overload,
         tuple(sorted(_attribute_identity(item) for item in declaration.attributes)),
+        _return_type_dimension(declaration),
     )
+
+
+def _return_type_dimension(
+    declaration: ParsedPrimitiveDeclaration,
+) -> str | None:
+    for parsed in declaration.fields_by_name("return_type"):
+        for field in children(parsed.field):
+            if field.key.text in {"base", "extension"}:
+                return field.key.text
+    return None
 
 
 def _attribute_identity(attribute: ParsedTslAttribute) -> tuple[str, str, str]:
@@ -192,7 +205,7 @@ def _validate_duplicate_primitive(
             code="TSL-CATALOG-DUPLICATE-PRIMITIVE",
             message=(
                 f"duplicate declaration of primitive {declaration.name!r} with the"
-                " same signature and attributes; first declaration is at"
+                " same signature, attributes, and target dimension; first declaration is at"
                 f" {first.header_source.path}:{first.header_source.line}"
             ),
             source=source_span(declaration.header_source),
