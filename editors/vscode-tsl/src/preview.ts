@@ -2,6 +2,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 
 import type { CommandSpec } from "./discovery";
+import { profileChoices } from "./previewModel";
 import { runCommand, type CancellableProcess } from "./subprocess";
 
 export interface ConcreteSlot {
@@ -256,11 +257,9 @@ export async function selectConcreteSlot(
     );
     return undefined;
   }
-  const profile = await selectValue(
-    "profile",
-    unique(candidates.map((slot) => slot.profile)),
+  const profile = await selectProfile(
+    candidates,
     configuration.get<string>("preview.profile"),
-    undefined,
     "scalar",
   );
   if (!profile) {
@@ -313,20 +312,21 @@ export async function selectContextProfile(
   uri: vscode.Uri,
   context: SpecializationContext,
 ): Promise<string | undefined> {
-  let profiles = context.profiles;
+  let scoped: readonly SpecializationSlotChoice[] = [];
   if (context.primitive) {
-    const scoped = context.slots.filter(
+    scoped = context.slots.filter(
       (slot) =>
         (!context.contextualExtensions.length ||
           context.contextualExtensions.includes(slot.extension)) &&
         (!context.contextualTypes.length || context.contextualTypes.includes(slot.type)),
     );
-    profiles = unique(scoped.map((slot) => slot.profile));
   }
   const configured = vscode.workspace
     .getConfiguration("tsl", uri)
     .get<string>("preview.profile");
-  return selectValue("profile", profiles, configured, undefined, "scalar");
+  return context.primitive
+    ? selectProfile(scoped, configured, "scalar")
+    : selectValue("profile", context.profiles, configured, undefined, "scalar");
 }
 
 export function workspaceCwd(document: vscode.TextDocument): string {
@@ -363,6 +363,36 @@ async function selectValue(
     title: `TSL ${kind}`,
     placeHolder: `Select a ${kind} valid for the current specialization`,
   });
+}
+
+async function selectProfile(
+  candidates: readonly SpecializationSlotChoice[],
+  configured: string | undefined,
+  defaultValue?: string,
+): Promise<string | undefined> {
+  const values = unique(candidates.map((slot) => slot.profile));
+  const selected = configured?.trim();
+  if (selected && values.includes(selected)) {
+    return selected;
+  }
+  if (!values.length) {
+    void vscode.window.showErrorMessage("No valid TSL profiles are available.");
+    return undefined;
+  }
+  if (selected) {
+    void vscode.window.showWarningMessage(
+      `Configured TSL profile '${selected}' is not valid in this context; choose another.`,
+    );
+  }
+  const choice = await vscode.window.showQuickPick(
+    profileChoices(candidates, defaultValue),
+    {
+      title: "TSL machine profile",
+      placeHolder:
+        "Select a machine profile; compatible implementation extensions are shown on each row",
+    },
+  );
+  return choice?.value;
 }
 
 async function selectTarget(

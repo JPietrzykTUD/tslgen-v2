@@ -310,6 +310,10 @@ that target axis.
 A single extension or concrete type established by the cursor wins over a
 setting and skips its picker. A multi-type selector such as `?i?` constrains the
 type QuickPick to its concrete members but does not silently choose one.
+Profile QuickPick rows name the compatible implementation extensions beside
+each machine profile. For example, `sve` may say `extension: clang_v128 only`
+when the selected body belongs to the universal compiler-vector overlay rather
+than to the native `sve` extension.
 Configured profile/extension/type values are accepted only when present in the
 remaining matrix; stale values produce a warning and a filtered QuickPick.
 Check passes all four concrete dimensions to `tslc check`. Inside a primitive,

@@ -359,6 +359,42 @@ def test_implementation_context_only_offers_slots_where_that_body_wins(
     )
 
 
+def test_implementation_context_distinguishes_profile_from_rendered_extension(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    path = data_root / "primitives" / "mask" / "special.tsl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    implementation_line = next(
+        line
+        for line, text in enumerate(lines, 1)
+        if 300 < line < 350 and text.strip() == "implementation:"
+    )
+
+    context = specialization_context(
+        snapshot.catalog,
+        snapshot.parsed,
+        workspace.config.profiles,
+        backend="cpp",
+        path=path,
+        line=implementation_line,
+        column=lines[implementation_line - 1].index("implementation") + 1,
+    )
+
+    assert context.primitive == "extract_imask"
+    assert context.contextual_types == ("si16", "ui16")
+    assert {
+        slot.extension
+        for slot in context.slots
+        if slot.profile == "sve"
+        and slot.extension in context.contextual_extensions
+        and slot.type_tag in context.contextual_types
+    } == {"clang_v128"}
+
+
 def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
     data_root: Path,
     monkeypatch,
