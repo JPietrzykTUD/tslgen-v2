@@ -1019,6 +1019,14 @@ def test_generated_cmake_keeps_benchmarks_opt_in(benchmark_result) -> None:
     assert "add_dependencies(tsl_generated tsl_variant_policy)" in cmake
     assert "if(TSL_BUILD_BENCHMARKS OR _TSL_POLICY_REQUESTED)" in cmake
     assert "if(_TSL_POLICY_REQUESTED AND CMAKE_CROSSCOMPILING)" in cmake
+    assert "${CMAKE_CXX_COMPILER_ARG1} -dumpmachine" in cmake
+    assert 'MATCHES "(wasm|wasi)"' in cmake
+    assert "check_cxx_source_runs(" in cmake
+    assert "_TSL_POLICY_COMPILER_RUNS_NATIVELY" in cmake
+    assert "require a C++ compiler that produces runnable host executables" in cmake
+    assert cmake.index("if(_TSL_POLICY_REQUESTED)") < cmake.index(
+        'if(_TSL_REQUESTED_PROFILE STREQUAL "auto")'
+    )
     assert "Cross-compiling tsl_variant_bench" in cmake
 
 
@@ -1068,7 +1076,7 @@ def test_indexed_load_variant_gets_hot_l1_throughput_scenario(
 
 
 @pytest.mark.generated_build
-def test_native_autotune_and_non_default_policy_build_consumer(
+def test_native_clang_autotune_and_non_default_policy_build_consumer(
     data_root: Path,
     machine_profiles_path: Path,
     tmp_path: Path,
@@ -1077,6 +1085,9 @@ def test_native_autotune_and_non_default_policy_build_consumer(
         pytest.skip("cmake is required")
     if platform.machine().lower() not in {"amd64", "x86_64"}:
         pytest.skip("the deterministic non-default policy probe uses SSE2")
+    clangxx = _native_clangxx()
+    if clangxx is None:
+        pytest.skip("a native Linux Clang C++ compiler is required")
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
@@ -1092,8 +1103,7 @@ def test_native_autotune_and_non_default_policy_build_consumer(
     assert not has_errors(write_report.diagnostics), write_report.diagnostics
 
     environment = os.environ.copy()
-    if _compiler_name(environment.get("CXX", "")) == "zig":
-        environment["CXX"] = "c++"
+    environment.pop("CXX", None)
     consumer = tmp_path / "consumer"
     consumer.mkdir()
     (consumer / "CMakeLists.txt").write_text(
@@ -1159,6 +1169,7 @@ def test_native_autotune_and_non_default_policy_build_consumer(
             str(consumer),
             "-B",
             str(autotune),
+            f"-DCMAKE_CXX_COMPILER={clangxx}",
         ),
         environment,
     )
@@ -1268,6 +1279,7 @@ def test_native_autotune_and_non_default_policy_build_consumer(
             str(policy_consumer),
             "-B",
             str(manual),
+            f"-DCMAKE_CXX_COMPILER={clangxx}",
         ),
         environment,
     )
@@ -1279,6 +1291,44 @@ def test_native_autotune_and_non_default_policy_build_consumer(
     assert built.returncode == 0, built.stderr + built.stdout
     executed = _run((str(manual / "policy_consumer"),), environment)
     assert executed.returncode == 0, executed.stderr + executed.stdout
+
+
+@pytest.mark.generated_build
+def test_policy_configure_rejects_wasi_clang_as_non_native(
+    benchmark_result,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cmake") is None:
+        pytest.skip("cmake is required")
+    wasi_clangxx = _wasi_clangxx()
+    if wasi_clangxx is None:
+        pytest.skip("WASI SDK clang++ is required")
+
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(benchmark_result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    environment = os.environ.copy()
+    environment.pop("CXX", None)
+    configured = _run(
+        (
+            "cmake",
+            "-S",
+            str(generated / "cpp"),
+            "-B",
+            str(tmp_path / "build"),
+            f"-DCMAKE_CXX_COMPILER={wasi_clangxx}",
+            "-DTSL_PROFILE=auto",
+            "-DTSL_BUILD_TESTS=OFF",
+            "-DTSL_AUTOTUNE_VARIANTS=ON",
+        ),
+        environment,
+    )
+    assert configured.returncode != 0
+    output = " ".join((configured.stderr + configured.stdout).split())
+    assert "require a C++ compiler that produces runnable host executables" in output
+    assert "reports non-native target" in output
+    assert "wasm" in output
 
 
 @pytest.mark.generated_build
@@ -1478,3 +1528,41 @@ def _run(command: tuple[str, ...], environment: dict[str, str]) -> subprocess.Co
 def _compiler_name(command: str) -> str:
     parts = shlex.split(command)
     return Path(parts[0]).name if parts else ""
+
+
+def _native_clangxx() -> str | None:
+    candidates = ("/usr/bin/clang++", shutil.which("clang++"))
+    for candidate in candidates:
+        if candidate is None or not Path(candidate).is_file():
+            continue
+        target = subprocess.run(
+            (candidate, "-dumpmachine"),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if (
+            target.returncode == 0
+            and "linux" in target.stdout
+            and "wasm" not in target.stdout
+        ):
+            # Clang selects C++ driver behavior from argv[0], so preserve the
+            # clang++ symlink instead of resolving it to the clang binary.
+            return str(Path(candidate).absolute())
+    return None
+
+
+def _wasi_clangxx() -> str | None:
+    sdk_root = Path(os.environ.get("WASI_SDK_PATH", "/opt/wasi-sdk"))
+    candidate = sdk_root / "bin" / "clang++"
+    if not candidate.is_file():
+        return None
+    target = subprocess.run(
+        (str(candidate), "-dumpmachine"),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if target.returncode == 0 and "wasm" in target.stdout:
+        return str(candidate)
+    return None

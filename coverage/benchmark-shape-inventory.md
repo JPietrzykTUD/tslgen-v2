@@ -16,16 +16,16 @@ applicable**.
 - **28 C++ machine profiles** are probed.
 - **9755 selected variant slots** are accounted for.
 - **2149 candidate sets** are emitted; compile-time immediate cases may fan one slot out into several sets.
-- **7 signature shapes benchmarked**, **48 not applicable**, **7 gaps**.
+- **7 signature shapes benchmarked**, **50 not applicable**, **7 gaps**.
 - **6745 strict audit issues**.
 
 ## Signature shapes
 
 | Signature | Declarations | Variant declarations | Variant impl leaves | Authored variants | Selected slots | Candidate sets | Status |
 |---|---:|---:|---:|---:|---:|---:|---|
-| `im:=(im,im)` | 2 | 0 | 0 | 0 | 0 | 0 | not applicable |
-| `im:=(im,im,im)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
-| `im:=(im,usize)` | 2 | 0 | 0 | 0 | 0 | 0 | not applicable |
+| `im:=(im,im,usize)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
+| `im:=(im,usize)` | 5 | 0 | 0 | 0 | 0 | 0 | not applicable |
+| `im:=(imt,im,usize)` | 2 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `im:=m` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `m:=()` | 2 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `m:=(m,m)` | 3 | 0 | 0 | 0 | 0 | 0 | not applicable |
@@ -62,11 +62,13 @@ applicable**.
 | `v:=(m,v,sImm)` | 5 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(m,v,v)` | 21 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(m,v,v,v)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
+| `v:=(m,v,v,vidx)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
+| `v:=(m,v,vidx)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(s,s)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(v)` | 1 | 1 | 17 | 17 | 2024 | 338 | gap |
 | `v:=(v,s)` | 3 | 2 | 2 | 2 | 12 | 12 | benchmarked |
 | `v:=(v,sImm)` | 8 | 2 | 9 | 9 | 2010 | 18 | gap |
-| `v:=(v,v)` | 13 | 7 | 26 | 26 | 805 | 805 | benchmarked |
+| `v:=(v,v)` | 14 | 7 | 26 | 26 | 805 | 805 | benchmarked |
 | `v:=(v,v,sImm)` | 1 | 1 | 11 | 11 | 2110 | 0 | gap |
 | `v:=(v,vidx)` | 1 | 1 | 9 | 9 | 878 | 0 | gap |
 | `v:=(v,vidx,v)` | 1 | 1 | 8 | 8 | 860 | 0 | gap |
@@ -76,7 +78,7 @@ applicable**.
 | `v:=m` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=s` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=s[]` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
-| `v:=v` | 6 | 2 | 24 | 28 | 496 | 496 | benchmarked |
+| `v:=v` | 9 | 2 | 24 | 28 | 496 | 496 | benchmarked |
 | `void:=(m,ptr,v)` | 3 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `void:=(m,ptr,vidx,v,sImm)` | 1 | 1 | 1 | 1 | 40 | 0 | gap |
 | `void:=(ptr)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
@@ -94,17 +96,17 @@ benchmark workload.
 
 | Special case | Declarations | Variant declarations | Selected slots | Candidate sets | Status |
 |---|---:|---:|---:|---:|---|
-| masked primitive | 50 | 1 | 40 | 0 | gap |
-| representation-changing result | 7 | 0 | 0 | 0 | not applicable |
-| cross-lane semantics | 14 | 5 | 5880 | 32 | gap |
+| masked primitive | 52 | 1 | 40 | 0 | gap |
+| representation-changing result | 15 | 0 | 0 | 0 | not applicable |
+| cross-lane semantics | 16 | 5 | 5880 | 32 | gap |
 | caller-unsafe implementation | 33 | 3 | 112 | 32 | gap |
 | compile-time immediate operand | 21 | 6 | 4232 | 50 | gap |
 | lane-list operand | 1 | 0 | 0 | 0 | not applicable |
-| generic SIMD-type parameter | 8 | 5 | 1850 | 32 | gap |
+| generic SIMD-type parameter | 10 | 5 | 1850 | 32 | gap |
 | boolean attribute axis | 23 | 0 | 0 | 0 | not applicable |
-| sized-vector implementation | 162 | 0 | 0 | 0 | not applicable |
-| scalable-vector implementation | 153 | 4 | 4214 | 338 | gap |
-| opt-in compiler header implementation | 159 | 3 | 6134 | 338 | gap |
+| sized-vector implementation | 163 | 0 | 0 | 0 | not applicable |
+| scalable-vector implementation | 155 | 4 | 4214 | 338 | gap |
+| opt-in compiler header implementation | 168 | 3 | 6134 | 338 | gap |
 
 ## Audit issue counts
 

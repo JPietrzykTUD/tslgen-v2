@@ -117,7 +117,7 @@ def test_representative_project_shape_is_byte_stable(
         backends=["cpp", "rust"],
     )
     expected = {
-        "cpp/CMakeLists.txt": "f19135dd4188a311f5d904b8cc988553faa2c36398e59ac2b4306ea83fc73ddd",
+        "cpp/CMakeLists.txt": "afd9ccd8ea6feffdfe0fa38e44e5027b3e49b8206938b23415c59bf35c510b87",
         "cpp/docs/input/tsl_api_docs.hpp": "e8550c8f23c29e97012248af4d0bbec2922a81d213f3128132f39ff9e96a1d54",
         "cpp/include/tsl.hpp": "298cd47b4e1509cd59eb4100f7a0d82bcdbc6e5d9f4eedccb0a68ba0bf667e03",
         "cpp/include/tsl_primitives.hpp": "49a74d084e4b375d6e0832beb57c54ebfcf85edb25394f9c84d8776520ea0bb8",

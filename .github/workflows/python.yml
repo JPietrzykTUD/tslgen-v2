@@ -94,12 +94,10 @@ jobs:
                 tslctmp/pivot-rework/wheel-sources/pivot
               python -m pip wheel \
                 --no-deps \
-                --no-build-isolation \
                 tslctmp/pivot-rework/wheel-sources/tslc \
                 --wheel-dir tslctmp/pivot-rework/wheels/core
               python -m pip wheel \
                 --no-deps \
-                --no-build-isolation \
                 tslctmp/pivot-rework/wheel-sources/pivot \
                 --wheel-dir tslctmp/pivot-rework/wheels/tool
               python tools/pivot/scripts/check_wheel_isolation.py \
