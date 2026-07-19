@@ -4,6 +4,24 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 
 suite("TSL extension", () => {
+  suiteSetup(async () => {
+    // Contributor tests must exercise the current installed compiler even when
+    // an ignored runtime bundle from an earlier release build remains staged.
+    // Bundled-runtime tests omit this override and clear any persisted test setting.
+    const configuration = vscode.workspace.getConfiguration("tsl");
+    const command = process.env.TSL_TEST_TSLC_COMMAND;
+    await configuration.update(
+      "server.command",
+      command,
+      vscode.ConfigurationTarget.Global,
+    );
+    await configuration.update(
+      "preview.command",
+      command,
+      vscode.ConfigurationTarget.Global,
+    );
+  });
+
   test("activates for .tsl and serves compiler-backed hover", async () => {
     const extension = vscode.extensions.getExtension(
       "tsl-project.tsl-language-support",
