@@ -15,6 +15,12 @@ import pytest
 
 from tslc.api import generate_project, write_artifacts
 from tslc.backend.registry import backend_capability
+from tslc.backend.rust_policy_selection import (
+    RustPolicySelectionPlan,
+    RustPolicySelectionProfile,
+    plan_rust_policy_selection,
+)
+from tslc.benchmark.render_rust import rust_benchmark_artifacts
 from tslc.compiler_assets import load_default_render_assets
 from tslc.diagnostics import has_errors
 
@@ -67,10 +73,12 @@ def test_rust_benchmark_artifacts_are_opt_in_and_deterministic(
     capability = backend_capability("rust")
     rendered_once = capability.render_benchmark_artifacts(
         rust_benchmark_result.rendered.benchmarks,
+        rust_benchmark_result.emitted_profiles,
         load_default_render_assets(),
     )
     rendered_again = capability.render_benchmark_artifacts(
         rust_benchmark_result.rendered.benchmarks,
+        rust_benchmark_result.emitted_profiles,
         load_default_render_assets(),
     )
     assert rendered_once == rendered_again
@@ -86,7 +94,7 @@ def test_rust_candidate_calls_and_correctness_keep_backend_ownership(
 
     assert (
         "<Simd<i8, Sse> as "
-        "crate::tsl_sse2::detail::primitives::MulImpl>::apply"
+        "crate::tsl_sse2::detail::primitives::Mul_defaultImpl>::apply"
     ) in source
     assert (
         "crate::tsl_sse2::detail::primitives::Mul_generic_fallbackImpl>::apply"
@@ -105,6 +113,49 @@ def test_rust_candidate_calls_and_correctness_keep_backend_ownership(
     profile_plan = rust_benchmark_result.rendered.benchmarks.profile("rust", "sse2")
     assert profile_plan is not None
     assert run.count("correct_candidate_set_") == len(profile_plan.candidate_sets)
+
+
+def test_rust_default_call_uses_actual_selection_membership(
+    rust_benchmark_result,
+) -> None:
+    plan = plan_rust_policy_selection(rust_benchmark_result.emitted_profiles)
+    profile = plan.profile("sse2")
+    assert profile is not None
+    selected_key = profile.selections[0].key
+    demoted_coverage = tuple(
+        replace(
+            entry,
+            status="report_only",
+            reason="coherence collision",
+        )
+        if entry.key == selected_key
+        else entry
+        for entry in profile.coverage
+    )
+    demoted = RustPolicySelectionPlan(
+        profiles=(
+            replace(
+                profile,
+                selections=(),
+                coverage=demoted_coverage,
+            ),
+        )
+    )
+
+    rendered = rust_benchmark_artifacts(
+        rust_benchmark_result.rendered.benchmarks,
+        load_default_render_assets(),
+        "text/rust",
+        selection_plan=demoted,
+    )
+    source = next(
+        artifact.content
+        for artifact in rendered
+        if artifact.logical_path == "rust/src/tsl_variant_bench_sse2.rs"
+    )
+
+    assert "detail::primitives::MulImpl>::apply" in source
+    assert "detail::primitives::Mul_defaultImpl>::apply" not in source
 
 
 def test_rust_runtime_and_report_schema_are_policy_free(
@@ -156,9 +207,19 @@ def test_rust_report_keeps_canonical_profile_identity(
     profile = plan.profile("rust", "sse2")
     assert profile is not None
     renamed = replace(profile, profile_name="skylake-oneapi")
-    rendered = backend_capability("rust").render_benchmark_artifacts(
+    rendered = rust_benchmark_artifacts(
         replace(plan, profiles=(renamed,)),
         load_default_render_assets(),
+        "text/rust",
+        selection_plan=RustPolicySelectionPlan(
+            profiles=(
+                RustPolicySelectionProfile(
+                    profile_name="skylake-oneapi",
+                    selections=(),
+                    coverage=(),
+                ),
+            )
+        ),
     )
     artifacts = {artifact.logical_path: artifact.content for artifact in rendered}
 

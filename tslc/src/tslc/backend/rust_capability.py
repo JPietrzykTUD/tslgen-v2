@@ -14,6 +14,7 @@ from tslc.backend.capability import (
 )
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_policy_selection import plan_rust_policy_selection
 from tslc.backend.rust_translation import RustBackendDialect
 from tslc.backend.rust_validation import validate_rust_profiles
 from tslc.benchmark.planner import BenchmarkPlanner, BenchmarkProfileContext
@@ -51,7 +52,12 @@ def create_rust_dialect(catalog: Catalog) -> BackendDialect:
 def rust_project_artifacts(
     profiles: tuple[EmittedProfile, ...], assets: RenderAssets, media_type: str
 ) -> list[Artifact]:
-    return rust_artifacts(profiles, assets, media_type=media_type)
+    return rust_artifacts(
+        profiles,
+        assets,
+        media_type=media_type,
+        selection_plan=plan_rust_policy_selection(profiles),
+    )
 
 
 def rust_profile_verification(
@@ -94,6 +100,20 @@ def rust_benchmark_plan(
     ).plan(profiles, value_tests)
 
 
+def rust_benchmark_project_artifacts(
+    plan: BenchmarkProjectPlan,
+    profiles: tuple[EmittedProfile, ...],
+    assets: RenderAssets,
+    media_type: str,
+) -> list[Artifact]:
+    return rust_benchmark_artifacts(
+        plan,
+        assets,
+        media_type,
+        selection_plan=plan_rust_policy_selection(profiles),
+    )
+
+
 def rust_documentation_formatter() -> BackendDocumentationFormatter:
     return RUST_DOCUMENTATION_FORMATTER
 
@@ -108,11 +128,17 @@ def rust_primitive_preview(
     specializations: tuple[LoweredSpecialization, ...],
 ) -> str:
     family = profile.profile_family
+    policy_selection = plan_rust_policy_selection((profile,)).profile(
+        profile.profile.name
+    )
+    if policy_selection is None:
+        raise ValueError("Rust primitive preview requires a policy-selection profile")
     return RustBackend(
         feature_spellings=profile.profile.feature_spellings("rust"),
         emit_target_features=(
             family.backend("rust").feature_flags if family is not None else True
         ),
+        policy_selection=policy_selection,
     ).render_primitive(primitive_name, specializations)
 
 
@@ -130,7 +156,7 @@ RUST_BACKEND = BackendCapability(
     toolchain_commands=rust_toolchain_commands,
     documentation_formatter_factory=rust_documentation_formatter,
     benchmark_plan_builder=rust_benchmark_plan,
-    benchmark_renderer=rust_benchmark_artifacts,
+    benchmark_renderer=rust_benchmark_project_artifacts,
     helper_manifest=RUST_HELPER_MANIFEST,
     profile_validator=validate_rust_profiles,
     primitive_preview_renderer=rust_primitive_preview,

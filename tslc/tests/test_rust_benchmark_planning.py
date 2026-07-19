@@ -11,6 +11,11 @@ import pytest
 from tslc.api import generate_project
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.registry import backend_capability, supports_backend
+from tslc.benchmark.identity import (
+    implementation_body_hash,
+    specialization_key,
+    specialization_stable_id,
+)
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
     BenchmarkProjectPlan,
@@ -119,7 +124,9 @@ def test_rust_backend_produces_typed_plan_and_report_artifacts(
     )
     assert "[[bench]]" in cargo_toml
     assert backend_capability("rust").render_benchmark_artifacts(
-        plan, load_default_render_assets()
+        plan,
+        rust_benchmark_planning_result.emitted_profiles,
+        load_default_render_assets(),
     )
 
 
@@ -183,6 +190,60 @@ def test_cpp_and_rust_plans_reuse_correctness_and_scenario_owners(
         rust.specialization.param_names[latency.dependency_parameter]
         == source_primitive.benchmark.latency_chain
     )
+
+
+def test_shared_identity_helper_preserves_frozen_backend_keys(
+    rust_benchmark_planning_result,
+) -> None:
+    result = rust_benchmark_planning_result
+    profile = next(
+        emitted
+        for emitted in result.emitted_profiles
+        if emitted.profile.name == "sse2"
+    )
+    expected_ids = {
+        "cpp": "sse2_mul_sse_si8_7255aba5c341",
+        "rust": "sse2_mul_sse_si8_0ca8e0838e70",
+    }
+
+    for backend_id in ("cpp", "rust"):
+        candidate_set = _mul_candidate_set(result.rendered.benchmarks, backend_id)
+        specialization = candidate_set.specialization
+        rebuilt = specialization_key(
+            backend_id=backend_id,
+            profile=profile,
+            specialization=specialization,
+            primitive_specializations=profile.specializations(backend_id)["mul"],
+        )
+
+        assert rebuilt == candidate_set.key
+        assert rebuilt.canonical_fields() == (
+            backend_id,
+            "sse2",
+            "mul",
+            "mul",
+            "sse",
+            "si8",
+            "v",
+            ("v", "v"),
+            None,
+            None,
+            (),
+            None,
+            (),
+            (),
+            (),
+            16,
+            None,
+        )
+        assert specialization_stable_id(rebuilt) == expected_ids[backend_id]
+        assert tuple(
+            implementation_body_hash(body)
+            for body in (
+                specialization.body_text,
+                *(variant.body_text for variant in specialization.variant_bodies),
+            )
+        ) == tuple(candidate.body_hash for candidate in candidate_set.candidates)
 
 
 def test_cpp_manifest_identity_is_unchanged(

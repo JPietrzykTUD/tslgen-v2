@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 import json
-import re
 
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.benchmark.correctness import (
@@ -20,6 +19,11 @@ from tslc.benchmark.correctness import (
     vector_mask_cases as _vector_mask_correctness_cases,
     vector_scalar_cases as _vector_scalar_correctness_cases,
 )
+from tslc.benchmark.identity import (
+    implementation_body_hash,
+    specialization_key,
+    specialization_stable_id,
+)
 from tslc.benchmark.model import (
     BenchmarkCandidate,
     BenchmarkCandidateSet,
@@ -30,7 +34,6 @@ from tslc.benchmark.model import (
     BenchmarkProjectPlan,
     BenchmarkScenario,
     BenchmarkScenarioFamily,
-    SpecializationKey,
 )
 from tslc.benchmark.scenarios import (
     immediate_scenarios,
@@ -45,12 +48,11 @@ from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, Extension, Primitive
 from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.catalog.signatures import parse_signature
-from tslc.lower.lowerer import LoweredSpecialization, varying_positions
+from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests.harness import discover_harness_primitives
 from tslc.value_tests.lane_math import tiling_preserves_lane_semantics, whole_lanes
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestProjectPlan
 
-_STABLE_ID_RE = re.compile(r"[^0-9A-Za-z_]+")
 BENCHMARK_PROTOCOL_VERSION = 1
 
 
@@ -239,9 +241,17 @@ class BenchmarkPlanner:
         assert primitive is not None and extension is not None
         bits = scalar_bit_width(spec.type_tag)
         assert bits is not None and extension.vector_bits > 0
-        lanes = whole_lanes(extension.vector_bits, spec.type_tag)
-        if lanes is None:
+        key = specialization_key(
+            backend_id=self._backend_id,
+            profile=profile,
+            specialization=spec,
+            primitive_specializations=by_primitive[spec.primitive_name],
+            immediate_value=immediate_value,
+            simd_type_base_bindings=simd_type_base_bindings,
+        )
+        if key.lanes is None:
             return None, "extension width does not contain a complete scalar lane", False
+        lanes = key.lanes
         scenario_family = _scenario_family(spec)
         if scenario_family is None:
             return (
@@ -259,26 +269,7 @@ class BenchmarkPlanner:
                 f"{scenario_family!r} scenario family",
                 False,
             )
-        key = SpecializationKey(
-            backend_id=self._backend_id,
-            profile_name=profile.profile.name,
-            primitive_name=spec.primitive_name,
-            source_primitive_name=spec.source_primitive_name,
-            extension_name=spec.extension_name,
-            type_tag=spec.type_tag,
-            result_kind=spec.result_kind,
-            param_kinds=spec.param_kinds,
-            immediate=immediate_value,
-            simd_type_base_bindings=simd_type_base_bindings,
-            generic_values=tuple(
-                (name, default) for name, _type, default in spec.generic_params
-            ),
-            overload_parameter_positions=varying_positions(
-                by_primitive[spec.primitive_name]
-            ),
-            lanes=lanes,
-        )
-        stable_id = _stable_id(key)
+        stable_id = specialization_stable_id(key)
         seed = int(sha256(stable_id.encode("utf-8")).hexdigest()[:16], 16)
         correctness: tuple[BenchmarkCorrectnessCase, ...]
         scenarios: tuple[BenchmarkScenario, ...]
@@ -472,9 +463,11 @@ class BenchmarkPlanner:
         if not correctness:
             return None, "no authored expected-value case covers this specialization", True
         candidates = (
-            BenchmarkCandidate("default", _body_hash(spec.body_text)),
+            BenchmarkCandidate("default", implementation_body_hash(spec.body_text)),
             *(
-                BenchmarkCandidate(variant.name, _body_hash(variant.body_text))
+                BenchmarkCandidate(
+                    variant.name, implementation_body_hash(variant.body_text)
+                )
                 for variant in spec.variant_bodies
             ),
         )
@@ -643,22 +636,6 @@ def _source_primitive(
     return None
 
 
-def _stable_id(key: SpecializationKey) -> str:
-    readable = _STABLE_ID_RE.sub(
-        "_",
-        "_".join(
-            (
-                key.profile_name,
-                key.primitive_name,
-                key.extension_name,
-                key.type_tag,
-            )
-        ),
-    ).strip("_")
-    digest = sha256(repr(key.canonical_fields()).encode("utf-8")).hexdigest()[:12]
-    return f"{readable}_{digest}"
-
-
 def _manifest_hash(
     candidate_sets: tuple[BenchmarkCandidateSet, ...],
     profile: EmittedProfile,
@@ -701,10 +678,6 @@ def _manifest_hash(
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return sha256(canonical.encode("utf-8")).hexdigest()
-
-
-def _body_hash(body: str) -> str:
-    return sha256(body.encode("utf-8")).hexdigest()
 
 
 def _specialization_sort_key(spec: LoweredSpecialization) -> tuple[object, ...]:

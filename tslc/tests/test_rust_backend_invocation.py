@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 
 from tslc.backend.rust import RustBackend
+from tslc.benchmark.model import SpecializationKey
 from tslc.catalog.model import ImplementationSafety
 from tslc.lower.lowerer import (
     LoweredImplementationVariant,
@@ -51,6 +52,34 @@ def test_direct_implementation_call_owns_default_and_variant_trait_names() -> No
     ) == (
         "<Simd<i8, Sse2> as "
         "crate::tsl_sse2::detail::primitives::MulImpl>::apply(left, right)"
+    )
+
+    selectable_spec = replace(
+        spec,
+        extension_name="sse",
+        vector_spelling="Simd<i8, Sse>",
+    )
+    selectable_key = SpecializationKey(
+        backend_id="rust",
+        profile_name="sse2",
+        primitive_name="mul",
+        source_primitive_name="mul",
+        extension_name="sse",
+        type_tag="si8",
+        result_kind="v",
+        param_kinds=("v", "v"),
+        lanes=16,
+    )
+    assert backend.render_direct_implementation_call(
+        selectable_spec,
+        None,
+        ("left", "right"),
+        module_prefix=module,
+        selection_key=selectable_key,
+    ) == (
+        "<Simd<i8, Sse> as "
+        "crate::tsl_sse2::detail::primitives::Mul_defaultImpl>"
+        "::apply(left, right)"
     )
     assert backend.render_direct_implementation_call(
         spec,

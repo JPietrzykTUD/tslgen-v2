@@ -75,6 +75,16 @@ def cpp_benchmark_plan(
     return BenchmarkPlanner(catalog, backend_id="cpp").plan(profiles, value_tests)
 
 
+def cpp_benchmark_project_artifacts(
+    plan: BenchmarkProjectPlan,
+    profiles: tuple[EmittedProfile, ...],
+    assets: RenderAssets,
+    media_type: str,
+) -> list[Artifact]:
+    del profiles
+    return cpp_benchmark_artifacts(plan, assets, media_type)
+
+
 def cpp_documentation_formatter() -> BackendDocumentationFormatter:
     return CPP_DOCUMENTATION_FORMATTER
 
@@ -106,7 +116,7 @@ CPP_BACKEND = BackendCapability(
     toolchain_commands=cpp_toolchain_commands,
     documentation_formatter_factory=cpp_documentation_formatter,
     benchmark_plan_builder=cpp_benchmark_plan,
-    benchmark_renderer=cpp_benchmark_artifacts,
+    benchmark_renderer=cpp_benchmark_project_artifacts,
     helper_manifest=CPP_HELPER_MANIFEST,
     profile_validator=validate_cpp_profiles,
     primitive_preview_renderer=cpp_primitive_preview,

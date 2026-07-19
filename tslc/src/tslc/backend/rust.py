@@ -10,6 +10,11 @@ from tslc.backend.primitive_rendering import variant_names as _variant_names
 from tslc.backend.rust_implementation_state import (
     render_implementation_state_queries as _implementation_state_queries,
 )
+from tslc.backend.rust_policy_selection import (
+    RustPolicySelection,
+    RustPolicySelectionProfile,
+    rust_policy_selection_reason,
+)
 from tslc.backend.rust_documentation import rust_doc as _rust_doc
 from tslc.backend.rust_names import rust_primitive_trait_name
 from tslc.backend.rust_type_params import (
@@ -24,6 +29,7 @@ from tslc.backend.rust_type_params import (
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.target_capability import rust_extension_tag
+from tslc.benchmark.model import SpecializationKey
 from tslc.lower.lowerer import (
     LoweredSpecialization,
     effective_param_types,
@@ -51,9 +57,11 @@ class RustBackend:
         *,
         feature_spellings: Mapping[str, str] | None = None,
         emit_target_features: bool = True,
+        policy_selection: RustPolicySelectionProfile | None = None,
     ) -> None:
         self._feature_spellings = dict(feature_spellings or {})
         self._emit_target_features = emit_target_features
+        self._policy_selection = policy_selection
 
     def render_primitive(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -97,9 +105,33 @@ class RustBackend:
         caller_unsafe = _any_caller_unsafe(specializations)
         trait = self._trait(primitive_name, shape, caller_unsafe=caller_unsafe)
         impls = [
-            self._impl(spec, caller_unsafe=caller_unsafe) for spec in specializations
+            self._impl(spec, caller_unsafe=caller_unsafe)
+            for spec in specializations
+            if self._selection_for(spec) is None
         ]
         parts = [trait, *impls]
+        selections = tuple(
+            selection
+            for spec in specializations
+            if (selection := self._selection_for(spec)) is not None
+        )
+        if selections:
+            default_primitive = _variant_primitive_name(primitive_name, "default")
+            parts.append(
+                self._trait(
+                    default_primitive,
+                    shape,
+                    caller_unsafe=caller_unsafe,
+                )
+            )
+            parts.extend(
+                self._impl(
+                    selection.specialization,
+                    caller_unsafe=caller_unsafe,
+                    implementation_trait_variant="default",
+                )
+                for selection in selections
+            )
         for name in _variant_names(specializations):
             variant_primitive = _variant_primitive_name(primitive_name, name)
             variant_impls = [
@@ -120,6 +152,10 @@ class RustBackend:
                     )
                 )
                 parts.extend(variant_impls)
+        parts.extend(
+            self._selection_impl(selection, caller_unsafe=caller_unsafe)
+            for selection in selections
+        )
         return "\n\n".join(parts)
 
     def render_primitive_public(
@@ -196,6 +232,7 @@ class RustBackend:
         module_prefix: str = "",
         immediate_value: str | None = None,
         overload_parameter_positions: tuple[int, ...] = (),
+        selection_key: SpecializationKey | None = None,
     ) -> str:
         """Render a direct call to one already-emitted implementation trait.
 
@@ -281,7 +318,14 @@ class RustBackend:
         generic_args = (
             f"<{', '.join(trait_arguments)}>" if trait_arguments else ""
         )
-        trait_name = _implementation_trait_name(spec.primitive_name, variant_name)
+        direct_variant = variant_name
+        if (
+            variant_name is None
+            and selection_key is not None
+            and rust_policy_selection_reason(selection_key, spec) is None
+        ):
+            direct_variant = "default"
+        trait_name = _implementation_trait_name(spec.primitive_name, direct_variant)
         call = (
             f"<{self.concrete_vector_type(spec)} as {trait_prefix}{trait_name}"
             f"{generic_args}>::apply({', '.join(arguments)})"
@@ -519,6 +563,7 @@ class RustBackend:
         *,
         caller_unsafe: bool,
         variant_name: str | None = None,
+        implementation_trait_variant: str | None = None,
     ) -> str:
         body_ref = _body_for(spec, variant_name)
         if body_ref is None:
@@ -593,7 +638,12 @@ class RustBackend:
             else f"Rust specialization variant {variant_name}"
         )
         doc = _rust_doc(spec, context=doc_context)
-        trait_name = _implementation_trait_name(spec.primitive_name, variant_name)
+        trait_name = _implementation_trait_name(
+            spec.primitive_name,
+            implementation_trait_variant
+            if implementation_trait_variant is not None
+            else variant_name,
+        )
         return (
             (f"{doc}\n" if doc else "")
             + f"impl{impl_generics} {trait_name}"
@@ -605,6 +655,60 @@ class RustBackend:
             f"{_indent(body, 8)}\n"
             f"    }}\n"
             f"}}"
+        )
+
+    def _selection_for(
+        self,
+        spec: LoweredSpecialization,
+    ) -> RustPolicySelection | None:
+        if self._policy_selection is None:
+            return None
+        return next(
+            (
+                selection
+                for selection in self._policy_selection.selections
+                if selection.specialization == spec
+            ),
+            None,
+        )
+
+    def _selection_impl(
+        self,
+        selection: RustPolicySelection,
+        *,
+        caller_unsafe: bool,
+    ) -> str:
+        spec = selection.specialization
+        reason = rust_policy_selection_reason(selection.key, spec)
+        if reason is not None:
+            raise ValueError(
+                f"Rust policy selection renderer received an unsupported shape: {reason}"
+            )
+        selected_variant = (
+            "default"
+            if selection.selected_candidate == "default"
+            else selection.selected_candidate
+        )
+        trait_name = _implementation_trait_name(spec.primitive_name)
+        selected_trait_name = _implementation_trait_name(
+            spec.primitive_name, selected_variant
+        )
+        key = self.concrete_vector_type(spec)
+        params = _params(spec, "Self")
+        result = _kind_type(spec.result_kind, "Self")
+        call = (
+            f"<Self as {selected_trait_name}>::apply({_runtime_names(spec)})"
+        )
+        call = _unsafe_call(call, caller_unsafe)
+        return (
+            f"impl {trait_name} for {key} {{\n"
+            f"    const IMPLEMENTATION_STATE: ImplementationState = "
+            f"<Self as {selected_trait_name}>::IMPLEMENTATION_STATE;\n"
+            "    #[inline(always)]\n"
+            f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {result} {{\n"
+            f"        {call}\n"
+            "    }\n"
+            "}"
         )
 
     def _wrapper(

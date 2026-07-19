@@ -5,6 +5,10 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_policy_selection import (
+    RustPolicySelectionPlan,
+    validate_rust_policy_selection_plan,
+)
 from tslc.backend.emitted_profile import (
     EmittedProfile,
     used_extensions,
@@ -28,7 +32,9 @@ def rust_artifacts(
     assets: RenderAssets,
     *,
     media_type: str,
+    selection_plan: RustPolicySelectionPlan,
 ) -> list[Artifact]:
+    validate_rust_policy_selection_plan(profiles, selection_plan)
     artifacts = [
         text("rust/build.rs", assets.text("rust_build.rs"), media_type=media_type),
         text("rust/src/tsl_core.rs", assets.text("tsl_core.rs"), media_type=media_type),
@@ -42,12 +48,18 @@ def rust_artifacts(
         text("rust/rustfmt.toml", assets.text("rustfmt.toml"), media_type=media_type),
     ]
     for emitted_profile in profiles:
+        policy_selection = selection_plan.profile(emitted_profile.profile.name)
+        if policy_selection is None:
+            raise ValueError(
+                "Rust project rendering requires complete policy-selection profiles"
+            )
         capability = emitted_profile.profile_family or ProfileFamilyCapability(
             emitted_profile.profile.family
         )
         backend = RustBackend(
             feature_spellings=emitted_profile.profile.feature_spellings("rust"),
             emit_target_features=capability.backend("rust").feature_flags,
+            policy_selection=policy_selection,
         )
         by_primitive = emitted_profile.specializations("rust")
         registrations = rust_registrations(by_primitive, emitted_profile.extensions)

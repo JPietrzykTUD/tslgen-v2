@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_policy_selection import RustPolicySelectionProfile
 from tslc.benchmark._render_rust_common import indent, rust_string_literal
-from tslc.benchmark.model import BenchmarkCandidateSet, BenchmarkRegisterScenario
+from tslc.benchmark.model import (
+    BenchmarkCandidateSet,
+    BenchmarkRegisterScenario,
+    SpecializationKey,
+)
 from tslc.benchmark.render_rust_correctness import render_correctness
 from tslc.benchmark.render_rust_scenarios import render_scenario
 
@@ -14,6 +19,7 @@ def render_candidate_set(
     candidate_set: BenchmarkCandidateSet,
     *,
     profile_module: str,
+    policy_selection: RustPolicySelectionProfile,
 ) -> str:
     if any(
         not isinstance(scenario, BenchmarkRegisterScenario)
@@ -21,6 +27,10 @@ def render_candidate_set(
     ):
         raise ValueError("Rust benchmark renderer supports only register scenarios")
     backend = RustBackend(emit_target_features=False)
+    selected_keys = {selection.key for selection in policy_selection.selections}
+    selection_key = (
+        candidate_set.key if candidate_set.key in selected_keys else None
+    )
     vector = backend.concrete_vector_type(candidate_set.specialization)
     invokes = "\n\n".join(
         _render_invoke(
@@ -29,6 +39,7 @@ def render_candidate_set(
             candidate_index,
             candidate_set,
             profile_module=profile_module,
+            selection_key=selection_key,
         )
         for candidate_index, _candidate in enumerate(candidate_set.candidates)
     )
@@ -96,6 +107,7 @@ def _render_invoke(
     candidate_set: BenchmarkCandidateSet,
     *,
     profile_module: str,
+    selection_key: SpecializationKey | None,
 ) -> str:
     spec = candidate_set.specialization
     parameters = tuple(
@@ -115,6 +127,7 @@ def _render_invoke(
         arguments,
         module_prefix=f"crate::{profile_module}",
         overload_parameter_positions=candidate_set.key.overload_parameter_positions,
+        selection_key=selection_key,
     )
     return f"""fn invoke_{set_index}_{candidate_index}(
 {indent(',\n'.join(parameters), 4)}

@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import json
 
+from tslc.backend.rust_policy_selection import (
+    RustPolicySelectionPlan,
+    RustPolicySelectionProfile,
+)
 from tslc.benchmark._render_rust_common import rust_string_literal
 from tslc.benchmark.model import (
     BenchmarkProfilePlan,
@@ -21,6 +25,8 @@ def rust_benchmark_artifacts(
     plan: BenchmarkProjectPlan,
     assets: RenderAssets,
     media_type: str,
+    *,
+    selection_plan: RustPolicySelectionPlan,
 ) -> list[Artifact]:
     profiles = plan.profiles_for("rust")
     if not profiles:
@@ -38,12 +44,17 @@ def rust_benchmark_artifacts(
         ),
     ]
     for profile in profiles:
+        policy_selection = selection_plan.profile(profile.profile_name)
+        if policy_selection is None:
+            raise ValueError(
+                "Rust benchmark rendering requires complete policy-selection profiles"
+            )
         profile_slug = slug(profile.profile_name)
         artifacts.extend(
             (
                 text(
                     f"rust/src/tsl_variant_bench_{profile_slug}.rs",
-                    _render_source(profile, assets),
+                    _render_source(profile, policy_selection, assets),
                     media_type=media_type,
                 ),
                 text(
@@ -56,11 +67,20 @@ def rust_benchmark_artifacts(
     return artifacts
 
 
-def _render_source(profile: BenchmarkProfilePlan, assets: RenderAssets) -> str:
+def _render_source(
+    profile: BenchmarkProfilePlan,
+    policy_selection: RustPolicySelectionProfile,
+    assets: RenderAssets,
+) -> str:
     profile_slug = slug(profile.profile_name)
     profile_module = f"tsl_{profile_slug}"
     declarations = "\n\n".join(
-        render_candidate_set(index, candidate_set, profile_module=profile_module)
+        render_candidate_set(
+            index,
+            candidate_set,
+            profile_module=profile_module,
+            policy_selection=policy_selection,
+        )
         for index, candidate_set in enumerate(profile.candidate_sets)
     )
     correctness_calls = "\n".join(

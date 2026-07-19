@@ -49,7 +49,13 @@ TestArtifactRenderer = Callable[
     ["ValueTestProjectPlan", "RenderAssets", str], list["Artifact"]
 ]
 BenchmarkArtifactRenderer = Callable[
-    ["BenchmarkProjectPlan", "RenderAssets", str], list["Artifact"]
+    [
+        "BenchmarkProjectPlan",
+        tuple["EmittedProfile", ...],
+        "RenderAssets",
+        str,
+    ],
+    list["Artifact"],
 ]
 BenchmarkPlanBuilder = Callable[
     ["Catalog", tuple["EmittedProfile", ...], "ValueTestProjectPlan"],
@@ -112,10 +118,11 @@ def _no_profile_diagnostics(
 
 def _no_benchmark_artifacts(
     plan: BenchmarkProjectPlan,
+    profiles: tuple[EmittedProfile, ...],
     assets: RenderAssets,
     media_type: str,
 ) -> list[Artifact]:
-    del plan, assets, media_type
+    del plan, profiles, assets, media_type
     return []
 
 
@@ -175,9 +182,15 @@ class BackendCapability:
     def render_benchmark_artifacts(
         self,
         plan: BenchmarkProjectPlan,
+        profiles: tuple[EmittedProfile, ...],
         assets: RenderAssets,
     ) -> list[Artifact]:
-        return self.benchmark_renderer(plan, assets, self.artifact_media_type)
+        return self.benchmark_renderer(
+            plan,
+            profiles,
+            assets,
+            self.artifact_media_type,
+        )
 
     def plan_benchmarks(
         self,

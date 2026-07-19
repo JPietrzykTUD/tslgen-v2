@@ -44,7 +44,9 @@ def render_project(
     for driver in drivers:
         artifacts.extend(driver.render_project_artifacts(ordered, assets))
         artifacts.extend(driver.render_test_artifacts(value_tests, assets))
-        artifacts.extend(driver.render_benchmark_artifacts(benchmarks, assets))
+        artifacts.extend(
+            driver.render_benchmark_artifacts(benchmarks, ordered, assets)
+        )
         verify_backends.append(driver.verify_backend(ordered))
     artifacts.extend(documentation_artifacts(ordered))
     artifacts.extend(generated_license_artifacts(drivers, assets))

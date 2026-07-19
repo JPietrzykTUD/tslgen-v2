@@ -6,6 +6,7 @@ import re
 import pytest
 
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.rust_policy_selection import plan_rust_policy_selection
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.compiler_assets import (
@@ -77,7 +78,12 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
 
     rendered = {
         artifact.logical_path: artifact.content
-        for artifact in rust_artifacts((), assets, media_type="text/rust")
+        for artifact in rust_artifacts(
+            (),
+            assets,
+            media_type="text/rust",
+            selection_plan=plan_rust_policy_selection(()),
+        )
     }
 
     assert rendered["rust/src/tsl_core.rs"] == "// injected core\n"
@@ -109,6 +115,7 @@ def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
             profiles,
             load_default_render_assets(),
             media_type="text/rust",
+            selection_plan=plan_rust_policy_selection(profiles),
         )
     }
 
