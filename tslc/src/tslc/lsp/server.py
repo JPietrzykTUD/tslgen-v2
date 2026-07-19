@@ -24,7 +24,14 @@ from tslc.lsp.features import (
     reference_locations,
     semantic_tokens,
 )
-from tslc.lsp.positions import path_to_uri, source_position, span_to_range, uri_to_path
+from tslc.lsp.implementation_preview import implementation_preview_sites
+from tslc.lsp.positions import (
+    SourceTextMap,
+    path_to_uri,
+    source_position,
+    span_to_range,
+    uri_to_path,
+)
 from tslc.lsp.primitive_explorer import (
     PrimitiveExplorer,
     PrimitiveExplorerCache,
@@ -303,6 +310,58 @@ def create_server(
             )
         )
 
+    @server.feature(
+        types.TEXT_DOCUMENT_CODE_LENS,
+        types.CodeLensOptions(resolve_provider=False),
+    )
+    async def code_lens_request(
+        params: types.CodeLensParams,
+    ) -> list[types.CodeLens]:
+        workspace = await _workspace_with_index(state)
+        if workspace is None:
+            return []
+        snapshot = workspace.latest
+        catalog = snapshot.catalog
+        if catalog is None:
+            return []
+        path = uri_to_path(params.text_document.uri)
+        if _has_path_errors(snapshot, path):
+            return []
+        version = _snapshot_document_version(workspace, snapshot, path)
+        if version is None:
+            return []
+        text = workspace.document_text(path) or ""
+        source_map = SourceTextMap.from_text(text)
+        lenses: list[types.CodeLens] = []
+        for site in implementation_preview_sites(
+            catalog,
+            snapshot.parsed,
+            path,
+        ):
+            anchor = source_map.range(site.anchor).start
+            selector = source_map.range(site.selector).start
+            lenses.append(
+                types.CodeLens(
+                    range=types.Range(start=anchor, end=anchor),
+                    command=types.Command(
+                        title="$(gear) Render preview",
+                        command="tsl.previewSpecialization",
+                        tooltip="Render this authored implementation with tslc",
+                        arguments=[
+                            {
+                                "textDocument": {"uri": path_to_uri(path)},
+                                "position": {
+                                    "line": selector.line,
+                                    "character": selector.character,
+                                },
+                                "documentVersion": version,
+                            }
+                        ],
+                    ),
+                )
+            )
+        return lenses
+
     @server.feature(SPECIALIZATION_CONTEXT_METHOD)
     async def specialization_context_request(params: Any) -> dict[str, object]:
         workspace = await _workspace_with_index(state)
@@ -315,6 +374,7 @@ def create_server(
                 "contextualTypes": [],
                 "profiles": [],
                 "slots": [],
+                "implementation": None,
             }
         uri = _document_uri(params)
         position = _position(params)
@@ -337,7 +397,14 @@ def create_server(
             line=line,
             column=column,
         )
-        return context.payload()
+        payload = context.payload()
+        if context.implementation_source is not None:
+            payload["implementation"] = _preview_location_payload(
+                context.implementation_source,
+                workspace,
+                {},
+            )
+        return payload
 
     @server.feature(PRIMITIVE_SCAFFOLD_CHOICES_METHOD)
     async def primitive_scaffold_choices_request(
@@ -705,6 +772,39 @@ def _location_payload(
             },
         },
     }
+
+
+def _preview_location_payload(
+    span: SourceSpan,
+    workspace: AuthoringWorkspace,
+    texts: dict[Path, str],
+) -> dict[str, object]:
+    return {
+        **_location_payload(span, workspace, texts),
+        "sourceLine": span.line,
+        "sourceColumn": span.column,
+    }
+
+
+def _has_path_errors(snapshot: WorkspaceSnapshot, path: Path) -> bool:
+    selected = path.resolve()
+    return any(
+        diagnostic.severity == "error"
+        and diagnostic.span is not None
+        and diagnostic.span.path.resolve() == selected
+        for diagnostic in snapshot.diagnostics
+    )
+
+
+def _snapshot_document_version(
+    workspace: AuthoringWorkspace,
+    snapshot: WorkspaceSnapshot,
+    path: Path,
+) -> int | None:
+    version = snapshot.versions.get(path.resolve())
+    if version is None or version != workspace.document_version(path):
+        return None
+    return version
 
 
 def _path_option(options: dict[str, Any], name: str) -> Path | None:

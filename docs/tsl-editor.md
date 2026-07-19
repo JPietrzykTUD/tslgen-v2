@@ -289,10 +289,24 @@ Specialization**, and complete only the slot dimensions not already established
 by the cursor or explicit settings. The client requests a compiler-owned
 specialization context from the language server. That response combines the
 parsed primitive/implementation selector scope at the cursor with the real
-selector's valid `(profile, extension, type)` matrix for the configured backend.
+selector's valid `(profile, extension, type, result target)` matrix for the
+configured backend.
+
+Every promoted physical `implementation` field also has a **Render preview**
+CodeLens with a gear icon. Lens discovery is a source-span projection only; it
+does not select or lower the corpus. Clicking a lens performs the same explicit
+selection flow, but offers only slots for which that exact authored body wins
+the compiler selector. The preview child then filters lowered output by the
+same source identity, so same-name overloads and masked callables cannot be
+included from another authored field. Concrete wildcard-attribute variants
+declared by the clicked physical field remain grouped in its preview. VS Code's
+standard `"[tsl]": { "editor.codeLens": false }` setting hides the lenses.
 
 Selection proceeds in dependency order: profile first, then only extensions
 valid for that profile, then only types valid for that profile and extension.
+Preview adds a result-target picker when the primitive changes representation;
+Check and Doctor stop at the type because their current contracts do not consume
+that target axis.
 A single extension or concrete type established by the cursor wins over a
 setting and skips its picker. A multi-type selector such as `?i?` constrains the
 type QuickPick to its concrete members but does not silently choose one.
@@ -311,11 +325,13 @@ result in a read-only `tsl-preview:` document beside the source. A newer
 preview cancels and supersedes an older child without allowing stale output to
 replace the newer result. Preview loads one corpus snapshot, performs
 selection, lowering, and dependency closure, and sends the requested emitted
-specialization through the normal backend primitive renderer. The result is an
-actual C++ or Rust fragment with the concrete selection and input digest; no
-project assets are loaded, no generated project is written, and no compiler or
-runner is invoked. Use `tslc explain` separately when the selection and
-lowering decision trace is more useful than rendered code.
+specialization through the normal backend primitive renderer. A CodeLens
+preview additionally supplies its selected implementation source point and
+fails closed if that body no longer produces the slot. The result is an actual
+C++ or Rust fragment with the concrete selection and input digest; no project
+assets are loaded, no generated project is written, and no compiler or runner
+is invoked. Use `tslc explain` separately when the selection and lowering
+decision trace is more useful than rendered code.
 
 The explorer's **Analyze Concrete Specialization** action similarly launches
 `tslc analyze --format json` as a cancellable child, but it never renders an

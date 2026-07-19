@@ -11,12 +11,24 @@ export interface ConcreteSlot {
   readonly backend: string;
   readonly extension: string;
   readonly toTarget?: string | null;
+  readonly implementation?: SpecializationLocation | null;
+}
+
+export interface SpecializationLocation {
+  readonly uri: string;
+  readonly sourceLine?: number;
+  readonly sourceColumn?: number;
+  readonly range: {
+    readonly start: { readonly line: number; readonly character: number };
+    readonly end: { readonly line: number; readonly character: number };
+  };
 }
 
 export interface SpecializationSlotChoice {
   readonly profile: string;
   readonly extension: string;
   readonly type: string;
+  readonly toTarget?: string | null;
 }
 
 export interface SpecializationContext {
@@ -27,6 +39,7 @@ export interface SpecializationContext {
   readonly contextualTypes: readonly string[];
   readonly profiles: readonly string[];
   readonly slots: readonly SpecializationSlotChoice[];
+  readonly implementation?: SpecializationLocation | null;
 }
 
 export class PreviewDocumentProvider implements vscode.TextDocumentContentProvider {
@@ -80,6 +93,7 @@ export class PreviewManager implements vscode.Disposable {
         "--extension",
         slot.extension,
         ...(slot.toTarget ? ["--to-target", slot.toTarget] : []),
+        ...implementationArguments(slot.implementation),
       ],
       `TSL Preview: ${slot.primitive}<${slot.type}${target}> ` +
         `(${slot.profile}/${slot.extension}/${slot.backend})`,
@@ -217,8 +231,9 @@ export class PreviewManager implements vscode.Disposable {
 }
 
 export async function selectConcreteSlot(
-  editor: vscode.TextEditor,
+  uri: vscode.Uri,
   context: SpecializationContext,
+  selectResultTarget = false,
 ): Promise<ConcreteSlot | undefined> {
   const primitive = context.primitive;
   if (!primitive) {
@@ -227,7 +242,7 @@ export async function selectConcreteSlot(
     );
     return undefined;
   }
-  const configuration = vscode.workspace.getConfiguration("tsl", editor.document.uri);
+  const configuration = vscode.workspace.getConfiguration("tsl", uri);
   let candidates = context.slots.filter(
     (slot) =>
       (!context.contextualExtensions.length ||
@@ -271,8 +286,27 @@ export async function selectConcreteSlot(
   if (!type) {
     return undefined;
   }
+  let toTarget: string | null = null;
+  if (selectResultTarget) {
+    candidates = candidates.filter((slot) => slot.type === type);
+    const selectedTarget = await selectTarget(
+      uniqueTargets(candidates.map((slot) => slot.toTarget ?? null)),
+    );
+    if (selectedTarget === undefined) {
+      return undefined;
+    }
+    toTarget = selectedTarget;
+  }
   const backend = configuration.get<string>("preview.backend", "cpp");
-  return { primitive, profile, type, backend, extension };
+  return {
+    primitive,
+    profile,
+    type,
+    backend,
+    extension,
+    toTarget,
+    implementation: context.implementation ?? null,
+  };
 }
 
 export async function selectContextProfile(
@@ -331,8 +365,61 @@ async function selectValue(
   });
 }
 
+async function selectTarget(
+  values: readonly (string | null)[],
+): Promise<string | null | undefined> {
+  if (values.length === 1) {
+    return values[0];
+  }
+  if (!values.length) {
+    void vscode.window.showErrorMessage(
+      "No valid TSL result targets are available.",
+    );
+    return undefined;
+  }
+  const selected = await vscode.window.showQuickPick(
+    values.map((value) => ({
+      label: value ?? "Default result target",
+      description: value === null ? "No representation-change target" : undefined,
+      value,
+    })),
+    {
+      title: "TSL result target",
+      placeHolder: "Select a result target valid for the current specialization",
+    },
+  );
+  return selected?.value;
+}
+
+function implementationArguments(
+  location: SpecializationLocation | null | undefined,
+): readonly string[] {
+  if (!location) {
+    return [];
+  }
+  const uri = vscode.Uri.parse(location.uri);
+  const line = location.sourceLine ?? location.range.start.line + 1;
+  const column = location.sourceColumn ?? location.range.start.character + 1;
+  return [
+    "--implementation-file",
+    uri.fsPath,
+    "--implementation-line",
+    String(line),
+    "--implementation-column",
+    String(column),
+  ];
+}
+
 function unique(values: readonly string[]): readonly string[] {
   return [...new Set(values)];
+}
+
+function uniqueTargets(
+  values: readonly (string | null)[],
+): readonly (string | null)[] {
+  return [...new Set(values)].sort((left, right) =>
+    (left ?? "").localeCompare(right ?? ""),
+  );
 }
 
 function prefer(

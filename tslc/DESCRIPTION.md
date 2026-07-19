@@ -114,8 +114,13 @@ resolver delegates their spelling to the active backend template dialect, so a
 new target namespace does not require a resolver branch.
 [lsp/specialization_context.py](src/tslc/lsp/specialization_context.py)
 combines the parsed cursor scope with the real selector to expose valid
-`(profile, extension, type)` slots to editor clients without duplicating source
-parsing or compatibility rules in TypeScript.
+`(profile, extension, type, result target)` slots to editor clients without
+duplicating source parsing or compatibility rules in TypeScript. Inside an
+authored implementation it retains only slots for which that exact source body
+wins selection. [lsp/implementation_preview.py](src/tslc/lsp/implementation_preview.py)
+projects one deterministic CodeLens site per promoted physical implementation
+field from parsed/catalog source spans; lens collection never selects, lowers,
+or renders a slot.
 [version.py](src/tslc/version.py) derives the installed distribution version
 used by `tslc --version`, LSP server metadata, and diagnostic sources. The
 platform-specific editor release freezes this same CLI/LSP entry point and its
@@ -158,9 +163,14 @@ or start analysis.
 Concrete preview runs `tslc preview` as a separate saved-file child. It uses
 one loaded input snapshot for selection, lowering, and dependency closure, then
 passes the requested emitted specialization through the registered backend's
-normal primitive renderer. It does not load project render assets, plan tests
-or benchmarks, write a generated project, or invoke a toolchain. `tslc explain`
-remains the detailed selection/lowering diagnostic view.
+normal primitive renderer. An optional compiler source point restricts the
+result to lowered specializations originating in that exact authored selector,
+which lets editor CodeLens previews avoid merging overloads or other source
+bodies with the same primitive name. Concrete wildcard-attribute
+variants that share that selector intentionally remain grouped. It does not
+load project render assets, plan tests or benchmarks, write a generated
+project, or invoke a toolchain. `tslc explain` remains the detailed
+selection/lowering diagnostic view.
 
 ## The input language (two nested languages)
 

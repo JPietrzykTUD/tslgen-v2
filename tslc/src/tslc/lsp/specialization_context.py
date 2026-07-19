@@ -8,9 +8,9 @@ from pathlib import Path
 
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
+from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS, SCALAR_TYPE_ORDER
 from tslc.catalog.selector_paths import selector_head_extensions
 from tslc.diagnostics import SourceSpan
-from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS, SCALAR_TYPE_ORDER
 from tslc.select.selector import Selector
 from tslc.syntax.ast import (
     OuterTslParseResult,
@@ -25,12 +25,14 @@ class SpecializationSlot:
     profile: str
     extension: str
     type_tag: str
+    to_target: str | None = None
 
-    def payload(self) -> dict[str, str]:
+    def payload(self) -> dict[str, str | None]:
         return {
             "profile": self.profile,
             "extension": self.extension,
             "type": self.type_tag,
+            "toTarget": self.to_target,
         }
 
 
@@ -41,6 +43,7 @@ class SpecializationContext:
     contextual_types: tuple[str, ...]
     profiles: tuple[str, ...]
     slots: tuple[SpecializationSlot, ...]
+    implementation_source: SourceSpan | None = None
 
     @property
     def extension(self) -> str | None:
@@ -63,7 +66,15 @@ class SpecializationContext:
             "contextualTypes": list(self.contextual_types),
             "profiles": list(self.profiles),
             "slots": [slot.payload() for slot in self.slots],
+            "implementation": None,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class _SourceScope:
+    primitive: ParsedPrimitiveDeclaration | None = None
+    selector_path: tuple[str, ...] = ()
+    implementation_source: ParsedTslSourceSpan | None = None
 
 
 def specialization_context(
@@ -79,12 +90,13 @@ def specialization_context(
     """Return cursor facts and selector-valid slots without lowering or rendering."""
 
     profile_names = tuple(sorted(profiles))
-    primitive, selector_path = _source_scope(parsed, path, line, column)
+    scope = _source_scope(parsed, path, line, column)
+    primitive = scope.primitive
     if primitive is None:
         return SpecializationContext(None, (), (), profile_names, ())
 
-    contextual_extensions = _contextual_extensions(catalog, selector_path)
-    contextual_types = _contextual_types(catalog, primitive, selector_path)
+    contextual_extensions = _contextual_extensions(catalog, scope.selector_path)
+    contextual_types = _contextual_types(catalog, primitive, scope.selector_path)
     slots: set[SpecializationSlot] = set()
     selector = Selector()
     for profile_name in profile_names:
@@ -100,8 +112,17 @@ def specialization_context(
                 profile=profile_name,
                 extension=item.extension.isa_name,
                 type_tag=item.type_tag,
+                to_target=item.to_target,
             )
             for item in selected.selected
+            if _same_source(item.primitive.source, primitive.source)
+            and (
+                scope.implementation_source is None
+                or _same_source(
+                    item.implementation.selector_source,
+                    scope.implementation_source,
+                )
+            )
         )
     ordered = tuple(
         sorted(
@@ -111,6 +132,7 @@ def specialization_context(
                 item.extension,
                 SCALAR_TYPE_ORDER.get(item.type_tag, 999),
                 item.type_tag,
+                item.to_target or "",
             ),
         )
     )
@@ -120,6 +142,11 @@ def specialization_context(
         contextual_types,
         profile_names,
         ordered,
+        (
+            _source_span(scope.implementation_source)
+            if scope.implementation_source is not None
+            else None
+        ),
     )
 
 
@@ -128,34 +155,48 @@ def _source_scope(
     path: Path | None,
     line: int | None,
     column: int | None,
-) -> tuple[ParsedPrimitiveDeclaration | None, tuple[str, ...]]:
+) -> _SourceScope:
     if parsed is None or path is None or line is None or column is None:
-        return None, ()
+        return _SourceScope()
     selected_path = path.resolve()
     for document in parsed.documents:
         if document.path.resolve() != selected_path:
             continue
         for primitive in document.primitives:
             if _contains(primitive.source, line, column):
-                return primitive, _selector_path_at(
-                    primitive.impl_entries, line, column
+                selector_path, implementation_source = _selector_scope_at(
+                    primitive.impl_entries,
+                    line,
+                    column,
                 )
-    return None, ()
+                return _SourceScope(
+                    primitive,
+                    selector_path,
+                    implementation_source,
+                )
+    return _SourceScope()
 
 
-def _selector_path_at(
+def _selector_scope_at(
     entries: tuple[ParsedImplementationSelectorEntry, ...],
     line: int,
     column: int,
     parent: tuple[str, ...] = (),
-) -> tuple[str, ...]:
+) -> tuple[tuple[str, ...], ParsedTslSourceSpan | None]:
     for entry in entries:
         if not _contains(entry.source, line, column):
             continue
         current = (*parent, entry.selector.text)
-        nested = _selector_path_at(entry.children, line, column, current)
-        return nested or current
-    return ()
+        nested_path, nested_source = _selector_scope_at(
+            entry.children,
+            line,
+            column,
+            current,
+        )
+        if nested_path:
+            return nested_path, nested_source
+        return current, entry.source if entry.body_envelopes else None
+    return (), None
 
 
 def _contextual_extensions(
@@ -203,9 +244,21 @@ def _contextual_types(
 def _same_source(left: SourceSpan | None, right: ParsedTslSourceSpan) -> bool:
     return (
         left is not None
-        and left.path == right.path
+        and left.path.resolve() == right.path.resolve()
         and left.line == right.line
         and left.column == right.column
+        and left.end_line == right.end_line
+        and left.end_column == right.end_column
+    )
+
+
+def _source_span(source: ParsedTslSourceSpan) -> SourceSpan:
+    return SourceSpan(
+        path=source.path,
+        line=source.line,
+        column=source.column,
+        end_line=source.end_line,
+        end_column=source.end_column,
     )
 
 

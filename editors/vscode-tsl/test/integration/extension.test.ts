@@ -246,7 +246,36 @@ suite("TSL extension", () => {
       line,
       character + "add".length,
     );
-    const preview = vscode.commands.executeCommand<void>("tsl.previewSpecialization");
+    await vscode.commands.executeCommand<void>("tsl.previewSpecialization");
+    const manualPreviewEditor = vscode.window.activeTextEditor;
+    assert.equal(manualPreviewEditor?.document.uri.scheme, "tsl-preview");
+    assert.match(
+      manualPreviewEditor.document.getText(),
+      /tslc rendered specialization preview/,
+    );
+
+    await vscode.window.showTextDocument(document);
+    const sourceLines = document.getText().split(/\r?\n/);
+    const avx2Line = sourceLines.findIndex((value) => value.trim() === "avx2:");
+    assert.ok(avx2Line >= 0);
+    const avx2ImplementationLine = sourceLines.findIndex(
+      (value, index) =>
+        index > avx2Line &&
+        index < avx2Line + 12 &&
+        value.trim() === "implementation:",
+    );
+    assert.ok(avx2ImplementationLine >= 0);
+    const lenses = await waitForCodeLenses(uri);
+    const renderLens = lenses.find(
+      (lens) => lens.range.start.line === avx2ImplementationLine,
+    );
+    assert.ok(renderLens?.command);
+    assert.equal(renderLens.command.title, "$(gear) Render preview");
+    assert.equal(renderLens.command.command, "tsl.previewSpecialization");
+    const preview = vscode.commands.executeCommand<void>(
+      renderLens.command.command,
+      ...(renderLens.command.arguments ?? []),
+    );
     const hoverStarted = Date.now();
     const duringPreview = await waitForHover(
       uri,
@@ -265,6 +294,9 @@ suite("TSL extension", () => {
     );
     assert.match(previewEditor.document.getText(), /input snapshot: sha256:/);
     assert.match(previewEditor.document.getText(), /namespace detail::primitives/);
+    assert.match(previewEditor.document.getText(), /struct add_impl</);
+    assert.doesNotMatch(previewEditor.document.getText(), /struct add_mask_impl</);
+    assert.doesNotMatch(previewEditor.document.getText(), /struct add_maskz_impl</);
     assert.doesNotMatch(previewEditor.document.getText(), /VERDICT: COMPILES/);
     assert.ok(
       vscode.window.visibleTextEditors.some(
@@ -286,6 +318,20 @@ async function waitForHover(
     );
     if (hovers.length > 0) {
       return hovers;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return [];
+}
+
+async function waitForCodeLenses(uri: vscode.Uri): Promise<vscode.CodeLens[]> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>(
+      "vscode.executeCodeLensProvider",
+      uri,
+    );
+    if (lenses.length > 0) {
+      return lenses;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }

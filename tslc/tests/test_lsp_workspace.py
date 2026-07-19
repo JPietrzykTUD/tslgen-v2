@@ -23,6 +23,7 @@ from tslc.lsp.features import (
     reference_locations,
     semantic_tokens,
 )
+from tslc.lsp.implementation_preview import implementation_preview_sites
 from tslc.lsp.positions import (
     offset_position,
     position_offset,
@@ -34,6 +35,7 @@ from tslc.lsp.server import (
     _check_and_publish,
     _publish,
     _ServerState,
+    _snapshot_document_version,
     _workspace_with_index,
 )
 from tslc.lsp.specialization_context import specialization_context
@@ -167,6 +169,26 @@ def test_workspace_reuses_unchanged_documents_and_suppresses_stale_results(
     assert workspace.cache.index_cache.last_reindexed == (path.resolve(),)
 
 
+def test_code_lens_projection_requires_the_current_checked_document_version(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    initial = workspace.check()
+    assert initial is not None
+    path = next(iter(sorted(data_root.rglob("*.tsl"))))
+    original = path.read_text(encoding="utf-8")
+
+    workspace.open(path, original, 1)
+    assert _snapshot_document_version(workspace, initial, path) is None
+
+    checked = workspace.check()
+    assert checked is not None
+    assert _snapshot_document_version(workspace, checked, path) == 1
+
+    workspace.change(path, f"{original}\n", 2)
+    assert _snapshot_document_version(workspace, checked, path) is None
+
+
 def test_initial_invalid_overlay_seeds_last_valid_parsed_context(
     data_root: Path,
 ) -> None:
@@ -245,6 +267,95 @@ def test_specialization_context_uses_cursor_scope_and_selector_slots(
         "ui16",
         "ui32",
         "ui64",
+    )
+
+
+def test_implementation_preview_sites_are_physical_promoted_bodies(
+    data_root: Path,
+    monkeypatch,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    path = data_root / "primitives" / "arithmetic" / "fundamental.tsl"
+
+    def unexpected_selection(*args, **kwargs):
+        raise AssertionError("CodeLens discovery triggered profile selection")
+
+    monkeypatch.setattr(Selector, "select_profile", unexpected_selection)
+    sites = implementation_preview_sites(snapshot.catalog, snapshot.parsed, path)
+
+    expected_selectors = {
+        implementation.selector_source
+        for primitive in snapshot.catalog.primitives
+        for implementation in primitive.implementations
+        if implementation.selector_source is not None
+        and implementation.selector_source.path.resolve() == path.resolve()
+    }
+    assert {site.selector for site in sites} == expected_selectors
+    assert len(sites) == len(expected_selectors)
+    assert list(sites) == sorted(
+        sites,
+        key=lambda site: (
+            site.anchor.line,
+            site.anchor.column,
+            site.selector.line,
+            site.selector.column,
+        ),
+    )
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert all(
+        lines[site.anchor.line - 1][site.anchor.column - 1 :].startswith(
+            "implementation"
+        )
+        for site in sites
+    )
+
+
+def test_implementation_context_only_offers_slots_where_that_body_wins(
+    data_root: Path,
+    monkeypatch,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    path = data_root / "primitives" / "arithmetic" / "select.tsl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    body_line = next(
+        line
+        for line, text in enumerate(lines, 1)
+        if line > 150 and text.strip() == "complete("
+    )
+
+    def unexpected_lowering(*args, **kwargs):
+        raise AssertionError("specialization context triggered concrete lowering")
+
+    monkeypatch.setattr(Lowerer, "lower", unexpected_lowering)
+    context = specialization_context(
+        snapshot.catalog,
+        snapshot.parsed,
+        workspace.config.profiles,
+        backend="cpp",
+        path=path,
+        line=body_line,
+        column=lines[body_line - 1].index("complete") + 1,
+    )
+
+    assert context.primitive == "max"
+    assert context.implementation_source is not None
+    assert context.implementation_source.line == 150
+    assert context.slots
+    assert any(
+        slot.profile == "avx2"
+        and slot.extension == "generic"
+        and slot.type_tag == "si8"
+        for slot in context.slots
+    )
+    assert not any(
+        slot.extension == "clang_v128" and slot.type_tag == "si8"
+        for slot in context.slots
     )
 
 

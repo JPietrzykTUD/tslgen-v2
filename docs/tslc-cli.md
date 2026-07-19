@@ -209,6 +209,15 @@ tslc coverage inventory --update
 tslc coverage inventory --check
 ```
 
+`preview` normally renders every emitted callable matching the concrete name
+and slot filters. Editor integrations can additionally pass
+`--implementation-file`, `--implementation-line`, and
+`--implementation-column` together to retain only lowered specializations whose
+authored selector starts at that one-based source point. A stale or non-winning
+source point that no longer identifies a matching lowered selector fails with
+`TSL-PREVIEW-NOT-EMITTED`. Editor CodeLens calls additionally bind the point to
+the checked document version so moved source is rejected before invocation.
+
 `coverage inventory` is read-only by default. It reports corpus totals and an
 emitted-specialization matrix for the configured profiles and backends; text,
 Markdown, and JSON formats use the same typed inventory. Each profile/backend

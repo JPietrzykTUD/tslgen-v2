@@ -190,13 +190,13 @@ async function previewExplorerSlot(slot: ExplorerPreviewSlot): Promise<void> {
   if (!manager) {
     return;
   }
-  const document = await vscode.workspace.openTextDocument(slot.sourceUri);
-  if (document.isDirty) {
+  if (firstDirtyTslDocument()) {
     void vscode.window.showWarningMessage(
-      "Save the TSL document before previewing so the compiler child reads the displayed source.",
+      "Save all open TSL documents before previewing so the compiler child reads the displayed corpus.",
     );
     return;
   }
+  const document = await vscode.workspace.openTextDocument(slot.sourceUri);
   const compiler = await compilerCommand(slot.sourceUri);
   if (!compiler) {
     return;
@@ -214,9 +214,7 @@ async function analyzeExplorerSlot(
   if (!manager) {
     return undefined;
   }
-  const dirty = vscode.workspace.textDocuments.find(
-    (document) => document.languageId === "tsl" && document.isDirty,
-  );
+  const dirty = firstDirtyTslDocument();
   if (dirty) {
     void vscode.window.showWarningMessage(
       "Save all open TSL documents before analysis so the compiler child reads " +
@@ -235,33 +233,87 @@ async function analyzeExplorerSlot(
   return manager.analyze(compiler, cwd, slot);
 }
 
-async function previewSpecialization(): Promise<void> {
-  const editor = activeTslEditor();
-  if (!editor || !previewManager) {
+interface PreviewCommandTarget {
+  readonly uri: vscode.Uri;
+  readonly position: { readonly line: number; readonly character: number };
+  readonly documentVersion: number;
+}
+
+async function previewSpecialization(value?: unknown): Promise<void> {
+  if (!previewManager) {
     return;
   }
-  if (editor.document.isDirty) {
+  const target = previewCommandTarget(value);
+  if (value !== undefined && !target) {
+    void vscode.window.showErrorMessage(
+      "The implementation preview target is stale or malformed; refresh the CodeLens and try again.",
+    );
+    return;
+  }
+  const editor = target ? undefined : activeTslEditor();
+  if (!target && !editor) {
+    return;
+  }
+  let document: vscode.TextDocument;
+  try {
+    document = target
+      ? await vscode.workspace.openTextDocument(target.uri)
+      : editor!.document;
+  } catch (error) {
+    output?.error(`Could not open the implementation preview target: ${String(error)}`);
+    void vscode.window.showErrorMessage(
+      "Could not open the implementation preview target. See the TSL output channel for details.",
+    );
+    return;
+  }
+  if (document.languageId !== "tsl") {
+    void vscode.window.showErrorMessage("The preview target is not a TSL document.");
+    return;
+  }
+  if (
+    target &&
+    target.documentVersion !== document.version
+  ) {
     void vscode.window.showWarningMessage(
-      "Save the TSL document before previewing so the compiler child reads the displayed source.",
+      "This implementation moved after its CodeLens was created; wait for the lens to refresh and try again.",
+    );
+    return;
+  }
+  if (
+    target &&
+    (target.position.line >= document.lineCount ||
+      target.position.character > document.lineAt(target.position.line).text.length)
+  ) {
+    void vscode.window.showWarningMessage(
+      "This implementation moved after its CodeLens was created; wait for the lens to refresh and try again.",
+    );
+    return;
+  }
+  if (firstDirtyTslDocument()) {
+    void vscode.window.showWarningMessage(
+      "Save all open TSL documents before previewing so the compiler child reads the displayed corpus.",
     );
     return;
   }
   const backend = vscode.workspace
-    .getConfiguration("tsl", editor.document.uri)
+    .getConfiguration("tsl", document.uri)
     .get<string>("preview.backend", "cpp");
-  const context = await requestSpecializationContext(editor, backend);
+  const position = target
+    ? new vscode.Position(target.position.line, target.position.character)
+    : editor!.selection.active;
+  const context = await requestSpecializationContext(document, position, backend);
   if (!context) {
     return;
   }
-  const slot = await selectConcreteSlot(editor, context);
+  const slot = await selectConcreteSlot(document.uri, context, true);
   if (!slot) {
     return;
   }
-  const compiler = await compilerCommand(editor.document.uri);
+  const compiler = await compilerCommand(document.uri);
   if (!compiler) {
     return;
   }
-  const cwd = workspaceCwd(editor.document);
+  const cwd = workspaceCwd(document);
   await previewManager.preview(compiler, cwd, slot);
 }
 
@@ -279,11 +331,15 @@ async function checkSlot(): Promise<void> {
   const backend = vscode.workspace
     .getConfiguration("tsl", editor.document.uri)
     .get<string>("preview.backend", "cpp");
-  const context = await requestSpecializationContext(editor, backend);
+  const context = await requestSpecializationContext(
+    editor.document,
+    editor.selection.active,
+    backend,
+  );
   if (!context) {
     return;
   }
-  const slot = await selectConcreteSlot(editor, context);
+  const slot = await selectConcreteSlot(editor.document.uri, context);
   if (!slot) {
     return;
   }
@@ -309,13 +365,17 @@ async function doctor(): Promise<void> {
   const backend = configuration.get<string>("preview.backend", "cpp");
   const contextualEditor =
     editor?.document.languageId === "tsl" ? editor : undefined;
-  const context = await requestSpecializationContext(contextualEditor, backend);
+  const context = await requestSpecializationContext(
+    contextualEditor?.document,
+    contextualEditor?.selection.active,
+    backend,
+  );
   if (!context) {
     return;
   }
   const slot =
     contextualEditor && context.primitive
-      ? await selectConcreteSlot(contextualEditor, context)
+      ? await selectConcreteSlot(contextualEditor.document.uri, context)
       : undefined;
   if (contextualEditor && context.primitive && !slot) {
     return;
@@ -496,7 +556,8 @@ function activeTslEditor(): vscode.TextEditor | undefined {
 }
 
 async function requestSpecializationContext(
-  editor: vscode.TextEditor | undefined,
+  document: vscode.TextDocument | undefined,
+  position: vscode.Position | undefined,
   backend: string,
 ): Promise<SpecializationContext | undefined> {
   const running = client;
@@ -511,10 +572,10 @@ async function requestSpecializationContext(
       "tsl/specializationContext",
       {
         backend,
-        ...(editor
+        ...(document && position
           ? {
-              textDocument: { uri: editor.document.uri.toString() },
-              position: editor.selection.active,
+              textDocument: { uri: document.uri.toString() },
+              position,
             }
           : {}),
       },
@@ -527,6 +588,58 @@ async function requestSpecializationContext(
     );
     return undefined;
   }
+}
+
+function previewCommandTarget(value: unknown): PreviewCommandTarget | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const candidate = value as {
+    readonly textDocument?: { readonly uri?: unknown };
+    readonly position?: {
+      readonly line?: unknown;
+      readonly character?: unknown;
+    };
+    readonly documentVersion?: unknown;
+  };
+  const document = candidate.textDocument;
+  const position = candidate.position;
+  if (
+    !document ||
+    typeof document.uri !== "string" ||
+    !position ||
+    typeof position.line !== "number" ||
+    typeof position.character !== "number" ||
+    !Number.isInteger(position.line) ||
+    !Number.isInteger(position.character) ||
+    position.line < 0 ||
+    position.character < 0 ||
+    typeof candidate.documentVersion !== "number" ||
+    !Number.isInteger(candidate.documentVersion) ||
+    candidate.documentVersion < 0
+  ) {
+    return undefined;
+  }
+  let uri: vscode.Uri;
+  try {
+    uri = vscode.Uri.parse(document.uri, true);
+  } catch {
+    return undefined;
+  }
+  if (uri.scheme !== "file") {
+    return undefined;
+  }
+  return {
+    uri,
+    position: { line: position.line, character: position.character },
+    documentVersion: candidate.documentVersion,
+  };
+}
+
+function firstDirtyTslDocument(): vscode.TextDocument | undefined {
+  return vscode.workspace.textDocuments.find(
+    (document) => document.languageId === "tsl" && document.isDirty,
+  );
 }
 
 async function compilerCommand(uri: vscode.Uri) {

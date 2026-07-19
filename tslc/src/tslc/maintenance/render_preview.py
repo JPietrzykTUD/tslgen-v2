@@ -9,7 +9,13 @@ from pathlib import Path
 from tslc.api import _expand_sources
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.registry import backend_capability, registered_backend_ids
-from tslc.diagnostics import Diagnostic, format_diagnostic, has_errors
+from tslc.diagnostics import (
+    Diagnostic,
+    SourceLocation,
+    SourceSpan,
+    format_diagnostic,
+    has_errors,
+)
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.maintenance import _repo_context
 from tslc.pipeline import GenerationRequest, SkippedEntry, _generate_loaded, _load_inputs
@@ -32,6 +38,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--extension", default=None)
     parser.add_argument("--to-target", default=None)
     parser.add_argument(
+        "--implementation-file",
+        default=None,
+        help="restrict output to the implementation selector at this source point",
+    )
+    parser.add_argument("--implementation-line", type=_positive_int, default=None)
+    parser.add_argument("--implementation-column", type=_positive_int, default=None)
+    parser.add_argument(
         "--sources",
         default=None,
         help="corpus root (default: the checkout's tsldata/)",
@@ -43,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         "supplementary/buildsystem/machine_profiles.json)",
     )
     args = parser.parse_args(argv)
+    implementation_source = _implementation_source(parser, args)
 
     sources, machine_profiles = _repo_context.resolve_corpus_paths(
         parser, args.sources, args.machine_profiles
@@ -56,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         backend=args.backend,
         extension=args.extension,
         to_target=args.to_target,
+        implementation_source=implementation_source,
     )
     for diagnostic in diagnostics:
         print(format_diagnostic(diagnostic), file=sys.stderr)
@@ -75,6 +90,7 @@ def render_preview(
     backend: str,
     extension: str | None = None,
     to_target: str | None = None,
+    implementation_source: SourceLocation | None = None,
 ) -> tuple[str | None, tuple[Diagnostic, ...]]:
     """Return a rendered backend fragment and all diagnostics for one saved slot."""
 
@@ -103,7 +119,13 @@ def render_preview(
         return None, (
             *result.diagnostics,
             _not_emitted_diagnostic(
-                primitive, profile, type_tag, backend, extension, result.skipped
+                primitive,
+                profile,
+                type_tag,
+                backend,
+                extension,
+                result.skipped,
+                implementation_source,
             ),
         )
 
@@ -114,12 +136,19 @@ def render_preview(
         backend=backend,
         extension=extension,
         to_target=to_target,
+        implementation_source=implementation_source,
     )
     if not matching:
         return None, (
             *result.diagnostics,
             _not_emitted_diagnostic(
-                primitive, profile, type_tag, backend, extension, result.skipped
+                primitive,
+                profile,
+                type_tag,
+                backend,
+                extension,
+                result.skipped,
+                implementation_source,
             ),
         )
 
@@ -146,6 +175,12 @@ def render_preview(
         f"primitive={primitive} profile={profile} type={type_tag} backend={backend} "
         f"extension={extension or '*'} to_target={to_target or '*'}"
     )
+    if implementation_source is not None:
+        selection += (
+            " implementation="
+            f"{implementation_source.path}:{implementation_source.line}:"
+            f"{implementation_source.column}"
+        )
     header = (
         "// tslc rendered specialization preview\n"
         f"// input snapshot: sha256:{inputs.input_digest}\n"
@@ -165,6 +200,7 @@ def _matching_specializations(
     backend: str,
     extension: str | None,
     to_target: str | None,
+    implementation_source: SourceLocation | None,
 ) -> tuple[tuple[str, tuple[LoweredSpecialization, ...]], ...]:
     matching: list[tuple[str, tuple[LoweredSpecialization, ...]]] = []
     for emitted_name, specializations in sorted(
@@ -180,6 +216,7 @@ def _matching_specializations(
             and spec.type_tag == type_tag
             and (extension is None or spec.extension_name == extension)
             and _matches_target(spec, to_target)
+            and _matches_implementation_source(spec.source, implementation_source)
         )
         if selected:
             matching.append((emitted_name, selected))
@@ -195,6 +232,47 @@ def _matches_target(spec: LoweredSpecialization, to_target: str | None) -> bool:
     }
 
 
+def _matches_implementation_source(
+    span: SourceSpan | None,
+    location: SourceLocation | None,
+) -> bool:
+    if location is None:
+        return True
+    if span is None or span.path.resolve() != location.path.resolve():
+        return False
+    return (span.line, span.column) == (location.line, location.column)
+
+
+def _implementation_source(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+) -> SourceLocation | None:
+    values = (
+        args.implementation_file,
+        args.implementation_line,
+        args.implementation_column,
+    )
+    if not any(value is not None for value in values):
+        return None
+    if not all(value is not None for value in values):
+        parser.error(
+            "--implementation-file, --implementation-line, and "
+            "--implementation-column must be provided together"
+        )
+    return SourceLocation(
+        Path(args.implementation_file).resolve(),
+        args.implementation_line,
+        args.implementation_column,
+    )
+
+
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 def _not_emitted_diagnostic(
     primitive: str,
     profile: str,
@@ -202,26 +280,40 @@ def _not_emitted_diagnostic(
     backend: str,
     extension: str | None,
     skipped: tuple[SkippedEntry, ...],
+    implementation_source: SourceLocation | None,
 ) -> Diagnostic:
-    reasons = sorted(
-        {
-            item.reason
-            for item in skipped
-            if item.primitive == primitive
-            and item.profile == profile
-            and item.type_tag == type_tag
-            and item.backend == backend
-            and (extension is None or item.extension == extension)
-        }
+    reasons = (
+        []
+        if implementation_source is not None
+        else sorted(
+            {
+                item.reason
+                for item in skipped
+                if item.primitive == primitive
+                and item.profile == profile
+                and item.type_tag == type_tag
+                and item.backend == backend
+                and (extension is None or item.extension == extension)
+            }
+        )
     )
     suffix = f" Reasons: {'; '.join(reasons)}" if reasons else ""
+    source = (
+        ""
+        if implementation_source is None
+        else (
+            ", implementation "
+            f"{implementation_source.path}:{implementation_source.line}:"
+            f"{implementation_source.column}"
+        )
+    )
     return Diagnostic(
         severity="error",
         code="TSL-PREVIEW-NOT-EMITTED",
         message=(
             f"no rendered specialization for primitive {primitive!r}, profile "
             f"{profile!r}, type {type_tag!r}, backend {backend!r}, extension "
-            f"{extension or '*'}{suffix}"
+            f"{extension or '*'}{source}{suffix}"
         ),
     )
 

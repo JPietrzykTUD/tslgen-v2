@@ -106,6 +106,14 @@ undo. It does not invent an implementation body.
 Preview requires a saved source and runs `tslc preview` in a cancellable child.
 It displays the actual C++ or Rust specialization fragment from the normal
 backend primitive renderer without writing a project or invoking a toolchain.
+Each authored `implementation` field has a **$(gear) Render preview** CodeLens.
+The lens reuses the same filtered profile, extension, type, and result-target
+selection flow, then restricts rendering to the body whose lens was clicked;
+overloads and masked callables backed by other authored fields cannot leak into
+that preview. Concrete wildcard attributes authored by the same physical field
+remain grouped because they are variants of that one body. CodeLens discovery
+never selects or lowers slots. Use the standard language-specific VS Code
+setting `"[tsl]": { "editor.codeLens": false }` to hide these lenses.
 Ordinary hover and diagnostics never lower or render a specialization, invoke
 toolchains, or start preview processes.
 Explorer analysis requires the saved corpus and runs `tslc analyze --format
