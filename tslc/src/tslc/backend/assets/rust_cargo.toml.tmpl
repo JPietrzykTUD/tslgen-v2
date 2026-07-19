@@ -8,3 +8,8 @@ path = "src/lib.rs"
 
 [features]
 @{features}@{bench_targets}
+
+# The benchmark policy records this generated profile contract, rejects exposed
+# overrides, and requires an external identity for invocation details that a
+# Cargo build script cannot observe.
+@{benchmark_profile}

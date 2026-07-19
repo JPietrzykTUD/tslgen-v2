@@ -1,16 +1,17 @@
-//! Standard-library-only support for generated Rust variant benchmarks.
+//! Standard-library-only mechanics for generated Rust variant benchmarks.
 
 use std::fmt::Write as _;
-use std::hint::black_box;
-use std::io::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, Instant};
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Options {
     pub results_path: Option<PathBuf>,
+    pub summary_path: Option<PathBuf>,
+    pub policy_json_path: Option<PathBuf>,
     rounds_override: Option<usize>,
     minimum_sample_ns_override: Option<u64>,
+    threshold: f64,
     pub self_test: bool,
 }
 
@@ -19,8 +20,11 @@ impl Options {
         let mut arguments = arguments.into_iter();
         let mut options = Self {
             results_path: None,
+            summary_path: None,
+            policy_json_path: None,
             rounds_override: None,
             minimum_sample_ns_override: None,
+            threshold: 0.05,
             self_test: false,
         };
         while let Some(argument) = arguments.next() {
@@ -31,6 +35,10 @@ impl Options {
             };
             match argument.as_str() {
                 "--results" => options.results_path = Some(PathBuf::from(value()?)),
+                "--summary" => options.summary_path = Some(PathBuf::from(value()?)),
+                "--policy-json" => {
+                    options.policy_json_path = Some(PathBuf::from(value()?));
+                }
                 "--rounds" => {
                     let rounds = value()?
                         .parse::<usize>()
@@ -49,12 +57,37 @@ impl Options {
                     }
                     options.minimum_sample_ns_override = Some(minimum);
                 }
+                "--threshold" => {
+                    let threshold = value()?
+                        .parse::<f64>()
+                        .map_err(|_| "--threshold must be a number".to_string())?;
+                    if !threshold.is_finite() || !(0.0..1.0).contains(&threshold) {
+                        return Err("--threshold must be finite and in [0, 1)".to_string());
+                    }
+                    options.threshold = threshold;
+                }
                 "--self-test" => options.self_test = true,
                 // Cargo appends this libtest-compatible marker to `cargo bench`
                 // invocations even when the custom target has `harness = false`.
                 "--bench" => {}
                 _ => return Err(format!("unknown benchmark option: {argument}")),
             }
+        }
+        let paths = [
+            options.results_path.as_ref(),
+            options.summary_path.as_ref(),
+            options.policy_json_path.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|path| output_identity(path))
+        .collect::<Result<Vec<_>, _>>()?;
+        if paths
+            .iter()
+            .enumerate()
+            .any(|(index, path)| paths[index + 1..].contains(path))
+        {
+            return Err("benchmark output paths must be distinct".to_string());
         }
         Ok(options)
     }
@@ -66,6 +99,47 @@ impl Options {
     pub fn minimum_sample_ns(&self, default: u64) -> u64 {
         self.minimum_sample_ns_override.unwrap_or(default)
     }
+
+    pub fn threshold(&self) -> f64 {
+        self.threshold
+    }
+
+    pub fn rounds_override(&self) -> Option<usize> {
+        self.rounds_override
+    }
+
+    pub fn minimum_sample_ns_override(&self) -> Option<u64> {
+        self.minimum_sample_ns_override
+    }
+}
+
+pub(crate) fn output_identity(path: &Path) -> Result<PathBuf, String> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|error| format!("cannot resolve benchmark output path: {error}"))?
+            .join(path)
+    };
+    if let Ok(canonical) = std::fs::canonicalize(&absolute) {
+        return Ok(canonical);
+    }
+    if let (Some(parent), Some(file_name)) = (absolute.parent(), absolute.file_name()) {
+        if let Ok(canonical_parent) = std::fs::canonicalize(parent) {
+            return Ok(canonical_parent.join(file_name));
+        }
+    }
+    let mut normalized = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            _ => normalized.push(component.as_os_str()),
+        }
+    }
+    Ok(normalized)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -76,13 +150,6 @@ pub struct RawSample {
     pub round: usize,
     pub iterations: usize,
     pub elapsed_ns: u64,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ReportMetadata {
-    pub protocol_version: u32,
-    pub profile: &'static str,
-    pub manifest_hash: &'static str,
 }
 
 pub fn splitmix64(state: &mut u64) -> u64 {
@@ -220,79 +287,4 @@ pub fn json_escape(value: &str) -> String {
         }
     }
     escaped
-}
-
-pub fn write_samples(
-    samples: &[RawSample],
-    metadata: ReportMetadata,
-    results_path: Option<&Path>,
-) -> Result<(), String> {
-    let mut document = String::new();
-    for sample in samples {
-        writeln!(
-            &mut document,
-            concat!(
-                "{{\"backend\":\"rust\",\"protocol_version\":{},",
-                "\"profile\":\"{}\",\"manifest_hash\":\"{}\",",
-                "\"stable_id\":\"{}\",\"scenario\":\"{}\",",
-                "\"candidate\":\"{}\",\"round\":{},\"iterations\":{},",
-                "\"elapsed_ns\":{}}}"
-            ),
-            metadata.protocol_version,
-            json_escape(metadata.profile),
-            json_escape(metadata.manifest_hash),
-            json_escape(sample.stable_id),
-            json_escape(sample.scenario),
-            json_escape(sample.candidate),
-            sample.round,
-            sample.iterations,
-            sample.elapsed_ns,
-        )
-        .unwrap();
-    }
-    if let Some(path) = results_path {
-        std::fs::write(path, document)
-            .map_err(|error| format!("cannot write benchmark results {}: {error}", path.display()))
-    } else {
-        let mut output = std::io::stdout().lock();
-        output
-            .write_all(document.as_bytes())
-            .and_then(|()| output.flush())
-            .map_err(|error| format!("cannot write benchmark results: {error}"))
-    }
-}
-
-pub fn runtime_self_test() -> Result<(), String> {
-    let options = Options::parse([
-        "--rounds".to_string(),
-        "3".to_string(),
-        "--minimum-sample-ns".to_string(),
-        "1".to_string(),
-        "--self-test".to_string(),
-    ])?;
-    if options.rounds(9) != 3 || options.minimum_sample_ns(9) != 1 || !options.self_test {
-        return Err("benchmark option self-test failed".to_string());
-    }
-    let mut first_state = 7;
-    let mut second_state = 7;
-    let first = next_value::<i16>(&mut first_state);
-    if first != next_value::<i16>(&mut second_state) || first_state != second_state {
-        return Err("benchmark generator self-test failed".to_string());
-    }
-    if next_nonzero_value::<i8>(&mut first_state) == 0 {
-        return Err("benchmark nonzero generator self-test failed".to_string());
-    }
-    let mut order = candidate_order(3, 5)?;
-    order.sort_unstable();
-    if order != [0, 1, 2] {
-        return Err("benchmark schedule self-test failed".to_string());
-    }
-    if calibrate(|iterations| Ok(iterations as u64 * 10), 35)? != 4 {
-        return Err("benchmark calibration self-test failed".to_string());
-    }
-    if json_escape("a\n\"b\\") != "a\\n\\\"b\\\\" {
-        return Err("benchmark JSON self-test failed".to_string());
-    }
-    black_box(first);
-    Ok(())
 }

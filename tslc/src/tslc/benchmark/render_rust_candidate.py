@@ -75,10 +75,21 @@ def render_candidate_set(
         rust_string_literal(candidate.variant_id)
         for candidate in candidate_set.candidates
     )
+    scenarios_specs = "\n".join(
+        "    ScenarioSpec { "
+        f"scenario: {rust_string_literal(scenario.scenario_id)}, "
+        f"rounds: {scenario.timing.rounds}, "
+        f"minimum_sample_ns: {scenario.timing.minimum_sample_ns}u64 "
+        "},"
+        for scenario in candidate_set.scenarios
+    )
     return f"""type Vec_{set_index} = {vector};
 type Reg_{set_index} = <Vec_{set_index} as SimdVector>::RegisterType;
 type Base_{set_index} = <Vec_{set_index} as SimdVector>::BaseType;
 const CANDIDATES_{set_index}: [&str; {len(candidate_set.candidates)}] = [{candidates}];
+const SCENARIOS_{set_index}: [ScenarioSpec; {len(candidate_set.scenarios)}] = [
+{scenarios_specs}
+];
 
 {invokes}
 

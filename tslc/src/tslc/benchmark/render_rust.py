@@ -1,9 +1,10 @@
-"""Render report-only Rust benchmark artifacts from typed benchmark plans."""
+"""Render Rust benchmark reports and backend-scoped policy production."""
 
 from __future__ import annotations
 
 import json
 
+from tslc.backend.rust_benchmark_context import RUST_BENCHMARK_CODEGEN_CONTRACT
 from tslc.backend.rust_policy_selection import (
     RustPolicySelectionPlan,
     RustPolicySelectionProfile,
@@ -20,6 +21,8 @@ from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact
 from tslc.render._common import slug, text
 
+RUST_BENCHMARK_POLICY_SCHEMA_VERSION = 1
+
 
 def rust_benchmark_artifacts(
     plan: BenchmarkProjectPlan,
@@ -35,6 +38,21 @@ def rust_benchmark_artifacts(
         text(
             "rust/src/tsl_benchmark_core.rs",
             assets.text("tsl_benchmark_core.rs"),
+            media_type=media_type,
+        ),
+        text(
+            "rust/src/tsl_benchmark_reducer.rs",
+            assets.text("tsl_benchmark_reducer.rs"),
+            media_type=media_type,
+        ),
+        text(
+            "rust/src/tsl_benchmark_policy.rs",
+            assets.text("tsl_benchmark_policy.rs"),
+            media_type=media_type,
+        ),
+        text(
+            "rust/src/tsl_benchmark_self_test.rs",
+            assets.text("tsl_benchmark_self_test.rs"),
             media_type=media_type,
         ),
         text(
@@ -91,17 +109,31 @@ def _render_source(
         f"    run_candidate_set_{index}(&options, &mut samples)?;"
         for index, _candidate_set in enumerate(profile.candidate_sets)
     )
+    selected_keys = {selection.key for selection in policy_selection.selections}
+    candidate_set_specs = "\n".join(
+        "    CandidateSetSpec { "
+        f"stable_id: {rust_string_literal(candidate_set.stable_id)}, "
+        f"candidates: &CANDIDATES_{index}, scenarios: &SCENARIOS_{index}, "
+        f"policy_supported: {str(candidate_set.key in selected_keys).lower()} "
+        "},"
+        for index, candidate_set in enumerate(profile.candidate_sets)
+    )
     required_features = ",".join(profile.backend_feature_spellings)
     return assets.fill(
         "rust_benchmark.rs.tmpl",
         profile_slug=profile_slug,
         protocol_version=str(BENCHMARK_PROTOCOL_VERSION),
+        policy_schema_version=str(RUST_BENCHMARK_POLICY_SCHEMA_VERSION),
         profile_name=_rust_profile_literal(profile.profile_name),
         manifest_hash=rust_string_literal(profile.manifest_hash),
         required_features=rust_string_literal(required_features),
+        benchmark_codegen_contract=rust_string_literal(
+            RUST_BENCHMARK_CODEGEN_CONTRACT.identity
+        ),
         native_cpu_check=_render_native_cpu_check(profile),
         declarations=declarations,
         candidate_set_count=str(len(profile.candidate_sets)),
+        candidate_set_specs=candidate_set_specs,
         correctness_calls=correctness_calls,
         scenario_calls=scenario_calls,
     )
@@ -211,4 +243,4 @@ def _scenario_manifest(scenario: BenchmarkScenario) -> dict[str, object]:
     return payload
 
 
-__all__ = ("rust_benchmark_artifacts",)
+__all__ = ("RUST_BENCHMARK_POLICY_SCHEMA_VERSION", "rust_benchmark_artifacts")

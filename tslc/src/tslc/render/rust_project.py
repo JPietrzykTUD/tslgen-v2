@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_benchmark_context import RUST_BENCHMARK_CODEGEN_CONTRACT
 from tslc.backend.rust_policy_selection import (
     RustPolicySelectionPlan,
     validate_rust_policy_selection_plan,
@@ -36,7 +37,26 @@ def rust_artifacts(
 ) -> list[Artifact]:
     validate_rust_policy_selection_plan(profiles, selection_plan)
     artifacts = [
-        text("rust/build.rs", assets.text("rust_build.rs"), media_type=media_type),
+        text(
+            "rust/build.rs",
+            assets.fill(
+                "rust_build.rs",
+                default_debug_assertions=str(
+                    RUST_BENCHMARK_CODEGEN_CONTRACT.debug_assertions
+                ).lower(),
+                default_overflow_checks=str(
+                    RUST_BENCHMARK_CODEGEN_CONTRACT.overflow_checks
+                ).lower(),
+                default_lto=str(RUST_BENCHMARK_CODEGEN_CONTRACT.lto).lower(),
+                default_codegen_units=str(
+                    RUST_BENCHMARK_CODEGEN_CONTRACT.codegen_units
+                ),
+                default_incremental=str(
+                    RUST_BENCHMARK_CODEGEN_CONTRACT.incremental
+                ).lower(),
+            ),
+            media_type=media_type,
+        ),
         text("rust/src/tsl_core.rs", assets.text("tsl_core.rs"), media_type=media_type),
         text(
             "rust/src/tsl_algorithm.rs",
@@ -343,4 +363,5 @@ def _rust_cargo(profiles: tuple[EmittedProfile, ...], assets: RenderAssets) -> s
         "rust_cargo.toml.tmpl",
         features="\n".join(features),
         bench_targets=(f"\n\n{bench_targets}" if bench_targets else ""),
+        benchmark_profile=RUST_BENCHMARK_CODEGEN_CONTRACT.render_cargo_profile(),
     )

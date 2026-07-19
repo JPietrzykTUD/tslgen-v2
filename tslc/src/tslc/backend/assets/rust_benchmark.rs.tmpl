@@ -1,16 +1,45 @@
-use crate::tsl_benchmark_core::{
-    runtime_self_test, write_samples, Options, RawSample, ReportMetadata,
+use crate::tsl_benchmark_core::{Options, RawSample};
+use crate::tsl_benchmark_policy::{
+    write_reports, BuildContext, ReportMetadata, RUST_BACKEND_ID,
 };
+use crate::tsl_benchmark_reducer::{reduce_profile, CandidateSetSpec, ScenarioSpec};
+use crate::tsl_benchmark_self_test::runtime_self_test;
 use crate::tsl_core::{Simd, SimdVector};
 use crate::tsl_test_core::LaneEq;
 use crate::tsl_@{profile_slug}::*;
 
 const PROTOCOL_VERSION: u32 = @{protocol_version};
+const POLICY_SCHEMA_VERSION: u32 = @{policy_schema_version};
 const PROFILE: &str = @{profile_name};
 const MANIFEST_HASH: &str = @{manifest_hash};
 const REQUIRED_FEATURES: &str = @{required_features};
 const BUILD_HOST: &str = env!("TSL_BUILD_HOST");
 const BUILD_TARGET: &str = env!("TSL_BUILD_TARGET");
+const BUILD_CONTEXT: BuildContext = BuildContext {
+    rustc_verbose_version: env!("TSL_RUSTC_VERBOSE_VERSION"),
+    host: BUILD_HOST,
+    target: BUILD_TARGET,
+    linker: env!("TSL_RUST_LINKER"),
+    rustc_wrapper: env!("TSL_RUSTC_WRAPPER"),
+    rustc_workspace_wrapper: env!("TSL_RUSTC_WORKSPACE_WRAPPER"),
+    target_cpu: env!("TSL_RUST_TARGET_CPU"),
+    target_features: env!("TSL_RUST_TARGET_FEATURES"),
+    cargo_features: env!("TSL_RUST_CARGO_FEATURES"),
+    cargo_profile: env!("TSL_RUST_CARGO_PROFILE"),
+    opt_level: env!("TSL_RUST_OPT_LEVEL"),
+    debug_assertions: env!("TSL_RUST_DEBUG_ASSERTIONS"),
+    overflow_checks: env!("TSL_RUST_OVERFLOW_CHECKS"),
+    lto: env!("TSL_RUST_LTO"),
+    codegen_units: env!("TSL_RUST_CODEGEN_UNITS"),
+    panic: env!("TSL_RUST_PANIC"),
+    incremental: env!("TSL_RUST_INCREMENTAL"),
+    debug: env!("TSL_RUST_DEBUG"),
+    rustflags: env!("TSL_RUSTFLAGS"),
+    encoded_rustflags: env!("TSL_RUST_ENCODED_RUSTFLAGS"),
+    profile_overrides: env!("TSL_RUST_PROFILE_OVERRIDES"),
+    benchmark_codegen_contract: @{benchmark_codegen_contract},
+    external_context: env!("TSL_RUST_BENCHMARK_CONTEXT"),
+};
 
 fn native_build_matches(host: &str, target: &str) -> bool {
     host == target
@@ -19,6 +48,10 @@ fn native_build_matches(host: &str, target: &str) -> bool {
 @{native_cpu_check}
 
 @{declarations}
+
+const CANDIDATE_SETS: [CandidateSetSpec; @{candidate_set_count}] = [
+@{candidate_set_specs}
+];
 
 fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     let options = Options::parse(arguments)?;
@@ -44,14 +77,21 @@ fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
 @{correctness_calls}
     let mut samples = Vec::<RawSample>::new();
 @{scenario_calls}
-    write_samples(
+    let decisions = reduce_profile(&CANDIDATE_SETS, &samples, &options)?;
+    write_reports(
+        &CANDIDATE_SETS,
         &samples,
+        &decisions,
         ReportMetadata {
+            policy_schema_version: POLICY_SCHEMA_VERSION,
             protocol_version: PROTOCOL_VERSION,
+            backend: RUST_BACKEND_ID,
             profile: PROFILE,
             manifest_hash: MANIFEST_HASH,
+            required_features: REQUIRED_FEATURES,
+            build_context: BUILD_CONTEXT,
         },
-        options.results_path.as_deref(),
+        &options,
     )
 }
 
