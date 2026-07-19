@@ -51,16 +51,19 @@ _STABLE_ID_RE = re.compile(r"[^0-9A-Za-z_]+")
 BENCHMARK_PROTOCOL_VERSION = 1
 
 
-class CppBenchmarkPlanner:
-    """Plan typed benchmark scenarios for authored implementation variants.
+class BenchmarkPlanner:
+    """Plan typed benchmark scenarios for one generated backend.
 
     Eligibility is expressed entirely through typed signature/catalog facts.
     Unsupported variant slots remain visible in coverage rather than being
     silently dropped or classified by primitive name.
     """
 
-    def __init__(self, catalog: Catalog) -> None:
+    def __init__(self, catalog: Catalog, *, backend_id: str) -> None:
+        if not backend_id:
+            raise ValueError("benchmark planner requires a backend ID")
         self._catalog = catalog
+        self._backend_id = backend_id
         self._harness = discover_harness_primitives(catalog)
 
     def plan(
@@ -75,7 +78,7 @@ class CppBenchmarkPlanner:
             for profile in value_tests.profiles
         }
         for emitted_profile in sorted(profiles, key=lambda item: item.profile.name):
-            backend_id = "cpp"
+            backend_id = self._backend_id
             by_primitive = emitted_profile.specializations(backend_id)
             cases = value_profiles.get((backend_id, emitted_profile.profile.name), ())
             candidate_sets: list[BenchmarkCandidateSet] = []
@@ -90,6 +93,7 @@ class CppBenchmarkPlanner:
                             _coverage(
                                 emitted_profile,
                                 spec,
+                                backend_id,
                                 "unsupported",
                                 "overloaded selector slots require overload-specific policy identity",
                             )
@@ -123,20 +127,25 @@ class CppBenchmarkPlanner:
                             _coverage(
                                 emitted_profile,
                                 spec,
+                                backend_id,
                                 "missing_correctness" if missing_correctness else "unsupported",
                                 reason,
                             )
                         )
                         continue
                     candidate_sets.extend(candidate_sets_for_spec)
-                    coverage.append(_coverage(emitted_profile, spec, "emitted", ""))
+                    coverage.append(
+                        _coverage(emitted_profile, spec, backend_id, "emitted", "")
+                    )
             ordered_sets = tuple(sorted(candidate_sets, key=lambda item: item.stable_id))
             planned_profiles.append(
                 BenchmarkProfilePlan(
                     backend_id=backend_id,
                     profile_name=emitted_profile.profile.name,
                     candidate_sets=ordered_sets,
-                    manifest_hash=_manifest_hash(ordered_sets, emitted_profile),
+                    manifest_hash=_manifest_hash(
+                        ordered_sets, emitted_profile, backend_id
+                    ),
                 )
             )
         return BenchmarkProjectPlan(
@@ -159,7 +168,9 @@ class CppBenchmarkPlanner:
     ) -> tuple[BenchmarkCandidateSet | None, str, bool]:
         primitive = _source_primitive(self._catalog, spec)
         extension = profile.extensions.get(spec.extension_name)
-        reason = _common_unsupported_reason(spec, primitive, extension)
+        reason = _common_unsupported_reason(
+            spec, primitive, extension, self._backend_id
+        )
         if reason is not None:
             return None, reason, False
         assert primitive is not None and extension is not None
@@ -169,7 +180,7 @@ class CppBenchmarkPlanner:
         if lanes is None:
             return None, "extension width does not contain a complete scalar lane", False
         key = SpecializationKey(
-            backend_id="cpp",
+            backend_id=self._backend_id,
             profile_name=profile.profile.name,
             primitive_name=spec.primitive_name,
             source_primitive_name=spec.source_primitive_name,
@@ -424,6 +435,7 @@ def _common_unsupported_reason(
     spec: LoweredSpecialization,
     primitive: Primitive | None,
     extension: Extension | None,
+    backend_id: str,
 ) -> str | None:
     if primitive is None:
         return "source primitive is not present in the catalog"
@@ -453,7 +465,7 @@ def _common_unsupported_reason(
         return "only fixed-width hardware vectors are benchmarked"
     if not extension.default_test_target:
         return "extension is not enabled as a native value-test target"
-    if extension.header_group_for_backend("cpp") is not None:
+    if extension.header_group_for_backend(backend_id) is not None:
         return "opt-in header-group extensions are not benchmarked in the first slice"
     return None
 
@@ -516,6 +528,7 @@ def _stable_id(key: SpecializationKey) -> str:
 def _manifest_hash(
     candidate_sets: tuple[BenchmarkCandidateSet, ...],
     profile: EmittedProfile,
+    backend_id: str,
 ) -> str:
     payload = {
         "protocol_version": BENCHMARK_PROTOCOL_VERSION,
@@ -524,10 +537,10 @@ def _manifest_hash(
             "family": profile.profile.family,
             "features": sorted(profile.profile.features),
             "feature_spellings": sorted(
-                profile.profile.feature_spellings("cpp").items()
+                profile.profile.feature_spellings(backend_id).items()
             ),
             "compile_modes": sorted(profile.profile.compile_modes),
-            "cpp_flags": profile.profile.flags_for_backend("cpp"),
+            f"{backend_id}_flags": profile.profile.flags_for_backend(backend_id),
         },
         "candidate_sets": [
             {
@@ -601,11 +614,12 @@ def _selector_slot_key(spec: LoweredSpecialization) -> tuple[object, ...]:
 def _coverage(
     profile: EmittedProfile,
     spec: LoweredSpecialization,
+    backend_id: str,
     status: BenchmarkCoverageStatus,
     reason: str,
 ) -> BenchmarkCoverageEntry:
     return BenchmarkCoverageEntry(
-        backend_id="cpp",
+        backend_id=backend_id,
         profile_name=profile.profile.name,
         primitive_name=spec.primitive_name,
         source_primitive_name=spec.source_primitive_name,
@@ -639,4 +653,4 @@ def _coverage_sort_key(entry: BenchmarkCoverageEntry) -> tuple[str, ...]:
     )
 
 
-__all__ = ("BENCHMARK_PROTOCOL_VERSION", "CppBenchmarkPlanner")
+__all__ = ("BENCHMARK_PROTOCOL_VERSION", "BenchmarkPlanner")

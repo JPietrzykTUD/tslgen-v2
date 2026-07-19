@@ -14,7 +14,7 @@ from tslc.backend.capability import (
 )
 from tslc.backend.cpp_translation import CppBackendDialect
 from tslc.backend.cpp import CppBackend
-from tslc.benchmark.planner import CppBenchmarkPlanner
+from tslc.benchmark.planner import BenchmarkPlanner
 from tslc.benchmark.render_cpp import cpp_benchmark_artifacts
 from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.cpp_validation import validate_cpp_profiles
@@ -72,7 +72,7 @@ def cpp_benchmark_plan(
     profiles: tuple[EmittedProfile, ...],
     value_tests: ValueTestProjectPlan,
 ) -> BenchmarkProjectPlan:
-    return CppBenchmarkPlanner(catalog).plan(profiles, value_tests)
+    return BenchmarkPlanner(catalog, backend_id="cpp").plan(profiles, value_tests)
 
 
 def cpp_documentation_formatter() -> BackendDocumentationFormatter:

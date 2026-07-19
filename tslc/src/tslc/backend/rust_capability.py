@@ -13,9 +13,10 @@ from tslc.backend.capability import (
     GeneratedFormatSpec,
 )
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
-from tslc.backend.rust_translation import RustBackendDialect
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_translation import RustBackendDialect
 from tslc.backend.rust_validation import validate_rust_profiles
+from tslc.benchmark.planner import BenchmarkPlanner
 from tslc.catalog.model import Catalog
 from tslc.output._verify_rust import (
     create_rust_verify_driver as _create_rust_verify_driver,
@@ -31,14 +32,15 @@ from tslc.render.tests_project import rust_test_artifacts
 from tslc.value_tests.render_rust import RUST_VALUE_TEST_SUPPORT
 
 if TYPE_CHECKING:
+    from tslc.benchmark.model import BenchmarkProjectPlan
     from tslc.backend.translation import BackendDialect
     from tslc.backend.emitted_profile import EmittedProfile
     from tslc.compiler_assets import RenderAssets
     from tslc.output.artifacts import Artifact
     from tslc.output.verify_drivers import VerifyBackendDriver
     from tslc.output.verify_model import VerifyProfile
-    from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
     from tslc.lower.lowerer import LoweredSpecialization
+    from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
 
 
 def create_rust_dialect(catalog: Catalog) -> BackendDialect:
@@ -65,6 +67,14 @@ def rust_value_test_artifacts(
     plan: ValueTestProjectPlan, assets: RenderAssets, media_type: str
 ) -> list[Artifact]:
     return rust_test_artifacts(plan, assets, media_type=media_type)
+
+
+def rust_benchmark_plan(
+    catalog: Catalog,
+    profiles: tuple[EmittedProfile, ...],
+    value_tests: ValueTestProjectPlan,
+) -> BenchmarkProjectPlan:
+    return BenchmarkPlanner(catalog, backend_id="rust").plan(profiles, value_tests)
 
 
 def rust_documentation_formatter() -> BackendDocumentationFormatter:
@@ -102,6 +112,7 @@ RUST_BACKEND = BackendCapability(
     verify_machine_profile=rust_verify_profile,
     toolchain_commands=rust_toolchain_commands,
     documentation_formatter_factory=rust_documentation_formatter,
+    benchmark_plan_builder=rust_benchmark_plan,
     helper_manifest=RUST_HELPER_MANIFEST,
     profile_validator=validate_rust_profiles,
     primitive_preview_renderer=rust_primitive_preview,
@@ -126,6 +137,7 @@ __all__ = [
     "create_rust_dialect",
     "create_rust_verify_driver",
     "rust_profile_verification",
+    "rust_benchmark_plan",
     "rust_documentation_formatter",
     "rust_project_artifacts",
     "rust_value_test_artifacts",

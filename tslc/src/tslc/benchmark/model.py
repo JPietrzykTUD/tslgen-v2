@@ -28,7 +28,7 @@ BenchmarkOperandGenerator = Literal[
 
 @dataclass(frozen=True, slots=True)
 class SpecializationKey:
-    """Backend-neutral identity of one policy-selectable specialization."""
+    """Backend-local identity of one policy-selectable specialization."""
 
     backend_id: str
     profile_name: str

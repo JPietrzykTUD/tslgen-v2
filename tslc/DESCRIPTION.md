@@ -379,12 +379,15 @@ finalized, validated profiles, prebuilt value-test plans, and prebuilt
 benchmark plans into a per-profile project with a top-level dispatch
 header/module.
 
-The optional [benchmark/](src/tslc/benchmark/) stage consumes finalized C++
-specializations and authored value-test facts. It plans every explicitly
-coexisting named variant in the emitted primitive/dependency closure, emits
-structured skip coverage for unsupported signature shapes, and renders a
-standalone native benchmark/policy tool. Value-test tags do not control
-benchmark admission. Workload semantics are resolved in
+The optional [benchmark/](src/tslc/benchmark/) stage consumes finalized
+backend specializations and authored value-test facts through one
+backend-parameterized typed planner. It plans every explicitly coexisting named
+variant in the emitted primitive/dependency closure and emits structured skip
+coverage for unsupported signature shapes. C++ renders those facts as a
+standalone native benchmark/policy tool; Rust currently stops at deterministic
+typed plan and coverage evidence, without adding benchmark artifacts to the
+generated Cargo project. Value-test tags do not control benchmark admission.
+Workload semantics are resolved in
 [benchmark/scenarios.py](src/tslc/benchmark/scenarios.py) before rendering:
 each typed scenario and correctness case validates its own structural and
 specialization compatibility and owns its canonical policy identity. Candidate
