@@ -159,7 +159,7 @@ def test_evaluate_candidates_ranks_winner_and_records_rejection(
     data_root: Path, machine_profiles_path: Path
 ) -> None:
     from tslc.catalog.builder import CatalogBuilder
-    from tslc.catalog.machine_profiles import load_machine_profiles
+    from tslc.catalog.machine_profiles import load_machine_profiles_checked
     from tslc.compiler_assets import load_default_tsl_grammar
     from tslc.sources import SourceLoader
     from tslc.syntax.parser import TslParser
@@ -169,7 +169,7 @@ def test_evaluate_candidates_ranks_winner_and_records_rejection(
     parse_result = TslParser(load_default_tsl_grammar()).parse(documents.documents)
     catalog = CatalogBuilder().build(parse_result).catalog
     assert catalog is not None
-    profile = load_machine_profiles(machine_profiles_path)["avx2"]
+    profile = load_machine_profiles_checked(machine_profiles_path).profiles["avx2"]
     primitive = catalog.primitive("add")
     assert primitive is not None
 

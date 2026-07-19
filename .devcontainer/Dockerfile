@@ -44,7 +44,9 @@ RUN set -eux; \
 ENV RUSTUP_HOME=/usr/local/rustup
 ENV CARGO_HOME=/usr/local/cargo
 ENV WASI_SDK_PATH=/opt/wasi-sdk
-ENV PATH="/opt/venv/bin:/opt/zig:/opt/wasi-sdk/bin:${CARGO_HOME}/bin:${PATH}"
+# Keep WASI's target-specific clang out of ambient compiler discovery. tslc
+# addresses it explicitly through the wasi-cpp tool role.
+ENV PATH="/opt/venv/bin:/opt/zig:${CARGO_HOME}/bin:${PATH}"
 
 ENV CC="zig cc"
 ENV CXX="zig c++"

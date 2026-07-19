@@ -9,7 +9,6 @@ repository-wide canonical probe so the committed report remains reproducible.
 from __future__ import annotations
 
 import argparse
-import ast
 from pathlib import Path
 import sys
 
@@ -18,6 +17,7 @@ from tslc.authoring import check_catalog
 from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.machine_profiles import load_machine_profiles_checked
 from tslc.diagnostics import Diagnostic, format_diagnostic, has_errors
+from tslc.maintenance.build_verified import build_verified_primitives
 from tslc.maintenance.coverage_inventory_report import (
     CoverageInventory,
     build_coverage_inventory,
@@ -28,59 +28,18 @@ from tslc.maintenance.coverage_inventory_render import (
     render_markdown,
     render_text,
 )
+from tslc.maintenance import _repo_context
+from tslc.maintenance._repo_context import RepoContext
 from tslc.project_config import ProjectConfig, load_project_config
 
 
 PROFILES = ("scalar", "sse2", "avx", "avx2", "skylake", "icelake_rockerlake")
 
 
-def _find_repo_root(start: Path) -> Path:
-    for candidate in (start, *start.parents):
-        if (candidate / "tsldata").is_dir() and (candidate / "tslc" / "src").is_dir():
-            return candidate
-    raise RuntimeError(f"could not find repository root from {start}")
+def canonical_report_path(context: RepoContext) -> Path:
+    """The tracked Markdown report maintained by ``--update``/``--check``."""
 
-
-_REPO_ROOT = _find_repo_root(Path(__file__).resolve())
-_DATA_ROOT = _REPO_ROOT / "tsldata"
-_PROFILES_PATH = _REPO_ROOT / "supplementary" / "buildsystem" / "machine_profiles.json"
-_BUILD_TEST = _REPO_ROOT / "tslc" / "tests" / "test_build_verify.py"
-_OUT = _REPO_ROOT / "coverage" / "primitive-coverage-inventory.md"
-
-
-def _has_skip_decorator(fn: ast.FunctionDef) -> bool:
-    """Return whether a test function is explicitly skipped."""
-
-    for decorator in fn.decorator_list:
-        target = decorator.func if isinstance(decorator, ast.Call) else decorator
-        while isinstance(target, ast.Attribute):
-            if target.attr == "skip":
-                return True
-            target = target.value
-    return False
-
-
-def _build_verified_primitives() -> frozenset[str]:
-    """Primitive names covered by at least one non-skipped generated build test."""
-
-    tree = ast.parse(_BUILD_TEST.read_text(encoding="utf-8"))
-    verified: set[str] = set()
-    for fn in tree.body:
-        if not isinstance(fn, ast.FunctionDef) or _has_skip_decorator(fn):
-            continue
-        for node in ast.walk(fn):
-            if (
-                isinstance(node, ast.keyword)
-                and node.arg == "primitives"
-                and isinstance(node.value, ast.List)
-            ):
-                verified.update(
-                    element.value
-                    for element in node.value.elts
-                    if isinstance(element, ast.Constant)
-                    and isinstance(element.value, str)
-                )
-    return frozenset(verified)
+    return context.coverage_root / "primitive-coverage-inventory.md"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -114,26 +73,58 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    sources: tuple[Path, ...]
-    profiles: tuple[str, ...] | None
-    maintenance_mode = args.update or args.check
-    if maintenance_mode:
+    if args.update or args.check:
         _reject_custom_canonical_scope(args, parser)
-        sources = (_DATA_ROOT,)
-        machine_profiles = _PROFILES_PATH
-        profiles = PROFILES
-        backends = registered_backend_ids()
-        type_tags = _ARITH_TYPE_TAGS
-    else:
-        if args.output is not None:
-            parser.error("--output requires --update or --check")
-        try:
-            project = load_project_config(args.config)
-            sources, machine_profiles, backends = _configured_scope(args, project)
-            profiles = _csv(args.profiles) if args.profiles else None
-            type_tags = _csv(args.types) if args.types else _ARITH_TYPE_TAGS
-        except ValueError as exc:
-            parser.error(str(exc))
+        return _run_canonical(args, parser)
+    if args.output is not None:
+        parser.error("--output requires --update or --check")
+    return _run_report(args, parser)
+
+
+def _run_canonical(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> int:
+    """Maintain the tracked report over the stable repository-wide scope."""
+
+    context = _repo_context.require_repo_context(parser)
+    inventory, errors = collect_inventory(
+        sources=(context.data_root,),
+        machine_profiles=context.machine_profiles_path,
+        profiles=PROFILES,
+        backends=registered_backend_ids(),
+        type_tags=_ARITH_TYPE_TAGS,
+    )
+    if inventory is None:
+        for error in errors:
+            print(error, file=sys.stderr)
+        return 1
+
+    output = Path(args.output) if args.output else canonical_report_path(context)
+    rendered = render_markdown(inventory, tracked=True)
+    if args.check:
+        current = output.read_text(encoding="utf-8") if output.is_file() else None
+        if current != rendered:
+            print(f"coverage inventory is stale: {output}", file=sys.stderr)
+            return 1
+        print(f"coverage inventory is current: {_display_path(output, context.root)}")
+        return 0
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(rendered, encoding="utf-8")
+    print(f"wrote {_display_path(output, context.root)}")
+    return 0
+
+
+def _run_report(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    """Print a read-only inventory over the configured corpus scope."""
+
+    sources: tuple[Path, ...]
+    try:
+        project = load_project_config(args.config)
+        sources, machine_profiles, backends = _configured_scope(args, project, parser)
+        profiles = _csv(args.profiles) if args.profiles else None
+        type_tags = _csv(args.types) if args.types else _ARITH_TYPE_TAGS
+    except ValueError as exc:
+        parser.error(str(exc))
 
     inventory, errors = collect_inventory(
         sources=sources,
@@ -146,21 +137,6 @@ def main(argv: list[str] | None = None) -> int:
         for error in errors:
             print(error, file=sys.stderr)
         return 1
-
-    if args.check or args.update:
-        output = Path(args.output) if args.output else _OUT
-        rendered = render_markdown(inventory, tracked=True)
-        if args.check:
-            current = output.read_text(encoding="utf-8") if output.is_file() else None
-            if current != rendered:
-                print(f"coverage inventory is stale: {output}", file=sys.stderr)
-                return 1
-            print(f"coverage inventory is current: {_display_path(output)}")
-            return 0
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(rendered, encoding="utf-8")
-        print(f"wrote {_display_path(output)}")
-        return 0
 
     renderer = {
         "text": render_text,
@@ -179,7 +155,12 @@ def collect_inventory(
     backends: tuple[str, ...],
     type_tags: tuple[str, ...],
 ) -> tuple[CoverageInventory | None, tuple[str, ...]]:
-    """Load configured inputs, run lowering only, and calculate the inventory."""
+    """Load configured inputs, run lowering only, and calculate the inventory.
+
+    Build-verification evidence comes from the typed
+    ``tslc.maintenance.build_verified`` constant the generated-build tests
+    consume, so no checkout probing is required.
+    """
 
     catalog_result = check_catalog(sources, backends=backends)
     if catalog_result.catalog is None or has_errors(catalog_result.diagnostics):
@@ -220,7 +201,7 @@ def collect_inventory(
             machine_profiles=selected_profile_models,
             backends=backends,
             type_tags=type_tags,
-            verified_primitives=_build_verified_primitives(),
+            verified_primitives=build_verified_primitives(),
         ),
         (),
     )
@@ -229,21 +210,26 @@ def collect_inventory(
 def _configured_scope(
     args: argparse.Namespace,
     project: ProjectConfig | None,
+    parser: argparse.ArgumentParser,
 ) -> tuple[tuple[Path, ...], Path, tuple[str, ...]]:
-    sources = (
-        tuple(Path(item) for item in args.sources)
-        if args.sources
-        else project.sources
-        if project is not None
-        else (_DATA_ROOT,)
-    )
-    machine_profiles = (
-        Path(args.machine_profiles)
-        if args.machine_profiles
-        else project.machine_profiles
-        if project is not None
-        else _PROFILES_PATH
-    )
+    """Resolve corpus paths, requiring a checkout only as the last fallback."""
+
+    fallback: RepoContext | None = None
+    if args.sources:
+        sources = tuple(Path(item) for item in args.sources)
+    elif project is not None:
+        sources = project.sources
+    else:
+        fallback = _repo_context.require_repo_context(parser)
+        sources = (fallback.data_root,)
+    if args.machine_profiles:
+        machine_profiles = Path(args.machine_profiles)
+    elif project is not None:
+        machine_profiles = project.machine_profiles
+    else:
+        if fallback is None:
+            fallback = _repo_context.require_repo_context(parser)
+        machine_profiles = fallback.machine_profiles_path
     backends = (
         _csv(args.backends)
         if args.backends
@@ -297,15 +283,16 @@ def _diagnostic_lines(diagnostics: tuple[Diagnostic, ...]) -> tuple[str, ...]:
     )
 
 
-def _display_path(path: Path) -> Path:
+def _display_path(path: Path, repo_root: Path) -> Path:
     try:
-        return path.relative_to(_REPO_ROOT)
+        return path.relative_to(repo_root)
     except ValueError:
         return path
 
 
 __all__ = (
     "PROFILES",
+    "canonical_report_path",
     "collect_inventory",
     "main",
     "skip_category",

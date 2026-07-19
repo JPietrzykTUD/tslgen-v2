@@ -5,7 +5,9 @@ import {
   groupSlots,
   implementationLabel,
   originDescription,
+  slotCallableLabel,
   slotStatusDescription,
+  slotTypeLabel,
   type ExplorerImplementation,
   type ExplorerSlot,
 } from "../src/explorerModel";
@@ -13,8 +15,13 @@ import {
 describe("primitive explorer presentation", () => {
   const slots: readonly ExplorerSlot[] = [
     {
+      primitive: "add",
+      signature: "v:=(v,v)",
+      parameters: ["left", "right"],
+      attributes: {},
       extension: "avx2",
       type: "si32",
+      target: null,
       status: "selected",
       detail: null,
       available: true,
@@ -22,8 +29,13 @@ describe("primitive explorer presentation", () => {
       implementations: [],
     },
     {
+      primitive: "add",
+      signature: "v:=(v,v)",
+      parameters: ["left", "right"],
+      attributes: {},
       extension: "avx2",
       type: "f64",
+      target: null,
       status: "missing",
       detail: "missing",
       available: false,
@@ -31,8 +43,27 @@ describe("primitive explorer presentation", () => {
       implementations: [],
     },
     {
+      primitive: "add",
+      signature: "v:=(m,v,v)",
+      parameters: ["mask", "left", "right"],
+      attributes: { mask: "zero" },
+      extension: "avx2",
+      type: "si32",
+      target: null,
+      status: "selected",
+      detail: null,
+      available: true,
+      origins: ["broader"],
+      implementations: [],
+    },
+    {
+      primitive: "add",
+      signature: "v:=(m,v,v)",
+      parameters: ["mask", "left", "right"],
+      attributes: { mask: "zero" },
       extension: "scalar",
       type: "si32",
+      target: null,
       status: "authored",
       detail: null,
       available: true,
@@ -46,13 +77,13 @@ describe("primitive explorer presentation", () => {
     assert.deepEqual(
       groups.map((group) => [group.extension, group.available, group.total]),
       [
-        ["avx2", 1, 2],
+        ["avx2", 2, 3],
         ["scalar", 1, 1],
       ],
     );
     assert.deepEqual(
       groups[0]?.slots.map((slot) => slot.type),
-      ["si32", "f64"],
+      ["si32", "f64", "si32"],
     );
   });
 
@@ -60,8 +91,8 @@ describe("primitive explorer presentation", () => {
     const groups = groupSlots(slots, true);
     assert.equal(groups.length, 1);
     assert.equal(groups[0]?.extension, "avx2");
-    assert.equal(groups[0]?.available, 1);
-    assert.equal(groups[0]?.total, 2);
+    assert.equal(groups[0]?.available, 2);
+    assert.equal(groups[0]?.total, 3);
     assert.deepEqual(groups[0]?.slots.map((slot) => slot.type), ["f64"]);
   });
 
@@ -80,7 +111,7 @@ describe("primitive explorer presentation", () => {
     assert.equal(slotStatusDescription(slots[0]!), "selected • broader selector");
     assert.equal(slotStatusDescription(slots[1]!), "missing implementation");
     assert.equal(
-      slotStatusDescription(slots[2]!),
+      slotStatusDescription(slots[3]!),
       "authored source • authored here + inherited",
     );
   });
@@ -90,6 +121,7 @@ describe("primitive explorer presentation", () => {
       primitive: "hmax",
       signature: "s:=(m,v)",
       parameters: ["mask", "vec"],
+      attributes: {},
       extension: "clang_v128",
       typeGroup: "arith",
       selectorPath: ["clang_v128", "arith"],
@@ -107,5 +139,25 @@ describe("primitive explorer presentation", () => {
       implementationLabel(implementation),
       "hmax(mask, vec) • clang_v128 / arith",
     );
+  });
+
+  it("identifies callable attributes on specialization rows", () => {
+    assert.equal(
+      slotCallableLabel(slots[3]!),
+      "add(mask, left, right) [mask=zero]",
+    );
+  });
+
+  it("identifies the concrete representation target on a slot", () => {
+    const targetSlot: ExplorerSlot = {
+      ...slots[0]!,
+      target: { dimension: "base", name: "ToBase", value: "ui8" },
+    };
+
+    assert.equal(slotTypeLabel(targetSlot), "si32 → ui8");
+    assert.equal(slotTypeLabel({
+      ...targetSlot,
+      target: { dimension: "extension", name: "ToExtension", value: null },
+    }), "si32 → ToExtension");
   });
 });

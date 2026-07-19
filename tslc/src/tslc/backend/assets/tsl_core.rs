@@ -348,6 +348,24 @@ impl_tsl_clz!(u16);
 impl_tsl_clz!(u32);
 impl_tsl_clz!(u64);
 
+// Compact integral masks are always represented by one of these unsigned
+// storage types. The trait lets a target-vector-associated ImaskType receive a
+// normalized u64 result without target-language type inspection in the compiler.
+pub trait TslImask: Copy {
+    fn from_u64(value: u64) -> Self;
+}
+macro_rules! impl_tsl_imask {
+    ($($ty:ty),*) => {
+        $( impl TslImask for $ty {
+            #[inline]
+            fn from_u64(value: u64) -> Self {
+                value as Self
+            }
+        } )*
+    };
+}
+impl_tsl_imask!(u8, u16, u32, u64);
+
 pub fn ptr_add<T>(p: *const T, i: usize) -> *const T {
     p.wrapping_add(i)
 }
@@ -565,6 +583,49 @@ pub mod detail {
     }
     pub fn clz<T: TslClz>(v: T) -> u32 {
         v.clz()
+    }
+    fn imask_low_bits(count: usize) -> u64 {
+        if count >= 64 {
+            u64::MAX
+        } else if count == 0 {
+            0
+        } else {
+            (1u64 << count) - 1u64
+        }
+    }
+    pub fn imask_insert<ToVec: StaticSimdVector>(
+        orig: u64,
+        data: u64,
+        position: usize,
+        source_lanes: usize,
+        target_lanes: usize,
+    ) -> ToVec::ImaskType
+    where
+        ToVec::ImaskType: TslImask,
+    {
+        let normalized_orig = orig & imask_low_bits(target_lanes);
+        if position >= target_lanes || position >= 64 {
+            return ToVec::ImaskType::from_u64(normalized_orig);
+        }
+        let copied = source_lanes.min(target_lanes - position);
+        let window = imask_low_bits(copied) << position;
+        let inserted = (data & imask_low_bits(copied)) << position;
+        ToVec::ImaskType::from_u64((normalized_orig & !window) | inserted)
+    }
+    pub fn imask_extract<ToVec: StaticSimdVector>(
+        data: u64,
+        position: usize,
+        source_lanes: usize,
+        target_lanes: usize,
+    ) -> ToVec::ImaskType
+    where
+        ToVec::ImaskType: TslImask,
+    {
+        if position >= source_lanes || position >= 64 {
+            return ToVec::ImaskType::from_u64(0);
+        }
+        let copied = target_lanes.min(source_lanes - position);
+        ToVec::ImaskType::from_u64((data >> position) & imask_low_bits(copied))
     }
 
     // Saturating numeric cast for `convert_down` (`cast<saturating>`). Narrowing a lane that does

@@ -12,30 +12,21 @@ import subprocess
 import sys
 from typing import Any
 
+from tslc._cli_options import merge_toolchains, parse_assignments, split_csv
 from tslc.authoring import check_catalog
 from tslc.backend.registry import backend_capabilities
 from tslc.catalog.machine_profiles import load_machine_profiles_checked
-from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.target_families import ProfileFamilyCapability
-from tslc.diagnostics import Diagnostic, has_errors
-from tslc.output._verify_cpp_config import cpp_linker, cpp_target, effective_cpp_compiler
-from tslc.output._verify_rust_config import (
-    effective_rust_compiler,
-    rust_linker,
-    rust_target,
-)
+from tslc.diagnostics import has_errors
 from tslc.output.verify import run_subprocess_build_command
 from tslc.output.verify_model import (
     BackendToolchain,
-    BuildCommandResult,
     BuildCommandRunner,
     BuildVerifierConfig,
+    ToolchainCommands,
     VerifyBackend,
     VerifyProfile,
 )
 from tslc.project_config import ProjectConfig, load_project_config
-from tslc.render.cpp_build import cpp_verify_profile
-from tslc.render.rust_project import rust_verify_profile
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -67,10 +58,11 @@ def main(argv: list[str] | None = None) -> int:
         sources=settings.sources,
         machine_profiles=settings.machine_profiles,
         backends=settings.backends,
-        profiles=tuple(args.profile) or (_split(args.profiles) if args.profiles else None),
+        profiles=tuple(args.profile) or (split_csv(args.profiles) if args.profiles else None),
         work_root=settings.work_root,
         toolchains=settings.toolchains,
         runner_paths=settings.runner_paths,
+        tool_paths=settings.tool_paths,
         run_value_tests=args.run,
     )
     if args.format == "json":
@@ -95,6 +87,7 @@ class _Settings:
         work_root: Path,
         toolchains: Mapping[str, BackendToolchain],
         runner_paths: Mapping[str, str],
+        tool_paths: Mapping[str, str],
     ) -> None:
         self.sources = sources
         self.machine_profiles = machine_profiles
@@ -102,6 +95,7 @@ class _Settings:
         self.work_root = work_root
         self.toolchains = toolchains
         self.runner_paths = runner_paths
+        self.tool_paths = tool_paths
 
 
 def _settings(args: argparse.Namespace, project: ProjectConfig | None) -> _Settings:
@@ -124,25 +118,21 @@ def _settings(args: argparse.Namespace, project: ProjectConfig | None) -> _Setti
             "doctor requires sources and machine profiles; configure tslc.toml or pass both"
         )
     backends = tuple(args.backend) or (
-        _split(args.backends)
+        split_csv(args.backends)
         if args.backends
         else project.backends
         if project is not None
         else ("cpp", "rust")
     )
-    compilers = _assignments(args.compiler, "--compiler")
-    targets = _assignments(args.target, "--target")
-    linkers = _assignments(args.linker, "--linker")
-    base_toolchains = dict(project.toolchains) if project is not None else {}
-    for backend_id in compilers.keys() | targets.keys() | linkers.keys():
-        previous = base_toolchains.get(backend_id, BackendToolchain())
-        base_toolchains[backend_id] = BackendToolchain.create(
-            compiler=compilers.get(backend_id) or previous.compiler,
-            target=targets.get(backend_id) or previous.target,
-            linker=linkers.get(backend_id) or previous.linker,
-        )
+    base_toolchains = merge_toolchains(
+        project.toolchains if project is not None else {},
+        parse_assignments(args.compiler, "--compiler"),
+        parse_assignments(args.target, "--target"),
+        parse_assignments(args.linker, "--linker"),
+    )
     runners = dict(project.runner_paths) if project is not None else {}
-    runners.update(_assignments(args.runner, "--runner"))
+    runners.update(parse_assignments(args.runner, "--runner"))
+    tools = dict(project.tool_paths) if project is not None else {}
     if args.work_root:
         work_root = Path(args.work_root)
     elif project is not None:
@@ -156,6 +146,7 @@ def _settings(args: argparse.Namespace, project: ProjectConfig | None) -> _Setti
         work_root=work_root,
         toolchains=base_toolchains,
         runner_paths=runners,
+        tool_paths=tools,
     )
 
 
@@ -168,6 +159,7 @@ def diagnose(
     work_root: Path,
     toolchains: Mapping[str, BackendToolchain] | None = None,
     runner_paths: Mapping[str, str] | None = None,
+    tool_paths: Mapping[str, str] | None = None,
     runner: BuildCommandRunner = run_subprocess_build_command,
     run_value_tests: bool = False,
 ) -> dict[str, Any]:
@@ -191,14 +183,14 @@ def diagnose(
     config = BuildVerifierConfig.create(
         toolchains=toolchains,
         runner_paths=runner_paths,
+        tool_paths=tool_paths,
         run_value_tests=run_value_tests,
     )
     backend_reports: list[dict[str, Any]] = []
     work_root.mkdir(parents=True, exist_ok=True)
     for capability in backend_capabilities(backends):
         verify_profiles = tuple(
-            _verify_profile(
-                capability.backend_id,
+            capability.verify_machine_profile(
                 profile,
                 checked.catalog.target_families.profile_family(profile.family),
             )
@@ -211,25 +203,18 @@ def diagnose(
         )
         driver = capability.verify_driver()
         missing_tools = [tool for tool in driver.required_tools if shutil.which(tool) is None]
-        command_results: list[BuildCommandResult] = []
-        preflight_diagnostics: list[Diagnostic] = []
-        skipped: list[str] = []
-        prepared = driver.prepare_backend(
-            work_root,
-            backend,
-            config,
-            runner,
-            command_results,
-            preflight_diagnostics,
-            skipped,
-        )
+        prep = driver.prepare_backend(work_root, backend, config, runner)
+        command_results = list(prep.commands)
+        preflight_diagnostics = list(prep.diagnostics)
+        skipped = list(prep.skipped)
+        prepared = prep.backend
         prepared_names = {
             item.profile_name for item in prepared.profiles
         } if prepared is not None else set()
         profile_reports = [
             _profile_report(
-                capability.backend_id,
                 item,
+                capability.toolchain_commands(item, config),
                 config,
                 prepared=item.profile_name in prepared_names,
                 missing_backend_tools=missing_tools,
@@ -273,35 +258,18 @@ def diagnose(
     }
 
 
-def _verify_profile(
-    backend_id: str,
-    profile: MachineProfile,
-    family: ProfileFamilyCapability | None,
-) -> VerifyProfile:
-    if backend_id == "cpp":
-        return cpp_verify_profile(profile, family)
-    if backend_id == "rust":
-        return rust_verify_profile(profile, family)
-    raise ValueError(f"unsupported backend {backend_id!r}")
-
-
 def _profile_report(
-    backend_id: str,
     profile: VerifyProfile,
+    commands: ToolchainCommands,
     config: BuildVerifierConfig,
     *,
     prepared: bool,
     missing_backend_tools: list[str],
     skipped: list[str],
 ) -> dict[str, Any]:
-    if backend_id == "cpp":
-        compiler = effective_cpp_compiler(config, profile=profile)
-        target = cpp_target(profile, config)
-        linker = cpp_linker(config)
-    else:
-        compiler = (effective_rust_compiler(config),)
-        target = rust_target(profile, config)
-        linker = rust_linker(profile, config)
+    compiler = commands.compiler
+    target = commands.target
+    linker = commands.linker
     compiler_tool = _tool(compiler[0], compiler)
     missing = [f"{tool} not found" for tool in missing_backend_tools]
     if not compiler_tool["available"]:
@@ -377,22 +345,6 @@ def _version(command: tuple[str, ...]) -> str | None:
         return None
     text = completed.stdout.strip() or completed.stderr.strip()
     return text.splitlines()[0] if text else None
-
-
-def _assignments(values: list[str], option: str) -> dict[str, str]:
-    result: dict[str, str] = {}
-    for value in values:
-        name, separator, setting = value.partition("=")
-        if not separator or not name.strip() or not setting.strip():
-            raise ValueError(f"{option} expects NAME=VALUE, got {value!r}")
-        if name.strip() in result:
-            raise ValueError(f"{option} repeats name {name.strip()!r}")
-        result[name.strip()] = setting.strip()
-    return result
-
-
-def _split(value: str) -> tuple[str, ...]:
-    return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 def _format_text(report: dict[str, Any]) -> str:

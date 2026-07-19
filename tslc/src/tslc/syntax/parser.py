@@ -11,7 +11,7 @@ from lark import Lark, Token, Tree
 from lark.exceptions import UnexpectedInput
 from lark.indenter import Indenter
 
-from tslc.diagnostics import Diagnostic, SourceLocation
+from tslc.diagnostics import Diagnostic, SourceLocation, SourceSpan
 from tslc.sources import SourceDocument
 from tslc.syntax.ast import (
     OuterTslParseResult,
@@ -54,6 +54,14 @@ _KNOWN_PRIMITIVE_FIELDS: dict[str, ParsedPrimitiveFieldKind] = {
 }
 
 
+class _MalformedStringError(Exception):
+    """A grammar-accepted string literal whose escapes cannot be decoded."""
+
+    def __init__(self, span: ParsedTslSourceSpan) -> None:
+        super().__init__(span.text)
+        self.span = span
+
+
 class _TslIndenter(Indenter):
     NL_type = "NEWLINE"
     OPEN_PAREN_types = ["LPAR", "LSQB", "LBRACE", "LT"]
@@ -81,16 +89,41 @@ class TslParser:
                         severity="error",
                         code="TSL-OUTER-PARSE-UNSUPPORTED-FORM",
                         message=f"outer TSL declaration parse failed: {error}",
-                        location=SourceLocation(
-                            document.path,
-                            int(getattr(error, "line", 1) or 1),
-                            int(getattr(error, "column", 1) or 1),
+                        span=SourceSpan.point(
+                            SourceLocation(
+                                document.path,
+                                int(getattr(error, "line", 1) or 1),
+                                int(getattr(error, "column", 1) or 1),
+                            )
                         ),
                     )
                 )
                 continue
 
-            parsed_documents.append(_DocumentTransformer(document).transform(tree))
+            try:
+                parsed_documents.append(_DocumentTransformer(document).transform(tree))
+            except _MalformedStringError as error:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-OUTER-PARSE-BAD-STRING",
+                        message=(
+                            "string literal contains an escape sequence that cannot"
+                            f" be decoded: {error.span.text}"
+                        ),
+                        span=SourceSpan(
+                            path=error.span.path,
+                            line=error.span.line,
+                            column=error.span.column,
+                            end_line=error.span.end_line,
+                            end_column=error.span.end_column,
+                        ),
+                        help=(
+                            'use "\\\\" for a literal backslash; only escapes valid in'
+                            " a Python string literal are supported"
+                        ),
+                    )
+                )
 
         return OuterTslParseResult(
             documents=tuple(parsed_documents),
@@ -421,7 +454,10 @@ class _DocumentTransformer:
         text = raw_text
         if tree.data == "string":
             quote_form = "inline"
-            text = ast.literal_eval(raw_text)
+            try:
+                text = ast.literal_eval(raw_text)
+            except (ValueError, SyntaxError):
+                raise _MalformedStringError(self._span(token)) from None
             payload_source = self._inner_string_span(token, 1)
         elif tree.data == "multiline_string":
             quote_form = "multiline"

@@ -1,4 +1,10 @@
-"""Parsed AST accessors and span conversion helpers for catalog validation."""
+"""Parse-tree shape accessors shared by catalog promotion and validation.
+
+A field's children can be spelled as an indented block (``field.children``) or
+as an inline ``{}`` map (``field.value`` entries). These helpers own that
+equivalence — plus scalar/list text extraction and span conversion — so every
+parsed-TSL consumer reads the tree through one implementation.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +14,7 @@ from tslc.diagnostics import SourceSpan
 from tslc.syntax.ast import (
     ParsedTslAttribute,
     ParsedTslField,
+    ParsedTslListValue,
     ParsedTslMapValue,
     ParsedTslScalarValue,
     ParsedTslSourceSpan,
@@ -15,6 +22,8 @@ from tslc.syntax.ast import (
 
 
 def children(field: ParsedTslField | None) -> tuple[ParsedTslField, ...]:
+    """Child fields, whether the source used an indented block or an inline ``{}`` map."""
+
     if field is None:
         return ()
     if field.children:
@@ -45,6 +54,14 @@ def field_text(field: ParsedTslField | None) -> str | None:
     if field is not None and isinstance(field.value, ParsedTslScalarValue):
         return field.value.text
     return None
+
+
+def list_text(field: ParsedTslField | None) -> tuple[str, ...]:
+    if field is None or not isinstance(field.value, ParsedTslListValue):
+        return ()
+    return tuple(
+        item.text for item in field.value.items if isinstance(item, ParsedTslScalarValue)
+    )
 
 
 def attribute_scalar_text(attribute: ParsedTslAttribute) -> str | None:

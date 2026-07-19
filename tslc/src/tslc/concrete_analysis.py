@@ -22,6 +22,7 @@ from tslc.lower.implementation_state import (
     ImplementationState,
     combine_implementation_states,
 )
+from tslc.lower.lowerer import LoweredSpecialization
 from tslc.pipeline import GenerationRequest, SkippedEntry, _generate_loaded
 
 AnalysisNodeStatus = Literal["resolved", "unresolved", "cycle"]
@@ -34,6 +35,7 @@ class ConcreteAnalysisContext:
     backend: str
     extension: str
     type_tag: str
+    to_target: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +79,7 @@ def analyze_concrete_specialization(
     backend: str,
     extension: str,
     type_tag: str,
+    to_target: str | None = None,
 ) -> tuple[ConcreteAnalysis | None, tuple[Diagnostic, ...]]:
     """Load one saved corpus and analyze an exact lowered specialization."""
 
@@ -101,6 +104,7 @@ def analyze_concrete_specialization(
         backend=backend,
         extension=extension,
         type_tag=type_tag,
+        to_target=to_target,
     )
     trace = result.lowering_trace
     roots = (
@@ -161,7 +165,18 @@ def _matches_context(
         and context.primitive in {spec.primitive_name, spec.source_primitive_name}
         and spec.extension_name == context.extension
         and spec.type_tag == context.type_tag
+        and _matches_target(spec, context.to_target)
     )
+
+
+def _matches_target(spec: LoweredSpecialization, to_target: str | None) -> bool:
+    if to_target is None:
+        return True
+    target = spec.target
+    return target is not None and to_target in {
+        target.base_tag,
+        target.extension_isa,
+    }
 
 
 def _node_from_slot(

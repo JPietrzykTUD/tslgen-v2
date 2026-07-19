@@ -20,6 +20,9 @@ class SignatureTypeForms:
     free_with_pointer_base: str | None = None
     owner: str | None = None
     concrete: str | None = None
+    member: str | None = None
+    member_parameter: str | None = None
+    concrete_integral_mask: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +70,21 @@ class BackendSignatureTypes:
     def concrete_type(self, kind: str, **values: str | None) -> str:
         return self._project(kind, "concrete", **values)
 
+    def member_type(self, kind: str, **values: str | None) -> str:
+        """Value/result type scoped to an explicit vector type spelling."""
+
+        return self._project(kind, "member", **values)
+
+    def member_parameter_type(self, kind: str, **values: str | None) -> str:
+        """Parameter type scoped to an explicit vector type spelling."""
+
+        return self._project(kind, "member_parameter", **values)
+
+    def concrete_integral_mask_type(self, kind: str, **values: str | None) -> str:
+        """Concrete unsigned-integer mask spelling for a lane-derived bit width."""
+
+        return self._project(kind, "concrete_integral_mask", **values)
+
     def supports(self, kind: str, form: str) -> bool:
         forms = self._forms.get(kind)
         return forms is not None and getattr(forms, form, None) is not None
@@ -105,46 +123,63 @@ CPP_SIGNATURE_TYPES = BackendSignatureTypes(
         "v": SignatureTypeForms(
             result="typename Vec::register_type",
             parameter="typename tsl::reg_param<Vec>::type",
+            member="typename {vector}::register_type",
+            member_parameter="typename ::tsl::reg_param<{vector}>::type",
         ),
         "s": SignatureTypeForms(
             result="typename Vec::base_type",
             parameter="typename Vec::base_type",
             free="{base}",
+            concrete="{base}",
+            member="typename {vector}::base_type",
+            member_parameter="typename {vector}::base_type",
         ),
         "m": SignatureTypeForms(
             result="typename Vec::mask_type",
             parameter="typename Vec::mask_type",
+            member="typename {vector}::mask_type",
+            member_parameter="typename {vector}::mask_type",
         ),
         "im": SignatureTypeForms(
             result="typename Vec::imask_type",
             parameter="typename Vec::imask_type",
+            member="typename {vector}::imask_type",
+            member_parameter="typename {vector}::imask_type",
+            concrete_integral_mask="std::uint{width}_t",
         ),
         "usize": SignatureTypeForms(
             result="std::size_t",
             parameter="std::size_t",
             free="std::size_t",
+            concrete="std::size_t",
+            member="std::size_t",
+            member_parameter="std::size_t",
         ),
         "ptr": SignatureTypeForms(
             parameter="typename Vec::base_type *",
             free="{base} *",
             free_with_pointer_base="{base}",
+            member_parameter="typename {vector}::base_type*",
         ),
         "ptr+": SignatureTypeForms(
             parameter="typename Vec::base_type *",
             free="{base} *",
             free_with_pointer_base="{base}",
+            member_parameter="typename {vector}::base_type*",
         ),
         "cptr": SignatureTypeForms(
             parameter="typename Vec::base_type const *",
             free="const {base} *",
             free_with_pointer_base="const {base}",
+            member_parameter="typename {vector}::base_type const*",
         ),
         "cptr+": SignatureTypeForms(
             parameter="typename Vec::base_type const *",
             free="const {base} *",
             free_with_pointer_base="const {base}",
+            member_parameter="typename {vector}::base_type const*",
         ),
-        "void": SignatureTypeForms(result="void", free="void"),
+        "void": SignatureTypeForms(result="void", free="void", member="void"),
         "s[]": SignatureTypeForms(
             result="typename ::tsl::array_for<Vec>::type",
             parameter="typename ::tsl::array_param<Vec>::type",
@@ -153,7 +188,12 @@ CPP_SIGNATURE_TYPES = BackendSignatureTypes(
             parameter="typename ::tsl::array_param<Vec>::type"
         ),
         "vt": SignatureTypeForms(
-            parameter="typename tsl::reg_param<{target_vector}>::type"
+            parameter="typename tsl::reg_param<{target_vector}>::type",
+            member_parameter="typename ::tsl::reg_param<{vector}>::type",
+        ),
+        "imt": SignatureTypeForms(
+            parameter="typename {target_vector}::imask_type",
+            member_parameter="typename {vector}::imask_type",
         ),
         "vidx": SignatureTypeForms(
             parameter="typename tsl::reg_param<{index_type}>::type"
@@ -189,6 +229,7 @@ RUST_SIGNATURE_TYPES = BackendSignatureTypes(
             owner="{owner}::ImaskType",
             parameter="{owner}::ImaskType",
             concrete="{register}",
+            concrete_integral_mask="u{width}",
         ),
         "usize": SignatureTypeForms(
             owner="usize",
@@ -239,6 +280,10 @@ RUST_SIGNATURE_TYPES = BackendSignatureTypes(
             owner="{owner}::RegisterType",
             parameter="{owner}::RegisterType",
             concrete="{register}",
+        ),
+        "imt": SignatureTypeForms(
+            owner="{owner}::ImaskType",
+            parameter="{owner}::ImaskType",
         ),
         "vidx": SignatureTypeForms(
             owner="{owner}::RegisterType",

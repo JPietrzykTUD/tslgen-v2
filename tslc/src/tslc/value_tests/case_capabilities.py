@@ -68,6 +68,13 @@ _CASE_REQUIREMENTS = {
             {ValueTestFact.REPRESENTATION, ValueTestFact.INDEX_VALUE}
         ),
     ),
+    "extension_result": ValueTestCaseRequirements(
+        expected="non_empty",
+        vector_inputs="non_empty",
+        required_facts=_CONVERSION_TARGET_FACTS
+        | frozenset({ValueTestFact.REPRESENTATION, ValueTestFact.RESULT_KIND}),
+        vector_inputs_match_lanes=True,
+    ),
     "generic_golden": ValueTestCaseRequirements(
         expected="lanes", required_facts=_RESULT, vector_inputs_match_lanes=True
     ),
@@ -81,14 +88,24 @@ _CASE_REQUIREMENTS = {
         expected="target_lanes",
         vector_inputs="non_empty",
         required_facts=frozenset(
-            {ValueTestFact.IMMEDIATE, ValueTestFact.TARGET_LANES}
+            {
+                ValueTestFact.IMMEDIATE,
+                ValueTestFact.TARGET_LANES,
+                ValueTestFact.INDEX_STYLE,
+                ValueTestFact.INDEX_LANES,
+            }
         ),
     ),
     "indexed_store": ValueTestCaseRequirements(
         expected="non_empty",
         vector_inputs="non_empty",
         required_facts=frozenset(
-            {ValueTestFact.IMMEDIATE, ValueTestFact.MEMORY_LENGTH}
+            {
+                ValueTestFact.IMMEDIATE,
+                ValueTestFact.MEMORY_LENGTH,
+                ValueTestFact.INDEX_STYLE,
+                ValueTestFact.INDEX_LANES,
+            }
         ),
     ),
     "lane_list": ValueTestCaseRequirements(
@@ -104,13 +121,17 @@ _CASE_REQUIREMENTS = {
     ),
     "mask_logic": ValueTestCaseRequirements(expected="one", mask_inputs="non_empty"),
     "mask_pointer_load": ValueTestCaseRequirements(
-        expected="one", vector_inputs="one"
+        expected="one",
+        vector_inputs="one",
+        required_facts=frozenset({ValueTestFact.MEMORY_LENGTH}),
     ),
     "mask_result": ValueTestCaseRequirements(expected="one"),
     "mask_store": ValueTestCaseRequirements(
         expected="non_empty",
         mask_inputs="one",
-        required_facts=frozenset({ValueTestFact.MEMORY_LENGTH}),
+        required_facts=frozenset(
+            {ValueTestFact.MEMORY_LENGTH, ValueTestFact.MEMORY_STORAGE}
+        ),
     ),
     "mask_to_vector": ValueTestCaseRequirements(
         expected="lanes", mask_inputs="one"
@@ -215,6 +236,19 @@ _CASE_REQUIREMENTS = {
         vector_inputs="one",
         required_facts=frozenset({ValueTestFact.MEMORY_LENGTH}),
         vector_inputs_match_lanes=True,
+    ),
+    "target_imask": ValueTestCaseRequirements(
+        expected="one",
+        mask_inputs="non_empty",
+        scalar_inputs="one",
+        required_facts=frozenset(
+            {
+                ValueTestFact.RESULT_KIND,
+                ValueTestFact.TARGET_LAYOUT,
+                ValueTestFact.TARGET_LANES,
+                ValueTestFact.REPRESENTATION_LAYOUT,
+            }
+        ),
     ),
     "status_pointer": ValueTestCaseRequirements(
         scalar_inputs="one", required_facts=_RESULT

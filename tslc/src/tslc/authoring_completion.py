@@ -70,8 +70,8 @@ from tslc.ir.region_registry import (
 )
 from tslc.lower._query_model import QueryValueKind
 from tslc.lower.query_authoring import (
-    DEFAULT_QUERY_AUTHORING_INDEX,
     QueryScopeSymbol,
+    query_authoring_index,
 )
 from tslc.syntax.authoring import AuthoringCursorContext, AuthoringTextRange
 
@@ -167,10 +167,11 @@ def authoring_completions(
         return _tsil_shell_completions(context, catalog)
     if context.current_field == "$region-keyword":
         queries = _tsil_argument_completions(context, catalog)
+        query_index = query_authoring_index(catalog)
         query_cursor = (
             None
             if context.tsil_argument_prefix is None
-            else DEFAULT_QUERY_AUTHORING_INDEX.cursor(context.tsil_argument_prefix)
+            else query_index.cursor(context.tsil_argument_prefix)
         )
         if query_cursor is not None and "::" in query_cursor.prefix:
             return queries
@@ -234,7 +235,7 @@ def _query_completions(
     expression_prefix: str,
     expression_start: int,
 ) -> tuple[AuthoringCompletion, ...]:
-    candidates = DEFAULT_QUERY_AUTHORING_INDEX.complete(
+    candidates = query_authoring_index(catalog).complete(
         expression_prefix,
         _query_scope_symbols(context, catalog),
     )
@@ -277,7 +278,7 @@ def _query_scope_symbols(
         if context.declaration_name is None
         else catalog.primitives_named(context.declaration_name, unmasked=False)
     )
-    generic_kinds = {
+    generic_kinds: dict[str, str] = {
         parameter.name: parameter.kind
         for primitive in primitives
         for parameter in primitive.generic_params

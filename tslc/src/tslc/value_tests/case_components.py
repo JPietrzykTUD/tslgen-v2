@@ -8,6 +8,8 @@ from typing import Literal
 
 ExpectedArity = Literal["optional", "non_empty", "one", "lanes", "target_lanes"]
 InputArity = Literal["optional", "non_empty", "one"]
+MemoryStorage = Literal["packed", "unpacked"]
+IndexStyle = Literal["register", "pointer"]
 
 
 class ValueTestFact(Enum):
@@ -19,9 +21,13 @@ class ValueTestFact(Enum):
     TARGET_LAYOUT = auto()
     TARGET_LANES = auto()
     INDEX_VALUE = auto()
+    INDEX_STYLE = auto()
+    INDEX_LANES = auto()
     MEMORY_LENGTH = auto()
+    MEMORY_STORAGE = auto()
     TEXT_EXPECTED = auto()
     REPRESENTATION = auto()
+    REPRESENTATION_LAYOUT = auto()
     SCALABLE_RUNTIME = auto()
     SCALABLE_VALUE_HARNESS = auto()
     SCALABLE_MASK_CHECK = auto()
@@ -108,12 +114,15 @@ class ValueTestTarget:
 
 @dataclass(frozen=True, slots=True)
 class ValueTestIndex:
-    """Immediate index and optional index-vector layout."""
+    """Immediate index and optional index-vector layout and call style."""
 
     value: str | None = None
     type_tag: str | None = None
     base_spelling: str | None = None
     lanes: int | None = None
+    # How indexed-memory calls pass the index operand: loaded into an index
+    # register or forwarded as a raw pointer. Decided once at planning.
+    style: IndexStyle | None = None
 
     def __post_init__(self) -> None:
         if (self.type_tag is None) != (self.base_spelling is None):
@@ -122,6 +131,10 @@ class ValueTestIndex:
             )
         if self.lanes is not None and self.lanes <= 0:
             raise ValueError("value-test index requires positive lanes")
+        if self.style is not None and self.style not in ("register", "pointer"):
+            raise ValueError(
+                "value-test index style must be 'register' or 'pointer'"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +145,10 @@ class ValueTestMemory:
     buffer_length: int | None = None
     source_offset: int = 0
     alignment: int | None = None
+    # Whether the stored bytes are the packed integral-mask representation or
+    # unpacked per-lane values. Decided once at planning; the primitive's real
+    # result kind stays on the invocation.
+    storage: MemoryStorage | None = None
 
     def __post_init__(self) -> None:
         if self.buffer_offset < 0 or self.source_offset < 0:
@@ -140,6 +157,10 @@ class ValueTestMemory:
             raise ValueError("value-test memory buffer length must be positive")
         if self.alignment is not None and self.alignment <= 0:
             raise ValueError("value-test memory alignment must be positive")
+        if self.storage is not None and self.storage not in ("packed", "unpacked"):
+            raise ValueError(
+                "value-test memory storage must be 'packed' or 'unpacked'"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,22 +184,49 @@ class ValueTestRepresentation:
             and self.to_array_name is not None
         )
 
+    @property
+    def has_layout(self) -> bool:
+        return self.target_extension is not None
+
 
 @dataclass(frozen=True, slots=True)
 class ValueTestScalable:
-    """Scalable-extension runtime and harness expressions."""
+    """Backend-neutral scalable-extension facts.
+
+    Carries the extension's raw per-backend test templates, integer mask-bit values,
+    and harness primitive names. Backend renderers substitute the template
+    placeholders and own all final spelling (SIMD type, literal suffixes, quoting).
+    """
 
     source_extension: str
-    runtime_lanes_expr: str
-    mask_from_bits_exprs: tuple[str, ...] = ()
-    mask_check_expr: str | None = None
+    runtime_lanes_template: str
+    mask_from_bits_template: str | None = None
+    mask_check_template: str | None = None
+    mask_bits: tuple[int, ...] = ()
+    expected_mask_bits: int | None = None
     load_name: str | None = None
     store_name: str | None = None
 
     def __post_init__(self) -> None:
-        if not self.source_extension or not self.runtime_lanes_expr:
+        if not self.source_extension or not self.runtime_lanes_template:
             raise ValueError(
-                "scalable value-test plan requires extension and runtime lanes"
+                "scalable value-test plan requires extension and runtime-lanes template"
+            )
+        if bool(self.mask_bits) != (self.mask_from_bits_template is not None):
+            raise ValueError(
+                "scalable value-test mask bits and mask-from-bits template "
+                "must be provided together"
+            )
+        if any(bits < 0 for bits in self.mask_bits):
+            raise ValueError("scalable value-test mask bits must be non-negative")
+        if (self.expected_mask_bits is None) != (self.mask_check_template is None):
+            raise ValueError(
+                "scalable value-test expected mask bits and mask-check template "
+                "must be provided together"
+            )
+        if self.expected_mask_bits is not None and self.expected_mask_bits < 0:
+            raise ValueError(
+                "scalable value-test expected mask bits must be non-negative"
             )
 
     @property

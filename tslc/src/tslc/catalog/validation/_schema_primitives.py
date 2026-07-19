@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Collection
+from typing import get_args
 
+from tslc.catalog.model import GenericParamKind
+from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS
+from tslc.catalog.signatures import parse_signature
+from tslc.catalog.param_types import (
+    BASE_WIDTH_RELATIONS,
+    base_width_relation_text,
+    parse_base_width_constraint,
+    parse_param_type_condition,
+    unquote_key,
+)
 from tslc.catalog.validation._schema_common import (
     KNOWN_BOOLEAN_VALUES,
     diagnose_duplicate_fields,
     invalid_enum,
     is_non_empty_scalar_list,
-    unquote_key,
     validate_known_fields,
 )
 from tslc.catalog.validation._schema_implementation import (
@@ -19,7 +28,7 @@ from tslc.catalog.validation._schema_implementation import (
 from tslc.catalog.validation._schema_benchmarks import validate_benchmarks
 from tslc.catalog.validation._schema_tests import validate_tests
 from tslc.catalog.validation.requires_validation import validate_requires
-from tslc.catalog.validation.source_spans import (
+from tslc.syntax.access import (
     attribute_scalar_text,
     child,
     children,
@@ -33,16 +42,14 @@ from tslc.syntax.ast import (
     ParsedTslField,
 )
 
-KNOWN_GENERIC_PARAM_KINDS = frozenset({"bool", "int", "simd_type"})
+# Derived from the typed catalog kind so the validator cannot drift from the model.
+KNOWN_GENERIC_PARAM_KINDS: frozenset[str] = frozenset(get_args(GenericParamKind))
 KNOWN_IMMEDIATE_DISPATCH = frozenset({"literal_match"})
 KNOWN_GENERIC_PARAM_FIELDS = frozenset(
     {"kind", "default", "base_types", "specialize_base", "constraints"}
 )
 KNOWN_IMMEDIATE_PARAM_FIELDS = frozenset({"type", "value_range", "dispatch"})
 KNOWN_RETURN_TYPE_FIELDS = frozenset({"base", "extension"})
-_BASE_WIDTH_CONSTRAINT_RE = re.compile(
-    r"^width\(self::base\)\s*(>=|>|==)\s*width\(base::in\)$"
-)
 KNOWN_PRIMITIVE_FIELDS = frozenset(
     {
         "benchmarks",
@@ -70,13 +77,13 @@ KNOWN_PRIMITIVE_ATTRIBUTES = {
     "packed": frozenset({"true", "false", "*"}),
     "value": frozenset({"zero", "undef", "all"}),
 }
-_PARAM_TYPE_CONDITION_RE = re.compile(r"^if\s+([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_]+)$")
 
 
 def validate_primitive(
     declaration: ParsedPrimitiveDeclaration,
     backend_ids: Collection[str],
     diagnostics: list[Diagnostic],
+    known_target_features: Collection[str] = (),
 ) -> None:
     fields = tuple(field.field for field in declaration.fields)
     validate_known_fields(
@@ -103,7 +110,7 @@ def validate_primitive(
     _validate_return_type(declaration, diagnostics)
     validate_benchmarks(declaration, diagnostics)
     validate_tests(declaration, diagnostics)
-    validate_requires(declaration, diagnostics)
+    validate_requires(declaration, diagnostics, known_target_features)
 
 
 def _validate_attributes(
@@ -277,7 +284,24 @@ def _validate_generic_param_constraints(
         key = field.key.text
         if key == "base_types":
             continue
-        if _BASE_WIDTH_CONSTRAINT_RE.fullmatch(key):
+        relation_text = base_width_relation_text(key)
+        if relation_text is not None and parse_base_width_constraint(key) is None:
+            # The key is base-width shaped but its relation is mistyped (`<`, `=>`).
+            # Diagnose the relation itself so the author fixes the operator, not the key.
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-BASE-WIDTH-RELATION",
+                    message=(
+                        f"generic parameter {name!r} base-width constraint uses "
+                        f"unknown relation {relation_text!r}; expected one of: "
+                        f"{', '.join(BASE_WIDTH_RELATIONS)}"
+                    ),
+                    source=source_span(field.source),
+                )
+            )
+            continue
+        if parse_base_width_constraint(key) is not None:
             width_constraint_count += 1
             if kind != "simd_type":
                 diagnostics.append(
@@ -385,7 +409,7 @@ def _validate_param_types(
                     )
                 )
             for entry in children(parameter):
-                parsed = _parse_param_type_condition(entry.key.text)
+                parsed = parse_param_type_condition(entry.key.text)
                 if parsed is None:
                     diagnostics.append(
                         diagnostic_at(
@@ -483,26 +507,53 @@ def _validate_param_types(
                     )
 
 
-def _parse_param_type_condition(
-    text: str,
-) -> tuple[str | None, str | None] | None:
-    condition = unquote_key(text)
-    if condition == "default":
-        return (None, None)
-    match = _PARAM_TYPE_CONDITION_RE.fullmatch(condition)
-    if match is None:
-        return None
-    return match.group(1), match.group(2)
-
-
 def _validate_return_type(
     declaration: ParsedPrimitiveDeclaration,
     diagnostics: list[Diagnostic],
 ) -> None:
+    target_fields: list[ParsedTslField] = []
     for field in declaration.fields_by_name("return_type"):
+        target_fields.extend(
+            child_field
+            for child_field in children(field.field)
+            if child_field.key.text in KNOWN_RETURN_TYPE_FIELDS
+        )
         validate_known_fields(
             children(field.field),
             KNOWN_RETURN_TYPE_FIELDS,
             diagnostics,
             owner="return_type",
+        )
+    shape = parse_signature(declaration.signature)
+    if shape is None:
+        return
+    target_param_kinds = tuple(
+        kind
+        for kind in shape.param_kinds
+        if DEFAULT_SIGNATURE_KINDS.is_target_vector_parameter(kind)
+    )
+    if DEFAULT_SIGNATURE_KINDS.is_target_vector_parameter(shape.result_kind):
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-TARGET-KIND-RESULT",
+                message=(
+                    f"target-vector signature kind {shape.result_kind!r} is valid only "
+                    "for parameters"
+                ),
+                source=source_span(declaration.signature_source),
+            )
+        )
+    if target_param_kinds and len(target_fields) != 1:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-TARGET-PARAM-RETURN-TYPE",
+                message=(
+                    f"primitive {declaration.name!r} uses target-vector parameter kind(s) "
+                    f"{', '.join(repr(kind) for kind in target_param_kinds)} and must "
+                    "declare exactly one return_type base or extension target"
+                ),
+                source=source_span(declaration.signature_source),
+            )
         )

@@ -5,18 +5,20 @@ from __future__ import annotations
 from tslc.catalog.model import Catalog, TestCase
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests.case_helpers import (
+    args_match as _args_match,
     base_spelling as _base_spelling,
     convert_match as _convert_match,
     extension_repr_match as _extension_repr_match,
     function_name as _function_name,
     load_convert_match as _load_convert_match,
+    mask_inputs as _mask_inputs,
     repr_cast_match as _repr_cast_match,
     sanitize as _sanitize,
     scalar_inputs as _scalar_inputs,
-    type_bits_for_tag as _type_bits,
     valid_generic_lanes as _valid_generic_lanes,
     vector_inputs as _vector_inputs,
 )
+from tslc.value_tests.lane_math import SEED_MIX_64, whole_lanes as _whole_lanes
 from tslc.value_tests.model import (
     HarnessPrimitiveNames,
     ValueTestCasePlan,
@@ -28,6 +30,77 @@ from tslc.value_tests.model import (
     ValueTestRepresentation,
     ValueTestTarget,
 )
+
+
+def extension_result_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+    catalog: Catalog,
+    harness: HarnessPrimitiveNames,
+    *,
+    undefined_upper: bool,
+) -> ValueTestCasePlan | None:
+    """Plan a fixed-extension result with one or more source-width vectors.
+
+    Undefined-width growth still has a deterministic low prefix.  The planner
+    decides that comparison width here; renderers only compare the authored
+    expectation carried by the plan.
+    """
+
+    if case.expected_rule is not None or case.lanes is None:
+        return None
+    if not harness.round_trip_ready:
+        return None
+    match = _extension_repr_match(case, specs)
+    if match is None or case.to_extension is None:
+        return None
+    target_extension = catalog.extensions.get(case.to_extension)
+    if (
+        target_extension is None
+        or target_extension.vector_bits_kind != "fixed"
+        or target_extension.vector_bits <= 0
+    ):
+        return None
+    target_lanes = _whole_lanes(target_extension.vector_bits, case.type_tag)
+    if target_lanes is None:
+        return None
+    vector_inputs = _vector_inputs(case)
+    if (
+        len(vector_inputs) != len(match.param_kinds)
+        or any(len(values) != case.lanes for values in vector_inputs)
+    ):
+        return None
+    expected_lanes = case.lanes if undefined_upper else target_lanes
+    if len(case.expected) != expected_lanes:
+        return None
+    return ValueTestCasePlan(
+        kind="extension_result",
+        function_name=_function_name(name, index, case),
+        case_name=case.name,
+        call_name=name,
+        type_tag=case.type_tag,
+        base_spelling=match.base_type_spelling,
+        lanes=case.lanes,
+        inputs=ValueTestInputs(vectors=vector_inputs),
+        expectation=ValueTestExpectation(values=case.expected),
+        invocation=ValueTestInvocation(
+            result_kind=match.result_kind,
+            param_kinds=match.param_kinds,
+        ),
+        target=ValueTestTarget(
+            type_tag=case.type_tag,
+            base_spelling=match.base_type_spelling,
+            lanes=target_lanes,
+        ),
+        representation=ValueTestRepresentation(
+            source_extension=case.extension or match.extension_name,
+            target_extension=case.to_extension,
+            from_array_name=harness.from_array,
+            to_array_name=harness.to_array,
+        ),
+    )
 
 def load_convert_case(
     name: str,
@@ -207,11 +280,108 @@ def extension_repr_case(
         ),
     )
 
+
+def target_imask_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+    catalog: Catalog,
+) -> ValueTestCasePlan | None:
+    """Plan a direct integral-mask operation whose result belongs to ToVec."""
+
+    if (
+        case.expected_rule is not None
+        or len(case.expected) != 1
+        or case.extension is None
+        or (case.to_type is None) == (case.to_extension is None)
+    ):
+        return None
+    match = next(
+        (
+            spec
+            for spec in specs
+            if spec.type_tag == case.type_tag
+            and spec.extension_name == case.extension
+            and spec.target is not None
+            and (
+                (
+                    case.to_type is not None
+                    and spec.target.base_tag == case.to_type
+                    and spec.target.extension_isa == spec.extension_name
+                )
+                or (
+                    case.to_extension is not None
+                    and spec.target.base_tag == case.type_tag
+                    and spec.target.extension_isa == case.to_extension
+                )
+            )
+        ),
+        None,
+    )
+    if match is None or match.target is None or not _args_match(case, match.param_kinds):
+        return None
+    source_bits = _fixed_extension_bits(catalog, match.extension_name)
+    target_bits = _fixed_extension_bits(catalog, match.target.extension_isa)
+    source_lanes = (
+        _whole_lanes(source_bits, match.type_tag) if source_bits is not None else None
+    )
+    target_lanes = (
+        _whole_lanes(target_bits, match.target.base_tag)
+        if target_bits is not None
+        else None
+    )
+    mask_inputs = _mask_inputs(case)
+    scalar_inputs = _scalar_inputs(case)
+    if source_lanes is None or target_lanes is None or len(scalar_inputs) != 1:
+        return None
+    return ValueTestCasePlan(
+        kind="target_imask",
+        function_name=_function_name(name, index, case),
+        case_name=case.name,
+        call_name=name,
+        type_tag=match.type_tag,
+        base_spelling=match.base_type_spelling,
+        lanes=source_lanes,
+        inputs=ValueTestInputs(masks=mask_inputs, scalars=scalar_inputs),
+        expectation=ValueTestExpectation(values=case.expected),
+        invocation=ValueTestInvocation(
+            result_kind=match.result_kind,
+            param_kinds=match.param_kinds,
+        ),
+        target=ValueTestTarget(
+            type_tag=match.target.base_tag,
+            base_spelling=match.target.base_spelling,
+            lanes=target_lanes,
+        ),
+        representation=ValueTestRepresentation(
+            source_extension=match.extension_name,
+            target_extension=match.target.extension_isa,
+        ),
+    )
+
+
+def _fixed_extension_bits(catalog: Catalog, name: str) -> int | None:
+    extension = catalog.extensions.get(name)
+    if extension is not None:
+        return (
+            extension.vector_bits
+            if extension.vector_bits_kind == "fixed" and extension.vector_bits > 0
+            else None
+        )
+    widths = {
+        candidate.vector_bits
+        for candidate in catalog.extensions.values()
+        if candidate.isa_name == name
+        and candidate.vector_bits_kind == "fixed"
+        and candidate.vector_bits > 0
+    }
+    return next(iter(widths)) if len(widths) == 1 else None
+
 # Random inputs swept per (primitive, type, extension) by one compiled fuzz function. 256 keeps
 # the values binary fast while covering far more of the input space than the handful of authored
 # cases. Deterministic: the seed is derived from the function name, so a failure reproduces.
 FUZZ_ITERATIONS = 256
-_FUZZ_BASE_SEED = 0x9E3779B97F4A7C15
 
 
 def _fuzz_seed(function_name: str) -> int:
@@ -221,7 +391,7 @@ def _fuzz_seed(function_name: str) -> int:
     digest = 0xCBF29CE484222325
     for byte in function_name.encode("utf-8"):
         digest = ((digest ^ byte) * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
-    return (digest ^ _FUZZ_BASE_SEED) & 0xFFFFFFFFFFFFFFFF or 1  # xorshift must not start at 0
+    return (digest ^ SEED_MIX_64) & 0xFFFFFFFFFFFFFFFF or 1  # xorshift must not start at 0
 
 
 def differential_fuzz_cases(
@@ -254,12 +424,9 @@ def differential_fuzz_cases(
             or extension.vector_bits <= 0
         ):
             continue
-        type_bits = _type_bits(spec.type_tag)
+        lanes = _whole_lanes(extension.vector_bits, spec.type_tag)
         base_spelling = _base_spelling((spec,), spec.type_tag)
-        if type_bits is None or base_spelling is None:
-            continue
-        lanes = extension.vector_bits // type_bits
-        if lanes <= 0:
+        if lanes is None or base_spelling is None:
             continue
         function_name = f"fuzz_diff_{spec.extension_name}_{_sanitize(name)}_{spec.type_tag}"
         emitted.append(
@@ -301,9 +468,8 @@ def differential_cases(
     if harness.from_array is None:
         return []
     base_spelling = _base_spelling(specs, case.type_tag)
-    type_bits = _type_bits(case.type_tag)
     vector_inputs = _vector_inputs(case)
-    if base_spelling is None or type_bits is None:
+    if base_spelling is None:
         return []
     if len(vector_inputs) != len(specs[0].param_kinds):
         return []
@@ -321,7 +487,7 @@ def differential_cases(
             continue
         if spec.type_tag != case.type_tag:
             continue
-        if extension.vector_bits != case.lanes * type_bits:
+        if _whole_lanes(extension.vector_bits, case.type_tag) != case.lanes:
             continue
         emitted.append(
             ValueTestCasePlan(

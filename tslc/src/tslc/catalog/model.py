@@ -8,12 +8,15 @@ What it is not is plumbing — there are no result/handoff wrappers here.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Literal, TypeVar
 
 from tslc.diagnostics import SourceSpan
-from tslc.catalog.target_families import TargetFamilyCatalog
+from tslc.catalog.target_families import (
+    ExtensionFamilyCapability,
+    TargetFamilyCatalog,
+)
 
 _K = TypeVar("_K")
 _V = TypeVar("_V")
@@ -29,6 +32,27 @@ BOOLEAN_WILDCARD_ATTRIBUTES = frozenset({"aligned", "packed"})
 # `Primitive.result_target` dim): the element type, or the extension/register width.
 RESULT_DIM_BASE = "base"
 RESULT_DIM_EXTENSION = "extension"
+
+# Closed catalog vocabularies. Schema validators derive their allowed-value sets
+# from these aliases (`typing.get_args`), so the model owns each vocabulary once.
+GenericParamKind = Literal["bool", "int", "simd_type"]
+TestArgKind = Literal["vector", "mask", "scalar"]
+TestCaseRole = Literal["value", "compile"]
+MaskPolicyKind = Literal[
+    "bool",
+    "boolean_lane_vector",
+    "comparison_lane_vector",
+    "exact_lane_bitmask",
+    "lane_bitmask",
+    "native_predicate",
+    "native_predicate_by_lanes",
+]
+ImaskPolicyKind = Literal["lane_bitmask", "same_as_mask_type", "unsigned_scalar"]
+# The relation of a `width(self::base) <op> width(base::in)` generic-param constraint.
+BaseWidthRelation = Literal[">=", ">", "=="]
+# How an extension's `vector_bits` declares register width: "fixed" is promoted from a
+# numeric width, "sized"/"scalable" are declared spellings, "" means no declared width.
+VectorBitsKind = Literal["fixed", "sized", "scalable", ""]
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +132,8 @@ class TargetConstraint:
             return 0 < target.vector_bits < source.vector_bits
         if self.width == "larger_than":
             return target.vector_bits > source.vector_bits > 0
+        if self.width == "twice_as_wide":
+            return target.vector_bits == 2 * source.vector_bits > 0
         return False
 
 
@@ -259,7 +285,7 @@ class GenericParam:
     """A `generic_params` entry: a free template/const parameter."""
 
     name: str
-    kind: str  # "bool", "int", or "simd_type"
+    kind: GenericParamKind
     default: str  # e.g. "true"
     # For `kind simd_type`, optional source-level constraints on the parameter's
     # associated base type. Entries are scalar type tags or catalog type-group
@@ -278,7 +304,7 @@ class GenericParam:
 class GenericParamBaseWidthConstraint:
     """`width(self::base) <op> width(base::in)` for a SIMD type generic param."""
 
-    relation: str
+    relation: BaseWidthRelation
     source: SourceSpan | None = None
 
 
@@ -303,7 +329,7 @@ class TestArg:
     ``"scalar"`` arg is a single non-mask scalar token such as an immediate, size, or base value.
     """
 
-    kind: str  # "vector" | "mask" | "scalar"
+    kind: TestArgKind
     values: tuple[str, ...] = ()  # vector: per-lane literal tokens
     mask_bits: str | None = None  # mask: the bitmask literal token
     scalar: str | None = None  # scalar: the literal token
@@ -334,7 +360,7 @@ class TestCase:
     tags: tuple[str, ...]
     inputs: tuple[TestArg, ...]
     expected: tuple[str, ...]
-    role: str = "value"
+    role: TestCaseRole = "value"
     lanes: int | None = None
     id: str | None = None
     extension: str | None = None
@@ -377,7 +403,7 @@ class MaskPolicy:
       extends source data without changing this model.
     """
 
-    kind: str = "lane_bitmask"
+    kind: MaskPolicyKind = "lane_bitmask"
     backend_spelling: Mapping[str, str] = field(default_factory=dict)
     backend_spelling_by_lanes: Mapping[str, Mapping[int, str]] = field(default_factory=dict)
     source: SourceSpan | None = None
@@ -418,7 +444,7 @@ class ImaskPolicy:
     so their declared policy (``unsigned_scalar`` / ``lane_bitmask``) is not consumed here.
     """
 
-    kind: str = "lane_bitmask"
+    kind: ImaskPolicyKind = "lane_bitmask"
 
 
 @dataclass(frozen=True, slots=True)
@@ -472,6 +498,7 @@ class ExtensionMetadata:
     """Shared and backend-specific extension facts consumed by the compiler."""
 
     native_sort_order: int | None = None
+    documentation_width: str | None = None
     backend: Mapping[str, BackendExtensionMetadata] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -515,6 +542,9 @@ class Extension:
     family: str  # "x86" | "arm" | "scalar" | … — picks the Rust core::arch module
     compose_prefix: Mapping[str, str]  # backend_id -> intrinsic prefix
     compose_suffix_by_type: Mapping[str, str]  # type tag -> suffix fragment
+    family_capability: ExtensionFamilyCapability = field(
+        default_factory=lambda: ExtensionFamilyCapability("")
+    )
     vector_register_types: Mapping[str, Mapping[str, str]] = field(
         default_factory=dict
     )  # type tag/group -> backend_id -> register type
@@ -527,7 +557,7 @@ class Extension:
     active_when: ExtensionActivation = field(default_factory=ExtensionActivation)
     supersedes: frozenset[str] = frozenset()
     vector_bits: int = 0  # register width (sse=128, avx2=256, avx512=512); 0 for scalar
-    vector_bits_kind: str = "fixed"  # fixed | sized | scalable | ""
+    vector_bits_kind: VectorBitsKind = "fixed"
     size_parameter_name: str | None = None
     vector_register_type_policy: str = ""
     mask_policy: MaskPolicy = field(default_factory=MaskPolicy)  # how masks are represented
@@ -646,7 +676,21 @@ class Catalog:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "type_groups", _freeze_mapping(self.type_groups))
-        object.__setattr__(self, "extensions", _freeze_mapping(self.extensions))
+        object.__setattr__(
+            self,
+            "extensions",
+            _freeze_mapping(
+                {
+                    name: replace(
+                        extension,
+                        family_capability=self.target_families.extension_family(
+                            extension.family
+                        ),
+                    )
+                    for name, extension in self.extensions.items()
+                }
+            ),
+        )
         object.__setattr__(
             self,
             "type_spellings",

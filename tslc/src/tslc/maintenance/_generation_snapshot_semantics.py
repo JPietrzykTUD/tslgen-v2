@@ -24,7 +24,7 @@ from tslc.benchmark.model import (
     BenchmarkVectorScalarScenario,
     SpecializationKey,
 )
-from tslc.diagnostics import Diagnostic, SourceLocation
+from tslc.diagnostics import Diagnostic, SourceLocation, SourceSpan
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import (
     VerifyBackend,
@@ -165,6 +165,21 @@ def _serialize_location(
     }
 
 
+def _serialize_span(
+    span: SourceSpan | None,
+    repo_root: Path,
+) -> dict[str, object] | None:
+    if span is None:
+        return None
+    return {
+        "path": _relative_path(span.path, repo_root),
+        "line": span.line,
+        "column": span.column,
+        "end_line": span.end_line,
+        "end_column": span.end_column,
+    }
+
+
 def _serialize_diagnostic(
     diagnostic: Diagnostic,
     repo_root: Path,
@@ -173,7 +188,7 @@ def _serialize_diagnostic(
         "severity": diagnostic.severity,
         "code": diagnostic.code,
         "message": diagnostic.message,
-        "location": _serialize_location(diagnostic.location, repo_root),
+        "span": _serialize_span(diagnostic.span, repo_root),
     }
 
 
@@ -331,6 +346,7 @@ def _serialize_value_test_index(value: ValueTestIndex | None) -> dict[str, objec
         "type_tag": value.type_tag,
         "base_spelling": value.base_spelling,
         "lanes": value.lanes,
+        "style": value.style,
     }
 
 
@@ -342,6 +358,7 @@ def _serialize_value_test_memory(value: ValueTestMemory | None) -> dict[str, obj
         "buffer_length": value.buffer_length,
         "source_offset": value.source_offset,
         "alignment": value.alignment,
+        "storage": value.storage,
     }
 
 
@@ -365,9 +382,11 @@ def _serialize_value_test_scalable(
         return None
     return {
         "source_extension": value.source_extension,
-        "runtime_lanes_expr": value.runtime_lanes_expr,
-        "mask_from_bits_exprs": value.mask_from_bits_exprs,
-        "mask_check_expr": value.mask_check_expr,
+        "runtime_lanes_template": value.runtime_lanes_template,
+        "mask_from_bits_template": value.mask_from_bits_template,
+        "mask_check_template": value.mask_check_template,
+        "mask_bits": value.mask_bits,
+        "expected_mask_bits": value.expected_mask_bits,
         "load_name": value.load_name,
         "store_name": value.store_name,
     }

@@ -3,21 +3,41 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from tslc.backend.cpp_detection import CPP_PROFILE_DETECTION_KINDS
 from tslc.backend.cpp_validation import resolve_cpp_compile_guards
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
-from tslc.backend.target_capability import feature_spelling
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import BackendCompileGuard
 from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.compiler_assets import RenderAssets
 from tslc.output.verify_model import VerifyProfile, VerifyRunner
 from tslc.render._common import slug
-from tslc.backend.cpp_profile import _cpp_compile_guard_condition
-from tslc.backend.cpp_profile import cpp_header_group
+from tslc.backend.cpp_profile import (
+    cpp_compile_guard_condition,
+    cpp_header_group,
+)
 
 _CMAKE_CXX_FEATURE_FLAG_COMPILERS = "GNU,Clang,AppleClang,IntelLLVM"
+
+
+@dataclass(frozen=True, slots=True)
+class _X86CpuidProbe:
+    leaf: int
+    subleaf: int | None
+    register: str
+    bit: int
+
+
+# Clang 17 accepts these compiler target features but rejects their spellings in
+# __builtin_cpu_supports. Profiles still check their other AVX/AVX-512 features
+# through the builtin, preserving its operating-system vector-state checks.
+_X86_CPUID_PROBES = {
+    "rdrand": _X86CpuidProbe(leaf=1, subleaf=None, register="ecx", bit=30),
+    "avx512_vaes": _X86CpuidProbe(leaf=7, subleaf=0, register="ecx", bit=9),
+    "avx512_fp16": _X86CpuidProbe(leaf=7, subleaf=0, register="edx", bit=23),
+}
 
 
 def cpp_verify_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[VerifyProfile, ...]:
@@ -57,7 +77,7 @@ def cpp_flags(
         return profile.flags_for_backend("cpp")
     return (
         *(
-            f"-m{feature_spelling(feature, profile.alternatives, backend_id='cpp')}"
+            f"-m{profile.feature_spelling(feature, 'cpp')}"
             for feature in sorted(profile.features)
         ),
         *profile.flags_for_backend("cpp"),
@@ -435,18 +455,67 @@ def _x86_profile_detection_source(
     profile: MachineProfile,
     guards: Sequence[BackendCompileGuard] = (),
 ) -> str:
-    checks = [
-        f'__builtin_cpu_supports("{feature_spelling(feature, profile.alternatives, backend_id="cpp")}")'
+    cpuid_probes = {
+        feature: _X86_CPUID_PROBES[feature]
         for feature in sorted(profile.features)
-    ]
+        if feature in _X86_CPUID_PROBES
+    }
+    checks = []
+    for feature in sorted(profile.features):
+        if feature in cpuid_probes:
+            checks.append(f"tsl_cpu_has_{feature}")
+        else:
+            checks.append(
+                f'__builtin_cpu_supports("{profile.feature_spelling(feature, "cpp")}")'
+            )
     if guards:
-        checks.append(_cpp_compile_guard_condition(guards))
+        checks.append(cpp_compile_guard_condition(guards))
     condition = " && ".join(checks) if checks else "1"
-    return "\n".join(
+    target_condition = (
+        "(defined(__x86_64__) || defined(__i386__)) "
+        "&& (defined(__GNUC__) || defined(__clang__))"
+    )
+    lines: list[str] = []
+    if cpuid_probes:
+        lines.extend((f"#if {target_condition}", "#include <cpuid.h>", "#endif"))
+    lines.extend(("int main() {", f"#if {target_condition}", "  __builtin_cpu_init();"))
+    cpuid_queries = sorted(
+        {(probe.leaf, probe.subleaf) for probe in cpuid_probes.values()},
+        key=lambda query: (query[0], -1 if query[1] is None else query[1]),
+    )
+    for leaf, subleaf in cpuid_queries:
+        query_name = f"tsl_cpuid_{leaf}"
+        if subleaf is not None:
+            query_name += f"_{subleaf}"
+        registers = tuple(
+            f"{query_name}_{register}"
+            for register in ("eax", "ebx", "ecx", "edx")
+        )
+        call = "__get_cpuid" if subleaf is None else "__get_cpuid_count"
+        arguments = [str(leaf)]
+        if subleaf is not None:
+            arguments.append(str(subleaf))
+        arguments.extend(f"&{register}" for register in registers)
+        lines.extend(
+            (
+                f"  unsigned int {', '.join(f'{register} = 0' for register in registers)};",
+                f"  const bool {query_name}_available =",
+                f"      {call}({', '.join(arguments)}) != 0;",
+            )
+        )
+    for feature, probe in cpuid_probes.items():
+        query_name = f"tsl_cpuid_{probe.leaf}"
+        if probe.subleaf is not None:
+            query_name += f"_{probe.subleaf}"
+        lines.extend(
+            (
+                f"  const bool tsl_cpu_has_{feature} =",
+                f"      {query_name}_available &&",
+                f"      ({query_name}_{probe.register} & (1u << {probe.bit})) != 0;",
+            )
+        )
+    lines.extend(
         (
-            "int main() {",
-            "#if (defined(__x86_64__) || defined(__i386__)) && (defined(__GNUC__) || defined(__clang__))",
-            "  __builtin_cpu_init();",
             f"  return ({condition}) ? 0 : 1;",
             "#else",
             "  return 1;",
@@ -454,6 +523,7 @@ def _x86_profile_detection_source(
             "}",
         )
     )
+    return "\n".join(lines)
 
 
 def _aarch64_profile_detection_source(
@@ -462,7 +532,7 @@ def _aarch64_profile_detection_source(
 ) -> str | None:
     if "sve" in profile.features:
         guard_condition = (
-            f" && {_cpp_compile_guard_condition(guards)}" if guards else ""
+            f" && {cpp_compile_guard_condition(guards)}" if guards else ""
         )
         return "\n".join(
             (

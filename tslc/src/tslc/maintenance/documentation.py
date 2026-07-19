@@ -25,14 +25,33 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from tslc._cli_options import split_csv
 from tslc.backend.capability import (
     DocumentationSiteInput,
     GeneratedDocumentationBuilder,
     GeneratedDocumentationSpec,
 )
 from tslc.backend.registry import backend_capability
+from tslc.maintenance import _repo_context
 
-CommandRunner = Callable[[Sequence[str], Path], subprocess.CompletedProcess[str]]
+CommandRunner = Callable[
+    [Sequence[str], Path, Mapping[str, str] | None],
+    subprocess.CompletedProcess[str],
+]
+
+
+def _required_repo_root(explicit: Path | None) -> Path:
+    """An explicit or lazily discovered checkout root for documentation assets."""
+
+    if explicit is not None:
+        return explicit
+    context = _repo_context.find_repo_context()
+    if context is None:
+        raise RuntimeError(
+            "generated-documentation assets need a tslgen repository checkout "
+            "(tsldata/ and tslc/src/ were not found above the installed package)"
+        )
+    return context.root
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +85,7 @@ class GeneratedDocumentationContext:
     commands: list[DocumentationCommand]
     outputs: list[Path]
     errors: list[str]
+    repo_root: Path | None = None
 
 
 DocumentationBuilder = Callable[[GeneratedDocumentationContext], Path | None]
@@ -85,8 +105,13 @@ def document_generated(
     dry_run: bool = False,
     runner: CommandRunner | None = None,
     documentation_tools: Mapping[str, str] | None = None,
+    repo_root: Path | None = None,
 ) -> DocumentationReport:
-    """Build docs for selected backends in an already-written generated project."""
+    """Build docs for selected backends in an already-written generated project.
+
+    ``repo_root`` locates the checkout's documentation assets; when omitted,
+    the enclosing checkout is discovered lazily at first use.
+    """
 
     root = Path(output_root).resolve()
     requested = tuple(dict.fromkeys(backends))
@@ -141,6 +166,7 @@ def document_generated(
                     commands=commands,
                     outputs=outputs,
                     errors=errors,
+                    repo_root=repo_root,
                 )
             )
         if output is not None:
@@ -148,6 +174,7 @@ def document_generated(
     if not errors and (site_only or site_inputs):
         _document_site(
             root,
+            repo_root=repo_root,
             project_name=project_name,
             doxygen_xml=site_inputs.get(DocumentationSiteInput.DOXYGEN_XML),
             rust_doc=site_inputs.get(DocumentationSiteInput.RUSTDOC),
@@ -209,9 +236,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    context = _repo_context.require_repo_context(parser)
     report = document_generated(
         args.output_root,
-        _split(args.backends),
+        split_csv(args.backends),
+        repo_root=context.root,
         project_name=args.project_name,
         doxygen=args.doxygen,
         sphinx_build=args.sphinx_build,
@@ -245,6 +274,7 @@ def _document_cpp(
     commands: list[DocumentationCommand],
     outputs: list[Path],
     errors: list[str],
+    repo_root: Path | None,
 ) -> Path | None:
     cpp_root = root / project_path
     facade_header = cpp_root / "docs" / "input" / "tsl_api_docs.hpp"
@@ -260,6 +290,7 @@ def _document_cpp(
         project_name=project_name,
         facade_header=facade_header,
         doxygen_root=doxygen_root,
+        repo_root=repo_root,
     )
 
     doxygen_command = _command(
@@ -347,6 +378,7 @@ def _build_cpp_documentation(context: GeneratedDocumentationContext) -> Path | N
         commands=context.commands,
         outputs=context.outputs,
         errors=context.errors,
+        repo_root=context.repo_root,
     )
 
 
@@ -376,6 +408,7 @@ _DOCUMENTATION_BUILDERS: Mapping[
 def _document_site(
     root: Path,
     *,
+    repo_root: Path | None,
     project_name: str,
     doxygen_xml: Path | None,
     rust_doc: Path | None,
@@ -398,6 +431,7 @@ def _document_site(
     if include_specializations:
         specializations_dist = _document_specializations_app(
             root,
+            repo_root=repo_root,
             npm=npm,
             npm_ci=npm_ci,
             dry_run=dry_run,
@@ -415,6 +449,7 @@ def _document_site(
         doxygen_xml=doxygen_xml,
         include_rust=rust_doc is not None,
         include_specializations=include_specializations,
+        repo_root=repo_root,
     )
 
     sphinx_command = _command(
@@ -459,6 +494,7 @@ def _document_site(
 def _document_specializations_app(
     root: Path,
     *,
+    repo_root: Path | None,
     npm: str,
     npm_ci: bool,
     dry_run: bool,
@@ -466,8 +502,10 @@ def _document_specializations_app(
     commands: list[DocumentationCommand],
     errors: list[str],
 ) -> Path | None:
-    repo_root = _repo_root(Path(__file__).resolve())
-    react_root = repo_root / "supplementary" / "docs" / "site" / "specializations" / "react"
+    checkout_root = _required_repo_root(repo_root)
+    react_root = (
+        checkout_root / "supplementary" / "docs" / "site" / "specializations" / "react"
+    )
     package_lock = react_root / "package-lock.json"
     if not package_lock.is_file():
         errors.append(f"React specialization explorer lockfile not found: {package_lock}")
@@ -518,7 +556,7 @@ def _document_specializations_app(
         runner,
         dry_run,
         errors,
-        extra_env=_specialization_build_env(repo_root),
+        extra_env=_specialization_build_env(checkout_root),
     ):
         return None
     return dist
@@ -533,10 +571,9 @@ def _render_cpp_assets(
     project_name: str,
     facade_header: Path,
     doxygen_root: Path,
+    repo_root: Path | None,
 ) -> None:
-    asset_root = (
-        _repo_root(Path(__file__).resolve()) / "supplementary" / "docs" / "cpp"
-    )
+    asset_root = _required_repo_root(repo_root) / "supplementary" / "docs" / "cpp"
     doxygen_text = _template(
         asset_root / "Doxyfile.in",
         _cpp_asset_values(
@@ -555,10 +592,9 @@ def _render_site_assets(
     doxygen_xml: Path | None,
     include_rust: bool,
     include_specializations: bool,
+    repo_root: Path | None,
 ) -> None:
-    asset_root = (
-        _repo_root(Path(__file__).resolve()) / "supplementary" / "docs" / "site"
-    )
+    asset_root = _required_repo_root(repo_root) / "supplementary" / "docs" / "site"
     values = _site_asset_values(
         project_name=project_name,
         doxygen_xml=doxygen_xml,
@@ -698,19 +734,7 @@ def _execute(
 ) -> bool:
     if dry_run:
         return True
-    if extra_env:
-        previous = {key: os.environ.get(key) for key in extra_env}
-        os.environ.update(extra_env)
-        try:
-            completed = runner(command.argv, command.cwd)
-        finally:
-            for key, old_value in previous.items():
-                if old_value is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = old_value
-    else:
-        completed = runner(command.argv, command.cwd)
+    completed = runner(command.argv, command.cwd, extra_env)
     if completed.returncode == 0:
         return True
     errors.append(
@@ -745,11 +769,15 @@ def _record_outputs(
 
 
 def _run_subprocess(
-    argv: Sequence[str], cwd: Path
+    argv: Sequence[str],
+    cwd: Path,
+    extra_env: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["LC_ALL"] = "C.UTF-8"
     env["LANG"] = "C.UTF-8"
+    if extra_env:
+        env.update(extra_env)
     return subprocess.run(
         list(argv),
         cwd=cwd,
@@ -799,17 +827,6 @@ def _resolve_tool(tool: str) -> str | None:
     if candidate.parent != Path("."):
         return str(candidate) if candidate.exists() else None
     return shutil.which(tool)
-
-
-def _split(value: str) -> tuple[str, ...]:
-    return tuple(item.strip() for item in value.split(",") if item.strip())
-
-
-def _repo_root(start: Path) -> Path:
-    for candidate in (start, *start.parents):
-        if (candidate / "tsldata").is_dir() and (candidate / "tslc" / "src").is_dir():
-            return candidate
-    raise RuntimeError(f"could not find repository root from {start}")
 
 
 if __name__ == "__main__":  # pragma: no cover

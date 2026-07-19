@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.value_tests.lane_math import runtime_tile_index as _runtime_tile_index
 from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestMemory
 from tslc.value_tests.render_cpp_helpers import (
@@ -9,6 +10,7 @@ from tslc.value_tests.render_cpp_helpers import (
     cast_literal_list as _cast_literal_list,
     cpp_string_literal as _cpp_string_literal,
     scalable_header as _scalable_header,
+    scalable_mask_from_bits as _scalable_mask_from_bits,
     uint_literal as _uint_literal,
 )
 
@@ -17,12 +19,20 @@ def _memory(case: ValueTestCasePlan) -> ValueTestMemory:
     return case.memory if case.memory is not None else ValueTestMemory()
 
 
+def _buffer_length(case: ValueTestCasePlan) -> int:
+    """The plan registry makes MEMORY_LENGTH mandatory for callers of this."""
+
+    memory = case.memory
+    assert memory is not None and memory.buffer_length is not None
+    return memory.buffer_length
+
+
 def _scalar_pointer_load(case: ValueTestCasePlan) -> str:
     memory = _memory(case)
     literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = cpp_literal(case.expectation.values[0], case.type_tag)
     axis = _axis_suffix(case)
-    buflen = memory.buffer_length or len(case.inputs.vectors[0])
+    buflen = _buffer_length(case)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
@@ -41,13 +51,15 @@ def _mask_pointer_load(case: ValueTestCasePlan) -> str:
     target = case.target
     expected_int = int(case.expectation.values[0])
     bits = ", ".join("1" if (expected_int >> i) & 1 else "0" for i in range(case.lanes))
-    input_type = (target.type_tag if target is not None else None) or case.type_tag
-    storage_type = (
-        target.base_spelling if target is not None else None
-    ) or case.base_spelling
+    if target is not None and target.type_tag is not None and target.base_spelling is not None:
+        input_type = target.type_tag
+        storage_type = target.base_spelling
+    else:
+        input_type = case.type_tag
+        storage_type = case.base_spelling
     literals = cpp_literal_list(case.inputs.vectors[0], input_type)
     axis = _axis_suffix(case)
-    buflen = memory.buffer_length or len(case.inputs.vectors[0])
+    buflen = _buffer_length(case)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
@@ -65,19 +77,17 @@ def _mask_pointer_load(case: ValueTestCasePlan) -> str:
 def _mask_store(case: ValueTestCasePlan) -> str:
     memory = _memory(case)
     target = case.target
-    packed = case.invocation.result_kind == "packed"
-    unpacked_type = (
-        target.base_spelling if target is not None else None
-    ) or case.base_spelling
-    unpacked_tag = (target.type_tag if target is not None else None) or case.type_tag
-    buffer_type = "typename Vec::imask_type" if packed else unpacked_type
-    expected = (
-        _cast_literal_list(case.expectation.values, "typename Vec::imask_type")
-        if packed
-        else cpp_literal_list(case.expectation.values, unpacked_tag)
-    )
+    assert memory.storage is not None
+    if memory.storage == "packed":
+        buffer_type = "typename Vec::imask_type"
+        expected = _cast_literal_list(case.expectation.values, "typename Vec::imask_type")
+    else:
+        assert target is not None
+        assert target.base_spelling is not None and target.type_tag is not None
+        buffer_type = target.base_spelling
+        expected = cpp_literal_list(case.expectation.values, target.type_tag)
     axis = _axis_suffix(case)
-    buflen = memory.buffer_length or len(case.expectation.values)
+    buflen = _buffer_length(case)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
@@ -119,7 +129,7 @@ def _masked_pointer_store(case: ValueTestCasePlan) -> str:
     literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = cpp_literal_list(case.expectation.values, case.type_tag)
     axis = _axis_suffix(case)
-    buflen = memory.buffer_length or len(case.expectation.values)
+    buflen = _buffer_length(case)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
@@ -141,8 +151,8 @@ def _memory_copy(case: ValueTestCasePlan) -> str:
     src = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = cpp_literal_list(case.expectation.values, case.type_tag)
     src_len = len(case.inputs.vectors[0])
-    dst_len = memory.buffer_length or len(case.expectation.values)
-    count = case.inputs.scalars[0] if case.inputs.scalars else str(src_len)
+    dst_len = _buffer_length(case)
+    count = case.inputs.scalars[0]
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
@@ -180,7 +190,7 @@ def _pointer_lifetime(case: ValueTestCasePlan) -> str:
 
 def _pointer_free(case: ValueTestCasePlan) -> str:
     memory = _memory(case)
-    count = case.inputs.scalars[0] if case.inputs.scalars else "1"
+    count = case.inputs.scalars[0]
     alignment = memory.alignment
     alloc = (
         f"std::aligned_alloc(static_cast<std::size_t>({alignment}), static_cast<std::size_t>({count}))"
@@ -200,18 +210,20 @@ def _pointer_free(case: ValueTestCasePlan) -> str:
 def _indexed_load(case: ValueTestCasePlan) -> str:
     index = case.index
     target = case.target
-    assert target is not None
+    assert target is not None and target.lanes is not None
+    assert index is not None and index.lanes is not None and index.style is not None
+    assert case.invocation.immediate is not None
     data = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
-    index_type = (index.type_tag if index is not None else None) or case.type_tag
+    index_type = index.type_tag if index.type_tag is not None else case.type_tag
     index_base = (
-        index.base_spelling if index is not None else None
-    ) or case.base_spelling
+        index.base_spelling if index.base_spelling is not None else case.base_spelling
+    )
     indices = cpp_literal_list(case.inputs.vectors[1], index_type)
     expected = cpp_literal_list(case.expectation.values, case.type_tag)
-    lanes = target.lanes or len(case.expectation.values)
-    index_lanes = (index.lanes if index is not None else None) or lanes
-    scale = case.invocation.immediate or "1"
-    pointer_indices = tuple(case.invocation.param_kinds) == ("cptr", "cptr", "sImm")
+    lanes = target.lanes
+    index_lanes = index.lanes
+    scale = case.invocation.immediate
+    pointer_indices = index.style == "pointer"
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{lanes}>>;",
@@ -259,19 +271,20 @@ def _indexed_load(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 def _indexed_store(case: ValueTestCasePlan) -> str:
-    memory = _memory(case)
     index = case.index
+    assert index is not None and index.lanes is not None
+    assert case.invocation.immediate is not None
     values = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
-    index_type = (index.type_tag if index is not None else None) or case.type_tag
+    index_type = index.type_tag if index.type_tag is not None else case.type_tag
     index_base = (
-        index.base_spelling if index is not None else None
-    ) or case.base_spelling
+        index.base_spelling if index.base_spelling is not None else case.base_spelling
+    )
     indices = cpp_literal_list(case.inputs.vectors[1], index_type)
     expected = cpp_literal_list(case.expectation.values, case.type_tag)
     lanes = case.lanes
-    index_lanes = (index.lanes if index is not None else None) or lanes
-    scale = case.invocation.immediate or "1"
-    buflen = memory.buffer_length or len(case.expectation.values)
+    index_lanes = index.lanes
+    scale = case.invocation.immediate
+    buflen = _buffer_length(case)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{lanes}>>;",
@@ -301,8 +314,9 @@ def _indexed_store(case: ValueTestCasePlan) -> str:
 
 def _stream(case: ValueTestCasePlan) -> str:
     literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
-    modifier = case.inputs.scalars[0] if case.inputs.scalars else "0"
-    expected = _cpp_string_literal(case.expectation.text or "")
+    modifier = case.inputs.scalars[0]
+    assert case.expectation.text is not None
+    expected = _cpp_string_literal(case.expectation.text)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
@@ -344,7 +358,7 @@ def _store(case: ValueTestCasePlan) -> str:
     literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = cpp_literal_list(case.expectation.values, case.type_tag)
     axis = _axis_suffix(case)
-    buflen = memory.buffer_length or len(case.expectation.values)
+    buflen = _buffer_length(case)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
@@ -364,7 +378,7 @@ def _scalable_mask_store(case: ValueTestCasePlan) -> str:
     memory = _memory(case)
     scalable = case.scalable
     target = case.target
-    if scalable is None or not scalable.mask_from_bits_exprs or target is None:
+    if scalable is None or not scalable.mask_bits or target is None:
         raise ValueError(
             "scalable mask-store C++ value test requires extension, lanes, "
             "mask input, and storage layout"
@@ -378,14 +392,14 @@ def _scalable_mask_store(case: ValueTestCasePlan) -> str:
     lines = _scalable_header(case)
     lines.extend(
         [
-            f"  typename Vec::mask_type mask = {scalable.mask_from_bits_exprs[0]};",
+            f"  typename Vec::mask_type mask = {_scalable_mask_from_bits(case, 0)};",
             f"  static const {storage_type} authored_expected[{authored_len}] = {{{expected}}};",
             f"  std::vector<{storage_type}> actual({memory.buffer_offset} + lanes);",
             f"  std::vector<{storage_type}> expected({memory.buffer_offset} + lanes);",
             f"  for (std::size_t i = 0; i < {memory.buffer_offset}; ++i) "
             "expected[i] = authored_expected[i];",
             f"  for (std::size_t i = 0; i < lanes; ++i) expected[{memory.buffer_offset} + i] = "
-            f"authored_expected[{memory.buffer_offset} + (i % {case.lanes})];",
+            f"authored_expected[{memory.buffer_offset} + ({_runtime_tile_index('i', case.lanes)})];",
             f"  tsl::{case.call_name}<Vec{axis}>("
             "reinterpret_cast<typename Vec::base_type *>(actual.data() + "
             f"{memory.buffer_offset}), mask);",

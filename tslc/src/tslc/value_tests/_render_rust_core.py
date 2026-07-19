@@ -170,16 +170,27 @@ def _mask_to_vector(case: ValueTestCasePlan) -> str:
 
 def _masked(case: ValueTestCasePlan) -> str:
     expected = rust_literal_list(case.expectation.values, case.type_tag)
+    has_index_vector = "vidx" in case.invocation.param_kinds
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
+    if has_index_vector:
+        index = case.index
+        if index is None or index.base_spelling is None or index.lanes is None:
+            raise ValueError("indexed Rust value test requires an index-vector layout")
+        lines.append(
+            f"        type Indices = Simd<{index.base_spelling}, Generic<{index.lanes}>>;"
+        )
     args = append_call_args(lines, case)
     lines.append(f"        let expected: [{case.base_spelling}; {case.lanes}] = [{expected}];")
+    template_args = ["Vec"]
+    if has_index_vector:
+        template_args.append("Indices")
     lines.append(
         f"        let result = {rust_raw_identifier(case.call_name)}"
-        f"::<Vec>({', '.join(args)});"
+        f"::<{', '.join(template_args)}>({', '.join(args)});"
     )
     lines.append(_lane_assert(case, case.lanes, "result"))
     lines.append("    }")
@@ -236,7 +247,8 @@ def _mask_logic(case: ValueTestCasePlan) -> str:
 
 
 def _broadcast(case: ValueTestCasePlan) -> str:
-    value = rust_literal(case.inputs.scalar or "0", case.type_tag)
+    assert case.inputs.scalar is not None
+    value = rust_literal(case.inputs.scalar, case.type_tag)
     expected = rust_literal_list(case.expectation.values, case.type_tag)
     return "\n".join(
         [
@@ -253,26 +265,22 @@ def _broadcast(case: ValueTestCasePlan) -> str:
 
 
 def _mask_store(case: ValueTestCasePlan) -> str:
-    packed = case.invocation.result_kind == "packed"
     target = case.target
     memory = case.memory
-    storage_type = (
-        "<Vec as SimdVector>::ImaskType"
-        if packed
-        else (target.base_spelling if target is not None else None)
-        or case.base_spelling
-    )
-    expected_type = (
-        "ui64"
-        if packed
-        else (target.type_tag if target is not None else None) or case.type_tag
-    )
+    assert memory is not None and memory.buffer_length is not None
+    assert memory.storage is not None
+    if memory.storage == "packed":
+        storage_type = "<Vec as SimdVector>::ImaskType"
+        expected_type = "ui64"
+    else:
+        assert target is not None
+        assert target.base_spelling is not None and target.type_tag is not None
+        storage_type = target.base_spelling
+        expected_type = target.type_tag
     expected = rust_literal_list(case.expectation.values, expected_type)
     axis = axis_args(case)
-    buflen = (
-        memory.buffer_length if memory is not None else None
-    ) or len(case.expectation.values)
-    buffer_offset = memory.buffer_offset if memory is not None else 0
+    buflen = memory.buffer_length
+    buffer_offset = memory.buffer_offset
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",

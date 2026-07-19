@@ -5,7 +5,6 @@ from dataclasses import replace
 from tslc.backend.emitted_profile import used_vector_type_specs
 from tslc.backend.target_capability import (
     cpp_x86_register_helper,
-    feature_spelling,
     is_x86_register_extension,
     rust_arch_module,
     rust_extension_tag,
@@ -23,10 +22,41 @@ from tslc.target_text import LoweredBody
 from tslc.backend.rust_vectors import rust_registrations
 
 
-def test_backend_specific_feature_spellings_are_typed() -> None:
-    assert feature_spelling("rdrand", {}, backend_id="cpp") == "rdrnd"
-    assert feature_spelling("rdrand", {}, backend_id="rust") == "rdrand"
-    assert feature_spelling("rdrand", {"rdrand": "custom"}, backend_id="cpp") == "custom"
+def test_backend_specific_feature_spellings_are_source_capabilities(
+    catalog: Catalog,
+) -> None:
+    rdrand = catalog.target_families.target_feature("rdrand")
+    vpclmulqdq = catalog.target_families.target_feature("avx512_vpclmulqdq")
+
+    assert rdrand is not None
+    assert rdrand.spelling("cpp") == "rdrnd"
+    assert rdrand.spelling("rust") == "rdrand"
+    assert vpclmulqdq is not None
+    assert vpclmulqdq.spelling("cpp") == "vpclmulqdq"
+
+
+def test_all_existing_feature_spellings_are_preserved(catalog: Catalog) -> None:
+    shared_non_identity = {
+        "avx512_bf16": "avx512bf16",
+        "avx512_bitalg": "avx512bitalg",
+        "avx512_fp16": "avx512fp16",
+        "avx512_gfni": "gfni",
+        "avx512_vaes": "vaes",
+        "avx512_vbmi2": "avx512vbmi2",
+        "avx512_vnni": "avx512vnni",
+        "avx512_vp2intersect": "avx512vp2intersect",
+        "avx512_vpclmulqdq": "vpclmulqdq",
+        "avx512_vpopcntdq": "avx512vpopcntdq",
+        "sse4_1": "sse4.1",
+        "sse4_2": "sse4.2",
+    }
+
+    for name, capability in catalog.target_families.target_features.items():
+        shared = shared_non_identity.get(name, name)
+        assert capability.spelling("rust") == shared
+        assert capability.spelling("cpp") == (
+            "rdrnd" if name == "rdrand" else shared
+        )
 
 
 def test_x86_register_capabilities_derive_from_extension_facts(

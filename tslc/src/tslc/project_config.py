@@ -23,6 +23,7 @@ class ProjectConfig:
     output_root: Path | None = None
     toolchains: Mapping[str, BackendToolchain] = field(default_factory=dict)
     runner_paths: Mapping[str, str] = field(default_factory=dict)
+    tool_paths: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -30,6 +31,9 @@ class ProjectConfig:
         )
         object.__setattr__(
             self, "runner_paths", MappingProxyType(dict(sorted(self.runner_paths.items())))
+        )
+        object.__setattr__(
+            self, "tool_paths", MappingProxyType(dict(sorted(self.tool_paths.items())))
         )
 
 
@@ -83,6 +87,12 @@ def load_project_config(path: Path | str | None = None) -> ProjectConfig | None:
         for key, value in runners.items()
     ):
         raise ValueError(f"{selected}: tslc.runners must map names to strings")
+    tools = root.get("tools", {})
+    if not isinstance(tools, dict) or not all(
+        isinstance(key, str) and isinstance(value, str) and value.strip()
+        for key, value in tools.items()
+    ):
+        raise ValueError(f"{selected}: tslc.tools must map names to non-empty strings")
     assert profiles is not None
     return ProjectConfig(
         path=selected,
@@ -93,6 +103,7 @@ def load_project_config(path: Path | str | None = None) -> ProjectConfig | None:
         output_root=_resolve(base, output) if output is not None else None,
         toolchains=toolchains,
         runner_paths={str(key): str(value) for key, value in runners.items()},
+        tool_paths={str(key): str(value) for key, value in tools.items()},
     )
 
 

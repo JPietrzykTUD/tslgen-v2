@@ -10,7 +10,7 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.backend.registry import create_backend_dialect
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import Catalog, GenericParam
 from tslc.diagnostics import has_errors
 from tslc.ir.region_syntax import ParsedCallSelector, parse_call_selector
 from tslc.lower.dependencies import (
@@ -89,6 +89,210 @@ def test_call_primitive_renders_wrapper_call(catalog: Catalog, machine_profiles)
     assert rust.body_text == "return nequal::<Self>(data, set_zero::<Self>());"
 
 
+def test_runtime_indexed_call_ignores_split_immediate_overload(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["avx2"],
+            "permute_lanes",
+            ("si32",),
+        )
+        .selected
+        if selected.extension.name == "avx2"
+        and selected.primitive.signature == "v:=(m,v,v,vidx)"
+    )
+
+    lowered = Lowerer().lower(
+        slot,
+        catalog,
+        create_backend_dialect(catalog, "rust"),
+    )
+
+    assert lowered.specialization is not None, lowered.diagnostics
+    assert lowered.specialization.type_params[0].bounds == ("to_array",)
+    assert "permute_lanes::<Self, IndicesType>(data, indexes)" in (
+        lowered.specialization.body_text
+    )
+    assert "IndicesType, _>" not in lowered.specialization.body_text
+
+
+@pytest.mark.parametrize(
+    ("signature", "expected_body"),
+    (
+        (
+            "v:=(m,v,v,vidx)",
+            "return _mm512_mask_permutexvar_epi64(src, mask, indexes, data);",
+        ),
+        (
+            "v:=(m,v,vidx)",
+            "return _mm512_maskz_permutexvar_epi64(mask, indexes, data);",
+        ),
+    ),
+)
+def test_avx512_indexed_masked_permute_uses_native_intrinsic(
+    catalog: Catalog,
+    machine_profiles,
+    signature: str,
+    expected_body: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["skylake"],
+            "permute_lanes",
+            ("si64",),
+        )
+        .selected
+        if selected.extension.name == "avx512"
+        and selected.primitive.signature == signature
+    )
+
+    lowered = Lowerer().lower(
+        slot,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    )
+
+    assert lowered.specialization is not None, lowered.diagnostics
+    assert lowered.specialization.body_text == expected_body
+
+
+@pytest.mark.parametrize(
+    ("profile_name", "extension_name", "type_tag", "signature", "intrinsic"),
+    (
+        (
+            "skylake",
+            "avx2_vl",
+            "si64",
+            "v:=(m,v,v,vidx)",
+            "_mm256_mask_permutexvar_epi64",
+        ),
+        (
+            "skylake",
+            "avx2_vl",
+            "f64",
+            "v:=(m,v,vidx)",
+            "_mm256_maskz_permutexvar_pd",
+        ),
+        (
+            "cannonlake",
+            "avx2_vl",
+            "si8",
+            "v:=(m,v,v,vidx)",
+            "_mm256_mask_permutexvar_epi8",
+        ),
+        (
+            "skylake",
+            "sse_vl",
+            "si16",
+            "v:=(m,v,v,vidx)",
+            "_mm_mask_permutexvar_epi16",
+        ),
+        (
+            "skylake",
+            "sse_vl",
+            "si32",
+            "v:=(m,v,v,vidx)",
+            "_mm_mask_permutevar_ps",
+        ),
+        (
+            "skylake",
+            "sse_vl",
+            "f32",
+            "v:=(m,v,v,vidx)",
+            "_mm_mask_permutevar_ps",
+        ),
+        (
+            "skylake",
+            "sse_vl",
+            "si64",
+            "v:=(m,v,vidx)",
+            "_mm_maskz_permutex2var_epi64",
+        ),
+        (
+            "cannonlake",
+            "sse_vl",
+            "si8",
+            "v:=(m,v,vidx)",
+            "_mm_maskz_permutex2var_epi8",
+        ),
+    ),
+)
+def test_vl_indexed_masked_permute_uses_exact_native_intrinsic(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+    extension_name: str,
+    type_tag: str,
+    signature: str,
+    intrinsic: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile_name],
+            "permute_lanes",
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == extension_name
+        and selected.primitive.signature == signature
+    )
+
+    lowered = Lowerer().lower(
+        slot,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    )
+
+    assert lowered.specialization is not None, lowered.diagnostics
+    body = lowered.specialization.body_text
+    assert intrinsic in body
+    assert "::tsl::mov_mask" not in body
+    assert "::tsl::permute_lanes" not in body
+
+
+@pytest.mark.parametrize("type_tag", ("si64", "f64"))
+def test_sse_vl_indexed_merge_permute_keeps_64_bit_semantic_fallback(
+    catalog: Catalog,
+    machine_profiles,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["skylake"],
+            "permute_lanes",
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == "sse_vl"
+        and selected.primitive.signature == "v:=(m,v,v,vidx)"
+    )
+
+    lowered = Lowerer().lower(
+        slot,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    )
+
+    assert lowered.specialization is not None, lowered.diagnostics
+    body = lowered.specialization.body_text
+    assert "::tsl::mov_mask" in body
+    assert "::tsl::permute_lanes" in body
+    assert "_mm_mask_permutevar_pd" not in body
+
+
 def test_dependency_closure_pulls_callees(data_root: Path, machine_profiles_path: Path) -> None:
     result = generate_project(
         [data_root],
@@ -145,6 +349,48 @@ def test_call_selector_parser_keeps_syntax_only_shape() -> None:
     )
     assert parse_call_selector("primitive=@self[Vec] attrs[mask=zero]") is None
     assert parse_call_selector("primitive=set_zero trailing") is None
+
+
+def test_call_bracket_args_require_exact_generic_param_references(
+    catalog: Catalog, machine_profiles
+) -> None:
+    def _lowering_with_param(body: str):
+        slot = next(
+            selected
+            for selected in Selector()
+            .select_profile(catalog, machine_profiles["avx2"], "add", ("si32",))
+            .selected
+            if selected.extension.name == "avx2"
+            and selected.primitive.attributes.get("mask") is None
+        )
+        slot = replace(
+            slot,
+            primitive=replace(
+                slot.primitive,
+                generic_params=(
+                    GenericParam(name="PreserveSign", kind="bool", default="true"),
+                ),
+            ),
+            implementation=replace(slot.implementation, body_text=body),
+        )
+        return Lowerer().lower(slot, catalog, create_backend_dialect(catalog, "cpp"))
+
+    exact = _lowering_with_param(
+        "complete(call<primitive=@self[Vec, PreserveSign]>(left, right));"
+    )
+    assert exact.specialization is not None, exact.diagnostics
+    assert "PreserveSign" in exact.specialization.body_text
+
+    # merely *mentioning* the declared param is not a symbolic reference: skip
+    # instead of forwarding unresolved text into the emitted call.
+    mention = _lowering_with_param(
+        "complete(call<primitive=@self[Vec, foo(PreserveSign)]>(left, right));"
+    )
+    assert mention.specialization is None
+    assert any(
+        diagnostic.code == "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS"
+        for diagnostic in mention.diagnostics
+    )
 
 
 def test_lowering_records_dependencies_after_resolving_type_aliases(

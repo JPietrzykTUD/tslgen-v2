@@ -5,7 +5,11 @@ from __future__ import annotations
 import re
 
 from tslc.catalog.model import Extension
-from tslc.ir.region_syntax import parse_call_selector, split_arg_groups
+from tslc.ir.region_syntax import (
+    parse_call_selector,
+    parse_generic_param_reference,
+    split_arg_groups,
+)
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.dependencies import (
@@ -180,9 +184,9 @@ class CallLowerer:
         source: VectorIdentity,
     ) -> str | None:
         """A forwarded call-bracket arg (entries 1..) as a target template/const-generic arg:
-        a query that resolves to a `TextValue` spelling, or a bare `generic_params` name (e.g.
-        `PreserveSign`) passed through verbatim. Returns None when it is neither (so the caller
-        skips).
+        a query that resolves to a `TextValue` spelling, or an exact `generic_params`
+        reference (`PreserveSign` / `!PreserveSign`) passed through verbatim. Returns None
+        when it is neither (so the caller skips).
 
         Forwarding the *immediate* (`@self[…, shift, …]`) passes it through verbatim — it is in
         scope as the `_imm` form's template / const-generic param (the caller appends `_imm` to
@@ -207,9 +211,9 @@ class CallLowerer:
             return entry
         if _DECIMAL_INTEGER.match(entry):
             return entry
-        if any(
-            re.search(rf"\b{re.escape(name)}\b", entry)
-            for name in context.env.generic_param_names
+        if (
+            parse_generic_param_reference(entry, context.env.generic_param_names)
+            is not None
         ):
             return entry
         extension = context.env.catalog.extensions.get(entry)

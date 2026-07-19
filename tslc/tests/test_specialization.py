@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from hashlib import sha256
 import re
 from pathlib import Path
 
@@ -113,6 +114,15 @@ def test_rust_impls_share_type_parameter_bounds_across_native_and_fallback_bodie
     assert (
         "IndicesType: StaticSimdVector + detail::primitives::To_arrayImpl"
         in rendered
+    )
+
+    queries = RustBackend().render_implementation_state_queries(
+        {"permute_lanes": (common, native)}
+    )
+
+    assert (
+        "IndicesType: StaticSimdVector + detail::primitives::To_arrayImpl"
+        in queries
     )
 
 
@@ -456,6 +466,10 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     cargo = specialization_artifacts["rust/Cargo.toml"]
     avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
+
+    assert sha256(avx2.encode()).hexdigest() == (
+        "069a033178bf5fa624ef764f855cdd2a05c9a48f7983c93d21ffb6d70efbd088"
+    )
 
     assert 'name = "tsl"' in cargo
     assert 'default = ["scalar"]' in cargo

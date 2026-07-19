@@ -28,6 +28,7 @@ examples/     Checked-in C++ and Rust generated-library consumers
 .github/      GitHub Actions workflows, actions, and workflow-only scripts
 supplementary/ Machine profiles, generated-doc inputs, and reusable CI helpers
 coverage/     Coverage and benchmark ratchet evidence
+tools/        Downstream packages; tools/pivot/ owns standalone PIVOT export
 tslctmp/      Local generated output and scratch space; do not commit
 ```
 
@@ -76,6 +77,7 @@ overlay.
 ## Where To Look
 
 - Package quick start: [tslc/README.md](tslc/README.md)
+- Standalone PIVOT exporter: [tools/pivot/README.md](tools/pivot/README.md)
 - Command-line tools: [docs/tslc-cli.md](docs/tslc-cli.md)
 - Editor setup and architecture: [docs/tsl-editor.md](docs/tsl-editor.md)
 - Repository charter: [CHARTER.md](CHARTER.md)

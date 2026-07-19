@@ -14,6 +14,10 @@ from tslc.catalog.target_families import (
     TargetFamilyCatalog,
 )
 from tslc.maintenance import coverage_inventory
+from tslc.maintenance.build_verified import (
+    BUILD_VERIFIED_PRIMITIVE_SETS,
+    build_verified_primitives,
+)
 from tslc.maintenance.coverage_inventory_report import (
     CoverageInventory,
     build_coverage_inventory,
@@ -186,7 +190,6 @@ def test_inventory_command_is_read_only_by_default(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     output = tmp_path / "inventory.md"
-    monkeypatch.setattr(coverage_inventory, "_OUT", output)
     monkeypatch.setattr(
         coverage_inventory,
         "collect_inventory",
@@ -240,3 +243,37 @@ def test_inventory_rejects_output_without_a_write_or_check_mode(
         coverage_inventory.main(["--output", str(tmp_path / "inventory.md")])
 
     assert exc.value.code == 2
+
+
+def test_build_verified_evidence_is_typed_and_consumed_by_the_inventory() -> None:
+    """The inventory's verified column comes from the shared typed constant,
+    not from sniffing test-source syntax."""
+
+    assert BUILD_VERIFIED_PRIMITIVE_SETS, "typed build evidence must not be empty"
+    for test_name, names in BUILD_VERIFIED_PRIMITIVE_SETS.items():
+        assert names, f"{test_name} claims build verification without primitives"
+        assert all(isinstance(name, str) and name for name in names), test_name
+        assert len(set(names)) == len(names), f"{test_name} repeats primitives"
+
+    union = build_verified_primitives()
+    assert union == frozenset(
+        name for names in BUILD_VERIFIED_PRIMITIVE_SETS.values() for name in names
+    )
+    assert "add" in union and "load" in union
+
+    # Every entry is keyed by the generated-build test that consumes it, and
+    # that test looks its own entry up by name, so the constant cannot drift
+    # from what the gate compiles.
+    build_test_source = (
+        Path(__file__).with_name("test_build_verify.py").read_text(encoding="utf-8")
+    )
+    for test_name in BUILD_VERIFIED_PRIMITIVE_SETS:
+        assert f"def {test_name}(" in build_test_source, (
+            f"{test_name} is not a generated-build test"
+        )
+        assert f'_build_verified("{test_name}")' in build_test_source, (
+            f"{test_name} does not consume its build-verified entry"
+        )
+
+    # collect_inventory wires the same evidence into the report.
+    assert coverage_inventory.build_verified_primitives is build_verified_primitives

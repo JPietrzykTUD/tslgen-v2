@@ -7,7 +7,7 @@ from tslc.catalog.validation._schema_common import (
     diagnose_duplicate_fields,
     validate_known_fields,
 )
-from tslc.catalog.validation.source_spans import children, field_text, source_span
+from tslc.syntax.access import children, field_text, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.ast import ParsedPrimitiveDeclaration, ParsedTslMapValue
 

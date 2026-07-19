@@ -180,6 +180,7 @@ _KIND_DESCRIPTIONS = {
     "s[]": "lane array",
     "lanes<s>": "lane list",
     "vt": "target SIMD register",
+    "imt": "target integral mask",
     "vidx": "index SIMD register",
     "o": "output stream",
 }

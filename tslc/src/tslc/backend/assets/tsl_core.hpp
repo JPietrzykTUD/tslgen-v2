@@ -447,6 +447,56 @@ inline std::uint32_t clz(ac_int<W, S> v) {
     return static_cast<std::uint32_t>(W);
 }
 #endif
+inline constexpr std::uint64_t imask_low_bits(std::size_t count) {
+    return count >= 64
+        ? std::numeric_limits<std::uint64_t>::max()
+        : count == 0
+            ? std::uint64_t{0}
+            : (std::uint64_t{1} << count) - std::uint64_t{1};
+}
+
+// Replace a source-mask window in a target mask. Lane counts, rather than the
+// storage integer widths, define the copied window; this matters for compact
+// masks whose public integer type is rounded up to 8/16/32/64 bits.
+template <class ToVec>
+inline typename ToVec::imask_type imask_insert(
+    std::uint64_t orig,
+    std::uint64_t data,
+    std::size_t position,
+    std::size_t source_lanes,
+    std::size_t target_lanes
+) {
+    const std::uint64_t normalized_orig = orig & imask_low_bits(target_lanes);
+    if (position >= target_lanes || position >= 64) {
+        return static_cast<typename ToVec::imask_type>(normalized_orig);
+    }
+    const std::size_t available = target_lanes - position;
+    const std::size_t copied = source_lanes < available ? source_lanes : available;
+    const std::uint64_t window = imask_low_bits(copied) << position;
+    const std::uint64_t inserted = (data & imask_low_bits(copied)) << position;
+    return static_cast<typename ToVec::imask_type>(
+        (normalized_orig & ~window) | inserted
+    );
+}
+
+// Select a target-sized source-mask window and normalize it to bit zero.
+template <class ToVec>
+inline typename ToVec::imask_type imask_extract(
+    std::uint64_t data,
+    std::size_t position,
+    std::size_t source_lanes,
+    std::size_t target_lanes
+) {
+    if (position >= source_lanes || position >= 64) {
+        return static_cast<typename ToVec::imask_type>(0);
+    }
+    const std::size_t available = source_lanes - position;
+    const std::size_t copied = target_lanes < available ? target_lanes : available;
+    return static_cast<typename ToVec::imask_type>(
+        (data >> position) & imask_low_bits(copied)
+    );
+}
+
 // Test lane `index` of an emulated mask, agnostic to how the vector stores it. Two reprs:
 // an integer bitset (the generic vector's `std::uint64_t`, or a native `__mmaskN`) tests bit
 // `index`; a register lane-mask (sse/avx2, where the mask IS a data register whose lanes are

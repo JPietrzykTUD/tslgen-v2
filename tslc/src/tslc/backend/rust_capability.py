@@ -20,8 +20,13 @@ from tslc.catalog.model import Catalog
 from tslc.output._verify_rust import (
     create_rust_verify_driver as _create_rust_verify_driver,
 )
+from tslc.output._verify_rust_config import rust_toolchain_commands
 from tslc.render.documentation_formatters import RUST_DOCUMENTATION_FORMATTER
-from tslc.render.rust_project import rust_artifacts, rust_verify_profiles
+from tslc.render.rust_project import (
+    rust_artifacts,
+    rust_verify_profile,
+    rust_verify_profiles,
+)
 from tslc.render.tests_project import rust_test_artifacts
 from tslc.value_tests.render_rust import RUST_VALUE_TEST_SUPPORT
 
@@ -77,7 +82,7 @@ def rust_primitive_preview(
 ) -> str:
     family = profile.profile_family
     return RustBackend(
-        feature_alternatives=profile.profile.alternatives,
+        feature_spellings=profile.profile.feature_spellings("rust"),
         emit_target_features=(
             family.backend("rust").feature_flags if family is not None else True
         ),
@@ -94,6 +99,8 @@ RUST_BACKEND = BackendCapability(
     value_test_support_factory=rust_value_test_support,
     test_renderer=rust_value_test_artifacts,
     verify_driver_factory=create_rust_verify_driver,
+    verify_machine_profile=rust_verify_profile,
+    toolchain_commands=rust_toolchain_commands,
     documentation_formatter_factory=rust_documentation_formatter,
     helper_manifest=RUST_HELPER_MANIFEST,
     profile_validator=validate_rust_profiles,

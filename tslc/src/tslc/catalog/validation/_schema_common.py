@@ -6,7 +6,7 @@ from collections import Counter
 from collections.abc import Collection, Sequence
 from difflib import get_close_matches
 
-from tslc.catalog.validation.source_spans import source_span
+from tslc.syntax.access import source_span
 from tslc.diagnostics import Diagnostic, RelatedLocation, diagnostic_at
 from tslc.syntax.ast import (
     ParsedTslAttribute,
@@ -134,9 +134,3 @@ def is_scalar_list(field: ParsedTslField) -> bool:
     return isinstance(value, ParsedTslListValue) and all(
         isinstance(item, ParsedTslScalarValue) for item in value.items
     )
-
-
-def unquote_key(text: str) -> str:
-    if len(text) >= 2 and text[0] == text[-1] == '"':
-        return text[1:-1]
-    return text

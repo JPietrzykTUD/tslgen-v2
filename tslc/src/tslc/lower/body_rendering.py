@@ -210,7 +210,11 @@ def _clone_scope(scope: LoweringScope) -> LoweringScope:
 
 
 def _find_region(segments: tuple[Segment, ...] | None, keyword: str) -> Region | None:
-    """Find a region by keyword inside body branches and switch arms."""
+    """Find a region by keyword in statement position: top level or any statement block.
+
+    Deliberately does not descend into ``(...)`` payloads — an argument-position
+    region is not a statement.
+    """
 
     if segments is None:
         return None
@@ -218,17 +222,10 @@ def _find_region(segments: tuple[Segment, ...] | None, keyword: str) -> Region |
         if isinstance(segment, Region):
             if segment.keyword == keyword:
                 return segment
-            if segment.keyword == "if":
-                nested = _find_region(segment.block, keyword)
-                if nested is None and segment.else_block is not None:
-                    nested = _find_region(segment.else_block, keyword)
+            for block in segment.statement_blocks():
+                nested = _find_region(block, keyword)
                 if nested is not None:
                     return nested
-            if segment.keyword == "switch" and segment.arms is not None:
-                for _label, body in segment.arms:
-                    nested = _find_region(body, keyword)
-                    if nested is not None:
-                        return nested
     return None
 
 
@@ -245,7 +242,7 @@ def _variant_diagnostics(
                 f"implementation variant {variant_name!r} for "
                 f"{primitive_name!r}: {diagnostic.message}"
             ),
-            location=diagnostic.location,
+            span=diagnostic.span,
         )
         for diagnostic in diagnostics
     )

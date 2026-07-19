@@ -5,10 +5,17 @@ backends = ["cpp", "rust"]
 authoring_profiles = ["scalar", "avx2"]
 output_root = "tslctmp/generated"
 
-# Optional local overrides use these tables; keep host-specific values uncommitted.
+# Committed repo-canonical tool roles live in [tslc.tools] below. Personal,
+# host-specific overrides use these tables and stay uncommitted.
 # [tslc.toolchains.cpp]
 # compiler = "clang++"
 # target = "aarch64-linux-gnu"
 # linker = "aarch64-linux-gnu-g++"
 # [tslc.runners]
 # qemu-aarch64 = "/usr/bin/qemu-aarch64"
+
+[tslc.tools]
+# Canonical devcontainer locations for role-specific compilers; override or
+# remove per host. Missing tools become recorded verification skips.
+oneapi-cpp = "/opt/intel/oneapi/compiler/2025.0/bin/icpx"
+wasi-cpp = "/opt/wasi-sdk/bin/clang++"

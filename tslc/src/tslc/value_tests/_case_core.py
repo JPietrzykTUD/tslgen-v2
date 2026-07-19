@@ -59,6 +59,7 @@ def masked_case(
     index: int,
     case: TestCase,
     specs: tuple[LoweredSpecialization, ...],
+    index_base_spelling: str | None = None,
 ) -> ValueTestCasePlan | None:
     if case.lanes is None or case.expected_rule is not None:
         return None
@@ -67,7 +68,11 @@ def masked_case(
     vector_inputs = _vector_inputs(case)
     if base_spelling is None or len(case.expected) != case.lanes:
         return None
-    if len(mask_inputs) != 1 or len(vector_inputs) != specs[0].param_kinds.count("v"):
+    has_index_vector = "vidx" in specs[0].param_kinds
+    if has_index_vector and (case.index_type is None or index_base_spelling is None):
+        return None
+    vector_param_count = sum(kind in {"v", "vidx"} for kind in specs[0].param_kinds)
+    if len(mask_inputs) != 1 or len(vector_inputs) != vector_param_count:
         return None
     return _plan(
         "masked",
@@ -79,6 +84,9 @@ def masked_case(
         vector_inputs=vector_inputs,
         expected=case.expected,
         mask_inputs=mask_inputs,
+        index_type_tag=case.index_type if has_index_vector else None,
+        index_base_spelling=index_base_spelling if has_index_vector else None,
+        index_lanes=case.lanes if has_index_vector else None,
     )
 
 def reduction_case(

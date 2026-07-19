@@ -10,7 +10,11 @@ import pytest
 
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import load_machine_profiles_checked
-from tslc.catalog.target_families import ProfileFamilyCapability, TargetFamilyCatalog
+from tslc.catalog.target_families import (
+    ProfileFamilyCapability,
+    TargetFamilyCatalog,
+    TargetFeatureCapability,
+)
 from tslc.catalog.validation import validate_catalog
 from tslc.catalog.validation._schema_extensions import known_extension_fields
 from tslc.compiler_assets import load_default_tsl_grammar
@@ -117,6 +121,35 @@ def test_target_constraint_relations_are_validated() -> None:
     assert sum(diagnostic.code == "TSL-CATALOG-INVALID-ENUM" for diagnostic in diagnostics) == 2
     assert any("target constraint family" in diagnostic.message for diagnostic in diagnostics)
     assert any("target constraint width" in diagnostic.message for diagnostic in diagnostics)
+
+
+def test_exact_double_target_constraint_relation_is_accepted() -> None:
+    source = _base_source().replace(
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n',
+        "prim<v:=v> id(data):\n"
+        "  return_type:\n"
+        "    extension: ToExtension\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        ToExtension:\n"
+        "          where:\n"
+        "            family same_as\n"
+        "            width twice_as_wide\n"
+        "            implementation:\n"
+        '              tsil "complete(data);"\n',
+    )
+
+    diagnostics = _diagnostics(source)
+
+    assert not any(
+        diagnostic.code == "TSL-CATALOG-INVALID-ENUM" for diagnostic in diagnostics
+    )
 
 
 def test_primitive_documentation_fields_are_accepted_and_promoted() -> None:
@@ -572,6 +605,82 @@ def test_simd_type_base_width_constraint_requires_specialization() -> None:
     assert "base-width constraints require specialize_base true" in diagnostic.message
 
 
+def test_base_width_constraint_unknown_relation_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  generic_params:\n"
+            "    IndexVec:\n"
+            "      kind simd_type\n"
+            "      specialize_base true\n"
+            "      constraints:\n"
+            "        base_types [si32]\n"
+            "        width(self::base) < width(base::in)\n"
+            "  impls:\n",
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-BASE-WIDTH-RELATION"
+    )
+    assert "unknown relation '<'" in diagnostic.message
+    assert ">=" in diagnostic.message
+    # the mistyped relation is diagnosed as such, not as an unrelated unknown field
+    assert not any(
+        d.code == "TSL-CATALOG-UNKNOWN-FIELD" and "width(self::base)" in d.message
+        for d in diagnostics
+    )
+
+
+def test_base_width_constraint_known_relations_are_accepted() -> None:
+    for relation in (">=", ">", "=="):
+        diagnostics = _diagnostics(
+            _base_source().replace(
+                "  impls:\n",
+                "  generic_params:\n"
+                "    IndexVec:\n"
+                "      kind simd_type\n"
+                "      specialize_base true\n"
+                "      constraints:\n"
+                "        base_types [si32]\n"
+                f"        width(self::base) {relation} width(base::in)\n"
+                "  impls:\n",
+            )
+        )
+
+        assert diagnostics == (), (relation, diagnostics)
+
+
+def test_extension_vector_bits_unknown_spelling_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            '  family "scalar"\n',
+            '  family "scalar"\n  vector_bits "huge"\n',
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-MALFORMED-VECTOR-BITS"
+    )
+    assert "'huge'" in diagnostic.message
+    assert "scalable" in diagnostic.message
+    assert "sized" in diagnostic.message
+
+
+def test_extension_vector_bits_accepts_numeric_sized_and_scalable() -> None:
+    for value in ("128", '"sized"', '"scalable"'):
+        diagnostics = _diagnostics(
+            _base_source().replace(
+                '  family "scalar"\n',
+                f'  family "scalar"\n  vector_bits {value}\n',
+            )
+        )
+
+        assert not any(
+            d.code == "TSL-CATALOG-MALFORMED-VECTOR-BITS" for d in diagnostics
+        ), (value, diagnostics)
+
+
 def test_simd_type_base_constraints_cannot_duplicate_base_types_location() -> None:
     diagnostics = _diagnostics(
         _base_source().replace(
@@ -618,6 +727,195 @@ def test_duplicate_keys_are_diagnosed() -> None:
     )
 
     assert "TSL-CATALOG-DUPLICATE-BLOCK" in {d.code for d in diagnostics}
+
+
+def test_duplicate_primitive_declarations_are_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "prim<v:=v> id(data):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(data);"\n'
+        )
+    )
+
+    duplicate = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-DUPLICATE-PRIMITIVE"
+    )
+    assert "id" in duplicate.message
+    assert duplicate.related
+    assert duplicate.related[0].message == "first declaration is here"
+
+
+def test_repeated_wildcard_primitive_declaration_is_a_duplicate() -> None:
+    block = (
+        "prim<v:=v>[aligned=*] dup(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+    diagnostics = _diagnostics(_base_source(block + block))
+
+    assert "TSL-CATALOG-DUPLICATE-PRIMITIVE" in {d.code for d in diagnostics}
+
+
+def test_primitive_overloads_and_attribute_variants_are_not_duplicates() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "prim<v:=(v,v)> combine(left, right):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(left);"\n'
+            "prim<v:=(v,s)> combine(left, scalar):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(left);"\n'
+            "prim<v:=v>[aligned=true] tagged(data):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(data);"\n'
+            "prim<v:=v>[aligned=false] tagged(data):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(data);"\n'
+        )
+    )
+
+    assert "TSL-CATALOG-DUPLICATE-PRIMITIVE" not in {d.code for d in diagnostics}
+
+
+def test_base_and_extension_target_declarations_share_one_callable_name() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "prim<im:=(imt,im,usize)> resize_mask(orig, data, position):\n"
+            "  return_type:\n"
+            "    base: ToBase\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        ToBase:\n"
+            "          ints:\n"
+            "            implementation:\n"
+            '              tsil "complete(orig);"\n'
+            "prim<im:=(imt,im,usize)> resize_mask(orig, data, position):\n"
+            "  return_type:\n"
+            "    extension: ToExtension\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        ToExtension:\n"
+            "          scalar:\n"
+            "            implementation:\n"
+            '              tsil "complete(orig);"\n'
+        )
+    )
+
+    assert "TSL-CATALOG-DUPLICATE-PRIMITIVE" not in {d.code for d in diagnostics}
+
+
+@pytest.mark.parametrize("dimension", ("base", "extension"))
+@pytest.mark.parametrize("ordinary_first", (True, False))
+def test_ordinary_and_target_declarations_cannot_share_one_callable(
+    dimension: str,
+    ordinary_first: bool,
+) -> None:
+    ordinary = (
+        "prim<im:=(im,usize)> resize_mask(data, position):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+    targeted = (
+        "prim<im:=(im,usize)> resize_mask(data, position):\n"
+        "  return_type:\n"
+        f"    {dimension}: ToTarget\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        ToTarget:\n"
+        "          ints:\n"
+        "            implementation:\n"
+        '              tsil "complete(data);"\n'
+    )
+    diagnostics = _diagnostics(
+        _base_source(ordinary + targeted if ordinary_first else targeted + ordinary)
+    )
+
+    duplicate = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-DUPLICATE-PRIMITIVE"
+    )
+    assert "ordinary and target-axis forms" in duplicate.message
+    assert duplicate.related
+
+
+def test_target_owned_signature_parameter_requires_return_type_axis() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "prim<im:=(imt,im,usize)> resize_mask(orig, data, position):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(orig);"\n'
+        )
+    )
+
+    assert "TSL-CATALOG-TARGET-PARAM-RETURN-TYPE" in {
+        diagnostic.code for diagnostic in diagnostics
+    }
+
+
+def test_type_group_without_member_list_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "types:\n"
+            '  broken:\n'
+            '    types "notalist"\n'
+        )
+    )
+
+    malformed = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-TYPE-GROUP-MALFORMED"
+    )
+    assert "broken" in malformed.message
+
+
+def test_type_group_with_empty_member_list_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "types:\n"
+            "  hollow {types []}\n"
+        )
+    )
+
+    assert "TSL-CATALOG-TYPE-GROUP-MALFORMED" in {d.code for d in diagnostics}
+
+
+def test_type_group_missing_types_field_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "types:\n"
+            "  nameless {}\n"
+        )
+    )
+
+    assert "TSL-CATALOG-TYPE-GROUP-MALFORMED" in {d.code for d in diagnostics}
 
 
 def test_unknown_fields_are_diagnosed() -> None:
@@ -891,6 +1189,38 @@ def test_target_family_typos_are_still_diagnosed() -> None:
     diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-INVALID-ENUM")
     assert "extension family 'risc-v'" in diagnostic.message
     assert "rvv" in diagnostic.message
+
+
+def test_unknown_target_feature_spellings_and_uses_are_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        "target_families:\n"
+        "  known_extension_families [scalar]\n"
+        "  known_target_features [known]\n"
+        "  target_feature_spellings:\n"
+        '    typo "compiler-typo"\n'
+        "  universal_extension_families [scalar]\n"
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "  active_when:\n"
+        "    target_features [active_typo]\n"
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        requires [requires_typo]\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+
+    messages = [diagnostic.message for diagnostic in diagnostics]
+    assert any("target feature spelling 'typo'" in message for message in messages)
+    assert any("active_when uses unknown target feature 'active_typo'" in message for message in messages)
+    assert any("requires uses unknown target feature 'requires_typo'" in message for message in messages)
 
 
 def test_missing_backend_spellings_are_diagnosed() -> None:
@@ -1375,6 +1705,36 @@ def test_machine_profile_target_features_are_validated(tmp_path: Path) -> None:
     }
 
 
+def test_machine_profile_features_and_overrides_use_target_feature_catalog(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{"x86": [{"name": "demo", "target_features": "known typo", '
+        '"alternatives": {"known": "profile-known", "unused": "profile-unused"}}]}\n',
+        encoding="utf-8",
+    )
+    families = TargetFamilyCatalog(
+        profile_families={"x86": ProfileFamilyCapability("x86")},
+        target_features={
+            "known": TargetFeatureCapability(
+                "known",
+                default_spelling="source-known",
+                backend_spellings={"cpp": "cpp-known"},
+            )
+        },
+    )
+
+    result = load_machine_profiles_checked(path, families)
+
+    assert {diagnostic.code for diagnostic in result.diagnostics} >= {
+        "TSL-PROFILE-UNKNOWN-ALTERNATIVE",
+        "TSL-PROFILE-UNKNOWN-TARGET-FEATURE",
+    }
+    profile = result.profiles["demo"]
+    assert profile.feature_spelling("known", "cpp") == "profile-known"
+
+
 def test_machine_profile_compile_modes_are_validated(tmp_path: Path) -> None:
     path = tmp_path / "machine_profiles.json"
     path.write_text(
@@ -1440,10 +1800,47 @@ def test_machine_profile_runner_metadata_is_validated(tmp_path: Path) -> None:
 
     result = load_machine_profiles_checked(path, _target_family_catalog())
 
-    assert result.profiles["avx2"].runner is not None
-    assert result.profiles["avx2"].runner.kind == "sde"
-    assert result.profiles["avx2"].runner.profile == "hsw"
-    assert "TSL-PROFILE-MALFORMED-RUNNER" in {d.code for d in result.diagnostics}
+    leading_dash = next(
+        d
+        for d in result.diagnostics
+        if d.code == "TSL-PROFILE-MALFORMED-RUNNER" and "'-hsw'" in d.message
+    )
+    assert "avx2" in leading_dash.message
+    assert result.profiles["avx2"].runner is None
+    runner_errors = [
+        d for d in result.diagnostics if d.code == "TSL-PROFILE-MALFORMED-RUNNER"
+    ]
+    assert len(runner_errors) == 2
+
+
+def test_machine_profile_valid_runners_are_preserved_verbatim(tmp_path: Path) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{\n'
+        '  "x86": [\n'
+        '    {"name": "avx2", "target_features": "avx avx2", '
+        '"runner": {"kind": "sde", "profile": "hsw"}}\n'
+        '  ],\n'
+        '  "aarch64": [\n'
+        '    {"name": "neon", "target_features": "neon", '
+        '"runner": {"kind": "qemu-aarch64", "profile": "cortex-a76", '
+        '"args": ["-cpu"]}}\n'
+        '  ]\n'
+        '}\n',
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path, _target_family_catalog())
+
+    assert result.diagnostics == ()
+    sde = result.profiles["avx2"].runner
+    assert sde is not None and (sde.kind, sde.profile) == ("sde", "hsw")
+    qemu = result.profiles["neon"].runner
+    assert qemu is not None and (qemu.kind, qemu.profile, qemu.args) == (
+        "qemu-aarch64",
+        "cortex-a76",
+        ("-cpu",),
+    )
 
 
 def test_machine_profile_runner_kinds_come_from_target_families(tmp_path: Path) -> None:
@@ -1465,3 +1862,106 @@ def test_machine_profile_runner_kinds_come_from_target_families(tmp_path: Path) 
     )
     assert "declared for family 'x86'" in diagnostic.message
     assert "sde" in diagnostic.message
+
+
+def _param_types_catalog_and_diagnostics(condition_key: str):
+    text = (
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v>[aligned=*] id(data):\n"
+        "  param_types:\n"
+        "    data:\n"
+        f'      {condition_key} "type(base::in)"\n'
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+    document = SourceDocument(Path("catalog_validation_fixture.tsl"), text, "d", "tsl")
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+    return result.catalog, (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=("cpp", "rust")),
+    )
+
+
+@pytest.mark.parametrize(
+    ("condition_key", "accepted"),
+    (
+        # Accepted grammar: the unconditional default rule (bare or quoted) and
+        # quoted `if attribute=value` conditions.
+        ("default", True),
+        ('"default"', True),
+        ('"if aligned=true"', True),
+        ('"if aligned=false"', True),
+        ('"if  aligned=true"', True),
+        # Rejected grammar: anything else must be diagnosed by validation and
+        # dropped by promotion — through the same shared parser.
+        ("defaults", False),
+        ('"if aligned = true"', False),
+        ('"if aligned=*"', False),
+        ('"if aligned="', False),
+        ('"if =true"', False),
+        ('"iff aligned=true"', False),
+        ('"if 1aligned=true"', False),
+        ('"if aligned=true "', False),
+    ),
+)
+def test_param_type_condition_acceptance_and_promotion_agree(
+    condition_key: str, accepted: bool
+) -> None:
+    """Validator acceptance and builder promotion share one condition grammar."""
+
+    catalog, diagnostics = _param_types_catalog_and_diagnostics(condition_key)
+
+    rejected = any(
+        diagnostic.code == "TSL-CATALOG-PARAM-TYPES-BAD-CONDITION"
+        for diagnostic in diagnostics
+    )
+    variants = catalog.primitives_named("id", unmasked=False)
+    assert variants
+    promoted_rule_counts = {len(variant.param_type_rules) for variant in variants}
+
+    assert rejected == (not accepted)
+    assert promoted_rule_counts == ({1} if accepted else {0})
+
+
+def test_validator_kind_sets_derive_from_typed_catalog_kinds() -> None:
+    from typing import get_args
+
+    from tslc.catalog import model
+    from tslc.catalog.validation import _schema_primitives, _schema_tests
+    from tslc.catalog.validation import _schema_extensions as schema_extensions
+
+    assert _schema_primitives.KNOWN_GENERIC_PARAM_KINDS == frozenset(
+        get_args(model.GenericParamKind)
+    ) == {"bool", "int", "simd_type"}
+    assert _schema_tests.KNOWN_TEST_ROLES == frozenset(
+        get_args(model.TestCaseRole)
+    ) == {"value", "compile"}
+    assert schema_extensions.KNOWN_MASK_POLICY_KINDS == frozenset(
+        get_args(model.MaskPolicyKind)
+    ) == {
+        "bool",
+        "boolean_lane_vector",
+        "comparison_lane_vector",
+        "exact_lane_bitmask",
+        "lane_bitmask",
+        "native_predicate",
+        "native_predicate_by_lanes",
+    }
+    assert schema_extensions.KNOWN_IMASK_POLICY_KINDS == frozenset(
+        get_args(model.ImaskPolicyKind)
+    ) == {"lane_bitmask", "same_as_mask_type", "unsigned_scalar"}
+    assert frozenset(get_args(model.TestArgKind)) == {"vector", "mask", "scalar"}

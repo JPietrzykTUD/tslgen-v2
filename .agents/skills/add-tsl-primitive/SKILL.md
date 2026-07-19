@@ -12,10 +12,16 @@ description: Add or update a TSL primitive in tsldata and the tslc compiler. Use
    examples under `tsldata/primitives/`.
 2. Identify the primitive family, signatures, type groups, extension coverage, masks, immediate parameters, and value-test needs before editing.
 3. Add or update source data in `tsldata/` first. Keep source forms explicit; do not make the compiler silently repair malformed `.tsl`.
-4. If the current parser/catalog/schema does not accept the needed shape, add typed validation and promotion at the parser/catalog boundary.
+4. If the current parser/catalog/schema does not accept the needed shape, add
+   typed validation and promotion through the shared syntax accessors, parameter
+   type vocabulary, and region syntax at the parser/catalog boundary.
 5. If selection or lowering needs new behavior, add typed domain/lowering values. Avoid raw string rewrites and avoid leaking dictionaries past catalog boundaries.
 6. If rendering or value tests need support, add backend capability checks before render-time surprises.
-7. Add focused tests at the touched boundary, then broaden to generated-output or value-test coverage when behavior crosses lowering/rendering.
+7. When a schema, selector, region, or query vocabulary changes, also use
+   `extend-tslc-authoring` and prove completion/index/query projection from the
+   same owner. Add focused tests and full-span diagnostics at the touched
+   boundary, then broaden to generated-output or value-test coverage when
+   behavior crosses lowering/rendering.
 
 ## Checks
 
@@ -27,8 +33,11 @@ description: Add or update a TSL primitive in tsldata and the tslc compiler. Use
 ## Useful Commands
 
 ```bash
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog_validation.py
+PYTHONPATH=tslc/src python -m tslc check
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower*.py tslc/tests/test_lower_text.py
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_diagnostic_provenance.py
+PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
 ./dev.sh build --primitives NAME --profiles scalar,avx2 --backends cpp,rust
+./dev.sh test --primitives NAME --profiles scalar,avx2 --backends cpp,rust
 ```

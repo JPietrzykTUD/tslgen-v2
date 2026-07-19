@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,11 +11,22 @@ import pytest
 
 from tslc import cli
 from tslc import check_cli
+from tslc import doctor as doctor_module
 from tslc.api import generate_project
 from tslc.authoring import check_catalog
 from tslc.doctor import diagnose
 from tslc.maintenance import coverage_inventory
-from tslc.output.verify_model import BuildCommand, BuildCommandResult
+from tslc.output.verify_drivers import (
+    BackendPreparation,
+    CommandFollowUp,
+    VerifyBackendDriver,
+)
+from tslc.output.verify_model import (
+    BuildCommand,
+    BuildCommandResult,
+    ToolchainCommands,
+    VerifyProfile,
+)
 from tslc.project_config import load_project_config
 
 
@@ -198,6 +210,8 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
                 'compiler = "clang++"',
                 "[tslc.runners]",
                 'sde = "/opt/sde64"',
+                "[tslc.tools]",
+                'oneapi-cpp = "/opt/oneapi/icpx"',
                 "",
             )
         ),
@@ -213,6 +227,7 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
     assert config.authoring_profiles == ("scalar",)
     assert config.toolchains["cpp"].compiler == ("clang++",)
     assert config.runner_paths == {"sde": "/opt/sde64"}
+    assert config.tool_paths == {"oneapi-cpp": "/opt/oneapi/icpx"}
 
 
 def test_generate_uses_discovered_backend_defaults_for_formatting(
@@ -297,6 +312,120 @@ def test_doctor_uses_verifier_preflight_for_selected_backend_and_profile(
     assert profile["build_ready"] is True
     assert profile["native_run"] is True
     assert [command.step for command in seen] == ["preflight"]
+
+
+def test_doctor_reports_registered_backend_through_capability_hooks(
+    monkeypatch: pytest.MonkeyPatch,
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    """Doctor consumes backend-owned projections; no cpp/rust id dispatch."""
+
+    from tslc.backend import registry
+    from tslc.backend.cpp_capability import CPP_BACKEND
+
+    def fake_verify_machine_profile(profile: object, family: object) -> VerifyProfile:
+        del family
+        return VerifyProfile(profile_name=profile.name, file_stem=profile.name)  # type: ignore[attr-defined]
+
+    def fake_toolchain_commands(
+        profile: VerifyProfile, config: object
+    ) -> ToolchainCommands:
+        del profile, config
+        return ToolchainCommands(compiler=("fakecc",), target=None, linker=None)
+
+    def fake_prepare(
+        root: Path, backend: object, config: object, runner: object
+    ) -> BackendPreparation:
+        del root, config, runner
+        return BackendPreparation(backend=backend)  # type: ignore[arg-type]
+
+    fake_driver = VerifyBackendDriver(
+        backend_id="fake",
+        required_tools=(),
+        prepare_backend=fake_prepare,
+        command_groups=lambda root, backend, config: (),
+        after_successful_command=(
+            lambda result, profiles, config, runner: CommandFollowUp()
+        ),
+    )
+    fake = replace(
+        CPP_BACKEND,
+        backend_id="fake",
+        root_path="fake",
+        verify_machine_profile=fake_verify_machine_profile,
+        toolchain_commands=fake_toolchain_commands,
+        verify_driver_factory=lambda: fake_driver,
+        generated_format=None,
+    )
+    monkeypatch.setattr(
+        registry, "BACKEND_CAPABILITIES", (*registry.BACKEND_CAPABILITIES, fake)
+    )
+    monkeypatch.setattr(registry, "_BY_ID", {**registry._BY_ID, "fake": fake})
+    # The source corpus does not carry type spellings for the fake backend;
+    # doctor's toolchain reporting is under test here, not corpus coverage.
+    real_check_catalog = doctor_module.check_catalog
+    monkeypatch.setattr(
+        doctor_module,
+        "check_catalog",
+        lambda sources, *, backends: real_check_catalog(sources, backends=("cpp",)),
+    )
+
+    report = diagnose(
+        sources=(data_root,),
+        machine_profiles=machine_profiles_path,
+        backends=("fake",),
+        profiles=("scalar",),
+        work_root=tmp_path / "doctor",
+        runner=lambda command: BuildCommandResult(command=command, returncode=0),
+    )
+
+    assert report["diagnostics"] == []
+    assert [backend["id"] for backend in report["backends"]] == ["fake"]
+    profile = report["backends"][0]["profiles"][0]
+    assert profile["name"] == "scalar"
+    assert profile["compiler"]["command"] == "fakecc"
+    assert profile["build_ready"] is True
+
+
+def test_project_config_tools_flow_into_doctor_settings(tmp_path: Path) -> None:
+    config_path = tmp_path / "tslc.toml"
+    config_path.write_text(
+        "\n".join(
+            (
+                "[tslc]",
+                'sources = ["data"]',
+                'machine_profiles = "profiles.json"',
+                'backends = ["cpp"]',
+                "[tslc.tools]",
+                'oneapi-cpp = "/opt/oneapi/icpx"',
+                'wasi-cpp = "/opt/wasi/clang++"',
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    config = load_project_config(config_path)
+    assert config is not None
+    args = SimpleNamespace(
+        sources=None,
+        machine_profiles=None,
+        backend=[],
+        backends=None,
+        compiler=[],
+        target=[],
+        linker=[],
+        runner=[],
+        work_root=None,
+    )
+
+    settings = doctor_module._settings(args, config)
+
+    assert settings.tool_paths == {
+        "oneapi-cpp": "/opt/oneapi/icpx",
+        "wasi-cpp": "/opt/wasi/clang++",
+    }
 
 
 def test_coverage_inventory_help_does_not_write(

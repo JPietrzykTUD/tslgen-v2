@@ -12,6 +12,7 @@ from tslc.benchmark.model import (
     BenchmarkVectorScalarCorrectnessCase,
 )
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.value_tests.lane_math import tile
 from tslc.value_tests.literals import token_truthy
 from tslc.value_tests.model import ValueTestCasePlan
 
@@ -341,12 +342,6 @@ def mask_cases(
             )
         )
     return tuple(matching)
-
-
-def tile(values: tuple[str, ...], lanes: int) -> tuple[str, ...]:
-    if not values:
-        return ()
-    return tuple(values[index % len(values)] for index in range(lanes))
 
 
 __all__ = (

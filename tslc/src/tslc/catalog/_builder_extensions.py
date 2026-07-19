@@ -5,15 +5,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import replace
 
-from tslc.catalog._builder_common import (
-    _child,
-    _children,
-    _field_text,
-    _list_text,
-    _list_text_set,
-    _opt_int,
-    _source_span,
-)
+from typing import cast
+
+from tslc.catalog._builder_common import _list_text_set, _opt_int
 from tslc.catalog.model import (
     BackendCompileGuard,
     BackendExtensionMetadata,
@@ -21,8 +15,16 @@ from tslc.catalog.model import (
     ExtensionActivation,
     ExtensionMetadata,
     ImaskPolicy,
+    ImaskPolicyKind,
     MaskPolicy,
+    MaskPolicyKind,
+    VectorBitsKind,
 )
+from tslc.syntax.access import child as _child
+from tslc.syntax.access import children as _children
+from tslc.syntax.access import field_text as _field_text
+from tslc.syntax.access import list_text as _list_text
+from tslc.syntax.access import source_span as _source_span
 from tslc.syntax.ast import ParsedBlockDeclaration, ParsedTslField
 
 
@@ -57,6 +59,10 @@ def _resolve_extension_inheritance(
             backend_supported={**parent.backend_supported, **ext.backend_supported},
             metadata=replace(
                 ext.metadata,
+                documentation_width=(
+                    ext.metadata.documentation_width
+                    or parent.metadata.documentation_width
+                ),
                 backend=_merge_backend_metadata(
                     parent.metadata.backend,
                     ext.metadata.backend,
@@ -230,6 +236,7 @@ def _extension_metadata(
 ) -> ExtensionMetadata:
     return ExtensionMetadata(
         native_sort_order=_opt_int(_field_text(fields.get("native_sort_order"))),
+        documentation_width=_field_text(fields.get("documentation_width")),
         backend=_backend_extension_metadata(fields, backend_ids),
     )
 
@@ -390,8 +397,9 @@ def _mask_policy(field: ParsedTslField | None) -> MaskPolicy:
 
     if field is None:
         return MaskPolicy()
+    # Typing-only narrow: schema validation diagnoses kinds outside MaskPolicyKind.
     return MaskPolicy(
-        kind=_field_text(_child(field, "kind")) or "lane_bitmask",
+        kind=cast(MaskPolicyKind, _field_text(_child(field, "kind")) or "lane_bitmask"),
         backend_spelling=_backend_text_map(_child(field, "backend_spelling")),
         backend_spelling_by_lanes=_backend_int_map(
             _child(field, "backend_spelling_by_lanes")
@@ -406,7 +414,10 @@ def _imask_policy(field: ParsedTslField | None) -> ImaskPolicy:
 
     if field is None:
         return ImaskPolicy()
-    return ImaskPolicy(kind=_field_text(_child(field, "kind")) or "lane_bitmask")
+    # Typing-only narrow: schema validation diagnoses kinds outside ImaskPolicyKind.
+    return ImaskPolicy(
+        kind=cast(ImaskPolicyKind, _field_text(_child(field, "kind")) or "lane_bitmask")
+    )
 
 
 
@@ -437,10 +448,11 @@ def _int_text(field: ParsedTslField | None) -> int:
 
 
 
-def _vector_bits_kind(field: ParsedTslField | None) -> str:
+def _vector_bits_kind(field: ParsedTslField | None) -> VectorBitsKind:
     text = _field_text(field)
     if text is None:
         return ""
     if text.lstrip("-").isdigit():
         return "fixed"
-    return text
+    # Typing-only narrow: schema validation diagnoses spellings outside VectorBitsKind.
+    return cast(VectorBitsKind, text)

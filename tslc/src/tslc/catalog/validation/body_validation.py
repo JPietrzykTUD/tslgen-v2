@@ -6,7 +6,7 @@ import re
 
 from collections.abc import Callable
 
-from tslc.catalog.validation.source_spans import source_span
+from tslc.syntax.access import source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS, region_shell_validator
 from tslc.ir.region_syntax import (
@@ -86,12 +86,8 @@ def _validate_segments(
         if isinstance(segment, RawText):
             continue
         _validate_region(primitive_name, segment, diagnostics)
-        _validate_segments(primitive_name, segment.body, diagnostics)
-        _validate_segments(primitive_name, segment.block, diagnostics)
-        _validate_segments(primitive_name, segment.else_block, diagnostics)
-        if segment.arms is not None:
-            for _label, body in segment.arms:
-                _validate_segments(primitive_name, body, diagnostics)
+        for child in segment.child_sequences():
+            _validate_segments(primitive_name, child, diagnostics)
 
 
 def _validate_region(

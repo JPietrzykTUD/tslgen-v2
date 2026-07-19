@@ -49,6 +49,9 @@ loaded sources/assets -> parse -> catalog -> select -> scan TSIL -> lower
 Use `.agents/skills/add-value-test-shape/SKILL.md` when extending executable
 case planning/rendering. Use `.agents/skills/extend-tslc-verification/SKILL.md`
 for compiler, target, runner, preflight, or generated verification changes.
+Use `.agents/skills/extend-tslc-authoring/SKILL.md` for compiler-owned
+diagnostics, completion, navigation, semantic tokens, code actions, workspace
+snapshots, explorer/scaffolding projections, or LSP protocol changes.
 
 Do not move behavior to a later stage merely because that stage has convenient
 access to strings or filesystem paths.

@@ -5,13 +5,14 @@ from __future__ import annotations
 from tslc.catalog.model import Catalog, TestCase
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_scalable_common import (
-    render_extension_test_template,
+    mask_bits_value as _mask_bits_value,
+    scalable_case_facts,
+    scalable_function_name,
     tiling_is_safe,
 )
 from tslc.value_tests.case_helpers import (
     mask_inputs as _mask_inputs,
     maskish_inputs as _maskish_inputs,
-    sanitize as _sanitize,
     vector_inputs as _vector_inputs,
 )
 from tslc.value_tests.literals import token_truthy
@@ -22,7 +23,6 @@ from tslc.value_tests.model import (
     ValueTestExpectation,
     ValueTestInputs,
     ValueTestInvocation,
-    ValueTestScalable,
 )
 
 
@@ -36,8 +36,6 @@ def scalable_mask_result_cases(
     backend: ValueTestBackendSupport,
 ) -> tuple[ValueTestCasePlan, ...]:
     del index
-    if "scalable_mask_result" not in backend.case_kinds:
-        return ()
     if case.lanes is None or case.expected_rule is not None:
         return ()
     if harness.load is None:
@@ -58,36 +56,20 @@ def scalable_mask_result_cases(
             continue
         if case.extension is not None and spec.extension_name != case.extension:
             continue
-        extension = catalog.extensions.get(spec.extension_name)
-        if extension is None or extension.vector_bits_kind != "scalable":
-            continue
-        runtime_lanes = extension.test_runtime_lanes.get(backend.backend_id)
-        mask_check_template = extension.test_mask_check.get(backend.backend_id)
-        if runtime_lanes is None or mask_check_template is None:
-            continue
-        runtime_lanes = render_extension_test_template(
-            runtime_lanes,
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
+        scalable = scalable_case_facts(
+            spec,
+            catalog,
+            backend,
+            expected_mask_bits=expected_bits,
+            load_name=harness.load,
         )
-        vec_type = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
-        check_expr = render_extension_test_template(
-            mask_check_template,
-            vec=vec_type,
-            case_name=f'"{case.name}"',
-            mask="result",
-            expected_bits=f"{expected_bits}ull",
-            authored_lanes=str(case.lanes),
-            lanes="lanes",
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
-        )
+        if scalable is None:
+            continue
         plans.append(
             ValueTestCasePlan(
                 kind="scalable_mask_result",
-                function_name=(
-                    f"test_scalable_{_sanitize(spec.extension_name)}_"
-                    f"{_sanitize(name)}_{_sanitize(case.name)}"
+                function_name=scalable_function_name(
+                    spec.extension_name, case.name, call_name=name
                 ),
                 case_name=case.name,
                 call_name=name,
@@ -100,12 +82,7 @@ def scalable_mask_result_cases(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,
                 ),
-                scalable=ValueTestScalable(
-                    source_extension=spec.extension_name,
-                    load_name=harness.load,
-                    runtime_lanes_expr=runtime_lanes,
-                    mask_check_expr=check_expr,
-                ),
+                scalable=scalable,
             )
         )
     return tuple(plans)
@@ -120,8 +97,6 @@ def scalable_masked_mask_result_cases(
     backend: ValueTestBackendSupport,
 ) -> tuple[ValueTestCasePlan, ...]:
     del index
-    if "scalable_masked_mask_result" not in backend.case_kinds:
-        return ()
     if case.lanes is None or case.expected_rule is not None:
         return ()
     if harness.load is None:
@@ -145,46 +120,21 @@ def scalable_masked_mask_result_cases(
             continue
         if case.extension is not None and spec.extension_name != case.extension:
             continue
-        extension = catalog.extensions.get(spec.extension_name)
-        if extension is None or extension.vector_bits_kind != "scalable":
+        scalable = scalable_case_facts(
+            spec,
+            catalog,
+            backend,
+            mask_bit_tokens=(mask_inputs[0],),
+            expected_mask_bits=expected_bits,
+            load_name=harness.load,
+        )
+        if scalable is None:
             continue
-        runtime_lanes = extension.test_runtime_lanes.get(backend.backend_id)
-        mask_template = extension.test_mask_from_bits.get(backend.backend_id)
-        mask_check_template = extension.test_mask_check.get(backend.backend_id)
-        if runtime_lanes is None or mask_template is None or mask_check_template is None:
-            continue
-        runtime_lanes = render_extension_test_template(
-            runtime_lanes,
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
-        )
-        vec_type = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
-        mask_expr = render_extension_test_template(
-            mask_template,
-            vec=vec_type,
-            mask_bits=f"{mask_inputs[0]}ull",
-            authored_lanes=str(case.lanes),
-            lanes="lanes",
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
-        )
-        check_expr = render_extension_test_template(
-            mask_check_template,
-            vec=vec_type,
-            case_name=f'"{case.name}"',
-            mask="result",
-            expected_bits=f"{expected_bits}ull",
-            authored_lanes=str(case.lanes),
-            lanes="lanes",
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
-        )
         plans.append(
             ValueTestCasePlan(
                 kind="scalable_masked_mask_result",
-                function_name=(
-                    f"test_scalable_{_sanitize(spec.extension_name)}_"
-                    f"{_sanitize(name)}_{_sanitize(case.name)}"
+                function_name=scalable_function_name(
+                    spec.extension_name, case.name, call_name=name
                 ),
                 case_name=case.name,
                 call_name=name,
@@ -197,13 +147,7 @@ def scalable_masked_mask_result_cases(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,
                 ),
-                scalable=ValueTestScalable(
-                    source_extension=spec.extension_name,
-                    load_name=harness.load,
-                    runtime_lanes_expr=runtime_lanes,
-                    mask_from_bits_exprs=(mask_expr,),
-                    mask_check_expr=check_expr,
-                ),
+                scalable=scalable,
             )
         )
     return tuple(plans)
@@ -219,14 +163,12 @@ def scalable_mask_logic_cases(
 ) -> tuple[ValueTestCasePlan, ...]:
     del index
     del harness
-    if "scalable_mask_logic" not in backend.case_kinds:
-        return ()
     if case.lanes is None or case.expected_rule is not None:
         return ()
     mask_inputs = _mask_inputs(case)
     if len(case.expected) != 1:
         return ()
-    expected_bits = _mask_bits(case.expected[0])
+    expected_bits = _mask_bits_value(case.expected[0])
     if expected_bits is None:
         return ()
     plans: list[ValueTestCasePlan] = []
@@ -239,49 +181,20 @@ def scalable_mask_logic_cases(
             continue
         if case.extension is not None and spec.extension_name != case.extension:
             continue
-        extension = catalog.extensions.get(spec.extension_name)
-        if extension is None or extension.vector_bits_kind != "scalable":
+        scalable = scalable_case_facts(
+            spec,
+            catalog,
+            backend,
+            mask_bit_tokens=mask_inputs,
+            expected_mask_bits=expected_bits,
+        )
+        if scalable is None:
             continue
-        runtime_lanes = extension.test_runtime_lanes.get(backend.backend_id)
-        mask_template = extension.test_mask_from_bits.get(backend.backend_id)
-        mask_check_template = extension.test_mask_check.get(backend.backend_id)
-        if runtime_lanes is None or mask_template is None or mask_check_template is None:
-            continue
-        runtime_lanes = render_extension_test_template(
-            runtime_lanes,
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
-        )
-        vec_type = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
-        mask_exprs = tuple(
-            render_extension_test_template(
-                mask_template,
-                vec=vec_type,
-                mask_bits=f"{mask_bits}ull",
-                authored_lanes=str(case.lanes),
-                lanes="lanes",
-                base_type=spec.base_type_spelling,
-                base=spec.base_type_spelling,
-            )
-            for mask_bits in mask_inputs
-        )
-        check_expr = render_extension_test_template(
-            mask_check_template,
-            vec=vec_type,
-            case_name=f'"{case.name}"',
-            mask="result",
-            expected_bits=f"{expected_bits}ull",
-            authored_lanes=str(case.lanes),
-            lanes="lanes",
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
-        )
         plans.append(
             ValueTestCasePlan(
                 kind="scalable_mask_logic",
-                function_name=(
-                    f"test_scalable_{_sanitize(spec.extension_name)}_"
-                    f"{_sanitize(name)}_{_sanitize(case.name)}"
+                function_name=scalable_function_name(
+                    spec.extension_name, case.name, call_name=name
                 ),
                 case_name=case.name,
                 call_name=name,
@@ -294,12 +207,7 @@ def scalable_mask_logic_cases(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,
                 ),
-                scalable=ValueTestScalable(
-                    source_extension=spec.extension_name,
-                    runtime_lanes_expr=runtime_lanes,
-                    mask_from_bits_exprs=mask_exprs,
-                    mask_check_expr=check_expr,
-                ),
+                scalable=scalable,
             )
         )
     return tuple(plans)
@@ -315,13 +223,11 @@ def scalable_mask_constant_cases(
 ) -> tuple[ValueTestCasePlan, ...]:
     del index
     del harness
-    if "scalable_mask_constant" not in backend.case_kinds:
-        return ()
     if case.lanes is None or case.expected_rule is not None:
         return ()
     if len(case.expected) != 1:
         return ()
-    expected_bits = _mask_bits(case.expected[0])
+    expected_bits = _mask_bits_value(case.expected[0])
     if expected_bits is None:
         return ()
     plans: list[ValueTestCasePlan] = []
@@ -332,36 +238,19 @@ def scalable_mask_constant_cases(
             continue
         if case.extension is not None and spec.extension_name != case.extension:
             continue
-        extension = catalog.extensions.get(spec.extension_name)
-        if extension is None or extension.vector_bits_kind != "scalable":
-            continue
-        runtime_lanes = extension.test_runtime_lanes.get(backend.backend_id)
-        mask_check_template = extension.test_mask_check.get(backend.backend_id)
-        if runtime_lanes is None or mask_check_template is None:
-            continue
-        runtime_lanes = render_extension_test_template(
-            runtime_lanes,
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
+        scalable = scalable_case_facts(
+            spec,
+            catalog,
+            backend,
+            expected_mask_bits=expected_bits,
         )
-        vec_type = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
-        check_expr = render_extension_test_template(
-            mask_check_template,
-            vec=vec_type,
-            case_name=f'"{case.name}"',
-            mask="result",
-            expected_bits=f"{expected_bits}ull",
-            authored_lanes=str(case.lanes),
-            lanes="lanes",
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
-        )
+        if scalable is None:
+            continue
         plans.append(
             ValueTestCasePlan(
                 kind="scalable_mask_constant",
-                function_name=(
-                    f"test_scalable_{_sanitize(spec.extension_name)}_"
-                    f"{_sanitize(name)}_{_sanitize(case.name)}"
+                function_name=scalable_function_name(
+                    spec.extension_name, case.name, call_name=name
                 ),
                 case_name=case.name,
                 call_name=name,
@@ -373,11 +262,7 @@ def scalable_mask_constant_cases(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,
                 ),
-                scalable=ValueTestScalable(
-                    source_extension=spec.extension_name,
-                    runtime_lanes_expr=runtime_lanes,
-                    mask_check_expr=check_expr,
-                ),
+                scalable=scalable,
             )
         )
     return tuple(plans)
@@ -393,14 +278,12 @@ def scalable_mask_conversion_cases(
 ) -> tuple[ValueTestCasePlan, ...]:
     del index
     del harness
-    if "scalable_mask_conversion" not in backend.case_kinds:
-        return ()
     if case.lanes is None or case.expected_rule is not None:
         return ()
     mask_inputs = _maskish_inputs(case)
     if len(mask_inputs) != 1 or len(case.expected) != 1:
         return ()
-    expected_bits = _mask_bits(case.expected[0])
+    expected_bits = _mask_bits_value(case.expected[0])
     if expected_bits is None:
         return ()
     plans: list[ValueTestCasePlan] = []
@@ -412,49 +295,22 @@ def scalable_mask_conversion_cases(
         if case.extension is not None and spec.extension_name != case.extension:
             continue
         extension = catalog.extensions.get(spec.extension_name)
-        if (
-            extension is None
-            or extension.vector_bits_kind != "scalable"
-            or extension.imask_policy.kind != "same_as_mask_type"
-        ):
+        if extension is None or extension.imask_policy.kind != "same_as_mask_type":
             continue
-        runtime_lanes = extension.test_runtime_lanes.get(backend.backend_id)
-        mask_template = extension.test_mask_from_bits.get(backend.backend_id)
-        mask_check_template = extension.test_mask_check.get(backend.backend_id)
-        if runtime_lanes is None or mask_template is None or mask_check_template is None:
+        scalable = scalable_case_facts(
+            spec,
+            catalog,
+            backend,
+            mask_bit_tokens=(mask_inputs[0],),
+            expected_mask_bits=expected_bits,
+        )
+        if scalable is None:
             continue
-        runtime_lanes = render_extension_test_template(
-            runtime_lanes,
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
-        )
-        vec_type = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
-        mask_expr = render_extension_test_template(
-            mask_template,
-            vec=vec_type,
-            mask_bits=f"{mask_inputs[0]}ull",
-            authored_lanes=str(case.lanes),
-            lanes="lanes",
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
-        )
-        check_expr = render_extension_test_template(
-            mask_check_template,
-            vec=vec_type,
-            case_name=f'"{case.name}"',
-            mask="result",
-            expected_bits=f"{expected_bits}ull",
-            authored_lanes=str(case.lanes),
-            lanes="lanes",
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
-        )
         plans.append(
             ValueTestCasePlan(
                 kind="scalable_mask_conversion",
-                function_name=(
-                    f"test_scalable_{_sanitize(spec.extension_name)}_"
-                    f"{_sanitize(name)}_{_sanitize(case.name)}"
+                function_name=scalable_function_name(
+                    spec.extension_name, case.name, call_name=name
                 ),
                 case_name=case.name,
                 call_name=name,
@@ -467,12 +323,7 @@ def scalable_mask_conversion_cases(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,
                 ),
-                scalable=ValueTestScalable(
-                    source_extension=spec.extension_name,
-                    runtime_lanes_expr=runtime_lanes,
-                    mask_from_bits_exprs=(mask_expr,),
-                    mask_check_expr=check_expr,
-                ),
+                scalable=scalable,
             )
         )
     return tuple(plans)
@@ -483,12 +334,6 @@ def _expected_mask_bits(values: tuple[str, ...]) -> int:
         if token_truthy(value):
             bits |= 1 << index
     return bits
-
-def _mask_bits(token: str) -> int | None:
-    try:
-        return int(token.strip().strip('"'), 0)
-    except ValueError:
-        return None
 
 __all__ = (
     "scalable_mask_constant_cases",

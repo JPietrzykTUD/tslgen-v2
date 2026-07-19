@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from tslc.catalog.builder import CatalogBuilder
-from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles
+from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
 from tslc.compiler_assets import (
     RenderAssets,
@@ -75,8 +75,10 @@ def machine_profiles_path() -> Path:
 
 
 @pytest.fixture(scope="session")
-def machine_profiles() -> Mapping[str, MachineProfile]:
-    return load_machine_profiles(_MACHINE_PROFILES)
+def machine_profiles(catalog: Catalog) -> Mapping[str, MachineProfile]:
+    result = load_machine_profiles_checked(_MACHINE_PROFILES, catalog.target_families)
+    assert result.diagnostics == ()
+    return result.profiles
 
 
 @pytest.fixture(scope="session")

@@ -10,7 +10,7 @@ from tslc.catalog.validation._schema_common import (
     invalid_enum,
     validate_known_fields,
 )
-from tslc.catalog.validation.source_spans import child, children, field_text, source_span
+from tslc.syntax.access import child, children, field_text, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.ast import (
     ParsedImplementationSelectorEntry,
@@ -31,7 +31,9 @@ KNOWN_TARGET_CONSTRAINT_FIELDS = frozenset(
     {"family", "width", "safety", "implementation", "variants"}
 )
 KNOWN_TARGET_FAMILY_RELATIONS = frozenset({"same_as"})
-KNOWN_TARGET_WIDTH_RELATIONS = frozenset({"smaller_than", "larger_than"})
+KNOWN_TARGET_WIDTH_RELATIONS = frozenset(
+    {"smaller_than", "larger_than", "twice_as_wide"}
+)
 
 
 def known_implementation_selector_fields() -> frozenset[str]:

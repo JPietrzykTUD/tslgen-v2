@@ -25,16 +25,9 @@ from tslc.benchmark.model import (
     BenchmarkCorrectnessCase,
     BenchmarkCoverageEntry,
     BenchmarkCoverageStatus,
-    BenchmarkImmediateCorrectnessCase,
-    BenchmarkIndexedLoadCorrectnessCase,
-    BenchmarkMaskCorrectnessCase,
     BenchmarkProfilePlan,
     BenchmarkProjectPlan,
-    BenchmarkReductionCorrectnessCase,
     BenchmarkScenario,
-    BenchmarkVectorCorrectnessCase,
-    BenchmarkVectorMaskCorrectnessCase,
-    BenchmarkVectorScalarCorrectnessCase,
     SpecializationKey,
 )
 from tslc.benchmark.scenarios import (
@@ -51,6 +44,7 @@ from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.catalog.signatures import parse_signature
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.value_tests.harness import discover_harness_primitives
+from tslc.value_tests.lane_math import tiling_preserves_lane_semantics, whole_lanes
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestProjectPlan
 
 _STABLE_ID_RE = re.compile(r"[^0-9A-Za-z_]+")
@@ -171,8 +165,8 @@ class CppBenchmarkPlanner:
         assert primitive is not None and extension is not None
         bits = scalar_bit_width(spec.type_tag)
         assert bits is not None and extension.vector_bits > 0
-        lanes = extension.vector_bits // bits
-        if lanes <= 0:
+        lanes = whole_lanes(extension.vector_bits, spec.type_tag)
+        if lanes is None:
             return None, "extension width does not contain a complete scalar lane", False
         key = SpecializationKey(
             backend_id="cpp",
@@ -210,19 +204,20 @@ class CppBenchmarkPlanner:
                     "indexed-load benchmark requires an element-sized scale",
                     False,
                 )
-            from_array = self._harness.from_array
-            to_array = self._harness.to_array
-            if from_array is None or to_array is None:
-                return None, "indexed-load harness primitives were not discovered", True
-            if from_array not in by_primitive or to_array not in by_primitive:
-                return (
-                    None,
-                    "indexed-load harness primitives are not in the emitted dependency closure",
-                    True,
-                )
+            harness, harness_reason = _require_harness(
+                by_primitive,
+                (self._harness.from_array, self._harness.to_array),
+                missing_reason="indexed-load harness primitives were not discovered",
+                closure_reason=(
+                    "indexed-load harness primitives are not in the emitted dependency closure"
+                ),
+            )
+            if harness is None:
+                return None, harness_reason, True
+            from_array, to_array = harness
             index_type_tag = simd_type_base_bindings[0][1]
-            index_bits = scalar_bit_width(index_type_tag)
-            if index_bits is None or extension.vector_bits % index_bits:
+            index_lanes = whole_lanes(extension.vector_bits, index_type_tag)
+            if index_lanes is None:
                 return None, "indexed-load type does not have a fixed lane count", False
             if not all(
                 _has_vector_specialization(
@@ -238,7 +233,6 @@ class CppBenchmarkPlanner:
                     "indexed-load SIMD-type harness specializations are not in the emitted closure",
                     True,
                 )
-            index_lanes = extension.vector_bits // index_bits
             correctness = _indexed_load_correctness_cases(
                 cases,
                 spec,
@@ -253,16 +247,17 @@ class CppBenchmarkPlanner:
         elif spec.result_kind == "v" and spec.param_kinds == ("v", "sImm"):
             if immediate_value is None:
                 return None, "no concrete immediate value was planned", True
-            from_array = self._harness.from_array
-            to_array = self._harness.to_array
-            if from_array is None or to_array is None:
-                return None, "vector round-trip harness primitives were not discovered", True
-            if from_array not in by_primitive or to_array not in by_primitive:
-                return (
-                    None,
-                    "vector round-trip harness primitives are not in the emitted dependency closure",
-                    True,
-                )
+            harness, harness_reason = _require_harness(
+                by_primitive,
+                (self._harness.from_array, self._harness.to_array),
+                missing_reason="vector round-trip harness primitives were not discovered",
+                closure_reason=(
+                    "vector round-trip harness primitives are not in the emitted dependency closure"
+                ),
+            )
+            if harness is None:
+                return None, harness_reason, True
+            from_array, to_array = harness
             correctness = _immediate_correctness_cases(
                 cases,
                 spec,
@@ -273,22 +268,23 @@ class CppBenchmarkPlanner:
             )
             scenarios = immediate_scenarios(primitive, spec, seed)
         elif spec.result_kind == "v" and spec.param_kinds == ("v", "s"):
-            if primitive.cross_lane:
+            if not tiling_preserves_lane_semantics(primitive):
                 return (
                     None,
                     "cross-lane vector results require a dedicated benchmark scenario",
                     False,
                 )
-            from_array = self._harness.from_array
-            to_array = self._harness.to_array
-            if from_array is None or to_array is None:
-                return None, "vector round-trip harness primitives were not discovered", True
-            if from_array not in by_primitive or to_array not in by_primitive:
-                return (
-                    None,
-                    "vector round-trip harness primitives are not in the emitted dependency closure",
-                    True,
-                )
+            harness, harness_reason = _require_harness(
+                by_primitive,
+                (self._harness.from_array, self._harness.to_array),
+                missing_reason="vector round-trip harness primitives were not discovered",
+                closure_reason=(
+                    "vector round-trip harness primitives are not in the emitted dependency closure"
+                ),
+            )
+            if harness is None:
+                return None, harness_reason, True
+            from_array, to_array = harness
             correctness = _vector_scalar_correctness_cases(
                 cases,
                 spec,
@@ -300,22 +296,23 @@ class CppBenchmarkPlanner:
         elif spec.result_kind == "v" and spec.param_kinds and all(
             kind == "v" for kind in spec.param_kinds
         ):
-            if primitive.cross_lane:
+            if not tiling_preserves_lane_semantics(primitive):
                 return (
                     None,
                     "cross-lane vector results require a dedicated benchmark scenario",
                     False,
                 )
-            from_array = self._harness.from_array
-            to_array = self._harness.to_array
-            if from_array is None or to_array is None:
-                return None, "vector round-trip harness primitives were not discovered", True
-            if from_array not in by_primitive or to_array not in by_primitive:
-                return (
-                    None,
-                    "vector round-trip harness primitives are not in the emitted dependency closure",
-                    True,
-                )
+            harness, harness_reason = _require_harness(
+                by_primitive,
+                (self._harness.from_array, self._harness.to_array),
+                missing_reason="vector round-trip harness primitives were not discovered",
+                closure_reason=(
+                    "vector round-trip harness primitives are not in the emitted dependency closure"
+                ),
+            )
+            if harness is None:
+                return None, harness_reason, True
+            from_array, to_array = harness
             correctness = _vector_correctness_cases(
                 cases,
                 spec,
@@ -327,20 +324,17 @@ class CppBenchmarkPlanner:
         elif spec.result_kind == "m" and spec.param_kinds and all(
             kind == "v" for kind in spec.param_kinds
         ):
-            from_array = self._harness.from_array
-            to_integral = self._harness.to_integral
-            if from_array is None or to_integral is None:
-                return (
-                    None,
-                    "vector-to-mask harness primitives were not discovered",
-                    True,
-                )
-            if from_array not in by_primitive or to_integral not in by_primitive:
-                return (
-                    None,
-                    "vector-to-mask harness primitives are not in the emitted dependency closure",
-                    True,
-                )
+            harness, harness_reason = _require_harness(
+                by_primitive,
+                (self._harness.from_array, self._harness.to_integral),
+                missing_reason="vector-to-mask harness primitives were not discovered",
+                closure_reason=(
+                    "vector-to-mask harness primitives are not in the emitted dependency closure"
+                ),
+            )
+            if harness is None:
+                return None, harness_reason, True
+            from_array, to_integral = harness
             correctness = _vector_mask_correctness_cases(
                 cases,
                 spec,
@@ -350,15 +344,17 @@ class CppBenchmarkPlanner:
             )
             scenarios = mask_result_scenarios(primitive, spec, seed)
         elif spec.result_kind == "s" and spec.param_kinds == ("v",):
-            from_array = self._harness.from_array
-            if from_array is None:
-                return None, "vector construction harness primitive was not discovered", True
-            if from_array not in by_primitive:
-                return (
-                    None,
-                    "vector construction harness primitive is not in the emitted dependency closure",
-                    True,
-                )
+            harness, harness_reason = _require_harness(
+                by_primitive,
+                (self._harness.from_array,),
+                missing_reason="vector construction harness primitive was not discovered",
+                closure_reason=(
+                    "vector construction harness primitive is not in the emitted dependency closure"
+                ),
+            )
+            if harness is None:
+                return None, harness_reason, True
+            (from_array,) = harness
             correctness = _reduction_correctness_cases(
                 cases,
                 spec,
@@ -367,15 +363,17 @@ class CppBenchmarkPlanner:
             )
             scenarios = reduction_scenarios(seed)
         elif spec.result_kind == "m" and spec.param_kinds == ("im",):
-            to_integral = self._harness.to_integral
-            if to_integral is None:
-                return None, "mask round-trip harness primitive was not discovered", True
-            if to_integral not in by_primitive:
-                return (
-                    None,
-                    "mask round-trip harness primitive is not in the emitted dependency closure",
-                    True,
-                )
+            harness, harness_reason = _require_harness(
+                by_primitive,
+                (self._harness.to_integral,),
+                missing_reason="mask round-trip harness primitive was not discovered",
+                closure_reason=(
+                    "mask round-trip harness primitive is not in the emitted dependency closure"
+                ),
+            )
+            if harness is None:
+                return None, harness_reason, True
+            (to_integral,) = harness
             correctness = _mask_correctness_cases(cases, spec, lanes, to_integral)
             scenarios = mask_density_scenarios(lanes, seed)
         else:
@@ -407,6 +405,21 @@ class CppBenchmarkPlanner:
         )
 
 
+def _require_harness(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    names: tuple[str | None, ...],
+    *,
+    missing_reason: str,
+    closure_reason: str,
+) -> tuple[tuple[str, ...] | None, str]:
+    if any(name is None for name in names):
+        return None, missing_reason
+    resolved = tuple(name for name in names if name is not None)
+    if any(name not in by_primitive for name in resolved):
+        return None, closure_reason
+    return resolved, ""
+
+
 def _common_unsupported_reason(
     spec: LoweredSpecialization,
     primitive: Primitive | None,
@@ -414,7 +427,7 @@ def _common_unsupported_reason(
 ) -> str | None:
     if primitive is None:
         return "source primitive is not present in the catalog"
-    if primitive.cross_lane and not (
+    if not tiling_preserves_lane_semantics(primitive) and not (
         (spec.result_kind == "s" and spec.param_kinds == ("v",))
         or _is_indexed_load_shape(spec)
     ):
@@ -510,7 +523,9 @@ def _manifest_hash(
             "name": profile.profile.name,
             "family": profile.profile.family,
             "features": sorted(profile.profile.features),
-            "feature_spellings": sorted(profile.profile.alternatives.items()),
+            "feature_spellings": sorted(
+                profile.profile.feature_spellings("cpp").items()
+            ),
             "compile_modes": sorted(profile.profile.compile_modes),
             "cpp_flags": profile.profile.flags_for_backend("cpp"),
         },
@@ -527,7 +542,7 @@ def _manifest_hash(
                     for scenario in candidate_set.scenarios
                 ],
                 "correctness": [
-                    _correctness_canonical_fields(case)
+                    case.canonical_fields()
                     for case in candidate_set.correctness_cases
                 ],
                 "required_features": sorted(
@@ -543,83 +558,6 @@ def _manifest_hash(
 
 def _body_hash(body: str) -> str:
     return sha256(body.encode("utf-8")).hexdigest()
-
-
-def _correctness_canonical_fields(
-    case: (
-        BenchmarkVectorCorrectnessCase
-        | BenchmarkImmediateCorrectnessCase
-        | BenchmarkIndexedLoadCorrectnessCase
-        | BenchmarkMaskCorrectnessCase
-        | BenchmarkVectorMaskCorrectnessCase
-        | BenchmarkVectorScalarCorrectnessCase
-        | BenchmarkReductionCorrectnessCase
-    ),
-) -> tuple[object, ...]:
-    if isinstance(case, BenchmarkVectorCorrectnessCase):
-        return (
-            "vector",
-            case.case_name,
-            case.vector_inputs,
-            case.expected,
-            case.from_array_name,
-            case.to_array_name,
-        )
-    if isinstance(case, BenchmarkImmediateCorrectnessCase):
-        return (
-            "immediate",
-            case.case_name,
-            case.vector_input,
-            case.expected,
-            case.from_array_name,
-            case.to_array_name,
-        )
-    if isinstance(case, BenchmarkIndexedLoadCorrectnessCase):
-        return (
-            "indexed_load",
-            case.case_name,
-            case.memory_values,
-            case.index_values,
-            case.expected,
-            case.index_type_tag,
-            case.index_base_spelling,
-            case.from_array_name,
-            case.to_array_name,
-        )
-    if isinstance(case, BenchmarkVectorScalarCorrectnessCase):
-        return (
-            "vector_scalar",
-            case.case_name,
-            case.vector_input,
-            case.scalar_input,
-            case.expected,
-            case.from_array_name,
-            case.to_array_name,
-        )
-    if isinstance(case, BenchmarkReductionCorrectnessCase):
-        return (
-            "reduction",
-            case.case_name,
-            case.vector_input,
-            case.expected,
-            case.from_array_name,
-        )
-    if isinstance(case, BenchmarkVectorMaskCorrectnessCase):
-        return (
-            "vector_mask",
-            case.case_name,
-            case.vector_inputs,
-            case.expected_mask,
-            case.from_array_name,
-            case.to_integral_name,
-        )
-    return (
-        "mask",
-        case.case_name,
-        case.mask_inputs,
-        case.expected_mask,
-        case.to_integral_name,
-    )
 
 
 def _specialization_sort_key(spec: LoweredSpecialization) -> tuple[object, ...]:

@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import TypeGuard
 
 from tslc.backend.emitted_profile import used_vector_type_specs
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
-from tslc.backend.rust_facades import (
-    rust_algorithm_primitive_facades,
-    rust_public_function_names,
-)
+from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
+from tslc.backend.rust_facades import rust_algorithm_primitive_facades
 from tslc.backend.rust_vectors import RustVectorRegistration, rust_vector_registrations
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.catalog.model import Extension
@@ -29,6 +28,8 @@ def rust_algorithm_module(
     if not RUST_HELPER_MANIFEST.supports("algorithm", by_primitive):
         return ""
 
+    registrations = rust_vector_registrations(by_primitive, extensions)
+    impl_targets = _rust_algorithm_impl_targets(registrations, extensions)
     parts = [
         "pub mod algo {\n"
         "    pub use crate::tsl_algorithm::{\n"
@@ -50,30 +51,30 @@ def rust_algorithm_module(
         "\n"
         "    pub struct Profile;"
     ]
-    parts.append(_rust_algorithm_load_store_impls(by_primitive, extensions))
+    parts.append(_rust_algorithm_load_store_impls(impl_targets))
     selected_load_impls = _rust_algorithm_selected_load_impls(
-        by_primitive, extensions
+        by_primitive, registrations, extensions
     )
     if selected_load_impls:
         parts.append(selected_load_impls)
-    parts.append(_rust_algorithm_masked_store_impls(by_primitive, extensions))
+    parts.append(_rust_algorithm_masked_store_impls(impl_targets, by_primitive))
     compress_store_impls = _rust_algorithm_compress_store_impls(
-        by_primitive, extensions
+        impl_targets, by_primitive
     )
     if compress_store_impls:
         parts.append(compress_store_impls)
     mask_population_count_impls = _rust_algorithm_mask_population_count_impls(
-        by_primitive, extensions
+        impl_targets, by_primitive
     )
     if mask_population_count_impls:
         parts.append(mask_population_count_impls)
     integral_mask_impls = _rust_algorithm_integral_mask_impls(
-        by_primitive, extensions
+        impl_targets, by_primitive
     )
     if integral_mask_impls:
         parts.append(integral_mask_impls)
     mask_from_integral_impls = _rust_algorithm_mask_from_integral_impls(
-        by_primitive, extensions
+        impl_targets, by_primitive
     )
     if mask_from_integral_impls:
         parts.append(mask_from_integral_impls)
@@ -83,7 +84,7 @@ def rust_algorithm_module(
     algorithm_wrappers = assets.text(_RUST_ALGORITHM_WRAPPER_ASSET).rstrip()
     primitive_facades = rust_algorithm_primitive_facades(
         by_primitive,
-        reserved_names=rust_public_function_names(algorithm_wrappers),
+        reserved_names=RUST_ALGORITHM_RESERVED_NAMES,
     )
     if primitive_facades:
         parts.append(primitive_facades)
@@ -91,11 +92,16 @@ def rust_algorithm_module(
     return "\n\n" + "\n\n".join(part for part in parts if part) + "\n}\n"
 
 
-def _rust_algorithm_load_store_impls(
-    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+@dataclass(frozen=True, slots=True)
+class _RustAlgorithmImplTarget:
+    type_parameters: str
+    vector: str
+
+
+def _rust_algorithm_impl_targets(
+    registrations: tuple[RustVectorRegistration, ...],
     extensions: Mapping[str, Extension],
-) -> str:
-    registrations = rust_vector_registrations(by_primitive, extensions)
+) -> tuple[_RustAlgorithmImplTarget, ...]:
     concrete_extensions = sorted(
         {
             f"super::{rust_extension_tag(extensions[registration.extension_name])}"
@@ -103,41 +109,26 @@ def _rust_algorithm_load_store_impls(
             if registration.extension_name in extensions
         }
     )
-    parts = [
-        _rust_algorithm_load_store_impl("Scalar"),
-        _rust_algorithm_generic_load_store_impl(),
-    ]
-    parts.extend(
-        _rust_algorithm_load_store_impl(extension)
-        for extension in concrete_extensions
-    )
-    return "\n\n".join(parts)
-
-
-def _rust_algorithm_load_store_impl(extension: str) -> str:
-    vector = f"Simd<T, {extension}>"
     return (
-        f"    impl<T> LoadStore<{vector}> for Profile\n"
-        "    where\n"
-        f"        {vector}: StaticSimdVector<BaseType = T>\n"
-        "            + super::detail::primitives::LoadImpl<false>,\n"
-        f"        <{vector} as SimdVector>::RegisterType:\n"
-        f"            super::detail::primitives::StoreImplArg<{vector}, false>,\n"
-        "    {\n"
-        f"        unsafe fn load_unaligned(ptr: *const T) -> <{vector} as SimdVector>::RegisterType {{\n"
-        f"            unsafe {{ super::load::<{vector}, false>(ptr) }}\n"
-        "        }\n\n"
-        f"        unsafe fn store_unaligned(ptr: *mut T, value: <{vector} as SimdVector>::RegisterType) {{\n"
-        f"            unsafe {{ super::store::<{vector}, false, _>(ptr, value) }}\n"
-        "        }\n"
-        "    }"
+        _RustAlgorithmImplTarget("T", "Simd<T, Scalar>"),
+        _RustAlgorithmImplTarget("T, const N: usize", "Simd<T, Generic<N>>"),
+        *(
+            _RustAlgorithmImplTarget("T", f"Simd<T, {extension}>")
+            for extension in concrete_extensions
+        ),
     )
 
 
-def _rust_algorithm_generic_load_store_impl() -> str:
-    vector = "Simd<T, Generic<N>>"
+def _rust_algorithm_load_store_impls(
+    targets: tuple[_RustAlgorithmImplTarget, ...],
+) -> str:
+    return "\n\n".join(_rust_algorithm_load_store_impl(target) for target in targets)
+
+
+def _rust_algorithm_load_store_impl(target: _RustAlgorithmImplTarget) -> str:
+    vector = target.vector
     return (
-        f"    impl<T, const N: usize> LoadStore<{vector}> for Profile\n"
+        f"    impl<{target.type_parameters}> LoadStore<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = T>\n"
         "            + super::detail::primitives::LoadImpl<false>,\n"
@@ -156,11 +147,11 @@ def _rust_algorithm_generic_load_store_impl() -> str:
 
 def _rust_algorithm_selected_load_impls(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    registrations: tuple[RustVectorRegistration, ...],
     extensions: Mapping[str, Extension],
 ) -> str:
     if not RUST_HELPER_MANIFEST.supports("selected_load", by_primitive):
         return ""
-    registrations = rust_vector_registrations(by_primitive, extensions)
     gather_narrow_vectors = _rust_algorithm_gather_narrow_vectors(by_primitive)
     selected_load_vectors = (
         gather_narrow_vectors | _rust_algorithm_array_selected_load_vectors(by_primitive)
@@ -341,53 +332,20 @@ def _rust_algorithm_array_selected_load_impl(vector: str, base: str) -> str:
 
 
 def _rust_algorithm_masked_store_impls(
+    targets: tuple[_RustAlgorithmImplTarget, ...],
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
-    extensions: Mapping[str, Extension],
 ) -> str:
     if not RUST_HELPER_MANIFEST.supports("masked_store", by_primitive):
         return ""
-    registrations = rust_vector_registrations(by_primitive, extensions)
-    concrete_extensions = sorted(
-        {
-            f"super::{rust_extension_tag(extensions[registration.extension_name])}"
-            for registration in registrations
-            if registration.extension_name in extensions
-        }
+    return "\n\n".join(
+        _rust_algorithm_masked_store_impl(target) for target in targets
     )
-    parts = [
-        _rust_algorithm_masked_store_impl("Scalar"),
-        _rust_algorithm_generic_masked_store_impl(),
-    ]
-    parts.extend(
-        _rust_algorithm_masked_store_impl(extension)
-        for extension in concrete_extensions
-    )
-    return "\n\n".join(parts)
 
 
-def _rust_algorithm_masked_store_impl(extension: str) -> str:
-    vector = f"Simd<T, {extension}>"
+def _rust_algorithm_masked_store_impl(target: _RustAlgorithmImplTarget) -> str:
+    vector = target.vector
     return (
-        f"    impl<T> MaskedStore<{vector}> for Profile\n"
-        "    where\n"
-        f"        {vector}: StaticSimdVector<BaseType = T>\n"
-        "            + super::detail::primitives::Store_maskImpl<false>,\n"
-        "    {\n"
-        f"        unsafe fn store_mask_unaligned(\n"
-        f"            mask: <{vector} as SimdVector>::MaskType,\n"
-        f"            ptr: *mut T,\n"
-        f"            value: <{vector} as SimdVector>::RegisterType,\n"
-        "        ) {\n"
-        f"            unsafe {{ super::store_mask::<{vector}, false>(mask, ptr, value) }}\n"
-        "        }\n"
-        "    }"
-    )
-
-
-def _rust_algorithm_generic_masked_store_impl() -> str:
-    vector = "Simd<T, Generic<N>>"
-    return (
-        f"    impl<T, const N: usize> MaskedStore<{vector}> for Profile\n"
+        f"    impl<{target.type_parameters}> MaskedStore<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = T>\n"
         "            + super::detail::primitives::Store_maskImpl<false>,\n"
@@ -404,53 +362,20 @@ def _rust_algorithm_generic_masked_store_impl() -> str:
 
 
 def _rust_algorithm_compress_store_impls(
+    targets: tuple[_RustAlgorithmImplTarget, ...],
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
-    extensions: Mapping[str, Extension],
 ) -> str:
     if not RUST_HELPER_MANIFEST.supports("compress_store", by_primitive):
         return ""
-    registrations = rust_vector_registrations(by_primitive, extensions)
-    concrete_extensions = sorted(
-        {
-            f"super::{rust_extension_tag(extensions[registration.extension_name])}"
-            for registration in registrations
-            if registration.extension_name in extensions
-        }
+    return "\n\n".join(
+        _rust_algorithm_compress_store_impl(target) for target in targets
     )
-    parts = [
-        _rust_algorithm_compress_store_impl("Scalar"),
-        _rust_algorithm_generic_compress_store_impl(),
-    ]
-    parts.extend(
-        _rust_algorithm_compress_store_impl(extension)
-        for extension in concrete_extensions
-    )
-    return "\n\n".join(parts)
 
 
-def _rust_algorithm_compress_store_impl(extension: str) -> str:
-    vector = f"Simd<T, {extension}>"
+def _rust_algorithm_compress_store_impl(target: _RustAlgorithmImplTarget) -> str:
+    vector = target.vector
     return (
-        f"    impl<T> CompressStore<{vector}> for Profile\n"
-        "    where\n"
-        f"        {vector}: StaticSimdVector<BaseType = T>\n"
-        "            + super::detail::primitives::Compress_storeImpl<true>,\n"
-        "    {\n"
-        "        unsafe fn compress_store(\n"
-        f"            mask: <{vector} as SimdVector>::MaskType,\n"
-        "            ptr: *mut T,\n"
-        f"            value: <{vector} as SimdVector>::RegisterType,\n"
-        "        ) {\n"
-        f"            unsafe {{ super::compress_store::<{vector}, true>(mask, ptr, value) }}\n"
-        "        }\n"
-        "    }"
-    )
-
-
-def _rust_algorithm_generic_compress_store_impl() -> str:
-    vector = "Simd<T, Generic<N>>"
-    return (
-        f"    impl<T, const N: usize> CompressStore<{vector}> for Profile\n"
+        f"    impl<{target.type_parameters}> CompressStore<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = T>\n"
         "            + super::detail::primitives::Compress_storeImpl<true>,\n"
@@ -467,49 +392,22 @@ def _rust_algorithm_generic_compress_store_impl() -> str:
 
 
 def _rust_algorithm_mask_population_count_impls(
+    targets: tuple[_RustAlgorithmImplTarget, ...],
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
-    extensions: Mapping[str, Extension],
 ) -> str:
     if not RUST_HELPER_MANIFEST.supports("mask_population_count", by_primitive):
         return ""
-    registrations = rust_vector_registrations(by_primitive, extensions)
-    concrete_extensions = sorted(
-        {
-            f"super::{rust_extension_tag(extensions[registration.extension_name])}"
-            for registration in registrations
-            if registration.extension_name in extensions
-        }
+    return "\n\n".join(
+        _rust_algorithm_mask_population_count_impl(target) for target in targets
     )
-    parts = [
-        _rust_algorithm_mask_population_count_impl("Scalar"),
-        _rust_algorithm_generic_mask_population_count_impl(),
-    ]
-    parts.extend(
-        _rust_algorithm_mask_population_count_impl(extension)
-        for extension in concrete_extensions
-    )
-    return "\n\n".join(parts)
 
 
-def _rust_algorithm_mask_population_count_impl(extension: str) -> str:
-    vector = f"Simd<T, {extension}>"
+def _rust_algorithm_mask_population_count_impl(
+    target: _RustAlgorithmImplTarget,
+) -> str:
+    vector = target.vector
     return (
-        f"    impl<T> MaskPopulationCount<{vector}> for Profile\n"
-        "    where\n"
-        f"        {vector}: StaticSimdVector\n"
-        "            + super::detail::primitives::Mask_population_countImpl,\n"
-        "    {\n"
-        f"        fn mask_population_count(mask: <{vector} as SimdVector>::MaskType) -> usize {{\n"
-        f"            super::mask_population_count::<{vector}>(mask)\n"
-        "        }\n"
-        "    }"
-    )
-
-
-def _rust_algorithm_generic_mask_population_count_impl() -> str:
-    vector = "Simd<T, Generic<N>>"
-    return (
-        f"    impl<T, const N: usize> MaskPopulationCount<{vector}> for Profile\n"
+        f"    impl<{target.type_parameters}> MaskPopulationCount<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector\n"
         "            + super::detail::primitives::Mask_population_countImpl,\n"
@@ -522,50 +420,20 @@ def _rust_algorithm_generic_mask_population_count_impl() -> str:
 
 
 def _rust_algorithm_integral_mask_impls(
+    targets: tuple[_RustAlgorithmImplTarget, ...],
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
-    extensions: Mapping[str, Extension],
 ) -> str:
     if not RUST_HELPER_MANIFEST.supports("integral_mask", by_primitive):
         return ""
-    registrations = rust_vector_registrations(by_primitive, extensions)
-    concrete_extensions = sorted(
-        {
-            f"super::{rust_extension_tag(extensions[registration.extension_name])}"
-            for registration in registrations
-            if registration.extension_name in extensions
-        }
+    return "\n\n".join(
+        _rust_algorithm_integral_mask_impl(target) for target in targets
     )
-    parts = [
-        _rust_algorithm_integral_mask_impl("Scalar"),
-        _rust_algorithm_generic_integral_mask_impl(),
-    ]
-    parts.extend(
-        _rust_algorithm_integral_mask_impl(extension)
-        for extension in concrete_extensions
-    )
-    return "\n\n".join(parts)
 
 
-def _rust_algorithm_integral_mask_impl(extension: str) -> str:
-    vector = f"Simd<T, {extension}>"
+def _rust_algorithm_integral_mask_impl(target: _RustAlgorithmImplTarget) -> str:
+    vector = target.vector
     return (
-        f"    impl<T> IntegralMask<{vector}> for Profile\n"
-        "    where\n"
-        f"        {vector}: StaticSimdVector\n"
-        "            + super::detail::primitives::To_integralImpl,\n"
-        "    {\n"
-        f"        fn to_integral(mask: <{vector} as SimdVector>::MaskType)\n"
-        f"            -> <{vector} as SimdVector>::ImaskType {{\n"
-        f"            super::to_integral::<{vector}>(mask)\n"
-        "        }\n"
-        "    }"
-    )
-
-
-def _rust_algorithm_generic_integral_mask_impl() -> str:
-    vector = "Simd<T, Generic<N>>"
-    return (
-        f"    impl<T, const N: usize> IntegralMask<{vector}> for Profile\n"
+        f"    impl<{target.type_parameters}> IntegralMask<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector\n"
         "            + super::detail::primitives::To_integralImpl,\n"
@@ -579,50 +447,22 @@ def _rust_algorithm_generic_integral_mask_impl() -> str:
 
 
 def _rust_algorithm_mask_from_integral_impls(
+    targets: tuple[_RustAlgorithmImplTarget, ...],
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
-    extensions: Mapping[str, Extension],
 ) -> str:
     if not RUST_HELPER_MANIFEST.supports("mask_from_integral", by_primitive):
         return ""
-    registrations = rust_vector_registrations(by_primitive, extensions)
-    concrete_extensions = sorted(
-        {
-            f"super::{rust_extension_tag(extensions[registration.extension_name])}"
-            for registration in registrations
-            if registration.extension_name in extensions
-        }
+    return "\n\n".join(
+        _rust_algorithm_mask_from_integral_impl(target) for target in targets
     )
-    parts = [
-        _rust_algorithm_mask_from_integral_impl("Scalar"),
-        _rust_algorithm_generic_mask_from_integral_impl(),
-    ]
-    parts.extend(
-        _rust_algorithm_mask_from_integral_impl(extension)
-        for extension in concrete_extensions
-    )
-    return "\n\n".join(parts)
 
 
-def _rust_algorithm_mask_from_integral_impl(extension: str) -> str:
-    vector = f"Simd<T, {extension}>"
+def _rust_algorithm_mask_from_integral_impl(
+    target: _RustAlgorithmImplTarget,
+) -> str:
+    vector = target.vector
     return (
-        f"    impl<T> MaskFromIntegral<{vector}> for Profile\n"
-        "    where\n"
-        f"        {vector}: StaticSimdVector\n"
-        "            + super::detail::primitives::To_maskImpl,\n"
-        "    {\n"
-        f"        fn to_mask(mask: <{vector} as SimdVector>::ImaskType)\n"
-        f"            -> <{vector} as SimdVector>::MaskType {{\n"
-        f"            super::to_mask::<{vector}>(mask)\n"
-        "        }\n"
-        "    }"
-    )
-
-
-def _rust_algorithm_generic_mask_from_integral_impl() -> str:
-    vector = "Simd<T, Generic<N>>"
-    return (
-        f"    impl<T, const N: usize> MaskFromIntegral<{vector}> for Profile\n"
+        f"    impl<{target.type_parameters}> MaskFromIntegral<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector\n"
         "            + super::detail::primitives::To_maskImpl,\n"
@@ -699,6 +539,19 @@ def rust_dataparallel_fixed_lane_count(
     if not _rust_algorithm_vector_is_mappable(extension):
         return None
     return DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
+
+
+def rust_fixed_vector_spelling(base: str, lane_count: int) -> str:
+    """Crate-external spelling of the ``Fixed<N>`` vector admitted by VectorFor.
+
+    Consumers outside the generated ``tsl`` crate address the dataparallel
+    policy and algorithm profile through their fully qualified paths.
+    """
+
+    return (
+        f"<tsl::dataparallel::Fixed<{lane_count}> as "
+        f"tsl::tsl_algorithm::VectorFor<tsl::profile::algo::Profile, {base}>>::Vec"
+    )
 
 
 def _rust_algorithm_vector_type(extension: Extension, base: str) -> str:

@@ -142,15 +142,15 @@ class ValueTestCasePlan:
                         f"value-test case {self.function_name!r} kind {self.kind!r} "
                         f"requires vector_inputs[{index}] to have {self.lanes} values"
                     )
-        mask_exprs = self.scalable.mask_from_bits_exprs if self.scalable else ()
+        mask_bits = self.scalable.mask_bits if self.scalable else ()
         if (
-            mask_exprs
+            mask_bits
             and self.inputs.masks
-            and len(mask_exprs) != len(self.inputs.masks)
+            and len(mask_bits) != len(self.inputs.masks)
         ):
             raise ValueError(
                 f"value-test case {self.function_name!r} kind {self.kind!r} "
-                "requires one mask_from_bits expression per mask input"
+                "requires one mask-bits value per mask input"
             )
 
     def _validate_tuple_arity(self, field_name: str, arity: InputArity) -> None:
@@ -222,24 +222,37 @@ class ValueTestCasePlan:
             ValueTestFact.INDEX_VALUE: (
                 self.index is not None and self.index.value is not None
             ),
+            ValueTestFact.INDEX_STYLE: (
+                self.index is not None and self.index.style is not None
+            ),
+            ValueTestFact.INDEX_LANES: (
+                self.index is not None and self.index.lanes is not None
+            ),
             ValueTestFact.MEMORY_LENGTH: (
                 self.memory is not None and self.memory.buffer_length is not None
+            ),
+            ValueTestFact.MEMORY_STORAGE: (
+                self.memory is not None and self.memory.storage is not None
             ),
             ValueTestFact.TEXT_EXPECTED: self.expectation.text is not None,
             ValueTestFact.REPRESENTATION: (
                 self.representation is not None
                 and self.representation.round_trip_ready
             ),
+            ValueTestFact.REPRESENTATION_LAYOUT: (
+                self.representation is not None
+                and self.representation.has_layout
+            ),
             ValueTestFact.SCALABLE_RUNTIME: self.scalable is not None,
             ValueTestFact.SCALABLE_VALUE_HARNESS: (
                 self.scalable is not None and self.scalable.value_harness_ready
             ),
             ValueTestFact.SCALABLE_MASK_CHECK: (
-                self.scalable is not None and self.scalable.mask_check_expr is not None
+                self.scalable is not None
+                and self.scalable.mask_check_template is not None
             ),
             ValueTestFact.SCALABLE_MASK_INPUTS: (
-                self.scalable is not None
-                and bool(self.scalable.mask_from_bits_exprs)
+                self.scalable is not None and bool(self.scalable.mask_bits)
             ),
             ValueTestFact.SCALABLE_LOAD: (
                 self.scalable is not None and self.scalable.load_name is not None

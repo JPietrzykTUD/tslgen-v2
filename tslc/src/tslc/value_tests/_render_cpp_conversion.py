@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tslc.value_tests.literals import cpp_literal_list
+from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 
 
@@ -10,9 +10,11 @@ def _convert(case: ValueTestCasePlan) -> str:
     target_plan = case.target
     index = case.index
     assert target_plan is not None and index is not None
-    target = target_plan.base_spelling or case.base_spelling
-    target_lanes = target_plan.lanes or case.lanes
-    expected_type = target_plan.type_tag or case.type_tag
+    assert target_plan.base_spelling is not None and target_plan.type_tag is not None
+    assert target_plan.lanes is not None
+    target = target_plan.base_spelling
+    target_lanes = target_plan.lanes
+    expected_type = target_plan.type_tag
     literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = cpp_literal_list(case.expectation.values, expected_type)
     lines = [
@@ -37,9 +39,11 @@ def _repr_cast(case: ValueTestCasePlan) -> str:
         return _fixed_extension_repr_cast(case)
     target_plan = case.target
     assert target_plan is not None
-    target = target_plan.base_spelling or case.base_spelling
-    target_lanes = target_plan.lanes or case.lanes
-    expected_type = target_plan.type_tag or case.type_tag
+    assert target_plan.base_spelling is not None and target_plan.type_tag is not None
+    assert target_plan.lanes is not None
+    target = target_plan.base_spelling
+    target_lanes = target_plan.lanes
+    expected_type = target_plan.type_tag
     literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = cpp_literal_list(case.expectation.values, expected_type)
     lines = [
@@ -58,13 +62,59 @@ def _repr_cast(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 
+def _target_imask(case: ValueTestCasePlan) -> str:
+    target = case.target
+    representation = case.representation
+    assert target is not None and representation is not None
+    assert target.base_spelling is not None
+    assert representation.target_extension is not None
+    lines = [
+        f"int {case.function_name}() {{",
+        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::{representation.source_extension}>;",
+        f"  using ToVec = tsl::simd<{target.base_spelling}, tsl::{representation.target_extension}>;",
+        "  using Result = typename ToVec::imask_type;",
+    ]
+    args: list[str] = []
+    mask_index = 0
+    scalar_index = 0
+    for position, kind in enumerate(case.invocation.param_kinds):
+        if kind in {"im", "imt"}:
+            owner = "ToVec" if kind == "imt" else "Vec"
+            value = cpp_literal(case.inputs.masks[mask_index], "ui64")
+            lines.append(
+                f"  typename {owner}::imask_type a{position} = "
+                f"static_cast<typename {owner}::imask_type>({value});"
+            )
+            mask_index += 1
+        else:
+            assert kind == "usize"
+            value = case.inputs.scalars[scalar_index]
+            lines.append(
+                f"  std::size_t a{position} = static_cast<std::size_t>({value});"
+            )
+            scalar_index += 1
+        args.append(f"a{position}")
+    expected = cpp_literal(case.expectation.values[0], "ui64")
+    lines.extend(
+        [
+            f"  Result result = tsl::{case.call_name}<Vec, ToVec>({', '.join(args)});",
+            f"  Result expected = static_cast<Result>({expected});",
+            f'  return tsl::test::check_scalar<Result>("{case.case_name}", result, expected);',
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _fixed_extension_repr_cast(case: ValueTestCasePlan) -> str:
     target_plan = case.target
     representation = case.representation
     assert target_plan is not None and representation is not None
-    target = target_plan.base_spelling or case.base_spelling
-    target_lanes = target_plan.lanes or case.lanes
-    expected_type = target_plan.type_tag or case.type_tag
+    assert target_plan.base_spelling is not None and target_plan.type_tag is not None
+    assert target_plan.lanes is not None
+    target = target_plan.base_spelling
+    target_lanes = target_plan.lanes
+    expected_type = target_plan.type_tag
     literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = cpp_literal_list(case.expectation.values, expected_type)
     lines = [
@@ -143,14 +193,53 @@ def _extension_insert(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 
+def _extension_result(case: ValueTestCasePlan) -> str:
+    target = case.target
+    representation = case.representation
+    assert target is not None and representation is not None
+    assert target.lanes is not None
+    expected_lanes = len(case.expectation.values)
+    expected = cpp_literal_list(case.expectation.values, case.type_tag)
+    lines = [
+        f"int {case.function_name}() {{",
+        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::{representation.source_extension}>;",
+        f"  using ToVec = tsl::simd<{case.base_spelling}, tsl::{representation.target_extension}>;",
+    ]
+    args: list[str] = []
+    for position, values in enumerate(case.inputs.vectors):
+        literals = cpp_literal_list(values, case.type_tag)
+        lines.extend(
+            [
+                f"  static const {case.base_spelling} in{position}[{case.lanes}] = {{{literals}}};",
+                f"  typename tsl::array_for<Vec>::type h{position};",
+                f"  for (std::size_t i = 0; i < {case.lanes}; ++i) h{position}[i] = in{position}[i];",
+            ]
+        )
+        args.append(f"tsl::{representation.from_array_name}<Vec>(h{position})")
+    lines.extend(
+        [
+            f"  auto result = tsl::{case.call_name}<Vec, ToVec>({', '.join(args)});",
+            f"  typename tsl::array_for<ToVec>::type hout = "
+            f"tsl::{representation.to_array_name}<ToVec>(result);",
+            f"  static const {case.base_spelling} expected[{expected_lanes}] = {{{expected}}};",
+            f'  return tsl::test::check_lanes<{case.base_spelling}>('
+            f'"{case.case_name}", hout, expected, {expected_lanes});',
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _load_convert(case: ValueTestCasePlan) -> str:
     if case.representation is not None:
         return _fixed_extension_load_convert(case)
     target_plan = case.target
     assert target_plan is not None
-    target = target_plan.base_spelling or case.base_spelling
-    target_lanes = target_plan.lanes or len(case.expectation.values)
-    expected_type = target_plan.type_tag or case.type_tag
+    assert target_plan.base_spelling is not None and target_plan.type_tag is not None
+    assert target_plan.lanes is not None
+    target = target_plan.base_spelling
+    target_lanes = target_plan.lanes
+    expected_type = target_plan.type_tag
     literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = cpp_literal_list(case.expectation.values, expected_type)
     lines = [
@@ -173,9 +262,11 @@ def _fixed_extension_load_convert(case: ValueTestCasePlan) -> str:
     target_plan = case.target
     representation = case.representation
     assert target_plan is not None and representation is not None
-    target = target_plan.base_spelling or case.base_spelling
-    target_lanes = target_plan.lanes or len(case.expectation.values)
-    expected_type = target_plan.type_tag or case.type_tag
+    assert target_plan.base_spelling is not None and target_plan.type_tag is not None
+    assert target_plan.lanes is not None
+    target = target_plan.base_spelling
+    target_lanes = target_plan.lanes
+    expected_type = target_plan.type_tag
     buffer_len = len(case.inputs.vectors[0])
     literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = cpp_literal_list(case.expectation.values, expected_type)
@@ -299,6 +390,7 @@ def _differential_fuzz(case: ValueTestCasePlan) -> str:
 __all__ = (
     "_convert",
     "_repr_cast",
+    "_target_imask",
     "_fixed_extension_repr_cast",
     "_extension_extract",
     "_extension_insert",

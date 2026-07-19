@@ -192,60 +192,6 @@ Missing run support is always reported, but affects the exit status only with
 `--run`. Missing build prerequisites or a failed compiler/target preflight
 produce exit status 1.
 
-## Export PIVOT YAML
-
-PIVOT export is an explicit path, separate from normal backend generation:
-
-```bash
-tslc export pivot \
-  --primitives add,sub \
-  --profiles avx2 \
-  --types si8,si32 \
-  --language cpp,rust \
-  --output-root ./tslctmp/pivot
-```
-
-`--language` is required and accepts `cpp`, `rust`, or both as a comma-separated
-list. The command writes one deterministic YAML document per supported callable
-under `<output-root>/<language>/`; a combined export therefore writes sibling
-`cpp/` and `rust/` trees.
-Each definition contains a concrete `isa`, `dtype`, parameter/result
-`signature`, and a `direct` instruction list. The final list entry assigns the
-`complete(...)` value to the document's `output` name. Supported primitive
-calls are recursively inlined into the same list.
-
-Fixed-width specializations that participate in the generated C++
-`dataparallel::fixed<N>` mapping also add `tsl_128`, `tsl_256`, or `tsl_512`
-definitions. Here `N` is the lane count for the definition's `dtype`, not its
-bit width. These definitions use the compiler-owned fixed-vector spelling and
-render a call to the generated TSL primitive; for example, 256-bit `int32`
-uses `fixed<8>`.
-
-Rust uses the corresponding generated `dataparallel::Fixed<N>` and `VectorFor`
-mapping and calls the selected `tsl::profile` primitive. Concrete Rust intrinsic
-definitions use the existing Rust backend spellings and are intended for the
-unsafe target-feature context owned by the PIVOT consumer.
-
-PIVOT currently accepts only concrete value-producing, straight-line
-specializations. Standard TSIL lowering first expands resolvable generation-time
-loops and branches. Control flow, blocks, pragmas, casts, unsupported constructs,
-or unresolved target-library calls that remain afterward, along with
-scalable/sized vectors and call graphs that cannot be resolved exactly, are
-reported as skips. Use `--show-skips` to print them, or `--strict` to make any
-skip fail the command.
-
-When no profile is specified, or when several profiles are requested, PIVOT
-projects them to one selection pass per distinct `(target family, hardware
-feature set)`. Compiler modes from profiles in the same group are combined so
-mode-activated definitions remain available. A single explicitly selected
-profile is used unchanged. Selection then retains a deterministic cover of
-feature sets: a feature set that contributes no corpus implementation beyond
-those already covered is not lowered or rendered.
-
-This command does not register PIVOT as a backend or run the ordinary
-generation/render pipeline. It has a dedicated output root and cannot create
-or alter generated C++/Rust projects.
-
 ## Preview, explain, inspect, audit, and coverage
 
 ```bash
@@ -262,6 +208,15 @@ tslc coverage inventory --format json
 tslc coverage inventory --update
 tslc coverage inventory --check
 ```
+
+`preview` normally renders every emitted callable matching the concrete name
+and slot filters. Editor integrations can additionally pass
+`--implementation-file`, `--implementation-line`, and
+`--implementation-column` together to retain only lowered specializations whose
+authored selector starts at that one-based source point. A stale or non-winning
+source point that no longer identifies a matching lowered selector fails with
+`TSL-PREVIEW-NOT-EMITTED`. Editor CodeLens calls additionally bind the point to
+the checked document version so moved source is rejected before invocation.
 
 `coverage inventory` is read-only by default. It reports corpus totals and an
 emitted-specialization matrix for the configured profiles and backends; text,

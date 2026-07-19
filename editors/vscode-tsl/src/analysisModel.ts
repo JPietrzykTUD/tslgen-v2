@@ -9,6 +9,7 @@ export interface ConcreteAnalysisContext {
   readonly backend: string;
   readonly extension: string;
   readonly type: string;
+  readonly toTarget: string | null;
 }
 
 export interface ConcreteAnalysisLocation {
@@ -120,6 +121,7 @@ export function analysisContextKey(context: ConcreteAnalysisContext): string {
     context.backend,
     context.extension,
     context.type,
+    context.toTarget ?? "",
   ].join("\u0000");
 }
 
@@ -176,6 +178,7 @@ function isAnalysis(value: unknown): value is ConcreteAnalysis {
     ["primitive", "profile", "backend", "extension", "type"].every(
       (key) => typeof context[key] === "string",
     ) &&
+    nullableString(context.toTarget) &&
     Array.isArray(value.roots) &&
     value.roots.every(isNode)
   );

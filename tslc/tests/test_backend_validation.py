@@ -147,6 +147,47 @@ def test_rust_unsupported_const_query_type_is_diagnostic() -> None:
     assert diagnostics[0].location == source.start
 
 
+def test_rust_multi_position_overload_is_rejected_before_rendering() -> None:
+    source = SourceSpan(Path("primitive.tsl"), 3, 1, 3, 30)
+    extension = _extension("scalar", cpp=True, rust=True, family="scalar", vector_bits=0)
+    overloads = (
+        _Specialization("scalar", result_kind="v", param_kinds=("v", "v"), source=source),
+        _Specialization("scalar", result_kind="v", param_kinds=("s", "ptr"), source=source),
+    )
+    profile = _profile(
+        cpp={"twist": overloads},  # type: ignore[arg-type]
+        rust={"twist": overloads},  # type: ignore[arg-type]
+        extensions={"scalar": extension},
+    )
+
+    diagnostics = validate_rust_profiles((profile,))
+
+    assert [diagnostic.code for diagnostic in diagnostics] == [
+        "TSL-BACKEND-RUST-UNSUPPORTED-MULTI-POSITION-OVERLOAD"
+    ]
+    assert diagnostics[0].location == source.start
+    # C++ keeps its general multi-position handling: no such rejection there.
+    assert all(
+        "MULTI-POSITION" not in diagnostic.code
+        for diagnostic in validate_cpp_profiles((profile,))
+    )
+
+
+def test_rust_single_position_overload_remains_legal() -> None:
+    extension = _extension("scalar", rust=True, family="scalar", vector_bits=0)
+    profile = _profile(
+        rust={
+            "store": (
+                _Specialization("scalar", param_kinds=("ptr", "v")),
+                _Specialization("scalar", param_kinds=("ptr", "s")),
+            )
+        },  # type: ignore[arg-type]
+        extensions={"scalar": extension},
+    )
+
+    assert validate_rust_profiles((profile,)) == ()
+
+
 @pytest.mark.parametrize(("type_name", "wrapper"), RUST_CONST_ARG_WRAPPERS.items())
 def test_rust_const_argument_mapping_drives_emission(
     type_name: str, wrapper: str

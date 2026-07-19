@@ -17,32 +17,44 @@ import shutil
 import sys
 
 from tslc.api import _ARITH_TYPE_TAGS, generate_project, write_artifacts
+from tslc.maintenance import _repo_context
 from tslc.maintenance._generation_snapshot_semantics import (
     serialize_artifact,
     serialize_generation_semantics,
 )
+from tslc.maintenance._repo_context import RepoContext
 from tslc.diagnostics import has_errors
 from tslc.pipeline import GenerationMode, GenerationResult
 
-_SNAPSHOT_VERSION = 1
+_SNAPSHOT_VERSION = 2
 _SNAPSHOT_FILE = "snapshot.json"
 _GENERATED_DIR = "generated"
 
 
-def _find_repo_root(start: Path) -> Path:
-    for candidate in (start, *start.parents):
-        if (candidate / "tsldata").is_dir() and (candidate / "tslc" / "src").is_dir():
-            return candidate
-    raise RuntimeError(f"could not find repository root from {start}")
+def _required_context(context: RepoContext | None) -> RepoContext:
+    """An explicit or lazily discovered checkout; snapshots read frozen inputs from it."""
+
+    if context is not None:
+        return context
+    found = _repo_context.find_repo_context()
+    if found is None:
+        raise SnapshotError(
+            "generation snapshots need a tslgen repository checkout "
+            "(tsldata/ and tslc/src/ were not found above the installed package)"
+        )
+    return found
 
 
-_REPO_ROOT = _find_repo_root(Path(__file__).resolve())
-_DATA_ROOT = _REPO_ROOT / "tsldata"
-_PROFILES_PATH = _REPO_ROOT / "supplementary" / "buildsystem" / "machine_profiles.json"
-_GRAMMAR_PATH = _REPO_ROOT / "tslc" / "src" / "tslc" / "syntax" / "grammar" / "tsl_data.lark"
-_ASSETS_ROOT = _REPO_ROOT / "tslc" / "src" / "tslc" / "backend" / "assets"
-_COMPILER_ROOT = _REPO_ROOT / "tslc" / "src" / "tslc"
-_SCRATCH_ROOT = _REPO_ROOT / "tslctmp"
+def _grammar_path(root: Path) -> Path:
+    return root / "tslc" / "src" / "tslc" / "syntax" / "grammar" / "tsl_data.lark"
+
+
+def _assets_root(root: Path) -> Path:
+    return root / "tslc" / "src" / "tslc" / "backend" / "assets"
+
+
+def _compiler_root(root: Path) -> Path:
+    return root / "tslc" / "src" / "tslc"
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,13 +133,20 @@ class SnapshotError(RuntimeError):
     """An explicit snapshot capture or comparison failure."""
 
 
-def capture(case: SnapshotCase, output_root: Path, *, replace: bool = False) -> Path:
+def capture(
+    case: SnapshotCase,
+    output_root: Path,
+    *,
+    replace: bool = False,
+    context: RepoContext | None = None,
+) -> Path:
     """Generate and write one repository-local snapshot case."""
 
-    root = _prepare_output_root(output_root, replace=replace)
+    resolved = _required_context(context)
+    root = _prepare_output_root(output_root, resolved.scratch_root, replace=replace)
     result = generate_project(
-        [_DATA_ROOT],
-        machine_profiles_path=_PROFILES_PATH,
+        [resolved.data_root],
+        machine_profiles_path=resolved.machine_profiles_path,
         primitives=case.primitives,
         profiles=case.profiles,
         type_tags=case.type_tags,
@@ -146,7 +165,7 @@ def capture(case: SnapshotCase, output_root: Path, *, replace: bool = False) -> 
         )
         raise SnapshotError(f"could not write generated snapshot tree: {messages}")
 
-    document = build_snapshot_document(case, result, generated_root)
+    document = build_snapshot_document(case, result, generated_root, context=resolved)
     snapshot_path = root / _SNAPSHOT_FILE
     snapshot_path.write_text(serialize_snapshot(document), encoding="utf-8")
     return snapshot_path
@@ -156,20 +175,23 @@ def build_snapshot_document(
     case: SnapshotCase,
     result: GenerationResult,
     generated_root: Path,
+    *,
+    context: RepoContext | None = None,
 ) -> dict[str, object]:
     """Build the canonical JSON boundary using explicit domain serializers."""
 
-    input_manifest = _input_manifest()
+    resolved = _required_context(context)
+    input_manifest = _input_manifest(resolved)
     return {
         "version": _SNAPSHOT_VERSION,
         "case": case.name,
         "request": _serialize_request(case),
         "input_manifest": input_manifest,
         "input_manifest_digest": _records_digest(input_manifest),
-        "compiler_provenance": _compiler_provenance(),
+        "compiler_provenance": _compiler_provenance(resolved.root),
         "artifacts": [serialize_artifact(artifact) for artifact in result.artifacts.artifacts],
         "generated_files": _file_manifest(generated_root),
-        "semantics": serialize_generation_semantics(result, _REPO_ROOT),
+        "semantics": serialize_generation_semantics(result, resolved.root),
     }
 
 
@@ -234,29 +256,31 @@ def _serialize_request(case: SnapshotCase) -> dict[str, object]:
     }
 
 
-def _input_manifest() -> list[dict[str, object]]:
+def _input_manifest(context: RepoContext) -> list[dict[str, object]]:
     paths = [
-        *sorted(_DATA_ROOT.rglob("*.tsl"), key=lambda item: item.as_posix()),
-        _PROFILES_PATH,
-        _GRAMMAR_PATH,
+        *sorted(context.data_root.rglob("*.tsl"), key=lambda item: item.as_posix()),
+        context.machine_profiles_path,
+        _grammar_path(context.root),
         *sorted(
-            (path for path in _ASSETS_ROOT.iterdir() if path.is_file()),
+            (path for path in _assets_root(context.root).iterdir() if path.is_file()),
             key=lambda item: item.as_posix(),
         ),
     ]
-    return [_file_record(path) for path in paths]
+    return [_file_record(path, context.root) for path in paths]
 
 
-def input_manifest_digest() -> str:
+def input_manifest_digest(context: RepoContext | None = None) -> str:
     """Return the frozen-input identity shared by snapshots and benchmarks."""
 
-    return _records_digest(_input_manifest())
+    return _records_digest(_input_manifest(_required_context(context)))
 
 
-def _compiler_provenance() -> dict[str, object]:
+def _compiler_provenance(repo_root: Path) -> dict[str, object]:
     records = [
-        _file_record(path)
-        for path in sorted(_COMPILER_ROOT.rglob("*.py"), key=lambda item: item.as_posix())
+        _file_record(path, repo_root)
+        for path in sorted(
+            _compiler_root(repo_root).rglob("*.py"), key=lambda item: item.as_posix()
+        )
     ]
     return {"python_file_count": len(records), "python_files_digest": _records_digest(records)}
 
@@ -277,10 +301,10 @@ def _file_manifest(root: Path) -> list[dict[str, object]]:
     return records
 
 
-def _file_record(path: Path) -> dict[str, object]:
+def _file_record(path: Path, repo_root: Path) -> dict[str, object]:
     content = path.read_bytes()
     return {
-        "logical_path": _relative_path(path),
+        "logical_path": _relative_path(path, repo_root),
         "sha256": sha256(content).hexdigest(),
         "byte_count": len(content),
     }
@@ -291,21 +315,21 @@ def _records_digest(records: list[dict[str, object]]) -> str:
     return sha256(encoded).hexdigest()
 
 
-def _relative_path(path: Path) -> str:
+def _relative_path(path: Path, repo_root: Path) -> str:
     resolved = path.resolve()
     try:
-        return resolved.relative_to(_REPO_ROOT).as_posix()
+        return resolved.relative_to(repo_root).as_posix()
     except ValueError:
         return path.as_posix()
 
 
-def _prepare_output_root(output_root: Path, *, replace: bool) -> Path:
+def _prepare_output_root(output_root: Path, scratch_root: Path, *, replace: bool) -> Path:
     root = output_root.resolve()
     try:
-        root.relative_to(_SCRATCH_ROOT.resolve())
+        root.relative_to(scratch_root.resolve())
     except ValueError as exc:
-        raise SnapshotError(f"snapshot output must be under {_SCRATCH_ROOT}") from exc
-    if root == _SCRATCH_ROOT.resolve():
+        raise SnapshotError(f"snapshot output must be under {scratch_root}") from exc
+    if root == scratch_root.resolve():
         raise SnapshotError("snapshot output must be a child of tslctmp")
     if root.exists():
         if not replace:
@@ -354,10 +378,13 @@ def _first_difference(baseline: object, candidate: object, path: str) -> str | N
     return None
 
 
-def _capture_command(args: argparse.Namespace) -> int:
+def _capture_command(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> int:
+    context = _repo_context.require_repo_context(parser)
     case = SNAPSHOT_CASES[args.case]
     try:
-        path = capture(case, Path(args.output), replace=args.replace)
+        path = capture(case, Path(args.output), replace=args.replace, context=context)
     except SnapshotError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
@@ -365,7 +392,9 @@ def _capture_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def _compare_command(args: argparse.Namespace) -> int:
+def _compare_command(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> int:
     try:
         comparison = compare_snapshot_directories(Path(args.baseline), Path(args.candidate))
     except SnapshotError as exc:
@@ -392,7 +421,7 @@ def main(argv: list[str] | None = None) -> int:
     compare_parser.add_argument("--candidate", required=True)
     compare_parser.set_defaults(handler=_compare_command)
     args = parser.parse_args(argv)
-    return int(args.handler(args))
+    return int(args.handler(args, parser))
 
 
 if __name__ == "__main__":

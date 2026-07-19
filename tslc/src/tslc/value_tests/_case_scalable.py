@@ -5,12 +5,12 @@ from __future__ import annotations
 from tslc.catalog.model import Catalog, TestCase
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_scalable_common import (
-    render_extension_test_template,
+    scalable_case_facts,
+    scalable_function_name,
     tiling_is_safe,
 )
 from tslc.value_tests.case_helpers import (
     mask_inputs as _mask_inputs,
-    sanitize as _sanitize,
     vector_inputs as _vector_inputs,
 )
 from tslc.value_tests.model import (
@@ -20,7 +20,6 @@ from tslc.value_tests.model import (
     ValueTestExpectation,
     ValueTestInputs,
     ValueTestInvocation,
-    ValueTestScalable,
 )
 
 
@@ -34,8 +33,6 @@ def scalable_golden_cases(
     backend: ValueTestBackendSupport,
 ) -> tuple[ValueTestCasePlan, ...]:
     del index
-    if "scalable_golden" not in backend.case_kinds:
-        return ()
     if case.lanes is None or case.expected_rule is not None:
         return ()
     if harness.load is None or harness.store is None:
@@ -51,23 +48,19 @@ def scalable_golden_cases(
             continue
         if case.extension is not None and spec.extension_name != case.extension:
             continue
-        extension = catalog.extensions.get(spec.extension_name)
-        if extension is None or extension.vector_bits_kind != "scalable":
-            continue
-        runtime_lanes = extension.test_runtime_lanes.get(backend.backend_id)
-        if runtime_lanes is None:
-            continue
-        runtime_lanes = render_extension_test_template(
-            runtime_lanes,
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
+        scalable = scalable_case_facts(
+            spec,
+            catalog,
+            backend,
+            load_name=harness.load,
+            store_name=harness.store,
         )
+        if scalable is None:
+            continue
         plans.append(
             ValueTestCasePlan(
                 kind="scalable_golden",
-                function_name=(
-                    f"test_scalable_{_sanitize(spec.extension_name)}_{_sanitize(case.name)}"
-                ),
+                function_name=scalable_function_name(spec.extension_name, case.name),
                 case_name=case.name,
                 call_name=name,
                 type_tag=case.type_tag,
@@ -79,12 +72,7 @@ def scalable_golden_cases(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,
                 ),
-                scalable=ValueTestScalable(
-                    source_extension=spec.extension_name,
-                    load_name=harness.load,
-                    store_name=harness.store,
-                    runtime_lanes_expr=runtime_lanes,
-                ),
+                scalable=scalable,
             )
         )
     return tuple(plans)
@@ -100,8 +88,6 @@ def scalable_masked_cases(
     backend: ValueTestBackendSupport,
 ) -> tuple[ValueTestCasePlan, ...]:
     del index
-    if "scalable_masked" not in backend.case_kinds:
-        return ()
     if case.lanes is None or case.expected_rule is not None:
         return ()
     if harness.load is None or harness.store is None:
@@ -120,34 +106,21 @@ def scalable_masked_cases(
             continue
         if case.extension is not None and spec.extension_name != case.extension:
             continue
-        extension = catalog.extensions.get(spec.extension_name)
-        if extension is None or extension.vector_bits_kind != "scalable":
-            continue
-        runtime_lanes = extension.test_runtime_lanes.get(backend.backend_id)
-        mask_template = extension.test_mask_from_bits.get(backend.backend_id)
-        if runtime_lanes is None or mask_template is None:
-            continue
-        runtime_lanes = render_extension_test_template(
-            runtime_lanes,
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
+        scalable = scalable_case_facts(
+            spec,
+            catalog,
+            backend,
+            mask_bit_tokens=(mask_inputs[0],),
+            load_name=harness.load,
+            store_name=harness.store,
         )
-        vec_type = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
-        mask_expr = render_extension_test_template(
-            mask_template,
-            vec=vec_type,
-            mask_bits=f"{mask_inputs[0]}ull",
-            authored_lanes=str(case.lanes),
-            lanes="lanes",
-            base_type=spec.base_type_spelling,
-            base=spec.base_type_spelling,
-        )
+        if scalable is None:
+            continue
         plans.append(
             ValueTestCasePlan(
                 kind="scalable_masked",
-                function_name=(
-                    f"test_scalable_{_sanitize(spec.extension_name)}_"
-                    f"{_sanitize(name)}_{_sanitize(case.name)}"
+                function_name=scalable_function_name(
+                    spec.extension_name, case.name, call_name=name
                 ),
                 case_name=case.name,
                 call_name=name,
@@ -160,13 +133,7 @@ def scalable_masked_cases(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,
                 ),
-                scalable=ValueTestScalable(
-                    source_extension=spec.extension_name,
-                    load_name=harness.load,
-                    store_name=harness.store,
-                    runtime_lanes_expr=runtime_lanes,
-                    mask_from_bits_exprs=(mask_expr,),
-                ),
+                scalable=scalable,
             )
         )
     return tuple(plans)

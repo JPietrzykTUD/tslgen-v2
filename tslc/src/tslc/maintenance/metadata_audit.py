@@ -16,23 +16,16 @@ from pathlib import Path
 import sys
 from typing import Literal, TextIO, cast
 
-from tslc._pipeline_closure import _LoweredSlot, _prune_unresolved
-from tslc.backend.registry import create_backend_dialect, registered_backend_ids
-from tslc.catalog.builder import CatalogBuilder
-from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
-from tslc.catalog.model import Catalog, ImplementationSafety
+from tslc._cli_options import split_csv
+from tslc.authoring import check_documents
+from tslc.backend.registry import registered_backend_ids
+from tslc.catalog.model import ImplementationSafety
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.catalog.signatures import parse_signature
-from tslc.catalog.validation.source_spans import source_span
-from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import Diagnostic, SourceSpan, format_diagnostic, has_errors
-from tslc.ir.scan import scan
-from tslc.lower.dependencies import CallDependency
-from tslc.lower.lowerer import Lowerer
-from tslc.select.selector import SelectedImplementation, Selector
-from tslc.sources import SourceDocument, SourceLoader
+from tslc.pipeline import GenerationRequest, generate
+from tslc.sources import SourceDocument, SourceLoader, expand_source_paths
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
-from tslc.support_policy_views import policy_split_names
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedImplementationSelectorEntry,
@@ -42,7 +35,6 @@ from tslc.syntax.ast import (
     ParsedTslScalarValue,
     ParsedTslSourceSpan,
 )
-from tslc.syntax.parser import TslParser
 
 SuggestionKind = Literal["safety", "requires"]
 Confidence = Literal["high", "medium", "low"]
@@ -84,10 +76,11 @@ class MetadataAuditResult:
 
 @dataclass(frozen=True, slots=True)
 class _AuditInputs:
+    """One validated source snapshot: raw documents plus their parse."""
+
+    source_paths: tuple[Path, ...]
     documents: Mapping[Path, SourceDocument]
     parsed: OuterTslParseResult
-    catalog: Catalog
-    machine_profiles: Mapping[str, MachineProfile]
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,13 +88,6 @@ class _EntryRef:
     primitive: ParsedPrimitiveDeclaration
     entry: ParsedImplementationSelectorEntry
     selector_path: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class _AuditSlot:
-    profile_name: str
-    selected: SelectedImplementation
-    lowered: _LoweredSlot
 
 
 def audit_metadata(
@@ -117,23 +103,25 @@ def audit_metadata(
     """Return source metadata suggestions without writing files."""
 
     selected_checks = frozenset(checks)
-    inputs, diagnostics = _load_inputs(source_paths, machine_profiles_path)
+    backend_ids = tuple(backends)
+    inputs, diagnostics = _load_inputs(source_paths, backend_ids)
     if inputs is None:
         return MetadataAuditResult(suggestions=(), diagnostics=diagnostics)
 
     suggestions: list[MetadataSuggestion] = []
     if "safety" in selected_checks:
         suggestions.extend(_safety_suggestions(inputs))
-    if "requires" in selected_checks:
-        suggestions.extend(
-            _requires_suggestions(
-                inputs,
-                profiles=tuple(profiles),
-                primitives=tuple(primitives) if primitives is not None else None,
-                type_tags=tuple(type_tags),
-                backends=tuple(backends),
-            )
+    if "requires" in selected_checks and machine_profiles_path is not None:
+        requires_suggestions, requires_diagnostics = _requires_suggestions(
+            inputs,
+            machine_profiles_path=Path(machine_profiles_path),
+            profiles=tuple(profiles),
+            primitives=tuple(primitives) if primitives is not None else None,
+            type_tags=tuple(type_tags),
+            backends=backend_ids,
         )
+        suggestions.extend(requires_suggestions)
+        diagnostics = (*diagnostics, *requires_diagnostics)
     return MetadataAuditResult(
         suggestions=tuple(sorted(suggestions, key=_suggestion_sort_key)),
         diagnostics=diagnostics,
@@ -229,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    checks = tuple(_split_csv(args.checks))
+    checks = tuple(split_csv(args.checks))
     invalid = sorted(set(checks) - {"safety", "requires"})
     if invalid:
         print(f"[error] unknown check(s): {', '.join(invalid)}", file=sys.stderr)
@@ -239,10 +227,10 @@ def main(argv: list[str] | None = None) -> int:
         [Path(path) for path in args.sources],
         checks=cast(tuple[SuggestionKind, ...], checks),
         machine_profiles_path=Path(args.machine_profiles),
-        profiles=tuple(_split_csv(args.profiles)),
-        primitives=tuple(_split_csv(args.primitives)) if args.primitives else None,
-        type_tags=tuple(_split_csv(args.types)),
-        backends=tuple(_split_csv(args.backends)),
+        profiles=tuple(split_csv(args.profiles)),
+        primitives=tuple(split_csv(args.primitives)) if args.primitives else None,
+        type_tags=tuple(split_csv(args.types)),
+        backends=tuple(split_csv(args.backends)),
     )
     for diagnostic in result.diagnostics:
         print(format_diagnostic(diagnostic), file=sys.stderr)
@@ -274,41 +262,26 @@ def main(argv: list[str] | None = None) -> int:
 
 def _load_inputs(
     source_paths: Iterable[Path | str],
-    machine_profiles_path: Path | str | None,
+    backends: tuple[str, ...],
 ) -> tuple[_AuditInputs | None, tuple[Diagnostic, ...]]:
-    diagnostics: list[Diagnostic] = []
-    expanded = _expand_sources(source_paths)
+    """Load and validate one corpus snapshot through the authoring boundary."""
+
+    expanded = expand_source_paths(source_paths)
     load = SourceLoader().load(expanded)
-    diagnostics.extend(load.diagnostics)
-    if has_errors(diagnostics):
-        return None, tuple(diagnostics)
+    if has_errors(load.diagnostics):
+        return None, tuple(load.diagnostics)
 
-    parsed = TslParser(load_default_tsl_grammar()).parse(load.documents)
-    diagnostics.extend(parsed.diagnostics)
-    if has_errors(diagnostics):
-        return None, tuple(diagnostics)
-
-    catalog_result = CatalogBuilder().build(parsed)
-    diagnostics.extend(catalog_result.diagnostics)
-    if catalog_result.catalog is None or has_errors(diagnostics):
-        return None, tuple(diagnostics)
-
-    profiles: Mapping[str, MachineProfile] = {}
-    if machine_profiles_path is not None:
-        profile_result = load_machine_profiles_checked(
-            Path(machine_profiles_path),
-            catalog_result.catalog.target_families,
-        )
-        diagnostics.extend(profile_result.diagnostics)
-        profiles = profile_result.profiles
+    checked = check_documents(load.documents, required_backends=backends)
+    diagnostics = (*load.diagnostics, *checked.diagnostics)
+    if checked.catalog is None or checked.parsed is None or has_errors(diagnostics):
+        return None, diagnostics
     return (
         _AuditInputs(
+            source_paths=expanded,
             documents={document.path: document for document in load.documents},
-            parsed=parsed,
-            catalog=catalog_result.catalog,
-            machine_profiles=profiles,
+            parsed=checked.parsed,
         ),
-        tuple(diagnostics),
+        diagnostics,
     )
 
 
@@ -385,111 +358,66 @@ def _direct_safety_facts(
 def _requires_suggestions(
     inputs: _AuditInputs,
     *,
+    machine_profiles_path: Path,
     profiles: tuple[str, ...],
     primitives: tuple[str, ...] | None,
     type_tags: tuple[str, ...],
     backends: tuple[str, ...],
-) -> tuple[MetadataSuggestion, ...]:
-    if not inputs.machine_profiles:
-        return ()
+) -> tuple[tuple[MetadataSuggestion, ...], tuple[Diagnostic, ...]]:
+    """Derive requires suggestions from the pipeline's own closure facts.
+
+    The non-rendering pipeline runs selection, lowering, dependency closure,
+    pruning, and feature propagation; each emitted trace slot carries both the
+    declared selection features and the propagated requirement set, so the
+    delta is exactly what generation would add transitively.
+    """
+
+    result = generate(
+        GenerationRequest(
+            source_paths=inputs.source_paths,
+            machine_profiles_path=machine_profiles_path,
+            primitives=primitives if primitives else None,
+            profiles=profiles,
+            type_tags=type_tags,
+            backends=backends,
+            render_artifacts=False,
+            collect_lowering_trace=True,
+        )
+    )
+    errors = tuple(
+        diagnostic
+        for diagnostic in result.diagnostics
+        if diagnostic.severity == "error"
+    )
+    trace = result.lowering_trace
+    if errors or trace is None:
+        return (), errors
 
     entry_index = _entry_index(inputs.parsed)
     missing_by_entry: dict[tuple[str, Path, int, int], set[str]] = defaultdict(set)
     reasons_by_entry: dict[tuple[str, Path, int, int], set[str]] = defaultdict(set)
-    primitive_names = primitives or tuple(
-        sorted({primitive.name for primitive in inputs.catalog.primitives})
-    )
-    split_names = policy_split_names(inputs.catalog)
-    selector = Selector()
-    lowerer = Lowerer()
-
-    for profile_name in profiles:
-        profile = inputs.machine_profiles.get(profile_name)
-        if profile is None:
+    for slot in trace.slots:
+        if not slot.emitted:
             continue
-        audit_slots: list[_AuditSlot] = []
-        worklist = list(primitive_names)
-        processed: set[str] = set()
-        while worklist:
-            primitive_name = worklist.pop(0)
-            if primitive_name in processed:
-                continue
-            processed.add(primitive_name)
-            for backend in backends:
-                selected = selector.select_profile(
-                    inputs.catalog,
-                    profile,
-                    primitive_name,
-                    type_tags,
-                    backend_id=backend,
-                )
-                for selected_slot in selected.selected:
-                    body_segments = scan(
-                        selected_slot.implementation.body_text,
-                        source=selected_slot.implementation.body_source,
-                    )
-                    lowered = lowerer.lower(
-                        selected_slot,
-                        inputs.catalog,
-                        create_backend_dialect(inputs.catalog, backend),
-                        body_segments=body_segments,
-                    )
-                    if lowered.specialization is None:
-                        continue
-                    origins = lowered.specialization.call_dependency_origins
-                    callees = frozenset(origin.dependency for origin in origins)
-                    audit_slots.append(
-                        _AuditSlot(
-                            profile_name=profile_name,
-                            selected=selected_slot,
-                            lowered=_LoweredSlot(
-                                backend=backend,
-                                spec=lowered.specialization,
-                                callees=callees,
-                                callee_origins=origins,
-                            ),
-                        )
-                    )
-                    dependency_names = sorted(
-                        {dependency.primitive for dependency in callees}
-                    )
-                    for dependency_name in dependency_names:
-                        if (
-                            dependency_name not in processed
-                            and inputs.catalog.primitives_named(
-                                dependency_name, unmasked=False
-                            )
-                        ):
-                            worklist.append(dependency_name)
-
-        lowered_slots = [slot.lowered for slot in audit_slots]
-        _grouped, pruned = _prune_unresolved(lowered_slots, split_names)
-        pruned_ids = {id(slot) for slot in pruned}
-        for audit_slot in audit_slots:
-            if id(audit_slot.lowered) in pruned_ids:
-                continue
-            missing = (
-                audit_slot.lowered.spec.required_features
-                - audit_slot.selected.required_features
-            )
-            if not missing:
-                continue
-            selector_source = audit_slot.selected.implementation.selector_source
-            if selector_source is None:
-                continue
-            key = (
-                audit_slot.selected.primitive.name,
-                selector_source.path,
-                selector_source.line,
-                selector_source.column,
-            )
-            if key not in entry_index:
-                continue
-            missing_by_entry[key].update(missing)
-            reasons_by_entry[key].add(
-                f"{profile_name}/{audit_slot.lowered.backend}/"
-                f"{audit_slot.selected.type_tag}"
-            )
+        spec = slot.specialization
+        missing = spec.required_features - slot.selection_required_features
+        if not missing:
+            continue
+        selector_source = slot.selector_source
+        if selector_source is None:
+            continue
+        key = (
+            spec.source_primitive_name,
+            selector_source.path,
+            selector_source.line,
+            selector_source.column,
+        )
+        if key not in entry_index:
+            continue
+        missing_by_entry[key].update(missing)
+        reasons_by_entry[key].add(
+            f"{slot.profile}/{slot.backend}/{spec.type_tag}"
+        )
 
     suggestions: list[MetadataSuggestion] = []
     for key, missing_features in sorted(
@@ -523,7 +451,7 @@ def _requires_suggestions(
                 scope=_entry_scope(entry),
             )
         )
-    return tuple(suggestions)
+    return tuple(suggestions), ()
 
 
 def _safety_edit(
@@ -788,28 +716,6 @@ def _suggestion_sort_key(
         suggestion.subject,
         suggestion.reason,
     )
-
-
-def _expand_sources(source_paths: Iterable[Path | str]) -> tuple[Path, ...]:
-    expanded: list[Path] = []
-    for entry in source_paths:
-        path = Path(entry)
-        if path.is_dir():
-            expanded.extend(sorted(path.rglob("*.tsl"), key=lambda item: item.as_posix()))
-        else:
-            expanded.append(path)
-    seen: set[str] = set()
-    result: list[Path] = []
-    for path in sorted(expanded, key=lambda item: item.as_posix()):
-        key = path.as_posix()
-        if key not in seen:
-            seen.add(key)
-            result.append(path)
-    return tuple(result)
-
-
-def _split_csv(value: str) -> tuple[str, ...]:
-    return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 if __name__ == "__main__":  # pragma: no cover

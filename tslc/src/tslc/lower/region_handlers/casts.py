@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from tslc.backend.translation import PointerCastOperand
 from tslc.ir.region_syntax import parse_cast_selector, segments_text, split_arg_groups
-from tslc.ir.segments import Region
+from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower.context import LoweringSession
 from tslc.lower.queries import QueryEvaluator
 from tslc.lower.region_handlers.common import _resolve_type_expression
@@ -60,7 +61,8 @@ class CastLowerer:
                 is_const=selector.type_kind == "const_ptr",
                 region=region,
                 context=context,
-                expr=render(args[1]),
+                value_group=args[1],
+                render=render,
             )
 
         if type_text.rstrip().endswith("*"):
@@ -102,7 +104,8 @@ class CastLowerer:
         is_const: bool,
         region: Region,
         context: LoweringSession,
-        expr: RenderField,
+        value_group: tuple[Segment, ...],
+        render: RenderBody,
     ) -> RenderField:
         """``cast<reinterpret, type=ptr|const_ptr>(type-expr, ptr)`` -> pointer cast."""
 
@@ -114,6 +117,62 @@ class CastLowerer:
                 source=region.source,
             )
             return region.full_text
+        operand = _classify_pointer_operand(value_group, render)
+        if operand is None:
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-CAST",
+                f"unsupported pointer-cast operand form in {region.full_text!r}; "
+                "use a pointer-valued expression, &target, or &mut target",
+                source=region.source,
+            )
+            return region.full_text
         return context.env.backend.syntax.render_pointer_cast(
-            resolved[1], is_const=is_const, expr=expr
+            resolved[1], is_const=is_const, operand=operand
         )
+
+
+def _classify_pointer_operand(
+    group: tuple[Segment, ...], render: RenderBody
+) -> PointerCastOperand | None:
+    """Classify the exact source form of a pointer-cast value operand.
+
+    A leading ``&`` / ``&mut`` in raw text is an address-of whose target is the
+    remainder of the operand; anything else is an already-pointer-valued
+    expression. Returns ``None`` for unsupported address forms (``&&x``, a bare
+    ``&``) so the caller diagnoses instead of guessing.
+    """
+
+    segments = list(group)
+    index = 0
+    while index < len(segments):
+        candidate = segments[index]
+        if not (isinstance(candidate, RawText) and not candidate.text.strip()):
+            break
+        index += 1
+    if index >= len(segments):
+        return None
+    first = segments[index]
+    if not isinstance(first, RawText) or not first.text.lstrip().startswith("&"):
+        return PointerCastOperand(
+            kind="pointer", target=render(tuple(segments[index:]))
+        )
+    text = first.text.lstrip()
+    if text.startswith("&&"):
+        return None
+    rest = text[1:].lstrip()
+    mutable = False
+    if rest.startswith("mut") and not (
+        len(rest) > 3 and (rest[3].isalnum() or rest[3] == "_")
+    ):
+        mutable = True
+        rest = rest[3:].lstrip()
+    remainder: tuple[Segment, ...]
+    if rest:
+        remainder = (RawText(rest, source=first.source), *segments[index + 1 :])
+    else:
+        remainder = tuple(segments[index + 1 :])
+    if not remainder:
+        return None
+    return PointerCastOperand(
+        kind="address_of", target=render(remainder), mutable_borrow=mutable
+    )

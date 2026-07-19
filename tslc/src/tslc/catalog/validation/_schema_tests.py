@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from typing import get_args
+
+from tslc.catalog.model import TestCaseRole
 from tslc.catalog.validation._schema_common import (
     diagnose_duplicate_fields,
     invalid_enum,
@@ -9,7 +12,7 @@ from tslc.catalog.validation._schema_common import (
     validate_known_fields,
 )
 from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS, is_type_tag
-from tslc.catalog.validation.source_spans import child, children, field_text, source_span
+from tslc.syntax.access import child, children, field_text, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.ast import (
     ParsedPrimitiveDeclaration,
@@ -42,7 +45,8 @@ KNOWN_TEST_FIELDS = frozenset(
     }
 )
 _REQUIRED_TEST_FIELDS = ("tags", "type", "case")
-KNOWN_TEST_ROLES = frozenset({"value", "compile"})
+# Derived from the typed catalog role so the validator cannot drift from the model.
+KNOWN_TEST_ROLES: frozenset[str] = frozenset(get_args(TestCaseRole))
 KNOWN_TEST_CASE_FIELDS = frozenset({"inputs", "expected"})
 
 

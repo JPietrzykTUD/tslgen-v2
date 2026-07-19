@@ -605,7 +605,7 @@ def test_rust_backend_emits_target_features_on_impl_body() -> None:
     )
 
     rendered = RustBackend(
-        feature_alternatives={"sse4_1": "sse4.1"}
+        feature_spellings={"sse4_1": "sse4.1"}
     ).render_primitive("needs_features", (spec,))
 
     assert "    fn apply(data: Self::RegisterType)" in rendered

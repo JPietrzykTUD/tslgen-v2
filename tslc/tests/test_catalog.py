@@ -12,7 +12,7 @@ from tslc.catalog._builder_implementations import _implementations_from_entries
 from tslc.catalog._builder_primitives import _build_primitives
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import Catalog, TargetConstraint
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
@@ -59,6 +59,19 @@ def test_scalar_extension_has_no_intrinsic_compose(catalog: Catalog) -> None:
     scalar = catalog.extensions["scalar"]
     assert scalar.family == "scalar"
     assert scalar.compose_prefix == {}  # scalar has no intrinsic prefix
+
+
+def test_target_constraint_matches_exact_double_width(catalog: Catalog) -> None:
+    constraint = TargetConstraint(family="same_as", width="twice_as_wide")
+
+    assert constraint.matches(catalog.extensions["sse"], catalog.extensions["avx2"])
+    assert constraint.matches(catalog.extensions["avx2"], catalog.extensions["avx512"])
+    assert not constraint.matches(
+        catalog.extensions["sse"], catalog.extensions["avx512"]
+    )
+    assert not constraint.matches(
+        catalog.extensions["neon"], catalog.extensions["avx2"]
+    )
 
 
 @pytest.mark.parametrize(("name", "operation"), (("mul_imm", "mul"), ("mod_imm", "mod")))
@@ -256,6 +269,48 @@ def test_extension_compiler_metadata_is_promoted(catalog: Catalog) -> None:
     assert sve.runtime_lane_count["cpp"] == "svcntb() / sizeof({base_type})"
 
 
+def test_boolean_wildcard_attributes_expand_to_concrete_variants() -> None:
+    source = SourceDocument(
+        Path("wildcard_fixture.tsl"),
+        (
+            "types:\n"
+            "  ints {types [si32]}\n"
+            "extension scalar:\n"
+            '  extension_name "scalar"\n'
+            '  family "scalar"\n'
+            "prim<v:=v>[aligned=*, packed=*, value=zero] wtest(data):\n"
+            "  impls:\n"
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(data);"\n'
+        ),
+        "d",
+        "tsl",
+    )
+    parsed = TslParser(load_default_tsl_grammar()).parse((source,))
+    assert parsed.diagnostics == ()
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+
+    variants = result.catalog.primitives_named("wtest")
+    combos = {
+        (p.attributes["aligned"], p.attributes["packed"]) for p in variants
+    }
+    assert combos == {
+        ("true", "true"),
+        ("true", "false"),
+        ("false", "true"),
+        ("false", "false"),
+    }
+    assert len(variants) == 4
+    assert all(p.attributes["value"] == "zero" for p in variants)
+    bodies = {
+        tuple(impl.body_text for impl in p.implementations) for p in variants
+    }
+    assert len(bodies) == 1
+
+
 def test_extension_inheritance_respects_explicit_false_and_empty_overrides() -> None:
     source = SourceDocument(
         Path("extension_inheritance_fixture.tsl"),
@@ -309,6 +364,14 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert "avx2" in machine_profiles["avx2"].features
     assert "avx2" not in machine_profiles["avx"].features
     assert "avx512f" in machine_profiles["skylake"].features
+    assert machine_profiles["avx2"].feature_spelling("sse4_1", "cpp") == "sse4.1"
+    assert machine_profiles["avx2"].feature_spelling("rdrand", "cpp") == "rdrnd"
+    assert (
+        machine_profiles["icelake_rockerlake"].feature_spelling(
+            "avx512_vpclmulqdq", "rust"
+        )
+        == "vpclmulqdq"
+    )
     assert machine_profiles["neon"].flags_for_backend("cpp") == ()
     assert machine_profiles["sve"].features == frozenset({"sve"})
     assert machine_profiles["sve"].flags_for_backend("cpp") == ("-mcpu=a64fx",)
@@ -363,6 +426,16 @@ def test_target_families_promoted(catalog: Catalog) -> None:
     assert families.extension_family("generic_like").implementation_fallback
     assert not families.extension_family("compiler_builtin").free_function_owner
     assert families.extension_family("x86").index_vector_register
+    assert families.extension_family("scalar").documented_sort_order == 0
+    assert families.extension_family("generic_like").documented_family == "generic"
+    assert families.extension_family("generic_like").documented_sort_order == 1
+    assert families.extension_family("arm").documented_family == "aarch64"
+    assert families.extension_family("arm").documented_sort_order == 20
+    sse4_1 = families.target_feature("sse4_1")
+    rdrand = families.target_feature("rdrand")
+    assert sse4_1 is not None and sse4_1.spelling("cpp") == "sse4.1"
+    assert rdrand is not None and rdrand.spelling("cpp") == "rdrnd"
+    assert rdrand.spelling("rust") == "rdrand"
     assert families.profile_families["generic"].native_without_runner
     assert families.profile_families["x86"].extension_families == frozenset({"x86"})
     assert families.profile_families["aarch64"].extension_families == frozenset({"arm"})
@@ -374,6 +447,10 @@ def test_target_families_promoted(catalog: Catalog) -> None:
     assert families.profile_families["wasm32"].runner_kinds == frozenset({"wasmtime"})
     assert families.profile_families["wasm32"].backend("cpp").target == "wasm32-wasip1"
     assert families.profile_families["wasm32"].backend("rust").target == "wasm32-wasip1"
+
+    assert catalog.extensions["sve"].metadata.documentation_width == "SVE"
+    assert catalog.extensions["sve512"].metadata.documentation_width == "SVE"
+    assert catalog.extensions["neon"].family_capability.documented_family == "aarch64"
 
 
 def test_clang_vector_extensions_are_cpp_opt_in_overlays(catalog: Catalog) -> None:

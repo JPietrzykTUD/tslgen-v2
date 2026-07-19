@@ -11,6 +11,7 @@ from typing import cast
 from lsprotocol import types
 from pygls.lsp.server import LanguageServer
 
+from tslc.catalog.selector_paths import selector_head_extensions
 from tslc.diagnostics import SourceSpan
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.ir.region_registry import TSIL_REGION_KEYWORDS
@@ -22,6 +23,7 @@ from tslc.lsp.features import (
     reference_locations,
     semantic_tokens,
 )
+from tslc.lsp.implementation_preview import implementation_preview_sites
 from tslc.lsp.positions import (
     offset_position,
     position_offset,
@@ -29,7 +31,13 @@ from tslc.lsp.positions import (
     span_to_range,
 )
 from tslc.lsp.primitive_explorer import PrimitiveExplorerCache, primitive_explorer
-from tslc.lsp.server import _publish, _ServerState, _workspace_with_index
+from tslc.lsp.server import (
+    _check_and_publish,
+    _publish,
+    _ServerState,
+    _snapshot_document_version,
+    _workspace_with_index,
+)
 from tslc.lsp.specialization_context import specialization_context
 from tslc.lsp.workspace import AuthoringWorkspace, WorkspaceSnapshot
 from tslc.lower.lowerer import Lowerer
@@ -70,6 +78,43 @@ def test_completed_check_releases_index_requests_without_an_index() -> None:
     _publish(cast(LanguageServer, object()), state, snapshot)
 
     assert state.initial_check_complete.is_set()
+
+
+def test_failed_initial_check_releases_requests_and_reports() -> None:
+    async def exercise() -> None:
+        state = _ServerState()
+
+        def raising_check(generation: int) -> WorkspaceSnapshot | None:
+            del generation
+            raise RuntimeError("boom")
+
+        workspace = SimpleNamespace(
+            latest=WorkspaceSnapshot(0, None, None, (), (), {}),
+            generation=1,
+            check=raising_check,
+        )
+        state.workspace = cast(AuthoringWorkspace, workspace)
+        logged: list[str] = []
+        shown: list[str] = []
+        server = SimpleNamespace(
+            window_log_message=lambda params: logged.append(params.message),
+            window_show_message=lambda params: shown.append(params.message),
+        )
+
+        request = asyncio.create_task(_workspace_with_index(state))
+        await asyncio.sleep(0)
+        assert not request.done()
+
+        await _check_and_publish(
+            cast(LanguageServer, server), state, 1, debounce=False
+        )
+
+        assert state.initial_check_complete.is_set()
+        assert await request is workspace
+        assert any("boom" in message for message in logged)
+        assert shown
+
+    asyncio.run(exercise())
 
 
 def test_utf16_position_round_trip() -> None:
@@ -122,6 +167,26 @@ def test_workspace_reuses_unchanged_documents_and_suppresses_stale_results(
     assert fixed.diagnostics == ()
     assert workspace.cache.last_reparsed == (path.resolve(),)
     assert workspace.cache.index_cache.last_reindexed == (path.resolve(),)
+
+
+def test_code_lens_projection_requires_the_current_checked_document_version(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    initial = workspace.check()
+    assert initial is not None
+    path = next(iter(sorted(data_root.rglob("*.tsl"))))
+    original = path.read_text(encoding="utf-8")
+
+    workspace.open(path, original, 1)
+    assert _snapshot_document_version(workspace, initial, path) is None
+
+    checked = workspace.check()
+    assert checked is not None
+    assert _snapshot_document_version(workspace, checked, path) == 1
+
+    workspace.change(path, f"{original}\n", 2)
+    assert _snapshot_document_version(workspace, checked, path) is None
 
 
 def test_initial_invalid_overlay_seeds_last_valid_parsed_context(
@@ -203,6 +268,131 @@ def test_specialization_context_uses_cursor_scope_and_selector_slots(
         "ui32",
         "ui64",
     )
+
+
+def test_implementation_preview_sites_are_physical_promoted_bodies(
+    data_root: Path,
+    monkeypatch,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    path = data_root / "primitives" / "arithmetic" / "fundamental.tsl"
+
+    def unexpected_selection(*args, **kwargs):
+        raise AssertionError("CodeLens discovery triggered profile selection")
+
+    monkeypatch.setattr(Selector, "select_profile", unexpected_selection)
+    sites = implementation_preview_sites(snapshot.catalog, snapshot.parsed, path)
+
+    expected_selectors = {
+        implementation.selector_source
+        for primitive in snapshot.catalog.primitives
+        for implementation in primitive.implementations
+        if implementation.selector_source is not None
+        and implementation.selector_source.path.resolve() == path.resolve()
+    }
+    assert {site.selector for site in sites} == expected_selectors
+    assert len(sites) == len(expected_selectors)
+    assert list(sites) == sorted(
+        sites,
+        key=lambda site: (
+            site.anchor.line,
+            site.anchor.column,
+            site.selector.line,
+            site.selector.column,
+        ),
+    )
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert all(
+        lines[site.anchor.line - 1][site.anchor.column - 1 :].startswith(
+            "implementation"
+        )
+        for site in sites
+    )
+
+
+def test_implementation_context_only_offers_slots_where_that_body_wins(
+    data_root: Path,
+    monkeypatch,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    path = data_root / "primitives" / "arithmetic" / "select.tsl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    body_line = next(
+        line
+        for line, text in enumerate(lines, 1)
+        if line > 150 and text.strip() == "complete("
+    )
+
+    def unexpected_lowering(*args, **kwargs):
+        raise AssertionError("specialization context triggered concrete lowering")
+
+    monkeypatch.setattr(Lowerer, "lower", unexpected_lowering)
+    context = specialization_context(
+        snapshot.catalog,
+        snapshot.parsed,
+        workspace.config.profiles,
+        backend="cpp",
+        path=path,
+        line=body_line,
+        column=lines[body_line - 1].index("complete") + 1,
+    )
+
+    assert context.primitive == "max"
+    assert context.implementation_source is not None
+    assert context.implementation_source.line == 150
+    assert context.slots
+    assert any(
+        slot.profile == "avx2"
+        and slot.extension == "generic"
+        and slot.type_tag == "si8"
+        for slot in context.slots
+    )
+    assert not any(
+        slot.extension == "clang_v128" and slot.type_tag == "si8"
+        for slot in context.slots
+    )
+
+
+def test_implementation_context_distinguishes_profile_from_rendered_extension(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    path = data_root / "primitives" / "mask" / "special.tsl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    implementation_line = next(
+        line
+        for line, text in enumerate(lines, 1)
+        if 300 < line < 350 and text.strip() == "implementation:"
+    )
+
+    context = specialization_context(
+        snapshot.catalog,
+        snapshot.parsed,
+        workspace.config.profiles,
+        backend="cpp",
+        path=path,
+        line=implementation_line,
+        column=lines[implementation_line - 1].index("implementation") + 1,
+    )
+
+    assert context.primitive == "extract_imask"
+    assert context.contextual_types == ("si16", "ui16")
+    assert {
+        slot.extension
+        for slot in context.slots
+        if slot.profile == "sve"
+        and slot.extension in context.contextual_extensions
+        and slot.type_tag in context.contextual_types
+    } == {"clang_v128"}
 
 
 def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
@@ -320,7 +510,78 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
     assert cached.slots
 
 
-def test_primitive_explorer_defaults_to_authored_source_and_keeps_overloads(
+def test_primitive_explorer_carries_selector_rejection_reasons(
+    data_root: Path,
+) -> None:
+    """A body on the slot's extension chain for the slot's type, dropped only
+    by a selector rule (unsatisfied `requires`), must surface the selector's
+    own rejection reason — not a generic missing-implementation message."""
+
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    assert snapshot.index is not None
+
+    explorer = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        mode="resolved",
+        profile="avx2",
+        backend="cpp",
+        selected_primitive="add",
+    )
+    avx512_si32 = next(
+        slot
+        for slot in explorer.slots
+        if slot.extension == "avx512" and slot.type_tag == "si32"
+    )
+    assert avx512_si32.status == "not-selected"
+    assert avx512_si32.implementations
+    detail = avx512_si32.detail or ""
+    assert (
+        "requires [avx512f] not satisfied by profile 'avx2' (missing: avx512f)"
+        in detail
+    )
+    assert "No implementation is authored" not in detail
+
+
+def test_specialization_context_extensions_agree_with_selector_path_projection(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    path = data_root / "primitives" / "arithmetic" / "fundamental.tsl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    head = "[avx512, avx2_vl, sse_vl]"
+    head_line = next(
+        index for index, line in enumerate(lines, 1) if line.strip() == f"{head}:"
+    )
+
+    context = specialization_context(
+        snapshot.catalog,
+        snapshot.parsed,
+        workspace.config.profiles,
+        backend="cpp",
+        path=path,
+        line=head_line + 1,
+        column=lines[head_line].index("?i?") + 1,
+    )
+
+    assert context.primitive == "add"
+    assert context.contextual_extensions == tuple(
+        sorted(
+            snapshot.catalog.extensions[name].isa_name
+            for name in selector_head_extensions(head)
+        )
+    )
+
+
+def test_primitive_explorer_keeps_authored_candidates_and_splits_resolved_callables(
     data_root: Path,
 ) -> None:
     workspace = AuthoringWorkspace.from_root(data_root.parent)
@@ -378,18 +639,47 @@ def test_primitive_explorer_defaults_to_authored_source_and_keeps_overloads(
         backend="cpp",
         selected_primitive="hmax",
     )
-    hmax_slot = next(
+    hmax_slots = tuple(
         slot
         for slot in hmax.slots
         if slot.extension == "clang_v128" and slot.type_tag == "si8"
     )
     assert {
-        (implementation.signature, implementation.parameters)
-        for implementation in hmax_slot.implementations
+        (slot.signature, slot.parameters)
+        for slot in hmax_slots
     } == {
         ("s:=v", ("vec",)),
         ("s:=(m,v)", ("mask", "vec")),
     }
+    assert all(len(slot.implementations) == 1 for slot in hmax_slots)
+    assert all(
+        slot.implementations[0].signature == slot.signature for slot in hmax_slots
+    )
+
+    add = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        mode="resolved",
+        profile="avx2",
+        backend="cpp",
+        selected_primitive="add",
+    )
+    add_slots = tuple(
+        slot
+        for slot in add.slots
+        if slot.extension == "clang_v128" and slot.type_tag == "si8"
+    )
+    assert {
+        (slot.signature, slot.attributes) for slot in add_slots
+    } == {
+        ("v:=(v,v)", ()),
+        ("v:=(m,v,v)", (("mask", "zero"),)),
+        ("v:=(m,v,v)", (("mask", "pass_through"),)),
+    }
+    assert all(slot.status == "selected" for slot in add_slots)
+    assert all(len(slot.implementations) == 1 for slot in add_slots)
 
     resolved = primitive_explorer(
         snapshot.catalog,
@@ -401,6 +691,55 @@ def test_primitive_explorer_defaults_to_authored_source_and_keeps_overloads(
         preferred_profiles=workspace.config.preferred_profiles,
     )
     assert resolved.profile == "avx2"
+
+
+def test_primitive_explorer_keeps_representation_targets_as_distinct_slots(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    assert snapshot.index is not None
+
+    authored = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        backend="cpp",
+        selected_primitive="insert_imask",
+    )
+    assert {
+        slot.target.dimension
+        for slot in authored.slots
+        if slot.target is not None
+    } == {"base", "extension"}
+
+    resolved = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        mode="resolved",
+        profile="avx2",
+        backend="cpp",
+        selected_primitive="insert_imask",
+    )
+    avx2_si64 = tuple(
+        slot
+        for slot in resolved.slots
+        if slot.extension == "avx2"
+        and slot.type_tag == "si64"
+        and slot.status == "selected"
+    )
+    targets = {
+        (slot.target.dimension, slot.target.value)
+        for slot in avx2_si64
+        if slot.target is not None
+    }
+    assert {("base", "ui8"), ("extension", "avx512")} <= targets
+    assert all(len(slot.implementations) == 1 for slot in avx2_si64)
 
 
 def test_navigation_hover_completion_and_tokens_use_latest_index(

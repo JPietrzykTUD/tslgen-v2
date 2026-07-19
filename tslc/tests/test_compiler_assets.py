@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import pytest
 
+from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
 from tslc.compiler_assets import (
     RenderAssets,
     load_default_render_assets,
@@ -81,6 +83,19 @@ def test_rust_algorithm_facade_wrappers_are_static_render_asset() -> None:
 
     assert "pub fn transform_unary<Policy, Op, T>" in wrappers
     assert "crate::tsl_algorithm::transform_unary::<Profile, Policy, Op, T>" in wrappers
+
+
+def test_rust_algorithm_reserved_name_manifest_matches_static_asset() -> None:
+    wrappers = load_default_render_assets().text("rust_algo_wrappers.rs")
+    public_names = frozenset(
+        re.findall(
+            r"^\s+pub (?:unsafe )?fn ([A-Za-z_][A-Za-z0-9_]*)",
+            wrappers,
+            flags=re.MULTILINE,
+        )
+    )
+
+    assert public_names == RUST_ALGORITHM_RESERVED_NAMES
 
 
 def test_package_resource_reads_stay_in_compiler_asset_boundary() -> None:

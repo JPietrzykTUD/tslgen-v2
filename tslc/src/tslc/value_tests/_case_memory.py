@@ -5,6 +5,7 @@ from __future__ import annotations
 from tslc.catalog.model import Primitive, TestCase
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_common import ordinary_base_spelling as _ordinary_base_spelling
+from tslc.value_tests.case_components import IndexStyle
 from tslc.value_tests.case_helpers import (
     axis_args as _axis_args,
     effective_lanes as _effective_lanes,
@@ -176,7 +177,7 @@ def mask_store_case(
         base_spelling,
         mask_inputs=mask_inputs,
         expected=case.expected,
-        result_kind="packed" if packed else None,
+        storage="packed" if packed else "unpacked",
         target_base_spelling=target_base_spelling,
         expected_type_tag=expected_type_tag,
         axis_args=_axis_args(specs[0], case),
@@ -361,6 +362,7 @@ def indexed_load_case(
         index_type_tag=case.index_type,
         index_base_spelling=index_base_spelling,
         index_lanes=len(vector_inputs[1]),
+        index_style=_index_style(specs),
     )
 
 def indexed_store_case(
@@ -394,7 +396,17 @@ def indexed_store_case(
         index_type_tag=case.index_type,
         index_base_spelling=index_base_spelling,
         index_lanes=len(vector_inputs[1]),
+        index_style=_index_style(specs),
     )
+
+
+def _index_style(specs: tuple[LoweredSpecialization, ...]) -> IndexStyle:
+    """Indexed-memory calls either load the authored indices into an index
+    register or forward them as a raw pointer; the signature decides once."""
+
+    if tuple(specs[0].param_kinds) == ("cptr", "cptr", "sImm"):
+        return "pointer"
+    return "register"
 
 def stream_case(
     name: str,

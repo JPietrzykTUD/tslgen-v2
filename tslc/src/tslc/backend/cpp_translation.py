@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from tslc.backend import translation_common as common
+from tslc.backend.translation import PointerCastOperand
 from tslc.catalog.model import Catalog, Extension
 from tslc.lane_count import LaneCount
 from tslc.target_text import RenderField, RenderText, literal_text, render_sequence
@@ -148,6 +149,12 @@ class _CppTemplates:
     def template(self, key: str) -> str | None:
         return common.template(self.catalog, self.backend_id, key)
 
+    def query_value(self, source_name: str) -> str | None:
+        return common.query_value(self.catalog, self.backend_id, source_name)
+
+    def query_value_names(self) -> tuple[str, ...]:
+        return common.query_value_names(self.catalog, self.backend_id)
+
     def render_template(
         self, key: str, fallback: str | None = None, /, **fields: RenderField
     ) -> RenderText:
@@ -202,15 +209,20 @@ class _CppSyntax:
         )
 
     def render_pointer_cast(
-        self, inner: RenderField, *, is_const: bool, expr: RenderField
+        self, inner: RenderField, *, is_const: bool, operand: PointerCastOperand
     ) -> RenderText:
         qualifier = " const" if is_const else ""
+        value: tuple[RenderField, ...] = (
+            (literal_text("&"), operand.target)
+            if operand.kind == "address_of"
+            else (operand.target,)
+        )
         return render_sequence(
             (
                 literal_text("reinterpret_cast<"),
                 inner,
                 literal_text(f"{qualifier} *>("),
-                expr,
+                *value,
                 literal_text(")"),
             )
         )
@@ -247,9 +259,9 @@ class _CppSyntax:
                 keyword = "if" if not parts else "else if"
                 parts.extend(
                     (
-                        literal_text(f"{keyword} constexpr ("),
+                        literal_text(f"{keyword} constexpr (("),
                         selector,
-                        literal_text(f" == {label}) {{\n        "),
+                        literal_text(f") == {label}) {{\n        "),
                         body,
                         literal_text("\n      }"),
                     )

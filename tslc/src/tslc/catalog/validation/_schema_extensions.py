@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable
+from typing import get_args
 
+from tslc.catalog.model import ImaskPolicyKind, MaskPolicyKind, VectorBitsKind
 from tslc.catalog.target_families import TargetFamilyCatalog
 from tslc.catalog.validation._schema_common import (
     diagnose_duplicate_fields,
@@ -11,14 +13,20 @@ from tslc.catalog.validation._schema_common import (
     validate_backend_key_fields,
     validate_known_fields,
 )
-from tslc.catalog.validation.source_spans import child, children, field_text, source_span
+from tslc.syntax.access import child, children, field_text, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
-from tslc.syntax.ast import ParsedBlockDeclaration, ParsedTslField
+from tslc.syntax.ast import (
+    ParsedBlockDeclaration,
+    ParsedTslField,
+    ParsedTslListValue,
+    ParsedTslScalarValue,
+)
 
 KNOWN_EXTENSION_FIELDS = frozenset(
     {
         "active_when",
         "default_test_target",
+        "documentation_width",
         "extension_name",
         "family",
         "inherits",
@@ -68,20 +76,14 @@ KNOWN_COMPILE_GUARD_FIELDS = frozenset(
     {"macro", "equals", "hint_flag", "diagnostic"}
 )
 KNOWN_TEST_FILTER_FIELDS = frozenset({"exclude_templates"})
-KNOWN_MASK_POLICY_KINDS = frozenset(
-    {
-        "bool",
-        "exact_lane_bitmask",
-        "lane_bitmask",
-        "native_predicate",
-        "native_predicate_by_lanes",
-        "comparison_lane_vector",
-        "boolean_lane_vector",
-    }
-)
-KNOWN_IMASK_POLICY_KINDS = frozenset(
-    {"lane_bitmask", "same_as_mask_type", "unsigned_scalar"}
-)
+# Derived from the typed catalog kinds so the validator cannot drift from the model.
+KNOWN_MASK_POLICY_KINDS: frozenset[str] = frozenset(get_args(MaskPolicyKind))
+KNOWN_IMASK_POLICY_KINDS: frozenset[str] = frozenset(get_args(ImaskPolicyKind))
+# Source spellings for a non-numeric `vector_bits`: "fixed" is only ever promoted
+# from a numeric width and "" only from an absent field, so neither is authorable.
+KNOWN_VECTOR_BITS_SPELLINGS: frozenset[str] = frozenset(
+    get_args(VectorBitsKind)
+) - {"fixed", ""}
 
 
 def known_extension_fields(backend_ids: Iterable[str] = ()) -> frozenset[str]:
@@ -106,6 +108,30 @@ def validate_extension_block(
             fields.get("family"),
             f"extension family {family!r}",
             sorted(target_families.known_extension_families),
+        )
+
+    vector_bits = fields.get("vector_bits")
+    vector_bits_text = field_text(vector_bits)
+    if (
+        vector_bits_text is not None
+        and not vector_bits_text.lstrip("-").isdigit()
+        and vector_bits_text not in KNOWN_VECTOR_BITS_SPELLINGS
+    ):
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-MALFORMED-VECTOR-BITS",
+                message=(
+                    f"extension field 'vector_bits' has unknown value "
+                    f"{vector_bits_text!r}; expected an integer bit width or one "
+                    f"of: {', '.join(sorted(KNOWN_VECTOR_BITS_SPELLINGS))}"
+                ),
+                source=(
+                    source_span(vector_bits.source)
+                    if vector_bits is not None
+                    else None
+                ),
+            )
         )
 
     mask = fields.get("mask_type_policy")
@@ -159,6 +185,11 @@ def validate_extension_block(
             children(active_when),
             diagnostics,
             label="active_when field",
+        )
+        _validate_active_target_features(
+            child(active_when, "target_features"),
+            target_families.target_feature_names,
+            diagnostics,
         )
     size_parameter = fields.get("size_parameter")
     if size_parameter is not None:
@@ -283,6 +314,33 @@ def _validate_compile_guards(
                         source=source_span(guard.source),
                     )
                 )
+
+
+def _validate_active_target_features(
+    field: ParsedTslField | None,
+    known_target_features: Collection[str],
+    diagnostics: list[Diagnostic],
+) -> None:
+    if not known_target_features or field is None:
+        return
+    if not isinstance(field.value, ParsedTslListValue):
+        return
+    for item in field.value.items:
+        if (
+            isinstance(item, ParsedTslScalarValue)
+            and item.text not in known_target_features
+        ):
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-UNKNOWN-TARGET-FEATURE",
+                    message=(
+                        f"active_when uses unknown target feature {item.text!r}; "
+                        f"expected one of: {', '.join(sorted(known_target_features))}"
+                    ),
+                    source=source_span(item.source),
+                )
+            )
 
 
 def _validate_policy_block(

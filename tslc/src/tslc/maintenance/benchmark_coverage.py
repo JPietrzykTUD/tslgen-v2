@@ -20,14 +20,13 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from tslc.api import _ARITH_TYPE_TAGS, generate_project
+from tslc.authoring import check_catalog
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
     BenchmarkCoverageEntry,
     BenchmarkProjectPlan,
 )
-from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.model import Catalog
-from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.maintenance.benchmark_inventory import (
     BenchmarkShapeInventoryEntry,
@@ -40,17 +39,9 @@ from tslc.maintenance.benchmark_inventory import (
     shape_label,
     source_shape,
 )
-from tslc.maintenance.coverage_inventory import (
-    _DATA_ROOT,
-    _PROFILES_PATH,
-    _REPO_ROOT,
-)
+from tslc.maintenance import _repo_context
 from tslc.pipeline import CoverageEntry, SkippedEntry
-from tslc.sources import SourceLoader
-from tslc.syntax.parser import TslParser
 
-_INVENTORY = _REPO_ROOT / "coverage" / "benchmark-shape-inventory.md"
-_BASELINE = _REPO_ROOT / "coverage" / "benchmark-baseline.json"
 _BASELINE_VERSION = 1
 
 BenchmarkIssueKind = Literal[
@@ -441,16 +432,20 @@ def _selection_slot(entry: CoverageEntry | SkippedEntry) -> BenchmarkSlotKey:
 
 
 def _load_catalog(sources: Path) -> tuple[Catalog | None, tuple[str, ...]]:
-    parsed = TslParser(load_default_tsl_grammar()).parse(
-        SourceLoader().load_dir(sources).documents
-    )
-    built = CatalogBuilder().build(parsed)
+    """Load and validate the corpus through the authoring boundary.
+
+    The benchmark audit only generates the C++ backend, so validation is
+    scoped to the same backend as :func:`compute_benchmark_coverage_audit`'s
+    ``generate_project`` call.
+    """
+
+    checked = check_catalog((sources,), backends=("cpp",))
     errors = tuple(
         format_diagnostic(diagnostic)
-        for diagnostic in built.diagnostics
+        for diagnostic in checked.diagnostics
         if diagnostic.severity == "error"
     )
-    return built.catalog, errors
+    return checked.catalog, errors
 
 
 def compute_benchmark_coverage_audit(
@@ -675,15 +670,34 @@ def main(argv: list[str] | None = None) -> int:
             "implementation variants."
         ),
     )
-    parser.add_argument("--inventory", default=str(_INVENTORY))
-    parser.add_argument("--baseline", default=str(_BASELINE))
+    parser.add_argument(
+        "--inventory",
+        default=None,
+        help="tracked shape inventory path (default: the checkout's "
+        "coverage/benchmark-shape-inventory.md)",
+    )
+    parser.add_argument(
+        "--baseline",
+        default=None,
+        help="issue baseline path (default: the checkout's "
+        "coverage/benchmark-baseline.json)",
+    )
     parser.add_argument(
         "--update",
         action="store_true",
         help="rewrite the deterministic issue baseline and shape inventory",
     )
-    parser.add_argument("--sources", default=str(_DATA_ROOT))
-    parser.add_argument("--machine-profiles", default=str(_PROFILES_PATH))
+    parser.add_argument(
+        "--sources",
+        default=None,
+        help="corpus root (default: the checkout's tsldata/)",
+    )
+    parser.add_argument(
+        "--machine-profiles",
+        default=None,
+        help="machine profile catalog (default: the checkout's "
+        "supplementary/buildsystem/machine_profiles.json)",
+    )
     parser.add_argument(
         "--profiles",
         default="",
@@ -692,9 +706,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--types", default=",".join(_ARITH_TYPE_TAGS))
     args = parser.parse_args(argv)
 
+    sources, machine_profiles = _repo_context.resolve_corpus_paths(
+        parser, args.sources, args.machine_profiles
+    )
+    if args.inventory is not None and args.baseline is not None:
+        inventory_path = Path(args.inventory)
+        baseline_path = Path(args.baseline)
+    else:
+        context = _repo_context.require_repo_context(parser)
+        inventory_path = (
+            Path(args.inventory)
+            if args.inventory is not None
+            else context.coverage_root / "benchmark-shape-inventory.md"
+        )
+        baseline_path = (
+            Path(args.baseline)
+            if args.baseline is not None
+            else context.coverage_root / "benchmark-baseline.json"
+        )
+
     audit, errors = compute_benchmark_coverage_audit(
-        sources=Path(args.sources),
-        machine_profiles=Path(args.machine_profiles),
+        sources=sources,
+        machine_profiles=machine_profiles,
         profiles=_split(args.profiles) or None,
         types=_split(args.types),
     )
@@ -704,8 +737,6 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {error}", file=sys.stderr)
         return 2
     rendered = render_benchmark_shape_inventory(audit)
-    inventory_path = Path(args.inventory)
-    baseline_path = Path(args.baseline)
     if args.update:
         inventory_path.parent.mkdir(parents=True, exist_ok=True)
         baseline_path.parent.mkdir(parents=True, exist_ok=True)

@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
+from tslc.catalog.model import Catalog
 from tslc.lower._query_leaf import DEFAULT_QUERY_LEAF_NAMESPACES
 from tslc.lower.queries import DEFAULT_QUERY_FUNCTIONS
 from tslc.lower.query_authoring import (
     DEFAULT_QUERY_AUTHORING_INDEX,
     QueryScopeSymbol,
+    query_authoring_index,
 )
 
 
@@ -92,3 +96,16 @@ def test_authoring_index_covers_exactly_the_evaluator_function_registry() -> Non
         function.head for function in DEFAULT_QUERY_FUNCTIONS
     }
     assert all(function.descriptor.result_kinds for function in DEFAULT_QUERY_FUNCTIONS)
+
+
+def test_backend_query_value_namespace_is_additive(catalog: Catalog) -> None:
+    translations = {
+        backend_id: dict(entries)
+        for backend_id, entries in catalog.translations.items()
+    }
+    translations["cpp"]["query_value::neon::round_to_zero"] = "NEON_ROUND_ZERO"
+    index = query_authoring_index(replace(catalog, translations=translations))
+
+    assert {candidate.label for candidate in index.complete("neon::")} == {
+        "round_to_zero"
+    }

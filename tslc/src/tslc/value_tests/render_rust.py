@@ -9,8 +9,10 @@ from tslc.value_tests._render_rust_conversion import (
     _differential,
     _extension_extract,
     _extension_insert,
+    _extension_result,
     _load_convert,
     _repr_cast,
+    _target_imask,
 )
 from tslc.value_tests._render_rust_core import (
     _array_to_vector,
@@ -88,6 +90,7 @@ RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "differential": _differential,
         "extension_extract": _extension_extract,
         "extension_insert": _extension_insert,
+        "extension_result": _extension_result,
         "generic_golden": _generic_golden,
         "immediate": _immediate,
         "indexed_load": _indexed_load,
@@ -112,6 +115,7 @@ RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "scalar_result": _scalar_result,
         "scalar_vector": _scalar_vector,
         "store": _store,
+        "target_imask": _target_imask,
         "status_pointer": _status_pointer,
         "stream": _stream,
         "vector_to_array": _vector_to_array,

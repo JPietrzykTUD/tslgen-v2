@@ -19,6 +19,7 @@ from tslc.lower.dependencies import (
 )
 from tslc.lower.implementation_state import ImplementationState
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.maintenance.analyze_specialization import format_analysis_text
 from tslc.target_text import LoweredBody
 
 
@@ -93,6 +94,32 @@ def test_real_corpus_analysis_reuses_pipeline_lowering_without_rendering(
     assert analysis.implementation_state is ImplementationState.NATIVE
     assert analysis.input_digest
     assert analysis.roots[0].source is not None
+
+
+def test_real_corpus_analysis_selects_one_representation_target(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    analysis, diagnostics = analyze_concrete_specialization(
+        sources=data_root,
+        machine_profiles=machine_profiles_path,
+        primitive="insert_imask",
+        profile="avx2",
+        backend="cpp",
+        extension="sse",
+        type_tag="si64",
+        to_target="avx2",
+    )
+
+    assert diagnostics == ()
+    assert analysis is not None
+    assert analysis.context.to_target == "avx2"
+    assert len(analysis.roots) == 1
+    assert analysis.roots[0].target_extension == "avx2"
+    assert analysis.roots[0].target_type == "si64"
+    rendered = format_analysis_text(analysis)
+    assert "insert_imask<si64 -> avx2>" in rendered
+    assert "-> si64<avx2>" in rendered
 
 
 def _context(primitive: str) -> ConcreteAnalysisContext:

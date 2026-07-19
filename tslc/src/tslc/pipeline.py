@@ -9,7 +9,7 @@ headers/modules with a top-level dispatch.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -36,10 +36,15 @@ from tslc.catalog.model import (
 )
 from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
 from tslc.catalog.signatures import parse_signature
-from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
+from tslc.diagnostics import Diagnostic, SourceSpan, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import dependency_sort_key
-from tslc.lower.lowerer import LoweredSpecialization, Lowerer, LoweringResult
+from tslc.lower.lowerer import (
+    POLICY_DEFERRED_SIGNATURE_CODE,
+    LoweredSpecialization,
+    Lowerer,
+    LoweringResult,
+)
 from tslc.output.artifacts import ArtifactSet
 from tslc.render.project import RenderedProject, render_project
 from tslc.select.selector import (
@@ -52,10 +57,15 @@ from tslc.value_tests import (
     ValueTestProjectPlan,
 )
 
-_DEFAULT_BACKENDS = registered_backend_ids()
 GenerationMode = Literal["partial", "strict"]
 SkipStatus = Literal["coverage_gap", "policy_deferred"]
 _TYPE_ORDER = SCALAR_TYPE_ORDER
+
+
+def _default_backend_ids() -> tuple[str, ...]:
+    """Resolve registry defaults when a request is created, not at import time."""
+
+    return registered_backend_ids()
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,7 +76,7 @@ class GenerationRequest:
     profiles: tuple[str, ...] | None
     type_tags: tuple[str, ...]
     extensions: tuple[str, ...] | None = None
-    backends: tuple[str, ...] = _DEFAULT_BACKENDS
+    backends: tuple[str, ...] = field(default_factory=_default_backend_ids)
     mode: GenerationMode = "partial"
     # Pull the value-test harness primitives (vector<->array round-trip and mask normalization)
     # into the dependency closure so the generated differential tests can build a hardware
@@ -418,6 +428,8 @@ class _GenerationSession:
                     callee_origins=slot.callee_origins,
                     emitted=id(slot) not in pruned_ids,
                     unresolved_callee=slot.unresolved_callee,
+                    selection_required_features=slot.selection_required_features,
+                    selector_source=slot.selector_source,
                 )
                 for slot in lowered_specs
             )
@@ -500,6 +512,8 @@ class _GenerationSession:
                         spec=lowered.specialization,
                         callees=callees,
                         callee_origins=callee_origins,
+                        selection_required_features=slot.required_features,
+                        selector_source=slot.implementation.selector_source,
                     )
                 )
                 discovered_dependencies.update(
@@ -539,7 +553,7 @@ class _GenerationSession:
             severity="info",
             code="TSL-PIPELINE-PRUNED-SPECIALIZATION",
             message=reason,
-            location=slot.spec.source.start if slot.spec.source is not None else None,
+            span=slot.spec.source,
         )
         entry = SkippedEntry(
             profile=profile_name,
@@ -666,7 +680,7 @@ def _lowering_skipped_entry(
 
 
 def _skip_status(diagnostics: tuple[Diagnostic, ...]) -> SkipStatus:
-    if any(d.code == "TSL-LOWER-POLICY-DEFERRED-SIGNATURE" for d in diagnostics):
+    if any(d.code == POLICY_DEFERRED_SIGNATURE_CODE for d in diagnostics):
         return "policy_deferred"
     return "coverage_gap"
 
@@ -694,7 +708,7 @@ def _strict_lowering_diagnostics(entry: SkippedEntry) -> tuple[Diagnostic, ...]:
             entry,
             code=diagnostic.code,
             message=diagnostic.message,
-            location=diagnostic.location,
+            span=diagnostic.span,
         )
         for diagnostic in coverage_gaps
     )
@@ -713,13 +727,13 @@ def _strict_skip_diagnostic(
     *,
     code: str,
     message: str,
-    location: SourceLocation | None = None,
+    span: SourceSpan | None = None,
 ) -> Diagnostic:
     return Diagnostic(
         severity="error",
         code=code,
         message=f"{_skipped_label(entry)} skipped: {message}",
-        location=location,
+        span=span,
     )
 
 
@@ -804,24 +818,7 @@ def _expand_requested_profiles(
     return tuple(sorted(names))
 
 
-def _coverage_key(entry: CoverageEntry) -> tuple[object, ...]:
-    return (
-        entry.profile,
-        entry.primitive,
-        entry.backend,
-        entry.extension,
-        _TYPE_ORDER.get(entry.type_tag, 99),
-        entry.type_tag,
-        entry.source_primitive_name,
-        entry.result_kind,
-        entry.param_kinds,
-        entry.mask_policy or "",
-        entry.axis,
-        entry.variant_names,
-    )
-
-
-def _skipped_key(entry: SkippedEntry) -> tuple[object, ...]:
+def _slot_result_key(entry: CoverageEntry | SkippedEntry) -> tuple[object, ...]:
     return (
         entry.profile,
         entry.primitive,
@@ -869,8 +866,8 @@ def _result(
         artifacts=artifacts,
         rendered=rendered,
         diagnostics=sort_diagnostics(diagnostics),
-        coverage=tuple(sorted(coverage, key=_coverage_key)),
-        skipped=tuple(sorted(skipped, key=_skipped_key)),
+        coverage=tuple(sorted(coverage, key=_slot_result_key)),
+        skipped=tuple(sorted(skipped, key=_slot_result_key)),
         emitted_profiles=emitted_profiles,
         lowering_trace=lowering_trace,
     )

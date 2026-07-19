@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from dataclasses import dataclass
+from typing import Literal, Protocol
 
 from tslc.catalog.model import Extension
 from tslc.catalog.scalar_types import (
@@ -14,6 +15,21 @@ from tslc.catalog.scalar_types import (
 )
 from tslc.lane_count import LaneCount
 from tslc.target_text import RenderField, RenderText
+
+
+@dataclass(frozen=True, slots=True)
+class PointerCastOperand:
+    """The classified value operand of ``cast<reinterpret, type=ptr|const_ptr>``.
+
+    Lowering classifies the exact source form once: ``address_of`` is a leading
+    borrow/address-of (``&x`` / ``&mut x``) whose ``target`` is the borrowed
+    expression; ``pointer`` is an already-pointer-valued expression. Backends
+    spell the cast from this typed fact and never re-inspect rendered text.
+    """
+
+    kind: Literal["address_of", "pointer"]
+    target: RenderField
+    mutable_borrow: bool = False
 
 
 class BackendTypeDialect(Protocol):
@@ -72,6 +88,8 @@ class BackendIntrinsicDialect(Protocol):
 
 class BackendTemplateDialect(Protocol):
     def template(self, key: str) -> str | None: ...
+    def query_value(self, source_name: str) -> str | None: ...
+    def query_value_names(self) -> tuple[str, ...]: ...
     def render_template(
         self, key: str, fallback: str | None = None, /, **fields: RenderField
     ) -> RenderText: ...
@@ -92,7 +110,7 @@ class BackendSyntaxDialect(Protocol):
         extra_args: tuple[RenderField, ...] = (),
     ) -> RenderText: ...
     def render_pointer_cast(
-        self, inner: RenderField, *, is_const: bool, expr: RenderField
+        self, inner: RenderField, *, is_const: bool, operand: PointerCastOperand
     ) -> RenderText: ...
     def render_param_type(
         self,

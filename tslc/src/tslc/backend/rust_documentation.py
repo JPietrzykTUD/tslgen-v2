@@ -105,7 +105,10 @@ def _result_summary(spec: LoweredSpecialization, *, concrete: bool) -> str:
     if concrete:
         return result_summary(spec.result_kind, _concrete_result(spec))
     if spec.target is not None:
-        return result_summary(spec.result_kind, "T::RegisterType")
+        return result_summary(
+            spec.result_kind,
+            RUST_SIGNATURE_TYPES.owner_type(spec.result_kind, owner="T"),
+        )
     return result_summary(
         spec.result_kind,
         RUST_SIGNATURE_TYPES.owner_type(spec.result_kind, owner="S"),
@@ -113,6 +116,11 @@ def _result_summary(spec: LoweredSpecialization, *, concrete: bool) -> str:
 
 
 def _concrete_result(spec: LoweredSpecialization) -> str:
+    if spec.target is not None:
+        return RUST_SIGNATURE_TYPES.owner_type(
+            spec.result_kind,
+            owner=f"<{spec.target.vector_spelling} as SimdVector>",
+        )
     return RUST_SIGNATURE_TYPES.concrete_type(
         spec.result_kind,
         base=spec.base_type_spelling,

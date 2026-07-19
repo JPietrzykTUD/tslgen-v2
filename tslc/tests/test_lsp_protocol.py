@@ -114,6 +114,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         assert capabilities["documentSymbolProvider"] is True
         assert capabilities["completionProvider"] is not None
         assert capabilities["codeActionProvider"] is not None
+        assert capabilities["codeLensProvider"] == {"resolveProvider": False}
         assert capabilities.get("documentFormattingProvider") in (None, False)
         client.send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
         client.send(
@@ -130,6 +131,38 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
                 },
             }
         )
+        client.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 20,
+                "method": "textDocument/codeLens",
+                "params": {"textDocument": {"uri": path.as_uri()}},
+            }
+        )
+        lenses = client.read_until(lambda item: item.get("id") == 20)["result"]
+        assert lenses
+        assert len(lenses) == len(
+            {
+                (
+                    lens["range"]["start"]["line"],
+                    lens["range"]["start"]["character"],
+                )
+                for lens in lenses
+            }
+        )
+        first_lens = lenses[0]
+        assert first_lens["command"]["title"] == "$(gear) Render preview"
+        assert first_lens["command"]["command"] == "tsl.previewSpecialization"
+        lens_argument = first_lens["command"]["arguments"][0]
+        assert lens_argument["textDocument"] == {"uri": path.as_uri()}
+        assert lens_argument["documentVersion"] == 1
+        anchor = first_lens["range"]["start"]
+        assert (
+            text.splitlines()[anchor["line"]][anchor["character"] :]
+            .lstrip()
+            .startswith("implementation:")
+        )
+
         client.send(
             {
                 "jsonrpc": "2.0",
@@ -171,8 +204,12 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         assert context["primitive"] == "add"
         assert context["extension"] == "sse"
         assert context["type"] == "f32"
+        assert context["implementation"]["uri"] == path.as_uri()
+        assert context["implementation"]["sourceLine"] > 0
         assert any(
-            slot["extension"] == "sse" and slot["type"] == "f32"
+            slot["extension"] == "sse"
+            and slot["type"] == "f32"
+            and slot["toTarget"] is None
             for slot in context["slots"]
         )
 
@@ -210,13 +247,20 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
             and slot["implementations"]
             for slot in explorer["slots"]
         )
-        selected_implementations = next(
-            slot["implementations"]
+        selected_slot = next(
+            slot
             for slot in explorer["slots"]
             if slot["extension"] == "clang_v128"
             and slot["type"] == "si8"
+            and slot["signature"] == "v:=(v,v)"
+            and slot["attributes"] == {}
             and slot["implementations"]
         )
+        assert selected_slot["primitive"] == "add"
+        assert selected_slot["parameters"] == ["left", "right"]
+        assert selected_slot["target"] is None
+        selected_implementations = selected_slot["implementations"]
+        assert len(selected_implementations) == 1
         assert all(
             implementation["primitive"] == "add"
             for implementation in selected_implementations
@@ -224,8 +268,36 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         assert any(
             implementation["signature"] == "v:=(v,v)"
             and implementation["parameters"] == ["left", "right"]
+            and implementation["attributes"] == {}
             for implementation in selected_implementations
         )
+
+        client.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 15,
+                "method": "tsl/primitiveExplorer",
+                "params": {
+                    "mode": "resolved",
+                    "profile": "avx2",
+                    "backend": "cpp",
+                    "primitive": "insert_imask",
+                },
+            }
+        )
+        target_response = client.read_until(lambda item: item.get("id") == 15)
+        target_slots = [
+            slot
+            for slot in target_response["result"]["slots"]
+            if slot["extension"] == "avx2"
+            and slot["type"] == "si64"
+            and slot["status"] == "selected"
+        ]
+        assert {
+            (slot["target"]["dimension"], slot["target"]["value"])
+            for slot in target_slots
+        } >= {("base", "ui8"), ("extension", "avx512")}
+        assert all(len(slot["implementations"]) == 1 for slot in target_slots)
 
         client.send(
             {
@@ -367,6 +439,15 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         assert invalid["params"]["diagnostics"]
         invalid_diagnostic = invalid["params"]["diagnostics"][0]
         assert invalid_diagnostic["source"] == f"tslc {package_version()}"
+        client.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 21,
+                "method": "textDocument/codeLens",
+                "params": {"textDocument": {"uri": path.as_uri()}},
+            }
+        )
+        assert client.read_until(lambda item: item.get("id") == 21)["result"] == []
         client.send(
             {
                 "jsonrpc": "2.0",

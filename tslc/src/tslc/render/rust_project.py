@@ -10,7 +10,7 @@ from tslc.backend.emitted_profile import (
     used_extensions,
 )
 from tslc.backend.rust_names import rust_primitive_tag_name
-from tslc.backend.target_capability import feature_spelling, rust_arch_module
+from tslc.backend.target_capability import rust_arch_module
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
@@ -45,7 +45,7 @@ def rust_artifacts(
             emitted_profile.profile.family
         )
         backend = RustBackend(
-            feature_alternatives=emitted_profile.profile.alternatives,
+            feature_spellings=emitted_profile.profile.feature_spellings("rust"),
             emit_target_features=capability.backend("rust").feature_flags,
         )
         by_primitive = emitted_profile.specializations("rust")
@@ -158,7 +158,7 @@ def rust_target_features(
     if not capability.backend("rust").feature_flags:
         return ()
     return tuple(
-        f"+{feature_spelling(feature, profile.alternatives, backend_id='rust')}"
+        f"+{profile.feature_spelling(feature, 'rust')}"
         for feature in sorted(profile.features)
     )
 

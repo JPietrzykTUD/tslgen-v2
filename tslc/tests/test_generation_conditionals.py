@@ -9,7 +9,7 @@ all delivering the SIMD comparison family (signed + unsigned + float) on sse/avx
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 
 import pytest
@@ -30,7 +30,9 @@ from tslc.lower._query_model import (
     _cached_parse_query,
     QueryParser,
 )
+from tslc.ir.region_syntax import segments_text
 from tslc.lower.region_handlers.casts import CastLowerer
+from tslc.lower.region_handlers.control import IfLowerer
 from tslc.lower.queries import (
     DEFAULT_QUERY_FUNCTIONS,
     BoolValue,
@@ -41,7 +43,7 @@ from tslc.lower.queries import (
 from tslc.select.selector import Selector
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region
-from tslc.target_text import literal_text
+from tslc.target_text import literal_text, render_text
 
 
 def _spec(catalog, machine_profiles, profile, primitive, ext, type_tag, backend="cpp"):
@@ -114,6 +116,24 @@ def test_type_is_same_query(catalog: Catalog) -> None:
     assert ev.evaluate("type::is_same(type(base::in), ui8)", ctx) == BoolValue(False)
     assert ev.evaluate("type::same_size(base::in, si16)", ctx) == BoolValue(True)
     assert ev.evaluate("type::same_size(base::in, si32)", ctx) == BoolValue(False)
+
+
+def test_query_value_namespaces_are_backend_translation_data(catalog: Catalog) -> None:
+    translations = {
+        backend_id: dict(entries)
+        for backend_id, entries in catalog.translations.items()
+    }
+    translations["cpp"]["query_value::neon::round_to_zero"] = "NEON_ROUND_ZERO"
+    synthetic = replace(catalog, translations=translations)
+
+    assert QueryEvaluator().evaluate(
+        "neon::round_to_zero",
+        _ctx(synthetic, "neon", "si32"),
+    ) == TextValue("NEON_ROUND_ZERO")
+    assert QueryEvaluator().evaluate(
+        "x86::mm_fround_to_zero",
+        _ctx(catalog, "avx2", "si32"),
+    ) == TextValue("_MM_FROUND_TO_ZERO")
 
 
 def test_unsigned_type_query_handles_integer_and_float_inputs(catalog: Catalog) -> None:
@@ -341,6 +361,62 @@ def test_lowering_env_freezes_simd_type_param_names(catalog: Catalog) -> None:
     assert dict(env.simd_type_param_base_bindings) == {"IndexVec": "ui32"}
 
 
+# --- if<compile> symbolic generic-param predicates ---------------------------
+
+
+def _generic_param_ctx(catalog: Catalog) -> LoweringSession:
+    return LoweringSession(
+        env=LoweringEnv(
+            catalog=catalog,
+            backend=create_backend_dialect(catalog, "cpp"),
+            extension=catalog.extensions["avx2"],
+            type_tag="si32",
+            generic_param_names=("PreserveSign",),
+        )
+    )
+
+
+def test_compile_if_renders_exact_symbolic_generic_param_leaves(
+    catalog: Catalog,
+) -> None:
+    region = scan(
+        "if<compile>(( value(type::is_signed(base::in)) ) && (!PreserveSign))"
+        " { taken; } else { other; }"
+    )[0]
+    assert isinstance(region, Region)
+    context = _generic_param_ctx(catalog)
+
+    rendered = render_text(
+        IfLowerer().lower(
+            region, context, lambda segments: literal_text(segments_text(segments))
+        )
+    )
+
+    # si32 folds the query leaf to a literal; the exact `!PreserveSign` reference
+    # survives verbatim, and both arms are kept for the target compiler.
+    assert "if constexpr (true && !PreserveSign)" in rendered
+    assert "taken;" in rendered
+    assert "other;" in rendered
+    assert not context.effects.diagnostics
+
+
+def test_compile_if_skips_non_exact_generic_param_expression(
+    catalog: Catalog,
+) -> None:
+    region = scan("if<compile>(foo(PreserveSign)) { taken; }")[0]
+    assert isinstance(region, Region)
+    context = _generic_param_ctx(catalog)
+
+    result = IfLowerer().lower(
+        region, context, lambda segments: literal_text(segments_text(segments))
+    )
+
+    assert result == region.full_text
+    assert [diagnostic.code for diagnostic in context.effects.diagnostics] == [
+        "TSL-LOWER-UNRESOLVED-IF-CONDITION"
+    ]
+
+
 # --- if<generation> lowering (taken branch only) -----------------------------
 
 
@@ -507,6 +583,9 @@ def test_mask_test_imask_lowers_integral_mask_bit_test(
     catalog: Catalog, machine_profiles
 ) -> None:
     cpp = _spec(catalog, machine_profiles, "avx2", "test_imask", "avx2", "ui32")
+    cpp_arithmetic_index = _spec(
+        catalog, machine_profiles, "avx", "to_mask", "sse", "si8"
+    )
     rust = _spec(
         catalog, machine_profiles, "scalar", "to_mask", "scalar", "ui32", backend="rust"
     )
@@ -514,6 +593,9 @@ def test_mask_test_imask_lowers_integral_mask_bit_test(
     assert cpp is not None
     assert "static_cast<std::uint64_t>(mask)" in cpp.body_text
     assert "mask<test" not in cpp.body_text
+    assert cpp_arithmetic_index is not None
+    assert ">> (16 - 1 - 15)" in cpp_arithmetic_index.body_text
+    assert ">> 16 - 1" not in cpp_arithmetic_index.body_text
     assert rust is not None
     assert rust.body_text == "return (((mask) as u64 >> 0) & 1u64) != 0;"
 

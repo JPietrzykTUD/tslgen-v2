@@ -11,11 +11,11 @@ from tslc.output._verify_runners import runner_prefix
 from tslc.output.verify_model import (
     BuildCommandEnvironment,
     BuildVerifierConfig,
+    ToolchainCommands,
     VerifyBackend,
     VerifyProfile,
 )
 
-_ONEAPI_CPP_COMPILER = "/opt/intel/oneapi/compiler/2025.0/bin/icpx"
 _AARCH64_GNU_CPP_COMPILER = "aarch64-linux-gnu-g++"
 _AARCH64_GNU_CPP_DRIVER_PREFIXES = ("aarch64-linux-gnu-",)
 
@@ -26,6 +26,16 @@ def cpp_target(profile: VerifyProfile, config: BuildVerifierConfig) -> str | Non
 
 def cpp_linker(config: BuildVerifierConfig) -> str | None:
     return config.toolchain("cpp").linker
+
+
+def cpp_toolchain_commands(
+    profile: VerifyProfile, config: BuildVerifierConfig
+) -> ToolchainCommands:
+    return ToolchainCommands(
+        compiler=effective_cpp_compiler(config, profile=profile),
+        target=cpp_target(profile, config),
+        linker=cpp_linker(config),
+    )
 
 
 def cmake_cross_emulator(
@@ -50,11 +60,11 @@ def effective_cpp_compiler(
     if backend is not None and backend.profiles and all(
         _is_wasm_cpp_target(candidate, config) for candidate in backend.profiles
     ):
-        return ("/opt/wasi-sdk/bin/clang++",)
+        return (config.tool_path("wasi-cpp") or "clang++",)
     if backend is not None and backend.profiles and all(
         _needs_oneapi_cpp_compiler(candidate) for candidate in backend.profiles
     ):
-        return (_ONEAPI_CPP_COMPILER,)
+        return (config.tool_path("oneapi-cpp") or "icpx",)
     if backend is not None and backend.profiles and all(
         _is_default_aarch64_gnu_cpp_target(candidate, config)
         for candidate in backend.profiles
@@ -74,7 +84,7 @@ def _effective_cpp_compiler_for_profile(
     profile: VerifyProfile,
 ) -> tuple[str, ...]:
     if _is_wasm_cpp_target(profile, config):
-        return ("/opt/wasi-sdk/bin/clang++",)
+        return (config.tool_path("wasi-cpp") or "clang++",)
     if _is_default_aarch64_gnu_cpp_target(profile, config):
         compiler = _aarch64_gnu_cpp_compiler()
         if compiler is not None:
@@ -82,7 +92,7 @@ def _effective_cpp_compiler_for_profile(
     if cpp_target(profile, config) is not None:
         return ("clang++",)
     if _needs_oneapi_cpp_compiler(profile):
-        return (_ONEAPI_CPP_COMPILER,)
+        return (config.tool_path("oneapi-cpp") or "icpx",)
     if (
         config.run_value_tests
         and config.runner_path("sde") is not None
@@ -180,5 +190,6 @@ __all__ = (
     "cpp_environment",
     "cpp_linker",
     "cpp_target",
+    "cpp_toolchain_commands",
     "effective_cpp_compiler",
 )

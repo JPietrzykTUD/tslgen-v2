@@ -15,6 +15,7 @@ describe("concrete analysis protocol parsing", () => {
             backend: "cpp",
             extension: "avx2",
             type: "si32",
+            toTarget: null,
           },
           implementationState: "composed",
           roots: [
@@ -24,6 +25,7 @@ describe("concrete analysis protocol parsing", () => {
               backend: "cpp",
               extension: "avx2",
               type: "si32",
+              toTarget: null,
               implementationState: "composed",
               origin: null,
               reason: null,

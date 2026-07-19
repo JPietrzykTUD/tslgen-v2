@@ -7,6 +7,8 @@ from types import MappingProxyType
 import re
 from typing import Literal, Mapping
 
+from tslc.backend.translation_common import query_value_names
+from tslc.catalog.model import Catalog
 from tslc.lower._query_leaf import DEFAULT_QUERY_LEAF_NAMESPACES
 from tslc.lower._query_model import (
     ALL_QUERY_KINDS,
@@ -85,7 +87,10 @@ class QueryAuthoringIndex:
         for head in self.functions:
             self._record_namespaces(head, namespace_children)
         for descriptor in leaf_namespaces:
-            namespace_children.setdefault("", set()).add(descriptor.name)
+            parts = descriptor.name.split("::")
+            for index, part in enumerate(parts):
+                parent = "::".join(parts[:index])
+                namespace_children.setdefault(parent, set()).add(part)
             namespace_children.setdefault(descriptor.name, set()).update(
                 descriptor.values
             )
@@ -263,8 +268,16 @@ class QueryAuthoringIndex:
                         child,
                         child,
                         replacement_start,
-                        "scalar type query leaf",
-                        "type",
+                        (
+                            "scalar type query leaf"
+                            if leaf_namespace.result_kinds == frozenset({"type"})
+                            else "TSIL query value"
+                        ),
+                        (
+                            "type"
+                            if leaf_namespace.result_kinds == frozenset({"type"})
+                            else "value"
+                        ),
                     )
                 )
             elif path in self.namespace_children:
@@ -334,9 +347,9 @@ class QueryAuthoringIndex:
         for head, descriptor in self.functions.items():
             if head.startswith(prefix):
                 kinds.update(descriptor.result_kinds)
-        leaf = self.leaf_namespaces.get(namespace)
-        if leaf is not None:
-            kinds.update(leaf.result_kinds)
+        for name, leaf in self.leaf_namespaces.items():
+            if name == namespace or name.startswith(prefix):
+                kinds.update(leaf.result_kinds)
         return frozenset(kinds)
 
 
@@ -378,10 +391,31 @@ DEFAULT_QUERY_AUTHORING_INDEX = QueryAuthoringIndex(
 )
 
 
+def query_authoring_index(catalog: Catalog) -> QueryAuthoringIndex:
+    values_by_namespace: dict[str, set[str]] = {}
+    for source_name in query_value_names(catalog):
+        namespace, separator, value = source_name.rpartition("::")
+        if separator and namespace and value:
+            values_by_namespace.setdefault(namespace, set()).add(value)
+    query_value_namespaces = tuple(
+        QueryLeafNamespaceDescriptor(
+            namespace,
+            tuple(sorted(values)),
+            frozenset({"text"}),
+        )
+        for namespace, values in sorted(values_by_namespace.items())
+    )
+    return QueryAuthoringIndex(
+        DEFAULT_QUERY_FUNCTIONS,
+        (*DEFAULT_QUERY_LEAF_NAMESPACES, *query_value_namespaces),
+    )
+
+
 __all__ = (
     "DEFAULT_QUERY_AUTHORING_INDEX",
     "QueryAuthoringCandidate",
     "QueryAuthoringIndex",
     "QueryCursor",
     "QueryScopeSymbol",
+    "query_authoring_index",
 )

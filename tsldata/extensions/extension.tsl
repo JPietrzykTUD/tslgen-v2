@@ -378,6 +378,7 @@ extension neon:
 extension sve:
   extension_name "sve"
   family "arm"
+  documentation_width "SVE"
   intrinsic_style "arm"
   vector_bits "scalable"
   native_sort_order 700

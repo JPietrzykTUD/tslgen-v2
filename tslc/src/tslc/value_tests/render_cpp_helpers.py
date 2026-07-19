@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.value_tests.lane_math import runtime_tile_index
 from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 
@@ -135,6 +136,69 @@ def axis_suffix(case: ValueTestCasePlan) -> str:
     return "".join(f", {value}" for value in case.invocation.axis_args)
 
 
+def render_extension_test_template(template: str, **values: str) -> str:
+    """Fill one extension-authored test template's ``{placeholder}`` slots."""
+
+    result = template
+    for key, value in values.items():
+        result = result.replace("{" + key + "}", value)
+    return result
+
+
+def _scalable_vec_type(case: ValueTestCasePlan) -> str:
+    scalable = case.scalable
+    assert scalable is not None
+    return f"tsl::simd<{case.base_spelling}, tsl::{scalable.source_extension}>"
+
+
+def scalable_runtime_lanes(case: ValueTestCasePlan) -> str:
+    """The C++ runtime lane-count expression from the plan's raw extension template."""
+
+    scalable = case.scalable
+    assert scalable is not None
+    return render_extension_test_template(
+        scalable.runtime_lanes_template,
+        base_type=case.base_spelling,
+        base=case.base_spelling,
+    )
+
+
+def scalable_mask_from_bits(case: ValueTestCasePlan, position: int) -> str:
+    """The C++ mask-materialization expression for the mask input at ``position``."""
+
+    scalable = case.scalable
+    assert scalable is not None and scalable.mask_from_bits_template is not None
+    return render_extension_test_template(
+        scalable.mask_from_bits_template,
+        vec=_scalable_vec_type(case),
+        mask_bits=f"{scalable.mask_bits[position]}ull",
+        authored_lanes=str(case.lanes),
+        lanes="lanes",
+        base_type=case.base_spelling,
+        base=case.base_spelling,
+    )
+
+
+def scalable_mask_check(case: ValueTestCasePlan) -> str:
+    """The C++ mask-verification expression over the local ``result`` mask."""
+
+    scalable = case.scalable
+    assert scalable is not None
+    assert scalable.mask_check_template is not None
+    assert scalable.expected_mask_bits is not None
+    return render_extension_test_template(
+        scalable.mask_check_template,
+        vec=_scalable_vec_type(case),
+        case_name=cpp_string_literal(case.case_name),
+        mask="result",
+        expected_bits=f"{scalable.expected_mask_bits}ull",
+        authored_lanes=str(case.lanes),
+        lanes="lanes",
+        base_type=case.base_spelling,
+        base=case.base_spelling,
+    )
+
+
 def scalable_header(case: ValueTestCasePlan) -> list[str]:
     """Open a scalable (runtime-length) value-test function: SVE-style `Vec` + runtime `lanes`."""
 
@@ -142,8 +206,8 @@ def scalable_header(case: ValueTestCasePlan) -> list[str]:
     assert scalable is not None
     return [
         f"int {case.function_name}() {{",
-        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::{scalable.source_extension}>;",
-        f"  const std::size_t lanes = static_cast<std::size_t>({scalable.runtime_lanes_expr});",
+        f"  using Vec = {_scalable_vec_type(case)};",
+        f"  const std::size_t lanes = static_cast<std::size_t>({scalable_runtime_lanes(case)});",
     ]
 
 
@@ -167,7 +231,7 @@ def append_runtime_vector_input(
     lines.append(f"  std::vector<{case.base_spelling}> in{position}(lanes);")
     lines.append(
         f"  for (std::size_t i = 0; i < lanes; ++i) "
-        f"in{position}[i] = authored{position}[i % {case.lanes}];"
+        f"in{position}[i] = authored{position}[{runtime_tile_index('i', case.lanes)}];"
     )
     lines.append(
         f"  typename Vec::register_type v{position} = "
@@ -182,7 +246,11 @@ __all__ = (
     "axis_suffix",
     "cast_literal_list",
     "cpp_string_literal",
+    "render_extension_test_template",
     "scalable_header",
+    "scalable_mask_check",
+    "scalable_mask_from_bits",
+    "scalable_runtime_lanes",
     "scalar_expected",
     "scalar_result_type",
     "uint_literal",

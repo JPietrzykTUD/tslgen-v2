@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 
 from tslc.diagnostics import SourceSpan
@@ -21,6 +21,29 @@ class BackendProfileFamily:
 
 
 @dataclass(frozen=True, slots=True)
+class TargetFeatureCapability:
+    """One source feature and its compiler spelling per backend."""
+
+    name: str
+    default_spelling: str | None = None
+    backend_spellings: Mapping[str, str] = field(default_factory=dict)
+    source: SourceSpan | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "backend_spellings",
+            MappingProxyType(dict(sorted(self.backend_spellings.items()))),
+        )
+
+    def spelling(self, backend_id: str) -> str:
+        return self.backend_spellings.get(
+            backend_id,
+            self.default_spelling or self.name,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class ExtensionFamilyCapability:
     """Compiler behavior shared by extensions in one source-named family."""
 
@@ -29,7 +52,21 @@ class ExtensionFamilyCapability:
     free_function_owner: bool = True
     requires_declared_vector_register: bool = True
     index_vector_register: bool = False
+    documentation_family: str | None = None
+    documentation_sort_order: int | None = None
     source: SourceSpan | None = None
+
+    @property
+    def documented_family(self) -> str:
+        return self.documentation_family or self.name
+
+    @property
+    def documented_sort_order(self) -> int:
+        return (
+            90
+            if self.documentation_sort_order is None
+            else self.documentation_sort_order
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +107,7 @@ class TargetFamilyCatalog:
         default_factory=dict
     )
     profile_families: Mapping[str, ProfileFamilyCapability] = field(default_factory=dict)
+    target_features: Mapping[str, TargetFeatureCapability] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         profile_families = MappingProxyType(
@@ -80,8 +118,14 @@ class TargetFamilyCatalog:
         )
         extension_families = MappingProxyType(
             {
-                name: capability
+                name: _resolved_documentation_order(capability, profile_families)
                 for name, capability in sorted(self.extension_families.items())
+            }
+        )
+        target_features = MappingProxyType(
+            {
+                name: capability
+                for name, capability in sorted(self.target_features.items())
             }
         )
         emitted = set(self.universal_extension_families)
@@ -99,6 +143,7 @@ class TargetFamilyCatalog:
         )
         object.__setattr__(self, "extension_families", extension_families)
         object.__setattr__(self, "profile_families", profile_families)
+        object.__setattr__(self, "target_features", target_features)
 
     @property
     def emitted_extension_families(self) -> frozenset[str]:
@@ -119,6 +164,10 @@ class TargetFamilyCatalog:
             for backend_id in capability.backends
         )
 
+    @property
+    def target_feature_names(self) -> frozenset[str]:
+        return frozenset(self.target_features)
+
     def supports_extension_family(self, family: str) -> bool:
         return family in self.emitted_extension_families
 
@@ -133,6 +182,9 @@ class TargetFamilyCatalog:
             family,
             ExtensionFamilyCapability(family),
         )
+
+    def target_feature(self, feature: str) -> TargetFeatureCapability | None:
+        return self.target_features.get(feature)
 
     def extension_targets_profile(
         self,
@@ -149,9 +201,23 @@ class TargetFamilyCatalog:
         return frozenset() if capability is None else capability.runner_kinds
 
 
+def _resolved_documentation_order(
+    capability: ExtensionFamilyCapability,
+    profile_families: Mapping[str, ProfileFamilyCapability],
+) -> ExtensionFamilyCapability:
+    if capability.documentation_sort_order is not None:
+        return capability
+    profile = profile_families.get(capability.documented_family)
+    return replace(
+        capability,
+        documentation_sort_order=profile.sort_order if profile is not None else 90,
+    )
+
+
 __all__ = (
     "BackendProfileFamily",
     "ExtensionFamilyCapability",
     "ProfileFamilyCapability",
+    "TargetFeatureCapability",
     "TargetFamilyCatalog",
 )

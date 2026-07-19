@@ -18,8 +18,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from tslc.catalog.target_families import TargetFamilyCatalog
-from tslc.diagnostics import Diagnostic, SourceLocation, sort_diagnostics
+from tslc.catalog.target_families import TargetFamilyCatalog, TargetFeatureCapability
+from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
 
 # Sentinel used by the generic/scalar profile to mean "no target features".
 _NO_SIMD = "NOSIMD-INVALID"
@@ -44,9 +44,12 @@ class MachineProfile:
     name: str
     family: str
     features: frozenset[str]
-    # feature -> its compiler/target-feature spelling when it differs from the token
-    # (e.g. avx512_vpclmulqdq -> vpclmulqdq, neon -> asimd).
+    # Profile-specific feature spelling overrides. Shared spelling differences
+    # belong to the source target-feature catalog.
     alternatives: Mapping[str, str]
+    feature_capabilities: Mapping[str, TargetFeatureCapability] = field(
+        default_factory=dict
+    )
     # Compiler-selected modes that are not hardware target features, e.g. fixed SVE width.
     compile_modes: frozenset[str] = frozenset()
     # Extra compiler flags keyed by backend. These are full compiler arguments,
@@ -66,6 +69,11 @@ class MachineProfile:
         object.__setattr__(self, "alternatives", MappingProxyType(dict(self.alternatives)))
         object.__setattr__(
             self,
+            "feature_capabilities",
+            MappingProxyType(dict(sorted(self.feature_capabilities.items()))),
+        )
+        object.__setattr__(
+            self,
             "backend_flags",
             MappingProxyType(
                 {
@@ -78,6 +86,21 @@ class MachineProfile:
     def flags_for_backend(self, backend_id: str) -> tuple[str, ...]:
         return self.backend_flags.get(backend_id, ())
 
+    def feature_spelling(self, feature: str, backend_id: str) -> str:
+        override = self.alternatives.get(feature)
+        if override is not None:
+            return override
+        capability = self.feature_capabilities.get(feature)
+        return feature if capability is None else capability.spelling(backend_id)
+
+    def feature_spellings(self, backend_id: str) -> Mapping[str, str]:
+        return MappingProxyType(
+            {
+                feature: self.feature_spelling(feature, backend_id)
+                for feature in sorted(self.features)
+            }
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class MachineProfileLoadResult:
@@ -89,15 +112,6 @@ class MachineProfileLoadResult:
 @dataclass(frozen=True, slots=True)
 class _JsonObject:
     pairs: tuple[tuple[str, Any], ...]
-
-
-def load_machine_profiles(
-    path: Path,
-    target_families: TargetFamilyCatalog | None = None,
-) -> Mapping[str, MachineProfile]:
-    """Load every machine profile, keyed by name. The filesystem-read boundary."""
-
-    return load_machine_profiles_checked(path, target_families).profiles
 
 
 def load_machine_profiles_checked(
@@ -134,7 +148,13 @@ def load_machine_profiles_checked(
                     severity="error",
                     code="TSL-PROFILE-MALFORMED-JSON",
                     message=f"could not parse machine profiles {path}: {exc.msg}",
-                    location=SourceLocation(path, exc.lineno, exc.colno),
+                    span=SourceSpan(
+                        path,
+                        exc.lineno,
+                        exc.colno,
+                        exc.lineno,
+                        exc.colno + 1,
+                    ),
                 ),
             ),
             digest=digest,
@@ -247,7 +267,20 @@ def load_machine_profiles_checked(
             if compile_modes is None:
                 continue
             alternatives_value = fields.get("alternatives", _JsonObject(()))
-            alternatives = _alternatives(name, alternatives_value, path, diagnostics)
+            alternatives = _alternatives(
+                name,
+                alternatives_value,
+                features,
+                path,
+                diagnostics,
+            )
+            feature_capabilities = _feature_capabilities(
+                name,
+                features,
+                target_families,
+                path,
+                diagnostics,
+            )
             backend_flags = _backend_flags(
                 name,
                 fields.get("backend_flags", _JsonObject(())),
@@ -275,6 +308,7 @@ def load_machine_profiles_checked(
                 family=family,
                 features=features,
                 alternatives=alternatives,
+                feature_capabilities=feature_capabilities,
                 compile_modes=compile_modes,
                 backend_flags=backend_flags,
                 runner=runner,
@@ -354,6 +388,7 @@ def _unknown_fields(
 def _alternatives(
     profile_name: str,
     value: Any,
+    features: frozenset[str],
     path: Path,
     diagnostics: list[Diagnostic],
 ) -> dict[str, str]:
@@ -369,17 +404,59 @@ def _alternatives(
     fields = _object_fields(value, path, diagnostics)
     alternatives: dict[str, str] = {}
     for key, spelling in fields.items():
-        if not isinstance(spelling, str):
+        if key not in features:
+            diagnostics.append(
+                _diagnostic(
+                    path,
+                    "TSL-PROFILE-UNKNOWN-ALTERNATIVE",
+                    (
+                        f"machine profile {profile_name!r} alternative {key!r} "
+                        "does not name one of its target features"
+                    ),
+                )
+            )
+        if not isinstance(spelling, str) or not spelling:
             diagnostics.append(
                 _diagnostic(
                     path,
                     "TSL-PROFILE-MALFORMED-ALTERNATIVES",
-                    f"machine profile {profile_name!r} alternative {key!r} must be a string",
+                    (
+                        f"machine profile {profile_name!r} alternative {key!r} "
+                        "must be a non-empty string"
+                    ),
                 )
             )
             continue
         alternatives[key] = spelling
     return alternatives
+
+
+def _feature_capabilities(
+    profile_name: str,
+    features: frozenset[str],
+    target_families: TargetFamilyCatalog | None,
+    path: Path,
+    diagnostics: list[Diagnostic],
+) -> dict[str, TargetFeatureCapability]:
+    if target_families is None or not target_families.target_feature_names:
+        return {}
+    capabilities: dict[str, TargetFeatureCapability] = {}
+    for feature in sorted(features):
+        capability = target_families.target_feature(feature)
+        if capability is None:
+            diagnostics.append(
+                _diagnostic(
+                    path,
+                    "TSL-PROFILE-UNKNOWN-TARGET-FEATURE",
+                    (
+                        f"machine profile {profile_name!r} target feature "
+                        f"{feature!r} is not declared in target_families"
+                    ),
+                )
+            )
+            continue
+        capabilities[feature] = capability
+    return capabilities
 
 
 def _token_set_field(
@@ -569,6 +646,21 @@ def _runner(
             )
         )
         return None
+    if profile_value.strip().startswith("-"):
+        # The runner invocation adds the flag prefix itself; authored data keeps
+        # the bare profile name. Diagnose rather than silently repairing.
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-RUNNER",
+                (
+                    f"machine profile {profile_name!r} runner profile must not start"
+                    f" with '-'; write the bare profile name"
+                    f" (got {profile_value.strip()!r})"
+                ),
+            )
+        )
+        return None
     args_value = fields.get("args", ())
     args: tuple[str, ...]
     if args_value == ():
@@ -584,8 +676,7 @@ def _runner(
             )
         )
         args = ()
-    cleaned_profile = profile_value.strip().lstrip("-") if kind == "sde" else profile_value.strip()
-    return MachineProfileRunner(kind=kind, profile=cleaned_profile, args=args)
+    return MachineProfileRunner(kind=kind, profile=profile_value.strip(), args=args)
 
 
 def _diagnostic(path: Path, code: str, message: str) -> Diagnostic:
@@ -593,5 +684,5 @@ def _diagnostic(path: Path, code: str, message: str) -> Diagnostic:
         severity="error",
         code=code,
         message=message,
-        location=SourceLocation(path, 1, 1),
+        span=SourceSpan(path, 1, 1, 1, 2),
     )

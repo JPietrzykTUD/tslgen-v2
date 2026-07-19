@@ -8,6 +8,8 @@ from tslc.catalog.scalar_types import (
 )
 from tslc.target_text import RenderField, RenderText, TemplateApplication
 
+_QUERY_VALUE_PREFIX = "query_value::"
+
 
 def scalar_spelling(catalog: Catalog, backend_id: str, type_tag: str) -> str | None:
     spellings = catalog.type_spellings.get(backend_id, {})
@@ -98,6 +100,32 @@ def compose_intrinsic_name(
 
 def template(catalog: Catalog, backend_id: str, key: str) -> str | None:
     return catalog.translations.get(backend_id, {}).get(key)
+
+
+def query_value(catalog: Catalog, backend_id: str, source_name: str) -> str | None:
+    return template(catalog, backend_id, f"{_QUERY_VALUE_PREFIX}{source_name}")
+
+
+def query_value_names(
+    catalog: Catalog,
+    backend_id: str | None = None,
+) -> tuple[str, ...]:
+    translations = (
+        (catalog.translations.get(backend_id, {}),)
+        if backend_id is not None
+        else tuple(catalog.translations.values())
+    )
+    return tuple(
+        sorted(
+            {
+                key[len(_QUERY_VALUE_PREFIX) :]
+                for entries in translations
+                for key in entries
+                if key.startswith(_QUERY_VALUE_PREFIX)
+                and "::" in key[len(_QUERY_VALUE_PREFIX) :]
+            }
+        )
+    )
 
 
 def render_template(

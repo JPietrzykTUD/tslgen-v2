@@ -7,7 +7,7 @@ import json
 from collections.abc import Iterable
 from pathlib import Path
 
-from tslc import pipeline
+from tslc import api, pipeline
 from tslc.backend import cpp_profile
 from tslc.backend.capability import BackendCapability
 from tslc.backend.cpp_capability import CPP_BACKEND
@@ -22,11 +22,15 @@ from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import RenderAssets, load_default_render_assets
-from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.lowerer import (
+    POLICY_DEFERRED_SIGNATURE_CODE,
+    LoweredSpecialization,
+)
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile
 from tslc.render import cpp_build, cpp_project
 from tslc.render.project import render_project
+from tslc.select.selector import Selector
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
 from tslc.compiler_assets import load_default_tsl_grammar
@@ -43,6 +47,50 @@ def test_pipeline_facade_keeps_input_and_closure_boundaries() -> None:
     assert pipeline._LoweredSlot.__module__ == "tslc._pipeline_closure"
     assert pipeline._prune_unresolved.__module__ == "tslc._pipeline_closure"
     assert pipeline._profile_with_required_features.__module__ == "tslc._pipeline_closure"
+
+
+def test_backend_defaults_are_resolved_at_request_construction(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(pipeline, "registered_backend_ids", lambda: ("future",))
+
+    request = pipeline.GenerationRequest(
+        source_paths=(),
+        machine_profiles_path=Path("profiles.json"),
+        primitives=(),
+        profiles=(),
+        type_tags=(),
+    )
+
+    assert request.backends == ("future",)
+
+
+def test_public_api_resolves_omitted_backends_for_each_call(monkeypatch) -> None:
+    captured: list[pipeline.GenerationRequest] = []
+
+    monkeypatch.setattr(api, "registered_backend_ids", lambda: ("future",))
+    monkeypatch.setattr(api, "generate", lambda request: captured.append(request))
+
+    api.generate_project((), machine_profiles_path=Path("profiles.json"))
+
+    assert captured[0].backends == ("future",)
+
+
+def test_pipeline_uses_lowering_owned_policy_code_and_one_slot_sort_key() -> None:
+    tree = ast.parse((_REPO_ROOT / "tslc/src/tslc/pipeline.py").read_text())
+    function_names = {
+        node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+    }
+    string_literals = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+
+    assert POLICY_DEFERRED_SIGNATURE_CODE not in string_literals
+    assert "_slot_result_key" in function_names
+    assert "_coverage_key" not in function_names
+    assert "_skipped_key" not in function_names
 
 
 def test_cpp_project_renderer_has_focused_owned_modules() -> None:
@@ -109,6 +157,8 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
         value_test_support_factory=lambda: None,  # type: ignore[return-value]
         test_renderer=lambda plan, assets, media_type: [],
         verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
+        toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
         documentation_formatter_factory=_FakeDocumentationFormatter,
     ).closure_seed_primitives(catalog) == ()
     assert CPP_BACKEND.helper_manifest is CPP_HELPER_MANIFEST
@@ -139,6 +189,8 @@ def test_backend_capability_owns_optional_benchmark_planning(catalog) -> None:
         value_test_support_factory=lambda: None,  # type: ignore[return-value]
         test_renderer=lambda plan, assets, media_type: [],
         verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
+        toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
         documentation_formatter_factory=_FakeDocumentationFormatter,
         benchmark_plan_builder=plan_benchmarks,
     )
@@ -193,6 +245,8 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
         value_test_support_factory=lambda: None,  # type: ignore[return-value]
         test_renderer=lambda plan, assets, media_type: [],
         verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
+        toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
         documentation_formatter_factory=_FakeDocumentationFormatter,
     )
     monkeypatch.setattr(registry, "BACKEND_CAPABILITIES", (fake,))
@@ -325,6 +379,8 @@ prim<v:=v> id(data):
         value_test_support_factory=lambda: None,  # type: ignore[return-value]
         test_renderer=lambda plan, assets, media_type: [],
         verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
+        toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
         documentation_formatter_factory=_FakeDocumentationFormatter,
     )
     monkeypatch.setattr(registry, "BACKEND_CAPABILITIES", (fake,))
@@ -394,6 +450,34 @@ def test_backend_semantics_do_not_import_project_rendering() -> None:
     assert _forbidden_imports(paths, "tslc.render") == []
 
 
+def test_render_modules_import_no_private_backend_names() -> None:
+    """render/ formats backend-decided models; `_`-private backend names stay backend-internal."""
+
+    render_root = _REPO_ROOT / "tslc" / "src" / "tslc" / "render"
+    offenders: list[str] = []
+    for path in sorted(render_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                offenders.extend(
+                    f"{path}:{node.lineno}: {alias.name}"
+                    for alias in node.names
+                    if _is_forbidden_import(alias.name, "tslc.backend")
+                    and any(part.startswith("_") for part in alias.name.split("."))
+                )
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                if not _is_forbidden_import(node.module, "tslc.backend"):
+                    continue
+                offenders.extend(
+                    f"{path}:{node.lineno}: {alias.name}"
+                    for alias in node.names
+                    if alias.name.startswith("_")
+                    or any(part.startswith("_") for part in node.module.split("."))
+                )
+
+    assert offenders == []
+
+
 def test_renderers_do_not_own_backend_helper_admission() -> None:
     package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
     render_paths = sorted((package_root / "render").rglob("*.py"))
@@ -447,6 +531,76 @@ def test_project_renderer_does_not_finalize_or_plan_semantics() -> None:
         "finalize_emitted_names",
         "value_test_warnings",
     }.isdisjoint(referenced_names)
+
+
+def test_authoring_tools_use_public_selector_and_selector_path_boundaries() -> None:
+    """LSP and maintenance projections consume selection facts through the
+    public Selector surface and never re-open catalog promotion internals."""
+
+    package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
+    selector_private = {
+        name
+        for name in vars(Selector)
+        if name.startswith("_") and not name.startswith("__")
+    }
+    private_import_sources = ("tslc.select", "tslc.catalog")
+    offenders: list[str] = []
+    for tree_name in ("lsp", "maintenance"):
+        for path in sorted((package_root / tree_name).rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Attribute)
+                    and node.attr in selector_private
+                ):
+                    offenders.append(
+                        f"{path}:{node.lineno}: accesses Selector.{node.attr}"
+                    )
+                elif isinstance(node, ast.Import):
+                    offenders.extend(
+                        f"{path}:{node.lineno}: imports {alias.name}"
+                        for alias in node.names
+                        if any(
+                            _is_forbidden_import(alias.name, source)
+                            for source in private_import_sources
+                        )
+                        and any(
+                            part.startswith("_") for part in alias.name.split(".")
+                        )
+                    )
+                elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                    if not any(
+                        _is_forbidden_import(node.module, source)
+                        for source in private_import_sources
+                    ):
+                        continue
+                    offenders.extend(
+                        f"{path}:{node.lineno}: imports {alias.name} from {node.module}"
+                        for alias in node.names
+                        if alias.name.startswith("_")
+                        or any(
+                            part.startswith("_") for part in node.module.split(".")
+                        )
+                    )
+
+    assert offenders == []
+
+
+def test_primitive_explorer_does_not_walk_extension_chains_itself() -> None:
+    """Slot candidate discovery belongs to the selector; the explorer must not
+    re-implement it with a second `catalog.extension_chain` walk."""
+
+    path = (
+        _REPO_ROOT / "tslc" / "src" / "tslc" / "lsp" / "primitive_explorer.py"
+    )
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    chain_walks = [
+        f"{path}:{node.lineno}"
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute) and node.attr == "extension_chain"
+    ]
+
+    assert chain_walks == []
 
 
 def test_architecture_documents_match_current_pipeline_vocabulary() -> None:

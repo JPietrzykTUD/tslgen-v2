@@ -23,7 +23,9 @@ description: Extend typed generated value-test planning and rendering in tslc. U
 5. Plan before rendering: the focused pattern owns acceptance and actionable
    unplanned reasons; case planners construct typed components;
    `case_capabilities.py` declares invariants; `patterns.py` owns deterministic
-   registration. Do not let renderers rediscover source semantics.
+   registration. `coverage.py` preserves a typed cause for planned or synthetic
+   cases dropped by a backend and an actionable reason for authored-unplanned
+   cases. Do not let renderers rediscover source semantics.
 6. Declare backend case-kind support through renderer capabilities and add
    focused backend rendering. Missing support must remain
    `backend_unsupported`, not fail through a late dispatch or template error.
@@ -31,10 +33,12 @@ description: Extend typed generated value-test planning and rendering in tslc. U
    explicit. A missing harness primitive or ambiguous oracle must produce
    `authored_unplanned` coverage or a structured diagnostic, not fabricated
    expected behavior.
-8. Test accepted and nearby rejected forms, unplanned reasons, component
-   invariants, backend capability validation, deterministic planning, and
-   rendering. Run executable generated tests for every affected backend/profile
-   that the available toolchains can verify.
+8. Test accepted and nearby rejected forms, unplanned/drop reasons, component
+   invariants, fuzz/synthetic cases, snapshot completeness, backend capability
+   validation, deterministic planning, and rendering. When lane or tiling math
+   is shared with benchmarks, test both consumers through `lane_math.py`. Run
+   executable generated tests for every affected backend/profile that the
+   available toolchains can verify.
 
 ## Checks
 
@@ -49,7 +53,9 @@ description: Extend typed generated value-test planning and rendering in tslc. U
 
 ```bash
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_backend_target_capability.py tslc/tests/test_value_tests.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_backend_target_capability.py tslc/tests/test_fuzz_value_tests.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_generation_snapshot.py tslc/tests/test_benchmark_variants.py
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_value_tests.py
+./dev.sh test --primitives NAME --profiles PROFILE --backends cpp,rust
 git diff --check
 ```

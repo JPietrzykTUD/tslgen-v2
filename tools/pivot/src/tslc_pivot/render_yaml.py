@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from tslc.pivot.model import PivotDefinition, PivotDocument
+from tslc_pivot.model import PivotDefinition, PivotDocument
 
 
 def render_pivot_yaml(document: PivotDocument) -> str:

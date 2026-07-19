@@ -91,13 +91,14 @@ class CatalogBuilder:
                     target_family_fields.append(declaration.field)
 
         extensions = _resolve_extension_inheritance(extensions, extension_declared_fields)
+        target_families = _build_target_families(target_family_fields)
         catalog = Catalog(
             primitives=tuple(primitives),
             type_groups=type_groups,
             extensions=extensions,
             type_spellings=type_spellings,
             translations=translations,
-            target_families=_build_target_families(target_family_fields),
+            target_families=target_families,
         )
         return CatalogBuildResult(catalog=catalog, diagnostics=tuple(diagnostics))
 

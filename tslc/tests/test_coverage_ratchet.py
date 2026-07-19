@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tslc.catalog.machine_profiles import load_machine_profiles
+from tslc.catalog.machine_profiles import load_machine_profiles_checked
 from tslc.diagnostics import Diagnostic
+from tslc.maintenance._repo_context import RepoContext, find_repo_context
 from tslc.maintenance.coverage_ratchet import (
-    _BASELINE,
     Snapshot,
     SlotKey,
     SlotRecord,
+    canonical_baseline_path,
     compute_snapshot,
     deserialize,
     diff_snapshots,
@@ -18,10 +19,16 @@ from tslc.maintenance.coverage_ratchet import (
 )
 from tslc.maintenance.coverage_inventory import (
     PROFILES,
-    _OUT as COVERAGE_INVENTORY_OUTPUT,
+    canonical_report_path,
     skip_category,
 )
 from tslc.pipeline import SkippedEntry
+
+
+def _checkout() -> RepoContext:
+    context = find_repo_context()
+    assert context is not None
+    return context
 
 
 def _snapshot(slots: dict[SlotKey, SlotRecord]) -> Snapshot:
@@ -162,15 +169,17 @@ def test_compute_snapshot_self_diff_is_clean(
 def test_canonical_coverage_profiles_exist_in_machine_profiles(
     machine_profiles_path: Path,
 ) -> None:
-    machine_profiles = load_machine_profiles(machine_profiles_path)
+    machine_profiles = load_machine_profiles_checked(machine_profiles_path).profiles
     assert set(PROFILES) <= set(machine_profiles)
 
 
 def test_committed_baseline_uses_canonical_profiles() -> None:
-    baseline = deserialize(_BASELINE.read_text(encoding="utf-8"))
+    baseline_path = canonical_baseline_path(_checkout())
+    baseline = deserialize(baseline_path.read_text(encoding="utf-8"))
     assert baseline.profiles == PROFILES
 
 
 def test_coverage_inventory_output_is_not_under_top_level_docs() -> None:
-    assert COVERAGE_INVENTORY_OUTPUT.parent.name == "coverage"
-    assert COVERAGE_INVENTORY_OUTPUT.name == "primitive-coverage-inventory.md"
+    output = canonical_report_path(_checkout())
+    assert output.parent.name == "coverage"
+    assert output.name == "primitive-coverage-inventory.md"

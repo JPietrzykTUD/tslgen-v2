@@ -24,11 +24,15 @@ from tslc.output.verify import (
     run_subprocess_build_command,
     verify_generated_project,
 )
+from tslc.output._verify_cpp import _prepare_cpp_backend
 from tslc.output._verify_cpp_config import effective_cpp_compiler
 from tslc.output._verify_runners import runner_prefix
 from tslc.output._verify_rust_config import effective_rust_compiler
-from tslc.output.verify_drivers import VerifyBackendDriver
+from tslc.output.verify_drivers import BackendPreparation, VerifyBackendDriver
 from tslc.output.verify_model import BackendToolchain
+
+_ONEAPI_CPP_TOOL = "/opt/intel/oneapi/compiler/2025.0/bin/icpx"
+_WASI_CPP_TOOL = "/opt/wasi-sdk/bin/clang++"
 
 
 def _config(
@@ -40,6 +44,7 @@ def _config(
     qemu_aarch64_path: str | None = None,
     wasmtime_path: str | None = None,
     cpp_linker: str | None = None,
+    tool_paths: dict[str, str] | None = None,
 ) -> BuildVerifierConfig:
     toolchains = {
         backend_id: BackendToolchain.create(compiler=compiler)
@@ -66,6 +71,7 @@ def _config(
     return BuildVerifierConfig.create(
         toolchains=toolchains,
         runner_paths=runner_paths,
+        tool_paths=tool_paths,
         run_value_tests=run_value_tests,
     )
 
@@ -147,10 +153,42 @@ def test_cpp_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
     assert report.diagnostics == ()
     assert report.skipped == ()
     assert [command.step for command in seen] == ["preflight", "configure", "build"]
+    assert [result.command.step for result in report.commands] == [
+        "preflight",
+        "configure",
+        "build",
+    ]
     assert seen[0].argv[0] == "/usr/bin/c++"
     assert "-DCMAKE_LINKER=/usr/bin/ld" in seen[1].argv
     assert _env(seen[1])["CXX"] == "/usr/bin/c++"
     assert _env(seen[2])["CXX"] == "/usr/bin/c++"
+
+
+def test_cpp_prepare_backend_returns_frozen_preparation(tmp_path: Path) -> None:
+    backend = VerifyBackend(
+        backend_id="cpp",
+        root_path="cpp",
+        profiles=(VerifyProfile(profile_name="scalar", file_stem="scalar"),),
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    prep = _prepare_cpp_backend(
+        tmp_path,
+        backend,
+        _config(cpp_compiler="/usr/bin/c++"),
+        runner,
+    )
+
+    assert isinstance(prep, BackendPreparation)
+    assert prep.backend is not None
+    assert [profile.profile_name for profile in prep.backend.profiles] == ["scalar"]
+    assert [result.command.step for result in prep.commands] == ["preflight"]
+    assert prep.diagnostics == ()
+    assert prep.skipped == ()
 
 
 def test_native_cpp_verifier_uses_host_compiler_over_ambient_zig(
@@ -663,7 +701,7 @@ def test_sde_runner_does_not_override_oneapi_cpp_default_compiler(
         )
     )
     seen: list[BuildCommand] = []
-    oneapi_compiler = "/opt/intel/oneapi/compiler/2025.0/bin/icpx"
+    oneapi_compiler = _ONEAPI_CPP_TOOL
     real_which = shutil.which
 
     def fake_which(executable: str) -> str | None:
@@ -684,6 +722,7 @@ def test_sde_runner_does_not_override_oneapi_cpp_default_compiler(
         config=_config(
             run_value_tests=True,
             sde_path=sys.executable,
+            tool_paths={"oneapi-cpp": oneapi_compiler},
         ),
     )
 
@@ -917,7 +956,7 @@ def test_cpp_wasm_value_tests_configure_wasi_and_wasmtime(tmp_path: Path) -> Non
     assert seen[-1].argv[0] == "ctest"
 
 
-def test_cpp_wasm_default_compiler_uses_wasi_sdk() -> None:
+def test_cpp_wasm_default_compiler_uses_configured_wasi_tool_or_clang() -> None:
     project = VerifyBackend(
         backend_id="cpp",
         root_path="cpp",
@@ -929,13 +968,18 @@ def test_cpp_wasm_default_compiler_uses_wasi_sdk() -> None:
             ),
         ),
     )
+    configured = _config(tool_paths={"wasi-cpp": _WASI_CPP_TOOL})
 
-    assert effective_cpp_compiler(_config(), project) == (
-        "/opt/wasi-sdk/bin/clang++",
-    )
+    assert effective_cpp_compiler(configured, project) == (_WASI_CPP_TOOL,)
+    assert effective_cpp_compiler(
+        configured,
+        project,
+        project.profiles[0],
+    ) == (_WASI_CPP_TOOL,)
+    assert effective_cpp_compiler(_config(), project) == ("clang++",)
 
 
-def test_cpp_oneapi_default_compiler_uses_intel_llvm() -> None:
+def test_cpp_oneapi_default_compiler_uses_configured_tool_or_icpx() -> None:
     project = VerifyBackend(
         backend_id="cpp",
         root_path="cpp",
@@ -947,15 +991,20 @@ def test_cpp_oneapi_default_compiler_uses_intel_llvm() -> None:
             ),
         ),
     )
+    configured = _config(tool_paths={"oneapi-cpp": _ONEAPI_CPP_TOOL})
 
-    assert effective_cpp_compiler(_config(), project) == (
-        "/opt/intel/oneapi/compiler/2025.0/bin/icpx",
-    )
+    assert effective_cpp_compiler(configured, project) == (_ONEAPI_CPP_TOOL,)
+    assert effective_cpp_compiler(
+        configured,
+        project,
+        project.profiles[0],
+    ) == (_ONEAPI_CPP_TOOL,)
+    assert effective_cpp_compiler(_config(), project) == ("icpx",)
     assert effective_cpp_compiler(
         _config(),
         project,
         project.profiles[0],
-    ) == ("/opt/intel/oneapi/compiler/2025.0/bin/icpx",)
+    ) == ("icpx",)
 
 
 def test_sde_runner_does_not_override_wasm_cpp_default_compiler(
@@ -984,7 +1033,7 @@ def test_sde_runner_does_not_override_wasm_cpp_default_compiler(
     real_which = shutil.which
 
     def fake_which(executable: str) -> str | None:
-        if executable == "/opt/wasi-sdk/bin/clang++":
+        if executable == _WASI_CPP_TOOL:
             return executable
         return real_which(executable)
 
@@ -1002,6 +1051,7 @@ def test_sde_runner_does_not_override_wasm_cpp_default_compiler(
             run_value_tests=True,
             sde_path=sys.executable,
             wasmtime_path=sys.executable,
+            tool_paths={"wasi-cpp": _WASI_CPP_TOOL},
         ),
     )
 
@@ -1012,18 +1062,18 @@ def test_sde_runner_does_not_override_wasm_cpp_default_compiler(
         "clean",
         "configure",
     ]
-    assert seen[0].argv[0] == "/opt/wasi-sdk/bin/clang++"
+    assert seen[0].argv[0] == _WASI_CPP_TOOL
     assert "--target=wasm32-wasip1" in seen[0].argv
     assert "-msimd128" in seen[0].argv
-    assert _env(seen[0])["CXX"] == "/opt/wasi-sdk/bin/clang++"
-    assert _env(seen[1])["CXX"] == "/opt/wasi-sdk/bin/clang++"
+    assert _env(seen[0])["CXX"] == _WASI_CPP_TOOL
+    assert _env(seen[1])["CXX"] == _WASI_CPP_TOOL
 
 
 def test_cpp_default_compiler_is_profile_scoped_for_mixed_native_and_wasm(
     monkeypatch,
 ) -> None:
     monkeypatch.delenv("CXX", raising=False)
-    config = _config()
+    config = _config(tool_paths={"wasi-cpp": _WASI_CPP_TOOL})
     backend = VerifyBackend(
         backend_id="cpp",
         root_path="cpp",
@@ -1040,7 +1090,7 @@ def test_cpp_default_compiler_is_profile_scoped_for_mixed_native_and_wasm(
     scalar, wasm = backend.profiles
 
     assert effective_cpp_compiler(config, backend, scalar) == ("c++",)
-    assert effective_cpp_compiler(config, backend, wasm) == ("/opt/wasi-sdk/bin/clang++",)
+    assert effective_cpp_compiler(config, backend, wasm) == (_WASI_CPP_TOOL,)
 
 
 def test_cpp_target_preflight_failure_skips_only_that_profile(tmp_path: Path) -> None:

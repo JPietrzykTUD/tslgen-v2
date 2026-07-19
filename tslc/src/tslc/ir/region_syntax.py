@@ -8,6 +8,7 @@ shells so accepted source forms have one owner below both stages.
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Literal
 
@@ -72,6 +73,143 @@ def segments_text(segments: tuple[Segment, ...]) -> str:
         segment.full_text if isinstance(segment, Region) else segment.text
         for segment in segments
     ).strip()
+
+
+def strip_outer_parens(text: str) -> str:
+    """Remove balanced parentheses that wrap the *whole* expression, e.g.
+    ``( A && B )`` -> ``A && B``. A leading ``(`` that closes before the end
+    (``( A ) && B``) is left intact — it isn't wrapping the whole text."""
+
+    text = text.strip()
+    while text.startswith("(") and text.endswith(")"):
+        depth = 0
+        wraps = True
+        for i, ch in enumerate(text):
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0 and i != len(text) - 1:
+                    wraps = False
+                    break
+        if not wraps:
+            break
+        text = text[1:-1].strip()
+    return text
+
+
+def _split_top_level_op(text: str, op: str) -> list[str]:
+    """Split ``text`` on the two-char operator ``op`` at paren/bracket/string depth
+    zero (so an operator inside a nested call is not a split point)."""
+
+    parts: list[str] = []
+    depth = 0
+    start = 0
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if ch == '"':
+            i = skip_string(text, i)
+            continue
+        if ch in "(<[":
+            depth += 1
+        elif ch in ")>]":
+            depth -= 1
+        elif depth == 0 and text[i : i + 2] == op:
+            parts.append(text[start:i])
+            i += 2
+            start = i
+            continue
+        i += 1
+    parts.append(text[start:])
+    return [part.strip() for part in parts if part.strip()]
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionLeaf:
+    """An opaque boolean sub-condition (a query or a symbolic predicate)."""
+
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionAnd:
+    """``a && b [&& …]`` — ``&&`` binds tighter than ``||``."""
+
+    terms: tuple["ConditionTerm", ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionOr:
+    """``a || b [|| …]`` of already-parsed terms."""
+
+    terms: tuple["ConditionTerm", ...]
+
+
+ConditionTerm = ConditionOr | ConditionAnd | ConditionLeaf
+
+
+def parse_condition(text: str) -> ConditionTerm:
+    """Parse an ``if`` boolean condition into typed ``Or``/``And``/``Leaf`` terms.
+
+    The grammar is ``||`` / ``&&`` of parenthesizable leaves (``&&`` binds
+    tighter); leaves stay opaque text. Evaluation and rendering both walk this
+    one parsed tree, so the accepted condition grammar has a single owner."""
+
+    text = strip_outer_parens(text)
+    ors = _split_top_level_op(text, "||")
+    if len(ors) > 1:
+        return ConditionOr(tuple(parse_condition(part) for part in ors))
+    ands = _split_top_level_op(text, "&&")
+    if len(ands) > 1:
+        return ConditionAnd(tuple(parse_condition(part) for part in ands))
+    return ConditionLeaf(text.strip())
+
+
+@dataclass(frozen=True, slots=True)
+class GenericParamReference:
+    """An exact symbolic reference to a declared ``generic_params`` name:
+    ``Name`` or ``!Name``. Text that merely *mentions* a declared name
+    (``foo(Name)``, ``Name.bar``) is not a reference."""
+
+    name: str
+    negated: bool
+
+
+def parse_generic_param_reference(
+    text: str, declared_names: Collection[str]
+) -> GenericParamReference | None:
+    """Recognize ``ident`` / ``!ident`` where ``ident`` is a declared generic
+    parameter. Returns None for any other form so callers skip instead of
+    passing unresolved text through to the emitted target code."""
+
+    term = text.strip()
+    negated = term.startswith("!")
+    name = term[1:] if negated else term
+    if name in declared_names:
+        return GenericParamReference(name=name, negated=negated)
+    return None
+
+
+@dataclass(frozen=True, slots=True)
+class LoopSelector:
+    """Parsed ``loop<variant[, modifiers…]>`` selector terms."""
+
+    variant: str
+    modifiers: tuple[str, ...] = ()
+
+
+def parse_loop_selector(selector_text: str) -> LoopSelector:
+    """Parse a ``loop`` selector into its variant term plus trailing modifiers.
+
+    Both implementation-state classification and loop lowering consume this
+    parse, so the two stages cannot tokenize the same selector differently."""
+
+    terms = split_top_level(selector_text.strip())
+    if not terms:
+        return LoopSelector(variant="")
+    return LoopSelector(variant=terms[0], modifiers=tuple(terms[1:]))
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,14 +443,24 @@ def _has_top_level_whitespace(text: str) -> bool:
 __all__ = (
     "CAST_TYPE_KINDS",
     "CastSelector",
+    "ConditionAnd",
+    "ConditionLeaf",
+    "ConditionOr",
+    "ConditionTerm",
+    "GenericParamReference",
     "IntrinsicSelector",
+    "LoopSelector",
     "MaskSelector",
     "ParsedCallSelector",
     "VarSelector",
     "parse_call_selector",
     "parse_cast_selector",
+    "parse_condition",
+    "parse_generic_param_reference",
+    "parse_loop_selector",
     "parse_mask_selector",
     "parse_var_selector",
     "segments_text",
     "split_arg_groups",
+    "strip_outer_parens",
 )

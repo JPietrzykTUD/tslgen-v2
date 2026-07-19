@@ -60,6 +60,20 @@ def test_parsed_document_cache_retains_failed_parse(tmp_path: Path) -> None:
     assert cache.last_reparsed == ()
 
 
+def test_undecodable_string_escape_reaches_authoring_as_a_diagnostic(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "bad_escape.tsl"
+    path.write_text(
+        'extension broken:\n  extension_name "bad \\x escape"\n  family "x86"\n',
+        encoding="utf-8",
+    )
+
+    result = check_catalog((path,))
+
+    assert "TSL-OUTER-PARSE-BAD-STRING" in [d.code for d in result.diagnostics]
+
+
 def test_overlays_replace_disk_text_without_writing(tmp_path: Path) -> None:
     path = tmp_path / "value.tsl"
     path.write_text('description "disk"\n', encoding="utf-8")

@@ -9,9 +9,13 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
-from tslc.catalog.target_families import BackendProfileFamily, ProfileFamilyCapability
+from tslc.catalog.target_families import (
+    BackendProfileFamily,
+    ProfileFamilyCapability,
+    TargetFeatureCapability,
+)
 from tslc.diagnostics import has_errors
-from tslc.render.cpp_build import cpp_flags, cpp_target
+from tslc.render.cpp_build import _x86_profile_detection_source, cpp_flags, cpp_target
 from tslc.render._common import slug
 from tslc.render.rust_project import rust_linker, rust_target, rust_target_features
 
@@ -113,11 +117,11 @@ def test_representative_project_shape_is_byte_stable(
         backends=["cpp", "rust"],
     )
     expected = {
-        "cpp/CMakeLists.txt": "622fab8141d4a28d85b69cdbb1531486133425e614311cb2f1a60299dea77649",
+        "cpp/CMakeLists.txt": "afd9ccd8ea6feffdfe0fa38e44e5027b3e49b8206938b23415c59bf35c510b87",
         "cpp/docs/input/tsl_api_docs.hpp": "e8550c8f23c29e97012248af4d0bbec2922a81d213f3128132f39ff9e96a1d54",
         "cpp/include/tsl.hpp": "298cd47b4e1509cd59eb4100f7a0d82bcdbc6e5d9f4eedccb0a68ba0bf667e03",
         "cpp/include/tsl_primitives.hpp": "49a74d084e4b375d6e0832beb57c54ebfcf85edb25394f9c84d8776520ea0bb8",
-        "cpp/include/tsl_scalar.hpp": "c351ac880a1b88e6b5591dca883a5d057e2542f2fcb1bbb12e55f198aa7fc17f",
+        "cpp/include/tsl_scalar.hpp": "4522211f30de0682e1d29d04b8cb322e45c71bb947aa0bd44e05e53e4d10b416",
         "cpp/tests/smoke_scalar.cpp": "b8d0793aa19282d85dab6db70c43f41fb0a029daad3799377eab7a4a3bd8c7bf",
         "rust/Cargo.toml": "73aed933b9c6741b4d235ed3ac544c64cea9914db1df2722c5bc2bc1714b4238",
         "rust/src/lib.rs": "c253d50313f50f4714ec8540bebc5ace33de5f452d6d3d48df8fa717c4af4cb6",
@@ -326,6 +330,54 @@ def test_feature_flag_spelling(data_root: Path, machine_profiles_path: Path) -> 
     assert '__builtin_cpu_supports("avx2")' in cmake
     assert "TSL_AUTO_ONEAPI_FPGA" not in cmake
     assert "auto-oneapi-fpga" not in cmake
+
+
+def test_cpp_auto_detection_uses_cpuid_for_unsupported_clang_builtins() -> None:
+    capabilities = {
+        name: TargetFeatureCapability(name=name, backend_spellings={"cpp": spelling})
+        for name, spelling in (
+            ("rdrand", "rdrnd"),
+            ("avx512_vaes", "vaes"),
+            ("avx512_fp16", "avx512fp16"),
+        )
+    }
+    profile = MachineProfile(
+        name="sapphire_rapids",
+        family="x86",
+        features=frozenset(
+            {"avx2", "avx512f", "rdrand", "avx512_vaes", "avx512_fp16"}
+        ),
+        alternatives={},
+        feature_capabilities=capabilities,
+    )
+
+    source = _x86_profile_detection_source(profile)
+
+    assert cpp_flags(profile) == (
+        "-mavx2",
+        "-mavx512fp16",
+        "-mvaes",
+        "-mavx512f",
+        "-mrdrnd",
+    )
+    assert '__builtin_cpu_supports("avx2")' in source
+    assert '__builtin_cpu_supports("avx512f")' in source
+    assert "#include <cpuid.h>" in source
+    assert "__get_cpuid(1, &tsl_cpuid_1_eax" in source
+    assert "__get_cpuid_count(7, 0, &tsl_cpuid_7_0_eax" in source
+    assert "(tsl_cpuid_1_ecx & (1u << 30)) != 0" in source
+    assert "(tsl_cpuid_7_0_ecx & (1u << 9)) != 0" in source
+    assert "(tsl_cpuid_7_0_edx & (1u << 23)) != 0" in source
+    assert '__builtin_cpu_supports("rdrnd")' not in source
+    assert '__builtin_cpu_supports("vaes")' not in source
+    assert '__builtin_cpu_supports("avx512fp16")' not in source
+
+    source_without_rdrand = _x86_profile_detection_source(
+        MachineProfile("avx", "x86", frozenset({"avx"}), {})
+    )
+    assert '__builtin_cpu_supports("avx")' in source_without_rdrand
+    assert "#include <cpuid.h>" not in source_without_rdrand
+    assert "__get_cpuid" not in source_without_rdrand
 
 
 def test_oneapi_fpga_profiles_are_opt_in_for_cmake_auto_detection(

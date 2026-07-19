@@ -27,8 +27,10 @@ from tslc.value_tests._render_cpp_conversion import (
     _differential_fuzz,
     _extension_extract,
     _extension_insert,
+    _extension_result,
     _load_convert,
     _repr_cast,
+    _target_imask,
 )
 from tslc.value_tests._render_cpp_memory import (
     _indexed_load,
@@ -63,6 +65,7 @@ CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "differential_fuzz": _differential_fuzz,
         "extension_extract": _extension_extract,
         "extension_insert": _extension_insert,
+        "extension_result": _extension_result,
         "generic_golden": render_value_case,
         "immediate": _immediate,
         "indexed_load": _indexed_load,
@@ -95,6 +98,7 @@ CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "scalable_masked_mask_result": render_mask_case,
         "scalable_masked": render_value_case,
         "store": _store,
+        "target_imask": _target_imask,
         "status_pointer": _status_pointer,
         "stream": _stream,
         "vector_to_array": _vector_to_array,

@@ -5,27 +5,36 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
-from tslc import cli
-from tslc.api import _expand_sources, generate_project
+import pytest
+
+from tslc.api import generate_project
 from tslc.backend.cpp_translation import CppBackendDialect
 from tslc.backend.registry import registered_backend_ids
+from tslc.backend.signature_types import CPP_SIGNATURE_TYPES, RUST_SIGNATURE_TYPES
+from tslc.catalog import scalar_types
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
 from tslc.ir.scan import scan
+from tslc.lower import region_handlers
 from tslc.lower.lowerer import Lowerer
-from tslc.pivot import PivotExportRequest, PivotLanguage, export_pivot
-from tslc.pivot._lowering import PivotCallCapture, pivot_region_lowerers
-from tslc.pivot.model import PivotDefinition, PivotDocument
-from tslc.pivot.planner import _contributing_indexes
-from tslc.pivot.profiles import profiles_for_distinct_feature_sets
-from tslc.pivot.render_yaml import render_pivot_yaml
 from tslc.select.selector import Selector
+from tslc.sources import expand_source_paths
+from tslc_pivot import PivotExportRequest, PivotLanguage, export_pivot
+from tslc_pivot import cli as pivot_cli
+from tslc_pivot.model import PivotDefinition, PivotDocument
+from tslc_pivot.planner import _SUPPORTED_KINDS, _fixed_type
+from tslc_pivot.profiles import contributing_indexes, profiles_for_distinct_feature_sets
+from tslc_pivot.render_yaml import render_pivot_yaml
+from tslc_pivot.inliner import (
+    PivotInliningError,
+    PivotInliner,
+)
 
 
 def _export_add(data_root: Path, machine_profiles_path: Path):
     return export_pivot(
         PivotExportRequest(
-            source_paths=_expand_sources((data_root,)),
+            source_paths=expand_source_paths((data_root,)),
             machine_profiles_path=machine_profiles_path,
             languages=(PivotLanguage.CPP,),
             primitives=("add",),
@@ -71,7 +80,7 @@ def test_profiles_are_projected_to_distinct_hardware_feature_sets() -> None:
 
 
 def test_only_feature_sets_that_add_an_implementation_are_retained() -> None:
-    indexes = _contributing_indexes(
+    indexes = contributing_indexes(
         (
             frozenset({1, 2}),
             frozenset({2, 3}),
@@ -141,7 +150,7 @@ def test_tsl_fixed_512_definition_uses_lane_count_not_bit_width(
 ) -> None:
     result = export_pivot(
         PivotExportRequest(
-            source_paths=_expand_sources((data_root,)),
+            source_paths=expand_source_paths((data_root,)),
             machine_profiles_path=machine_profiles_path,
             languages=(PivotLanguage.CPP,),
             primitives=("add",),
@@ -164,13 +173,45 @@ def test_tsl_fixed_512_definition_uses_lane_count_not_bit_width(
     )
 
 
+def test_fixed_wrapper_failure_keeps_native_definitions_and_reports_skips(
+    monkeypatch: pytest.MonkeyPatch,
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    def fail_fixed(
+        self: PivotInliner, *args: object, **kwargs: object
+    ) -> object:
+        del self, args, kwargs
+        raise PivotInliningError(
+            "TSL-PIVOT-TEST-FIXED",
+            "synthetic typed failure",
+        )
+
+    monkeypatch.setattr(PivotInliner, "emit_retained_body", fail_fixed)
+
+    result = _export_add(data_root, machine_profiles_path)
+    document = next(
+        item for item in result.projections[0].documents if item.name == "add"
+    )
+
+    assert {definition.isa for definition in document.definitions} >= {
+        "sse2",
+        "avx2",
+    }
+    assert not any(definition.isa.startswith("tsl_") for definition in document.definitions)
+    assert any(
+        skip.reason == "synthetic typed failure"
+        for skip in result.skipped
+    )
+
+
 def test_rust_projection_uses_backend_intrinsics_and_fixed_vector_for(
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
     result = export_pivot(
         PivotExportRequest(
-            source_paths=_expand_sources((data_root,)),
+            source_paths=expand_source_paths((data_root,)),
             machine_profiles_path=machine_profiles_path,
             languages=(PivotLanguage.RUST,),
             primitives=("add",),
@@ -224,7 +265,7 @@ def test_tsl_call_definition_remains_when_plain_body_contains_a_cast(
 ) -> None:
     result = export_pivot(
         PivotExportRequest(
-            source_paths=_expand_sources((data_root,)),
+            source_paths=expand_source_paths((data_root,)),
             machine_profiles_path=machine_profiles_path,
             languages=(PivotLanguage.CPP,),
             primitives=("set1",),
@@ -268,7 +309,7 @@ def test_primitive_calls_are_recursively_inlined_into_direct_flow(
     assert definition.direct[-1].startswith("res = ")
 
 
-def test_residual_control_and_casts_are_skipped_after_normal_lowering(
+def test_residual_control_and_casts_are_reported_by_typed_lowering(
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
@@ -277,7 +318,7 @@ def test_residual_control_and_casts_are_skipped_after_normal_lowering(
     assert any(
         skip.primitive == "add_maskz"
         and skip.extension == "scalar"
-        and "residual control flow" in skip.reason
+        and "unsupported compiler render value" in skip.reason
         for skip in result.skipped
     )
     assert any(
@@ -304,8 +345,7 @@ def test_generation_loop_is_expanded_by_the_standard_lowerer(
         if item.extension.isa_name == "avx2"
         and item.primitive.attributes.get("mask") is None
     )
-    capture = PivotCallCapture()
-    result = Lowerer(region_lowerers=pivot_region_lowerers(capture)).lower(
+    result = Lowerer().lower(
         slot,
         catalog,
         CppBackendDialect(catalog),
@@ -327,6 +367,189 @@ def test_generation_loop_is_expanded_by_the_standard_lowerer(
     assert "{" not in body
     assert body.count("acc = (acc + right);") == 2
     assert body.strip().endswith("return acc;")
+
+
+_COLLIDE_FIXTURE = (
+    "prim<v:=(v,v)> pivot_collide(min, right):\n"
+    "  impls:\n"
+    "    scalar:\n"
+    "      arith:\n"
+    "        implementation:\n"
+    '          tsil "complete(std::min(min, right));"\n'
+    "prim<v:=(v,v)> pivot_collide_user(left, right):\n"
+    "  impls:\n"
+    "    scalar:\n"
+    "      arith:\n"
+    "        implementation:\n"
+    '          tsil "complete(call<primitive=pivot_collide>(left, right));"\n'
+    "prim<v:=(v,v)> pivot_collide_rust(min, right):\n"
+    "  impls:\n"
+    "    scalar:\n"
+    "      arith:\n"
+    "        implementation:\n"
+    '          tsil "complete(i32::min(min, right));"\n'
+)
+
+_INLINER_FIXTURE = (
+    "prim<v:=(v,v)> pivot_expr_inner(a, b):\n"
+    "  impls:\n"
+    "    scalar:\n"
+    "      arith:\n"
+    "        implementation:\n"
+    '          tsil "complete(a * b);"\n'
+    "prim<v:=(v,v)> pivot_expr_user(left, right):\n"
+    "  impls:\n"
+    "    scalar:\n"
+    "      arith:\n"
+    "        implementation:\n"
+    '          tsil "complete(call<primitive=pivot_expr_inner>(left + right, right - left));"\n'
+    "prim<v:=(v)> pivot_cycle_a(value):\n"
+    "  impls:\n"
+    "    scalar:\n"
+    "      arith:\n"
+    "        implementation:\n"
+    '          tsil "complete(call<primitive=pivot_cycle_b>(value));"\n'
+    "prim<v:=(v)> pivot_cycle_b(value):\n"
+    "  impls:\n"
+    "    scalar:\n"
+    "      arith:\n"
+    "        implementation:\n"
+    '          tsil "complete(call<primitive=pivot_cycle_a>(value));"\n'
+    "prim<v:=(v,v)> pivot_arity_user(left, right):\n"
+    "  impls:\n"
+    "    scalar:\n"
+    "      arith:\n"
+    "        implementation:\n"
+    '          tsil "complete(call<primitive=pivot_cycle_b>(left, right));"\n'
+)
+
+
+def _export_collide_fixture(
+    tmp_path: Path,
+    data_root: Path,
+    machine_profiles_path: Path,
+    *,
+    language: PivotLanguage,
+    primitive: str,
+):
+    fixture = tmp_path / "pivot_collide.tsl"
+    fixture.write_text(_COLLIDE_FIXTURE, encoding="utf-8")
+    return export_pivot(
+        PivotExportRequest(
+            source_paths=(*expand_source_paths((data_root,)), fixture),
+            machine_profiles_path=machine_profiles_path,
+            languages=(language,),
+            primitives=(primitive,),
+            profiles=("scalar",),
+            type_tags=("si32",),
+        )
+    )
+
+
+def test_qualified_parameter_collision_is_rejected_not_rewritten(
+    tmp_path: Path,
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _export_collide_fixture(
+        tmp_path,
+        data_root,
+        machine_profiles_path,
+        language=PivotLanguage.CPP,
+        primitive="pivot_collide_user",
+    )
+
+    document = next(
+        document
+        for document in result.projections[0].documents
+        if document.name == "pivot_collide_user"
+    )
+    assert document.definitions[0].direct == (
+        "auto __pivot_tmp_0 = std::min(left, right);",
+        "res = __pivot_tmp_0;",
+    )
+    assert not any("qualified or member position" in skip.reason for skip in result.skipped)
+
+
+def test_rust_qualified_collision_is_rejected_not_rewritten(
+    tmp_path: Path,
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _export_collide_fixture(
+        tmp_path,
+        data_root,
+        machine_profiles_path,
+        language=PivotLanguage.RUST,
+        primitive="pivot_collide_rust",
+    )
+
+    document = next(
+        document
+        for document in result.projections[0].documents
+        if document.name == "pivot_collide_rust"
+    )
+    assert document.definitions[0].direct == ("res = i32::min(min, right);",)
+    assert not any("qualified or member position" in skip.reason for skip in result.skipped)
+
+
+def test_typed_inliner_parenthesizes_arguments_and_reports_cycles(
+    tmp_path: Path,
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    fixture = tmp_path / "pivot_typed.tsl"
+    fixture.write_text(_INLINER_FIXTURE, encoding="utf-8")
+    request = PivotExportRequest(
+        source_paths=(*expand_source_paths((data_root,)), fixture),
+        machine_profiles_path=machine_profiles_path,
+        languages=(PivotLanguage.CPP,),
+        primitives=("pivot_expr_user",),
+        profiles=("scalar",),
+        type_tags=("si32",),
+    )
+    expression_result = export_pivot(request)
+
+    document = next(
+        document
+        for document in expression_result.projections[0].documents
+        if document.name == "pivot_expr_user"
+    )
+    assert document.definitions[0].direct == (
+        "auto __pivot_tmp_0 = (left + right) * (right - left);",
+        "res = __pivot_tmp_0;",
+    )
+
+    cycle_result = export_pivot(
+        PivotExportRequest(
+            source_paths=request.source_paths,
+            machine_profiles_path=machine_profiles_path,
+            languages=(PivotLanguage.CPP,),
+            primitives=("pivot_cycle_a",),
+            profiles=("scalar",),
+            type_tags=("si32",),
+        )
+    )
+    assert cycle_result.projections[0].documents == ()
+    assert any(
+        "recursive primitive-call cycle cannot be inlined" in skip.reason
+        for skip in cycle_result.skipped
+    )
+
+    arity_result = export_pivot(
+        PivotExportRequest(
+            source_paths=request.source_paths,
+            machine_profiles_path=machine_profiles_path,
+            languages=(PivotLanguage.CPP,),
+            primitives=("pivot_arity_user",),
+            profiles=("scalar",),
+            type_tags=("si32",),
+        )
+    )
+    assert any(
+        "no exact specialization found while inlining call" in skip.reason
+        for skip in arity_result.skipped
+    )
 
 
 def test_yaml_renderer_handles_empty_inputs_without_changing_schema_shape() -> None:
@@ -360,23 +583,75 @@ def test_yaml_renderer_handles_empty_inputs_without_changing_schema_shape() -> N
     )
 
 
+def test_fixed_types_match_the_backend_projection() -> None:
+    cpp_expected = {
+        "v": "typename MyVec::register_type",
+        "m": "typename MyVec::mask_type",
+        "im": "typename MyVec::imask_type",
+        "s": "base_t",
+        "usize": "std::size_t",
+    }
+    rust_expected = {
+        "v": "<MyVec as tsl::tsl_core::SimdVector>::RegisterType",
+        "m": "<MyVec as tsl::tsl_core::SimdVector>::MaskType",
+        "im": "<MyVec as tsl::tsl_core::SimdVector>::ImaskType",
+        "s": "base_t",
+        "usize": "usize",
+    }
+    assert set(cpp_expected) == set(_SUPPORTED_KINDS)
+    assert set(rust_expected) == set(_SUPPORTED_KINDS)
+    for kind in sorted(_SUPPORTED_KINDS):
+        assert (
+            _fixed_type(PivotLanguage.CPP, kind, "MyVec", "base_t")
+            == cpp_expected[kind]
+        )
+        assert (
+            _fixed_type(PivotLanguage.RUST, kind, "MyVec", "base_t")
+            == rust_expected[kind]
+        )
+        if kind in {"v", "m", "im", "usize"}:
+            assert CPP_SIGNATURE_TYPES.member_type(kind, vector="MyVec") == (
+                cpp_expected[kind]
+            )
+            assert RUST_SIGNATURE_TYPES.owner_type(
+                kind, owner="<MyVec as tsl::tsl_core::SimdVector>"
+            ) == rust_expected[kind]
+
+
 def test_pivot_export_does_not_mutate_normal_generation(
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
+    default_type_tags = scalar_types.DEFAULT_SCALAR_TYPE_TAGS
+    default_region_lowerers = region_handlers.DEFAULT_REGION_LOWERERS
     kwargs = {
         "machine_profiles_path": machine_profiles_path,
         "primitives": ("add",),
         "profiles": ("avx2",),
         "type_tags": ("si8",),
-        "backends": ("cpp",),
+        "backends": ("cpp", "rust"),
     }
     before = generate_project((data_root,), **kwargs)
-    pivot = _export_add(data_root, machine_profiles_path)
+    pivot = export_pivot(
+        PivotExportRequest(
+            source_paths=expand_source_paths((data_root,)),
+            machine_profiles_path=machine_profiles_path,
+            languages=(PivotLanguage.CPP, PivotLanguage.RUST),
+            primitives=("add",),
+            profiles=("avx2",),
+            type_tags=("si8",),
+        )
+    )
     after = generate_project((data_root,), **kwargs)
 
-    assert pivot.projections[0].documents
+    assert tuple(item.language for item in pivot.projections) == (
+        PivotLanguage.CPP,
+        PivotLanguage.RUST,
+    )
+    assert all(item.documents for item in pivot.projections)
     assert registered_backend_ids() == ("cpp", "rust")
+    assert scalar_types.DEFAULT_SCALAR_TYPE_TAGS is default_type_tags
+    assert region_handlers.DEFAULT_REGION_LOWERERS is default_region_lowerers
     assert before.artifacts.digest_manifest() == after.artifacts.digest_manifest()
     assert before.coverage == after.coverage
     assert before.skipped == after.skipped
@@ -390,10 +665,8 @@ def test_explicit_export_command_writes_only_pivot_artifacts(
 ) -> None:
     output = tmp_path / "pivot"
 
-    status = cli.main(
+    status = pivot_cli.main(
         [
-            "export",
-            "pivot",
             "--sources",
             str(data_root),
             "--machine-profiles",

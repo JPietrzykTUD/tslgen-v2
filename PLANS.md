@@ -1,8 +1,9 @@
 # Planning And Execution Guide
 
-This is the repository-wide planning protocol for active `tslc` work. It keeps
-changes small, reviewable, and directed at working compiler behavior without
-requiring milestone logs or ceremonial plan documents.
+This is the repository-wide planning protocol for active compiler and
+downstream-tool work. It keeps changes small, reviewable, and directed at
+observable behavior without requiring milestone logs or ceremonial plan
+documents.
 
 ## What Counts As A Slice
 
@@ -16,6 +17,8 @@ these:
 - improve one diagnostic family;
 - remove one obsolete dependency or simplify one boundary;
 - strengthen one extension point with focused tests.
+- extract or improve one independently packaged downstream-tool behavior
+  without changing compiler semantics.
 
 A vertical slice may cross parser, catalog, lowering, backend, rendering, and
 source-data directories when those edits deliver one behavior. Avoid mixing
@@ -32,11 +35,17 @@ available.
 Before substantial implementation, write down or hold in working memory:
 
 - **Goal**: the user-visible behavior or cleanup result.
+- **Ownership class**: compiler behavior, compiler-owned projection, or
+  independently packaged downstream tool.
 - **Scope**: the source, compiler, assets, tests, and docs likely to change.
 - **Out of scope**: adjacent work to leave alone.
 - **Boundary**: the stages that own the behavior.
 - **Data model**: domain objects or typed records involved.
 - **Extension point**: what future backend/primitive/region becomes easier.
+- **Projection**: for a compiler-owned derived view, the typed owner of every
+  consumed fact and the decisions, if any, that legitimately remain local. For
+  a downstream tool, inventory every compiler fact or API consumed, whether an
+  import is public or explicitly lockstep, and every tool-local decision.
 - **Validation**: exact tests and commands to run.
 - **Risk**: likely regressions, nondeterminism, diagnostic gaps, or unavailable
   toolchains.
@@ -55,8 +64,12 @@ expand into a broad rewrite.
 5. Broaden validation when the change crosses stages or affects generated
    artifacts.
 6. Re-read the diff for scope, ownership, diagnostics, and determinism.
-7. Update guidance only when behavior, workflow, or architecture changed.
-8. Report the result, validation, limitations, and meaningful follow-ups.
+7. For a new semantic projection, independently packaged downstream tool, or
+   shared registry with no exact task skill, run `design-review` again after
+   focused tests and before calling the slice complete.
+8. Update guidance when behavior, workflow, ownership, or canonical validation
+   commands changed. Update every affected task skill in the same slice.
+9. Report the result, validation, limitations, and meaningful follow-ups.
 
 The charters and applicable `AGENTS.md` files own architecture invariants. Task
 skills own detailed feature procedures and command lists. Do not reproduce
@@ -75,6 +88,17 @@ Select validation proportionally:
 - Compiler logic changes: run `compileall` and focused pytest at the owning
   boundary; run mypy when typed models, protocols, or public signatures change.
 - Cross-stage compiler changes: broaden to the full Python suite.
+- New compiler-owned semantic projections or shared registries without an exact task skill:
+  add an owner-equivalence test and an additive probe using the next plausible
+  backend, family, namespace, region, or case kind. If raw target text is in
+  scope, prove that it remains opaque or that unsupported semantics are rejected
+  without rewriting it.
+- Independently packaged downstream tools: prove one-way dependencies,
+  separate package and CLI ownership, no compiler registry/default mutation,
+  and explicit lockstep treatment of private compiler imports. When the tool
+  interprets target text, add parser edge and fail-closed rejection tests,
+  golden or differential output coverage, deterministic ordering checks, and a
+  ratchet over exact output identities rather than aggregate counts alone.
 - Generated layout, backend codegen, verification, or executable value-test
   changes: run the opt-in generated build/value gates for the smallest useful
   primitive/profile/backend matrix.
@@ -106,5 +130,7 @@ Stop and ask or report a blocker when:
 - the slice is turning into a broad rewrite without a clear delivered behavior;
 - completion requires deleting the only active evidence or baseline for current
   behavior;
+- a downstream-tool need appears to require compiler or source-data behavior
+  without a separate projection-neutral justification;
 - completion requires a product, public-corpus, or compatibility decision that
   the user has not authorized.

@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tslc.diagnostics import has_errors
 from tslc.maintenance.metadata_audit import (
     apply_suggestions,
     audit_metadata,
     interactive_apply,
+    main,
 )
+from tslc.pipeline import GenerationRequest, generate
+from tslc.sources import expand_source_paths
 
 
 def test_safety_suggestion_applies_missing_direct_facts(tmp_path: Path) -> None:
@@ -19,6 +23,7 @@ def test_safety_suggestion_applies_missing_direct_facts(tmp_path: Path) -> None:
         (source,),
         checks=("safety",),
         machine_profiles_path=None,
+        backends=("cpp",),
     )
 
     assert result.diagnostics == ()
@@ -47,6 +52,7 @@ def test_interactive_apply_accepts_applicable_suggestion(tmp_path: Path) -> None
         (source,),
         checks=("safety",),
         machine_profiles_path=None,
+        backends=("cpp",),
     )
 
     written = interactive_apply(result.suggestions, input_func=lambda _prompt: "a")
@@ -87,6 +93,92 @@ def test_requires_suggestion_uses_transitive_call_requirements(
         "        requires [avx2]\n"
         "        safety:\n"
     ) in text
+
+
+def test_catalog_validation_error_aborts_audit(tmp_path: Path) -> None:
+    source = tmp_path / "invalid_fixture.tsl"
+    source.write_text(
+        _safety_source().replace(
+            "        implementation:\n",
+            "        frobnicate true\n        implementation:\n",
+        ),
+        encoding="utf-8",
+    )
+
+    result = audit_metadata((source,), machine_profiles_path=None, backends=("cpp",))
+
+    assert result.suggestions == ()
+    assert has_errors(result.diagnostics)
+    assert any(
+        diagnostic.code == "TSL-CATALOG-UNKNOWN-FIELD"
+        for diagnostic in result.diagnostics
+    )
+    assert main(["--sources", str(source), "--backends", "cpp"]) == 1
+
+
+def test_requires_suggestions_match_pipeline_facts_for_single_backend_callee(
+    tmp_path: Path,
+    machine_profiles_path: Path,
+) -> None:
+    source = tmp_path / "single_backend_fixture.tsl"
+    source.write_text(_single_backend_callee_source(), encoding="utf-8")
+
+    result = audit_metadata(
+        (source,),
+        checks=("requires",),
+        machine_profiles_path=machine_profiles_path,
+        profiles=("avx2",),
+        primitives=("caller",),
+        type_tags=("si32",),
+        backends=("cpp", "rust"),
+    )
+    generation = generate(
+        GenerationRequest(
+            source_paths=expand_source_paths((source,)),
+            machine_profiles_path=machine_profiles_path,
+            primitives=("caller",),
+            profiles=("avx2",),
+            type_tags=("si32",),
+            backends=("cpp", "rust"),
+            render_artifacts=False,
+            collect_lowering_trace=True,
+        )
+    )
+
+    assert generation.lowering_trace is not None
+    caller_slots = [
+        slot
+        for slot in generation.lowering_trace.slots
+        if slot.emitted
+        and slot.specialization.source_primitive_name == "caller"
+        and slot.specialization.required_features > slot.selection_required_features
+    ]
+    assert caller_slots, "the pipeline must emit a caller slot with a feature delta"
+    assert {slot.backend for slot in caller_slots} == {"cpp"}
+    expected_missing = sorted(
+        {
+            feature
+            for slot in caller_slots
+            for feature in (
+                slot.specialization.required_features
+                - slot.selection_required_features
+            )
+        }
+    )
+    expected_reasons = sorted(
+        f"{slot.profile}/{slot.backend}/{slot.specialization.type_tag}"
+        for slot in caller_slots
+    )
+
+    assert result.diagnostics == ()
+    assert len(result.suggestions) == 1
+    suggestion = result.suggestions[0]
+    assert suggestion.kind == "requires"
+    assert suggestion.reason == (
+        "transitive primitive calls require "
+        f"[{', '.join(expected_missing)}] ({', '.join(expected_reasons)})"
+    )
+    assert "rust" not in suggestion.reason
 
 
 def _safety_source() -> str:
@@ -142,6 +234,58 @@ def _requires_source() -> str:
         "          internal_unsafe false\n"
         "          caller_unsafe false\n"
         "          reasons []\n"
+        "        implementation:\n"
+        '          tsil "complete(call<primitive=callee>(data));"\n'
+        "target_families:\n"
+        "  known_extension_families [scalar, generic_like, x86, arm, wasm]\n"
+        "  universal_extension_families [scalar, generic_like]\n"
+        "  profile_families:\n"
+        "    generic:\n"
+        "      extension_families []\n"
+        "      runner_kinds []\n"
+        "    x86:\n"
+        "      extension_families [x86]\n"
+        "      runner_kinds [sde]\n"
+        "    aarch64:\n"
+        "      extension_families [arm]\n"
+        '      runner_kinds ["qemu-aarch64"]\n'
+        "    wasm32:\n"
+        "      extension_families [wasm]\n"
+        "      runner_kinds [wasmtime]\n"
+    )
+
+
+def _single_backend_callee_source() -> str:
+    """A caller/callee pair whose extension only supports the C++ backend."""
+
+    return (
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension avx2:\n"
+        '  extension_name "avx2"\n'
+        '  family "x86"\n'
+        "  vector_bits 256\n"
+        "  cpp:\n"
+        "    supported true\n"
+        "  vector_register_types:\n"
+        "    ints:\n"
+        '      cpp "__m256i"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v> callee(data):\n"
+        "  impls:\n"
+        "    avx2:\n"
+        "      ints:\n"
+        "        requires [avx2]\n"
+        "        implementation:\n"
+        '          tsil "complete(_mm256_add_epi32(data, data));"\n'
+        "prim<v:=v> caller(data):\n"
+        "  impls:\n"
+        "    avx2:\n"
+        "      ints:\n"
+        "        requires []\n"
         "        implementation:\n"
         '          tsil "complete(call<primitive=callee>(data));"\n'
         "target_families:\n"

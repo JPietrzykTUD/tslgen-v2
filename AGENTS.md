@@ -11,6 +11,8 @@ The active guidance is split by responsibility:
   scope, execute, validate, and report changes.
 - `tslc/AGENTS.md` owns compiler rules; `tsldata/AGENTS.md` owns source-data
   rules.
+- `tools/pivot/AGENTS.md` owns the independently packaged PIVOT downstream
+  tool; it does not extend the compiler contract.
 - `tslc/CHARTER.md` and `tslc/DESCRIPTION.md` define the compiler contract and
   describe the current architecture.
 - `.agents/skills/` contains task playbooks; `.claude/skills/` exposes those
@@ -22,7 +24,8 @@ The active guidance is split by responsibility:
 
 This repository contains `tslc`, a Python compiler for TSL data, plus its source
 corpus, reusable inputs, tests, coverage evidence, and CI for deterministic C++
-and Rust SIMD library generation.
+and Rust SIMD library generation. Independently packaged tools under `tools/`
+may consume that compiler product without becoming part of it.
 
 Optimize for a maintainable research compiler: typed models, clear ownership,
 small modules, deterministic output, and diagnostics that help a TSL author fix
@@ -59,9 +62,12 @@ The repository design rests on these ideas:
   selectors, generators, backend dialects, diagnostic reporters, and artifact
   writers. Use pure functions for simple stateless transformations.
 - **TSIL is not a target-language AST**: implementation bodies are recursive
-  sequences of raw target text plus recognized TSIL keyword regions. Add typed
-  regions for shared semantics; do not grow ad-hoc C/C++/Rust parsers or raw
-  string rewrite ladders.
+  sequences of raw target text plus recognized TSIL keyword regions. In
+  `tslc`, `tsldata`, and compiler-owned projections, add typed regions for
+  shared semantics; do not grow ad-hoc C/C++/Rust parsers or raw string rewrite
+  ladders. A declared downstream tool may interpret target text only inside its
+  own package and under its own charter; that interpretation is never compiler
+  semantics.
 - **Backends format decided semantics**: backend code translates typed lowered
   values. Templates format render models. They must not decide primitive
   selection, feature gating, type resolution, dependency closure, or source
@@ -78,6 +84,10 @@ The repository design rests on these ideas:
 - **Vertical slices cross directories**: a backend, primitive, source shape, or
   TSIL feature may touch `tsldata/`, `tslc/`, `supplementary/`, and tests.
   Directory boundaries express ownership; they do not define the whole feature.
+- **Downstream tools depend one way**: a tool may import and configure compiler
+  services, but `tslc` and `tsldata` do not import, register, or change behavior
+  for that tool. Tool-local facts, dependencies, and output remain owned and
+  validated by the tool.
 
 ## Project Map
 
@@ -93,7 +103,19 @@ ownership remains defined above.
 - TSIL keyword region: `.agents/skills/add-tsil-region/SKILL.md`.
 - Generated value-test shape: `.agents/skills/add-value-test-shape/SKILL.md`.
 - Toolchain/runner verification: `.agents/skills/extend-tslc-verification/SKILL.md`.
+- Compiler-owned authoring/LSP feature: `.agents/skills/extend-tslc-authoring/SKILL.md`.
 - Architecture/extensibility review: `.agents/skills/design-review/SKILL.md`.
+- PIVOT downstream tool: `tools/pivot/AGENTS.md` plus
+  `.agents/skills/design-review/SKILL.md`.
+
+Use `design-review` before designing and after focused validation for a new or
+expanded semantic projection that has no exact task skill, such as an analysis
+command, maintenance report, documentation generator, or benchmark consumer.
+Use it likewise for an independently packaged downstream tool. Classify the
+work first: a compiler-owned projection must identify the typed compiler owner
+for every projected fact and may not re-derive it; a downstream tool must
+inventory every compiler fact or API it consumes and every decision it owns
+locally.
 
 Read instructions for every subtree touched. Keep detailed paths, checks, and
 commands in the applicable skill. Claude exposes the same skill names through
@@ -221,6 +243,10 @@ or test gaps.
 - Hardware/toolchain detection must be injectable, skippable, or clearly gated.
 - Keep filesystem writes in artifact writing, explicit maintenance tools, or
   clearly owned configuration/update commands.
+- A downstream-tool request does not by itself authorize changes to `tslc/` or
+  `tsldata/`. Make a compiler or source-data change only as a separately
+  justified, projection-neutral slice. Removing existing reverse awareness
+  during an explicitly approved extraction is allowed.
 - Update instruction files, plans, charters, architecture docs, or READMEs only
   when their documented behavior, workflow, ownership, or navigation changes.
 - Final responses should state what changed, what validation ran, and any

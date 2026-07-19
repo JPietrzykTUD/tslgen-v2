@@ -250,3 +250,100 @@ def test_semantic_tokens_retain_partial_declaration_facts(catalog: Catalog) -> N
         (5, 7, "type", "arith"),
         (6, 9, "property", "requires"),
     )
+
+
+def test_selector_where_levels_are_constraints_not_type_group_references(
+    catalog: Catalog,
+) -> None:
+    """One selector-path projection classifies every level: list heads split
+    into per-extension spans, target levels stay on the target axis, and a
+    `where` constraint level is never indexed as a type group."""
+
+    source = '''description "demo"
+types:
+  arith {types [si32]}
+extension sse:
+  extension_name "sse"
+extension avx2:
+  extension_name "avx2"
+prim<v:=v> narrow(data):
+  return_type:
+    base: ToBase
+  impls:
+    [sse, avx2]:
+      arith:
+        ToBase:
+          where:
+            family same_as
+            width smaller_than
+            implementation:
+              tsil "complete(data);"
+          arith:
+            implementation:
+              tsil "complete(data);"
+'''
+    index, _ = _index(catalog, source)
+
+    head_line = next(
+        line_number
+        for line_number, line in enumerate(source.splitlines(), start=1)
+        if line.strip() == "[sse, avx2]:"
+    )
+    head_refs = {
+        (occurrence.name, occurrence.span.line, occurrence.span.column)
+        for occurrence in index.occurrences_by_path[_PATH]
+        if occurrence.kind == "extension"
+        and not occurrence.definition
+        and occurrence.span.line == head_line
+    }
+    head_text = source.splitlines()[head_line - 1]
+    assert head_refs == {
+        ("sse", head_line, head_text.index("sse") + 1),
+        ("avx2", head_line, head_text.index("avx2") + 1),
+    }
+    assert "[sse, avx2]" not in index.extension_references
+
+    assert "where" not in index.type_group_references
+    assert not any(
+        occurrence.name == "where"
+        for occurrence in index.occurrences_by_path[_PATH]
+    )
+
+    target_axis_refs = [
+        occurrence
+        for occurrence in index.occurrences_by_path[_PATH]
+        if occurrence.kind == "target-axis" and not occurrence.definition
+    ]
+    assert [occurrence.name for occurrence in target_axis_refs] == ["ToBase"]
+    assert "ToBase" not in index.type_group_references
+
+    # The source type-group level and the concrete-target level both
+    # reference `arith`; the `where` constraint level contributes nothing.
+    assert len(index.type_group_references["arith"]) == 2
+
+
+def test_selector_path_projection_classifies_levels_and_splits_targets() -> None:
+    from tslc.catalog.selector_paths import (
+        classify_selector_path,
+        selector_head_extensions,
+        split_target_selector,
+    )
+
+    where_path = ("[sse, avx2]", "arith", "ToBase", "where")
+    levels = classify_selector_path(where_path, "ToBase")
+    assert [level.kind for level in levels] == [
+        "extensions",
+        "source-type-group",
+        "target-axis",
+        "where-constraint",
+    ]
+    assert levels[0].names == ("sse", "avx2")
+    assert levels[3].names == ()
+
+    assert selector_head_extensions("sse") == ("sse",)
+    assert split_target_selector(where_path, "ToBase") == ("arith", None)
+    assert split_target_selector(
+        ("[sse, avx2]", "arith", "ToBase", "f?"), "ToBase"
+    ) == ("arith", "f?")
+    assert split_target_selector(("sse", "?i?"), None) == ("?i?", None)
+    assert split_target_selector(("sse", "?i?"), "ToBase") == ("?i?", None)

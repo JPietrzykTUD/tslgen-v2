@@ -17,13 +17,19 @@ if TYPE_CHECKING:
     from tslc.backend.emitted_profile import EmittedProfile
     from tslc.benchmark.model import BenchmarkProjectPlan
     from tslc.backend.translation import BackendDialect
+    from tslc.catalog.machine_profiles import MachineProfile
     from tslc.catalog.model import Catalog, Extension
+    from tslc.catalog.target_families import ProfileFamilyCapability
     from tslc.compiler_assets import RenderAssets
     from tslc.diagnostics import Diagnostic
     from tslc.lower.lowerer import LoweredSpecialization
     from tslc.output.artifacts import Artifact
     from tslc.output.verify_drivers import VerifyBackendDriver
-    from tslc.output.verify_model import VerifyProfile
+    from tslc.output.verify_model import (
+        BuildVerifierConfig,
+        ToolchainCommands,
+        VerifyProfile,
+    )
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
 
 DialectFactory = Callable[["Catalog"], "BackendDialect"]
@@ -32,6 +38,12 @@ ProjectArtifactRenderer = Callable[
 ]
 VerifyProfileRenderer = Callable[
     [tuple["EmittedProfile", ...]], tuple["VerifyProfile", ...]
+]
+VerifyMachineProfileProjector = Callable[
+    ["MachineProfile", "ProfileFamilyCapability | None"], "VerifyProfile"
+]
+ToolchainCommandsResolver = Callable[
+    ["VerifyProfile", "BuildVerifierConfig"], "ToolchainCommands"
 ]
 TestArtifactRenderer = Callable[
     ["ValueTestProjectPlan", "RenderAssets", str], list["Artifact"]
@@ -127,6 +139,8 @@ class BackendCapability:
     value_test_support_factory: ValueTestSupportFactory
     test_renderer: TestArtifactRenderer
     verify_driver_factory: VerifyDriverFactory
+    verify_machine_profile: VerifyMachineProfileProjector
+    toolchain_commands: ToolchainCommandsResolver
     documentation_formatter_factory: DocumentationFormatterFactory
     benchmark_plan_builder: BenchmarkPlanBuilder | None = None
     benchmark_renderer: BenchmarkArtifactRenderer = _no_benchmark_artifacts

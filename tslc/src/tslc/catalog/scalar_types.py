@@ -13,19 +13,22 @@ class ScalarTypeInfo:
     signed: bool
     floating: bool
     spelling_key: str
+    documentation_short_label: str
+    documentation_label: str
+    documentation_sort_order: int
 
 
 _SCALAR_TYPE_INFOS: tuple[ScalarTypeInfo, ...] = (
-    ScalarTypeInfo("si8", 8, True, False, "s8"),
-    ScalarTypeInfo("si16", 16, True, False, "s16"),
-    ScalarTypeInfo("si32", 32, True, False, "s32"),
-    ScalarTypeInfo("si64", 64, True, False, "s64"),
-    ScalarTypeInfo("ui8", 8, False, False, "u8"),
-    ScalarTypeInfo("ui16", 16, False, False, "u16"),
-    ScalarTypeInfo("ui32", 32, False, False, "u32"),
-    ScalarTypeInfo("ui64", 64, False, False, "u64"),
-    ScalarTypeInfo("f32", 32, True, True, "f32"),
-    ScalarTypeInfo("f64", 64, True, True, "f64"),
+    ScalarTypeInfo("si8", 8, True, False, "s8", "i8", "signed int8", 0),
+    ScalarTypeInfo("si16", 16, True, False, "s16", "i16", "signed int16", 1),
+    ScalarTypeInfo("si32", 32, True, False, "s32", "i32", "signed int32", 2),
+    ScalarTypeInfo("si64", 64, True, False, "s64", "i64", "signed int64", 3),
+    ScalarTypeInfo("ui8", 8, False, False, "u8", "u8", "unsigned int8", 4),
+    ScalarTypeInfo("ui16", 16, False, False, "u16", "u16", "unsigned int16", 5),
+    ScalarTypeInfo("ui32", 32, False, False, "u32", "u32", "unsigned int32", 6),
+    ScalarTypeInfo("ui64", 64, False, False, "u64", "u64", "unsigned int64", 7),
+    ScalarTypeInfo("f32", 32, True, True, "f32", "f32", "float", 8),
+    ScalarTypeInfo("f64", 64, True, True, "f64", "f64", "double", 9),
 )
 
 SCALAR_TYPE_INFOS = {info.tag: info for info in _SCALAR_TYPE_INFOS}

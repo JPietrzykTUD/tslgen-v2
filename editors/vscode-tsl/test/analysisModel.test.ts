@@ -15,6 +15,7 @@ describe("concrete analysis cache", () => {
     backend: "cpp",
     extension: "avx2",
     type: "si32",
+    toTarget: null,
   };
 
   it("reuses only an unchanged complete context and workspace generation", () => {
@@ -36,6 +37,7 @@ describe("concrete analysis cache", () => {
       { ...context, backend: "rust" },
       { ...context, extension: "sse" },
       { ...context, type: "f32" },
+      { ...context, toTarget: "sse" },
     ]) {
       assert.equal(cache.valid(changed, 7), undefined);
       assert.equal(cache.latest(changed, 7), undefined);

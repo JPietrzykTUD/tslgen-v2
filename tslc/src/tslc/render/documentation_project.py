@@ -9,6 +9,7 @@ from tslc.backend.capability import DocumentationSpec as _DocSpec
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.registry import backend_capability
 from tslc.catalog.model import Extension
+from tslc.catalog.scalar_types import scalar_type_info
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
 from tslc.render.documentation_formatters import (
@@ -360,7 +361,7 @@ def _target_class_row(
         strings.id(label),
         strings.id(family),
         strings.id(width),
-        strings.id(_target_class_sort_key(family, width)),
+        strings.id(_target_class_sort_key(family, width, extension)),
     ]
 
 
@@ -370,11 +371,11 @@ def _target_class_parts(
 ) -> tuple[str, str]:
     if extension is None:
         return ("unknown", "unknown")
-    family = _public_target_family(extension.family or "unclassified")
+    family = extension.family_capability.documented_family
     if family == "scalar":
         return ("scalar", "scalar")
-    if family == "aarch64" and extension.name.startswith("sve"):
-        return (family, "SVE")
+    if extension.metadata.documentation_width is not None:
+        return (family, extension.metadata.documentation_width)
     if extension.vector_bits_kind == "scalable":
         return (family, "scalable")
     if spec.uses_sized_vector:
@@ -382,10 +383,6 @@ def _target_class_parts(
     if extension.vector_bits > 0:
         return (family, f"{extension.vector_bits}-bit")
     return (family, "scalar")
-
-
-def _public_target_family(family: str) -> str:
-    return "aarch64" if family == "arm" else family
 
 
 def _target_class_key(family: str, width: str) -> str:
@@ -405,13 +402,17 @@ def _target_class_label(family: str, width: str) -> str:
     return f"{family} {width}"
 
 
-def _target_class_sort_key(family: str, width: str) -> str:
-    family_order = {
-        "scalar": "00",
-        "generic": "01",
-        "x86": "10",
-        "aarch64": "20",
-    }.get(family, f"90-{family}")
+def _target_class_sort_key(
+    family: str,
+    width: str,
+    extension: Extension | None,
+) -> str:
+    order = (
+        90
+        if extension is None
+        else extension.family_capability.documented_sort_order
+    )
+    family_order = f"{order:02d}" if order < 90 else f"{order:02d}-{family}"
     width_order = {
         "scalar": "0000",
         "lanes": "0001",
@@ -556,6 +557,7 @@ def _signature_kind_phrase(kind: str) -> str:
     labels = {
         "v": "SIMD register",
         "vt": "target SIMD register",
+        "imt": "target integral mask",
         "m": "mask",
         "im": "integral mask",
         "s": "scalar",
@@ -577,43 +579,18 @@ def _backend_label(backend_id: str) -> str:
 
 
 def _type_short_label(type_tag: str) -> str:
-    if type_tag == "f32":
-        return "f32"
-    if type_tag == "f64":
-        return "f64"
-    if type_tag.startswith("si"):
-        return f"i{type_tag[2:]}"
-    if type_tag.startswith("ui"):
-        return f"u{type_tag[2:]}"
-    return type_tag
+    info = scalar_type_info(type_tag)
+    return type_tag if info is None else info.documentation_short_label
 
 
 def _type_label(type_tag: str) -> str:
-    if type_tag == "f32":
-        return "float"
-    if type_tag == "f64":
-        return "double"
-    if type_tag.startswith("si"):
-        return f"signed int{type_tag[2:]}"
-    if type_tag.startswith("ui"):
-        return f"unsigned int{type_tag[2:]}"
-    return type_tag
+    info = scalar_type_info(type_tag)
+    return type_tag if info is None else info.documentation_label
 
 
 def _type_sort_key(type_tag: str) -> str:
-    order = {
-        "si8": "00",
-        "si16": "01",
-        "si32": "02",
-        "si64": "03",
-        "ui8": "04",
-        "ui16": "05",
-        "ui32": "06",
-        "ui64": "07",
-        "f32": "08",
-        "f64": "09",
-    }
-    return order.get(type_tag, f"z-{type_tag}")
+    info = scalar_type_info(type_tag)
+    return f"z-{type_tag}" if info is None else f"{info.documentation_sort_order:02d}"
 
 
 def _is_specialized_data_type(type_tag: str) -> bool:

@@ -152,7 +152,7 @@ def _cpp_facade_result_type(spec: LoweredSpecialization) -> str:
     if is_free_function(spec):
         return CPP_SIGNATURE_TYPES.free_type(spec.result_kind, base=spec.base_type_spelling)
     if spec.target is not None:
-        return "typename ToVec::register_type"
+        return CPP_SIGNATURE_TYPES.member_type(spec.result_kind, vector="ToVec")
     return CPP_SIGNATURE_TYPES.result_type(spec.result_kind)
 
 
@@ -160,7 +160,7 @@ def _rust_facade_result_type(spec: LoweredSpecialization) -> str:
     if is_free_function(spec):
         return rust_free_type(spec.result_kind, spec.base_type_spelling)
     if spec.target is not None:
-        return "T::RegisterType"
+        return RUST_SIGNATURE_TYPES.owner_type(spec.result_kind, owner="T")
     return RUST_SIGNATURE_TYPES.owner_type(spec.result_kind, owner="S")
 
 

@@ -24,17 +24,27 @@ from tslc.output.verify_model import (
     VerifyProfile,
 )
 
+@dataclass(frozen=True, slots=True)
+class BackendPreparation:
+    """Substantive outcome of preparing one backend for verification."""
+
+    backend: VerifyBackend | None
+    commands: tuple[BuildCommandResult, ...] = ()
+    diagnostics: tuple[Diagnostic, ...] = ()
+    skipped: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CommandFollowUp:
+    """Substantive outcome of one after-successful-command hook."""
+
+    commands: tuple[BuildCommandResult, ...] = ()
+    diagnostics: tuple[Diagnostic, ...] = ()
+
+
 PrepareBackend = Callable[
-    [
-        Path,
-        VerifyBackend,
-        BuildVerifierConfig,
-        BuildCommandRunner,
-        list[BuildCommandResult],
-        list[Diagnostic],
-        list[str],
-    ],
-    VerifyBackend | None,
+    [Path, VerifyBackend, BuildVerifierConfig, BuildCommandRunner],
+    BackendPreparation,
 ]
 CommandGroups = Callable[
     [Path, VerifyBackend, BuildVerifierConfig],
@@ -46,10 +56,8 @@ AfterCommand = Callable[
         Mapping[str, VerifyProfile],
         BuildVerifierConfig,
         BuildCommandRunner,
-        list[BuildCommandResult],
-        list[Diagnostic],
     ],
-    None,
+    CommandFollowUp,
 ]
 PrepareCommandEnvironment = Callable[[BuildCommand, dict[str, str]], None]
 
@@ -79,6 +87,8 @@ def missing_verify_tool(driver: VerifyBackendDriver) -> str | None:
 
 __all__ = [
     "AfterCommand",
+    "BackendPreparation",
+    "CommandFollowUp",
     "CommandGroups",
     "PrepareBackend",
     "PrepareCommandEnvironment",

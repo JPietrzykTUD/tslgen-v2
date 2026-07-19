@@ -83,3 +83,75 @@ def test_inline_tsil_body_envelope_uses_decoded_string_payload(
     envelope = result.documents[0].primitives[0].body_envelopes[0]
     assert envelope.payload_text == 'complete(intrin<foo, build[infix_sep=""]>(data));'
     assert envelope.payload_source.text == 'complete(intrin<foo, build[infix_sep=\\"\\"]>(data));'
+
+
+def test_undecodable_string_escape_is_a_located_diagnostic(
+    tmp_path: Path, tsl_grammar: str
+) -> None:
+    path = tmp_path / "bad_escape.tsl"
+    text = 'extension broken:\n  extension_name "bad \\x escape"\n'
+    document = SourceDocument(path=path, text=text, digest="", kind="tsl")
+
+    result = TslParser(tsl_grammar).parse((document,))
+
+    assert result.documents == ()
+    (diagnostic,) = result.diagnostics
+    assert diagnostic.severity == "error"
+    assert diagnostic.code == "TSL-OUTER-PARSE-BAD-STRING"
+    assert diagnostic.span is not None
+    assert diagnostic.span.path == path
+    assert diagnostic.span.line == 2
+    assert diagnostic.span.column == text.splitlines()[1].index('"') + 1
+
+
+def test_undecodable_string_in_one_document_keeps_other_documents_parsed(
+    tmp_path: Path, tsl_grammar: str
+) -> None:
+    bad_path = tmp_path / "a_bad.tsl"
+    good_path = tmp_path / "b_good.tsl"
+    bad = SourceDocument(
+        path=bad_path,
+        text='extension broken:\n  extension_name "bad \\x escape"\n',
+        digest="",
+        kind="tsl",
+    )
+    good = SourceDocument(
+        path=good_path,
+        text='extension fine:\n  extension_name "fine"\n',
+        digest="",
+        kind="tsl",
+    )
+
+    result = TslParser(tsl_grammar).parse((bad, good))
+
+    assert [doc.path for doc in result.documents] == [good_path]
+    assert [d.code for d in result.diagnostics] == ["TSL-OUTER-PARSE-BAD-STRING"]
+
+
+def test_field_children_agree_between_inline_map_and_indented_block(
+    tsl_grammar: str,
+) -> None:
+    """The shared accessors erase the inline-``{}`` vs indented-block spelling."""
+
+    from tslc.syntax.access import children, field_text, list_text
+    from tslc.syntax.ast import ParsedBlockDeclaration
+
+    inline = 'types:\n  ints {types [si32, ui32], label "x"}\n'
+    indented = 'types:\n  ints:\n    types [si32, ui32]\n    label "x"\n'
+
+    def child_shapes(text: str) -> list[tuple[str, str | None, tuple[str, ...]]]:
+        document = SourceDocument(Path("spelling.tsl"), text, "d", "tsl")
+        result = TslParser(tsl_grammar).parse((document,))
+        assert result.diagnostics == ()
+        declaration = result.documents[0].declarations[0]
+        assert isinstance(declaration, ParsedBlockDeclaration)
+        (field,) = declaration.fields
+        return [
+            (entry.key.text, field_text(entry), list_text(entry))
+            for entry in children(field)
+        ]
+
+    assert child_shapes(inline) == child_shapes(indented) == [
+        ("types", None, ("si32", "ui32")),
+        ("label", "x", ()),
+    ]

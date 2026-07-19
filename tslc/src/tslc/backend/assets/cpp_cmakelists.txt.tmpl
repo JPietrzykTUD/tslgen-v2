@@ -3,6 +3,57 @@ project(tsl_generated_cpp CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(TSL_BUILD_BENCHMARKS "Build generated implementation-variant benchmarks" OFF)
+option(TSL_AUTOTUNE_VARIANTS "Benchmark variants and consume a build-local policy" OFF)
+set(TSL_VARIANT_POLICY_FILE "" CACHE FILEPATH "Precomputed TSL variant-policy JSON")
+set(TSL_BENCHMARK_COMPILE_OPTIONS "" CACHE STRING "Additional compile options used for variant tuning")
+set(TSL_BENCHMARK_THRESHOLD "0.05" CACHE STRING "Minimum paired improvement required to select a variant")
+set(TSL_BENCHMARK_ROUNDS "9" CACHE STRING "Number of interleaved benchmark rounds")
+set(TSL_BENCHMARK_MINIMUM_SAMPLE_NS "20000000" CACHE STRING "Minimum duration of one benchmark sample")
+
+set(_TSL_POLICY_REQUESTED OFF)
+if(TSL_AUTOTUNE_VARIANTS AND NOT TSL_VARIANT_POLICY_FILE STREQUAL "")
+  message(FATAL_ERROR "Choose TSL_AUTOTUNE_VARIANTS or TSL_VARIANT_POLICY_FILE, not both")
+endif()
+if(TSL_AUTOTUNE_VARIANTS OR NOT TSL_VARIANT_POLICY_FILE STREQUAL "")
+  set(_TSL_POLICY_REQUESTED ON)
+endif()
+
+if(_TSL_POLICY_REQUESTED AND CMAKE_CROSSCOMPILING)
+  message(FATAL_ERROR "TSL variant policy generation and validation are native-only; use a native build for autotune/policy consumption")
+endif()
+if(_TSL_POLICY_REQUESTED)
+  execute_process(
+    COMMAND "${CMAKE_CXX_COMPILER}" ${CMAKE_CXX_COMPILER_ARG1} -dumpmachine
+    RESULT_VARIABLE _TSL_POLICY_COMPILER_TARGET_RESULT
+    OUTPUT_VARIABLE _TSL_POLICY_COMPILER_TARGET
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+    TIMEOUT 5
+  )
+  string(TOLOWER "${_TSL_POLICY_COMPILER_TARGET}" _TSL_POLICY_COMPILER_TARGET_LOWER)
+  if(
+    _TSL_POLICY_COMPILER_TARGET_RESULT EQUAL 0
+    AND _TSL_POLICY_COMPILER_TARGET_LOWER MATCHES "(wasm|wasi)"
+  )
+    message(FATAL_ERROR
+      "TSL variant policy generation and validation require a C++ compiler that produces runnable host executables; '${CMAKE_CXX_COMPILER}' reports non-native target '${_TSL_POLICY_COMPILER_TARGET}'. Select a native compiler explicitly with -DCMAKE_CXX_COMPILER=<path>.")
+  endif()
+  include(CheckCXXSourceRuns)
+  check_cxx_source_runs(
+    "#include <iostream>\nint main() { std::cout << \"\"; return 0; }"
+    _TSL_POLICY_COMPILER_RUNS_NATIVELY
+  )
+  if(NOT _TSL_POLICY_COMPILER_RUNS_NATIVELY)
+    message(FATAL_ERROR
+      "TSL variant policy generation and validation require a C++ compiler that produces runnable host executables; '${CMAKE_CXX_COMPILER}' could not build and run a host probe. Select a native compiler explicitly with -DCMAKE_CXX_COMPILER=<path>.")
+  endif()
+endif()
+get_property(_TSL_MULTI_CONFIG_GENERATOR GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(_TSL_POLICY_REQUESTED AND _TSL_MULTI_CONFIG_GENERATOR)
+  message(FATAL_ERROR "TSL variant policy generation currently requires a single-config CMake generator")
+endif()
+
 set(TSL_AVAILABLE_PROFILES @{available_profiles})
 set(TSL_PROFILE "auto" CACHE STRING "TSL profile to consume: auto or one generated profile")
 set_property(CACHE TSL_PROFILE PROPERTY STRINGS auto @{profile_auto_choices} @{profile_choices})
@@ -36,30 +87,6 @@ endif()
 add_library(tsl_generated INTERFACE)
 add_library(tsl::tsl ALIAS tsl_generated)
 target_link_libraries(tsl_generated INTERFACE tsl_profile_${TSL_SELECTED_PROFILE})
-
-option(TSL_BUILD_BENCHMARKS "Build generated implementation-variant benchmarks" OFF)
-option(TSL_AUTOTUNE_VARIANTS "Benchmark variants and consume a build-local policy" OFF)
-set(TSL_VARIANT_POLICY_FILE "" CACHE FILEPATH "Precomputed TSL variant-policy JSON")
-set(TSL_BENCHMARK_COMPILE_OPTIONS "" CACHE STRING "Additional compile options used for variant tuning")
-set(TSL_BENCHMARK_THRESHOLD "0.05" CACHE STRING "Minimum paired improvement required to select a variant")
-set(TSL_BENCHMARK_ROUNDS "9" CACHE STRING "Number of interleaved benchmark rounds")
-set(TSL_BENCHMARK_MINIMUM_SAMPLE_NS "20000000" CACHE STRING "Minimum duration of one benchmark sample")
-
-set(_TSL_POLICY_REQUESTED OFF)
-if(TSL_AUTOTUNE_VARIANTS AND NOT TSL_VARIANT_POLICY_FILE STREQUAL "")
-  message(FATAL_ERROR "Choose TSL_AUTOTUNE_VARIANTS or TSL_VARIANT_POLICY_FILE, not both")
-endif()
-if(TSL_AUTOTUNE_VARIANTS OR NOT TSL_VARIANT_POLICY_FILE STREQUAL "")
-  set(_TSL_POLICY_REQUESTED ON)
-endif()
-
-if(_TSL_POLICY_REQUESTED AND CMAKE_CROSSCOMPILING)
-  message(FATAL_ERROR "TSL variant policy generation and validation are native-only; use a native build for autotune/policy consumption")
-endif()
-get_property(_TSL_MULTI_CONFIG_GENERATOR GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
-if(_TSL_POLICY_REQUESTED AND _TSL_MULTI_CONFIG_GENERATOR)
-  message(FATAL_ERROR "TSL variant policy generation currently requires a single-config CMake generator")
-endif()
 
 if(TSL_BUILD_BENCHMARKS OR _TSL_POLICY_REQUESTED)
   add_executable(tsl_variant_bench bench/tsl_variant_bench_${TSL_SELECTED_PROFILE}.cpp)

@@ -76,6 +76,14 @@ class ValueTestPattern(Protocol):
     def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         ...
 
+    def unplanned_reason(self, context: ValueTestCaseContext) -> str | None:
+        """An actionable reason when this pattern matched but planned nothing."""
+        ...
+
+    def fuzz_cases(self, context: ValueTestFuzzContext) -> tuple[ValueTestCasePlan, ...]:
+        """Synthetic random-input cases independent of authored tests."""
+        ...
+
 
 class _BasePattern:
     def source_primitive(
@@ -99,6 +107,10 @@ class _BasePattern:
         del context
         return None
 
+    def fuzz_cases(self, context: ValueTestFuzzContext) -> tuple[ValueTestCasePlan, ...]:
+        del context
+        return ()
+
 
 def unplanned_case_reason(
     pattern: ValueTestPattern | None,
@@ -107,8 +119,7 @@ def unplanned_case_reason(
 ) -> str | None:
     if pattern is None or planned:
         return None
-    reason_builder = getattr(pattern, "unplanned_reason", None)
-    return reason_builder(context) if reason_builder is not None else None
+    return pattern.unplanned_reason(context)
 
 
 __all__ = (

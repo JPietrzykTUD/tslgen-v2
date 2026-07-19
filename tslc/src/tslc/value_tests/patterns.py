@@ -30,8 +30,10 @@ from tslc.value_tests._pattern_base import CasePlanBuilder, ValueTestPattern
 from tslc.value_tests._pattern_conversion import (
     _ConvertPattern,
     _ExtensionReprPattern,
+    _ExtensionResultPattern,
     _LoadConvertPattern,
     _ReprCastPattern,
+    _TargetImaskPattern,
 )
 from tslc.value_tests._pattern_core import (
     _GenericGoldenPattern,
@@ -129,6 +131,7 @@ def default_value_test_patterns(
         _simple(scalar_result_case, "usize", ("m",), support=support),
         _simple(scalar_result_case, "usize", ("s",), support=support),
         _MaskConversionPattern(scalar_result_case, "im", ("m",)),
+        _TargetImaskPattern(),
         _simple(
             scalar_result_case,
             "im",
@@ -144,6 +147,12 @@ def default_value_test_patterns(
             allow_generic_params=True,
         ),
         _simple(scalar_result_case, "im", ("im", "im"), support=support),
+        _simple(
+            scalar_result_case,
+            "im",
+            ("im", "im", "usize"),
+            support=support,
+        ),
         _simple(scalar_result_case, "im", ("im", "im", "im"), support=support),
         _simple(load_case, "v", ("cptr",), support=support, allow_axis=True),
         _LoadConvertPattern(),
@@ -181,6 +190,7 @@ def default_value_test_patterns(
         _simple(stream_case, "o", ("o", "v", "s"), support=support),
         _ConvertPattern(support),
         _ReprCastPattern(),
+        _ExtensionResultPattern(),
         _ExtensionReprPattern(support),
     )
 

@@ -26,6 +26,7 @@ export interface ExplorerImplementation {
   readonly primitive: string;
   readonly signature: string;
   readonly parameters: readonly string[];
+  readonly attributes: Readonly<Record<string, string>>;
   readonly extension: string;
   readonly typeGroup: string;
   readonly selectorPath: readonly string[];
@@ -33,9 +34,20 @@ export interface ExplorerImplementation {
   readonly location: ExplorerLocation;
 }
 
+export interface ExplorerTarget {
+  readonly dimension: "base" | "extension";
+  readonly name: string;
+  readonly value: string | null;
+}
+
 export interface ExplorerSlot {
+  readonly primitive: string;
+  readonly signature: string;
+  readonly parameters: readonly string[];
+  readonly attributes: Readonly<Record<string, string>>;
   readonly extension: string;
   readonly type: string;
+  readonly target: ExplorerTarget | null;
   readonly status: SlotStatus;
   readonly detail: string | null;
   readonly available: boolean;
@@ -152,6 +164,27 @@ export function slotStatusDescription(slot: ExplorerSlot): string {
 export function implementationLabel(
   implementation: ExplorerImplementation,
 ): string {
-  const callable = `${implementation.primitive}(${implementation.parameters.join(", ")})`;
-  return `${callable} • ${implementation.extension} / ${implementation.typeGroup}`;
+  return `${callableLabel(implementation)} • ${implementation.extension} / ${implementation.typeGroup}`;
+}
+
+export function slotCallableLabel(slot: ExplorerSlot): string {
+  return callableLabel(slot);
+}
+
+export function slotTypeLabel(slot: ExplorerSlot): string {
+  const target = slot.target;
+  return target ? `${slot.type} → ${target.value ?? target.name}` : slot.type;
+}
+
+function callableLabel(callable: {
+  readonly primitive: string;
+  readonly parameters: readonly string[];
+  readonly attributes: Readonly<Record<string, string>>;
+}): string {
+  const name = `${callable.primitive}(${callable.parameters.join(", ")})`;
+  const attributes = Object.entries(callable.attributes)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `[${key}=${value}]`)
+    .join(" ");
+  return attributes ? `${name} ${attributes}` : name;
 }

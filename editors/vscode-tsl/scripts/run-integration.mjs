@@ -7,6 +7,12 @@ import { fileURLToPath } from "node:url";
 const extensionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workingDirectory = path.join(tmpdir(), "tslc-vscode-test");
 const home = path.join(workingDirectory, "home");
+const configuredTslcCommand = process.env.TSL_TEST_TSLC_COMMAND;
+const expectedServerSource = process.env.TSL_EXPECT_SERVER_SOURCE;
+const testTslcCommand =
+  configuredTslcCommand ?? (expectedServerSource === undefined ? "tslc" : undefined);
+const effectiveExpectedServerSource =
+  expectedServerSource ?? (testTslcCommand ? "explicit" : undefined);
 await mkdir(workingDirectory, { recursive: true });
 await mkdir(home, { recursive: true });
 const executable = path.join(
@@ -29,6 +35,12 @@ const child = spawn(
       HOME: home,
       XDG_CACHE_HOME: path.join(home, ".cache"),
       XDG_CONFIG_HOME: path.join(home, ".config"),
+      ...(testTslcCommand
+        ? { TSL_TEST_TSLC_COMMAND: testTslcCommand }
+        : {}),
+      ...(effectiveExpectedServerSource
+        ? { TSL_EXPECT_SERVER_SOURCE: effectiveExpectedServerSource }
+        : {}),
     },
     stdio: "inherit",
     shell: false,

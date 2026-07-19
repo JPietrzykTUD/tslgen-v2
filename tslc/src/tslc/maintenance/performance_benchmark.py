@@ -20,22 +20,26 @@ from tslc.api import _ARITH_TYPE_TAGS, _expand_sources
 from tslc.authoring import check_catalog
 from tslc.ir.scan import _cached_scan
 from tslc.lower._query_model import _cached_parse_query
+from tslc.maintenance import _repo_context
+from tslc.maintenance._repo_context import RepoContext
 from tslc.maintenance.generation_snapshot import input_manifest_digest
 from tslc.pipeline import GenerationRequest, GenerationResult, _GenerationSession
 
-
-def _find_repo_root(start: Path) -> Path:
-    for candidate in (start, *start.parents):
-        if (candidate / "tsldata").is_dir() and (candidate / "tslc" / "src").is_dir():
-            return candidate
-    raise RuntimeError(f"could not find repository root from {start}")
-
-
-_REPO_ROOT = _find_repo_root(Path(__file__).resolve())
-_DATA_ROOT = _REPO_ROOT / "tsldata"
-_PROFILES_PATH = _REPO_ROOT / "supplementary" / "buildsystem" / "machine_profiles.json"
-_SCRATCH_ROOT = _REPO_ROOT / "tslctmp"
 _MODULE_NAME = "tslc.maintenance.performance_benchmark"
+
+
+def _required_context(context: RepoContext | None) -> RepoContext:
+    """An explicit or lazily discovered checkout; benchmarks cannot run without one."""
+
+    if context is not None:
+        return context
+    found = _repo_context.find_repo_context()
+    if found is None:
+        raise RuntimeError(
+            "performance benchmarks need a tslgen repository checkout "
+            "(tsldata/ and tslc/src/ were not found above the installed package)"
+        )
+    return found
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,20 +91,20 @@ class BenchmarkSample:
     query_parse_cache_capacity: int = 0
 
 
-def run_sample(case: BenchmarkCase) -> BenchmarkSample:
+def run_sample(case: BenchmarkCase, context: RepoContext) -> BenchmarkSample:
     start_wall = time.perf_counter()
     start_cpu = time.process_time()
     lowering_cache_hits = 0
     lowering_cache_misses = 0
     lowering_cache_size = 0
     if case.kind == "check":
-        check_result = check_catalog([_DATA_ROOT], backends=case.backends)
+        check_result = check_catalog([context.data_root], backends=case.backends)
         diagnostics = len(check_result.diagnostics)
         coverage = 0
         skipped = 0
         artifacts = 0
     else:
-        generation_result, cache_info = _run_generation(case)
+        generation_result, cache_info = _run_generation(case, context)
         lowering_cache_hits = cache_info.hits
         lowering_cache_misses = cache_info.misses
         lowering_cache_size = cache_info.size
@@ -134,11 +138,11 @@ def run_sample(case: BenchmarkCase) -> BenchmarkSample:
 
 
 def _run_generation(
-    case: BenchmarkCase,
+    case: BenchmarkCase, context: RepoContext
 ) -> tuple[GenerationResult, _LoweringCacheInfo]:
     request = GenerationRequest(
-        source_paths=_expand_sources((_DATA_ROOT,)),
-        machine_profiles_path=_PROFILES_PATH,
+        source_paths=_expand_sources((context.data_root,)),
+        machine_profiles_path=context.machine_profiles_path,
         primitives=case.primitives,
         profiles=case.profiles,
         type_tags=case.type_tags,
@@ -153,14 +157,19 @@ def _run_generation(
     return result, session.lowering_cache.info()
 
 
-def run_fresh_samples(case: BenchmarkCase, count: int) -> tuple[BenchmarkSample, ...]:
+def run_fresh_samples(
+    case: BenchmarkCase,
+    count: int,
+    context: RepoContext | None = None,
+) -> tuple[BenchmarkSample, ...]:
     if count <= 0:
         raise ValueError("sample count must be positive")
+    resolved = _required_context(context)
     samples: list[BenchmarkSample] = []
     for _ in range(count):
         completed = subprocess.run(
             [sys.executable, "-m", _MODULE_NAME, "worker", case.name],
-            cwd=_REPO_ROOT,
+            cwd=resolved.root,
             text=True,
             capture_output=True,
             check=False,
@@ -173,7 +182,12 @@ def run_fresh_samples(case: BenchmarkCase, count: int) -> tuple[BenchmarkSample,
     return tuple(samples)
 
 
-def benchmark_report(case: BenchmarkCase, samples: tuple[BenchmarkSample, ...]) -> dict[str, object]:
+def benchmark_report(
+    case: BenchmarkCase,
+    samples: tuple[BenchmarkSample, ...],
+    context: RepoContext | None = None,
+) -> dict[str, object]:
+    resolved = _required_context(context)
     return {
         "version": 1,
         "case": case.name,
@@ -190,7 +204,7 @@ def benchmark_report(case: BenchmarkCase, samples: tuple[BenchmarkSample, ...]) 
             "implementation": platform.python_implementation(),
             "cpu": _cpu_model(),
             "logical_cpus": os.cpu_count(),
-            "input_manifest_digest": input_manifest_digest(),
+            "input_manifest_digest": input_manifest_digest(resolved),
         },
         "samples": [asdict(sample) for sample in samples],
         "median": {
@@ -210,29 +224,29 @@ def _cpu_model() -> str:
     return platform.processor() or "unknown"
 
 
-def _write_report(path: Path, report: dict[str, object]) -> None:
+def _write_report(path: Path, report: dict[str, object], scratch_root: Path) -> None:
     output = path.resolve()
     try:
-        output.relative_to(_SCRATCH_ROOT.resolve())
+        output.relative_to(scratch_root.resolve())
     except ValueError as exc:
-        raise ValueError(f"benchmark output must be under {_SCRATCH_ROOT}") from exc
+        raise ValueError(f"benchmark output must be under {scratch_root}") from exc
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _worker_command(case_name: str) -> int:
-    sample = run_sample(BENCHMARK_CASES[case_name])
+def _worker_command(case_name: str, context: RepoContext) -> int:
+    sample = run_sample(BENCHMARK_CASES[case_name], context)
     print(json.dumps(asdict(sample), sort_keys=True))
     return 0
 
 
-def _run_command(args: argparse.Namespace) -> int:
+def _run_command(args: argparse.Namespace, context: RepoContext) -> int:
     case = BENCHMARK_CASES[args.case]
     try:
-        samples = run_fresh_samples(case, args.samples)
-        report = benchmark_report(case, samples)
+        samples = run_fresh_samples(case, args.samples, context)
+        report = benchmark_report(case, samples, context)
         if args.output is not None:
-            _write_report(Path(args.output), report)
+            _write_report(Path(args.output), report, context.scratch_root)
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
@@ -250,9 +264,10 @@ def main(argv: list[str] | None = None) -> int:
     worker_parser = subparsers.add_parser("worker", help=argparse.SUPPRESS)
     worker_parser.add_argument("case", choices=sorted(BENCHMARK_CASES))
     args = parser.parse_args(argv)
+    context = _repo_context.require_repo_context(parser)
     if args.command == "worker":
-        return _worker_command(args.case)
-    return _run_command(args)
+        return _worker_command(args.case, context)
+    return _run_command(args, context)
 
 
 if __name__ == "__main__":

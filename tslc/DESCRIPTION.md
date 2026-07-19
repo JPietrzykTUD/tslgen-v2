@@ -59,6 +59,16 @@ request selection and lowering. Catalog `list`/`show` and `doctor` consume the
 same typed catalog, backend registry, machine-profile projection, and verifier
 drivers rather than maintaining parallel compiler knowledge.
 
+An omitted API/backend request resolves the live backend registry when the
+`GenerationRequest` is constructed; no import-time snapshot defines later
+requests. The project renderer consumes the request's explicit backend tuple.
+
+Compiler diagnostics carry one canonical, end-exclusive `SourceSpan`; producers
+must supply `span=` and may project its start only for point-oriented display
+APIs. Strict-mode promotion, variant context, value-test coverage, and generation
+snapshot schema version 2 preserve the complete range rather than rebuilding it
+from a start location.
+
 Editor overlays use that same boundary through
 [lsp/workspace.py](src/tslc/lsp/workspace.py). A workspace-scoped parsed cache
 reparses changed buffers and reuses unchanged documents; a per-document
@@ -69,7 +79,12 @@ projections of the latest successful catalog/index. Hierarchical document
 symbols and registry-backed semantic token facts are built separately in
 [catalog_authoring_index.py](src/tslc/catalog_authoring_index.py); the core
 index retains resolvable catalog occurrences, including individual list
-selector elements and primitive-scoped result target axes. The parsed-source boundary
+selector elements and primitive-scoped result target axes. Implementation
+selector levels are classified by the catalog-owned projection in
+[catalog/selector_paths.py](src/tslc/catalog/selector_paths.py) — one
+interpretation shared by catalog promotion, indexing, and editor context — so
+target axes are recognized by name and `where` constraint levels are never
+indexed as type groups. The parsed-source boundary
 in [syntax/authoring.py](src/tslc/syntax/authoring.py) constructs a typed cursor
 context from declaration, field, selector, map, list, and value spans. Inside
 TSIL payloads it uses the recursive scanner's cursor spans to retain enclosing
@@ -92,10 +107,20 @@ last valid parsed structure without replacing current diagnostics. The
 editor-neutral pygls transport is in `lsp/`; an initially invalid overlay uses
 the valid saved corpus for catalog facts, parsed context, and definitions while
 retaining parseable overlay occurrence spans.
+
+Backend translation entries named `query_value::<namespace>::<name>` add typed
+value leaves to both lowering and catalog-aware completion. The generic query
+resolver delegates their spelling to the active backend template dialect, so a
+new target namespace does not require a resolver branch.
 [lsp/specialization_context.py](src/tslc/lsp/specialization_context.py)
 combines the parsed cursor scope with the real selector to expose valid
-`(profile, extension, type)` slots to editor clients without duplicating source
-parsing or compatibility rules in TypeScript.
+`(profile, extension, type, result target)` slots to editor clients without
+duplicating source parsing or compatibility rules in TypeScript. Inside an
+authored implementation it retains only slots for which that exact source body
+wins selection. [lsp/implementation_preview.py](src/tslc/lsp/implementation_preview.py)
+projects one deterministic CodeLens site per promoted physical implementation
+field from parsed/catalog source spans; lens collection never selects, lowers,
+or renders a slot.
 [version.py](src/tslc/version.py) derives the installed distribution version
 used by `tslc --version`, LSP server metadata, and diagnostic sources. The
 platform-specific editor release freezes this same CLI/LSP entry point and its
@@ -117,8 +142,14 @@ write the document. Ambiguous diagnostics yield non-editing guide actions.
 [lsp/primitive_explorer.py](src/tslc/lsp/primitive_explorer.py)
 projects File/Corpus primitive lists in either authored-source or concrete
 profile mode. It owns authored, selected, profile-rejected, missing, and
-backend-unsupported slot states plus implementation origins and source spans
-from the same catalog, selector, and index. Direct Calls/Called By relationships
+backend-unsupported slot states plus callable identity (signature and sorted
+primitive attributes), concrete representation-target identity, implementation
+origins, and source spans from the same catalog, selector, support-policy view,
+and index. A resolved callable-and-target slot has one selected source body, so
+editor navigation opens it directly; authored candidate bodies remain explicit
+when no profile has selected a winner. Preview and analysis forward that exact
+target instead of merging base- and extension-target specializations. Direct
+Calls/Called By relationships
 are indexed from registered `call` regions. The VS Code tree providers render
 those typed facts and never reconstruct selector or dependency rules.
 Explicit concrete explorer analysis runs `tslc analyze` as a saved-corpus
@@ -132,32 +163,14 @@ or start analysis.
 Concrete preview runs `tslc preview` as a separate saved-file child. It uses
 one loaded input snapshot for selection, lowering, and dependency closure, then
 passes the requested emitted specialization through the registered backend's
-normal primitive renderer. It does not load project render assets, plan tests
-or benchmarks, write a generated project, or invoke a toolchain. `tslc explain`
-remains the detailed selection/lowering diagnostic view.
-
-The [PIVOT exporter](src/tslc/pivot/) is a sibling projection rather than a
-registered backend. `tslc export pivot` reuses the immutable catalog, profile
-selection, standard TSIL region lowerers, and the selected C++ or Rust
-intrinsic/type translation,
-but replaces call lowering to retain typed sites for recursive inlining and
-validates the resulting lowered body for straight-line dataflow. Generation-time
-control therefore expands normally; only constructs that survive lowering are
-rejected. For fixed-width C++ vectors participating in dataparallel inference,
-the projection also emits width-labelled `tsl_128`/`tsl_256`/`tsl_512`
-definitions whose calls and `fixed<N>` vector types use the existing C++
-dialect, with `N` resolved as the scalar-type-specific lane count. It produces
-standalone YAML artifacts. Multiple requested machine profiles (including the
-implicit all-profiles case) are first projected to distinct target-family and
-hardware-feature-set combinations, with compiler modes combined within each
-combination. This avoids repeating the same PIVOT selection for profile aliases
-without changing ordinary generation. From those combinations it retains a
-deterministic cover of selected corpus implementations, so a feature set that
-adds no implementation is not lowered or rendered. The exporter
-does not construct a normal generation request, enter the generation session,
-register a backend, render a generated project, or affect default C++/Rust
-output. Its required comma-separated `--language` selection writes independent
-YAML trees below `<output-root>/cpp/` and/or `<output-root>/rust/`.
+normal primitive renderer. An optional compiler source point restricts the
+result to lowered specializations originating in that exact authored selector,
+which lets editor CodeLens previews avoid merging overloads or other source
+bodies with the same primitive name. Concrete wildcard-attribute
+variants that share that selector intentionally remain grouped. It does not
+load project render assets, plan tests or benchmarks, write a generated
+project, or invoke a toolchain. `tslc explain` remains the detailed
+selection/lowering diagnostic view.
 
 ## The input language (two nested languages)
 
@@ -180,8 +193,11 @@ prim<v:=(v,v)> add(left, right):
           tsil "complete(intrin<add, build[suffix=base::signed_of(base::in)]>(left, right));"
 ```
 
-- **Signatures** (`v:=(v,v)`): `v` vector, `m` mask, `s` scalar, `ptr`/`usize`
-  (presence makes it a free function), `lanes<s>` a lane list.
+- **Signatures** (`v:=(v,v)`): `v` vector, `m` mask, `im` integral mask, `s`
+  scalar, `ptr`/`usize` (presence makes it a free function), `lanes<s>` a lane
+  list. Representation changes may use target-owned operands such as `vt`
+  (target register) and `imt` (target integral mask); a target result projects
+  the declared result kind through the target vector.
 - **Type-group keys**: `?i?` (any int), `f?` (any float), `arith` (all), plus
   concrete tags. Ranked by **specificity** — `si32` beats `?i?` beats `arith`.
 - **Extension fallback**: extensions form `inherits` chains (e.g. `avx2_vl →
@@ -191,8 +207,11 @@ prim<v:=(v,v)> add(left, right):
   source-named extension families—fallback classification, free-function
   ownership, declared-register requirements, and index-vector support—and for
   profile families, including whether a profile runs natively without an
-  emulator. Selection, lowering, translation, and verification consume those
-  typed roles instead of recognizing family-name strings.
+  emulator. It also owns documentation family/order labels and the catalog of
+  accepted target features plus their default/backend compiler spellings;
+  machine profiles retain only genuine profile-specific overrides. Selection,
+  lowering, translation, documentation, and verification consume those typed
+  roles instead of recognizing family or feature-name patterns.
 - **Fixed-width SVE**: `sve128`/`sve256`/`sve512` inherit scalable `sve` bodies
   but supersede `sve` in their fixed profiles, so one profile emits one SVE
   model. The fixed width is a compile mode (`sve_vector_bits_N`) plus C++ flags
@@ -277,6 +296,12 @@ type/extension being specialized.
 
 ## Lowering & assembly
 
+The [Selector](src/tslc/select/selector.py) enumerates the literal
+`(extension, type, representation-target)` axis before choosing bodies. A
+free-function primitive follows a separate path and returns the first usable
+declaration-owning extension slot in established profile order, because its
+rendered declaration has no SIMD axis.
+
 The [Lowerer](src/tslc/lower/lowerer.py) walks the segments for one
 `(primitive, extension, type, backend)` slot → a `LoweredSpecialization`
 (concrete type spellings, register type, body text, mask policy, safety,
@@ -336,7 +361,12 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   Generated rustdoc uses a `cfg(doc)` profile-neutral facade containing one
   public signature per emitted Rust primitive; concrete profile availability
   stays in the specialization explorer, while normal builds retain their
-  Cargo-feature-selected `profile` alias.
+  Cargo-feature-selected `profile` alias. Profile-local algorithm trait impls
+  share typed Scalar/Generic/concrete render targets in
+  [backend/rust_algorithm.py](src/tslc/backend/rust_algorithm.py). Static
+  algorithm-wrapper names are reserved by the compiler manifest in
+  [backend/rust_algorithm_manifest.py](src/tslc/backend/rust_algorithm_manifest.py),
+  with an asset-consistency test preventing drift.
 
 A static substrate ships as assets
 ([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),
@@ -356,7 +386,13 @@ structured skip coverage for unsupported signature shapes, and renders a
 standalone native benchmark/policy tool. Value-test tags do not control
 benchmark admission. Workload semantics are resolved in
 [benchmark/scenarios.py](src/tslc/benchmark/scenarios.py) before rendering:
-pure-register scenarios carry
+each typed scenario and correctness case validates its own structural and
+specialization compatibility and owns its canonical policy identity. Candidate
+sets only enforce homogeneous matching families. Harness discovery/closure is
+checked through one planner boundary, while C++ scenario renderers supply typed
+fragments to one shared timing skeleton; the remaining family dispatch selects
+genuinely different input construction and invocation behavior. Pure-register
+scenarios carry
 their operand generators and dependency parameter, vector-plus-scalar scenarios
 keep the scalar input independent, immediate scenarios carry an authored
 concrete value, indexed-load scenarios carry a SIMD index binding and bounded

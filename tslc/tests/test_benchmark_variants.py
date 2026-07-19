@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 import os
 from pathlib import Path
 import platform
@@ -10,11 +11,16 @@ import shlex
 import shutil
 import subprocess
 import textwrap
+from types import SimpleNamespace
+from typing import cast, get_args
 
 import pytest
 
 from tslc.api import generate_project, write_artifacts
 from tslc.benchmark.model import (
+    BenchmarkCandidate,
+    BenchmarkCandidateSet,
+    BenchmarkCorrectnessCase,
     BenchmarkMaskCorrectnessCase,
     BenchmarkMaskDensityScenario,
     BenchmarkMaskResultScenario,
@@ -25,11 +31,184 @@ from tslc.benchmark.model import (
     BenchmarkReductionCorrectnessCase,
     BenchmarkReductionScenario,
     BenchmarkRegisterScenario,
+    BenchmarkScenario,
+    BenchmarkTiming,
+    BenchmarkVectorCorrectnessCase,
     BenchmarkVectorMaskCorrectnessCase,
     BenchmarkVectorScalarCorrectnessCase,
     BenchmarkVectorScalarScenario,
+    SpecializationKey,
 )
+from tslc.benchmark.render_cpp_scenarios import render_scenario
 from tslc.diagnostics import has_errors
+from tslc.lower.lowerer import LoweredSpecialization
+
+
+def test_supported_benchmark_scenario_families_are_consistent() -> None:
+    scenario_types = get_args(BenchmarkScenario)
+    correctness_types = get_args(BenchmarkCorrectnessCase)
+
+    assert {scenario_type.family for scenario_type in scenario_types} == {
+        "register",
+        "vector_scalar",
+        "immediate",
+        "indexed_load",
+        "mask_density",
+        "mask_result",
+        "reduction",
+    }
+    assert {scenario_type.correctness_type for scenario_type in scenario_types} == set(
+        correctness_types
+    )
+    assert all(
+        scenario_type.family == scenario_type.correctness_type.family
+        and callable(scenario_type.canonical_fields)
+        and callable(scenario_type.validate_key)
+        and callable(scenario_type.manifest_fields)
+        for scenario_type in scenario_types
+    )
+    assert all(
+        callable(correctness_type.canonical_fields)
+        and callable(correctness_type.validate_key)
+        for correctness_type in correctness_types
+    )
+
+
+def test_representative_timing_scenarios_are_byte_stable() -> None:
+    timing = BenchmarkTiming(seed=7)
+    samples = (
+        _timing_sample(
+            SpecializationKey(
+                "cpp", "p", "add", "add", "e", "si32", "v", ("v", "v"), lanes=2
+            ),
+            BenchmarkVectorCorrectnessCase(
+                "c", (("1", "2"), ("3", "4")), ("4", "6"), "from_array", "to_array"
+            ),
+            BenchmarkRegisterScenario(
+                "throughput", "throughput", timing, ("bounded_random", "bounded_random")
+            ),
+        ),
+        _timing_sample(
+            SpecializationKey(
+                "cpp", "p", "shift", "shift", "e", "si32", "v", ("v", "s"), lanes=2
+            ),
+            BenchmarkVectorScalarCorrectnessCase(
+                "c", ("1", "2"), "1", ("2", "4"), "from_array", "to_array"
+            ),
+            BenchmarkVectorScalarScenario(
+                "latency",
+                "latency",
+                timing,
+                "bounded_random",
+                "bounded_shift_count",
+                0,
+            ),
+        ),
+        _timing_sample(
+            SpecializationKey(
+                "cpp",
+                "p",
+                "shift_imm",
+                "shift_imm",
+                "e",
+                "si32",
+                "v",
+                ("v", "sImm"),
+                immediate="1",
+                lanes=2,
+            ),
+            BenchmarkImmediateCorrectnessCase(
+                "c", ("1", "2"), ("2", "4"), "from_array", "to_array"
+            ),
+            BenchmarkImmediateScenario(
+                "latency", "latency", timing, "bounded_random", 0
+            ),
+        ),
+        _timing_sample(
+            SpecializationKey(
+                "cpp",
+                "p",
+                "gather",
+                "gather",
+                "e",
+                "si32",
+                "v",
+                ("cptr", "vidx", "sImm"),
+                immediate="4",
+                simd_type_base_bindings=(("Index", "si32"),),
+                lanes=2,
+            ),
+            BenchmarkIndexedLoadCorrectnessCase(
+                "c",
+                ("1", "2"),
+                ("0", "1"),
+                ("1", "2"),
+                "si32",
+                "int32_t",
+                "from_array",
+                "to_array",
+            ),
+            BenchmarkIndexedLoadScenario("throughput", timing, 64, 2),
+        ),
+        _timing_sample(
+            SpecializationKey(
+                "cpp", "p", "to_mask", "to_mask", "e", "si32", "m", ("im",), lanes=2
+            ),
+            BenchmarkMaskCorrectnessCase("c", ("1",), "1", "to_integral"),
+            BenchmarkMaskDensityScenario("balanced", timing, 0, 1),
+        ),
+        _timing_sample(
+            SpecializationKey(
+                "cpp", "p", "less", "less", "e", "si32", "m", ("v", "v"), lanes=2
+            ),
+            BenchmarkVectorMaskCorrectnessCase(
+                "c", (("1", "2"), ("2", "1")), "1", "from_array", "to_integral"
+            ),
+            BenchmarkMaskResultScenario(
+                "throughput", timing, ("bounded_random", "bounded_random")
+            ),
+        ),
+        _timing_sample(
+            SpecializationKey(
+                "cpp", "p", "hadd", "hadd", "e", "si32", "s", ("v",), lanes=2
+            ),
+            BenchmarkReductionCorrectnessCase("c", ("1", "2"), "3", "from_array"),
+            BenchmarkReductionScenario("throughput", timing, "bounded_random"),
+        ),
+    )
+    assert {
+        sample.scenarios[0].family: sha256(
+            render_scenario(0, 0, sample, sample.scenarios[0]).encode("utf-8")
+        ).hexdigest()
+        for sample in samples
+    } == {
+        "register": "111c97f41c90e8f326ca08c8ec12e6ae2fe45bdd43d25b24f39e084ea4f14620",
+        "vector_scalar": "30073bd5bfa3ad2f70629e31130305164ee94878f9cc51fee38880f35a4d4f99",
+        "immediate": "d15fe29d6d4ee4b82679af613ff7fd9a77c61e0838ba853663f42b5497a9bb50",
+        "indexed_load": "be417ff5f260515d47b95b8ebcb1e090d6ce5b774fee555bb2fe0142fe0c1a90",
+        "mask_density": "42fbfbd543c40ea64196bd85b9f83a78a664ac34ea5425f48853dd7c849c3e84",
+        "mask_result": "111c97f41c90e8f326ca08c8ec12e6ae2fe45bdd43d25b24f39e084ea4f14620",
+        "reduction": "039fa946eb5547b4b112b8bbe02bc11713ae158a13e34fc11f7cc9b077a189e1",
+    }
+
+
+def _timing_sample(
+    key: SpecializationKey,
+    correctness: BenchmarkCorrectnessCase,
+    scenario: BenchmarkScenario,
+) -> BenchmarkCandidateSet:
+    specialization = cast(
+        LoweredSpecialization,
+        SimpleNamespace(param_kinds=key.param_kinds),
+    )
+    return BenchmarkCandidateSet(
+        key=key,
+        specialization=specialization,
+        candidates=(BenchmarkCandidate("default", "hash"),),
+        correctness_cases=(correctness,),
+        scenarios=(scenario,),
+        stable_id="stable",
+    )
 
 
 @pytest.fixture(scope="module")
@@ -840,6 +1019,14 @@ def test_generated_cmake_keeps_benchmarks_opt_in(benchmark_result) -> None:
     assert "add_dependencies(tsl_generated tsl_variant_policy)" in cmake
     assert "if(TSL_BUILD_BENCHMARKS OR _TSL_POLICY_REQUESTED)" in cmake
     assert "if(_TSL_POLICY_REQUESTED AND CMAKE_CROSSCOMPILING)" in cmake
+    assert "${CMAKE_CXX_COMPILER_ARG1} -dumpmachine" in cmake
+    assert 'MATCHES "(wasm|wasi)"' in cmake
+    assert "check_cxx_source_runs(" in cmake
+    assert "_TSL_POLICY_COMPILER_RUNS_NATIVELY" in cmake
+    assert "require a C++ compiler that produces runnable host executables" in cmake
+    assert cmake.index("if(_TSL_POLICY_REQUESTED)") < cmake.index(
+        'if(_TSL_REQUESTED_PROFILE STREQUAL "auto")'
+    )
     assert "Cross-compiling tsl_variant_bench" in cmake
 
 
@@ -889,7 +1076,7 @@ def test_indexed_load_variant_gets_hot_l1_throughput_scenario(
 
 
 @pytest.mark.generated_build
-def test_native_autotune_and_non_default_policy_build_consumer(
+def test_native_clang_autotune_and_non_default_policy_build_consumer(
     data_root: Path,
     machine_profiles_path: Path,
     tmp_path: Path,
@@ -898,6 +1085,9 @@ def test_native_autotune_and_non_default_policy_build_consumer(
         pytest.skip("cmake is required")
     if platform.machine().lower() not in {"amd64", "x86_64"}:
         pytest.skip("the deterministic non-default policy probe uses SSE2")
+    clangxx = _native_clangxx()
+    if clangxx is None:
+        pytest.skip("a native Linux Clang C++ compiler is required")
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
@@ -913,8 +1103,7 @@ def test_native_autotune_and_non_default_policy_build_consumer(
     assert not has_errors(write_report.diagnostics), write_report.diagnostics
 
     environment = os.environ.copy()
-    if _compiler_name(environment.get("CXX", "")) == "zig":
-        environment["CXX"] = "c++"
+    environment.pop("CXX", None)
     consumer = tmp_path / "consumer"
     consumer.mkdir()
     (consumer / "CMakeLists.txt").write_text(
@@ -980,6 +1169,7 @@ def test_native_autotune_and_non_default_policy_build_consumer(
             str(consumer),
             "-B",
             str(autotune),
+            f"-DCMAKE_CXX_COMPILER={clangxx}",
         ),
         environment,
     )
@@ -1089,6 +1279,7 @@ def test_native_autotune_and_non_default_policy_build_consumer(
             str(policy_consumer),
             "-B",
             str(manual),
+            f"-DCMAKE_CXX_COMPILER={clangxx}",
         ),
         environment,
     )
@@ -1100,6 +1291,44 @@ def test_native_autotune_and_non_default_policy_build_consumer(
     assert built.returncode == 0, built.stderr + built.stdout
     executed = _run((str(manual / "policy_consumer"),), environment)
     assert executed.returncode == 0, executed.stderr + executed.stdout
+
+
+@pytest.mark.generated_build
+def test_policy_configure_rejects_wasi_clang_as_non_native(
+    benchmark_result,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cmake") is None:
+        pytest.skip("cmake is required")
+    wasi_clangxx = _wasi_clangxx()
+    if wasi_clangxx is None:
+        pytest.skip("WASI SDK clang++ is required")
+
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(benchmark_result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    environment = os.environ.copy()
+    environment.pop("CXX", None)
+    configured = _run(
+        (
+            "cmake",
+            "-S",
+            str(generated / "cpp"),
+            "-B",
+            str(tmp_path / "build"),
+            f"-DCMAKE_CXX_COMPILER={wasi_clangxx}",
+            "-DTSL_PROFILE=auto",
+            "-DTSL_BUILD_TESTS=OFF",
+            "-DTSL_AUTOTUNE_VARIANTS=ON",
+        ),
+        environment,
+    )
+    assert configured.returncode != 0
+    output = " ".join((configured.stderr + configured.stdout).split())
+    assert "require a C++ compiler that produces runnable host executables" in output
+    assert "reports non-native target" in output
+    assert "wasm" in output
 
 
 @pytest.mark.generated_build
@@ -1299,3 +1528,41 @@ def _run(command: tuple[str, ...], environment: dict[str, str]) -> subprocess.Co
 def _compiler_name(command: str) -> str:
     parts = shlex.split(command)
     return Path(parts[0]).name if parts else ""
+
+
+def _native_clangxx() -> str | None:
+    candidates = ("/usr/bin/clang++", shutil.which("clang++"))
+    for candidate in candidates:
+        if candidate is None or not Path(candidate).is_file():
+            continue
+        target = subprocess.run(
+            (candidate, "-dumpmachine"),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if (
+            target.returncode == 0
+            and "linux" in target.stdout
+            and "wasm" not in target.stdout
+        ):
+            # Clang selects C++ driver behavior from argv[0], so preserve the
+            # clang++ symlink instead of resolving it to the clang binary.
+            return str(Path(candidate).absolute())
+    return None
+
+
+def _wasi_clangxx() -> str | None:
+    sdk_root = Path(os.environ.get("WASI_SDK_PATH", "/opt/wasi-sdk"))
+    candidate = sdk_root / "bin" / "clang++"
+    if not candidate.is_file():
+        return None
+    target = subprocess.run(
+        (str(candidate), "-dumpmachine"),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if target.returncode == 0 and "wasm" in target.stdout:
+        return str(candidate)
+    return None

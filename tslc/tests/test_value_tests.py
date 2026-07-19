@@ -218,6 +218,7 @@ def test_shift_imask_value_tests_cover_x86_arm_and_oneapi(
         x86_root,
         x86_result.rendered.verify,
         runner_paths={"sde": str(sde)},
+        tool_paths={"oneapi-cpp": str(icpx)},
         run_value_tests=True,
     )
     _assert_value_tests_ran(x86_report, backends=("cpp",))
