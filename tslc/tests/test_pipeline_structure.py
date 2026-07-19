@@ -112,13 +112,19 @@ def test_render_assets_have_one_packaged_source_of_truth() -> None:
         "cpp_profile_metadata.hpp.tmpl",
         "cpp_primitive_tags.hpp.tmpl",
         "cpp_smoke.cpp.tmpl",
+        "rust_benchmark.rs.tmpl",
+        "rust_benchmark_main.rs.tmpl",
+        "rust_benchmark_target.toml.tmpl",
+        "rust_build.rs",
         "rust_documentation.rs.tmpl",
         "rust_lib.rs.tmpl",
+        "rust_lib_benchmark_profile.rs.tmpl",
         "rust_lib_profile.rs.tmpl",
         "rust_primitive_tags.rs.tmpl",
         "rust_profile_module.rs.tmpl",
         "rust_profile_metadata.rs.tmpl",
         "rust_smoke.rs",
+        "tsl_benchmark_core.rs",
     } <= assets.files.keys()
     assert "int main(int argc, char** argv)" in assets.text(
         "cpp_benchmark.cpp.tmpl"

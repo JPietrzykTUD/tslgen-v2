@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from hashlib import sha256
 import json
 import re
@@ -28,6 +29,7 @@ from tslc.benchmark.model import (
     BenchmarkProfilePlan,
     BenchmarkProjectPlan,
     BenchmarkScenario,
+    BenchmarkScenarioFamily,
     SpecializationKey,
 )
 from tslc.benchmark.scenarios import (
@@ -39,6 +41,7 @@ from tslc.benchmark.scenarios import (
     register_scenarios,
     vector_scalar_scenarios,
 )
+from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, Extension, Primitive
 from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.catalog.signatures import parse_signature
@@ -51,6 +54,36 @@ _STABLE_ID_RE = re.compile(r"[^0-9A-Za-z_]+")
 BENCHMARK_PROTOCOL_VERSION = 1
 
 
+@dataclass(frozen=True, slots=True)
+class BenchmarkProfileContext:
+    """Exact machine-profile facts admitted by a backend benchmark pilot."""
+
+    profile_name: str
+    profile_family: str
+    features: frozenset[str]
+    backend_feature_spellings: tuple[str, ...]
+    compile_modes: frozenset[str]
+    backend_flags: tuple[str, ...]
+
+    @classmethod
+    def from_profile(
+        cls,
+        profile: MachineProfile,
+        backend_id: str,
+    ) -> BenchmarkProfileContext:
+        return cls(
+            profile_name=profile.name,
+            profile_family=profile.family,
+            features=profile.features,
+            backend_feature_spellings=tuple(
+                profile.feature_spelling(feature, backend_id)
+                for feature in sorted(profile.features)
+            ),
+            compile_modes=profile.compile_modes,
+            backend_flags=profile.flags_for_backend(backend_id),
+        )
+
+
 class BenchmarkPlanner:
     """Plan typed benchmark scenarios for one generated backend.
 
@@ -59,11 +92,20 @@ class BenchmarkPlanner:
     silently dropped or classified by primitive name.
     """
 
-    def __init__(self, catalog: Catalog, *, backend_id: str) -> None:
+    def __init__(
+        self,
+        catalog: Catalog,
+        *,
+        backend_id: str,
+        supported_scenario_families: frozenset[BenchmarkScenarioFamily] | None = None,
+        supported_profile_contexts: frozenset[BenchmarkProfileContext] | None = None,
+    ) -> None:
         if not backend_id:
             raise ValueError("benchmark planner requires a backend ID")
         self._catalog = catalog
         self._backend_id = backend_id
+        self._supported_scenario_families = supported_scenario_families
+        self._supported_profile_contexts = supported_profile_contexts
         self._harness = discover_harness_primitives(catalog)
 
     def plan(
@@ -79,6 +121,11 @@ class BenchmarkPlanner:
         }
         for emitted_profile in sorted(profiles, key=lambda item: item.profile.name):
             backend_id = self._backend_id
+            profile_support_reason = _profile_support_reason(
+                emitted_profile.profile,
+                backend_id,
+                self._supported_profile_contexts,
+            )
             by_primitive = emitted_profile.specializations(backend_id)
             cases = value_profiles.get((backend_id, emitted_profile.profile.name), ())
             candidate_sets: list[BenchmarkCandidateSet] = []
@@ -87,6 +134,17 @@ class BenchmarkPlanner:
                     by_primitive[primitive_name], key=_specialization_sort_key
                 ):
                     if not spec.variant_bodies:
+                        continue
+                    if profile_support_reason is not None:
+                        coverage.append(
+                            _coverage(
+                                emitted_profile,
+                                spec,
+                                backend_id,
+                                "unsupported",
+                                profile_support_reason,
+                            )
+                        )
                         continue
                     if _selector_slot_count(by_primitive[primitive_name], spec) > 1:
                         coverage.append(
@@ -146,6 +204,11 @@ class BenchmarkPlanner:
                     manifest_hash=_manifest_hash(
                         ordered_sets, emitted_profile, backend_id
                     ),
+                    profile_family=emitted_profile.profile.family,
+                    backend_feature_spellings=tuple(
+                        emitted_profile.profile.feature_spelling(feature, backend_id)
+                        for feature in sorted(emitted_profile.profile.features)
+                    ),
                 )
             )
         return BenchmarkProjectPlan(
@@ -179,6 +242,23 @@ class BenchmarkPlanner:
         lanes = whole_lanes(extension.vector_bits, spec.type_tag)
         if lanes is None:
             return None, "extension width does not contain a complete scalar lane", False
+        scenario_family = _scenario_family(spec)
+        if scenario_family is None:
+            return (
+                None,
+                "no typed benchmark scenario supports this result and parameter shape",
+                False,
+            )
+        if (
+            self._supported_scenario_families is not None
+            and scenario_family not in self._supported_scenario_families
+        ):
+            return (
+                None,
+                "backend benchmark support does not include the "
+                f"{scenario_family!r} scenario family",
+                False,
+            )
         key = SpecializationKey(
             backend_id=self._backend_id,
             profile_name=profile.profile.name,
@@ -202,7 +282,7 @@ class BenchmarkPlanner:
         seed = int(sha256(stable_id.encode("utf-8")).hexdigest()[:16], 16)
         correctness: tuple[BenchmarkCorrectnessCase, ...]
         scenarios: tuple[BenchmarkScenario, ...]
-        if _is_indexed_load_shape(spec):
+        if scenario_family == "indexed_load":
             if immediate_value is None or len(simd_type_base_bindings) != 1:
                 return None, "no concrete indexed-load binding was planned", True
             try:
@@ -255,7 +335,7 @@ class BenchmarkPlanner:
                 to_array,
             )
             scenarios = indexed_load_scenarios(index_lanes, seed)
-        elif spec.result_kind == "v" and spec.param_kinds == ("v", "sImm"):
+        elif scenario_family == "immediate":
             if immediate_value is None:
                 return None, "no concrete immediate value was planned", True
             harness, harness_reason = _require_harness(
@@ -278,7 +358,7 @@ class BenchmarkPlanner:
                 to_array,
             )
             scenarios = immediate_scenarios(primitive, spec, seed)
-        elif spec.result_kind == "v" and spec.param_kinds == ("v", "s"):
+        elif scenario_family == "vector_scalar":
             if not tiling_preserves_lane_semantics(primitive):
                 return (
                     None,
@@ -304,9 +384,7 @@ class BenchmarkPlanner:
                 to_array,
             )
             scenarios = vector_scalar_scenarios(primitive, spec, seed)
-        elif spec.result_kind == "v" and spec.param_kinds and all(
-            kind == "v" for kind in spec.param_kinds
-        ):
+        elif scenario_family == "register":
             if not tiling_preserves_lane_semantics(primitive):
                 return (
                     None,
@@ -332,9 +410,7 @@ class BenchmarkPlanner:
                 to_array,
             )
             scenarios = register_scenarios(primitive, spec, seed)
-        elif spec.result_kind == "m" and spec.param_kinds and all(
-            kind == "v" for kind in spec.param_kinds
-        ):
+        elif scenario_family == "mask_result":
             harness, harness_reason = _require_harness(
                 by_primitive,
                 (self._harness.from_array, self._harness.to_integral),
@@ -354,7 +430,7 @@ class BenchmarkPlanner:
                 to_integral,
             )
             scenarios = mask_result_scenarios(primitive, spec, seed)
-        elif spec.result_kind == "s" and spec.param_kinds == ("v",):
+        elif scenario_family == "reduction":
             harness, harness_reason = _require_harness(
                 by_primitive,
                 (self._harness.from_array,),
@@ -373,7 +449,7 @@ class BenchmarkPlanner:
                 from_array,
             )
             scenarios = reduction_scenarios(seed)
-        elif spec.result_kind == "m" and spec.param_kinds == ("im",):
+        elif scenario_family == "mask_density":
             harness, harness_reason = _require_harness(
                 by_primitive,
                 (self._harness.to_integral,),
@@ -431,6 +507,36 @@ def _require_harness(
     return resolved, ""
 
 
+def _profile_support_reason(
+    profile: MachineProfile,
+    backend_id: str,
+    supported: frozenset[BenchmarkProfileContext] | None,
+) -> str | None:
+    if supported is None:
+        return None
+    context = BenchmarkProfileContext.from_profile(profile, backend_id)
+    if context in supported:
+        return None
+    if not any(item.profile_family == context.profile_family for item in supported):
+        return (
+            "backend benchmark support does not include the "
+            f"{context.profile_family!r} profile family"
+        )
+    if not any(
+        item.profile_family == context.profile_family
+        and item.profile_name == context.profile_name
+        for item in supported
+    ):
+        return (
+            "backend benchmark support does not include profile "
+            f"{context.profile_name!r}"
+        )
+    return (
+        "backend benchmark support requires the canonical feature/build context "
+        f"for profile {context.profile_name!r}"
+    )
+
+
 def _common_unsupported_reason(
     spec: LoweredSpecialization,
     primitive: Primitive | None,
@@ -478,6 +584,34 @@ def _is_indexed_load_shape(spec: LoweredSpecialization) -> bool:
         and len(spec.type_params) == 1
         and spec.target is None
     )
+
+
+def _scenario_family(
+    spec: LoweredSpecialization,
+) -> BenchmarkScenarioFamily | None:
+    if _is_indexed_load_shape(spec):
+        return "indexed_load"
+    if spec.result_kind == "v" and spec.param_kinds == ("v", "sImm"):
+        return "immediate"
+    if spec.result_kind == "v" and spec.param_kinds == ("v", "s"):
+        return "vector_scalar"
+    if (
+        spec.result_kind == "v"
+        and spec.param_kinds
+        and all(kind == "v" for kind in spec.param_kinds)
+    ):
+        return "register"
+    if (
+        spec.result_kind == "m"
+        and spec.param_kinds
+        and all(kind == "v" for kind in spec.param_kinds)
+    ):
+        return "mask_result"
+    if spec.result_kind == "s" and spec.param_kinds == ("v",):
+        return "reduction"
+    if spec.result_kind == "m" and spec.param_kinds == ("im",):
+        return "mask_density"
+    return None
 
 
 def _has_vector_specialization(
@@ -653,4 +787,8 @@ def _coverage_sort_key(entry: BenchmarkCoverageEntry) -> tuple[str, ...]:
     )
 
 
-__all__ = ("BENCHMARK_PROTOCOL_VERSION", "BenchmarkPlanner")
+__all__ = (
+    "BENCHMARK_PROTOCOL_VERSION",
+    "BenchmarkPlanner",
+    "BenchmarkProfileContext",
+)

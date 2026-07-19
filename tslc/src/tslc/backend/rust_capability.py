@@ -16,7 +16,8 @@ from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
 from tslc.backend.rust import RustBackend
 from tslc.backend.rust_translation import RustBackendDialect
 from tslc.backend.rust_validation import validate_rust_profiles
-from tslc.benchmark.planner import BenchmarkPlanner
+from tslc.benchmark.planner import BenchmarkPlanner, BenchmarkProfileContext
+from tslc.benchmark.render_rust import rust_benchmark_artifacts
 from tslc.catalog.model import Catalog
 from tslc.output._verify_rust import (
     create_rust_verify_driver as _create_rust_verify_driver,
@@ -74,7 +75,23 @@ def rust_benchmark_plan(
     profiles: tuple[EmittedProfile, ...],
     value_tests: ValueTestProjectPlan,
 ) -> BenchmarkProjectPlan:
-    return BenchmarkPlanner(catalog, backend_id="rust").plan(profiles, value_tests)
+    return BenchmarkPlanner(
+        catalog,
+        backend_id="rust",
+        supported_scenario_families=frozenset({"register"}),
+        supported_profile_contexts=frozenset(
+            {
+                BenchmarkProfileContext(
+                    profile_name="sse2",
+                    profile_family="x86",
+                    features=frozenset({"sse", "sse2"}),
+                    backend_feature_spellings=("sse", "sse2"),
+                    compile_modes=frozenset(),
+                    backend_flags=(),
+                )
+            }
+        ),
+    ).plan(profiles, value_tests)
 
 
 def rust_documentation_formatter() -> BackendDocumentationFormatter:
@@ -113,6 +130,7 @@ RUST_BACKEND = BackendCapability(
     toolchain_commands=rust_toolchain_commands,
     documentation_formatter_factory=rust_documentation_formatter,
     benchmark_plan_builder=rust_benchmark_plan,
+    benchmark_renderer=rust_benchmark_artifacts,
     helper_manifest=RUST_HELPER_MANIFEST,
     profile_validator=validate_rust_profiles,
     primitive_preview_renderer=rust_primitive_preview,

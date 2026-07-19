@@ -1,0 +1,78 @@
+use crate::tsl_benchmark_core::{
+    runtime_self_test, write_samples, Options, RawSample, ReportMetadata,
+};
+use crate::tsl_core::{Simd, SimdVector};
+use crate::tsl_test_core::LaneEq;
+use crate::tsl_@{profile_slug}::*;
+
+const PROTOCOL_VERSION: u32 = @{protocol_version};
+const PROFILE: &str = @{profile_name};
+const MANIFEST_HASH: &str = @{manifest_hash};
+const REQUIRED_FEATURES: &str = @{required_features};
+const BUILD_HOST: &str = env!("TSL_BUILD_HOST");
+const BUILD_TARGET: &str = env!("TSL_BUILD_TARGET");
+
+fn native_build_matches(host: &str, target: &str) -> bool {
+    host == target
+}
+
+@{native_cpu_check}
+
+@{declarations}
+
+fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
+    let options = Options::parse(arguments)?;
+    if options.self_test {
+        return runtime_self_test();
+    }
+    if !native_build_matches(BUILD_HOST, BUILD_TARGET) {
+        return Err(format!(
+            "profile {} benchmark requires a native build, got host {} and target {}",
+            PROFILE,
+            BUILD_HOST,
+            BUILD_TARGET,
+        ));
+    }
+    if !native_cpu_supported() {
+        return Err(format!(
+            "profile {PROFILE} requires CPU features [{REQUIRED_FEATURES}] on this native host"
+        ));
+    }
+    if @{candidate_set_count} == 0 {
+        return Err(format!("profile {PROFILE} has no supported Rust register benchmarks"));
+    }
+@{correctness_calls}
+    let mut samples = Vec::<RawSample>::new();
+@{scenario_calls}
+    write_samples(
+        &samples,
+        ReportMetadata {
+            protocol_version: PROTOCOL_VERSION,
+            profile: PROFILE,
+            manifest_hash: MANIFEST_HASH,
+        },
+        options.results_path.as_deref(),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn cross_target_build_is_not_native() {
+        assert!(!super::native_build_matches(
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu",
+        ));
+    }
+}
+
+#[doc(hidden)]
+pub fn main() -> i32 {
+    match run(std::env::args().skip(1)) {
+        Ok(()) => 0,
+        Err(error) => {
+            eprintln!("TSL Rust benchmark error: {error}");
+            1
+        }
+    }
+}

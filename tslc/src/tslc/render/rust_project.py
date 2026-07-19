@@ -30,6 +30,7 @@ def rust_artifacts(
     media_type: str,
 ) -> list[Artifact]:
     artifacts = [
+        text("rust/build.rs", assets.text("rust_build.rs"), media_type=media_type),
         text("rust/src/tsl_core.rs", assets.text("tsl_core.rs"), media_type=media_type),
         text(
             "rust/src/tsl_algorithm.rs",
@@ -91,6 +92,17 @@ def rust_artifacts(
             text(
                 f"rust/src/tsl_{slug(emitted_profile.profile.name)}.rs",
                 content,
+                media_type=media_type,
+            )
+        )
+        profile_slug = slug(emitted_profile.profile.name)
+        artifacts.append(
+            text(
+                f"rust/benches/tsl_variant_bench_{profile_slug}.rs",
+                assets.fill(
+                    "rust_benchmark_main.rs.tmpl",
+                    profile_slug=profile_slug,
+                ),
                 media_type=media_type,
             )
         )
@@ -224,10 +236,18 @@ def _rust_lib(
         ).rstrip()
         for profile_slug in profile_slugs
     )
+    benchmark_modules = "\n\n".join(
+        assets.fill(
+            "rust_lib_benchmark_profile.rs.tmpl",
+            profile_slug=profile_slug,
+        ).rstrip()
+        for profile_slug in profile_slugs
+    )
     return assets.fill(
         "rust_lib.rs.tmpl",
         primitive_tags=(f"{primitive_tags}\n\n" if primitive_tags else ""),
         profile_modules=profile_modules,
+        benchmark_modules=benchmark_modules,
     )
 
 
@@ -298,4 +318,17 @@ def _rust_cargo(profiles: tuple[EmittedProfile, ...], assets: RenderAssets) -> s
     features.extend(f"{slug(emitted_profile.profile.name)} = []" for emitted_profile in profiles)
     # Opt-in feature that compiles+runs the generated value tests (parity with the C++ ctest gate).
     features.append("value_tests = []")
-    return assets.fill("rust_cargo.toml.tmpl", features="\n".join(features))
+    # Benchmark targets stay outside ordinary builds unless explicitly requested.
+    features.append("variant_benchmarks = []")
+    bench_targets = "\n\n".join(
+        assets.fill(
+            "rust_benchmark_target.toml.tmpl",
+            profile_slug=profile_slug,
+        ).rstrip()
+        for profile_slug in profile_slugs
+    )
+    return assets.fill(
+        "rust_cargo.toml.tmpl",
+        features="\n".join(features),
+        bench_targets=(f"\n\n{bench_targets}" if bench_targets else ""),
+    )

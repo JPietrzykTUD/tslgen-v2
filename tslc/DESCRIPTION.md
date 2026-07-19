@@ -45,7 +45,7 @@ sources + compiler assets → parse → catalog → select → scan body → low
 | **lower** | [lower/](src/tslc/lower/) | Walk segments, resolve queries/intrinsics → `LoweredSpecialization` |
 | **backend** | [backend/](src/tslc/backend/) | Own target type projection, helper manifests, emitted profiles, validation, and C++/Rust function text |
 | **value tests** | [value_tests/](src/tslc/value_tests/) | Plan executable cases from finalized emitted names |
-| **benchmark** | [benchmark/](src/tslc/benchmark/) | Plan explicit implementation-variant measurements and render the optional C++ benchmark/policy tool |
+| **benchmark** | [benchmark/](src/tslc/benchmark/) | Plan explicit implementation-variant measurements and render optional C++ policy/Rust report tools |
 | **render** | [render/](src/tslc/render/) | Format validated profiles and prebuilt test plans into headers/modules, dispatch, CMake/Cargo, and docs |
 | **output** | [output/](src/tslc/output/) | Write the file tree; build-verify with real toolchains (incl. SDE/QEMU emulation) |
 
@@ -384,9 +384,17 @@ backend specializations and authored value-test facts through one
 backend-parameterized typed planner. It plans every explicitly coexisting named
 variant in the emitted primitive/dependency closure and emits structured skip
 coverage for unsupported signature shapes. C++ renders those facts as a
-standalone native benchmark/policy tool; Rust currently stops at deterministic
-typed plan and coverage evidence, without adding benchmark artifacts to the
-generated Cargo project. Value-test tags do not control benchmark admission.
+standalone native benchmark/policy tool. Rust's initial `sse2` pilot renders
+the fixed-width register family as a standard-library-only, report-only custom
+Cargo benchmark: the feature-gated hot loop lives inside the library crate, a
+thin per-profile bench target invokes it only with the explicit
+`variant_benchmarks` and profile features, and ordinary Cargo builds retain the
+authored wrapper choice. Rust candidate calls use backend-owned concrete type,
+trait, const-argument, and unsafe spelling; all authored expectations pass
+before any samples are timed or written. Other profile and scenario families
+remain structured Rust coverage gaps, and the Rust report does not yet reduce
+samples or produce/consume a policy. Value-test tags do not control benchmark
+admission.
 Workload semantics are resolved in
 [benchmark/scenarios.py](src/tslc/benchmark/scenarios.py) before rendering:
 each typed scenario and correctness case validates its own structural and

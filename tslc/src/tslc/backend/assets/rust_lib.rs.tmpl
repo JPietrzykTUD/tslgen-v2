@@ -8,6 +8,10 @@ pub mod tsl_algorithm;
 pub mod tsl_test_core;
 pub use tsl_algorithm::dataparallel;
 
+#[cfg(feature = "variant_benchmarks")]
+#[doc(hidden)]
+pub mod tsl_benchmark_core;
+
 #[cfg(doc)]
 #[doc(hidden)]
 pub mod tsl_documentation;
@@ -17,3 +21,5 @@ pub mod tsl_documentation;
 pub use crate::tsl_documentation as profile;
 
 @{primitive_tags}@{profile_modules}
+
+@{benchmark_modules}

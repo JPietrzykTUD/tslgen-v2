@@ -174,7 +174,8 @@ jobs:
                 PYTHONPATH=tslc/src python -m pytest -q \
                   --run-generated-builds \
                   -m generated_build \
-                  tslc/tests/test_benchmark_variants.py
+                  tslc/tests/test_benchmark_variants.py \
+                  tslc/tests/test_rust_benchmark_rendering.py
               '
 
       - name: Upload generated benchmark logs

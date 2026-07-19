@@ -833,6 +833,8 @@ class BenchmarkProfilePlan:
     profile_name: str
     candidate_sets: tuple[BenchmarkCandidateSet, ...]
     manifest_hash: str
+    profile_family: str
+    backend_feature_spellings: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)

@@ -43,6 +43,25 @@ def rust_benchmark_planning_result(
     return result
 
 
+@pytest.fixture(scope="module")
+def rust_non_register_benchmark_planning_result(
+    data_root: Path,
+    machine_profiles_path: Path,
+):
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["hadd"],
+        profiles=["avx2"],
+        type_tags=["si32"],
+        backends=["rust"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    return result
+
+
 def _mul_candidate_set(
     plan: BenchmarkProjectPlan,
     backend_id: str,
@@ -58,7 +77,7 @@ def _mul_candidate_set(
     )
 
 
-def test_rust_backend_produces_typed_plan_without_benchmark_artifacts(
+def test_rust_backend_produces_typed_plan_and_report_artifacts(
     rust_benchmark_planning_result,
 ) -> None:
     result = rust_benchmark_planning_result
@@ -89,8 +108,8 @@ def test_rust_backend_produces_typed_plan_without_benchmark_artifacts(
         and entry.status == "emitted"
         for entry in plan.coverage
     )
-    assert not any(
-        artifact.logical_path.startswith("rust/bench/")
+    assert any(
+        artifact.logical_path == "rust/bench/manifest_sse2.json"
         for artifact in result.artifacts.artifacts
     )
     cargo_toml = next(
@@ -98,12 +117,9 @@ def test_rust_backend_produces_typed_plan_without_benchmark_artifacts(
         for artifact in result.artifacts.artifacts
         if artifact.logical_path == "rust/Cargo.toml"
     )
-    assert "[[bench]]" not in cargo_toml
-    assert (
-        backend_capability("rust").render_benchmark_artifacts(
-            plan, load_default_render_assets()
-        )
-        == []
+    assert "[[bench]]" in cargo_toml
+    assert backend_capability("rust").render_benchmark_artifacts(
+        plan, load_default_render_assets()
     )
 
 
@@ -198,6 +214,159 @@ def test_cpp_manifest_identity_is_unchanged(
         sha256(rendered_manifest.encode("utf-8")).hexdigest()
         == "486bd0f68520cee4fef7f352ef5bd67166a08d89ef28edc2ebc39868db68bdc5"
     )
+
+
+def test_profile_plan_owns_family_and_ordered_backend_feature_spellings(
+    rust_benchmark_planning_result,
+) -> None:
+    plan = rust_benchmark_planning_result.rendered.benchmarks
+
+    for backend_id in ("cpp", "rust"):
+        profile = plan.profile(backend_id, "sse2")
+        assert profile is not None
+        assert profile.profile_family == "x86"
+        assert profile.backend_feature_spellings == ("sse", "sse2")
+
+
+def test_rust_register_only_support_reports_other_scenario_families(
+    rust_non_register_benchmark_planning_result,
+    catalog: Catalog,
+) -> None:
+    result = rust_non_register_benchmark_planning_result
+    plan = BenchmarkPlanner(
+        catalog,
+        backend_id="rust",
+        supported_scenario_families=frozenset({"register"}),
+    ).plan(result.emitted_profiles, result.rendered.value_tests)
+    profile = plan.profile("rust", "avx2")
+    assert profile is not None
+    assert profile.candidate_sets == ()
+    assert profile.profile_family == "x86"
+    assert profile.backend_feature_spellings == (
+        "avx",
+        "avx2",
+        "rdrand",
+        "sse",
+        "sse2",
+        "sse4.1",
+        "sse4.2",
+        "ssse3",
+    )
+
+    hadd = next(
+        entry
+        for entry in plan.coverage
+        if entry.backend_id == "rust" and entry.primitive_name == "hadd"
+    )
+    assert hadd.status == "unsupported"
+    assert (
+        hadd.reason
+        == "backend benchmark support does not include the 'reduction' scenario family"
+    )
+    assert not any(entry.status == "emitted" for entry in plan.coverage)
+
+
+def test_rust_report_pilot_is_restricted_to_sse2(
+    rust_non_register_benchmark_planning_result,
+) -> None:
+    plan = rust_non_register_benchmark_planning_result.rendered.benchmarks
+    profile = plan.profile("rust", "avx2")
+    assert profile is not None
+    assert profile.candidate_sets == ()
+
+    hadd = next(
+        entry
+        for entry in plan.coverage
+        if entry.backend_id == "rust" and entry.primitive_name == "hadd"
+    )
+    assert hadd.status == "unsupported"
+    assert (
+        hadd.reason
+        == "backend benchmark support does not include profile 'avx2'"
+    )
+    assert not any(entry.status == "emitted" for entry in plan.coverage)
+
+
+def test_rust_sse2_pilot_requires_exact_profile_context(
+    rust_benchmark_planning_result,
+    catalog: Catalog,
+) -> None:
+    result = rust_benchmark_planning_result
+    source_profile = result.emitted_profiles[0]
+    machine_profile = source_profile.profile
+    mutated_profiles = (
+        replace(
+            machine_profile,
+            features=frozenset({"sse", "sse2", "avx2"}),
+        ),
+        replace(machine_profile, alternatives={"sse2": "avx2"}),
+        replace(machine_profile, compile_modes=frozenset({"custom_mode"})),
+        replace(
+            machine_profile,
+            backend_flags={"rust": ("-Ctarget-feature=+avx2",)},
+        ),
+    )
+
+    for mutated_profile in mutated_profiles:
+        emitted_profile = EmittedProfile(
+            profile=mutated_profile,
+            specializations_by_backend=source_profile.specializations_by_backend,
+            extensions=source_profile.extensions,
+            profile_family=source_profile.profile_family,
+            immediate_split_names=frozenset(),
+        )
+        plan = backend_capability("rust").plan_benchmarks(
+            catalog,
+            (emitted_profile,),
+            result.rendered.value_tests,
+        )
+        assert plan is not None
+        profile = plan.profile("rust", "sse2")
+        assert profile is not None
+        assert profile.candidate_sets == ()
+        assert plan.coverage
+        assert {entry.status for entry in plan.coverage} == {"unsupported"}
+        assert {entry.reason for entry in plan.coverage} == {
+            "backend benchmark support requires the canonical feature/build "
+            "context for profile 'sse2'"
+        }
+
+
+def test_rust_x86_pilot_reports_other_profile_families(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["abs"],
+        profiles=["neon"],
+        type_tags=["si8"],
+        backends=["rust"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    profile = result.rendered.benchmarks.profile("rust", "neon")
+    assert profile is not None
+    assert profile.profile_family == "aarch64"
+    assert profile.candidate_sets == ()
+
+    coverage = result.rendered.benchmarks.coverage
+    abs_entry = next(
+        entry
+        for entry in coverage
+        if entry.backend_id == "rust"
+        and entry.primitive_name == "abs"
+        and entry.extension_name == "neon"
+        and entry.type_tag == "si8"
+    )
+    assert abs_entry.status == "unsupported"
+    assert (
+        abs_entry.reason
+        == "backend benchmark support does not include the 'aarch64' profile family"
+    )
+    assert not any(entry.status == "emitted" for entry in coverage)
 
 
 def test_unregistered_backend_can_reuse_planner_without_name_dispatch(
