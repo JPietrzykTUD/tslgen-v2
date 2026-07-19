@@ -644,6 +644,15 @@ def _primitive_explorer_payload(
                 "attributes": dict(slot.attributes),
                 "extension": slot.extension,
                 "type": slot.type_tag,
+                "target": (
+                    None
+                    if slot.target is None
+                    else {
+                        "dimension": slot.target.dimension,
+                        "name": slot.target.name,
+                        "value": slot.target.value,
+                    }
+                ),
                 "status": slot.status,
                 "detail": slot.detail,
                 "available": slot.available,

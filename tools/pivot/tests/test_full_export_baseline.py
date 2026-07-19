@@ -62,10 +62,10 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     assert provenance["argv"] == list(CANONICAL_FULL_EXPORT_ARGV)
     assert provenance["command"] == CANONICAL_FULL_EXPORT_COMMAND
     assert actual["summary"] == {
-        "documents": 188,
-        "definitions": 17_060,
-        "skips": 27_823,
-        "nominal_definition_identities": 16_732,
+        "documents": 186,
+        "definitions": 16_620,
+        "skips": 29_123,
+        "nominal_definition_identities": 16_292,
         "definition_identity_collisions": {
             "groups": 328,
             "entries": 656,
@@ -74,13 +74,13 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
             "exact_duplicate_only_groups": 0,
         },
         "languages": {
-            "cpp": {"documents": 94, "definitions": 10_291, "skips": 18_568},
-            "rust": {"documents": 94, "definitions": 6_769, "skips": 9_255},
+            "cpp": {"documents": 93, "definitions": 10_041, "skips": 19_473},
+            "rust": {"documents": 93, "definitions": 6_579, "skips": 9_650},
         },
     }
     artifacts = actual["artifacts"]
     assert artifacts["ordered_content_sha256"] == (
-        "846ffd8955e3b7860f1bc7c2980d4fc2bd8618efa259fbe1824923c3293dc747"
+        "78ede4c2f285414fefa5da989d135e6b24ea6609f29d2ce5a082926efcb5ccf6"
     )
     assert actual["skip_category_scheme"] == "reason-prefix-v1"
     assert actual["unclassified_skip_count"] == 0
@@ -91,10 +91,10 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         "callee_resolution": 304,
         "forwarded_call_arguments": 3_180,
         "local_declaration": 818,
-        "residual_target_text": 7_172,
+        "residual_target_text": 7_352,
         "schema_conflict": 650,
-        "signature_admissibility": 10_943,
-        "specialization_admissibility": 4_756,
+        "signature_admissibility": 12_163,
+        "specialization_admissibility": 4_656,
     }
     assert actual["skip_fields"] == [
         "language",
@@ -108,7 +108,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     ]
     skip_records = actual["skips"]
     assert skip_records == sorted(skip_records, key=_canonical_json)
-    assert sum(record[-1] for record in skip_records) == 27_823
+    assert sum(record[-1] for record in skip_records) == 29_123
     assert all(len(record) == len(actual["skip_fields"]) for record in skip_records)
     assert all(
         record[6] is None
@@ -124,7 +124,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         actual["skip_inventory_sha256"]
     )
     assert actual["skip_inventory_sha256"] == (
-        "1f3a6ff9b2f5096536b931baaa01960bdf48191beb578f7eed37b639d3c1bedd"
+        "c28f3147d5665fc22c25a39ed95b5fd8bdffa42a2f89f75bb3c3ed7c89e32dcd"
     )
 
 
@@ -138,8 +138,8 @@ def _assert_complete_body_census(
         "rust",
     )
     assert tuple(len(census.entries) for census in result.body_censuses) == (
-        10_291,
-        6_769,
+        10_041,
+        6_579,
     )
     assert tuple(census.multi_statement_count for census in result.body_censuses) == (
         3_061,
@@ -150,15 +150,15 @@ def _assert_complete_body_census(
             ("call_and_local", 89),
             ("call_only", 2_962),
             ("local_only", 10),
-            ("native_leaf", 4_442),
-            ("synthetic_fixed", 2_788),
+            ("native_leaf", 4_222),
+            ("synthetic_fixed", 2_758),
         ),
         (
             ("call_and_local", 5),
             ("call_only", 1_654),
             ("local_only", 10),
-            ("native_leaf", 2_336),
-            ("synthetic_fixed", 2_764),
+            ("native_leaf", 2_176),
+            ("synthetic_fixed", 2_734),
         ),
     )
     assert Counter(
@@ -167,8 +167,8 @@ def _assert_complete_body_census(
         for entry in census.entries
         if entry.category is not None
     ) == {
-        "synthetic_fixed": 5_552,
-        "native_leaf": 6_778,
+        "synthetic_fixed": 5_492,
+        "native_leaf": 6_398,
         "call_only": 4_616,
         "local_only": 20,
         "call_and_local": 94,
@@ -322,7 +322,7 @@ def _definitions_by_identity(manifest: dict[str, Any]) -> dict[str, tuple[str, .
         )
         direct_sha256 = item[5]
         by_identity.setdefault(identity, []).append(direct_sha256)
-    assert sum(len(items) for items in by_identity.values()) == 17_060
+    assert sum(len(items) for items in by_identity.values()) == 16_620
     return {
         identity: tuple(sorted(direct_hashes))
         for identity, direct_hashes in by_identity.items()

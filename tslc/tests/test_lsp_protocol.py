@@ -221,6 +221,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         )
         assert selected_slot["primitive"] == "add"
         assert selected_slot["parameters"] == ["left", "right"]
+        assert selected_slot["target"] is None
         selected_implementations = selected_slot["implementations"]
         assert len(selected_implementations) == 1
         assert all(
@@ -233,6 +234,33 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
             and implementation["attributes"] == {}
             for implementation in selected_implementations
         )
+
+        client.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 15,
+                "method": "tsl/primitiveExplorer",
+                "params": {
+                    "mode": "resolved",
+                    "profile": "avx2",
+                    "backend": "cpp",
+                    "primitive": "insert_imask",
+                },
+            }
+        )
+        target_response = client.read_until(lambda item: item.get("id") == 15)
+        target_slots = [
+            slot
+            for slot in target_response["result"]["slots"]
+            if slot["extension"] == "avx2"
+            and slot["type"] == "si64"
+            and slot["status"] == "selected"
+        ]
+        assert {
+            (slot["target"]["dimension"], slot["target"]["value"])
+            for slot in target_slots
+        } >= {("base", "ui8"), ("extension", "avx512")}
+        assert all(len(slot["implementations"]) == 1 for slot in target_slots)
 
         client.send(
             {

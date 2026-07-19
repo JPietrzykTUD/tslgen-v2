@@ -34,6 +34,12 @@ export interface ExplorerImplementation {
   readonly location: ExplorerLocation;
 }
 
+export interface ExplorerTarget {
+  readonly dimension: "base" | "extension";
+  readonly name: string;
+  readonly value: string | null;
+}
+
 export interface ExplorerSlot {
   readonly primitive: string;
   readonly signature: string;
@@ -41,6 +47,7 @@ export interface ExplorerSlot {
   readonly attributes: Readonly<Record<string, string>>;
   readonly extension: string;
   readonly type: string;
+  readonly target: ExplorerTarget | null;
   readonly status: SlotStatus;
   readonly detail: string | null;
   readonly available: boolean;
@@ -162,6 +169,11 @@ export function implementationLabel(
 
 export function slotCallableLabel(slot: ExplorerSlot): string {
   return callableLabel(slot);
+}
+
+export function slotTypeLabel(slot: ExplorerSlot): string {
+  const target = slot.target;
+  return target ? `${slot.type} → ${target.value ?? target.name}` : slot.type;
 }
 
 function callableLabel(callable: {

@@ -825,6 +825,45 @@ def test_base_and_extension_target_declarations_share_one_callable_name() -> Non
     assert "TSL-CATALOG-DUPLICATE-PRIMITIVE" not in {d.code for d in diagnostics}
 
 
+@pytest.mark.parametrize("dimension", ("base", "extension"))
+@pytest.mark.parametrize("ordinary_first", (True, False))
+def test_ordinary_and_target_declarations_cannot_share_one_callable(
+    dimension: str,
+    ordinary_first: bool,
+) -> None:
+    ordinary = (
+        "prim<im:=(im,usize)> resize_mask(data, position):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+    targeted = (
+        "prim<im:=(im,usize)> resize_mask(data, position):\n"
+        "  return_type:\n"
+        f"    {dimension}: ToTarget\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        ToTarget:\n"
+        "          ints:\n"
+        "            implementation:\n"
+        '              tsil "complete(data);"\n'
+    )
+    diagnostics = _diagnostics(
+        _base_source(ordinary + targeted if ordinary_first else targeted + ordinary)
+    )
+
+    duplicate = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-DUPLICATE-PRIMITIVE"
+    )
+    assert "ordinary and target-axis forms" in duplicate.message
+    assert duplicate.related
+
+
 def test_target_owned_signature_parameter_requires_return_type_axis() -> None:
     diagnostics = _diagnostics(
         _base_source(

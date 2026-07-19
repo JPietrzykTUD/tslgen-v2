@@ -34,6 +34,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--type", required=True, dest="type_tag")
     parser.add_argument("--extension", required=True)
     parser.add_argument(
+        "--to-target",
+        default=None,
+        help="for a representation-change primitive, the concrete target type/extension",
+    )
+    parser.add_argument(
         "--backend", default="cpp", choices=registered_backend_ids()
     )
     parser.add_argument(
@@ -61,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         backend=args.backend,
         extension=args.extension,
         type_tag=args.type_tag,
+        to_target=args.to_target,
     )
     if args.format == "json":
         payload = diagnostics_json(
@@ -90,6 +96,7 @@ def analysis_json(analysis: ConcreteAnalysis) -> dict[str, object]:
             "backend": context.backend,
             "extension": context.extension,
             "type": context.type_tag,
+            "toTarget": context.to_target,
         },
         "implementationState": analysis.implementation_state.value,
         "roots": [_node_json(node) for node in analysis.roots],
@@ -124,9 +131,10 @@ def _node_json(node: ConcreteAnalysisNode) -> dict[str, object]:
 
 def format_analysis_text(analysis: ConcreteAnalysis) -> str:
     context = analysis.context
+    target = f" -> {context.to_target}" if context.to_target is not None else ""
     lines = [
         (
-            f"analyzed {context.primitive}<{context.type_tag}> "
+            f"analyzed {context.primitive}<{context.type_tag}{target}> "
             f"({context.profile}/{context.extension}/{context.backend}): "
             f"{analysis.implementation_state.value}"
         ),
@@ -142,9 +150,14 @@ def _append_node_text(
 ) -> None:
     suffix = f" — {node.reason}" if node.reason else ""
     origin = f" [{node.origin}]" if node.origin else ""
+    target = (
+        ""
+        if node.target_extension is None or node.target_type is None
+        else f" -> {node.target_type}<{node.target_extension}>"
+    )
     lines.append(
         f"{'  ' * depth}- {node.primitive}<{node.extension}, {node.type_tag}>"
-        f"{origin}: {node.status}/{node.implementation_state.value}{suffix}"
+        f"{target}{origin}: {node.status}/{node.implementation_state.value}{suffix}"
     )
     for child in node.dependencies:
         _append_node_text(lines, child, depth=depth + 1)

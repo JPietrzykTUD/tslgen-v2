@@ -284,7 +284,6 @@ RUST_SIGNATURE_TYPES = BackendSignatureTypes(
         "imt": SignatureTypeForms(
             owner="{owner}::ImaskType",
             parameter="{owner}::ImaskType",
-            concrete="{register}",
         ),
         "vidx": SignatureTypeForms(
             owner="{owner}::RegisterType",

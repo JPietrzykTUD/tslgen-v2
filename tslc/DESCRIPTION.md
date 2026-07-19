@@ -138,10 +138,13 @@ write the document. Ambiguous diagnostics yield non-editing guide actions.
 projects File/Corpus primitive lists in either authored-source or concrete
 profile mode. It owns authored, selected, profile-rejected, missing, and
 backend-unsupported slot states plus callable identity (signature and sorted
-primitive attributes), implementation origins, and source spans from the same
-catalog, selector, and index. A resolved callable slot has one selected source
-body, so editor navigation opens it directly; authored candidate bodies remain
-explicit when no profile has selected a winner. Direct Calls/Called By relationships
+primitive attributes), concrete representation-target identity, implementation
+origins, and source spans from the same catalog, selector, support-policy view,
+and index. A resolved callable-and-target slot has one selected source body, so
+editor navigation opens it directly; authored candidate bodies remain explicit
+when no profile has selected a winner. Preview and analysis forward that exact
+target instead of merging base- and extension-target specializations. Direct
+Calls/Called By relationships
 are indexed from registered `call` regions. The VS Code tree providers render
 those typed facts and never reconstruct selector or dependency rules.
 Explicit concrete explorer analysis runs `tslc analyze` as a saved-corpus

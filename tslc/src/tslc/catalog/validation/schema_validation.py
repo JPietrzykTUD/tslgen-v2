@@ -52,7 +52,10 @@ def validate_parsed_documents(
     )
     type_group_fields: list[ParsedTslField] = []
     named_blocks: dict[tuple[str, str], ParsedBlockDeclaration] = {}
-    seen_primitives: dict[_PrimitiveIdentity, ParsedPrimitiveDeclaration] = {}
+    seen_primitives: dict[
+        _PrimitiveCallableIdentity,
+        dict[str | None, ParsedPrimitiveDeclaration],
+    ] = {}
     target_family_fields: list[ParsedTslField] = []
 
     for document in parsed.documents:
@@ -136,23 +139,22 @@ def _validate_named_block_duplicates(
     )
 
 
-# The source identity of one primitive declaration: name, overload shape, concrete
-# attribute items, and the optional target dimension. Distinct signatures are legal
-# overloads (`store(ptr, v)` vs `store(ptr, s)`); distinct attribute values are legal
-# variants (masking, `[aligned=true]` vs `[aligned=false]`). Base- and extension-target
-# declarations may implement the same public callable. Wildcards stay unexpanded, so
-# two `[aligned=*]` declarations of one callable and target dimension collide.
-type _PrimitiveIdentity = tuple[
+# The public-callable identity of one primitive declaration. Distinct signatures are
+# legal overloads (`store(ptr, v)` vs `store(ptr, s)`); distinct attribute values are
+# legal variants (masking, `[aligned=true]` vs `[aligned=false]`). A callable may have
+# one base-target and one extension-target declaration, but an ordinary declaration
+# cannot coexist with either target-axis form. Wildcards stay unexpanded, so two
+# `[aligned=*]` declarations of one callable and target dimension collide.
+type _PrimitiveCallableIdentity = tuple[
     str,
     tuple[str, tuple[str, ...]] | str,
     tuple[tuple[str, str, str], ...],
-    str | None,
 ]
 
 
 def _primitive_identity(
     declaration: ParsedPrimitiveDeclaration,
-) -> _PrimitiveIdentity:
+) -> _PrimitiveCallableIdentity:
     shape = parse_signature(declaration.signature)
     overload: tuple[str, tuple[str, ...]] | str = (
         (shape.result_kind, shape.param_kinds)
@@ -163,7 +165,6 @@ def _primitive_identity(
         declaration.name,
         overload,
         tuple(sorted(_attribute_identity(item) for item in declaration.attributes)),
-        _return_type_dimension(declaration),
     )
 
 
@@ -190,22 +191,42 @@ def _attribute_identity(attribute: ParsedTslAttribute) -> tuple[str, str, str]:
 
 def _validate_duplicate_primitive(
     declaration: ParsedPrimitiveDeclaration,
-    seen: dict[_PrimitiveIdentity, ParsedPrimitiveDeclaration],
+    seen: dict[
+        _PrimitiveCallableIdentity,
+        dict[str | None, ParsedPrimitiveDeclaration],
+    ],
     diagnostics: list[Diagnostic],
 ) -> None:
     key = _primitive_identity(declaration)
-    first = seen.get(key)
+    dimension = _return_type_dimension(declaration)
+    declarations = seen.setdefault(key, {})
+    first = declarations.get(dimension)
+    conflicting_forms = False
+    if first is None and dimension is None and declarations:
+        first = next(iter(declarations.values()))
+        conflicting_forms = True
+    elif first is None and dimension is not None and None in declarations:
+        first = declarations[None]
+        conflicting_forms = True
     if first is None:
-        seen[key] = declaration
+        declarations[dimension] = declaration
         return
     first_span = source_span(first.header_source)
+    message = (
+        f"ordinary and target-axis forms of primitive {declaration.name!r} cannot"
+        " share one public callable"
+        if conflicting_forms
+        else (
+            f"duplicate declaration of primitive {declaration.name!r} with the"
+            " same signature, attributes, and target dimension"
+        )
+    )
     diagnostics.append(
         diagnostic_at(
             severity="error",
             code="TSL-CATALOG-DUPLICATE-PRIMITIVE",
             message=(
-                f"duplicate declaration of primitive {declaration.name!r} with the"
-                " same signature, attributes, and target dimension; first declaration is at"
+                f"{message}; first declaration is at"
                 f" {first.header_source.path}:{first.header_source.line}"
             ),
             source=source_span(declaration.header_source),

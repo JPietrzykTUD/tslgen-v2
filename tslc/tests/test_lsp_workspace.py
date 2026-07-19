@@ -546,6 +546,55 @@ def test_primitive_explorer_keeps_authored_candidates_and_splits_resolved_callab
     assert resolved.profile == "avx2"
 
 
+def test_primitive_explorer_keeps_representation_targets_as_distinct_slots(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    assert snapshot.index is not None
+
+    authored = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        backend="cpp",
+        selected_primitive="insert_imask",
+    )
+    assert {
+        slot.target.dimension
+        for slot in authored.slots
+        if slot.target is not None
+    } == {"base", "extension"}
+
+    resolved = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        mode="resolved",
+        profile="avx2",
+        backend="cpp",
+        selected_primitive="insert_imask",
+    )
+    avx2_si64 = tuple(
+        slot
+        for slot in resolved.slots
+        if slot.extension == "avx2"
+        and slot.type_tag == "si64"
+        and slot.status == "selected"
+    )
+    targets = {
+        (slot.target.dimension, slot.target.value)
+        for slot in avx2_si64
+        if slot.target is not None
+    }
+    assert {("base", "ui8"), ("extension", "avx512")} <= targets
+    assert all(len(slot.implementations) == 1 for slot in avx2_si64)
+
+
 def test_navigation_hover_completion_and_tokens_use_latest_index(
     data_root: Path,
     monkeypatch,

@@ -86,13 +86,13 @@ identifier replacement, marker-parenthesis scanner, or raw-text alpha-renamer.
 Compiler backend syntax remains the sole spelling owner for synthetic
 fixed-vector calls.
 
-The canonical corpus emits 188 documents and 17,060 definition occurrences,
+The canonical corpus emits 186 documents and 16,620 definition occurrences,
 including 4,730 multi-statement definitions and 328 nominal-identity collision
 groups. `tests/baselines/full_export.json` ratchets every definition occurrence,
 `direct` hash, artifact, and exact skip fact. `tests/baselines/body_census.json`
 associates a successfully constructed typed body with every emitted occurrence;
 it records zero construction failures. The ordered artifact digest is
-`846ffd8955e3b7860f1bc7c2980d4fc2bd8618efa259fbe1824923c3293dc747`.
+`78ede4c2f285414fefa5da989d135e6b24ea6609f29d2ce5a082926efcb5ccf6`.
 
 ## YAML Schema
 

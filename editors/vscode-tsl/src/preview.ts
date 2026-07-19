@@ -10,6 +10,7 @@ export interface ConcreteSlot {
   readonly type: string;
   readonly backend: string;
   readonly extension: string;
+  readonly toTarget?: string | null;
 }
 
 export interface SpecializationSlotChoice {
@@ -62,6 +63,7 @@ export class PreviewManager implements vscode.Disposable {
     cwd: string,
     slot: ConcreteSlot,
   ): Promise<void> {
+    const target = slot.toTarget ? ` → ${slot.toTarget}` : "";
     await this.run(
       compiler,
       cwd,
@@ -77,8 +79,9 @@ export class PreviewManager implements vscode.Disposable {
         slot.backend,
         "--extension",
         slot.extension,
+        ...(slot.toTarget ? ["--to-target", slot.toTarget] : []),
       ],
-      `TSL Preview: ${slot.primitive}<${slot.type}> ` +
+      `TSL Preview: ${slot.primitive}<${slot.type}${target}> ` +
         `(${slot.profile}/${slot.extension}/${slot.backend})`,
       "preview",
       slot.backend === "rust" ? "rs" : "hpp",

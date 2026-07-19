@@ -23,8 +23,9 @@ export class ConcreteAnalysisManager implements vscode.Disposable {
     this.generation += 1;
     const generation = this.generation;
     this.running?.cancel();
+    const target = slot.toTarget ? ` → ${slot.toTarget}` : "";
     const title =
-      `TSL Analyze: ${slot.primitive}<${slot.type}> ` +
+      `TSL Analyze: ${slot.primitive}<${slot.type}${target}> ` +
       `(${slot.profile}/${slot.extension}/${slot.backend})`;
     const process = runCommand(
       compiler.command,
@@ -41,6 +42,7 @@ export class ConcreteAnalysisManager implements vscode.Disposable {
         slot.backend,
         "--extension",
         slot.extension,
+        ...(slot.toTarget ? ["--to-target", slot.toTarget] : []),
         "--format",
         "json",
       ],

@@ -41,6 +41,8 @@ def test_backend_emitters_own_signature_type_projections() -> None:
         RUST_SIGNATURE_TYPES.parameter_type("imt", owner="ToVec")
         == "ToVec::ImaskType"
     )
+    with pytest.raises(KeyError, match="no concrete type projection"):
+        RUST_SIGNATURE_TYPES.concrete_type("imt", register="__m128i")
     assert (
         RUST_SIGNATURE_TYPES.concrete_type(
             "v",

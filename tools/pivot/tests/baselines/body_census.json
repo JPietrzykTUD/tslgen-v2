@@ -1,15 +1,15 @@
 {
-  "digest": "e29e9b9835ca3f76059fb92b8298996e18d1654695b00452eb19819d1a4d37af",
+  "digest": "ef7a7e25c75fcff1e59b9fc43eab1ff1b811b8654399eddc3f05a27252e7007e",
   "languages": {
     "cpp": {
       "categories": {
         "call_and_local": 89,
         "call_only": 2962,
         "local_only": 10,
-        "native_leaf": 4442,
-        "synthetic_fixed": 2788
+        "native_leaf": 4222,
+        "synthetic_fixed": 2758
       },
-      "entries": 10291,
+      "entries": 10041,
       "failures": 0,
       "feature_combinations": [
         {
@@ -96,14 +96,14 @@
           ]
         },
         {
-          "count": 4442,
+          "count": 4222,
           "features": [
             "residual_expression",
             "result_only"
           ]
         },
         {
-          "count": 2638,
+          "count": 2608,
           "features": [
             "residual_expression",
             "result_only",
@@ -125,16 +125,16 @@
         "multi_statement": 3061,
         "multiple_locals": 3,
         "nested_typed_call": 2313,
-        "residual_expression": 10141,
-        "result_only": 10252,
-        "synthetic_fixed": 2788,
-        "typed_call": 5839,
+        "residual_expression": 9891,
+        "result_only": 10002,
+        "synthetic_fixed": 2758,
+        "typed_call": 5809,
         "typed_local": 99
       },
       "multi_statement": 3061,
       "origins": {
-        "fixed_wrapper": 2788,
-        "lowered_source": 7503
+        "fixed_wrapper": 2758,
+        "lowered_source": 7283
       }
     },
     "rust": {
@@ -142,10 +142,10 @@
         "call_and_local": 5,
         "call_only": 1654,
         "local_only": 10,
-        "native_leaf": 2336,
-        "synthetic_fixed": 2764
+        "native_leaf": 2176,
+        "synthetic_fixed": 2734
       },
-      "entries": 6769,
+      "entries": 6579,
       "failures": 0,
       "feature_combinations": [
         {
@@ -224,7 +224,7 @@
           ]
         },
         {
-          "count": 726,
+          "count": 566,
           "features": [
             "residual_expression",
             "result_only"
@@ -239,7 +239,7 @@
           ]
         },
         {
-          "count": 2614,
+          "count": 2584,
           "features": [
             "residual_expression",
             "result_only",
@@ -261,25 +261,25 @@
         "multi_statement": 1669,
         "multiple_locals": 3,
         "nested_typed_call": 1491,
-        "residual_expression": 6619,
-        "result_only": 6754,
+        "residual_expression": 6429,
+        "result_only": 6564,
         "rust_unsafe_frame": 3169,
-        "synthetic_fixed": 2764,
-        "typed_call": 4423,
+        "synthetic_fixed": 2734,
+        "typed_call": 4393,
         "typed_local": 15
       },
       "multi_statement": 1669,
       "origins": {
-        "fixed_wrapper": 2764,
-        "lowered_source": 4005
+        "fixed_wrapper": 2734,
+        "lowered_source": 3845
       }
     }
   },
   "schema": "tslc-pivot-body-census-v1",
   "summary": {
-    "entries": 17060,
+    "entries": 16620,
     "failures": 0,
-    "fixed_wrappers": 5552,
+    "fixed_wrappers": 5492,
     "multi_statement": 4730,
     "nominal_collision_entries": 656,
     "nominal_collision_groups": 328

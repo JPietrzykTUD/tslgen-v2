@@ -7,6 +7,7 @@ import {
   originDescription,
   slotCallableLabel,
   slotStatusDescription,
+  slotTypeLabel,
   type ExplorerImplementation,
   type ExplorerSlot,
 } from "../src/explorerModel";
@@ -20,6 +21,7 @@ describe("primitive explorer presentation", () => {
       attributes: {},
       extension: "avx2",
       type: "si32",
+      target: null,
       status: "selected",
       detail: null,
       available: true,
@@ -33,6 +35,7 @@ describe("primitive explorer presentation", () => {
       attributes: {},
       extension: "avx2",
       type: "f64",
+      target: null,
       status: "missing",
       detail: "missing",
       available: false,
@@ -46,6 +49,7 @@ describe("primitive explorer presentation", () => {
       attributes: { mask: "zero" },
       extension: "avx2",
       type: "si32",
+      target: null,
       status: "selected",
       detail: null,
       available: true,
@@ -59,6 +63,7 @@ describe("primitive explorer presentation", () => {
       attributes: { mask: "zero" },
       extension: "scalar",
       type: "si32",
+      target: null,
       status: "authored",
       detail: null,
       available: true,
@@ -141,5 +146,18 @@ describe("primitive explorer presentation", () => {
       slotCallableLabel(slots[3]!),
       "add(mask, left, right) [mask=zero]",
     );
+  });
+
+  it("identifies the concrete representation target on a slot", () => {
+    const targetSlot: ExplorerSlot = {
+      ...slots[0]!,
+      target: { dimension: "base", name: "ToBase", value: "ui8" },
+    };
+
+    assert.equal(slotTypeLabel(targetSlot), "si32 → ui8");
+    assert.equal(slotTypeLabel({
+      ...targetSlot,
+      target: { dimension: "extension", name: "ToExtension", value: null },
+    }), "si32 → ToExtension");
   });
 });
