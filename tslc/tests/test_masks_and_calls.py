@@ -163,6 +163,136 @@ def test_avx512_indexed_masked_permute_uses_native_intrinsic(
     assert lowered.specialization.body_text == expected_body
 
 
+@pytest.mark.parametrize(
+    ("profile_name", "extension_name", "type_tag", "signature", "intrinsic"),
+    (
+        (
+            "skylake",
+            "avx2_vl",
+            "si64",
+            "v:=(m,v,v,vidx)",
+            "_mm256_mask_permutexvar_epi64",
+        ),
+        (
+            "skylake",
+            "avx2_vl",
+            "f64",
+            "v:=(m,v,vidx)",
+            "_mm256_maskz_permutexvar_pd",
+        ),
+        (
+            "cannonlake",
+            "avx2_vl",
+            "si8",
+            "v:=(m,v,v,vidx)",
+            "_mm256_mask_permutexvar_epi8",
+        ),
+        (
+            "skylake",
+            "sse_vl",
+            "si16",
+            "v:=(m,v,v,vidx)",
+            "_mm_mask_permutexvar_epi16",
+        ),
+        (
+            "skylake",
+            "sse_vl",
+            "si32",
+            "v:=(m,v,v,vidx)",
+            "_mm_mask_permutevar_ps",
+        ),
+        (
+            "skylake",
+            "sse_vl",
+            "f32",
+            "v:=(m,v,v,vidx)",
+            "_mm_mask_permutevar_ps",
+        ),
+        (
+            "skylake",
+            "sse_vl",
+            "si64",
+            "v:=(m,v,vidx)",
+            "_mm_maskz_permutex2var_epi64",
+        ),
+        (
+            "cannonlake",
+            "sse_vl",
+            "si8",
+            "v:=(m,v,vidx)",
+            "_mm_maskz_permutex2var_epi8",
+        ),
+    ),
+)
+def test_vl_indexed_masked_permute_uses_exact_native_intrinsic(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+    extension_name: str,
+    type_tag: str,
+    signature: str,
+    intrinsic: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile_name],
+            "permute_lanes",
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == extension_name
+        and selected.primitive.signature == signature
+    )
+
+    lowered = Lowerer().lower(
+        slot,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    )
+
+    assert lowered.specialization is not None, lowered.diagnostics
+    body = lowered.specialization.body_text
+    assert intrinsic in body
+    assert "::tsl::mov_mask" not in body
+    assert "::tsl::permute_lanes" not in body
+
+
+@pytest.mark.parametrize("type_tag", ("si64", "f64"))
+def test_sse_vl_indexed_merge_permute_keeps_64_bit_semantic_fallback(
+    catalog: Catalog,
+    machine_profiles,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["skylake"],
+            "permute_lanes",
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == "sse_vl"
+        and selected.primitive.signature == "v:=(m,v,v,vidx)"
+    )
+
+    lowered = Lowerer().lower(
+        slot,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    )
+
+    assert lowered.specialization is not None, lowered.diagnostics
+    body = lowered.specialization.body_text
+    assert "::tsl::mov_mask" in body
+    assert "::tsl::permute_lanes" in body
+    assert "_mm_mask_permutevar_pd" not in body
+
+
 def test_dependency_closure_pulls_callees(data_root: Path, machine_profiles_path: Path) -> None:
     result = generate_project(
         [data_root],

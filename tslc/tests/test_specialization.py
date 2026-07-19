@@ -116,6 +116,15 @@ def test_rust_impls_share_type_parameter_bounds_across_native_and_fallback_bodie
         in rendered
     )
 
+    queries = RustBackend().render_implementation_state_queries(
+        {"permute_lanes": (common, native)}
+    )
+
+    assert (
+        "IndicesType: StaticSimdVector + detail::primitives::To_arrayImpl"
+        in queries
+    )
+
 
 def test_dataparallel_primitive_facade_descriptor_classifies_shared_policy_shapes() -> None:
     add = classify_dataparallel_primitive_facade(

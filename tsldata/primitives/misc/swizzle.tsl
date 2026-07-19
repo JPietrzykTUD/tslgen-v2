@@ -1263,6 +1263,9 @@ prim<v:=(m,v,v,vidx)>[mask=pass_through] permute_lanes(mask, src, data, indexes)
   tests:
     - {tags [masked, basic], type "si32", index_type "ui32", case {inputs [170, [100, 200, 300, 400, 500, 600, 700, 800], [10, 20, 30, 40, 50, 60, 70, 80], [7, 0, 9, 2, 11, 4, 13, 6]], expected [100, 10, 300, 30, 500, 50, 700, 70]}}
     - {tags [masked, signed_index], type "ui64", index_type "si64", case {inputs [5, [100, 200, 300, 400], [10, 20, 30, 40], [-1, -2, 4, 5]], expected [40, 200, 10, 400]}}
+    - {tags [masked, sse_i16], type "si16", index_type "ui16", case {inputs [170, [100, 200, 300, 400, 500, 600, 700, 800], [10, 20, 30, 40, 50, 60, 70, 80], [7, 0, 9, 2, 11, 4, 13, 6]], expected [100, 10, 300, 30, 500, 50, 700, 70]}}
+    - {tags [masked, sse_f32], type "f32", index_type "ui32", case {inputs [10, [100.0, 200.0, 300.0, 400.0], [1.0, 2.0, 3.0, 4.0], [3, 0, 5, 2]], expected [100.0, 1.0, 300.0, 3.0]}}
+    - {tags [masked, sse_i8_vbmi], type "si8", index_type "ui8", case {inputs [43690, [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [15, 0, 17, 2, 19, 4, 21, 6, 23, 8, 25, 10, 27, 12, 29, 14]], expected [100, 1, 102, 3, 104, 5, 106, 7, 108, 9, 110, 11, 112, 13, 114, 15]}}
   impls:
     avx512:
       arith:
@@ -1285,6 +1288,63 @@ prim<v:=(m,v,v,vidx)>[mask=pass_through] permute_lanes(mask, src, data, indexes)
               complete(intrin<mask_permutexvar, build[suffix=base::signed_of(base::in)]>(src, mask, indexes, data));
             }
           """
+    avx2_vl:
+      arith:
+        requires:
+          ?i8 [avx, avx512f, avx512vl, avx512vbmi]
+          ?i16 [avx, avx512f, avx512vl, avx512bw]
+          ?i32 [avx, avx512f, avx512vl]
+          ?i64 [avx, avx512f, avx512vl]
+          f32 [avx, avx512f, avx512vl]
+          f64 [avx, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if<generation>(type::is_same(base::in, f32) || type::is_same(base::in, f64)) {
+              complete(intrin<mask_permutexvar, build[suffix=base::in]>(src, mask, indexes, data));
+            } else<generation> {
+              complete(intrin<mask_permutexvar, build[suffix=base::signed_of(base::in)]>(src, mask, indexes, data));
+            }
+          """
+    sse_vl:
+      [?i8, ?i16]:
+        requires:
+          ?i8 [sse, sse2, avx512f, avx512vl, avx512vbmi]
+          ?i16 [sse, sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<mask_permutexvar, build[suffix=base::signed_of(base::in)]>(src, mask, indexes, data));"
+      ?i32:
+        requires [sse, sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(FloatVec, vector::as_base(f32));
+            var<const_infer>(permuted, intrin<mask_permutevar, build[suffix=f32]>(
+              call<primitive=reinterpret[Vec, FloatVec]>(src),
+              mask,
+              call<primitive=reinterpret[Vec, FloatVec]>(data),
+              indexes
+            ));
+            complete(call<primitive=reinterpret[FloatVec, Vec]>(permuted));
+          """
+      f32:
+        requires [sse, sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<mask_permutevar, build[suffix=f32]>(src, mask, data, indexes));"
     [avx512, avx2, sse, neon, sve, wasm128, generic, clang_v128, oneapi_fpga, scalar]:
       arith:
         requires:
@@ -1338,6 +1398,9 @@ prim<v:=(m,v,vidx)>[mask=zero] permute_lanes(mask, data, indexes):
   tests:
     - {tags [maskz, basic], type "si32", index_type "ui32", case {inputs [170, [10, 20, 30, 40, 50, 60, 70, 80], [7, 0, 9, 2, 11, 4, 13, 6]], expected [0, 10, 0, 30, 0, 50, 0, 70]}}
     - {tags [maskz, signed_index], type "ui64", index_type "si64", case {inputs [5, [10, 20, 30, 40], [-1, -2, 4, 5]], expected [40, 0, 10, 0]}}
+    - {tags [maskz, sse_i8_vbmi], type "si8", index_type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [15, 0, 17, 2, 19, 4, 21, 6, 23, 8, 25, 10, 27, 12, 29, 14]], expected [0, 1, 0, 3, 0, 5, 0, 7, 0, 9, 0, 11, 0, 13, 0, 15]}}
+    - {tags [maskz, sse_f32], type "f32", index_type "ui32", case {inputs [10, [1.0, 2.0, 3.0, 4.0], [3, 0, 5, 2]], expected [0.0, 1.0, 0.0, 3.0]}}
+    - {tags [maskz, sse_i64], type "ui64", index_type "si64", case {inputs [1, [10, 20], [-1, -2]], expected [20, 0]}}
   impls:
     avx512:
       arith:
@@ -1358,6 +1421,48 @@ prim<v:=(m,v,vidx)>[mask=zero] permute_lanes(mask, data, indexes):
               complete(intrin<maskz_permutexvar, build[suffix=base::in]>(mask, indexes, data));
             } else<generation> {
               complete(intrin<maskz_permutexvar, build[suffix=base::signed_of(base::in)]>(mask, indexes, data));
+            }
+          """
+    avx2_vl:
+      arith:
+        requires:
+          ?i8 [avx, avx512f, avx512vl, avx512vbmi]
+          ?i16 [avx, avx512f, avx512vl, avx512bw]
+          ?i32 [avx, avx512f, avx512vl]
+          ?i64 [avx, avx512f, avx512vl]
+          f32 [avx, avx512f, avx512vl]
+          f64 [avx, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if<generation>(type::is_same(base::in, f32) || type::is_same(base::in, f64)) {
+              complete(intrin<maskz_permutexvar, build[suffix=base::in]>(mask, indexes, data));
+            } else<generation> {
+              complete(intrin<maskz_permutexvar, build[suffix=base::signed_of(base::in)]>(mask, indexes, data));
+            }
+          """
+    sse_vl:
+      arith:
+        requires:
+          ?i8 [sse, sse2, avx512f, avx512vl, avx512vbmi]
+          ?i16 [sse, sse2, avx512f, avx512vl, avx512bw]
+          ?i32 [sse, sse2, avx512f, avx512vl]
+          ?i64 [sse, sse2, avx512f, avx512vl]
+          f32 [sse, sse2, avx512f, avx512vl]
+          f64 [sse, sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if<generation>(type::is_same(base::in, f32) || type::is_same(base::in, f64)) {
+              complete(intrin<maskz_permutex2var, build[suffix=base::in]>(mask, data, indexes, data));
+            } else<generation> {
+              complete(intrin<maskz_permutex2var, build[suffix=base::signed_of(base::in)]>(mask, data, indexes, data));
             }
           """
     [avx512, avx2, sse, neon, sve, wasm128, generic, clang_v128, oneapi_fpga, scalar]:

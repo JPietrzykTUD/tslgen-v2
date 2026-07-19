@@ -1195,13 +1195,13 @@ def test_resize_and_indexed_permute_builds(
 ) -> None:
     # Covers the extension-result type axis without an immediate, including
     # x86 no-op casts, zero extension, exact-width concatenation, and both
-    # indexed mask policies. AVX2 exercises semantic fallbacks; Skylake
-    # compiles the native AVX-512 mask/maskz permutexvar forms.
+    # indexed mask policies. AVX2 exercises semantic fallbacks; Skylake covers
+    # AVX-512 plus its 128/256-bit VL forms, and Ice Lake adds the VBMI byte forms.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=_build_verified("test_resize_and_indexed_permute_builds"),
-        profiles=["avx2", "skylake"],
+        profiles=["avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None

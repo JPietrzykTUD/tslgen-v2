@@ -168,7 +168,12 @@ class RustBackend:
         self,
         by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     ) -> str:
-        return _implementation_state_queries(by_primitive)
+        return _implementation_state_queries(
+            {
+                primitive_name: _with_consistent_type_param_bounds(specializations)
+                for primitive_name, specializations in by_primitive.items()
+            }
+        )
 
     def _render_overloaded_internal(
         self,
