@@ -134,6 +134,8 @@ def test_rust_immediate_reports_bind_const_calls_and_policy_reason(
     assert "current = invoke_0_0(std::hint::black_box(current));" in source
     assert "let expected: [Base_0; 4] = [3.0, 4.0, 1.0, 2.0];" in source
     assert source.count("policy_supported: false") == 6
+    assert "const POLICY_OUTPUT_SUPPORTED: bool = false;" in source
+    assert "Write a consumable context-bound Rust policy" not in source
 
     manifest = json.loads(artifacts["rust/bench/manifest_sse2.json"])
     assert {
@@ -188,6 +190,8 @@ def test_rust_avx2_reduction_reports_are_exact_and_report_only(
     source = artifacts["rust/src/tsl_variant_bench_avx2.rs"]
     assert source.count("type Result_") == 40
     assert source.count("policy_supported: false") == 40
+    assert "const POLICY_OUTPUT_SUPPORTED: bool = false;" in source
+    assert "Write a consumable context-bound Rust policy" not in source
     assert "let expected: Base_" in source
     for primitive in ("Hadd", "Hand", "Hmax", "Hmin", "Hor"):
         assert f"::primitives::{primitive}Impl>::apply(value_0)" in source
@@ -243,6 +247,9 @@ def test_rust_benchmark_artifacts_are_opt_in_and_deterministic(
     assert "std::process::exit(tsl::tsl_variant_bench_sse2::main());" in artifacts[
         "rust/benches/tsl_variant_bench_sse2.rs"
     ]
+    benchmark_source = artifacts["rust/src/tsl_variant_bench_sse2.rs"]
+    assert "const POLICY_OUTPUT_SUPPORTED: bool = true;" in benchmark_source
+    assert "Write a consumable context-bound Rust policy" in benchmark_source
 
     selection = plan_rust_policy_selection(
         rust_benchmark_result.emitted_profiles
@@ -503,6 +510,8 @@ def test_rust_report_keeps_canonical_profile_identity(
     assert 'const BENCHMARK_TARGET: &str = "tsl_variant_bench_skylake_oneapi";' in source
     assert 'const CARGO_FEATURES: &str = "variant_benchmarks,skylake_oneapi";' in source
     assert "Explicit two-phase autotune" not in source
+    assert "const POLICY_OUTPUT_SUPPORTED: bool = false;" in source
+    assert "Write a consumable context-bound Rust policy" not in source
     assert (
         "Policy consumption is unavailable for this report-only benchmark profile."
         in source
@@ -822,8 +831,6 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
             str(results_path),
             "--summary",
             str(summary_path),
-            "--policy-json",
-            str(policy_path),
         ),
         cwd=crate,
         environment=policy_environment,
@@ -851,14 +858,32 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
         )
         for row in rows
     ) == expected
-    policy = json.loads(policy_path.read_text())
-    assert len(policy["decisions"]) == 6
-    assert {decision["status"] for decision in policy["decisions"]} == {
-        "report_only"
-    }
-    assert {decision["selected"] for decision in policy["decisions"]} == {
-        "default"
-    }
+    summary = summary_path.read_text()
+    assert summary.count("policy default (report_only)") == 6
+    rejected_policy = _run(
+        (
+            "cargo",
+            "bench",
+            "--profile",
+            "bench",
+            *common,
+            "--bench",
+            "tsl_variant_bench_sse2",
+            "--no-default-features",
+            "--features",
+            "variant_benchmarks,sse2",
+            "--",
+            "--policy-json",
+            str(policy_path),
+        ),
+        cwd=crate,
+        environment=policy_environment,
+    )
+    assert rejected_policy.returncode != 0
+    assert "is report-only and cannot produce a consumable Rust policy" in (
+        rejected_policy.stderr
+    )
+    assert not policy_path.exists()
 
     if platform.system() == "Linux":
         _assert_gnu_linux_immediate_hot_loop(crate, common, policy_environment)
@@ -933,8 +958,6 @@ def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
             str(results_path),
             "--summary",
             str(summary_path),
-            "--policy-json",
-            str(policy_path),
         ),
         cwd=crate,
         environment=policy_environment,
@@ -965,14 +988,32 @@ def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
         )
         for row in rows
     ) == expected
-    policy = json.loads(policy_path.read_text())
-    assert len(policy["decisions"]) == 40
-    assert {decision["status"] for decision in policy["decisions"]} == {
-        "report_only"
-    }
-    assert {decision["selected"] for decision in policy["decisions"]} == {
-        "default"
-    }
+    summary = summary_path.read_text()
+    assert summary.count("policy default (report_only)") == 40
+    rejected_policy = _run(
+        (
+            "cargo",
+            "bench",
+            "--profile",
+            "bench",
+            *common,
+            "--bench",
+            "tsl_variant_bench_avx2",
+            "--no-default-features",
+            "--features",
+            "variant_benchmarks,avx2",
+            "--",
+            "--policy-json",
+            str(policy_path),
+        ),
+        cwd=crate,
+        environment=policy_environment,
+    )
+    assert rejected_policy.returncode != 0
+    assert "is report-only and cannot produce a consumable Rust policy" in (
+        rejected_policy.stderr
+    )
+    assert not policy_path.exists()
 
     if platform.system() == "Linux":
         representative = next(

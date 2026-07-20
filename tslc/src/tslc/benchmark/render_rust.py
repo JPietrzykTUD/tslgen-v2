@@ -164,6 +164,13 @@ def _render_source(
         cargo_features=rust_string_literal(layout.cargo_features_argument),
         manifest_hash=rust_string_literal(profile.manifest_hash),
         required_features=rust_string_literal(required_features),
+        policy_output_supported=str(consumption is not None).lower(),
+        policy_json_help=(
+            '    println!("  --policy-json PATH        Write a consumable '
+            'context-bound Rust policy");'
+            if consumption is not None
+            else ""
+        ),
         required_policy_rustflags="&["
         + ", ".join(
             rust_string_literal(flag)

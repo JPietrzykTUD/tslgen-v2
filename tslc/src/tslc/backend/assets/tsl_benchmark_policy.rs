@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 
 use crate::tsl_benchmark_core::{json_escape, output_identity, Options, RawSample};
 use crate::tsl_benchmark_reducer::{
-    reduce_profile, validate_decisions, validate_specs, CandidateSetSpec, Decision,
+    reduce_profile, reduce_profile_observations, validate_decisions, validate_specs,
+    CandidateSetSpec, Decision,
 };
 use crate::tsl_rust_cpu_identity::{cpu_id, precise_x86_cpu_id};
 
@@ -261,10 +262,11 @@ pub fn write_reports(
     if reduced != decisions {
         return Err("benchmark decisions do not match the validated sample evidence".to_string());
     }
+    let observations = reduce_profile_observations(specs, samples, options)?;
     let cpu_identity = cpu_id();
     let tune_context = tune_context(specs, metadata, options);
     let raw = render_samples(samples, metadata, &tune_context, &cpu_identity)?;
-    let summary = render_summary(decisions, metadata, options, &cpu_identity);
+    let summary = render_summary(&observations, decisions, metadata, options, &cpu_identity);
     let policy = if options.policy_json_path.is_some() {
         Some(render_policy_json(&build_policy_document(
             specs,
@@ -352,6 +354,7 @@ fn render_samples(
 }
 
 fn render_summary(
+    observations: &[Decision],
     decisions: &[Decision],
     metadata: ReportMetadata,
     options: &Options,
@@ -364,13 +367,28 @@ fn render_summary(
     writeln!(&mut summary, "manifest: {}", metadata.manifest_hash).unwrap();
     writeln!(&mut summary, "cpu: {cpu_identity}").unwrap();
     writeln!(&mut summary, "threshold: {}", options.threshold()).unwrap();
-    for decision in decisions {
-        writeln!(
-            &mut summary,
-            "{}: {} ({}, minimum improvement {})",
-            decision.stable_id, decision.selected, decision.status, decision.minimum_improvement,
-        )
-        .unwrap();
+    for (observation, decision) in observations.iter().zip(decisions) {
+        if decision.status == "report_only" {
+            writeln!(
+                &mut summary,
+                "{}: observed {} ({}, minimum improvement {}); policy default (report_only)",
+                observation.stable_id,
+                observation.selected,
+                observation.status,
+                observation.minimum_improvement,
+            )
+            .unwrap();
+        } else {
+            writeln!(
+                &mut summary,
+                "{}: {} ({}, minimum improvement {})",
+                decision.stable_id,
+                decision.selected,
+                decision.status,
+                decision.minimum_improvement,
+            )
+            .unwrap();
+        }
     }
     summary
 }

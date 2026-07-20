@@ -15,6 +15,7 @@ const BENCHMARK_TARGET: &str = @{benchmark_target};
 const CARGO_FEATURES: &str = @{cargo_features};
 const MANIFEST_HASH: &str = @{manifest_hash};
 const REQUIRED_FEATURES: &str = @{required_features};
+const POLICY_OUTPUT_SUPPORTED: bool = @{policy_output_supported};
 const REQUIRED_POLICY_RUSTFLAGS: &[&str] = @{required_policy_rustflags};
 const REQUIRED_POLICY_INCREMENTAL_ENVIRONMENT: &str =
     @{required_policy_incremental_environment};
@@ -70,7 +71,7 @@ fn print_help() {
     println!("Options:");
     println!("  --results PATH            Write raw JSONL samples");
     println!("  --summary PATH            Write the human-readable summary");
-    println!("  --policy-json PATH        Write a context-bound Rust policy");
+@{policy_json_help}
     println!("  --rounds N                Override timing rounds (minimum 3)");
     println!("  --minimum-sample-ns N     Override minimum sample duration");
     println!("  --threshold FRACTION      Select only above this improvement");
@@ -87,6 +88,11 @@ fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     }
     if options.self_test {
         return runtime_self_test();
+    }
+    if options.policy_json_path.is_some() && !POLICY_OUTPUT_SUPPORTED {
+        return Err(format!(
+            "profile {PROFILE} is report-only and cannot produce a consumable Rust policy"
+        ));
     }
     if !native_build_matches(BUILD_HOST, BUILD_TARGET) {
         return Err(format!(

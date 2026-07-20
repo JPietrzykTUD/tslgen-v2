@@ -3,14 +3,34 @@
 Generated C++ and Rust projects can benchmark implementation variants.
 
 C++ supports report-only benchmarking, reusable policies, and an optional
-one-build autotune workflow. The initial Rust `sse2` register pilot uses an
-explicit policy-free benchmark followed by a separate policy-enabled build.
+one-build autotune workflow. Rust supports explicitly admitted native report
+families plus a deliberately narrow compile-time policy mapping. Its autotune
+workflow is an explicit policy-free benchmark followed by a separate
+policy-enabled build.
 
 The feature is opt-in.
 
 Normal generation does not run benchmarks.
 
 Normal builds keep the authored default variant.
+
+## Rust Capability Matrix
+
+| Profile | Scenario family | Report | Consumable policy |
+| --- | --- | ---: | ---: |
+| `sse2` | Register | yes | Only the proven `mul/sse/si8` mapping |
+| `sse2` | Vector plus immediate | yes | no |
+| `avx2` | One-vector scalar reduction | yes | no |
+
+Every other `profile × scenario-family` pair remains an explicit coverage gap.
+The admission key contains only the named profile and scenario family; live
+machine-profile facts remain owned by `MachineProfile` and flow into the
+manifest and native feature checks.
+
+Report-only summaries retain the reducer's observed candidate and improvement,
+but the corresponding policy decision remains the authored default. A profile
+with no consumable mapping does not advertise policy output and rejects
+`--policy-json`; its raw JSONL and summary are the complete report artifacts.
 
 ## The Word `key` Has Three Meanings
 
@@ -298,8 +318,9 @@ primitive signature + benchmarks block + authored tests + lowered variants
   -> manifest
   -> generated backend benchmark tool
   -> JSONL results
-  -> validated policy
-  -> compile-time variant selection
+  -> observed report decision
+  -> validated policy when the specialization has a compile-time mapping
+  -> optional compile-time variant selection
 ```
 
 Every candidate must pass authored expected-value cases before timing.

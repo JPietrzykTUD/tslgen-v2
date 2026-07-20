@@ -128,8 +128,11 @@ host supports it, but AVX2 availability is not an ordinary CI assumption.
 
 There is one backend-parameterized benchmark planner. It consumes the same
 typed catalog, emitted-profile, value-test, correctness, and scenario facts for
-C++ and Rust. It may use a small literal backend context for genuine profile
-manifest differences; it must not become a strategy framework.
+C++ and Rust. Backend admission contains only a named
+`profile × scenario-family` pair. Profile family, features, backend spellings,
+compile modes, flags, and manifest content come from the live typed machine
+profile rather than a copied backend snapshot; the planner must not become a
+strategy framework.
 
 C++ and Rust retain separate candidate, correctness, scenario, runtime, policy,
 and project renderers. Target-language source generation is not generalized
@@ -355,7 +358,10 @@ Changes:
 
 - Implement the existing median paired-improvement, win-count, dispersion, and
   default-on-inconclusive contract in the generated Rust runtime.
-- Emit raw JSONL, a human-readable summary, and typed Rust policy JSON.
+- Emit raw JSONL, a human-readable summary, and typed Rust policy JSON for
+  profiles with a consumable mapping. The summary keeps the observed result for
+  report-only sets while the policy decision remains the authored default;
+  all-report-only profiles reject policy output.
 - Bind policy decisions to the Rust backend ID, manifest, profile, exact tune
   context, and CPU identity.
 - Reject incomplete correctness, missing scenarios/candidates, duplicate
@@ -489,7 +495,8 @@ report-only with the explicit
 `scalar-result reduction specializations are report-only` reason. Native short
 execution covers every set, and the `hadd/si32` assembly proof follows both
 production target-feature call paths to distinct, call-free vector-reduction
-bodies.
+bodies. Report-only summaries retain the observed result, while these
+all-report-only profiles neither advertise nor produce a consumable policy.
 
 Mask-density and indexed-load support remain deferred. The current exact Rust
 gaps provide only two canonical AVX2 mask-density slots without a demonstrated

@@ -32,6 +32,23 @@ pub fn reduce_profile(
     samples: &[RawSample],
     options: &Options,
 ) -> Result<Vec<Decision>, String> {
+    let mut decisions = reduce_profile_observations(specs, samples, options)?;
+    for (spec, decision) in specs.iter().zip(&mut decisions) {
+        if !spec.policy_supported {
+            decision.selected = "default".to_string();
+            decision.status = "report_only".to_string();
+            decision.minimum_improvement = 0.0;
+        }
+    }
+    validate_decisions(specs, &decisions, options.threshold())?;
+    Ok(decisions)
+}
+
+pub fn reduce_profile_observations(
+    specs: &[CandidateSetSpec],
+    samples: &[RawSample],
+    options: &Options,
+) -> Result<Vec<Decision>, String> {
     validate_specs(specs)?;
     if !options.threshold().is_finite() || !(0.0..1.0).contains(&options.threshold()) {
         return Err("reducer threshold must be finite and in [0, 1)".to_string());
@@ -52,15 +69,8 @@ pub fn reduce_profile(
             .filter(|sample| sample.stable_id == spec.stable_id)
             .cloned()
             .collect::<Vec<_>>();
-        let mut decision = reduce_candidate_set(spec, &set_samples, options)?;
-        if !spec.policy_supported {
-            decision.selected = "default".to_string();
-            decision.status = "report_only".to_string();
-            decision.minimum_improvement = 0.0;
-        }
-        decisions.push(decision);
+        decisions.push(reduce_candidate_set(spec, &set_samples, options)?);
     }
-    validate_decisions(specs, &decisions, options.threshold())?;
     Ok(decisions)
 }
 

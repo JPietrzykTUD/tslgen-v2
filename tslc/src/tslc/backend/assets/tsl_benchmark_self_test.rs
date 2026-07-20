@@ -10,7 +10,8 @@ use crate::tsl_benchmark_policy::{
     ReportMetadata, RUST_BACKEND_ID,
 };
 use crate::tsl_benchmark_reducer::{
-    reduce_candidate_set, reduce_profile, validate_decisions, CandidateSetSpec, ScenarioSpec,
+    reduce_candidate_set, reduce_profile, reduce_profile_observations, validate_decisions,
+    CandidateSetSpec, ScenarioSpec,
 };
 
 pub fn runtime_self_test() -> Result<(), String> {
@@ -133,6 +134,13 @@ fn reducer_self_test(options: &Options) -> Result<(), String> {
         policy_supported: false,
         ..spec
     };
+    let observations = reduce_profile_observations(&[report_only_spec], &stable, options)?;
+    if observations[0].selected != "alternative"
+        || observations[0].status != "selected"
+        || observations[0].minimum_improvement <= 0.0
+    {
+        return Err("report-only observation self-test failed".to_string());
+    }
     let report_only = reduce_profile(&[report_only_spec], &stable, options)?;
     if report_only[0].selected != "default"
         || report_only[0].status != "report_only"

@@ -388,17 +388,24 @@ backend specializations and authored value-test facts through one
 backend-parameterized typed planner. It plans every explicitly coexisting named
 variant in the emitted primitive/dependency closure and emits structured skip
 coverage for unsupported signature shapes. C++ renders those facts as a
-standalone native benchmark/policy tool. Rust's initial `sse2` pilot renders
-the fixed-width register family as a standard-library-only custom Cargo
-benchmark: the feature-gated hot loop lives inside the library crate, a thin
+standalone native benchmark/policy tool. Rust admits scenario coverage through
+explicit named `profile × scenario-family` pairs while deriving profile family,
+features, spellings, modes, and flags from the live machine profile. It renders
+the `sse2` register and immediate families plus `avx2` one-vector scalar
+reductions as standard-library-only custom Cargo benchmarks. The feature-gated
+hot loop lives inside the library crate, and a thin
 per-profile bench target invokes it only with the explicit
 `variant_benchmarks` and profile features, and ordinary Cargo builds retain the
 authored wrapper choice. Rust candidate calls use backend-owned concrete type,
 trait, const-argument, and unsafe spelling; all authored expectations pass
 before any samples are timed or written. The Rust runtime validates the exact
-sample inventory, applies the conservative paired reducer, and stages raw
-JSONL, summary, and backend-scoped policy files before publishing the policy
-last. Policy production is native x86 and build-local. It requires
+sample inventory and applies the conservative paired reducer. Its summary keeps
+the observed candidate and improvement even when compile-time selection is
+unsupported; the separate policy decision remains the authored default.
+Profiles without a consumable mapping do not advertise or produce a policy
+file. Policy-capable reports stage raw JSONL, summary, and backend-scoped policy
+files before publishing the policy last. Policy production is native x86 and
+build-local. It requires
 `TSL_RUST_BENCHMARK_CONTEXT` as the caller's explicit identity for the
 build-local inputs that Cargo does not expose to `build.rs`. Policy-producing
 and policy-consuming invocations use the same exact compiler-owned trailing
@@ -423,10 +430,11 @@ and policy-consuming library builds retain the same internal
 `variant_benchmarks` feature so their generated code context is identical; the
 benchmark target itself independently rejects any policy input. The generated
 per-profile benchmark help prints the exact explicit workflow and codegen
-guard. Its first Cargo invocation removes `TSL_RUST_VARIANT_POLICY_FILE`, runs
-the optimized benchmark, and writes samples, summary, and policy below the
-Cargo target tree. A separate policy-enabled Cargo invocation consumes that
-precomputed file; no convenience command hides or cycles the two phases. The
+guard. For the policy-capable `sse2` register profile, its first Cargo invocation
+removes `TSL_RUST_VARIANT_POLICY_FILE`, runs the optimized benchmark, and writes
+samples, summary, and policy below the Cargo target tree. A separate
+policy-enabled Cargo invocation consumes that precomputed file; no convenience
+command hides or cycles the two phases. The
 generated benchmark Cargo profile is pinned to the compiler-owned settings. A
 frozen semantic consumption plan joins benchmark evidence to the selection
 seam; one render projection derives the Cargo and artifact names shared by
@@ -438,8 +446,8 @@ Cargo-owned path unconditionally instead of exposing a caller-forgeable cfg or
 mapping environment seam. It neither executes timing code nor edits generated
 `src/` files. Unset input retains the authored-default mapping, while any
 requested missing, foreign, stale, partial, duplicate, or report-only selection
-fails before library compilation. Other profile and scenario families remain
-structured Rust coverage gaps. The benchmark maintenance projection runs one
+fails before library compilation. Unadmitted profile and scenario-family pairs
+remain structured Rust coverage gaps. The benchmark maintenance projection runs one
 backend per invocation: the original C++ issue baseline remains unchanged,
 while separate Rust evidence preserves every raw report gap plus exact profile
 manifest, candidate ID/body hash, policy eligibility, and compiler-rendered

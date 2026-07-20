@@ -26,7 +26,6 @@ from tslc.benchmark.model import (
 )
 from tslc.benchmark.planner import (
     BenchmarkPlanner,
-    BenchmarkProfileContext,
     BenchmarkScenarioAdmission,
 )
 from tslc.catalog.model import Catalog
@@ -298,25 +297,16 @@ def test_profile_plan_owns_family_and_ordered_backend_feature_spellings(
 
 def test_profile_scenario_admission_prevents_cartesian_expansion(
     rust_non_register_benchmark_planning_result,
-    rust_benchmark_planning_result,
     catalog: Catalog,
 ) -> None:
     result = rust_non_register_benchmark_planning_result
-    avx2_context = BenchmarkProfileContext.from_profile(
-        result.emitted_profiles[0].profile,
-        "rust",
-    )
-    sse2_context = BenchmarkProfileContext.from_profile(
-        rust_benchmark_planning_result.emitted_profiles[0].profile,
-        "rust",
-    )
     plan = BenchmarkPlanner(
         catalog,
         backend_id="rust",
         supported_admissions=frozenset(
             {
-                BenchmarkScenarioAdmission(avx2_context, "register"),
-                BenchmarkScenarioAdmission(sse2_context, "reduction"),
+                BenchmarkScenarioAdmission("avx2", "register"),
+                BenchmarkScenarioAdmission("sse2", "reduction"),
             }
         ),
     ).plan(result.emitted_profiles, result.rendered.value_tests)
@@ -411,13 +401,15 @@ def test_rust_avx2_does_not_admit_register_scenarios(
     )
 
 
-def test_rust_sse2_pilot_requires_exact_profile_context(
+def test_rust_sse2_admission_uses_live_profile_context(
     rust_benchmark_planning_result,
     catalog: Catalog,
 ) -> None:
     result = rust_benchmark_planning_result
     source_profile = result.emitted_profiles[0]
     machine_profile = source_profile.profile
+    source_plan = result.rendered.benchmarks.profile("rust", "sse2")
+    assert source_plan is not None
     mutated_profiles = (
         replace(
             machine_profile,
@@ -447,16 +439,17 @@ def test_rust_sse2_pilot_requires_exact_profile_context(
         assert plan is not None
         profile = plan.profile("rust", "sse2")
         assert profile is not None
-        assert profile.candidate_sets == ()
+        assert profile.candidate_sets
+        assert profile.manifest_hash != source_plan.manifest_hash
+        assert profile.backend_feature_spellings == tuple(
+            mutated_profile.feature_spelling(feature, "rust")
+            for feature in sorted(mutated_profile.features)
+        )
         assert plan.coverage
-        assert {entry.status for entry in plan.coverage} == {"unsupported"}
-        assert {entry.reason for entry in plan.coverage} == {
-            "backend benchmark support requires the canonical feature/build "
-            "context for profile 'sse2'"
-        }
+        assert any(entry.status == "emitted" for entry in plan.coverage)
 
 
-def test_rust_x86_pilot_reports_other_profile_families(
+def test_rust_benchmark_reports_unadmitted_profiles(
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
@@ -488,7 +481,7 @@ def test_rust_x86_pilot_reports_other_profile_families(
     assert abs_entry.status == "unsupported"
     assert (
         abs_entry.reason
-        == "backend benchmark support does not include the 'aarch64' profile family"
+        == "backend benchmark support does not include profile 'neon'"
     )
     assert not any(entry.status == "emitted" for entry in coverage)
 

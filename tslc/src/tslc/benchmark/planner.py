@@ -58,41 +58,15 @@ BENCHMARK_PROTOCOL_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
-class BenchmarkProfileContext:
-    """Exact machine-profile facts admitted by a backend benchmark pilot."""
+class BenchmarkScenarioAdmission:
+    """One named machine profile admitted for one scenario family."""
 
     profile_name: str
-    profile_family: str
-    features: frozenset[str]
-    backend_feature_spellings: tuple[str, ...]
-    compile_modes: frozenset[str]
-    backend_flags: tuple[str, ...]
-
-    @classmethod
-    def from_profile(
-        cls,
-        profile: MachineProfile,
-        backend_id: str,
-    ) -> BenchmarkProfileContext:
-        return cls(
-            profile_name=profile.name,
-            profile_family=profile.family,
-            features=profile.features,
-            backend_feature_spellings=tuple(
-                profile.feature_spelling(feature, backend_id)
-                for feature in sorted(profile.features)
-            ),
-            compile_modes=profile.compile_modes,
-            backend_flags=profile.flags_for_backend(backend_id),
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class BenchmarkScenarioAdmission:
-    """One exact machine-profile context admitted for one scenario family."""
-
-    profile_context: BenchmarkProfileContext
     scenario_family: BenchmarkScenarioFamily
+
+    def __post_init__(self) -> None:
+        if not self.profile_name:
+            raise ValueError("benchmark scenario admissions require a profile name")
 
 
 class BenchmarkPlanner:
@@ -132,7 +106,6 @@ class BenchmarkPlanner:
             backend_id = self._backend_id
             profile_admission_reason = _profile_admission_reason(
                 emitted_profile.profile,
-                backend_id,
                 self._supported_admissions,
             )
             by_primitive = emitted_profile.specializations(backend_id)
@@ -268,7 +241,6 @@ class BenchmarkPlanner:
             )
         admission_reason = _scenario_admission_reason(
             profile.profile,
-            self._backend_id,
             scenario_family,
             self._supported_admissions,
         )
@@ -508,48 +480,27 @@ def _require_harness(
 
 def _profile_admission_reason(
     profile: MachineProfile,
-    backend_id: str,
     supported: frozenset[BenchmarkScenarioAdmission] | None,
 ) -> str | None:
     if supported is None:
         return None
-    context = BenchmarkProfileContext.from_profile(profile, backend_id)
-    profile_contexts = frozenset(item.profile_context for item in supported)
-    if not any(
-        item.profile_family == context.profile_family for item in profile_contexts
-    ):
-        return (
-            "backend benchmark support does not include the "
-            f"{context.profile_family!r} profile family"
-        )
-    if not any(
-        item.profile_family == context.profile_family
-        and item.profile_name == context.profile_name
-        for item in profile_contexts
-    ):
+    if not any(item.profile_name == profile.name for item in supported):
         return (
             "backend benchmark support does not include profile "
-            f"{context.profile_name!r}"
-        )
-    if context not in profile_contexts:
-        return (
-            "backend benchmark support requires the canonical feature/build context "
-            f"for profile {context.profile_name!r}"
+            f"{profile.name!r}"
         )
     return None
 
 
 def _scenario_admission_reason(
     profile: MachineProfile,
-    backend_id: str,
     scenario_family: BenchmarkScenarioFamily,
     supported: frozenset[BenchmarkScenarioAdmission] | None,
 ) -> str | None:
     if supported is None:
         return None
-    context = BenchmarkProfileContext.from_profile(profile, backend_id)
     if any(
-        item.profile_context == context
+        item.profile_name == profile.name
         and item.scenario_family == scenario_family
         for item in supported
     ):
@@ -596,7 +547,7 @@ def _common_unsupported_reason(
     if not extension.default_test_target:
         return "extension is not enabled as a native value-test target"
     if extension.header_group_for_backend(backend_id) is not None:
-        return "opt-in header-group extensions are not benchmarked in the first slice"
+        return "opt-in header-group extensions are not supported by benchmark planning"
     return None
 
 
@@ -800,6 +751,5 @@ def _coverage_sort_key(entry: BenchmarkCoverageEntry) -> tuple[str, ...]:
 __all__ = (
     "BENCHMARK_PROTOCOL_VERSION",
     "BenchmarkPlanner",
-    "BenchmarkProfileContext",
     "BenchmarkScenarioAdmission",
 )
