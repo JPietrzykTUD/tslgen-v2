@@ -460,8 +460,10 @@ Rust coverage gaps.
 
 Evidence-driven order:
 
-1. add vector-result immediate reports for the six current native SSE2
-   candidate slots, retaining structured report-only policy decisions;
+1. add shared exact-lane planning plus Rust vector-result immediate reports for
+   the six current native SSE2 candidate slots, retaining structured
+   report-only Rust policy decisions; matching C++ immediate evidence may
+   improve wherever the same exact-width specialization is selected;
 2. before enabling any additional machine profile, replace independent profile
    and scenario allowlists with explicit `profile × scenario-family` admission
    so capability expansion cannot admit an unintended Cartesian product;
@@ -482,9 +484,11 @@ timing slice.
 
 Exit criterion for each implemented family: every selected candidate set in
 that family either emits correct deterministic report artifacts or has one
-precise backend-specific reason why it cannot; unrelated families and C++
-evidence are unchanged. A deferred family remains an exact coverage gap rather
-than an incomplete implementation commitment.
+precise backend-specific reason why it cannot. Unrelated families remain
+unchanged; shared planner improvements may update matching C++ family evidence
+but must not alter unrelated C++ candidate identities. A deferred family
+remains an exact coverage gap rather than an incomplete implementation
+commitment.
 
 ## Validation Matrix
 

@@ -121,6 +121,8 @@ def immediate_cases(
     immediate_value: str,
     from_array_name: str,
     to_array_name: str,
+    *,
+    allow_tiling: bool,
 ) -> tuple[BenchmarkImmediateCorrectnessCase, ...]:
     matching: list[BenchmarkImmediateCorrectnessCase] = []
     seen: set[str] = set()
@@ -137,12 +139,24 @@ def immediate_cases(
             or case.case_name in seen
         ):
             continue
+        if not allow_tiling and case.lanes != lanes:
+            continue
         seen.add(case.case_name)
+        vector_input = (
+            tile(case.inputs.vectors[0], lanes)
+            if allow_tiling
+            else case.inputs.vectors[0]
+        )
+        expected = (
+            tile(case.expectation.values, lanes)
+            if allow_tiling
+            else case.expectation.values
+        )
         matching.append(
             BenchmarkImmediateCorrectnessCase(
                 case_name=case.case_name,
-                vector_input=tile(case.inputs.vectors[0], lanes),
-                expected=tile(case.expectation.values, lanes),
+                vector_input=vector_input,
+                expected=expected,
                 from_array_name=from_array_name,
                 to_array_name=to_array_name,
             )

@@ -348,6 +348,7 @@ class BenchmarkPlanner:
                 immediate_value,
                 from_array,
                 to_array,
+                allow_tiling=tiling_preserves_lane_semantics(primitive),
             )
             scenarios = immediate_scenarios(primitive, spec, seed)
         elif scenario_family == "vector_scalar":
@@ -541,6 +542,7 @@ def _common_unsupported_reason(
         return "source primitive is not present in the catalog"
     if not tiling_preserves_lane_semantics(primitive) and not (
         (spec.result_kind == "s" and spec.param_kinds == ("v",))
+        or (spec.result_kind == "v" and spec.param_kinds == ("v", "sImm"))
         or _is_indexed_load_shape(spec)
     ):
         return "cross-lane primitives require a dedicated benchmark scenario"
