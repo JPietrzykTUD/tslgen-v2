@@ -11,6 +11,8 @@ use crate::tsl_@{profile_slug}::*;
 const PROTOCOL_VERSION: u32 = @{protocol_version};
 const POLICY_SCHEMA_VERSION: u32 = @{policy_schema_version};
 const PROFILE: &str = @{profile_name};
+const BENCHMARK_TARGET: &str = @{benchmark_target};
+const CARGO_FEATURES: &str = @{cargo_features};
 const MANIFEST_HASH: &str = @{manifest_hash};
 const REQUIRED_FEATURES: &str = @{required_features};
 const REQUIRED_POLICY_RUSTFLAGS: &[&str] = @{required_policy_rustflags};
@@ -57,8 +59,32 @@ const CANDIDATE_SETS: [CandidateSetSpec; @{candidate_set_count}] = [
 @{candidate_set_specs}
 ];
 
+fn print_help() {
+    println!("TSL Rust variant benchmark for profile {PROFILE}");
+    println!();
+    println!("Usage:");
+    println!(
+        "  cargo bench --profile bench --bench {BENCHMARK_TARGET} --no-default-features --features {CARGO_FEATURES} -- [OPTIONS]"
+    );
+    println!();
+    println!("Options:");
+    println!("  --results PATH            Write raw JSONL samples");
+    println!("  --summary PATH            Write the human-readable summary");
+    println!("  --policy-json PATH        Write a context-bound Rust policy");
+    println!("  --rounds N                Override timing rounds (minimum 3)");
+    println!("  --minimum-sample-ns N     Override minimum sample duration");
+    println!("  --threshold FRACTION      Select only above this improvement");
+    println!("  --self-test               Run deterministic runtime checks");
+    println!("  -h, --help                Print this help");
+@{policy_help}
+}
+
 fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     let options = Options::parse(arguments)?;
+    if options.help {
+        print_help();
+        return Ok(());
+    }
     if options.self_test {
         return runtime_self_test();
     }

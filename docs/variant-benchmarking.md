@@ -1,6 +1,10 @@
 # Variant Benchmarking And Autotuning
 
-Generated C++ projects can benchmark implementation variants.
+Generated C++ and Rust projects can benchmark implementation variants.
+
+C++ supports report-only benchmarking, reusable policies, and an optional
+one-build autotune workflow. The initial Rust `sse2` register pilot uses an
+explicit policy-free benchmark followed by a separate policy-enabled build.
 
 The feature is opt-in.
 
@@ -292,7 +296,7 @@ primitive signature + benchmarks block + authored tests + lowered variants
   -> typed timing scenarios
   -> candidate set
   -> manifest
-  -> generated C++ benchmark tool
+  -> generated backend benchmark tool
   -> JSONL results
   -> validated policy
   -> compile-time variant selection
@@ -307,6 +311,9 @@ Focused primitive generation stays focused.
 Omit `--primitives` to benchmark the full catalog.
 
 ## Coverage Gate
+
+The current corpus ratchet covers C++ benchmark shapes. Rust receives its own
+backend-scoped report and policy ratchet in the next coverage slice.
 
 Run the corpus audit:
 
@@ -345,7 +352,74 @@ The ARM emulation check is functional only.
 
 Its timings never create a consumed policy.
 
-## Report Only
+## Rust Explicit Two-Phase Autotune
+
+Run these POSIX-shell commands from the generated Rust crate. The benchmark
+help prints the profile-specific commands and the compiler-owned flag set:
+
+```bash
+cd generated/rust
+env -u TSL_RUST_VARIANT_POLICY_FILE \
+  cargo bench --profile bench \
+    --bench tsl_variant_bench_sse2 \
+    --no-default-features \
+    --features variant_benchmarks,sse2 \
+    -- --help
+```
+
+First, create raw samples, a summary, and a native build-local policy without
+allowing an existing policy input into the benchmark build:
+
+```bash
+artifact_dir="${CARGO_TARGET_DIR:-$PWD/target}/tsl-benchmark/sse2"
+mkdir -p "$artifact_dir"
+
+export TSL_RUST_BENCHMARK_CONTEXT='local-native-sse2-v1'
+export CARGO_INCREMENTAL=0
+export RUSTFLAGS='-Copt-level=3 -Cdebuginfo=0 -Cdebug-assertions=no -Coverflow-checks=no -Clto=off -Clinker-plugin-lto=no -Cembed-bitcode=no -Ccodegen-units=1 -Cpanic=unwind -Crpath=no -Cstrip=none'
+
+env -u CARGO_ENCODED_RUSTFLAGS -u TSL_RUST_VARIANT_POLICY_FILE \
+  cargo bench --profile bench \
+    --bench tsl_variant_bench_sse2 \
+    --no-default-features \
+    --features variant_benchmarks,sse2 \
+    -- \
+    --results "$artifact_dir/results.jsonl" \
+    --summary "$artifact_dir/summary.txt" \
+    --policy-json "$artifact_dir/policy.json"
+```
+
+`TSL_RUST_VARIANT_POLICY_FILE` must be absent, not present with an empty value.
+The benchmark target also rejects policy-enabled builds independently. If the
+runner or another build-local input changes, use a new
+`TSL_RUST_BENCHMARK_CONTEXT` identity.
+
+Second, build the consumer separately with the precomputed policy and the same
+profile, feature set, context, and compiler flags:
+
+```bash
+env -u CARGO_ENCODED_RUSTFLAGS \
+  TSL_RUST_VARIANT_POLICY_FILE="$artifact_dir/policy.json" \
+  cargo build --profile bench \
+    --no-default-features \
+    --features variant_benchmarks,sse2
+```
+
+The consumer keeps `variant_benchmarks` enabled only so its generated-code
+context exactly matches the producer; the build script validates the policy and
+does not execute timing code. An ordinary build with no policy input still uses
+the authored default. Results and policies belong below the Cargo target tree,
+never below generated `src/`. The artifact expression follows a custom
+`CARGO_TARGET_DIR`; pass an absolute policy path when a downstream build runs
+from a different working directory.
+
+Rust policies are native x86-64, CPU-, compiler-, Cargo-, generated-source-, and
+context-bound artifacts. They are not portable across machines, emulators, or
+unrecorded build inputs. Keep the generated defaults for production tuning;
+the short `--rounds 3 --minimum-sample-ns 1000` settings are only for harness
+checks.
+
+## C++ Report Only
 
 ```bash
 cmake -S generated/cpp -B build/tsl-report \
@@ -359,7 +433,7 @@ This writes `tsl_variant_results.jsonl`.
 
 It does not change wrapper selection.
 
-## One-Build Autotune
+## C++ One-Build Autotune
 
 ```bash
 cmake -S generated/cpp -B build/tsl-tuned \
@@ -384,7 +458,7 @@ It requires a single-config CMake generator.
 
 An inconclusive result keeps the authored default.
 
-## Reuse A Policy
+## C++ Policy Reuse
 
 ```bash
 cmake -S generated/cpp -B build/tsl-policy \

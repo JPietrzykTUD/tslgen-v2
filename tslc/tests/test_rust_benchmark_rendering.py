@@ -228,6 +228,7 @@ def test_rust_runtime_produces_backend_scoped_policy_without_consuming_it(
     self_test_runtime = artifacts["rust/src/tsl_benchmark_self_test.rs"]
     source = artifacts["rust/src/tsl_variant_bench_sse2.rs"]
     library = artifacts["rust/src/lib.rs"]
+    cargo_manifest = artifacts["rust/Cargo.toml"]
     manifest = json.loads(artifacts["rust/bench/manifest_sse2.json"])
     coverage = json.loads(artifacts["rust/bench/coverage.json"])
 
@@ -256,7 +257,19 @@ def test_rust_runtime_produces_backend_scoped_policy_without_consuming_it(
     assert "TSL_RUST_VARIANT_POLICY_FILE" not in (
         runtime + reducer + policy_runtime + self_test_runtime
     )
-    assert "TSL_RUST_VARIANT_POLICY_FILE" not in source
+    assert "Explicit two-phase autotune" in source
+    assert "env -u CARGO_ENCODED_RUSTFLAGS -u TSL_RUST_VARIANT_POLICY_FILE" in source
+    assert 'const BENCHMARK_TARGET: &str = "tsl_variant_bench_sse2";' in source
+    assert 'const CARGO_FEATURES: &str = "variant_benchmarks,sse2";' in source
+    assert 'let artifact_subdirectory = "tsl-benchmark/sse2";' in source
+    assert '${{CARGO_TARGET_DIR:-$PWD/target}}/{artifact_subdirectory}' in source
+    assert "if options.help" in source
+    assert (
+        'name = "tsl_variant_bench_sse2"\n'
+        'path = "benches/tsl_variant_bench_sse2.rs"\n'
+        'harness = false\n'
+        'required-features = ["variant_benchmarks", "sse2"]'
+    ) in cargo_manifest
     assert "is_x86_feature_detected!(\"sse\")" in source
     assert "is_x86_feature_detected!(\"sse2\")" in source
     assert '#[cfg(target_arch = "x86_64")]' in source
@@ -290,6 +303,19 @@ def test_rust_runtime_produces_backend_scoped_policy_without_consuming_it(
     )
 
 
+def test_documented_rust_workflow_tracks_codegen_contract() -> None:
+    guide = (
+        Path(__file__).parents[2] / "docs" / "variant-benchmarking.md"
+    ).read_text(encoding="utf-8")
+    expected = (
+        "export RUSTFLAGS='"
+        + " ".join(RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags)
+        + "'"
+    )
+
+    assert expected in guide
+
+
 def test_rust_report_keeps_canonical_profile_identity(
     rust_benchmark_result,
 ) -> None:
@@ -310,6 +336,13 @@ def test_rust_report_keeps_canonical_profile_identity(
         artifacts["rust/bench/manifest_skylake_oneapi.json"]
     )
     assert 'const PROFILE: &str = "skylake\\u{2d}oneapi";' in source
+    assert 'const BENCHMARK_TARGET: &str = "tsl_variant_bench_skylake_oneapi";' in source
+    assert 'const CARGO_FEATURES: &str = "variant_benchmarks,skylake_oneapi";' in source
+    assert "Explicit two-phase autotune" not in source
+    assert (
+        "Policy consumption is unavailable for this report-only benchmark profile."
+        in source
+    )
     assert manifest["profile"] == "skylake-oneapi"
 
 
@@ -352,6 +385,7 @@ def _rust_policy_environment(context: str) -> dict[str, str | None]:
         "RUSTC_WRAPPER",
         "RUSTC_WORKSPACE_WRAPPER",
         "RUSTFLAGS",
+        "TSL_RUST_VARIANT_POLICY_FILE",
     }
     cleared.update(
         name
@@ -459,6 +493,8 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
         (
             "cargo",
             "bench",
+            "--profile",
+            "bench",
             *common,
             "--bench",
             "tsl_variant_bench_sse2",
@@ -474,6 +510,8 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
     base_bench = (
         "cargo",
         "bench",
+        "--profile",
+        "bench",
         *common,
         "--bench",
         "tsl_variant_bench_sse2",
@@ -482,6 +520,31 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
         "variant_benchmarks,sse2",
         "--",
     )
+    help_run = _run(
+        (*base_bench, "--help"),
+        cwd=crate,
+        environment=policy_environment,
+    )
+    assert help_run.returncode == 0, help_run.stderr
+    assert "Explicit two-phase autotune" in help_run.stdout
+    assert (
+        "env -u CARGO_ENCODED_RUSTFLAGS -u TSL_RUST_VARIANT_POLICY_FILE"
+        in help_run.stdout
+    )
+    assert (
+        "RUSTFLAGS='"
+        + " ".join(RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags)
+        + "'"
+        in help_run.stdout
+    )
+    assert (
+        'artifact_dir="${CARGO_TARGET_DIR:-$PWD/target}/tsl-benchmark/sse2"'
+        in help_run.stdout
+    )
+    assert 'TSL_RUST_VARIANT_POLICY_FILE="$artifact_dir/policy.json"' in (
+        help_run.stdout
+    )
+    assert "cargo build --profile bench" in help_run.stdout
     self_test = _run(
         (*base_bench, "--self-test"),
         cwd=crate,

@@ -27,8 +27,14 @@ pub fn runtime_self_test() -> Result<(), String> {
         || options.minimum_sample_ns(9) != 1
         || options.threshold() != 0.05
         || !options.self_test
+        || options.help
     {
         return Err("benchmark option self-test failed".to_string());
+    }
+    if !Options::parse(["--help".to_string()])?.help
+        || !Options::parse(["-h".to_string()])?.help
+    {
+        return Err("benchmark help option self-test failed".to_string());
     }
     if Options::parse(["--threshold".to_string(), "NaN".to_string()]).is_ok() {
         return Err("benchmark non-finite threshold self-test failed".to_string());

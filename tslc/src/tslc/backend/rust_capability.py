@@ -26,6 +26,7 @@ from tslc.output._verify_rust import (
 )
 from tslc.output._verify_rust_config import rust_toolchain_commands
 from tslc.render.documentation_formatters import RUST_DOCUMENTATION_FORMATTER
+from tslc.render.rust_benchmark_layout import plan_rust_benchmark_layout
 from tslc.render.rust_policy_consumption import plan_rust_policy_consumption_render
 from tslc.render.rust_project import (
     rust_artifacts,
@@ -104,6 +105,9 @@ def rust_backend_artifacts(
     consumption_plan = plan_rust_policy_consumption_render(
         plan_rust_policy_consumption(benchmarks, selection_plan)
     )
+    benchmark_layout_plan = plan_rust_benchmark_layout(
+        tuple(profile.profile.name for profile in profiles)
+    )
     return [
         *rust_artifacts(
             profiles,
@@ -111,6 +115,7 @@ def rust_backend_artifacts(
             media_type=media_type,
             selection_plan=selection_plan,
             consumption_plan=consumption_plan,
+            benchmark_layout_plan=benchmark_layout_plan,
         ),
         *rust_test_artifacts(value_tests, assets, media_type=media_type),
         *rust_benchmark_artifacts(
@@ -118,6 +123,7 @@ def rust_backend_artifacts(
             assets,
             media_type,
             consumption_plan=consumption_plan,
+            layout_plan=benchmark_layout_plan,
         ),
     ]
 

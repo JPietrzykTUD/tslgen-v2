@@ -23,11 +23,17 @@ from tslc.benchmark.planner import BENCHMARK_PROTOCOL_VERSION
 from tslc.benchmark.render_rust_candidate import render_candidate_set
 from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact
-from tslc.render._common import slug, text
+from tslc.render._common import text
+from tslc.render.rust_benchmark_layout import (
+    RustBenchmarkLayout,
+    RustBenchmarkLayoutPlan,
+    plan_rust_benchmark_layout,
+)
 from tslc.render.rust_policy_consumption import (
     RustPolicyConsumptionRenderPlan,
     RustPolicyConsumptionRenderProfile,
 )
+
 
 def rust_benchmark_artifacts(
     plan: BenchmarkProjectPlan,
@@ -35,10 +41,17 @@ def rust_benchmark_artifacts(
     media_type: str,
     *,
     consumption_plan: RustPolicyConsumptionRenderPlan,
+    layout_plan: RustBenchmarkLayoutPlan | None = None,
 ) -> list[Artifact]:
     profiles = plan.profiles_for("rust")
     if not profiles:
         return []
+    if layout_plan is None:
+        layout_plan = plan_rust_benchmark_layout(
+            tuple(profile.profile_name for profile in profiles)
+        )
+    if any(layout_plan.profile(profile.profile_name) is None for profile in profiles):
+        raise ValueError("Rust benchmark layout plan lacks a benchmark profile")
     artifacts = [
         text(
             "rust/src/tsl_benchmark_core.rs",
@@ -67,17 +80,19 @@ def rust_benchmark_artifacts(
         ),
     ]
     for profile in profiles:
+        layout = layout_plan.profile(profile.profile_name)
+        if layout is None:
+            raise ValueError("Rust benchmark rendering requires a layout profile")
         consumption = consumption_plan.profile(profile.profile_name)
-        profile_slug = slug(profile.profile_name)
         artifacts.extend(
             (
                 text(
-                    f"rust/src/tsl_variant_bench_{profile_slug}.rs",
-                    _render_source(profile, consumption, assets),
+                    f"rust/src/{layout.benchmark_target}.rs",
+                    _render_source(profile, layout, consumption, assets),
                     media_type=media_type,
                 ),
                 text(
-                    f"rust/bench/manifest_{profile_slug}.json",
+                    f"rust/bench/manifest_{layout.profile_slug}.json",
                     _render_manifest(profile),
                     media_type="application/json",
                 ),
@@ -103,11 +118,11 @@ def rust_benchmark_artifacts(
 
 def _render_source(
     profile: BenchmarkProfilePlan,
+    layout: RustBenchmarkLayout,
     consumption: RustPolicyConsumptionRenderProfile | None,
     assets: RenderAssets,
 ) -> str:
-    profile_slug = slug(profile.profile_name)
-    profile_module = f"tsl_{profile_slug}"
+    profile_module = f"tsl_{layout.profile_slug}"
     selected_keys = {
         decision.key
         for decision in (() if consumption is None else consumption.profile.decisions)
@@ -141,10 +156,12 @@ def _render_source(
     required_features = ",".join(profile.backend_feature_spellings)
     return assets.fill(
         "rust_benchmark.rs.tmpl",
-        profile_slug=profile_slug,
+        profile_slug=layout.profile_slug,
         protocol_version=str(BENCHMARK_PROTOCOL_VERSION),
         policy_schema_version=str(RUST_BENCHMARK_POLICY_SCHEMA_VERSION),
         profile_name=_rust_profile_literal(profile.profile_name),
+        benchmark_target=rust_string_literal(layout.benchmark_target),
+        cargo_features=rust_string_literal(layout.cargo_features_argument),
         manifest_hash=rust_string_literal(profile.manifest_hash),
         required_features=rust_string_literal(required_features),
         required_policy_rustflags="&["
@@ -165,6 +182,17 @@ def _render_source(
         candidate_set_specs=candidate_set_specs,
         correctness_calls=correctness_calls,
         scenario_calls=scenario_calls,
+        policy_help=(
+            assets.fill(
+                "rust_benchmark_policy_help.rs.tmpl",
+                artifact_subdirectory=rust_string_literal(
+                    layout.artifact_subdirectory
+                ),
+                context_example=rust_string_literal(layout.context_example),
+            ).rstrip()
+            if consumption is not None
+            else assets.text("rust_benchmark_report_only_help.rs").rstrip()
+        ),
     )
 
 

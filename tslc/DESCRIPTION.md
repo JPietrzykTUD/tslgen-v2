@@ -422,7 +422,12 @@ codegen contract, attested context identity, and CPU facts. Policy-producing
 and policy-consuming library builds retain the same internal
 `variant_benchmarks` feature so their generated code context is identical; the
 benchmark target itself independently rejects any policy input. The generated
-benchmark Cargo profile is pinned to the compiler-owned settings. A
+per-profile benchmark help prints the exact explicit workflow and codegen
+guard. Its first Cargo invocation removes `TSL_RUST_VARIANT_POLICY_FILE`, runs
+the optimized benchmark, and writes samples, summary, and policy below the
+Cargo target tree. A separate policy-enabled Cargo invocation consumes that
+precomputed file; no convenience command hides or cycles the two phases. The
+generated benchmark Cargo profile is pinned to the compiler-owned settings. A
 frozen semantic consumption plan joins benchmark evidence to the selection
 seam; one render projection derives the Cargo and artifact names shared by
 project and benchmark rendering. Missing benchmark evidence therefore leaves

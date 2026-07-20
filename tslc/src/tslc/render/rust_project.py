@@ -29,6 +29,10 @@ from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile, VerifyRunner
 from tslc.render._common import slug, text
+from tslc.render.rust_benchmark_layout import (
+    RustBenchmarkLayoutPlan,
+    plan_rust_benchmark_layout,
+)
 from tslc.render.rust_policy_consumption import (
     EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN,
     RustPolicyConsumptionRenderPlan,
@@ -47,6 +51,7 @@ def rust_artifacts(
     consumption_plan: RustPolicyConsumptionRenderPlan = (
         EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN
     ),
+    benchmark_layout_plan: RustBenchmarkLayoutPlan | None = None,
 ) -> list[Artifact]:
     validate_rust_policy_selection_plan(profiles, selection_plan)
     emitted_names = {profile.profile.name for profile in profiles}
@@ -56,6 +61,14 @@ def rust_artifacts(
     ):
         raise ValueError("Rust policy consumption plan is foreign to the project")
     policy_profiles = consumption_plan.profiles
+    if benchmark_layout_plan is None:
+        benchmark_layout_plan = plan_rust_benchmark_layout(
+            tuple(profile.profile.name for profile in profiles)
+        )
+    if tuple(
+        profile.profile_name for profile in benchmark_layout_plan.profiles
+    ) != tuple(profile.profile.name for profile in profiles):
+        raise ValueError("Rust benchmark layout plan does not match the project")
     artifacts = [
         text(
             "rust/build.rs",
@@ -123,6 +136,9 @@ def rust_artifacts(
         text("rust/rustfmt.toml", assets.text("rustfmt.toml"), media_type=media_type),
     ]
     for emitted_profile in profiles:
+        benchmark_layout = benchmark_layout_plan.profile(emitted_profile.profile.name)
+        if benchmark_layout is None:
+            raise ValueError("Rust project rendering requires benchmark layout profiles")
         policy_selection = selection_plan.profile(emitted_profile.profile.name)
         if policy_selection is None:
             raise ValueError(
@@ -188,13 +204,12 @@ def rust_artifacts(
                 media_type=media_type,
             )
         )
-        profile_slug = slug(emitted_profile.profile.name)
         artifacts.append(
             text(
-                f"rust/benches/tsl_variant_bench_{profile_slug}.rs",
+                f"rust/benches/{benchmark_layout.benchmark_target}.rs",
                 assets.fill(
                     "rust_benchmark_main.rs.tmpl",
-                    profile_slug=profile_slug,
+                    profile_slug=benchmark_layout.profile_slug,
                 ),
                 media_type=media_type,
             )
@@ -213,7 +228,7 @@ def rust_artifacts(
     artifacts.append(
         text(
             "rust/Cargo.toml",
-            _rust_cargo(profiles, assets),
+            _rust_cargo(benchmark_layout_plan, assets),
             media_type=media_type,
         )
     )
@@ -455,15 +470,20 @@ def _rust_build_policy_modules(
     )
 
 
-def _rust_cargo(profiles: tuple[EmittedProfile, ...], assets: RenderAssets) -> str:
-    profile_slugs = tuple(slug(profile.profile.name) for profile in profiles)
+def _rust_cargo(
+    benchmark_layout_plan: RustBenchmarkLayoutPlan,
+    assets: RenderAssets,
+) -> str:
+    profile_slugs = tuple(
+        profile.profile_slug for profile in benchmark_layout_plan.profiles
+    )
     default = (
         "scalar"
         if "scalar" in profile_slugs
         else profile_slugs[0] if profile_slugs else "scalar"
     )
     features = [f'default = ["{default}"]']
-    features.extend(f"{slug(emitted_profile.profile.name)} = []" for emitted_profile in profiles)
+    features.extend(f"{profile_slug} = []" for profile_slug in profile_slugs)
     # Opt-in feature that compiles+runs the generated value tests (parity with the C++ ctest gate).
     features.append("value_tests = []")
     # Benchmark targets stay outside ordinary builds unless explicitly requested.
@@ -471,9 +491,13 @@ def _rust_cargo(profiles: tuple[EmittedProfile, ...], assets: RenderAssets) -> s
     bench_targets = "\n\n".join(
         assets.fill(
             "rust_benchmark_target.toml.tmpl",
-            profile_slug=profile_slug,
+            profile_slug=profile.profile_slug,
+            benchmark_target=profile.benchmark_target,
+            required_features=", ".join(
+                json.dumps(feature) for feature in profile.cargo_features
+            ),
         ).rstrip()
-        for profile_slug in profile_slugs
+        for profile in benchmark_layout_plan.profiles
     )
     return assets.fill(
         "rust_cargo.toml.tmpl",

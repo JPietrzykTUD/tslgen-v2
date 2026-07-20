@@ -446,6 +446,7 @@ def _clean_rust_environment(**values: str | None) -> dict[str, str | None]:
         "CARGO_BUILD_TARGET",
         "CARGO_ENCODED_RUSTFLAGS",
         "CARGO_INCREMENTAL",
+        "CARGO_TARGET_DIR",
         "RUSTC",
         "RUSTC_LINKER",
         "RUSTC_WRAPPER",
@@ -536,6 +537,9 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
     )
     source_hashes = _source_hashes(crate)
     manifest = str(crate / "Cargo.toml")
+    cargo_target = generated / "custom-cargo-target"
+    workflow_directory = cargo_target / "tsl-benchmark" / "sse2"
+    workflow_directory.mkdir(parents=True)
     consumer = (
         "cargo",
         "run",
@@ -549,13 +553,21 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
         "--features",
         "variant_benchmarks,sse2",
     )
-    context = "slice4-generated-policy-consumer"
+    context = "slice5-two-phase-policy-consumer"
+
+    def workflow_environment(**values: str | None) -> dict[str, str | None]:
+        return _policy_codegen_environment(
+            CARGO_TARGET_DIR=str(cargo_target),
+            TSL_RUST_BENCHMARK_CONTEXT=context,
+            **values,
+        )
+
     default_environment = _clean_rust_environment(
+        CARGO_TARGET_DIR=str(cargo_target),
         TSL_RUST_BENCHMARK_CONTEXT=context,
     )
-    guarded_environment = _policy_codegen_environment(
-        TSL_RUST_BENCHMARK_CONTEXT=context,
-    )
+    guarded_environment = workflow_environment()
+    assert guarded_environment["TSL_RUST_VARIANT_POLICY_FILE"] is None
 
     ordinary = _run(consumer, cwd=crate, environment=default_environment)
     assert ordinary.returncode == 0, ordinary.stderr
@@ -579,13 +591,15 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
     assert bypass_attempt.stdout.strip() == "Fallback"
     assert "FORGED_POLICY_MAPPING_COMPILED" not in bypass_attempt.stderr
 
-    policy_path = generated / "variant-policy.json"
-    samples_path = generated / "samples.jsonl"
-    summary_path = generated / "summary.txt"
-    rejected_policy_path = generated / "rejected-policy.json"
+    policy_path = workflow_directory / "policy.json"
+    samples_path = workflow_directory / "results.jsonl"
+    summary_path = workflow_directory / "summary.txt"
+    rejected_policy_path = workflow_directory / "rejected-policy.json"
     producer_override = _run(
         (
             "cargo",
+            "bench",
+            "--profile",
             "bench",
             "--manifest-path",
             manifest,
@@ -602,9 +616,9 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
             "--threshold",
             "0.05",
             "--results",
-            str(generated / "rejected-samples.jsonl"),
+            str(workflow_directory / "rejected-results.jsonl"),
             "--summary",
-            str(generated / "rejected-summary.txt"),
+            str(workflow_directory / "rejected-summary.txt"),
             "--policy-json",
             str(rejected_policy_path),
         ),
@@ -623,6 +637,8 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
     produced = _run(
         (
             "cargo",
+            "bench",
+            "--profile",
             "bench",
             "--manifest-path",
             manifest,
@@ -649,11 +665,14 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
         environment=guarded_environment,
     )
     assert produced.returncode == 0, produced.stderr
+    assert all(
+        path.is_file() and path.is_relative_to(cargo_target)
+        for path in (samples_path, summary_path, policy_path)
+    )
     policy = json.loads(policy_path.read_text(encoding="utf-8"))
     _force_mul_candidate(policy, "generic_fallback")
     _write_policy(policy_path, policy)
-    policy_environment = _policy_codegen_environment(
-        TSL_RUST_BENCHMARK_CONTEXT=context,
+    policy_environment = workflow_environment(
         TSL_RUST_VARIANT_POLICY_FILE=str(policy_path),
     )
 
@@ -697,7 +716,7 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
         assert rustc_command.rfind(guarded) > rustc_command.rfind(hostile)
     assert _source_hashes(crate) == source_hashes
     mappings = tuple(
-        (crate / "target").glob(
+        cargo_target.glob(
             "release/build/tsl-*/out/tsl_variant_policy_sse2.rs"
         )
     )
@@ -729,7 +748,7 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
     )
     assert assembly.returncode == 0, assembly.stderr
     assembly_files = sorted(
-        (crate / "target" / "release" / "examples").glob("selection_probe-*.s"),
+        (cargo_target / "release" / "examples").glob("selection_probe-*.s"),
         key=lambda path: path.stat().st_mtime_ns,
         reverse=True,
     )
@@ -823,8 +842,7 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
     newline_path = _run(
         consumer,
         cwd=crate,
-        environment=_policy_codegen_environment(
-            TSL_RUST_BENCHMARK_CONTEXT=context,
+        environment=workflow_environment(
             TSL_RUST_VARIANT_POLICY_FILE=(
                 f"{policy_path}\ncargo:rustc-cfg=tsl_injected"
             ),
@@ -886,6 +904,8 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
     benchmark_with_policy = _run(
         (
             "cargo",
+            "bench",
+            "--profile",
             "bench",
             "--manifest-path",
             manifest,
@@ -1002,8 +1022,7 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
         completed = _run(
             invalid_command,
             cwd=crate,
-            environment=_policy_codegen_environment(
-                TSL_RUST_BENCHMARK_CONTEXT=context,
+            environment=workflow_environment(
                 TSL_RUST_VARIANT_POLICY_FILE=str(invalid_path),
             ),
         )
@@ -1028,8 +1047,7 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
         completed = _run(
             invalid_command,
             cwd=crate,
-            environment=_policy_codegen_environment(
-                TSL_RUST_BENCHMARK_CONTEXT=context,
+            environment=workflow_environment(
                 TSL_RUST_VARIANT_POLICY_FILE=str(invalid_path),
             ),
         )
@@ -1041,8 +1059,7 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
     missing_policy = _run(
         invalid_command,
         cwd=crate,
-        environment=_policy_codegen_environment(
-            TSL_RUST_BENCHMARK_CONTEXT=context,
+        environment=workflow_environment(
             TSL_RUST_VARIANT_POLICY_FILE=str(missing_path),
         ),
     )
@@ -1053,8 +1070,7 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
     empty_policy = _run(
         invalid_command,
         cwd=crate,
-        environment=_policy_codegen_environment(
-            TSL_RUST_BENCHMARK_CONTEXT=context,
+        environment=workflow_environment(
             TSL_RUST_VARIANT_POLICY_FILE="",
         ),
     )
@@ -1064,8 +1080,7 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
 
     valid_path = generated / "valid-policy.json"
     _write_policy(valid_path, policy)
-    valid_environment = _policy_codegen_environment(
-        TSL_RUST_BENCHMARK_CONTEXT=context,
+    valid_environment = workflow_environment(
         TSL_RUST_VARIANT_POLICY_FILE=str(valid_path),
     )
     extra_feature = _run(
@@ -1140,8 +1155,7 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
         linked = _run(
             invalid_command,
             cwd=crate,
-            environment=_policy_codegen_environment(
-                TSL_RUST_BENCHMARK_CONTEXT=context,
+            environment=workflow_environment(
                 TSL_RUST_VARIANT_POLICY_FILE=str(symlink),
             ),
         )

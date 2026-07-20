@@ -1,5 +1,5 @@
 [[bench]]
-name = "tsl_variant_bench_@{profile_slug}"
-path = "benches/tsl_variant_bench_@{profile_slug}.rs"
+name = "@{benchmark_target}"
+path = "benches/@{benchmark_target}.rs"
 harness = false
-required-features = ["variant_benchmarks", "@{profile_slug}"]
+required-features = [@{required_features}]

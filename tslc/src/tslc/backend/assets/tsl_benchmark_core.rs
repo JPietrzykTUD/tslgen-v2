@@ -13,6 +13,7 @@ pub struct Options {
     minimum_sample_ns_override: Option<u64>,
     threshold: f64,
     pub self_test: bool,
+    pub help: bool,
 }
 
 impl Options {
@@ -26,6 +27,7 @@ impl Options {
             minimum_sample_ns_override: None,
             threshold: 0.05,
             self_test: false,
+            help: false,
         };
         while let Some(argument) = arguments.next() {
             let mut value = || {
@@ -67,6 +69,7 @@ impl Options {
                     options.threshold = threshold;
                 }
                 "--self-test" => options.self_test = true,
+                "--help" | "-h" => options.help = true,
                 // Cargo appends this libtest-compatible marker to `cargo bench`
                 // invocations even when the custom target has `harness = false`.
                 "--bench" => {}
