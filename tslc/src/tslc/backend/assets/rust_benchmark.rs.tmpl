@@ -102,7 +102,7 @@ fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
         ));
     }
     if @{candidate_set_count} == 0 {
-        return Err(format!("profile {PROFILE} has no supported Rust register benchmarks"));
+        return Err(format!("profile {PROFILE} has no supported Rust benchmarks"));
     }
 @{correctness_calls}
     let mut samples = Vec::<RawSample>::new();

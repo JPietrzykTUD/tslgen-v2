@@ -16,7 +16,10 @@ import pytest
 
 from tslc.api import generate_project, write_artifacts
 from tslc.backend.rust_benchmark_context import RUST_BENCHMARK_CODEGEN_CONTRACT
-from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
+from tslc.backend.rust_policy_consumption import (
+    plan_rust_policy_consumption,
+    plan_rust_policy_coverage,
+)
 from tslc.backend.rust_policy_selection import (
     RustPolicySelectionPlan,
     plan_rust_policy_selection,
@@ -46,11 +49,89 @@ def rust_benchmark_result(data_root: Path, machine_profiles_path: Path):
     return result
 
 
+@pytest.fixture(scope="module")
+def rust_immediate_benchmark_result(data_root: Path, machine_profiles_path: Path):
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["permute_lanes"],
+        profiles=["sse2"],
+        type_tags=["si32", "ui32", "si64", "ui64", "f32", "f64"],
+        backends=["rust"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    return result
+
+
 def _artifacts(result) -> dict[str, str]:
     return {
         artifact.logical_path: artifact.content
         for artifact in result.artifacts.artifacts
     }
+
+
+def test_rust_immediate_reports_bind_const_calls_and_policy_reason(
+    rust_immediate_benchmark_result,
+) -> None:
+    plan = rust_immediate_benchmark_result.rendered.benchmarks
+    profile = plan.profile("rust", "sse2")
+    assert profile is not None
+    assert {
+        (candidate_set.key.type_tag, candidate_set.key.immediate)
+        for candidate_set in profile.candidate_sets
+    } == {
+        ("f32", "78"),
+        ("f64", "255"),
+        ("si32", "27"),
+        ("si64", "1"),
+        ("ui32", "78"),
+        ("ui64", "0"),
+    }
+
+    artifacts = _artifacts(rust_immediate_benchmark_result)
+    source = artifacts["rust/src/tsl_variant_bench_sse2.rs"]
+    for immediate in (0, 1, 27, 78, 255):
+        assert f"Permute_lanes_immImpl<{immediate}>>::apply(value_0)" in source
+        assert (
+            f"Permute_lanes_imm_scalar_lanes_fallbackImpl<{immediate}>>::apply"
+            "(value_0)"
+        ) in source
+    assert "vectors: [Vec<Reg_0>; 1]" in source
+    assert "current = invoke_0_0(std::hint::black_box(current));" in source
+    assert "let expected: [Base_0; 4] = [3.0, 4.0, 1.0, 2.0];" in source
+    assert source.count("policy_supported: false") == 6
+
+    manifest = json.loads(artifacts["rust/bench/manifest_sse2.json"])
+    assert {
+        scenario["family"]
+        for candidate_set in manifest["candidate_sets"]
+        for scenario in candidate_set["scenarios"]
+    } == {"immediate"}
+    assert all(
+        len(candidate_set["scenarios"]) == 2
+        for candidate_set in manifest["candidate_sets"]
+    )
+
+    selection = plan_rust_policy_selection(
+        rust_immediate_benchmark_result.emitted_profiles
+    )
+    policy = plan_rust_policy_coverage(plan, selection).profile("sse2")
+    assert policy is not None
+    assert len(policy.decisions) == 6
+    assert {decision.status for decision in policy.decisions} == {"report_only"}
+    assert {decision.reason for decision in policy.decisions} == {
+        "immediate specializations are report-only"
+    }
+    assert {decision.key.immediate for decision in policy.decisions} == {
+        "0",
+        "1",
+        "27",
+        "78",
+        "255",
+    }
+    assert all(not decision.mapping_choices for decision in policy.decisions)
 
 
 def test_rust_benchmark_artifacts_are_opt_in_and_deterministic(
@@ -458,6 +539,169 @@ def _assert_gnu_linux_hot_loop(
     assert "pmullw" in function[candidate_branch.end() : second_path]
     assert "pmullw" in function[second_path:]
     assert not re.search(r"callq[^\n]*(?:MulImpl|invoke_0)", function)
+
+
+def _assert_gnu_linux_immediate_hot_loop(
+    crate: Path,
+    common: tuple[str, ...],
+    environment: dict[str, str | None],
+) -> None:
+    assembly = _run(
+        (
+            "cargo",
+            "rustc",
+            *common,
+            "--lib",
+            "--release",
+            "--no-default-features",
+            "--features",
+            "variant_benchmarks,sse2",
+            "--",
+            "--emit=asm",
+        ),
+        cwd=crate,
+        environment=environment,
+    )
+    assert assembly.returncode == 0, assembly.stderr
+    assembly_files = sorted(
+        (crate / "target" / "release" / "deps").glob("tsl-*.s"),
+        key=lambda path: path.stat().st_mtime_ns,
+        reverse=True,
+    )
+    assert assembly_files
+    marker_pattern = re.compile(
+        r"\.section\s+\.text\.[^\n]*tsl_variant_bench_sse2[^\n]*measure_0_0"
+    )
+    for assembly_file in assembly_files:
+        assembly_text = assembly_file.read_text()
+        marker = marker_pattern.search(assembly_text)
+        if marker is not None:
+            break
+    else:
+        pytest.fail("generated assembly does not contain the immediate hot loop")
+    function = assembly_text[
+        marker.start() : assembly_text.index(".Lfunc_end", marker.start())
+    ]
+    candidate_branch = re.search(
+        r"(?:test|cmp)[bwlq][^\n]*\n\s+j(?:e|ne)\s+(\.LBB\d+_\d+)",
+        function,
+    )
+    assert candidate_branch is not None
+    second_path = function.index(f"{candidate_branch.group(1)}:")
+    assert "shufps\t$78" in function[candidate_branch.end() : second_path]
+    assert "shufps\t$78" in function[second_path:]
+    assert not re.search(
+        r"callq[^\n]*(?:Permute_lanes_imm|invoke_0)",
+        function,
+    )
+
+
+@pytest.mark.generated_build
+def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
+    rust_immediate_benchmark_result,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cargo") is None or shutil.which("rustc") is None:
+        pytest.skip("cargo and rustc are required")
+    if platform.machine().lower() not in {"x86_64", "amd64"}:
+        pytest.skip("the sse2 immediate benchmark requires a native x86-64 host")
+
+    generated = tmp_path / "generated"
+    report = write_artifacts(rust_immediate_benchmark_result.artifacts, generated)
+    assert not has_errors(report.diagnostics), report.diagnostics
+    crate = generated / "rust"
+    common = ("--manifest-path", str(crate / "Cargo.toml"))
+    policy_environment = _rust_policy_environment(
+        "sse2-immediate-generated-test-context"
+    )
+
+    for command in (
+        ("cargo", "check", *common),
+        (
+            "cargo",
+            "bench",
+            "--profile",
+            "bench",
+            *common,
+            "--bench",
+            "tsl_variant_bench_sse2",
+            "--no-default-features",
+            "--features",
+            "variant_benchmarks,sse2",
+            "--no-run",
+        ),
+    ):
+        completed = _run(command, cwd=crate, environment=policy_environment)
+        assert completed.returncode == 0, completed.stderr
+
+    profile = rust_immediate_benchmark_result.rendered.benchmarks.profile(
+        "rust", "sse2"
+    )
+    assert profile is not None
+    results_path = generated / "immediate-samples.jsonl"
+    summary_path = generated / "immediate-summary.txt"
+    policy_path = generated / "immediate-policy.json"
+    completed = _run(
+        (
+            "cargo",
+            "bench",
+            "--profile",
+            "bench",
+            *common,
+            "--bench",
+            "tsl_variant_bench_sse2",
+            "--no-default-features",
+            "--features",
+            "variant_benchmarks,sse2",
+            "--",
+            "--rounds",
+            "3",
+            "--minimum-sample-ns",
+            "1000",
+            "--results",
+            str(results_path),
+            "--summary",
+            str(summary_path),
+            "--policy-json",
+            str(policy_path),
+        ),
+        cwd=crate,
+        environment=policy_environment,
+    )
+    assert completed.returncode == 0, completed.stderr
+    rows = [json.loads(line) for line in results_path.read_text().splitlines()]
+    expected = Counter(
+        (
+            candidate_set.stable_id,
+            scenario.scenario_id,
+            candidate.variant_id,
+            round_index,
+        )
+        for candidate_set in profile.candidate_sets
+        for scenario in candidate_set.scenarios
+        for candidate in candidate_set.candidates
+        for round_index in range(3)
+    )
+    assert Counter(
+        (
+            row["stable_id"],
+            row["scenario"],
+            row["candidate"],
+            row["round"],
+        )
+        for row in rows
+    ) == expected
+    policy = json.loads(policy_path.read_text())
+    assert len(policy["decisions"]) == 6
+    assert {decision["status"] for decision in policy["decisions"]} == {
+        "report_only"
+    }
+    assert {decision["selected"] for decision in policy["decisions"]} == {
+        "default"
+    }
+
+    if platform.system() == "Linux":
+        _assert_gnu_linux_immediate_hot_loop(crate, common, policy_environment)
 
 
 @pytest.mark.generated_build

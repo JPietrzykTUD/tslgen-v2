@@ -6,6 +6,7 @@ from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.benchmark._render_rust_common import indent, rust_string_literal
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
+    BenchmarkImmediateCorrectnessCase,
     BenchmarkVectorCorrectnessCase,
 )
 from tslc.value_tests.literals import rust_literal_list
@@ -20,8 +21,13 @@ def render_correctness(
 ) -> str:
     blocks = []
     for case in candidate_set.correctness_cases:
-        if not isinstance(case, BenchmarkVectorCorrectnessCase):
-            raise ValueError("Rust register benchmarks require vector correctness cases")
+        if not isinstance(
+            case,
+            (BenchmarkImmediateCorrectnessCase, BenchmarkVectorCorrectnessCase),
+        ):
+            raise ValueError(
+                "Rust register and immediate benchmarks require vector correctness cases"
+            )
         blocks.append(
             _render_case(
                 set_index,
@@ -41,17 +47,22 @@ def _render_case(
     set_index: int,
     candidate_index: int,
     candidate_set: BenchmarkCandidateSet,
-    case: BenchmarkVectorCorrectnessCase,
+    case: BenchmarkImmediateCorrectnessCase | BenchmarkVectorCorrectnessCase,
     *,
     profile_module: str,
 ) -> str:
     lanes = candidate_set.key.lanes
     if lanes is None:
-        raise ValueError("Rust register correctness requires a fixed lane count")
+        raise ValueError("Rust vector correctness requires a fixed lane count")
+    vector_inputs = (
+        (case.vector_input,)
+        if isinstance(case, BenchmarkImmediateCorrectnessCase)
+        else case.vector_inputs
+    )
     inputs: list[str] = []
     arguments: list[str] = []
     from_array = rust_raw_identifier(case.from_array_name)
-    for argument, values in enumerate(case.vector_inputs):
+    for argument, values in enumerate(vector_inputs):
         literals = rust_literal_list(values, candidate_set.key.type_tag)
         inputs.append(
             f"let values_{argument}: [Base_{set_index}; {lanes}] = [{literals}];\n"

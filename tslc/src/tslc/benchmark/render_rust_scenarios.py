@@ -1,4 +1,4 @@
-"""Render fixed-width pure-register Rust benchmark timing loops."""
+"""Render fixed-width vector-input Rust benchmark timing loops."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.benchmark._render_rust_common import indent, rust_string_literal
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
+    BenchmarkImmediateCorrectnessCase,
+    BenchmarkImmediateScenario,
     BenchmarkRegisterScenario,
     BenchmarkVectorCorrectnessCase,
 )
@@ -15,19 +17,29 @@ def render_scenario(
     set_index: int,
     scenario_index: int,
     candidate_set: BenchmarkCandidateSet,
-    scenario: BenchmarkRegisterScenario,
+    scenario: BenchmarkImmediateScenario | BenchmarkRegisterScenario,
     *,
     profile_module: str,
 ) -> str:
-    if not isinstance(scenario, BenchmarkRegisterScenario):
-        raise ValueError("Rust benchmark renderer supports only register scenarios")
     correctness = candidate_set.correctness_cases[0]
-    if not isinstance(correctness, BenchmarkVectorCorrectnessCase):
-        raise ValueError("Rust register scenarios require vector correctness cases")
+    if isinstance(scenario, BenchmarkRegisterScenario):
+        if not isinstance(correctness, BenchmarkVectorCorrectnessCase):
+            raise ValueError("Rust register scenarios require vector correctness cases")
+        operand_generators = scenario.operand_generators
+    elif isinstance(scenario, BenchmarkImmediateScenario):
+        if not isinstance(correctness, BenchmarkImmediateCorrectnessCase):
+            raise ValueError(
+                "Rust immediate scenarios require immediate correctness cases"
+            )
+        operand_generators = (scenario.operand_generator,)
+    else:
+        raise ValueError(
+            "Rust benchmark renderer supports only register and immediate scenarios"
+        )
     lanes = candidate_set.key.lanes
     if lanes is None:
-        raise ValueError("Rust register scenarios require a fixed lane count")
-    generators = tuple(_generator_name(item) for item in scenario.operand_generators)
+        raise ValueError("Rust vector scenarios require a fixed lane count")
+    generators = tuple(_generator_name(item) for item in operand_generators)
     input_type = f"Inputs_{set_index}_{scenario_index}"
     batch = scenario.timing.batch_size
     from_array = rust_raw_identifier(correctness.from_array_name)
@@ -131,19 +143,34 @@ def _render_candidate_measure(
     scenario_index: int,
     candidate_index: int,
     candidate_set: BenchmarkCandidateSet,
-    scenario: BenchmarkRegisterScenario,
+    scenario: BenchmarkImmediateScenario | BenchmarkRegisterScenario,
     input_type: str,
 ) -> str:
+    runtime_positions = tuple(
+        position
+        for position, kind in enumerate(candidate_set.key.param_kinds)
+        if kind == "v"
+    )
     arguments = [
-        f"inputs.vectors[{parameter}][position]"
-        for parameter, _kind in enumerate(candidate_set.key.param_kinds)
+        f"inputs.vectors[{batch_index}][position]"
+        for batch_index, _parameter in enumerate(runtime_positions)
     ]
     if scenario.kind == "latency":
         dependency = scenario.dependency_parameter
         if dependency is None:
             raise ValueError("Rust latency scenario requires a dependency parameter")
-        arguments[dependency] = "current"
-        setup = f"let mut current = inputs.vectors[{dependency}][0];"
+        try:
+            dependency_batch = runtime_positions.index(dependency)
+        except ValueError as error:
+            raise ValueError(
+                "Rust latency dependency must name a runtime vector parameter"
+            ) from error
+        arguments[dependency_batch] = (
+            "std::hint::black_box(current)"
+            if len(runtime_positions) == 1
+            else "current"
+        )
+        setup = f"let mut current = inputs.vectors[{dependency_batch}][0];"
         operation = (
             f"current = invoke_{set_index}_{candidate_index}({', '.join(arguments)});"
         )
@@ -155,6 +182,11 @@ def _render_candidate_measure(
             f"({', '.join(arguments)}));"
         )
         consume = "std::hint::black_box(result);"
+    loop_position = (
+        "position"
+        if scenario.kind == "throughput" or len(runtime_positions) > 1
+        else "_position"
+    )
     return f"""fn measure_{set_index}_{scenario_index}_{candidate_index}(
     inputs: &{input_type},
     iterations: usize,
@@ -162,7 +194,7 @@ def _render_candidate_measure(
     {setup}
     let begin = std::time::Instant::now();
     for _iteration in 0..iterations {{
-        for position in 0..BATCH_{set_index}_{scenario_index} {{
+        for {loop_position} in 0..BATCH_{set_index}_{scenario_index} {{
             {operation}
         }}
     }}

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from tslc.backend.rust import RustBackend
 from tslc.benchmark._render_rust_common import indent, rust_string_literal
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
+    BenchmarkImmediateScenario,
     BenchmarkRegisterScenario,
     SpecializationKey,
 )
@@ -21,10 +24,15 @@ def render_candidate_set(
     policy_supported_keys: frozenset[SpecializationKey],
 ) -> str:
     if any(
-        not isinstance(scenario, BenchmarkRegisterScenario)
+        not isinstance(
+            scenario,
+            (BenchmarkImmediateScenario, BenchmarkRegisterScenario),
+        )
         for scenario in candidate_set.scenarios
     ):
-        raise ValueError("Rust benchmark renderer supports only register scenarios")
+        raise ValueError(
+            "Rust benchmark renderer supports only register and immediate scenarios"
+        )
     backend = RustBackend(emit_target_features=False)
     selection_key = (
         candidate_set.key if candidate_set.key in policy_supported_keys else None
@@ -55,11 +63,10 @@ def render_candidate_set(
             set_index,
             scenario_index,
             candidate_set,
-            scenario,
+            cast(BenchmarkImmediateScenario | BenchmarkRegisterScenario, scenario),
             profile_module=profile_module,
         )
         for scenario_index, scenario in enumerate(candidate_set.scenarios)
-        if isinstance(scenario, BenchmarkRegisterScenario)
     )
     correctness_calls = "\n".join(
         f"    correct_{set_index}_{candidate_index}()?;"
@@ -124,17 +131,23 @@ def _render_invoke(
         for position, kind in enumerate(spec.param_kinds)
         if kind == "v"
     )
-    if len(parameters) != len(spec.param_kinds):
-        raise ValueError("Rust register benchmark candidates require vector parameters")
     arguments = tuple(
-        f"value_{position}" for position, _kind in enumerate(spec.param_kinds)
+        f"value_{position}"
+        for position, kind in enumerate(spec.param_kinds)
+        if kind != "sImm"
     )
+    if len(parameters) != len(arguments):
+        raise ValueError(
+            "Rust register and immediate benchmark candidates require vector "
+            "runtime parameters"
+        )
     candidate = candidate_set.candidates[candidate_index]
     expression = backend.render_direct_implementation_call(
         spec,
         None if candidate.is_default else candidate.variant_id,
         arguments,
         module_prefix=f"crate::{profile_module}",
+        immediate_value=candidate_set.key.immediate,
         overload_parameter_positions=candidate_set.key.overload_parameter_positions,
         selection_key=selection_key,
     )

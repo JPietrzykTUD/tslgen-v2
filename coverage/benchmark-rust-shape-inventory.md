@@ -13,10 +13,10 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 
 - **28 Rust machine profiles** are probed.
 - **4451 selected variant slots** are accounted for.
-- **52 benchmark reports** are emitted.
-- **Policy-mapped reports: 1**; **report-only: 51**.
+- **58 benchmark reports** are emitted.
+- **Policy-mapped reports: 1**; **report-only: 57**.
 - **0 signature shapes benchmarked**, **50 not applicable**, **14 gaps**.
-- **4401 strict audit issues**.
+- **4395 strict audit issues**.
 
 ## Signature shapes
 
@@ -66,7 +66,7 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 | `v:=(s,s)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(v)` | 1 | 1 | 17 | 17 | 320 | 2 | 0 | 2 | gap |
 | `v:=(v,s)` | 3 | 2 | 2 | 2 | 12 | 0 | 0 | 0 | gap |
-| `v:=(v,sImm)` | 8 | 2 | 9 | 9 | 330 | 0 | 0 | 0 | gap |
+| `v:=(v,sImm)` | 8 | 2 | 9 | 9 | 330 | 6 | 0 | 6 | gap |
 | `v:=(v,v)` | 14 | 7 | 26 | 26 | 805 | 32 | 1 | 31 | gap |
 | `v:=(v,v,sImm)` | 1 | 1 | 11 | 11 | 390 | 0 | 0 | 0 | gap |
 | `v:=(v,vidx)` | 1 | 1 | 9 | 9 | 818 | 0 | 0 | 0 | gap |
@@ -93,9 +93,9 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 |---|---:|---:|---:|---:|---|
 | masked primitive | 52 | 1 | 0 | 0 | gap |
 | representation-changing result | 15 | 0 | 0 | 0 | not applicable |
-| cross-lane semantics | 16 | 5 | 2360 | 0 | gap |
+| cross-lane semantics | 16 | 5 | 2360 | 6 | gap |
 | caller-unsafe implementation | 33 | 3 | 32 | 0 | gap |
-| compile-time immediate operand | 21 | 6 | 752 | 0 | gap |
+| compile-time immediate operand | 21 | 6 | 752 | 6 | gap |
 | lane-list operand | 1 | 0 | 0 | 0 | not applicable |
 | generic SIMD-type parameter | 10 | 5 | 1650 | 0 | gap |
 | boolean attribute axis | 23 | 0 | 0 | 0 | not applicable |
@@ -107,5 +107,5 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 
 | Kind | Count |
 |---|---:|
-| `coverage-gap` | 4399 |
+| `coverage-gap` | 4393 |
 | `inactive-authored-shape` | 2 |

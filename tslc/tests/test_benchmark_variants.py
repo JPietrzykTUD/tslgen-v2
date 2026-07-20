@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from hashlib import sha256
 import os
@@ -1052,7 +1053,29 @@ def test_cross_lane_immediates_require_exact_width_correctness(
         for scenario in candidate_set.scenarios
     )
 
-    assert rust.candidate_sets == ()
+    rust_candidate_sets = [
+        candidate_set
+        for candidate_set in rust.candidate_sets
+        if candidate_set.key.primitive_name == "permute_lanes_imm"
+        and candidate_set.key.extension_name == "sse"
+    ]
+    cpp_by_binding = {
+        (candidate_set.key.type_tag, candidate_set.key.immediate): candidate_set
+        for candidate_set in candidate_sets
+    }
+    rust_by_binding = {
+        (candidate_set.key.type_tag, candidate_set.key.immediate): candidate_set
+        for candidate_set in rust_candidate_sets
+    }
+    assert rust_by_binding.keys() == cpp_by_binding.keys()
+    for binding, rust_candidate_set in rust_by_binding.items():
+        cpp_candidate_set = cpp_by_binding[binding]
+        assert replace(rust_candidate_set.key, backend_id="cpp") == cpp_candidate_set.key
+        assert rust_candidate_set.correctness_cases == cpp_candidate_set.correctness_cases
+        assert all(
+            isinstance(scenario, BenchmarkImmediateScenario)
+            for scenario in rust_candidate_set.scenarios
+        )
     rust_entries = [
         entry
         for entry in plan.coverage
@@ -1061,9 +1084,8 @@ def test_cross_lane_immediates_require_exact_width_correctness(
         and entry.extension_name == "sse"
     ]
     assert len(rust_entries) == 6
-    assert {entry.reason for entry in rust_entries} == {
-        "backend benchmark support does not include the 'immediate' scenario family"
-    }
+    assert {entry.status for entry in rust_entries} == {"emitted"}
+    assert {entry.reason for entry in rust_entries} == {""}
 
     artifacts = {
         artifact.logical_path: artifact.content
@@ -1078,6 +1100,12 @@ def test_cross_lane_immediates_require_exact_width_correctness(
     source = artifacts["cpp/bench/tsl_variant_bench_sse2.cpp"]
     assert "permute_lanes_imm_impl<Vec_0, 78>::apply(value_0)" in source
     assert "permute_lanes_imm_impl_scalar_lanes_fallback<Vec_0, 78>" in source
+    rust_manifest = json.loads(artifacts["rust/bench/manifest_sse2.json"])
+    assert {
+        scenario["family"]
+        for candidate_set in rust_manifest["candidate_sets"]
+        for scenario in candidate_set["scenarios"]
+    } == {"immediate"}
 
 
 def test_cpp_selector_defaults_and_policy_include_order(benchmark_result) -> None:

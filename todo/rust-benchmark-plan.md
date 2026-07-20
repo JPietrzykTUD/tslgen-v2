@@ -460,10 +460,11 @@ Rust coverage gaps.
 
 Evidence-driven order:
 
-1. add shared exact-lane planning plus Rust vector-result immediate reports for
-   the six current native SSE2 candidate slots, retaining structured
-   report-only Rust policy decisions; matching C++ immediate evidence may
-   improve wherever the same exact-width specialization is selected;
+1. **Completed:** add shared exact-lane planning plus Rust vector-result
+   immediate reports for the six current native SSE2 candidate slots,
+   retaining structured report-only Rust policy decisions; matching C++
+   immediate evidence may improve wherever the same exact-width specialization
+   is selected;
 2. before enabling any additional machine profile, replace independent profile
    and scenario allowlists with explicit `profile × scenario-family` admission
    so capability expansion cannot admit an unintended Cartesian product;
@@ -473,6 +474,12 @@ Evidence-driven order:
    proving their exact native target profiles; and
 5. defer the Wasm-only vector-plus-scalar and vector-input mask-result families
    until benchmarking under a Wasm runtime is an explicit product decision.
+
+The completed SSE2 immediate follow-up binds each authored immediate into its
+direct Rust candidate call, uses exact-width correctness inputs, guards the
+unary latency dependency against compiler collapse, and proves the native
+`shufps` hot loop. All six decisions remain report-only with the explicit
+`immediate specializations are report-only` reason.
 
 Each implemented family slice includes Rust correctness rendering, timing
 rendering, manifest evidence, generated compilation, a short native mechanics

@@ -8,11 +8,14 @@ from typing import TypeVar
 
 from tslc.backend.rust_policy_selection import (
     RustPolicySelection,
+    RustPolicySelectionCoverageEntry,
     RustPolicySelectionPlan,
     RustPolicySelectionProfile,
     RustPolicySelectionStatus,
+    rust_policy_selection_reason,
 )
 from tslc.benchmark.model import (
+    BenchmarkCandidateSet,
     BenchmarkProfilePlan,
     BenchmarkProjectPlan,
     BenchmarkScenarioFamily,
@@ -366,7 +369,12 @@ def join_rust_policy_consumption_profile(
         tuple((selection.key, selection) for selection in selection_profile.selections),
         "policy selection",
     )
-    missing_coverage = candidate_sets.keys() - coverage.keys()
+    resolved_coverage: dict[SpecializationKey, RustPolicySelectionCoverageEntry] = {}
+    for key, candidate_set in candidate_sets.items():
+        entry = _coverage_for_candidate_set(candidate_set, coverage)
+        if entry is not None:
+            resolved_coverage[key] = entry
+    missing_coverage = candidate_sets.keys() - resolved_coverage.keys()
     if missing_coverage:
         raise ValueError(
             "Rust benchmark candidate sets are missing policy coverage entries"
@@ -379,7 +387,7 @@ def join_rust_policy_consumption_profile(
 
     decisions: list[RustPolicyConsumptionDecision] = []
     for candidate_set in benchmark_profile.candidate_sets:
-        entry = coverage[candidate_set.key]
+        entry = resolved_coverage[candidate_set.key]
         candidate_ids = tuple(
             candidate.variant_id for candidate in candidate_set.candidates
         )
@@ -455,6 +463,32 @@ def join_rust_policy_consumption_profile(
         required_features=benchmark_profile.backend_feature_spellings,
         decisions=tuple(decisions),
     )
+
+
+def _coverage_for_candidate_set(
+    candidate_set: BenchmarkCandidateSet,
+    coverage: dict[SpecializationKey, RustPolicySelectionCoverageEntry],
+) -> RustPolicySelectionCoverageEntry | None:
+    """Resolve exact coverage, binding only report-only immediate slots."""
+
+    exact = coverage.get(candidate_set.key)
+    if exact is not None:
+        return exact
+    if (
+        candidate_set.key.immediate is None
+        or candidate_set.specialization.immediate is None
+    ):
+        return None
+    unbound = coverage.get(replace(candidate_set.key, immediate=None))
+    if unbound is None or unbound.status != "report_only":
+        return None
+    reason = rust_policy_selection_reason(
+        candidate_set.key,
+        candidate_set.specialization,
+    )
+    if reason != unbound.reason:
+        return None
+    return replace(unbound, key=candidate_set.key)
 
 
 def _unique_by_key(

@@ -359,6 +359,8 @@ def rust_policy_selection_reason(
         return "sized-vector specializations are report-only"
     if spec.vector_spelling is None:
         return "policy selection requires a concrete Rust vector spelling"
+    if spec.immediate is not None or key.immediate is not None:
+        return "immediate specializations are report-only"
     if spec.result_kind != "v" or not spec.param_kinds or any(
         kind != "v" for kind in spec.param_kinds
     ):
@@ -380,8 +382,6 @@ def rust_policy_selection_reason(
         return "representation-changing specializations are report-only"
     if spec.axis or key.axis:
         return "const-generic axis specializations are report-only"
-    if spec.immediate is not None or key.immediate is not None:
-        return "immediate specializations are report-only"
     if spec.generic_params or key.generic_values:
         return "const-generic specializations are report-only"
     if spec.type_params or key.simd_type_base_bindings:

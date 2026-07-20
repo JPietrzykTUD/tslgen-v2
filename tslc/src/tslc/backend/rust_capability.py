@@ -76,7 +76,7 @@ def rust_benchmark_plan(
     return BenchmarkPlanner(
         catalog,
         backend_id="rust",
-        supported_scenario_families=frozenset({"register"}),
+        supported_scenario_families=frozenset({"immediate", "register"}),
         supported_profile_contexts=frozenset(
             {
                 BenchmarkProfileContext(
