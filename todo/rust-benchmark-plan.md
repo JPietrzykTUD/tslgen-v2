@@ -469,8 +469,8 @@ Evidence-driven order:
    independent profile and scenario allowlists with explicit
    `profile × scenario-family` admission so capability expansion cannot admit
    an unintended Cartesian product;
-3. add AVX2 one-vector scalar reductions only if their native candidate value
-   justifies expanding the supported profile set;
+3. **Completed:** add AVX2 one-vector scalar reductions after confirming 40
+   exact candidate slots with authored correctness and two emitted candidates;
 4. add integral-mask density or indexed hot-L1 loads only after choosing and
    proving their exact native target profiles; and
 5. defer the Wasm-only vector-plus-scalar and vector-input mask-result families
@@ -481,6 +481,21 @@ direct Rust candidate call, uses exact-width correctness inputs, guards the
 unary latency dependency against compiler collapse, and proves the native
 `shufps` hot loop. All six decisions remain report-only with the explicit
 `immediate specializations are report-only` reason.
+
+The completed AVX2 reduction follow-up emits throughput reports for `hadd`,
+`hand`, `hmax`, `hmin`, and `hor` across the eight fixed-width integer types.
+All 40 candidate sets use authored exact-width scalar expectations and remain
+report-only with the explicit
+`scalar-result reduction specializations are report-only` reason. Native short
+execution covers every set, and the `hadd/si32` assembly proof follows both
+production target-feature call paths to distinct, call-free vector-reduction
+bodies.
+
+Mask-density and indexed-load support remain deferred. The current exact Rust
+gaps provide only two canonical AVX2 mask-density slots without a demonstrated
+tuning question, while indexed loads are spread across AVX-512 profiles and do
+not yet have one selected native profile and host proof. Their target choice and
+workload value must be justified before adding either admission pair.
 
 Each implemented family slice includes Rust correctness rendering, timing
 rendering, manifest evidence, generated compilation, a short native mechanics

@@ -13,10 +13,10 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 
 - **28 Rust machine profiles** are probed.
 - **4451 selected variant slots** are accounted for.
-- **58 benchmark reports** are emitted.
-- **Policy-mapped reports: 1**; **report-only: 57**.
+- **98 benchmark reports** are emitted.
+- **Policy-mapped reports: 1**; **report-only: 97**.
 - **0 signature shapes benchmarked**, **50 not applicable**, **14 gaps**.
-- **4395 strict audit issues**.
+- **4355 strict audit issues**.
 
 ## Signature shapes
 
@@ -43,7 +43,7 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 | `s:=(m,v)` | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `s:=(v,s)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `s:=cptr` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
-| `s:=v` | 5 | 5 | 5 | 5 | 428 | 0 | 0 | 0 | gap |
+| `s:=v` | 5 | 5 | 5 | 5 | 428 | 40 | 0 | 40 | gap |
 | `s:=v[idx]` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `s[]:=v` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `usize:=(ptr)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
@@ -107,5 +107,5 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 
 | Kind | Count |
 |---|---:|
-| `coverage-gap` | 4393 |
+| `coverage-gap` | 4353 |
 | `inactive-authored-shape` | 2 |

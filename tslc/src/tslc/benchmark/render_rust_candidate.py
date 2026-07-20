@@ -1,4 +1,4 @@
-"""Render direct Rust candidate calls and register benchmark batches."""
+"""Render direct Rust candidate calls and vector-input benchmark batches."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from tslc.benchmark._render_rust_common import indent, rust_string_literal
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
     BenchmarkImmediateScenario,
+    BenchmarkReductionScenario,
     BenchmarkRegisterScenario,
     SpecializationKey,
 )
@@ -26,18 +27,29 @@ def render_candidate_set(
     if any(
         not isinstance(
             scenario,
-            (BenchmarkImmediateScenario, BenchmarkRegisterScenario),
+            (
+                BenchmarkImmediateScenario,
+                BenchmarkReductionScenario,
+                BenchmarkRegisterScenario,
+            ),
         )
         for scenario in candidate_set.scenarios
     ):
         raise ValueError(
-            "Rust benchmark renderer supports only register and immediate scenarios"
+            "Rust benchmark renderer supports only register, immediate, and "
+            "reduction scenarios"
         )
     backend = RustBackend(emit_target_features=False)
     selection_key = (
         candidate_set.key if candidate_set.key in policy_supported_keys else None
     )
     vector = backend.concrete_vector_type(candidate_set.specialization)
+    if candidate_set.key.result_kind == "v":
+        result = f"Reg_{set_index}"
+    elif candidate_set.key.result_kind == "s":
+        result = f"Base_{set_index}"
+    else:
+        raise ValueError("Rust benchmark result must be a vector or scalar")
     invokes = "\n\n".join(
         _render_invoke(
             backend,
@@ -63,7 +75,12 @@ def render_candidate_set(
             set_index,
             scenario_index,
             candidate_set,
-            cast(BenchmarkImmediateScenario | BenchmarkRegisterScenario, scenario),
+            cast(
+                BenchmarkImmediateScenario
+                | BenchmarkReductionScenario
+                | BenchmarkRegisterScenario,
+                scenario,
+            ),
             profile_module=profile_module,
         )
         for scenario_index, scenario in enumerate(candidate_set.scenarios)
@@ -91,6 +108,7 @@ def render_candidate_set(
     return f"""type Vec_{set_index} = {vector};
 type Reg_{set_index} = <Vec_{set_index} as SimdVector>::RegisterType;
 type Base_{set_index} = <Vec_{set_index} as SimdVector>::BaseType;
+type Result_{set_index} = {result};
 const CANDIDATES_{set_index}: [&str; {len(candidate_set.candidates)}] = [{candidates}];
 const SCENARIOS_{set_index}: [ScenarioSpec; {len(candidate_set.scenarios)}] = [
 {scenarios_specs}
@@ -138,8 +156,8 @@ def _render_invoke(
     )
     if len(parameters) != len(arguments):
         raise ValueError(
-            "Rust register and immediate benchmark candidates require vector "
-            "runtime parameters"
+            "Rust vector-input benchmark candidates require vector runtime "
+            "parameters"
         )
     candidate = candidate_set.candidates[candidate_index]
     expression = backend.render_direct_implementation_call(
@@ -153,7 +171,7 @@ def _render_invoke(
     )
     return f"""fn invoke_{set_index}_{candidate_index}(
 {indent(',\n'.join(parameters), 4)}
-) -> Reg_{set_index} {{
+) -> Result_{set_index} {{
     {expression}
 }}"""
 

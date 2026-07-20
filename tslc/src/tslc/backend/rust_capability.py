@@ -60,8 +60,28 @@ _RUST_SSE2_BENCHMARK_CONTEXT = BenchmarkProfileContext(
     compile_modes=frozenset(),
     backend_flags=(),
 )
+_RUST_AVX2_BENCHMARK_CONTEXT = BenchmarkProfileContext(
+    profile_name="avx2",
+    profile_family="x86",
+    features=frozenset(
+        {"avx", "avx2", "rdrand", "sse", "sse2", "sse4_1", "sse4_2", "ssse3"}
+    ),
+    backend_feature_spellings=(
+        "avx",
+        "avx2",
+        "rdrand",
+        "sse",
+        "sse2",
+        "sse4.1",
+        "sse4.2",
+        "ssse3",
+    ),
+    compile_modes=frozenset(),
+    backend_flags=(),
+)
 _RUST_BENCHMARK_ADMISSIONS = frozenset(
     {
+        BenchmarkScenarioAdmission(_RUST_AVX2_BENCHMARK_CONTEXT, "reduction"),
         BenchmarkScenarioAdmission(_RUST_SSE2_BENCHMARK_CONTEXT, "immediate"),
         BenchmarkScenarioAdmission(_RUST_SSE2_BENCHMARK_CONTEXT, "register"),
     }

@@ -361,6 +361,8 @@ def rust_policy_selection_reason(
         return "policy selection requires a concrete Rust vector spelling"
     if spec.immediate is not None or key.immediate is not None:
         return "immediate specializations are report-only"
+    if spec.result_kind == "s" and spec.param_kinds == ("v",):
+        return "scalar-result reduction specializations are report-only"
     if spec.result_kind != "v" or not spec.param_kinds or any(
         kind != "v" for kind in spec.param_kinds
     ):

@@ -24,6 +24,10 @@ from tslc.backend.rust_policy_selection import (
     RustPolicySelectionPlan,
     plan_rust_policy_selection,
 )
+from tslc.benchmark.model import (
+    BenchmarkReductionCorrectnessCase,
+    BenchmarkReductionScenario,
+)
 from tslc.benchmark.render_rust import rust_benchmark_artifacts
 from tslc.compiler_assets import load_default_render_assets
 from tslc.diagnostics import has_errors
@@ -57,6 +61,34 @@ def rust_immediate_benchmark_result(data_root: Path, machine_profiles_path: Path
         primitives=["permute_lanes"],
         profiles=["sse2"],
         type_tags=["si32", "ui32", "si64", "ui64", "f32", "f64"],
+        backends=["rust"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    return result
+
+
+@pytest.fixture(scope="module")
+def rust_avx2_reduction_benchmark_result(
+    data_root: Path,
+    machine_profiles_path: Path,
+):
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["hadd", "hand", "hmax", "hmin", "hor"],
+        profiles=["avx2"],
+        type_tags=[
+            "si8",
+            "si16",
+            "si32",
+            "si64",
+            "ui8",
+            "ui16",
+            "ui32",
+            "ui64",
+        ],
         backends=["rust"],
         test_harness=True,
     )
@@ -130,6 +162,57 @@ def test_rust_immediate_reports_bind_const_calls_and_policy_reason(
         "27",
         "78",
         "255",
+    }
+    assert all(not decision.mapping_choices for decision in policy.decisions)
+
+
+def test_rust_avx2_reduction_reports_are_exact_and_report_only(
+    rust_avx2_reduction_benchmark_result,
+) -> None:
+    plan = rust_avx2_reduction_benchmark_result.rendered.benchmarks
+    profile = plan.profile("rust", "avx2")
+    assert profile is not None
+    assert len(profile.candidate_sets) == 40
+    assert all(
+        len(candidate_set.candidates) == 2
+        and len(candidate_set.scenarios) == 1
+        and isinstance(candidate_set.scenarios[0], BenchmarkReductionScenario)
+        and all(
+            isinstance(case, BenchmarkReductionCorrectnessCase)
+            for case in candidate_set.correctness_cases
+        )
+        for candidate_set in profile.candidate_sets
+    )
+
+    artifacts = _artifacts(rust_avx2_reduction_benchmark_result)
+    source = artifacts["rust/src/tsl_variant_bench_avx2.rs"]
+    assert source.count("type Result_") == 40
+    assert source.count("policy_supported: false") == 40
+    assert "let expected: Base_" in source
+    for primitive in ("Hadd", "Hand", "Hmax", "Hmin", "Hor"):
+        assert f"::primitives::{primitive}Impl>::apply(value_0)" in source
+        assert (
+            f"::primitives::{primitive}_generic_fallbackImpl>::apply(value_0)"
+            in source
+        )
+
+    manifest = json.loads(artifacts["rust/bench/manifest_avx2.json"])
+    assert len(manifest["candidate_sets"]) == 40
+    assert {
+        scenario["family"]
+        for candidate_set in manifest["candidate_sets"]
+        for scenario in candidate_set["scenarios"]
+    } == {"reduction"}
+
+    selection = plan_rust_policy_selection(
+        rust_avx2_reduction_benchmark_result.emitted_profiles
+    )
+    policy = plan_rust_policy_coverage(plan, selection).profile("avx2")
+    assert policy is not None
+    assert len(policy.decisions) == 40
+    assert {decision.status for decision in policy.decisions} == {"report_only"}
+    assert {decision.reason for decision in policy.decisions} == {
+        "scalar-result reduction specializations are report-only"
     }
     assert all(not decision.mapping_choices for decision in policy.decisions)
 
@@ -596,6 +679,83 @@ def _assert_gnu_linux_immediate_hot_loop(
     )
 
 
+def _assert_gnu_linux_avx2_reduction_hot_loop(
+    crate: Path,
+    common: tuple[str, ...],
+    environment: dict[str, str | None],
+    *,
+    set_index: int,
+) -> None:
+    assembly = _run(
+        (
+            "cargo",
+            "rustc",
+            *common,
+            "--lib",
+            "--release",
+            "--no-default-features",
+            "--features",
+            "variant_benchmarks,avx2",
+            "--",
+            "--emit=asm",
+        ),
+        cwd=crate,
+        environment=environment,
+    )
+    assert assembly.returncode == 0, assembly.stderr
+    assembly_files = sorted(
+        (crate / "target" / "release" / "deps").glob("tsl-*.s"),
+        key=lambda path: path.stat().st_mtime_ns,
+        reverse=True,
+    )
+    assert assembly_files
+    marker_pattern = re.compile(
+        rf"\.section\s+\.text\.[^\n]*tsl_variant_bench_avx2[^\n]*"
+        rf"measure_{set_index}_0"
+    )
+    for assembly_file in assembly_files:
+        assembly_text = assembly_file.read_text()
+        marker = marker_pattern.search(assembly_text)
+        if marker is not None:
+            break
+    else:
+        pytest.fail("generated assembly does not contain the AVX2 reduction hot loop")
+    hot_loop = assembly_text[
+        marker.start() : assembly_text.index(".Lfunc_end", marker.start())
+    ]
+    assert re.search(
+        r"callq[^\n]*Avx2[^\n]*HaddImpl[^\n]*__tsl_target_feature_body",
+        hot_loop,
+    )
+    assert re.search(
+        r"callq[^\n]*Avx2[^\n]*Hadd_generic_fallbackImpl"
+        r"[^\n]*__tsl_target_feature_body",
+        hot_loop,
+    )
+    assert not re.search(r"callq[^\n]*invoke_", hot_loop)
+
+    def target_body(pattern: str) -> str:
+        target = re.search(rf"\.section[^\n]*{pattern}[^\n]*", assembly_text)
+        assert target is not None
+        return assembly_text[
+            target.start() : assembly_text.index(".Lfunc_end", target.start())
+        ]
+
+    default = target_body(
+        r"Simd\$LT\$i32.*Avx2.*HaddImpl.*__tsl_target_feature_body"
+    )
+    fallback = target_body(
+        r"Simd\$LT\$i32.*Avx2.*Hadd_generic_fallbackImpl"
+        r".*__tsl_target_feature_body"
+    )
+    assert default.count("vpaddd") >= 3
+    assert fallback.count("vpaddd") >= 3
+    assert "vpshufd\t$78" in default
+    assert "vpshufd\t$238" in fallback
+    assert "callq" not in default
+    assert "callq" not in fallback
+
+
 @pytest.mark.generated_build
 def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
     rust_immediate_benchmark_result,
@@ -702,6 +862,131 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
 
     if platform.system() == "Linux":
         _assert_gnu_linux_immediate_hot_loop(crate, common, policy_environment)
+
+
+@pytest.mark.generated_build
+def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
+    rust_avx2_reduction_benchmark_result,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cargo") is None or shutil.which("rustc") is None:
+        pytest.skip("cargo and rustc are required")
+    if platform.machine().lower() not in {"x86_64", "amd64"}:
+        pytest.skip("the AVX2 reduction benchmark requires a native x86-64 host")
+
+    generated = tmp_path / "generated"
+    report = write_artifacts(
+        rust_avx2_reduction_benchmark_result.artifacts,
+        generated,
+    )
+    assert not has_errors(report.diagnostics), report.diagnostics
+    crate = generated / "rust"
+    common = ("--manifest-path", str(crate / "Cargo.toml"))
+    policy_environment = _rust_policy_environment(
+        "avx2-reduction-generated-test-context"
+    )
+
+    for command in (
+        ("cargo", "check", *common),
+        (
+            "cargo",
+            "bench",
+            "--profile",
+            "bench",
+            *common,
+            "--bench",
+            "tsl_variant_bench_avx2",
+            "--no-default-features",
+            "--features",
+            "variant_benchmarks,avx2",
+            "--no-run",
+        ),
+    ):
+        completed = _run(command, cwd=crate, environment=policy_environment)
+        assert completed.returncode == 0, completed.stderr
+
+    profile = rust_avx2_reduction_benchmark_result.rendered.benchmarks.profile(
+        "rust", "avx2"
+    )
+    assert profile is not None
+    results_path = generated / "avx2-reduction-samples.jsonl"
+    summary_path = generated / "avx2-reduction-summary.txt"
+    policy_path = generated / "avx2-reduction-policy.json"
+    completed = _run(
+        (
+            "cargo",
+            "bench",
+            "--profile",
+            "bench",
+            *common,
+            "--bench",
+            "tsl_variant_bench_avx2",
+            "--no-default-features",
+            "--features",
+            "variant_benchmarks,avx2",
+            "--",
+            "--rounds",
+            "3",
+            "--minimum-sample-ns",
+            "1000",
+            "--results",
+            str(results_path),
+            "--summary",
+            str(summary_path),
+            "--policy-json",
+            str(policy_path),
+        ),
+        cwd=crate,
+        environment=policy_environment,
+    )
+    if completed.returncode != 0 and "requires CPU features" in completed.stderr:
+        pytest.skip(completed.stderr.strip())
+    assert completed.returncode == 0, completed.stderr
+
+    rows = [json.loads(line) for line in results_path.read_text().splitlines()]
+    expected = Counter(
+        (
+            candidate_set.stable_id,
+            scenario.scenario_id,
+            candidate.variant_id,
+            round_index,
+        )
+        for candidate_set in profile.candidate_sets
+        for scenario in candidate_set.scenarios
+        for candidate in candidate_set.candidates
+        for round_index in range(3)
+    )
+    assert Counter(
+        (
+            row["stable_id"],
+            row["scenario"],
+            row["candidate"],
+            row["round"],
+        )
+        for row in rows
+    ) == expected
+    policy = json.loads(policy_path.read_text())
+    assert len(policy["decisions"]) == 40
+    assert {decision["status"] for decision in policy["decisions"]} == {
+        "report_only"
+    }
+    assert {decision["selected"] for decision in policy["decisions"]} == {
+        "default"
+    }
+
+    if platform.system() == "Linux":
+        representative = next(
+            index
+            for index, candidate_set in enumerate(profile.candidate_sets)
+            if candidate_set.key.primitive_name == "hadd"
+            and candidate_set.key.type_tag == "si32"
+        )
+        _assert_gnu_linux_avx2_reduction_hot_loop(
+            crate,
+            common,
+            policy_environment,
+            set_index=representative,
+        )
 
 
 @pytest.mark.generated_build

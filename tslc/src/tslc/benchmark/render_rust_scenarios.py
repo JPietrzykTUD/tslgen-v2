@@ -8,6 +8,8 @@ from tslc.benchmark.model import (
     BenchmarkCandidateSet,
     BenchmarkImmediateCorrectnessCase,
     BenchmarkImmediateScenario,
+    BenchmarkReductionCorrectnessCase,
+    BenchmarkReductionScenario,
     BenchmarkRegisterScenario,
     BenchmarkVectorCorrectnessCase,
 )
@@ -17,7 +19,11 @@ def render_scenario(
     set_index: int,
     scenario_index: int,
     candidate_set: BenchmarkCandidateSet,
-    scenario: BenchmarkImmediateScenario | BenchmarkRegisterScenario,
+    scenario: (
+        BenchmarkImmediateScenario
+        | BenchmarkReductionScenario
+        | BenchmarkRegisterScenario
+    ),
     *,
     profile_module: str,
 ) -> str:
@@ -32,9 +38,16 @@ def render_scenario(
                 "Rust immediate scenarios require immediate correctness cases"
             )
         operand_generators = (scenario.operand_generator,)
+    elif isinstance(scenario, BenchmarkReductionScenario):
+        if not isinstance(correctness, BenchmarkReductionCorrectnessCase):
+            raise ValueError(
+                "Rust reduction scenarios require reduction correctness cases"
+            )
+        operand_generators = (scenario.operand_generator,)
     else:
         raise ValueError(
-            "Rust benchmark renderer supports only register and immediate scenarios"
+            "Rust benchmark renderer supports only register, immediate, and "
+            "reduction scenarios"
         )
     lanes = candidate_set.key.lanes
     if lanes is None:
@@ -143,7 +156,11 @@ def _render_candidate_measure(
     scenario_index: int,
     candidate_index: int,
     candidate_set: BenchmarkCandidateSet,
-    scenario: BenchmarkImmediateScenario | BenchmarkRegisterScenario,
+    scenario: (
+        BenchmarkImmediateScenario
+        | BenchmarkReductionScenario
+        | BenchmarkRegisterScenario
+    ),
     input_type: str,
 ) -> str:
     runtime_positions = tuple(
@@ -176,7 +193,11 @@ def _render_candidate_measure(
         )
         consume = "std::hint::black_box(current);"
     else:
-        setup = "let mut result = inputs.vectors[0][0];"
+        setup = (
+            f"let mut result: Result_{set_index} = Default::default();"
+            if candidate_set.key.result_kind == "s"
+            else "let mut result = inputs.vectors[0][0];"
+        )
         operation = (
             f"result = std::hint::black_box(invoke_{set_index}_{candidate_index}"
             f"({', '.join(arguments)}));"

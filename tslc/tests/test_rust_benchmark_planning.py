@@ -19,6 +19,8 @@ from tslc.benchmark.identity import (
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
     BenchmarkProjectPlan,
+    BenchmarkReductionCorrectnessCase,
+    BenchmarkReductionScenario,
     BenchmarkRegisterScenario,
     BenchmarkVectorCorrectnessCase,
 )
@@ -346,25 +348,67 @@ def test_profile_scenario_admission_prevents_cartesian_expansion(
     assert not any(entry.status == "emitted" for entry in plan.coverage)
 
 
-def test_rust_report_pilot_is_restricted_to_sse2(
+def test_rust_avx2_admits_reduction_reports(
     rust_non_register_benchmark_planning_result,
 ) -> None:
     plan = rust_non_register_benchmark_planning_result.rendered.benchmarks
     profile = plan.profile("rust", "avx2")
     assert profile is not None
-    assert profile.candidate_sets == ()
+    assert len(profile.candidate_sets) == 1
+
+    candidate_set = profile.candidate_sets[0]
+    assert candidate_set.key.primitive_name == "hadd"
+    assert candidate_set.key.type_tag == "si32"
+    assert [candidate.variant_id for candidate in candidate_set.candidates] == [
+        "default",
+        "generic_fallback",
+    ]
+    assert all(
+        isinstance(case, BenchmarkReductionCorrectnessCase)
+        for case in candidate_set.correctness_cases
+    )
+    assert all(
+        isinstance(scenario, BenchmarkReductionScenario)
+        for scenario in candidate_set.scenarios
+    )
 
     hadd = next(
         entry
         for entry in plan.coverage
         if entry.backend_id == "rust" and entry.primitive_name == "hadd"
     )
-    assert hadd.status == "unsupported"
-    assert (
-        hadd.reason
-        == "backend benchmark support does not include profile 'avx2'"
+    assert hadd.status == "emitted"
+
+
+def test_rust_avx2_does_not_admit_register_scenarios(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["mul"],
+        profiles=["avx2"],
+        type_tags=["si8"],
+        backends=["rust"],
+        test_harness=True,
     )
-    assert not any(entry.status == "emitted" for entry in plan.coverage)
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    profile = result.rendered.benchmarks.profile("rust", "avx2")
+    assert profile is not None
+    assert profile.candidate_sets == ()
+
+    mul = next(
+        entry
+        for entry in result.rendered.benchmarks.coverage
+        if entry.backend_id == "rust" and entry.primitive_name == "mul"
+    )
+    assert mul.status == "unsupported"
+    assert (
+        mul.reason
+        == "backend benchmark support does not include the 'register' scenario family"
+    )
 
 
 def test_rust_sse2_pilot_requires_exact_profile_context(
