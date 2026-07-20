@@ -15,6 +15,7 @@ from tslc.backend.capability import (
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
 from tslc.backend.rust import RustBackend
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
+from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
 from tslc.backend.rust_translation import RustBackendDialect
 from tslc.backend.rust_validation import validate_rust_profiles
 from tslc.benchmark.planner import BenchmarkPlanner, BenchmarkProfileContext
@@ -25,6 +26,7 @@ from tslc.output._verify_rust import (
 )
 from tslc.output._verify_rust_config import rust_toolchain_commands
 from tslc.render.documentation_formatters import RUST_DOCUMENTATION_FORMATTER
+from tslc.render.rust_policy_consumption import plan_rust_policy_consumption_render
 from tslc.render.rust_project import (
     rust_artifacts,
     rust_verify_profile,
@@ -47,17 +49,6 @@ if TYPE_CHECKING:
 
 def create_rust_dialect(catalog: Catalog) -> BackendDialect:
     return RustBackendDialect(catalog)
-
-
-def rust_project_artifacts(
-    profiles: tuple[EmittedProfile, ...], assets: RenderAssets, media_type: str
-) -> list[Artifact]:
-    return rust_artifacts(
-        profiles,
-        assets,
-        media_type=media_type,
-        selection_plan=plan_rust_policy_selection(profiles),
-    )
 
 
 def rust_profile_verification(
@@ -100,18 +91,35 @@ def rust_benchmark_plan(
     ).plan(profiles, value_tests)
 
 
-def rust_benchmark_project_artifacts(
-    plan: BenchmarkProjectPlan,
+def rust_backend_artifacts(
     profiles: tuple[EmittedProfile, ...],
+    value_tests: ValueTestProjectPlan,
+    benchmarks: BenchmarkProjectPlan,
     assets: RenderAssets,
     media_type: str,
 ) -> list[Artifact]:
-    return rust_benchmark_artifacts(
-        plan,
-        assets,
-        media_type,
-        selection_plan=plan_rust_policy_selection(profiles),
+    """Render Rust from one frozen selection/consumption projection."""
+
+    selection_plan = plan_rust_policy_selection(profiles)
+    consumption_plan = plan_rust_policy_consumption_render(
+        plan_rust_policy_consumption(benchmarks, selection_plan)
     )
+    return [
+        *rust_artifacts(
+            profiles,
+            assets,
+            media_type=media_type,
+            selection_plan=selection_plan,
+            consumption_plan=consumption_plan,
+        ),
+        *rust_test_artifacts(value_tests, assets, media_type=media_type),
+        *rust_benchmark_artifacts(
+            benchmarks,
+            assets,
+            media_type,
+            consumption_plan=consumption_plan,
+        ),
+    ]
 
 
 def rust_documentation_formatter() -> BackendDocumentationFormatter:
@@ -147,16 +155,14 @@ RUST_BACKEND = BackendCapability(
     root_path="rust",
     artifact_media_type="text/rust",
     dialect_factory=create_rust_dialect,
-    project_renderer=rust_project_artifacts,
+    artifact_renderer=rust_backend_artifacts,
     verify_profiles=rust_profile_verification,
     value_test_support_factory=rust_value_test_support,
-    test_renderer=rust_value_test_artifacts,
     verify_driver_factory=create_rust_verify_driver,
     verify_machine_profile=rust_verify_profile,
     toolchain_commands=rust_toolchain_commands,
     documentation_formatter_factory=rust_documentation_formatter,
     benchmark_plan_builder=rust_benchmark_plan,
-    benchmark_renderer=rust_benchmark_project_artifacts,
     helper_manifest=RUST_HELPER_MANIFEST,
     profile_validator=validate_rust_profiles,
     primitive_preview_renderer=rust_primitive_preview,
@@ -183,7 +189,6 @@ __all__ = [
     "rust_profile_verification",
     "rust_benchmark_plan",
     "rust_documentation_formatter",
-    "rust_project_artifacts",
     "rust_value_test_artifacts",
     "rust_value_test_support",
 ]

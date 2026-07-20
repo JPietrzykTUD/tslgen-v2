@@ -10,12 +10,14 @@ use crate::tsl_benchmark_core::{json_escape, output_identity, Options, RawSample
 use crate::tsl_benchmark_reducer::{
     reduce_profile, validate_decisions, validate_specs, CandidateSetSpec, Decision,
 };
+use crate::tsl_rust_cpu_identity::{cpu_id, precise_x86_cpu_id};
 
 pub const RUST_BACKEND_ID: &str = "rust";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BuildContext {
     pub rustc_verbose_version: &'static str,
+    pub cargo_verbose_version: &'static str,
     pub host: &'static str,
     pub target: &'static str,
     pub linker: &'static str,
@@ -48,6 +50,8 @@ pub struct ReportMetadata {
     pub profile: &'static str,
     pub manifest_hash: &'static str,
     pub required_features: &'static str,
+    pub required_rustflags: &'static [&'static str],
+    pub required_incremental_environment: &'static str,
     pub build_context: BuildContext,
 }
 
@@ -89,6 +93,7 @@ pub fn build_policy_document(
     cpu_identity: String,
 ) -> Result<RustPolicyDocument, String> {
     validate_metadata(metadata)?;
+    validate_policy_codegen_guard(metadata)?;
     validate_decisions(specs, decisions, options.threshold())?;
     if !precise_x86_cpu_id(&cpu_identity) {
         return Err(format!(
@@ -119,6 +124,7 @@ pub fn validate_policy_document(
     expected_cpu_id: &str,
 ) -> Result<(), String> {
     validate_metadata(expected)?;
+    validate_policy_codegen_guard(expected)?;
     let expected_context = tune_context(specs, expected, options);
     validate_policy_tune_context(&expected_context)?;
     if document.schema_version != expected.policy_schema_version
@@ -175,12 +181,6 @@ fn validate_policy_tune_context(context: &TuneContext) -> Result<(), String> {
     {
         return Err("Rust policy production does not support compiler wrappers".to_string());
     }
-    if !context.build.profile_overrides.is_empty() {
-        return Err(
-            "Rust policy production does not support Cargo profile or codegen overrides"
-                .to_string(),
-        );
-    }
     Ok(())
 }
 
@@ -191,6 +191,7 @@ fn validate_metadata(metadata: ReportMetadata) -> Result<(), String> {
         metadata.profile,
         metadata.manifest_hash,
         context.rustc_verbose_version,
+        context.cargo_verbose_version,
         context.host,
         context.target,
         context.linker,
@@ -206,10 +207,41 @@ fn validate_metadata(metadata: ReportMetadata) -> Result<(), String> {
         context.incremental,
         context.debug,
         context.benchmark_codegen_contract,
+        metadata.required_incremental_environment,
     ];
-    if metadata.backend != RUST_BACKEND_ID || required.iter().any(|value| value.is_empty()) {
+    if metadata.backend != RUST_BACKEND_ID
+        || required.iter().any(|value| value.is_empty())
+        || metadata.required_rustflags.is_empty()
+        || metadata
+            .required_rustflags
+            .iter()
+            .any(|value| value.is_empty())
+    {
         return Err(
             "Rust benchmark metadata has a wrong backend or missing tune context".to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_policy_codegen_guard(metadata: ReportMetadata) -> Result<(), String> {
+    let context = metadata.build_context;
+    let encoded_flags = if context.encoded_rustflags.is_empty() {
+        Vec::new()
+    } else {
+        context.encoded_rustflags.split('\u{1f}').collect::<Vec<_>>()
+    };
+    let expected_overrides = format!(
+        "CARGO_INCREMENTAL={}",
+        metadata.required_incremental_environment
+    );
+    if encoded_flags != metadata.required_rustflags
+        || context.incremental != metadata.required_incremental_environment
+        || context.profile_overrides != expected_overrides
+    {
+        return Err(
+            "Rust policy production requires the exact compiler-owned codegen guard"
+                .to_string(),
         );
     }
     Ok(())
@@ -387,7 +419,8 @@ fn render_tune_context(tune_context: &TuneContext) -> String {
     let context = tune_context.build;
     let mut output = format!(
         concat!(
-            "{{\"rustc_verbose_version\":\"{}\",\"host\":\"{}\",",
+            "{{\"rustc_verbose_version\":\"{}\",\"cargo_verbose_version\":\"{}\",",
+            "\"host\":\"{}\",",
             "\"target\":\"{}\",\"linker\":\"{}\",",
             "\"rustc_wrapper\":\"{}\",\"rustc_workspace_wrapper\":\"{}\",",
             "\"target_cpu\":\"{}\",",
@@ -402,6 +435,7 @@ fn render_tune_context(tune_context: &TuneContext) -> String {
             "\"minimum_sample_ns_override\":{},\"scenario_settings\":["
         ),
         json_escape(context.rustc_verbose_version),
+        json_escape(context.cargo_verbose_version),
         json_escape(context.host),
         json_escape(context.target),
         json_escape(context.linker),
@@ -676,45 +710,4 @@ fn cleanup_staged(staged: &[StagedDocument]) {
     for document in staged {
         let _ = std::fs::remove_file(&document.temporary_path);
     }
-}
-
-fn precise_x86_cpu_id(value: &str) -> bool {
-    let fields = value.split(':').collect::<Vec<_>>();
-    fields.len() == 5
-        && fields[0] == "x86"
-        && fields[1].len() == 12
-        && fields[2..].iter().all(|field| field.parse::<u32>().is_ok())
-}
-
-pub fn cpu_id() -> String {
-    #[cfg(target_arch = "x86_64")]
-    {
-        let vendor_leaf = std::arch::x86_64::__cpuid(0);
-        let identity = std::arch::x86_64::__cpuid(1);
-        let mut vendor = Vec::with_capacity(12);
-        vendor.extend_from_slice(&vendor_leaf.ebx.to_le_bytes());
-        vendor.extend_from_slice(&vendor_leaf.edx.to_le_bytes());
-        vendor.extend_from_slice(&vendor_leaf.ecx.to_le_bytes());
-        let vendor = String::from_utf8_lossy(&vendor);
-        let stepping = identity.eax & 0xf;
-        let base_model = (identity.eax >> 4) & 0xf;
-        let base_family = (identity.eax >> 8) & 0xf;
-        let model = if base_family == 0x6 || base_family == 0xf {
-            base_model + (((identity.eax >> 16) & 0xf) << 4)
-        } else {
-            base_model
-        };
-        let family = if base_family == 0xf {
-            base_family + ((identity.eax >> 20) & 0xff)
-        } else {
-            base_family
-        };
-        return format!("x86:{vendor}:{family}:{model}:{stepping}");
-    }
-    #[cfg(target_arch = "aarch64")]
-    {
-        return "aarch64:insufficient-identity".to_string();
-    }
-    #[allow(unreachable_code)]
-    "unknown-architecture".to_string()
 }

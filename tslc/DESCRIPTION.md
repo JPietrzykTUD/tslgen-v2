@@ -337,9 +337,9 @@ Backends differ idiomatically (a `BackendDialect`,
 [backend/translation.py](src/tslc/backend/translation.py), abstracts type
 spellings, intrinsic composition, call syntax, and unsafe framing). The
 [backend registry](src/tslc/backend/registry.py) owns each backend's dialect
-factory, artifact media type and renderers, documentation formatter, validation,
-helper manifest, value-test support, optional benchmark planner and renderer,
-verification adapter, and
+factory, artifact media type, complete artifact renderer, documentation
+formatter, validation, helper manifest, value-test support, optional benchmark
+planner, verification adapter, and
 post-generation formatting/documentation specs. Signature type
 projection machinery and the concrete C++/Rust projection tables are co-located
 in [backend/signature_types.py](src/tslc/backend/signature_types.py), then shared
@@ -348,6 +348,10 @@ not registry capabilities. Backend-neutral variant/body facts live in
 [backend/primitive_rendering.py](src/tslc/backend/primitive_rendering.py);
 language documentation assembly and Rust type-parameter/state-query spelling
 live in focused sibling modules rather than the function emitters.
+The complete renderer receives emitted profiles, value-test plans, and
+benchmark plans as one frozen snapshot. This lets a backend compute any shared
+semantic-to-layout projection once before its focused project, test, and
+benchmark formatters run.
 
 Sized-vector lane arithmetic crosses that boundary as a typed `LaneCount`.
 C++ renders scaled symbolic counts as constant expressions; stable Rust rejects
@@ -394,12 +398,44 @@ trait, const-argument, and unsafe spelling; all authored expectations pass
 before any samples are timed or written. The Rust runtime validates the exact
 sample inventory, applies the conservative paired reducer, and stages raw
 JSONL, summary, and backend-scoped policy files before publishing the policy
-last. Policy production is
-native x86 and build-local: it requires an explicit external context identity
-and rejects compiler wrappers or exposed Cargo profile/code-generation
-overrides. No generated library consumes that policy yet. Other profile and
-scenario families remain structured Rust coverage gaps. Value-test tags do not
-control benchmark admission.
+last. Policy production is native x86 and build-local. It requires
+`TSL_RUST_BENCHMARK_CONTEXT` as the caller's explicit identity for the
+build-local inputs that Cargo does not expose to `build.rs`. Policy-producing
+and policy-consuming invocations use the same exact compiler-owned trailing
+Rust codegen flags and `CARGO_INCREMENTAL=0`; under the recorded Cargo version,
+these neutralize stable workspace, manifest, and command-line profile settings
+that would otherwise change generated code invisibly. The compiler compares
+the tokenized flags, Cargo and rustc verbose identities, observable profile
+facts, wrappers, target facts, and the caller's context identity in both
+phases. Environment-exposed extra profile settings and compiler wrappers fail
+closed. This is a compatibility boundary for the documented ordinary Cargo
+commands, not an adversarial security boundary or a portable-policy claim.
+Callers must change the external context identity when an unobservable runner
+or other build-local input changes. Extra `cargo rustc --` arguments, forced
+Cargo `[env]` values, custom/untrusted Cargo or rustc executables, nightly-only
+flag channels, and future Cargo codegen mechanisms outside the versioned guard
+are unsupported. A
+separate native policy-enabled Cargo build may consume the precomputed file
+through `TSL_RUST_VARIANT_POLICY_FILE`. The build script joins it to a
+compiler-rendered descriptor, requires the same compiler, target, generated
+codegen contract, attested context identity, and CPU facts. Policy-producing
+and policy-consuming library builds retain the same internal
+`variant_benchmarks` feature so their generated code context is identical; the
+benchmark target itself independently rejects any policy input. The generated
+benchmark Cargo profile is pinned to the compiler-owned settings. A
+frozen semantic consumption plan joins benchmark evidence to the selection
+seam; one render projection derives the Cargo and artifact names shared by
+project and benchmark rendering. Missing benchmark evidence therefore leaves
+an ordinary default-only build instead of a dangling policy module. The build
+script materializes one complete mapping under `OUT_DIR` for
+both authored-default and policy-selected builds, and the library includes that
+Cargo-owned path unconditionally instead of exposing a caller-forgeable cfg or
+mapping environment seam. It neither executes timing code nor edits generated
+`src/` files. Unset input retains the authored-default mapping, while any
+requested missing, foreign, stale, partial, duplicate, or report-only selection
+fails before library compilation. Other profile and scenario families remain
+structured Rust coverage gaps. Value-test tags do not control benchmark
+admission.
 Workload semantics are resolved in
 [benchmark/scenarios.py](src/tslc/benchmark/scenarios.py) before rendering:
 each typed scenario and correctness case validates its own structural and

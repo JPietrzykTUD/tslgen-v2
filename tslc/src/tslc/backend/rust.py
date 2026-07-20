@@ -58,10 +58,16 @@ class RustBackend:
         feature_spellings: Mapping[str, str] | None = None,
         emit_target_features: bool = True,
         policy_selection: RustPolicySelectionProfile | None = None,
+        deferred_policy_mapping_file: str | None = None,
     ) -> None:
         self._feature_spellings = dict(feature_spellings or {})
         self._emit_target_features = emit_target_features
         self._policy_selection = policy_selection
+        if deferred_policy_mapping_file is not None and policy_selection is None:
+            raise ValueError(
+                "deferred Rust policy selection requires a typed selection profile"
+            )
+        self._deferred_policy_mapping_file = deferred_policy_mapping_file
 
     def render_primitive(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -70,10 +76,50 @@ class RustBackend:
         public = self.render_primitive_public(primitive_name, specializations)
         if not internal:
             return public
-        return "\n\n".join([_primitive_module(internal), public])
+        return "\n\n".join([self.render_primitive_module(internal), public])
 
     def render_primitive_module(self, internal: str) -> str:
-        return _primitive_module(internal) if internal.strip() else ""
+        if not internal.strip():
+            return ""
+        if (
+            self._deferred_policy_mapping_file is not None
+            and self._policy_selection is not None
+            and self._policy_selection.selections
+        ):
+            internal = (
+                f"{internal}\n\n"
+                "include!(concat!(env!(\"OUT_DIR\"), "
+                f'"/{self._deferred_policy_mapping_file}"));'
+            )
+        return _primitive_module(internal)
+
+    def render_policy_selection_impl(
+        self,
+        selection: RustPolicySelection,
+    ) -> str:
+        """Render one trusted mapping fragment from typed backend facts."""
+
+        if self._policy_selection is None:
+            raise ValueError("Rust policy mapping rendering requires a selection profile")
+        expected = next(
+            (
+                candidate
+                for candidate in self._policy_selection.selections
+                if candidate.key == selection.key
+            ),
+            None,
+        )
+        if expected is None or (
+            expected.specialization != selection.specialization
+            or expected.candidate_ids != selection.candidate_ids
+        ):
+            raise ValueError(
+                "Rust policy mapping selection is foreign or stale for this profile"
+            )
+        return self._selection_impl(
+            selection,
+            caller_unsafe=selection.specialization.safety.caller_unsafe,
+        )
 
     def render_primitive_internal(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -152,10 +198,11 @@ class RustBackend:
                     )
                 )
                 parts.extend(variant_impls)
-        parts.extend(
-            self._selection_impl(selection, caller_unsafe=caller_unsafe)
-            for selection in selections
-        )
+        if self._deferred_policy_mapping_file is None:
+            parts.extend(
+                self._selection_impl(selection, caller_unsafe=caller_unsafe)
+                for selection in selections
+            )
         return "\n\n".join(parts)
 
     def render_primitive_public(

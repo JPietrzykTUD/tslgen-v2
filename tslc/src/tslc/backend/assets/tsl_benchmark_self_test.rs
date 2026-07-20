@@ -172,6 +172,7 @@ fn reducer_self_test(options: &Options) -> Result<(), String> {
 
     let context = BuildContext {
         rustc_verbose_version: "rustc self-test",
+        cargo_verbose_version: "cargo self-test",
         host: "x86_64-self",
         target: "x86_64-self",
         linker: "self-linker",
@@ -185,23 +186,25 @@ fn reducer_self_test(options: &Options) -> Result<(), String> {
         debug_assertions: "false",
         overflow_checks: "false",
         lto: "false",
-        codegen_units: "16",
+        codegen_units: "1",
         panic: "unwind",
-        incremental: "false",
+        incremental: "0",
         debug: "false",
         rustflags: "",
-        encoded_rustflags: "",
-        profile_overrides: "",
+        encoded_rustflags: "-Copt-level=3\u{1f}-Ccodegen-units=1",
+        profile_overrides: "CARGO_INCREMENTAL=0",
         benchmark_codegen_contract: "profile.bench.v1",
         external_context: "self-context",
     };
     let metadata = ReportMetadata {
-        policy_schema_version: 1,
+        policy_schema_version: 2,
         protocol_version: 1,
         backend: RUST_BACKEND_ID,
         profile: "self",
         manifest_hash: "self-manifest",
         required_features: "sse,sse2",
+        required_rustflags: &["-Copt-level=3", "-Ccodegen-units=1"],
+        required_incremental_environment: "0",
         build_context: context,
     };
     let mut incomplete_context = context;

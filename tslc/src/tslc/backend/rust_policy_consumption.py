@@ -1,0 +1,399 @@
+"""Typed join between Rust benchmark evidence and policy-selection mappings."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass, replace
+from typing import TypeVar
+
+from tslc.backend.rust_policy_selection import (
+    RustPolicySelection,
+    RustPolicySelectionPlan,
+    RustPolicySelectionProfile,
+    RustPolicySelectionStatus,
+)
+from tslc.benchmark.model import (
+    BenchmarkProfilePlan,
+    BenchmarkProjectPlan,
+    BenchmarkScenarioFamily,
+    BenchmarkScenarioKind,
+    BenchmarkTiming,
+    SpecializationKey,
+)
+
+RustPolicyMappingRenderer = Callable[[RustPolicySelection], str]
+_Value = TypeVar("_Value")
+
+
+@dataclass(frozen=True, slots=True)
+class RustPolicyCandidateFact:
+    """One benchmark candidate identity bound to its lowered-body hash."""
+
+    candidate_id: str
+    body_hash: str
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id or not self.body_hash:
+            raise ValueError("Rust policy candidates require an ID and body hash")
+
+
+@dataclass(frozen=True, slots=True)
+class RustPolicyScenarioFact:
+    """The ordered scenario and timing facts consumed by policy validation."""
+
+    scenario_id: str
+    family: BenchmarkScenarioFamily
+    kind: BenchmarkScenarioKind
+    timing: BenchmarkTiming
+
+    def __post_init__(self) -> None:
+        if not self.scenario_id:
+            raise ValueError("Rust policy scenarios require an ID")
+
+
+@dataclass(frozen=True, slots=True)
+class RustPolicyMappingChoice:
+    """Compiler-rendered Rust mapping for one supported candidate."""
+
+    candidate_id: str
+    source: str
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id or not self.source.strip():
+            raise ValueError("Rust policy mapping choices require an ID and source")
+
+
+@dataclass(frozen=True, slots=True)
+class RustPolicyConsumptionDecision:
+    """One ordered policy decision with benchmark and backend-owned facts joined."""
+
+    key: SpecializationKey
+    stable_id: str
+    status: RustPolicySelectionStatus
+    reason: str
+    candidates: tuple[RustPolicyCandidateFact, ...]
+    scenarios: tuple[RustPolicyScenarioFact, ...]
+    specialization_required_features: tuple[str, ...]
+    mapping_choices: tuple[RustPolicyMappingChoice, ...] = ()
+
+    def __post_init__(self) -> None:
+        candidate_ids = tuple(candidate.candidate_id for candidate in self.candidates)
+        mapping_ids = tuple(mapping.candidate_id for mapping in self.mapping_choices)
+        if not self.stable_id:
+            raise ValueError("Rust policy decisions require a stable ID")
+        if not candidate_ids or candidate_ids[0] != "default":
+            raise ValueError(
+                "Rust policy decisions must begin with the authored default"
+            )
+        if len(set(candidate_ids)) != len(candidate_ids):
+            raise ValueError("Rust policy decision candidate IDs must be unique")
+        if not self.scenarios:
+            raise ValueError("Rust policy decisions require benchmark scenarios")
+        if len(set(self.specialization_required_features)) != len(
+            self.specialization_required_features
+        ):
+            raise ValueError("Rust policy decision features must be unique")
+        if self.status == "supported":
+            if self.reason:
+                raise ValueError("supported Rust policy decisions cannot have a reason")
+            if mapping_ids != candidate_ids:
+                raise ValueError(
+                    "supported Rust policy decisions require one mapping per candidate"
+                )
+        elif self.status == "report_only":
+            if not self.reason:
+                raise ValueError("report-only Rust policy decisions require a reason")
+            if self.mapping_choices:
+                raise ValueError(
+                    "report-only Rust policy decisions cannot have mappings"
+                )
+
+
+@dataclass(frozen=True, slots=True)
+class RustPolicyConsumptionProfile:
+    """Complete build-time policy inputs for one generated Rust profile."""
+
+    backend_id: str
+    profile_name: str
+    profile_family: str
+    manifest_hash: str
+    required_features: tuple[str, ...]
+    decisions: tuple[RustPolicyConsumptionDecision, ...]
+
+    def __post_init__(self) -> None:
+        if self.backend_id != "rust":
+            raise ValueError(
+                "Rust policy consumption requires a Rust benchmark profile"
+            )
+        if not self.profile_name or not self.profile_family or not self.manifest_hash:
+            raise ValueError(
+                "Rust policy consumption requires complete profile identity"
+            )
+        if len(set(self.required_features)) != len(self.required_features):
+            raise ValueError("Rust policy profile features must be unique")
+        keys = tuple(decision.key for decision in self.decisions)
+        stable_ids = tuple(decision.stable_id for decision in self.decisions)
+        if any(
+            key.backend_id != self.backend_id or key.profile_name != self.profile_name
+            for key in keys
+        ):
+            raise ValueError(
+                "Rust policy decisions must match their consumption profile"
+            )
+        if len(set(keys)) != len(keys):
+            raise ValueError("Rust policy decision keys must be unique")
+        if len(set(stable_ids)) != len(stable_ids):
+            raise ValueError("Rust policy decision stable IDs must be unique")
+
+
+@dataclass(frozen=True, slots=True)
+class RustPolicyConsumptionGap:
+    """Why an eligible selection profile remains default-only."""
+
+    profile_name: str
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.profile_name or not self.reason:
+            raise ValueError("Rust policy consumption gaps require profile and reason")
+
+
+@dataclass(frozen=True, slots=True)
+class RustPolicyConsumptionPlan:
+    """Frozen semantic availability for Rust policy consumption."""
+
+    profiles: tuple[RustPolicyConsumptionProfile, ...]
+    gaps: tuple[RustPolicyConsumptionGap, ...] = ()
+
+    def __post_init__(self) -> None:
+        names = tuple(profile.profile_name for profile in self.profiles)
+        gap_names = tuple(gap.profile_name for gap in self.gaps)
+        if len(set(names)) != len(names) or len(set(gap_names)) != len(gap_names):
+            raise ValueError("Rust policy consumption profile names must be unique")
+        if set(names) & set(gap_names):
+            raise ValueError("Rust policy profiles cannot be both consumable and gaps")
+
+    def profile(self, profile_name: str) -> RustPolicyConsumptionProfile | None:
+        return next(
+            (
+                profile
+                for profile in self.profiles
+                if profile.profile_name == profile_name
+            ),
+            None,
+        )
+
+
+EMPTY_RUST_POLICY_CONSUMPTION_PLAN = RustPolicyConsumptionPlan(profiles=())
+
+
+def plan_rust_policy_consumption(
+    benchmarks: BenchmarkProjectPlan,
+    selections: RustPolicySelectionPlan,
+) -> RustPolicyConsumptionPlan:
+    """Join policy eligibility to actual benchmark evidence exactly once."""
+
+    # Keep the renderer import local: the typed plan owns mapping facts, while
+    # the Rust backend remains their only spelling authority.
+    from tslc.backend.rust import RustBackend
+
+    selection_profile_names = {
+        selection_profile.profile_name for selection_profile in selections.profiles
+    }
+    foreign_benchmark_profiles = tuple(
+        benchmark_profile.profile_name
+        for benchmark_profile in benchmarks.profiles_for("rust")
+        if benchmark_profile.profile_name not in selection_profile_names
+    )
+    if foreign_benchmark_profiles:
+        names = ", ".join(repr(name) for name in foreign_benchmark_profiles)
+        raise ValueError(
+            "Rust benchmark profiles have no policy-selection profile: " + names
+        )
+
+    profiles: list[RustPolicyConsumptionProfile] = []
+    gaps: list[RustPolicyConsumptionGap] = []
+    for selection_profile in selections.profiles:
+        if not selection_profile.selections:
+            continue
+        benchmark_profile = benchmarks.profile("rust", selection_profile.profile_name)
+        if benchmark_profile is None:
+            gaps.append(
+                RustPolicyConsumptionGap(
+                    profile_name=selection_profile.profile_name,
+                    reason="no Rust benchmark profile evidence was planned",
+                )
+            )
+            continue
+        benchmark_keys = {
+            candidate_set.key for candidate_set in benchmark_profile.candidate_sets
+        }
+        missing_keys = {
+            selection.key
+            for selection in selection_profile.selections
+            if selection.key not in benchmark_keys
+        }
+        if missing_keys:
+            gaps.append(
+                RustPolicyConsumptionGap(
+                    profile_name=selection_profile.profile_name,
+                    reason=(
+                        "policy-supported Rust selections lack benchmark candidate evidence"
+                    ),
+                )
+            )
+            continue
+        backend = RustBackend(policy_selection=selection_profile)
+        joined = join_rust_policy_consumption_profile(
+            benchmark_profile,
+            selection_profile,
+            render_mapping=backend.render_policy_selection_impl,
+        )
+        profiles.append(joined)
+    return RustPolicyConsumptionPlan(profiles=tuple(profiles), gaps=tuple(gaps))
+
+
+def join_rust_policy_consumption_profile(
+    benchmark_profile: BenchmarkProfilePlan,
+    selection_profile: RustPolicySelectionProfile,
+    *,
+    render_mapping: RustPolicyMappingRenderer,
+) -> RustPolicyConsumptionProfile:
+    """Join exact benchmark inventory to compiler-owned Rust mapping choices."""
+
+    if benchmark_profile.backend_id != "rust":
+        raise ValueError("Rust policy consumption requires a Rust benchmark profile")
+    if benchmark_profile.profile_name != selection_profile.profile_name:
+        raise ValueError(
+            "Rust benchmark and policy-selection profiles do not match"
+        )
+
+    candidate_sets = _unique_by_key(
+        tuple(
+            (candidate_set.key, candidate_set)
+            for candidate_set in benchmark_profile.candidate_sets
+        ),
+        "benchmark candidate-set",
+    )
+    coverage = _unique_by_key(
+        tuple((entry.key, entry) for entry in selection_profile.coverage),
+        "policy coverage",
+    )
+    selections = _unique_by_key(
+        tuple((selection.key, selection) for selection in selection_profile.selections),
+        "policy selection",
+    )
+    missing_coverage = candidate_sets.keys() - coverage.keys()
+    if missing_coverage:
+        raise ValueError(
+            "Rust benchmark candidate sets are missing policy coverage entries"
+        )
+    missing_benchmarks = selections.keys() - candidate_sets.keys()
+    if missing_benchmarks:
+        raise ValueError(
+            "Rust policy selections are missing benchmark candidate evidence"
+        )
+
+    decisions: list[RustPolicyConsumptionDecision] = []
+    for candidate_set in benchmark_profile.candidate_sets:
+        entry = coverage[candidate_set.key]
+        candidate_ids = tuple(
+            candidate.variant_id for candidate in candidate_set.candidates
+        )
+        if candidate_ids != entry.candidate_ids:
+            raise ValueError(
+                "Rust benchmark and policy candidate inventories do not match for "
+                f"{candidate_set.stable_id!r}"
+            )
+
+        selection = selections.get(candidate_set.key)
+        mapping_choices: tuple[RustPolicyMappingChoice, ...] = ()
+        if entry.status == "supported":
+            if selection is None:
+                raise ValueError(
+                    "supported Rust policy coverage has no compiler selection"
+                )
+            if (
+                selection.candidate_ids != candidate_ids
+                or selection.specialization != candidate_set.specialization
+            ):
+                raise ValueError(
+                    "Rust benchmark and compiler selection facts do not match for "
+                    f"{candidate_set.stable_id!r}"
+                )
+            mapping_choices = tuple(
+                RustPolicyMappingChoice(
+                    candidate_id=candidate_id,
+                    source=render_mapping(
+                        replace(selection, selected_candidate=candidate_id)
+                    ),
+                )
+                for candidate_id in candidate_ids
+            )
+        elif selection is not None:
+            raise ValueError(
+                "report-only Rust policy coverage has a compiler selection"
+            )
+
+        decisions.append(
+            RustPolicyConsumptionDecision(
+                key=candidate_set.key,
+                stable_id=candidate_set.stable_id,
+                status=entry.status,
+                reason=entry.reason,
+                candidates=tuple(
+                    RustPolicyCandidateFact(
+                        candidate_id=candidate.variant_id,
+                        body_hash=candidate.body_hash,
+                    )
+                    for candidate in candidate_set.candidates
+                ),
+                scenarios=tuple(
+                    RustPolicyScenarioFact(
+                        scenario_id=scenario.scenario_id,
+                        family=scenario.family,
+                        kind=scenario.kind,
+                        timing=scenario.timing,
+                    )
+                    for scenario in candidate_set.scenarios
+                ),
+                specialization_required_features=tuple(
+                    sorted(candidate_set.specialization.required_features)
+                ),
+                mapping_choices=mapping_choices,
+            )
+        )
+
+    return RustPolicyConsumptionProfile(
+        backend_id=benchmark_profile.backend_id,
+        profile_name=benchmark_profile.profile_name,
+        profile_family=benchmark_profile.profile_family,
+        manifest_hash=benchmark_profile.manifest_hash,
+        required_features=benchmark_profile.backend_feature_spellings,
+        decisions=tuple(decisions),
+    )
+
+
+def _unique_by_key(
+    pairs: tuple[tuple[SpecializationKey, _Value], ...],
+    label: str,
+) -> dict[SpecializationKey, _Value]:
+    by_key = dict(pairs)
+    if len(by_key) != len(pairs):
+        raise ValueError(f"Rust {label} keys must be unique")
+    return by_key
+
+
+__all__ = (
+    "EMPTY_RUST_POLICY_CONSUMPTION_PLAN",
+    "RustPolicyCandidateFact",
+    "RustPolicyConsumptionDecision",
+    "RustPolicyConsumptionGap",
+    "RustPolicyConsumptionPlan",
+    "RustPolicyConsumptionProfile",
+    "RustPolicyMappingChoice",
+    "RustPolicyMappingRenderer",
+    "RustPolicyScenarioFact",
+    "join_rust_policy_consumption_profile",
+    "plan_rust_policy_consumption",
+)

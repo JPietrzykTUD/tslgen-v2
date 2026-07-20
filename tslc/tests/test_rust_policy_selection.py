@@ -14,6 +14,7 @@ import textwrap
 import pytest
 
 from tslc.api import generate_project, write_artifacts
+from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
 from tslc.backend.rust_policy_selection import (
     RustPolicySelection,
     RustPolicySelectionPlan,
@@ -25,6 +26,9 @@ from tslc.diagnostics import has_errors
 from tslc.output.artifacts import Artifact, ArtifactSet
 from tslc.render.licensing import add_generated_license_notice
 from tslc.render.rust_project import rust_artifacts
+from tslc.render.rust_policy_consumption import (
+    plan_rust_policy_consumption_render,
+)
 from tslc.target_text import LoweredBody
 
 
@@ -122,6 +126,12 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
     forced = plan.with_forced_selection(selection.key, "generic_fallback")
     assert _mul_selection(plan).selected_candidate == "default"
     assert _mul_selection(forced).selected_candidate == "generic_fallback"
+    consumption = plan_rust_policy_consumption_render(
+        plan_rust_policy_consumption(
+            rust_policy_result.rendered.benchmarks,
+            plan,
+        )
+    )
 
     default_first = rust_artifacts(
         rust_policy_result.emitted_profiles,
@@ -134,6 +144,13 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
         render_assets,
         media_type="text/rust",
         selection_plan=plan,
+    )
+    consumable_artifacts = rust_artifacts(
+        rust_policy_result.emitted_profiles,
+        render_assets,
+        media_type="text/rust",
+        selection_plan=plan,
+        consumption_plan=consumption,
     )
     forced_artifacts = rust_artifacts(
         rust_policy_result.emitted_profiles,
@@ -149,7 +166,8 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
     normal_source = _by_path(rust_policy_result.artifacts.artifacts)[
         "rust/src/tsl_sse2.rs"
     ].content
-    assert add_generated_license_notice(default_artifact).content == normal_source
+    consumable_artifact = _by_path(consumable_artifacts)["rust/src/tsl_sse2.rs"]
+    assert add_generated_license_notice(consumable_artifact).content == normal_source
 
     default_wrapper = _rust_item(default_source, "pub fn mul<")
     forced_wrapper = _rust_item(forced_source, "pub fn mul<")

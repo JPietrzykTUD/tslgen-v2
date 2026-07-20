@@ -15,16 +15,19 @@ import subprocess
 import pytest
 
 from tslc.api import generate_project, write_artifacts
-from tslc.backend.registry import backend_capability
 from tslc.backend.rust_benchmark_context import RUST_BENCHMARK_CODEGEN_CONTRACT
+from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
 from tslc.backend.rust_policy_selection import (
     RustPolicySelectionPlan,
-    RustPolicySelectionProfile,
     plan_rust_policy_selection,
 )
 from tslc.benchmark.render_rust import rust_benchmark_artifacts
 from tslc.compiler_assets import load_default_render_assets
 from tslc.diagnostics import has_errors
+from tslc.render.rust_policy_consumption import (
+    EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN,
+    plan_rust_policy_consumption_render,
+)
 
 
 @pytest.fixture(scope="module")
@@ -57,6 +60,8 @@ def test_rust_benchmark_artifacts_are_opt_in_and_deterministic(
     expected = {
         "rust/bench/coverage.json",
         "rust/bench/manifest_sse2.json",
+        "rust/bench/policy_consumption_sse2.json",
+        "rust/bench/policy_consumption_sse2.rs",
         "rust/src/tsl_benchmark_core.rs",
         "rust/src/tsl_benchmark_reducer.rs",
         "rust/src/tsl_benchmark_policy.rs",
@@ -75,16 +80,26 @@ def test_rust_benchmark_artifacts_are_opt_in_and_deterministic(
         "rust/benches/tsl_variant_bench_sse2.rs"
     ]
 
-    capability = backend_capability("rust")
-    rendered_once = capability.render_benchmark_artifacts(
-        rust_benchmark_result.rendered.benchmarks,
-        rust_benchmark_result.emitted_profiles,
-        load_default_render_assets(),
+    selection = plan_rust_policy_selection(
+        rust_benchmark_result.emitted_profiles
     )
-    rendered_again = capability.render_benchmark_artifacts(
+    consumption = plan_rust_policy_consumption_render(
+        plan_rust_policy_consumption(
+            rust_benchmark_result.rendered.benchmarks,
+            selection,
+        )
+    )
+    rendered_once = rust_benchmark_artifacts(
         rust_benchmark_result.rendered.benchmarks,
-        rust_benchmark_result.emitted_profiles,
         load_default_render_assets(),
+        "text/rust",
+        consumption_plan=consumption,
+    )
+    rendered_again = rust_benchmark_artifacts(
+        rust_benchmark_result.rendered.benchmarks,
+        load_default_render_assets(),
+        "text/rust",
+        consumption_plan=consumption,
     )
     assert rendered_once == rendered_again
     assert {artifact.logical_path for artifact in rendered_once} == expected
@@ -151,7 +166,12 @@ def test_rust_default_call_uses_actual_selection_membership(
         rust_benchmark_result.rendered.benchmarks,
         load_default_render_assets(),
         "text/rust",
-        selection_plan=demoted,
+        consumption_plan=plan_rust_policy_consumption_render(
+            plan_rust_policy_consumption(
+                rust_benchmark_result.rendered.benchmarks,
+                demoted,
+            )
+        ),
     )
     source = next(
         artifact.content
@@ -281,15 +301,7 @@ def test_rust_report_keeps_canonical_profile_identity(
         replace(plan, profiles=(renamed,)),
         load_default_render_assets(),
         "text/rust",
-        selection_plan=RustPolicySelectionPlan(
-            profiles=(
-                RustPolicySelectionProfile(
-                    profile_name="skylake-oneapi",
-                    selections=(),
-                    coverage=(),
-                ),
-            )
-        ),
+        consumption_plan=EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN,
     )
     artifacts = {artifact.logical_path: artifact.content for artifact in rendered}
 
@@ -352,6 +364,12 @@ def _rust_policy_environment(context: str) -> dict[str, str | None]:
     )
     return {
         **{name: None for name in cleared},
+        "RUSTFLAGS": " ".join(
+            RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags
+        ),
+        "CARGO_INCREMENTAL": (
+            RUST_BENCHMARK_CODEGEN_CONTRACT.policy_incremental_environment
+        ),
         "TSL_RUST_BENCHMARK_CONTEXT": context,
     }
 
@@ -380,16 +398,20 @@ def _assert_gnu_linux_hot_loop(
     assert assembly.returncode == 0, assembly.stderr
     assembly_files = sorted(
         (crate / "target" / "release" / "deps").glob("tsl-*.s"),
-        key=lambda path: path.stat().st_size,
+        key=lambda path: path.stat().st_mtime_ns,
         reverse=True,
     )
     assert assembly_files
-    assembly_text = assembly_files[0].read_text()
-    marker = re.search(
-        r"\.section\s+\.text\.[^\n]*tsl_variant_bench_sse2[^\n]*measure_0_0",
-        assembly_text,
+    marker_pattern = re.compile(
+        r"\.section\s+\.text\.[^\n]*tsl_variant_bench_sse2[^\n]*measure_0_0"
     )
-    assert marker is not None
+    for assembly_file in assembly_files:
+        assembly_text = assembly_file.read_text()
+        marker = marker_pattern.search(assembly_text)
+        if marker is not None:
+            break
+    else:
+        pytest.fail("generated assembly does not contain the benchmark hot loop")
     function = assembly_text[
         marker.start() : assembly_text.index(".Lfunc_end", marker.start())
     ]
@@ -579,6 +601,7 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
         assert all(row["cpu_id"].startswith("x86:") for row in rows)
         expected_tune_context_keys = {
             "rustc_verbose_version",
+            "cargo_verbose_version",
             "host",
             "target",
             "linker",
@@ -610,6 +633,7 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
         assert all(set(row["tune_context"]) == expected_tune_context_keys for row in rows)
         assert all(
             row["tune_context"]["rustc_verbose_version"].startswith("rustc ")
+            and row["tune_context"]["cargo_verbose_version"].startswith("cargo ")
             and row["tune_context"]["host"] == row["tune_context"]["target"]
             and row["tune_context"]["linker"]
             and row["tune_context"]["rustc_wrapper"] == ""
@@ -626,13 +650,15 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
             and row["tune_context"]["debug_assertions"] == "false"
             and row["tune_context"]["overflow_checks"] == "false"
             and row["tune_context"]["lto"] == "false"
-            and row["tune_context"]["codegen_units"] == "16"
+            and row["tune_context"]["codegen_units"] == "1"
             and row["tune_context"]["panic"] == "unwind"
-            and row["tune_context"]["incremental"] == "false"
+            and row["tune_context"]["incremental"] == "0"
             and row["tune_context"]["debug"] == "false"
             and row["tune_context"]["rustflags"] == ""
-            and row["tune_context"]["encoded_rustflags"] == ""
-            and row["tune_context"]["profile_overrides"] == ""
+            and row["tune_context"]["encoded_rustflags"].split("\x1f")
+            == list(RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags)
+            and row["tune_context"]["profile_overrides"]
+            == "CARGO_INCREMENTAL=0"
             and row["tune_context"]["external_context"]
             == "slice3-generated-test-context"
             and row["tune_context"]["threshold"]
@@ -677,7 +703,7 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
             "cpu_id",
             "decisions",
         }
-        assert policy["schema_version"] == 1
+        assert policy["schema_version"] == 2
         assert policy["protocol_version"] == 1
         assert policy["backend"] == "rust"
         assert policy["profile"] == "sse2"
@@ -736,7 +762,6 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
 
     encoded_results = generated / "encoded-results.jsonl"
     encoded_summary = generated / "encoded-summary.txt"
-    encoded_policy = generated / "encoded-policy.json"
     encoded_context = _run(
         (
             *base_bench,
@@ -748,8 +773,6 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
             str(encoded_results),
             "--summary",
             str(encoded_summary),
-            "--policy-json",
-            str(encoded_policy),
         ),
         cwd=crate,
         environment={
@@ -758,7 +781,9 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
         },
     )
     assert encoded_context.returncode == 0, encoded_context.stderr
-    encoded_tune_context = json.loads(encoded_policy.read_text())["tune_context"]
+    encoded_tune_context = json.loads(encoded_results.read_text().splitlines()[0])[
+        "tune_context"
+    ]
     assert encoded_tune_context["target_cpu"] == "x86-64"
     assert encoded_tune_context["rustflags"] == ""
     encoded_flags = encoded_tune_context["encoded_rustflags"].split("\x1f")
@@ -790,7 +815,7 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
         },
     )
     assert rejected_override.returncode != 0
-    assert "does not support Cargo profile or codegen overrides" in (
+    assert "requires the exact compiler-owned codegen guard" in (
         rejected_override.stderr
     )
     assert not rejected_results.exists()
@@ -822,7 +847,7 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
             environment={**policy_environment, **override},
         )
         assert rejected_incremental.returncode != 0
-        assert "does not support Cargo profile or codegen overrides" in (
+        assert "requires the exact compiler-owned codegen guard" in (
             rejected_incremental.stderr
         )
         assert not incremental_results.exists()
@@ -856,7 +881,7 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
     ]
     assert precedence_context["incremental"] == "0"
     assert precedence_context["profile_overrides"] == (
-        "CARGO_INCREMENTAL=0;CARGO_BUILD_INCREMENTAL=true"
+        "CARGO_BUILD_INCREMENTAL=true;CARGO_INCREMENTAL=0"
     )
     assert not tuple(generated.glob(".*.tsl-tmp"))
     assert not tuple(generated.glob(".*.tsl-backup"))

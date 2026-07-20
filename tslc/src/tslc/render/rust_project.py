@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from tslc.backend.rust import RustBackend
-from tslc.backend.rust_benchmark_context import RUST_BENCHMARK_CODEGEN_CONTRACT
+from tslc.backend.rust_benchmark_context import (
+    RUST_BENCHMARK_CODEGEN_CONTRACT,
+    RUST_BENCHMARK_POLICY_SCHEMA_VERSION,
+    RUST_POLICY_CONSUMPTION_SCHEMA_VERSION,
+)
 from tslc.backend.rust_policy_selection import (
     RustPolicySelectionPlan,
     validate_rust_policy_selection_plan,
@@ -19,11 +23,17 @@ from tslc.backend.target_capability import rust_arch_module
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
+from tslc.benchmark.planner import BENCHMARK_PROTOCOL_VERSION
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile, VerifyRunner
 from tslc.render._common import slug, text
+from tslc.render.rust_policy_consumption import (
+    EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN,
+    RustPolicyConsumptionRenderPlan,
+    RustPolicyConsumptionRenderProfile,
+)
 from tslc.backend.rust_algorithm import rust_algorithm_module
 from tslc.backend.rust_vectors import rust_registrations
 
@@ -34,8 +44,18 @@ def rust_artifacts(
     *,
     media_type: str,
     selection_plan: RustPolicySelectionPlan,
+    consumption_plan: RustPolicyConsumptionRenderPlan = (
+        EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN
+    ),
 ) -> list[Artifact]:
     validate_rust_policy_selection_plan(profiles, selection_plan)
+    emitted_names = {profile.profile.name for profile in profiles}
+    if any(
+        entry.profile.profile_name not in emitted_names
+        for entry in consumption_plan.profiles
+    ):
+        raise ValueError("Rust policy consumption plan is foreign to the project")
+    policy_profiles = consumption_plan.profiles
     artifacts = [
         text(
             "rust/build.rs",
@@ -54,6 +74,9 @@ def rust_artifacts(
                 default_incremental=str(
                     RUST_BENCHMARK_CODEGEN_CONTRACT.incremental
                 ).lower(),
+                benchmark_codegen_contract=RUST_BENCHMARK_CODEGEN_CONTRACT.identity,
+                policy_modules=_rust_build_policy_modules(policy_profiles),
+                policy_profiles=_rust_build_policy_profiles(policy_profiles),
             ),
             media_type=media_type,
         ),
@@ -61,6 +84,38 @@ def rust_artifacts(
         text(
             "rust/src/tsl_algorithm.rs",
             assets.text("tsl_algorithm.rs"),
+            media_type=media_type,
+        ),
+        text(
+            "rust/src/tsl_rust_cpu_identity.rs",
+            assets.text("tsl_rust_cpu_identity.rs"),
+            media_type=media_type,
+        ),
+        text(
+            "rust/tsl_rust_policy_json.rs",
+            assets.text("tsl_rust_policy_json.rs"),
+            media_type=media_type,
+        ),
+        text(
+            "rust/tsl_rust_variant_policy.rs",
+            assets.text("tsl_rust_variant_policy.rs"),
+            media_type=media_type,
+        ),
+        text(
+            "rust/tsl_rust_variant_policy_protocol.rs",
+            assets.fill(
+                "tsl_rust_variant_policy_protocol.rs",
+                descriptor_schema_version=str(
+                    RUST_POLICY_CONSUMPTION_SCHEMA_VERSION
+                ),
+                policy_schema_version=str(RUST_BENCHMARK_POLICY_SCHEMA_VERSION),
+                benchmark_protocol_version=str(BENCHMARK_PROTOCOL_VERSION),
+            ),
+            media_type=media_type,
+        ),
+        text(
+            "rust/tsl_rust_variant_policy_validation.rs",
+            assets.text("tsl_rust_variant_policy_validation.rs"),
             media_type=media_type,
         ),
         # Ship the formatter config at the crate root so `rustfmt`/`cargo fmt` finds it and the
@@ -73,6 +128,7 @@ def rust_artifacts(
             raise ValueError(
                 "Rust project rendering requires complete policy-selection profiles"
             )
+        consumption = consumption_plan.profile(emitted_profile.profile.name)
         capability = emitted_profile.profile_family or ProfileFamilyCapability(
             emitted_profile.profile.family
         )
@@ -80,6 +136,11 @@ def rust_artifacts(
             feature_spellings=emitted_profile.profile.feature_spellings("rust"),
             emit_target_features=capability.backend("rust").feature_flags,
             policy_selection=policy_selection,
+            deferred_policy_mapping_file=(
+                consumption.names.materialized_mapping_file
+                if consumption is not None
+                else None
+            ),
         )
         by_primitive = emitted_profile.specializations("rust")
         registrations = rust_registrations(by_primitive, emitted_profile.extensions)
@@ -337,6 +398,61 @@ def _rust_selected_profile_cfg(profile_slug: str, profile_slugs: tuple[str, ...]
         return f'feature = "{profile_slug}"'
     others = ", ".join(f'feature = "{other}"' for other in other_slugs)
     return f'all(feature = "{profile_slug}", not(any({others})))'
+
+
+def _rust_build_policy_profiles(
+    profiles: tuple[RustPolicyConsumptionRenderProfile, ...],
+) -> str:
+    if not profiles:
+        return "&[]"
+    entries = [
+        (
+            "tsl_rust_variant_policy::GeneratedProfile {",
+            f"    name: {json.dumps(entry.profile.profile_name)},",
+            f'    feature_environment: "{entry.names.feature_environment}",',
+            "    descriptor_relative_path: "
+            f'"{entry.names.descriptor_path}",',
+            "    descriptor: "
+            f'include_str!("{entry.names.descriptor_path}"),',
+            "    mappings: "
+            f"tsl_rust_policy_data_{entry.names.profile_slug}::MAPPINGS,",
+            "    materialized_mapping_file: "
+            f'"{entry.names.materialized_mapping_file}",',
+            "    required_rustflags: &["
+            + ", ".join(
+                json.dumps(flag)
+                for flag in RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags
+            )
+            + "],",
+            "    required_incremental_environment: "
+            + json.dumps(
+                RUST_BENCHMARK_CODEGEN_CONTRACT.policy_incremental_environment
+            )
+            + ",",
+            "}",
+        )
+        for entry in profiles
+    ]
+    if len(entries) == 1:
+        return "&[" + "\n".join(entries[0]) + "]"
+    return "&[\n" + "\n".join(
+        "\n".join(f"    {line}" for line in entry[:-1]) + "\n    },"
+        for entry in entries
+    ) + "\n]"
+
+
+def _rust_build_policy_modules(
+    profiles: tuple[RustPolicyConsumptionRenderProfile, ...],
+) -> str:
+    return "\n".join(
+        "\n".join(
+            (
+                f'#[path = "{entry.names.mapping_source_path}"]',
+                f"mod tsl_rust_policy_data_{entry.names.profile_slug};",
+            )
+        )
+        for entry in profiles
+    )
 
 
 def _rust_cargo(profiles: tuple[EmittedProfile, ...], assets: RenderAssets) -> str:

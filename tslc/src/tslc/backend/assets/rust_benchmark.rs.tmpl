@@ -13,10 +13,14 @@ const POLICY_SCHEMA_VERSION: u32 = @{policy_schema_version};
 const PROFILE: &str = @{profile_name};
 const MANIFEST_HASH: &str = @{manifest_hash};
 const REQUIRED_FEATURES: &str = @{required_features};
+const REQUIRED_POLICY_RUSTFLAGS: &[&str] = @{required_policy_rustflags};
+const REQUIRED_POLICY_INCREMENTAL_ENVIRONMENT: &str =
+    @{required_policy_incremental_environment};
 const BUILD_HOST: &str = env!("TSL_BUILD_HOST");
 const BUILD_TARGET: &str = env!("TSL_BUILD_TARGET");
 const BUILD_CONTEXT: BuildContext = BuildContext {
     rustc_verbose_version: env!("TSL_RUSTC_VERBOSE_VERSION"),
+    cargo_verbose_version: env!("TSL_CARGO_VERBOSE_VERSION"),
     host: BUILD_HOST,
     target: BUILD_TARGET,
     linker: env!("TSL_RUST_LINKER"),
@@ -89,6 +93,8 @@ fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
             profile: PROFILE,
             manifest_hash: MANIFEST_HASH,
             required_features: REQUIRED_FEATURES,
+            required_rustflags: REQUIRED_POLICY_RUSTFLAGS,
+            required_incremental_environment: REQUIRED_POLICY_INCREMENTAL_ENVIRONMENT,
             build_context: BUILD_CONTEXT,
         },
         &options,

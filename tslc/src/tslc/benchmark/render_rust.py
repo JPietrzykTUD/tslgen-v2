@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import json
 
-from tslc.backend.rust_benchmark_context import RUST_BENCHMARK_CODEGEN_CONTRACT
-from tslc.backend.rust_policy_selection import (
-    RustPolicySelectionPlan,
-    RustPolicySelectionProfile,
+from tslc.backend.rust_benchmark_context import (
+    RUST_BENCHMARK_CODEGEN_CONTRACT,
+    RUST_BENCHMARK_POLICY_SCHEMA_VERSION,
+    RUST_POLICY_CONSUMPTION_SCHEMA_VERSION,
+)
+from tslc.backend.rust_policy_consumption import (
+    RustPolicyConsumptionDecision,
+    RustPolicyConsumptionProfile,
 )
 from tslc.benchmark._render_rust_common import rust_string_literal
 from tslc.benchmark.model import (
@@ -20,16 +24,17 @@ from tslc.benchmark.render_rust_candidate import render_candidate_set
 from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact
 from tslc.render._common import slug, text
-
-RUST_BENCHMARK_POLICY_SCHEMA_VERSION = 1
-
+from tslc.render.rust_policy_consumption import (
+    RustPolicyConsumptionRenderPlan,
+    RustPolicyConsumptionRenderProfile,
+)
 
 def rust_benchmark_artifacts(
     plan: BenchmarkProjectPlan,
     assets: RenderAssets,
     media_type: str,
     *,
-    selection_plan: RustPolicySelectionPlan,
+    consumption_plan: RustPolicyConsumptionRenderPlan,
 ) -> list[Artifact]:
     profiles = plan.profiles_for("rust")
     if not profiles:
@@ -62,17 +67,13 @@ def rust_benchmark_artifacts(
         ),
     ]
     for profile in profiles:
-        policy_selection = selection_plan.profile(profile.profile_name)
-        if policy_selection is None:
-            raise ValueError(
-                "Rust benchmark rendering requires complete policy-selection profiles"
-            )
+        consumption = consumption_plan.profile(profile.profile_name)
         profile_slug = slug(profile.profile_name)
         artifacts.extend(
             (
                 text(
                     f"rust/src/tsl_variant_bench_{profile_slug}.rs",
-                    _render_source(profile, policy_selection, assets),
+                    _render_source(profile, consumption, assets),
                     media_type=media_type,
                 ),
                 text(
@@ -82,22 +83,42 @@ def rust_benchmark_artifacts(
                 ),
             )
         )
+        if consumption is not None:
+            artifacts.extend(
+                (
+                    text(
+                        f"rust/{consumption.names.descriptor_path}",
+                        _render_policy_consumption(consumption.profile),
+                        media_type="application/json",
+                    ),
+                    text(
+                        f"rust/{consumption.names.mapping_source_path}",
+                        _render_policy_mappings(consumption.profile),
+                        media_type=media_type,
+                    ),
+                )
+            )
     return artifacts
 
 
 def _render_source(
     profile: BenchmarkProfilePlan,
-    policy_selection: RustPolicySelectionProfile,
+    consumption: RustPolicyConsumptionRenderProfile | None,
     assets: RenderAssets,
 ) -> str:
     profile_slug = slug(profile.profile_name)
     profile_module = f"tsl_{profile_slug}"
+    selected_keys = {
+        decision.key
+        for decision in (() if consumption is None else consumption.profile.decisions)
+        if decision.status == "supported"
+    }
     declarations = "\n\n".join(
         render_candidate_set(
             index,
             candidate_set,
             profile_module=profile_module,
-            policy_selection=policy_selection,
+            policy_supported_keys=frozenset(selected_keys),
         )
         for index, candidate_set in enumerate(profile.candidate_sets)
     )
@@ -109,7 +130,6 @@ def _render_source(
         f"    run_candidate_set_{index}(&options, &mut samples)?;"
         for index, _candidate_set in enumerate(profile.candidate_sets)
     )
-    selected_keys = {selection.key for selection in policy_selection.selections}
     candidate_set_specs = "\n".join(
         "    CandidateSetSpec { "
         f"stable_id: {rust_string_literal(candidate_set.stable_id)}, "
@@ -127,6 +147,15 @@ def _render_source(
         profile_name=_rust_profile_literal(profile.profile_name),
         manifest_hash=rust_string_literal(profile.manifest_hash),
         required_features=rust_string_literal(required_features),
+        required_policy_rustflags="&["
+        + ", ".join(
+            rust_string_literal(flag)
+            for flag in RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags
+        )
+        + "]",
+        required_policy_incremental_environment=rust_string_literal(
+            RUST_BENCHMARK_CODEGEN_CONTRACT.policy_incremental_environment
+        ),
         benchmark_codegen_contract=rust_string_literal(
             RUST_BENCHMARK_CODEGEN_CONTRACT.identity
         ),
@@ -230,6 +259,81 @@ def _render_manifest(profile: BenchmarkProfilePlan) -> str:
     return json.dumps(payload, indent=2, sort_keys=True) + "\n"
 
 
+def _render_policy_consumption(joined: RustPolicyConsumptionProfile) -> str:
+    payload = {
+        "schema_version": RUST_POLICY_CONSUMPTION_SCHEMA_VERSION,
+        "policy_schema_version": RUST_BENCHMARK_POLICY_SCHEMA_VERSION,
+        "protocol_version": BENCHMARK_PROTOCOL_VERSION,
+        "backend": joined.backend_id,
+        "profile": joined.profile_name,
+        "profile_family": joined.profile_family,
+        "manifest_hash": joined.manifest_hash,
+        "required_features": list(joined.required_features),
+        "benchmark_codegen_contract": RUST_BENCHMARK_CODEGEN_CONTRACT.identity,
+        "decisions": [
+            _policy_consumption_decision(decision)
+            for decision in joined.decisions
+        ],
+    }
+    return json.dumps(payload, indent=2, sort_keys=True) + "\n"
+
+
+def _render_policy_mappings(joined: RustPolicyConsumptionProfile) -> str:
+    entries = "\n".join(
+        "\n".join(
+            (
+                "    crate::tsl_rust_variant_policy::GeneratedMapping {",
+                f"        stable_id: {rust_string_literal(decision.stable_id)},",
+                f"        candidate: {rust_string_literal(mapping.candidate_id)},",
+                f"        source: {rust_string_literal(mapping.source)},",
+                "    },",
+            )
+        )
+        for decision in joined.decisions
+        for mapping in decision.mapping_choices
+    )
+    return (
+        "//! Compiler-rendered Rust variant mappings joined to benchmark identity.\n\n"
+        "pub const MAPPINGS: &[crate::tsl_rust_variant_policy::GeneratedMapping] = &[\n"
+        f"{entries}\n"
+        "];\n"
+    )
+
+
+def _policy_consumption_decision(
+    decision: RustPolicyConsumptionDecision,
+) -> dict[str, object]:
+    # Keep JSON projection local; the typed join above owns every semantic fact.
+    return {
+        "stable_id": decision.stable_id,
+        "status": decision.status,
+        "reason": decision.reason,
+        "candidates": [
+            {"id": candidate.candidate_id, "body_hash": candidate.body_hash}
+            for candidate in decision.candidates
+        ],
+        "scenarios": [
+            {
+                "id": scenario.scenario_id,
+                "family": scenario.family,
+                "kind": scenario.kind,
+                "seed": scenario.timing.seed,
+                "batch_size": scenario.timing.batch_size,
+                "rounds": scenario.timing.rounds,
+                "minimum_sample_ns": scenario.timing.minimum_sample_ns,
+            }
+            for scenario in decision.scenarios
+        ],
+        "specialization_required_features": list(
+            decision.specialization_required_features
+        ),
+        "mappings": [
+            {"candidate": mapping.candidate_id}
+            for mapping in decision.mapping_choices
+        ],
+    }
+
+
 def _scenario_manifest(scenario: BenchmarkScenario) -> dict[str, object]:
     payload: dict[str, object] = {
         "id": scenario.scenario_id,
@@ -243,4 +347,8 @@ def _scenario_manifest(scenario: BenchmarkScenario) -> dict[str, object]:
     return payload
 
 
-__all__ = ("RUST_BENCHMARK_POLICY_SCHEMA_VERSION", "rust_benchmark_artifacts")
+__all__ = (
+    "RUST_BENCHMARK_POLICY_SCHEMA_VERSION",
+    "RUST_POLICY_CONSUMPTION_SCHEMA_VERSION",
+    "rust_benchmark_artifacts",
+)

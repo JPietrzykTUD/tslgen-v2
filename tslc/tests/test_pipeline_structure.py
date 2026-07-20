@@ -158,10 +158,9 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
         root_path="fake",
         artifact_media_type="text/fake",
         dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
-        project_renderer=lambda profiles, assets, media_type: [],
+        artifact_renderer=_empty_backend_artifacts,
         verify_profiles=lambda profiles: (),
         value_test_support_factory=lambda: None,  # type: ignore[return-value]
-        test_renderer=lambda plan, assets, media_type: [],
         verify_driver_factory=lambda: None,  # type: ignore[return-value]
         verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
         toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
@@ -190,10 +189,9 @@ def test_backend_capability_owns_optional_benchmark_planning(catalog) -> None:
         root_path="future",
         artifact_media_type="text/future",
         dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
-        project_renderer=lambda profiles, assets, media_type: [],
+        artifact_renderer=_empty_backend_artifacts,
         verify_profiles=lambda profiles: (),
         value_test_support_factory=lambda: None,  # type: ignore[return-value]
-        test_renderer=lambda plan, assets, media_type: [],
         verify_driver_factory=lambda: None,  # type: ignore[return-value]
         verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
         toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
@@ -233,12 +231,14 @@ def test_neutral_planners_do_not_branch_on_registered_backend_names() -> None:
 def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) -> None:
     from tslc.backend import registry
 
-    def project_renderer(
+    def artifact_renderer(
         profiles: tuple[EmittedProfile, ...],
+        value_tests: ValueTestProjectPlan,
+        benchmarks: object,
         assets: RenderAssets,
         media_type: str,
     ) -> list[Artifact]:
-        del profiles, assets
+        del profiles, value_tests, benchmarks, assets
         return [Artifact("fake/lib.fake", "fake\n", media_type)]
 
     fake = BackendCapability(
@@ -246,10 +246,9 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
         root_path="fake",
         artifact_media_type="text/fake",
         dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
-        project_renderer=project_renderer,
+        artifact_renderer=artifact_renderer,
         verify_profiles=lambda profiles: (),
         value_test_support_factory=lambda: None,  # type: ignore[return-value]
-        test_renderer=lambda plan, assets, media_type: [],
         verify_driver_factory=lambda: None,  # type: ignore[return-value]
         verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
         toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
@@ -380,10 +379,9 @@ prim<v:=v> id(data):
         root_path="fake",
         artifact_media_type="text/fake",
         dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
-        project_renderer=lambda profiles, assets, media_type: [],
+        artifact_renderer=_empty_backend_artifacts,
         verify_profiles=verify_profiles,
         value_test_support_factory=lambda: None,  # type: ignore[return-value]
-        test_renderer=lambda plan, assets, media_type: [],
         verify_driver_factory=lambda: None,  # type: ignore[return-value]
         verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
         toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
@@ -667,6 +665,17 @@ def _function_local_imports(paths: Iterable[Path], prefix: str) -> list[str]:
                     if _is_forbidden_import(node.module, prefix):
                         offenders.append(f"{path}:{node.lineno}")
     return sorted(set(offenders))
+
+
+def _empty_backend_artifacts(
+    profiles: tuple[EmittedProfile, ...],
+    value_tests: ValueTestProjectPlan,
+    benchmarks: object,
+    assets: RenderAssets,
+    media_type: str,
+) -> list[Artifact]:
+    del profiles, value_tests, benchmarks, assets, media_type
+    return []
 
 
 class _FakeDocumentationFormatter:

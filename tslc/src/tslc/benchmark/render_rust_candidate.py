@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from tslc.backend.rust import RustBackend
-from tslc.backend.rust_policy_selection import RustPolicySelectionProfile
 from tslc.benchmark._render_rust_common import indent, rust_string_literal
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
@@ -19,7 +18,7 @@ def render_candidate_set(
     candidate_set: BenchmarkCandidateSet,
     *,
     profile_module: str,
-    policy_selection: RustPolicySelectionProfile,
+    policy_supported_keys: frozenset[SpecializationKey],
 ) -> str:
     if any(
         not isinstance(scenario, BenchmarkRegisterScenario)
@@ -27,9 +26,8 @@ def render_candidate_set(
     ):
         raise ValueError("Rust benchmark renderer supports only register scenarios")
     backend = RustBackend(emit_target_features=False)
-    selected_keys = {selection.key for selection in policy_selection.selections}
     selection_key = (
-        candidate_set.key if candidate_set.key in selected_keys else None
+        candidate_set.key if candidate_set.key in policy_supported_keys else None
     )
     vector = backend.concrete_vector_type(candidate_set.specialization)
     invokes = "\n\n".join(

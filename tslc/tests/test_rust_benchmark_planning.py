@@ -123,9 +123,10 @@ def test_rust_backend_produces_typed_plan_and_report_artifacts(
         if artifact.logical_path == "rust/Cargo.toml"
     )
     assert "[[bench]]" in cargo_toml
-    assert backend_capability("rust").render_benchmark_artifacts(
-        plan,
+    assert backend_capability("rust").render_artifacts(
         rust_benchmark_planning_result.emitted_profiles,
+        rust_benchmark_planning_result.rendered.value_tests,
+        plan,
         load_default_render_assets(),
     )
 

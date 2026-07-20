@@ -58,6 +58,15 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
             "rustfmt.toml": "# injected rustfmt\n",
             "tsl_core.rs": "// injected core\n",
             "tsl_algorithm.rs": "// injected algorithm\n",
+            "tsl_rust_cpu_identity.rs": "// injected CPU identity\n",
+            "tsl_rust_policy_json.rs": "// injected policy JSON\n",
+            "tsl_rust_variant_policy.rs": "// injected policy consumer\n",
+            "tsl_rust_variant_policy_protocol.rs": (
+                "// injected policy protocol\n"
+            ),
+            "tsl_rust_variant_policy_validation.rs": (
+                "// injected policy validation\n"
+            ),
             "rust_benchmark_main.rs.tmpl": "// injected bench @{profile_slug}\n",
             "rust_benchmark_target.toml.tmpl": (
                 "// injected benchmark target @{profile_slug}\n"
@@ -88,6 +97,19 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
 
     assert rendered["rust/src/tsl_core.rs"] == "// injected core\n"
     assert rendered["rust/src/tsl_algorithm.rs"] == "// injected algorithm\n"
+    assert rendered["rust/src/tsl_rust_cpu_identity.rs"] == (
+        "// injected CPU identity\n"
+    )
+    assert rendered["rust/tsl_rust_policy_json.rs"] == "// injected policy JSON\n"
+    assert rendered["rust/tsl_rust_variant_policy.rs"] == (
+        "// injected policy consumer\n"
+    )
+    assert rendered["rust/tsl_rust_variant_policy_protocol.rs"] == (
+        "// injected policy protocol\n"
+    )
+    assert rendered["rust/tsl_rust_variant_policy_validation.rs"] == (
+        "// injected policy validation\n"
+    )
     assert rendered["rust/build.rs"] == "// injected build host/target marker\n"
     assert rendered["rust/src/lib.rs"] == "// injected lib\n"
     assert rendered["rust/src/tsl_documentation.rs"] == "// injected docs\n"
@@ -130,10 +152,11 @@ def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
             'harness = false\n'
             f'required-features = ["variant_benchmarks", "{profile_slug}"]'
         ) in cargo
-        assert rendered[f"rust/benches/{target_name}.rs"] == (
-            "fn main() {\n"
-            f"    std::process::exit(tsl::{target_name}::main());\n"
-            "}\n"
+        benchmark_main = rendered[f"rust/benches/{target_name}.rs"]
+        assert "TSL_RUST_VARIANT_POLICY_ACTIVE" in benchmark_main
+        assert (
+            f"    std::process::exit(tsl::{target_name}::main());"
+            in benchmark_main
         )
 
     lib = rendered["rust/src/lib.rs"]
