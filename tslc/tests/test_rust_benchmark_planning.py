@@ -22,7 +22,11 @@ from tslc.benchmark.model import (
     BenchmarkRegisterScenario,
     BenchmarkVectorCorrectnessCase,
 )
-from tslc.benchmark.planner import BenchmarkPlanner
+from tslc.benchmark.planner import (
+    BenchmarkPlanner,
+    BenchmarkProfileContext,
+    BenchmarkScenarioAdmission,
+)
 from tslc.catalog.model import Catalog
 from tslc.compiler_assets import load_default_render_assets
 from tslc.diagnostics import has_errors
@@ -290,15 +294,29 @@ def test_profile_plan_owns_family_and_ordered_backend_feature_spellings(
         assert profile.backend_feature_spellings == ("sse", "sse2")
 
 
-def test_rust_register_only_support_reports_other_scenario_families(
+def test_profile_scenario_admission_prevents_cartesian_expansion(
     rust_non_register_benchmark_planning_result,
+    rust_benchmark_planning_result,
     catalog: Catalog,
 ) -> None:
     result = rust_non_register_benchmark_planning_result
+    avx2_context = BenchmarkProfileContext.from_profile(
+        result.emitted_profiles[0].profile,
+        "rust",
+    )
+    sse2_context = BenchmarkProfileContext.from_profile(
+        rust_benchmark_planning_result.emitted_profiles[0].profile,
+        "rust",
+    )
     plan = BenchmarkPlanner(
         catalog,
         backend_id="rust",
-        supported_scenario_families=frozenset({"register"}),
+        supported_admissions=frozenset(
+            {
+                BenchmarkScenarioAdmission(avx2_context, "register"),
+                BenchmarkScenarioAdmission(sse2_context, "reduction"),
+            }
+        ),
     ).plan(result.emitted_profiles, result.rendered.value_tests)
     profile = plan.profile("rust", "avx2")
     assert profile is not None

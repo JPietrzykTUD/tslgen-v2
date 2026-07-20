@@ -465,9 +465,10 @@ Evidence-driven order:
    retaining structured report-only Rust policy decisions; matching C++
    immediate evidence may improve wherever the same exact-width specialization
    is selected;
-2. before enabling any additional machine profile, replace independent profile
-   and scenario allowlists with explicit `profile × scenario-family` admission
-   so capability expansion cannot admit an unintended Cartesian product;
+2. **Completed:** before enabling any additional machine profile, replace
+   independent profile and scenario allowlists with explicit
+   `profile × scenario-family` admission so capability expansion cannot admit
+   an unintended Cartesian product;
 3. add AVX2 one-vector scalar reductions only if their native candidate value
    justifies expanding the supported profile set;
 4. add integral-mask density or indexed hot-L1 loads only after choosing and

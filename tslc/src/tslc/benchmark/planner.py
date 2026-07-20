@@ -87,6 +87,14 @@ class BenchmarkProfileContext:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class BenchmarkScenarioAdmission:
+    """One exact machine-profile context admitted for one scenario family."""
+
+    profile_context: BenchmarkProfileContext
+    scenario_family: BenchmarkScenarioFamily
+
+
 class BenchmarkPlanner:
     """Plan typed benchmark scenarios for one generated backend.
 
@@ -100,15 +108,13 @@ class BenchmarkPlanner:
         catalog: Catalog,
         *,
         backend_id: str,
-        supported_scenario_families: frozenset[BenchmarkScenarioFamily] | None = None,
-        supported_profile_contexts: frozenset[BenchmarkProfileContext] | None = None,
+        supported_admissions: frozenset[BenchmarkScenarioAdmission] | None = None,
     ) -> None:
         if not backend_id:
             raise ValueError("benchmark planner requires a backend ID")
         self._catalog = catalog
         self._backend_id = backend_id
-        self._supported_scenario_families = supported_scenario_families
-        self._supported_profile_contexts = supported_profile_contexts
+        self._supported_admissions = supported_admissions
         self._harness = discover_harness_primitives(catalog)
 
     def plan(
@@ -124,10 +130,10 @@ class BenchmarkPlanner:
         }
         for emitted_profile in sorted(profiles, key=lambda item: item.profile.name):
             backend_id = self._backend_id
-            profile_support_reason = _profile_support_reason(
+            profile_admission_reason = _profile_admission_reason(
                 emitted_profile.profile,
                 backend_id,
-                self._supported_profile_contexts,
+                self._supported_admissions,
             )
             by_primitive = emitted_profile.specializations(backend_id)
             cases = value_profiles.get((backend_id, emitted_profile.profile.name), ())
@@ -138,14 +144,14 @@ class BenchmarkPlanner:
                 ):
                     if not spec.variant_bodies:
                         continue
-                    if profile_support_reason is not None:
+                    if profile_admission_reason is not None:
                         coverage.append(
                             _coverage(
                                 emitted_profile,
                                 spec,
                                 backend_id,
                                 "unsupported",
-                                profile_support_reason,
+                                profile_admission_reason,
                             )
                         )
                         continue
@@ -260,16 +266,14 @@ class BenchmarkPlanner:
                 "no typed benchmark scenario supports this result and parameter shape",
                 False,
             )
-        if (
-            self._supported_scenario_families is not None
-            and scenario_family not in self._supported_scenario_families
-        ):
-            return (
-                None,
-                "backend benchmark support does not include the "
-                f"{scenario_family!r} scenario family",
-                False,
-            )
+        admission_reason = _scenario_admission_reason(
+            profile.profile,
+            self._backend_id,
+            scenario_family,
+            self._supported_admissions,
+        )
+        if admission_reason is not None:
+            return None, admission_reason, False
         stable_id = specialization_stable_id(key)
         seed = int(sha256(stable_id.encode("utf-8")).hexdigest()[:16], 16)
         correctness: tuple[BenchmarkCorrectnessCase, ...]
@@ -502,17 +506,18 @@ def _require_harness(
     return resolved, ""
 
 
-def _profile_support_reason(
+def _profile_admission_reason(
     profile: MachineProfile,
     backend_id: str,
-    supported: frozenset[BenchmarkProfileContext] | None,
+    supported: frozenset[BenchmarkScenarioAdmission] | None,
 ) -> str | None:
     if supported is None:
         return None
     context = BenchmarkProfileContext.from_profile(profile, backend_id)
-    if context in supported:
-        return None
-    if not any(item.profile_family == context.profile_family for item in supported):
+    profile_contexts = frozenset(item.profile_context for item in supported)
+    if not any(
+        item.profile_family == context.profile_family for item in profile_contexts
+    ):
         return (
             "backend benchmark support does not include the "
             f"{context.profile_family!r} profile family"
@@ -520,15 +525,38 @@ def _profile_support_reason(
     if not any(
         item.profile_family == context.profile_family
         and item.profile_name == context.profile_name
-        for item in supported
+        for item in profile_contexts
     ):
         return (
             "backend benchmark support does not include profile "
             f"{context.profile_name!r}"
         )
+    if context not in profile_contexts:
+        return (
+            "backend benchmark support requires the canonical feature/build context "
+            f"for profile {context.profile_name!r}"
+        )
+    return None
+
+
+def _scenario_admission_reason(
+    profile: MachineProfile,
+    backend_id: str,
+    scenario_family: BenchmarkScenarioFamily,
+    supported: frozenset[BenchmarkScenarioAdmission] | None,
+) -> str | None:
+    if supported is None:
+        return None
+    context = BenchmarkProfileContext.from_profile(profile, backend_id)
+    if any(
+        item.profile_context == context
+        and item.scenario_family == scenario_family
+        for item in supported
+    ):
+        return None
     return (
-        "backend benchmark support requires the canonical feature/build context "
-        f"for profile {context.profile_name!r}"
+        "backend benchmark support does not include the "
+        f"{scenario_family!r} scenario family"
     )
 
 
@@ -773,4 +801,5 @@ __all__ = (
     "BENCHMARK_PROTOCOL_VERSION",
     "BenchmarkPlanner",
     "BenchmarkProfileContext",
+    "BenchmarkScenarioAdmission",
 )
