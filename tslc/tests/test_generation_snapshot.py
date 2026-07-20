@@ -271,6 +271,9 @@ _DELIBERATE_OMISSIONS: dict[type, frozenset[str]] = {
     # specialization: the lowered specialization is a compiler intermediate;
     # its callable identity is captured by the key and candidate body hashes.
     BenchmarkCandidateSet: frozenset({"specialization"}),
+    # slot_hash: maintenance-only Rust ratchet identity. It deliberately does
+    # not broaden the backend-neutral generation snapshot schema.
+    BenchmarkCoverageEntry: frozenset({"slot_hash"}),
 }
 
 _LOCATION = SourceLocation(Path("tsldata/probe.tsl"), 3, 5)
@@ -348,7 +351,19 @@ _BENCHMARK_CANDIDATE_SET = BenchmarkCandidateSet(
     stable_id="stable",
 )
 _BENCHMARK_COVERAGE = BenchmarkCoverageEntry(
-    "cpp", "avx2", "add", "add", "avx2", "si32", "v", ("v", "v"), None, (), (), "emitted"
+    "cpp",
+    "avx2",
+    "add",
+    "add",
+    "avx2",
+    "si32",
+    "v",
+    ("v", "v"),
+    None,
+    (),
+    (),
+    "",
+    "emitted",
 )
 _BENCHMARK_PROFILE = BenchmarkProfilePlan(
     "cpp",

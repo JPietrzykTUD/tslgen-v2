@@ -21,6 +21,7 @@ from tslc.backend.rust_benchmark_context import RUST_BENCHMARK_CODEGEN_CONTRACT
 from tslc.backend.rust_policy_consumption import (
     RustPolicyConsumptionProfile,
     join_rust_policy_consumption_profile,
+    plan_rust_policy_coverage,
     plan_rust_policy_consumption,
 )
 from tslc.backend.rust_policy_selection import (
@@ -125,6 +126,74 @@ def test_join_preserves_ordered_policy_and_benchmark_facts(
         ("mul", "default"),
         ("mul", "generic_fallback"),
     ]
+
+
+def test_policy_coverage_retains_a_report_only_only_profile(
+    rust_policy_inputs: tuple[BenchmarkProfilePlan, RustPolicySelectionProfile],
+) -> None:
+    benchmark, selection = rust_policy_inputs
+    demoted_coverage = tuple(
+        replace(
+            entry,
+            status="report_only",
+            reason="focused report-only coverage sentinel",
+        )
+        if entry.status == "supported"
+        else entry
+        for entry in selection.coverage
+    )
+    selection_plan = RustPolicySelectionPlan(
+        profiles=(
+            replace(
+                selection,
+                selections=(),
+                coverage=demoted_coverage,
+            ),
+        )
+    )
+    benchmarks = BenchmarkProjectPlan(profiles=(benchmark,))
+
+    coverage = plan_rust_policy_coverage(benchmarks, selection_plan)
+    coverage_profile = coverage.profile("sse2")
+    assert coverage_profile is not None
+    assert len(coverage_profile.decisions) == len(benchmark.candidate_sets)
+    assert {decision.status for decision in coverage_profile.decisions} == {
+        "report_only"
+    }
+    assert coverage.gaps == ()
+
+    consumption = plan_rust_policy_consumption(benchmarks, selection_plan)
+    assert consumption.profiles == ()
+    assert consumption.gaps == ()
+
+
+def test_policy_coverage_rejects_a_foreign_report_only_profile(
+    rust_policy_inputs: tuple[BenchmarkProfilePlan, RustPolicySelectionProfile],
+) -> None:
+    benchmark, selection = rust_policy_inputs
+    foreign_coverage = tuple(
+        replace(
+            entry,
+            key=replace(entry.key, profile_name="foreign"),
+            status="report_only",
+            reason=(entry.reason or "foreign report-only sentinel"),
+        )
+        for entry in selection.coverage
+    )
+    foreign = RustPolicySelectionProfile(
+        profile_name="foreign",
+        selections=(),
+        coverage=foreign_coverage,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="policy-selection profiles have no benchmark profile: 'foreign'",
+    ):
+        plan_rust_policy_coverage(
+            BenchmarkProjectPlan(profiles=(benchmark,)),
+            RustPolicySelectionPlan(profiles=(selection, foreign)),
+        )
 
 
 def test_join_rejects_profile_key_and_candidate_inventory_drift(

@@ -20,6 +20,7 @@ from tslc.benchmark.correctness import (
     vector_scalar_cases as _vector_scalar_correctness_cases,
 )
 from tslc.benchmark.identity import (
+    benchmark_slot_identity_hash,
     implementation_body_hash,
     specialization_key,
     specialization_stable_id,
@@ -737,6 +738,11 @@ def _coverage(
         mask_policy=spec.mask_policy,
         axis=spec.axis,
         variant_names=spec.variant_names,
+        slot_hash=(
+            benchmark_slot_identity_hash(profile.profile.name, spec)
+            if backend_id == "rust"
+            else ""
+        ),
         status=status,
         reason=reason,
     )
@@ -755,6 +761,7 @@ def _coverage_sort_key(entry: BenchmarkCoverageEntry) -> tuple[str, ...]:
         entry.mask_policy or "",
         ",".join(f"{name}={value}" for name, value in entry.axis),
         ",".join(entry.variant_names),
+        entry.slot_hash,
         entry.status,
         entry.reason,
     )

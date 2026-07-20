@@ -312,13 +312,17 @@ Omit `--primitives` to benchmark the full catalog.
 
 ## Coverage Gate
 
-The current corpus ratchet covers C++ benchmark shapes. Rust receives its own
-backend-scoped report and policy ratchet in the next coverage slice.
-
-Run the corpus audit:
+Benchmark coverage is ratcheted independently for C++ and Rust. The no-option
+command remains the C++ compatibility gate:
 
 ```bash
 ./dev.sh benchmark-ratchet
+```
+
+Run the separate Rust report-and-policy gate with:
+
+```bash
+./dev.sh benchmark-ratchet --backend rust
 ```
 
 The audit checks:
@@ -329,17 +333,29 @@ The audit checks:
 - a typed scenario exists;
 - emitted candidates match coverage identity.
 
-The gate compares stable issue identities to
-`coverage/benchmark-baseline.json`, so newly introduced gaps fail while known
-gaps can be closed incrementally. Explanatory reason text is not part of issue
-identity. The audit also checks the deterministic
-`coverage/benchmark-shape-inventory.md`.
+The C++ gate retains `coverage/benchmark-baseline.json` and
+`coverage/benchmark-shape-inventory.md`. Its existing issue identities and
+inventory remain unchanged.
 
-Refresh both evidence files after an intentional coverage change with:
+Rust uses `coverage/benchmark-rust-baseline.json` and
+`coverage/benchmark-rust-shape-inventory.md`. Its baseline records every raw
+gap membership rather than collapsing equal-looking lowered slots. It also
+records every profile manifest hash, emitted specialization identity, ordered
+candidate ID/body hash, independent policy status, and compiler-rendered
+mapping hash. A report can therefore remain honestly `report_only`; only a
+policy-supported report must have a complete mapping. Explanatory reason text
+is excluded from stable identity for both backends.
+
+Refresh only the intended backend's two evidence files after reviewing a
+deliberate coverage change:
 
 ```bash
 ./dev.sh benchmark-ratchet --update
+./dev.sh benchmark-ratchet --backend rust --update
 ```
+
+The Rust command never reads or updates the C++ evidence files, and conversely
+the default C++ command does not accept Rust evidence.
 
 Run generated benchmark tests with:
 

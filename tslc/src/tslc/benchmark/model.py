@@ -823,6 +823,7 @@ class BenchmarkCoverageEntry:
     mask_policy: str | None
     axis: tuple[tuple[str, str], ...]
     variant_names: tuple[str, ...]
+    slot_hash: str
     status: BenchmarkCoverageStatus
     reason: str = ""
 

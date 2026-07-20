@@ -439,8 +439,12 @@ mapping environment seam. It neither executes timing code nor edits generated
 `src/` files. Unset input retains the authored-default mapping, while any
 requested missing, foreign, stale, partial, duplicate, or report-only selection
 fails before library compilation. Other profile and scenario families remain
-structured Rust coverage gaps. Value-test tags do not control benchmark
-admission.
+structured Rust coverage gaps. The benchmark maintenance projection runs one
+backend per invocation: the original C++ issue baseline remains unchanged,
+while separate Rust evidence preserves every raw report gap plus exact profile
+manifest, candidate ID/body hash, policy eligibility, and compiler-rendered
+mapping hashes. Aggregate shape counts are explanatory inventory, not the Rust
+ratchet identity. Value-test tags do not control benchmark admission.
 Workload semantics are resolved in
 [benchmark/scenarios.py](src/tslc/benchmark/scenarios.py) before rendering:
 each typed scenario and correctness case validates its own structural and

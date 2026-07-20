@@ -12,6 +12,7 @@ from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.value_tests.lane_math import whole_lanes
 
 _STABLE_ID_RE = re.compile(r"[^0-9A-Za-z_]+")
+_SHA256_CHARS = frozenset("0123456789abcdef")
 
 
 def specialization_key(
@@ -92,8 +93,103 @@ def specialization_stable_id(key: SpecializationKey) -> str:
             )
         ),
     ).strip("_")
-    digest = sha256(repr(key.canonical_fields()).encode("utf-8")).hexdigest()[:12]
+    digest = specialization_identity_hash(key)[:12]
     return f"{readable}_{digest}"
+
+
+def specialization_identity_hash(key: SpecializationKey) -> str:
+    """Return the full canonical specialization digest used by exact evidence."""
+
+    return sha256(repr(key.canonical_fields()).encode("utf-8")).hexdigest()
+
+
+def benchmark_slot_identity_hash(
+    profile_name: str,
+    specialization: LoweredSpecialization,
+) -> str:
+    """Hash one exact lowered benchmark slot without hashing target bodies."""
+
+    target = specialization.target
+    target_fields = (
+        None
+        if target is None
+        else (
+            target.vector_spelling,
+            target.register_spelling,
+            target.extension_isa,
+            target.base_tag,
+            target.base_spelling,
+            target.uses_sized_vector,
+            target.lane_parameter,
+            target.windowed,
+            target.native_register_spelling,
+        )
+    )
+    fields = (
+        "benchmark-slot-v1",
+        specialization.backend_id,
+        profile_name,
+        specialization.primitive_name,
+        specialization.source_primitive_name,
+        specialization.extension_name,
+        specialization.type_tag,
+        specialization.base_type_spelling,
+        specialization.register_spelling,
+        specialization.result_kind,
+        specialization.param_names,
+        specialization.param_kinds,
+        specialization.param_identity_tokens,
+        specialization.effective_param_type_overrides,
+        specialization.vector_spelling,
+        specialization.index_register_spelling,
+        specialization.native_register_spelling,
+        specialization.uses_sized_vector,
+        specialization.lane_parameter,
+        specialization.axis,
+        specialization.immediate,
+        specialization.generic_params,
+        tuple(
+            (
+                parameter.name,
+                parameter.bounds,
+                parameter.base_type_constraints,
+                parameter.specialize_base,
+                parameter.base_type_binding,
+                parameter.base_type_binding_spelling,
+            )
+            for parameter in specialization.type_params
+        ),
+        specialization.register_is_base,
+        target_fields,
+        specialization.mask_policy,
+        tuple(
+            (
+                parameter.name,
+                parameter.element_kind,
+                parameter.lane_count,
+                parameter.lane_expression,
+            )
+            for parameter in specialization.lane_list_params
+        ),
+        tuple(sorted(specialization.required_features)),
+        specialization.implementation_state.value,
+        (
+            specialization.safety.internal_unsafe,
+            specialization.safety.caller_unsafe,
+            tuple(sorted(specialization.safety.reasons)),
+        ),
+        tuple(
+            (
+                variant.name,
+                variant.implementation_state.value,
+                variant.safety.internal_unsafe,
+                variant.safety.caller_unsafe,
+                tuple(sorted(variant.safety.reasons)),
+            )
+            for variant in specialization.variant_bodies
+        ),
+    )
+    return sha256(repr(fields).encode("utf-8")).hexdigest()
 
 
 def implementation_body_hash(body: str) -> str:
@@ -102,8 +198,21 @@ def implementation_body_hash(body: str) -> str:
     return sha256(body.encode("utf-8")).hexdigest()
 
 
+def is_sha256_digest(value: object) -> bool:
+    """Return whether ``value`` is one canonical lowercase SHA-256 digest."""
+
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in _SHA256_CHARS for character in value)
+    )
+
+
 __all__ = (
+    "benchmark_slot_identity_hash",
     "implementation_body_hash",
+    "is_sha256_digest",
+    "specialization_identity_hash",
     "specialization_key",
     "specialization_stable_id",
 )

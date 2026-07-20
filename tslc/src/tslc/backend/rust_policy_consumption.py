@@ -159,6 +159,53 @@ class RustPolicyConsumptionGap:
 
 
 @dataclass(frozen=True, slots=True)
+class RustPolicyCoverageGap:
+    """One policy-supported specialization without benchmark report evidence."""
+
+    key: SpecializationKey
+    candidate_ids: tuple[str, ...]
+    reason: str
+
+    def __post_init__(self) -> None:
+        if (
+            self.key.backend_id != "rust"
+            or not self.candidate_ids
+            or self.candidate_ids[0] != "default"
+            or len(set(self.candidate_ids)) != len(self.candidate_ids)
+            or not self.reason
+        ):
+            raise ValueError(
+                "Rust policy coverage gaps require a Rust key, candidates, and reason"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class RustPolicyCoveragePlan:
+    """Exact report-to-policy evidence, including report-only-only profiles."""
+
+    profiles: tuple[RustPolicyConsumptionProfile, ...]
+    gaps: tuple[RustPolicyCoverageGap, ...] = ()
+
+    def __post_init__(self) -> None:
+        names = tuple(profile.profile_name for profile in self.profiles)
+        if len(set(names)) != len(names):
+            raise ValueError("Rust policy coverage profile names must be unique")
+        gap_keys = tuple(gap.key for gap in self.gaps)
+        if len(set(gap_keys)) != len(gap_keys):
+            raise ValueError("Rust policy coverage gap keys must be unique")
+
+    def profile(self, profile_name: str) -> RustPolicyConsumptionProfile | None:
+        return next(
+            (
+                profile
+                for profile in self.profiles
+                if profile.profile_name == profile_name
+            ),
+            None,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class RustPolicyConsumptionPlan:
     """Frozen semantic availability for Rust policy consumption."""
 
@@ -187,11 +234,11 @@ class RustPolicyConsumptionPlan:
 EMPTY_RUST_POLICY_CONSUMPTION_PLAN = RustPolicyConsumptionPlan(profiles=())
 
 
-def plan_rust_policy_consumption(
+def plan_rust_policy_coverage(
     benchmarks: BenchmarkProjectPlan,
     selections: RustPolicySelectionPlan,
-) -> RustPolicyConsumptionPlan:
-    """Join policy eligibility to actual benchmark evidence exactly once."""
+) -> RustPolicyCoveragePlan:
+    """Join every Rust report to canonical policy eligibility exactly once."""
 
     # Keep the renderer import local: the typed plan owns mapping facts, while
     # the Rust backend remains their only spelling authority.
@@ -200,40 +247,81 @@ def plan_rust_policy_consumption(
     selection_profile_names = {
         selection_profile.profile_name for selection_profile in selections.profiles
     }
-    foreign_benchmark_profiles = tuple(
+    benchmark_profile_names = tuple(
         benchmark_profile.profile_name
         for benchmark_profile in benchmarks.profiles_for("rust")
-        if benchmark_profile.profile_name not in selection_profile_names
+    )
+    if len(set(benchmark_profile_names)) != len(benchmark_profile_names):
+        raise ValueError("Rust benchmark profile names must be unique")
+    foreign_benchmark_profiles = tuple(
+        name for name in benchmark_profile_names if name not in selection_profile_names
     )
     if foreign_benchmark_profiles:
         names = ", ".join(repr(name) for name in foreign_benchmark_profiles)
         raise ValueError(
             "Rust benchmark profiles have no policy-selection profile: " + names
         )
+    foreign_selection_profiles = tuple(
+        sorted(selection_profile_names - set(benchmark_profile_names))
+    )
+    if foreign_selection_profiles:
+        names = ", ".join(repr(name) for name in foreign_selection_profiles)
+        raise ValueError(
+            "Rust policy-selection profiles have no benchmark profile: " + names
+        )
 
+    selection_by_name = {
+        profile.profile_name: profile for profile in selections.profiles
+    }
+    profiles: list[RustPolicyConsumptionProfile] = []
+    for benchmark_profile in benchmarks.profiles_for("rust"):
+        selection_profile = selection_by_name[benchmark_profile.profile_name]
+        backend = RustBackend(policy_selection=selection_profile)
+        joined = join_rust_policy_consumption_profile(
+            benchmark_profile,
+            selection_profile,
+            render_mapping=backend.render_policy_selection_impl,
+            require_supported_reports=False,
+        )
+        profiles.append(joined)
+
+    benchmark_keys = {
+        candidate_set.key
+        for profile in benchmarks.profiles_for("rust")
+        for candidate_set in profile.candidate_sets
+    }
+    gaps = tuple(
+        RustPolicyCoverageGap(
+            key=selection.key,
+            candidate_ids=selection.candidate_ids,
+            reason="policy-supported Rust selection lacks benchmark report evidence",
+        )
+        for profile in selections.profiles
+        for selection in profile.selections
+        if selection.key not in benchmark_keys
+    )
+    return RustPolicyCoveragePlan(profiles=tuple(profiles), gaps=gaps)
+
+
+def plan_rust_policy_consumption(
+    benchmarks: BenchmarkProjectPlan,
+    selections: RustPolicySelectionPlan,
+) -> RustPolicyConsumptionPlan:
+    """Restrict exact policy coverage to profiles with complete mappings."""
+
+    coverage = plan_rust_policy_coverage(benchmarks, selections)
+    gaps_by_profile = {
+        gap.key.profile_name for gap in coverage.gaps
+    }
+    coverage_by_profile = {
+        profile.profile_name: profile for profile in coverage.profiles
+    }
     profiles: list[RustPolicyConsumptionProfile] = []
     gaps: list[RustPolicyConsumptionGap] = []
     for selection_profile in selections.profiles:
         if not selection_profile.selections:
             continue
-        benchmark_profile = benchmarks.profile("rust", selection_profile.profile_name)
-        if benchmark_profile is None:
-            gaps.append(
-                RustPolicyConsumptionGap(
-                    profile_name=selection_profile.profile_name,
-                    reason="no Rust benchmark profile evidence was planned",
-                )
-            )
-            continue
-        benchmark_keys = {
-            candidate_set.key for candidate_set in benchmark_profile.candidate_sets
-        }
-        missing_keys = {
-            selection.key
-            for selection in selection_profile.selections
-            if selection.key not in benchmark_keys
-        }
-        if missing_keys:
+        if selection_profile.profile_name in gaps_by_profile:
             gaps.append(
                 RustPolicyConsumptionGap(
                     profile_name=selection_profile.profile_name,
@@ -243,13 +331,7 @@ def plan_rust_policy_consumption(
                 )
             )
             continue
-        backend = RustBackend(policy_selection=selection_profile)
-        joined = join_rust_policy_consumption_profile(
-            benchmark_profile,
-            selection_profile,
-            render_mapping=backend.render_policy_selection_impl,
-        )
-        profiles.append(joined)
+        profiles.append(coverage_by_profile[selection_profile.profile_name])
     return RustPolicyConsumptionPlan(profiles=tuple(profiles), gaps=tuple(gaps))
 
 
@@ -258,6 +340,7 @@ def join_rust_policy_consumption_profile(
     selection_profile: RustPolicySelectionProfile,
     *,
     render_mapping: RustPolicyMappingRenderer,
+    require_supported_reports: bool = True,
 ) -> RustPolicyConsumptionProfile:
     """Join exact benchmark inventory to compiler-owned Rust mapping choices."""
 
@@ -289,7 +372,7 @@ def join_rust_policy_consumption_profile(
             "Rust benchmark candidate sets are missing policy coverage entries"
         )
     missing_benchmarks = selections.keys() - candidate_sets.keys()
-    if missing_benchmarks:
+    if require_supported_reports and missing_benchmarks:
         raise ValueError(
             "Rust policy selections are missing benchmark candidate evidence"
         )
@@ -391,9 +474,12 @@ __all__ = (
     "RustPolicyConsumptionGap",
     "RustPolicyConsumptionPlan",
     "RustPolicyConsumptionProfile",
+    "RustPolicyCoverageGap",
+    "RustPolicyCoveragePlan",
     "RustPolicyMappingChoice",
     "RustPolicyMappingRenderer",
     "RustPolicyScenarioFact",
     "join_rust_policy_consumption_profile",
+    "plan_rust_policy_coverage",
     "plan_rust_policy_consumption",
 )
