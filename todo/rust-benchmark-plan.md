@@ -448,30 +448,43 @@ Exit criterion: every current Rust variant-bearing slot either reaches an
 emitted report and, where supported, a policy mapping, or appears as a
 deterministic actionable gap without altering C++ evidence.
 
-### Slice 7+: One Scenario Family Per Follow-Up Slice
+### Optional Slice 7+: Evidence-Driven Scenario-Family Coverage
 
-**Outcome:** each follow-up adds complete report behavior for one already-typed
-scenario family and closes only that family's Rust coverage gaps.
+**Status:** Slices 0–6 complete the first Rust autotuning version. These
+follow-ups expand report coverage; they are not prerequisites for claiming the
+native SSE2 register workflow, policy production, or policy consumption.
 
-Suggested order:
+**Outcome:** each independently justified follow-up adds complete report
+behavior for one already-typed scenario family and closes only that family's
+Rust coverage gaps.
 
-1. vector-plus-scalar;
-2. vector result with authored immediate values;
-3. vector-input mask result;
-4. integral-mask density;
-5. one-vector scalar reductions; and
-6. indexed hot-L1 loads.
+Evidence-driven order:
 
-Each family slice includes its Rust correctness rendering, timing rendering,
-manifest evidence, generated compilation, short native mechanics run, and an
-explicit policy-supported or structured report-only decision. Policy selection
-for a family is a separate slice whenever its stable-Rust mapping differs from
-the proven register mapping.
+1. add vector-result immediate reports for the six current native SSE2
+   candidate slots, retaining structured report-only policy decisions;
+2. before enabling any additional machine profile, replace independent profile
+   and scenario allowlists with explicit `profile × scenario-family` admission
+   so capability expansion cannot admit an unintended Cartesian product;
+3. add AVX2 one-vector scalar reductions only if their native candidate value
+   justifies expanding the supported profile set;
+4. add integral-mask density or indexed hot-L1 loads only after choosing and
+   proving their exact native target profiles; and
+5. defer the Wasm-only vector-plus-scalar and vector-input mask-result families
+   until benchmarking under a Wasm runtime is an explicit product decision.
 
-Exit criterion for each family: every selected candidate set in that family
-either emits correct deterministic report artifacts or has one precise
-backend-specific reason why it cannot; unrelated families and C++ evidence are
-unchanged.
+Each implemented family slice includes Rust correctness rendering, timing
+rendering, manifest evidence, generated compilation, a short native mechanics
+run, and an explicit policy-supported or structured report-only decision.
+Policy selection for a family is a separate slice whenever its stable-Rust
+mapping differs from the proven register mapping. Cross-compiled or emulated
+correctness never substitutes for the native mechanics evidence required by a
+timing slice.
+
+Exit criterion for each implemented family: every selected candidate set in
+that family either emits correct deterministic report artifacts or has one
+precise backend-specific reason why it cannot; unrelated families and C++
+evidence are unchanged. A deferred family remains an exact coverage gap rather
+than an incomplete implementation commitment.
 
 ## Validation Matrix
 
@@ -493,7 +506,7 @@ PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds \
   tslc/tests/test_build_verify.py \
   tslc/tests/test_value_tests.py \
   tslc/tests/test_benchmark_variants.py \
-  tslc/tests/test_rust_benchmark_generated.py
+  tslc/tests/test_rust_benchmark_rendering.py
 ```
 
 Validation must include these invariants:
