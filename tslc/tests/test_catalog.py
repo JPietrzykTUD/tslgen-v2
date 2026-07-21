@@ -511,6 +511,28 @@ def test_overload_registry_promoted_from_source(catalog: Catalog) -> None:
     assert registry.axes["payload_extent"].values["vector"].source is not None
 
 
+def test_overload_annotations_preserve_corpus_inventory(catalog: Catalog) -> None:
+    assert len(catalog.primitives) == 172
+    authored_sources = {primitive.source for primitive in catalog.primitives}
+    assert None not in authored_sources
+    assert len(authored_sources) == 160
+
+    annotated = tuple(
+        primitive for primitive in catalog.primitives if primitive.overload is not None
+    )
+    assert {primitive.name for primitive in annotated} == {
+        "shift_left",
+        "shift_right",
+        "store",
+    }
+    assert len({primitive.source for primitive in annotated}) == 10
+    assert all(
+        primitive.overload is not None
+        for primitive in catalog.primitives
+        if primitive.name in {"shift_left", "shift_right", "store"}
+    )
+
+
 def test_clang_vector_extensions_are_cpp_opt_in_overlays(catalog: Catalog) -> None:
     for width in (128, 256, 512):
         extension = catalog.extensions[f"clang_v{width}"]

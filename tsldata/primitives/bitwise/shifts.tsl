@@ -1,5 +1,8 @@
 description "Shift operations"
 prim<v:=(v,sImm)> shift_left(data, shift):
+  overload:
+    axis count_distribution
+    value uniform
   brief_description "Shifts each vector lane left by the compile-time shift count."
   detailed_description """
     Shifts each lane left by the compile-time scalar immediate `shift`. Vacated
@@ -382,6 +385,9 @@ prim<v:=(v,sImm)> shift_left(data, shift):
               complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
+  overload:
+    axis count_distribution
+    value uniform
   brief_description "Shifts active lanes left by the compile-time shift count and keeps the input lane where the mask is inactive."
   detailed_description """
     Shifts lanes enabled by the mask left by the compile-time scalar immediate
@@ -541,6 +547,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
               complete(call<primitive=blend>(mask, data, shifted));
             """
 prim<v:=(v,s)> shift_left(data, shift):
+  overload:
+    axis count_distribution
+    value uniform
+    primary true
   brief_description "Shifts each vector lane left by the scalar shift count."
   detailed_description """
     Shifts each lane left by the runtime scalar count `shift`. The same count is
@@ -985,6 +995,9 @@ prim<v:=(v,s)> shift_left(data, shift):
               complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(v,v)> shift_left(data, shift):
+  overload:
+    axis count_distribution
+    value per_lane
   brief_description "Shifts each vector lane left by the corresponding lane in the shift vector."
   detailed_description """
     Shifts each lane left by the corresponding lane count from `shift`. Vacated
@@ -1572,6 +1585,9 @@ prim<v:=(v,v)> shift_left(data, shift):
               complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(v,sImm)> shift_right(data, shift):
+  overload:
+    axis count_distribution
+    value uniform
   brief_description "Shifts each vector lane right by the compile-time shift count."
   detailed_description """
     Shifts each lane right by the compile-time scalar immediate `shift`.
@@ -2275,6 +2291,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
               }
             """
 prim<v:=(v,s)> shift_right(data, shift):
+  overload:
+    axis count_distribution
+    value uniform
+    primary true
   brief_description "Shifts each vector lane right by the scalar shift count."
   detailed_description """
     Shifts each lane right by the runtime scalar count `shift`. The same count is
@@ -3292,6 +3312,9 @@ prim<v:=(v,s)> shift_right(data, shift):
               complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(v,v)> shift_right(data, shift):
+  overload:
+    axis count_distribution
+    value per_lane
   brief_description "Shifts each vector lane right by the corresponding lane in the shift vector."
   detailed_description """
     Shifts each lane right by the corresponding lane count from `shift`.
