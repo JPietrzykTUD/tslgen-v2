@@ -97,6 +97,25 @@ def rust_avx2_reduction_benchmark_result(
     return result
 
 
+@pytest.fixture(scope="module")
+def rust_avx2_reduction_build_result(
+    data_root: Path,
+    machine_profiles_path: Path,
+):
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["hadd", "hand", "hmax", "hmin", "hor"],
+        profiles=["avx2"],
+        type_tags=["si32"],
+        backends=["rust"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    return result
+
+
 def _artifacts(result) -> dict[str, str]:
     return {
         artifact.logical_path: artifact.content
@@ -891,7 +910,7 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
 
 @pytest.mark.generated_build
 def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
-    rust_avx2_reduction_benchmark_result,
+    rust_avx2_reduction_build_result,
     tmp_path: Path,
 ) -> None:
     if shutil.which("cargo") is None or shutil.which("rustc") is None:
@@ -901,7 +920,7 @@ def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
 
     generated = tmp_path / "generated"
     report = write_artifacts(
-        rust_avx2_reduction_benchmark_result.artifacts,
+        rust_avx2_reduction_build_result.artifacts,
         generated,
     )
     assert not has_errors(report.diagnostics), report.diagnostics
@@ -930,10 +949,16 @@ def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
         completed = _run(command, cwd=crate, environment=policy_environment)
         assert completed.returncode == 0, completed.stderr
 
-    profile = rust_avx2_reduction_benchmark_result.rendered.benchmarks.profile(
+    profile = rust_avx2_reduction_build_result.rendered.benchmarks.profile(
         "rust", "avx2"
     )
     assert profile is not None
+    assert {
+        candidate_set.key.primitive_name for candidate_set in profile.candidate_sets
+    } == {"hadd", "hand", "hmax", "hmin", "hor"}
+    assert {
+        candidate_set.key.type_tag for candidate_set in profile.candidate_sets
+    } == {"si32"}
     results_path = generated / "avx2-reduction-samples.jsonl"
     summary_path = generated / "avx2-reduction-summary.txt"
     policy_path = generated / "avx2-reduction-policy.json"
@@ -989,7 +1014,9 @@ def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
         for row in rows
     ) == expected
     summary = summary_path.read_text()
-    assert summary.count("policy default (report_only)") == 40
+    assert summary.count("policy default (report_only)") == len(
+        profile.candidate_sets
+    )
     rejected_policy = _run(
         (
             "cargo",
