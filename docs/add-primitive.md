@@ -109,7 +109,31 @@ It must not infer a generic kind from the parameter name.
 
 Keep source constraints in the source contract.
 
-## 5. Add Benchmark Facts Only When Needed
+## 5. Declare A Registered Semantic Overload Only When Needed
+
+Use `overload` when same-name declarations differ along an axis already owned
+by `tsldata/detail/overload_axes.tsl`:
+
+```tsl
+overload:
+  axis registered_axis
+  value registered_value
+  primary true
+```
+
+The block accepts exactly `axis`, `value`, and optional boolean `primary`.
+Exactly one source declaration in the complete same-name family declares
+`primary true`; that value becomes primary for every sibling declaration with
+the same value. The compiler validates the distinguishing operand from the
+registry's signature-kind rules. It does not infer an overload from primitive
+or parameter names.
+
+Do not use this block for immediates, masks, generic parameters, result targets,
+or implementation safety. Those facts retain their existing source and typed
+owners. Semantic overload metadata is currently catalog/editor behavior and
+does not change generated API names.
+
+## 6. Add Benchmark Facts Only When Needed
 
 Most workload behavior comes from the signature.
 
@@ -126,7 +150,7 @@ The field and domain vocabularies are closed.
 
 See [Variant benchmarking and autotuning](variant-benchmarking.md).
 
-## 6. Add Tests As Data
+## 7. Add Tests As Data
 
 Author expected values in `tests:`.
 
@@ -162,7 +186,7 @@ Do not put renderer function names in source tests.
 
 The planner derives generated test names from typed axes.
 
-## 7. Add Implementations
+## 8. Add Implementations
 
 Make support explicit for each extension and type group.
 
@@ -201,7 +225,7 @@ signature + type group + extension + requires + generic axes + safety
 
 Selection must not depend on a primitive-name branch in Python.
 
-## 8. Add Compiler Support Only For A Missing Concept
+## 9. Add Compiler Support Only For A Missing Concept
 
 Use the smallest typed boundary.
 
@@ -231,7 +255,7 @@ Do not repair malformed source silently.
 
 Emit a source-located diagnostic.
 
-## 9. Check The Full Connection
+## 10. Check The Full Connection
 
 ```text
 primitive source
@@ -248,7 +272,7 @@ Inspect at least one C++ artifact.
 
 Inspect at least one Rust artifact.
 
-## 10. Validate
+## 11. Validate
 
 Run focused checks:
 

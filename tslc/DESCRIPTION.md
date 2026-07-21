@@ -79,7 +79,11 @@ projections of the latest successful catalog/index. Hierarchical document
 symbols and registry-backed semantic token facts are built separately in
 [catalog_authoring_index.py](src/tslc/catalog_authoring_index.py); the core
 index retains resolvable catalog occurrences, including individual list
-selector elements and primitive-scoped result target axes. Implementation
+selector elements, primitive-scoped result target axes, and source-defined
+semantic-overload axes and values. Overload completion, hover, navigation,
+references, symbols, tokens, and diagnostics all project the same typed
+registry and validated primitive-family facts; the parsed cursor contributes
+only generic sibling scalar fields for axis-scoped value completion. Implementation
 selector levels are classified by the catalog-owned projection in
 [catalog/selector_paths.py](src/tslc/catalog/selector_paths.py) — one
 interpretation shared by catalog promotion, indexing, and editor context — so
@@ -212,6 +216,15 @@ prim<v:=(v,v)> add(left, right):
   machine profiles retain only genuine profile-specific overrides. Selection,
   lowering, translation, documentation, and verification consume those typed
   roles instead of recognizing family or feature-name patterns.
+- **Semantic overloads**: `overload_axes:` declares closed axes, values, and
+  accepted operand signature kinds in source data. A primitive `overload`
+  block selects one axis/value and may mark its source declaration primary.
+  The catalog promotes these into immutable registry and primitive values,
+  validates complete same-name families, resolves the primary value once, and
+  structurally identifies the distinguishing operand without interpreting
+  parameter names or implementation text. This fact currently ends at the
+  catalog and editor projection: `LoweredSpecialization`, backend/API naming,
+  generated artifacts, tests, and benchmarks do not carry or consume it yet.
 - **Fixed-width SVE**: `sve128`/`sve256`/`sve512` inherit scalable `sve` bodies
   but supersede `sve` in their fixed profiles, so one profile emits one SVE
   model. The fixed width is a compile mode (`sve_vector_bits_N`) plus C++ flags
