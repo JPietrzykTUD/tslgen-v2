@@ -13,7 +13,7 @@ from types import MappingProxyType
 from typing import Literal, TypeVar
 
 from tslc.diagnostics import SourceSpan
-from tslc.catalog.overloads import OverloadRegistry
+from tslc.catalog.overloads import OverloadRegistry, PrimitiveOverload
 from tslc.catalog.target_families import (
     ExtensionFamilyCapability,
     TargetFamilyCatalog,
@@ -230,6 +230,9 @@ class Primitive:
     brief_description: str | None = None
     detailed_description: str | None = None
     semantics: str | None = None
+    # Source-authored semantic-overload identity. Cross-declaration validation resolves
+    # the family primary value; selection/lowering intentionally do not consume it yet.
+    overload: PrimitiveOverload | None = None
     # Corpus-declared cross-lane fact: True iff an output lane reads more than its own input
     # lane (a reduction, shuffle, compress, conflict, iota, gather …). It gates every *scalable*
     # (runtime-length, e.g. SVE) value-test kind that tiles an authored fixed-length pattern

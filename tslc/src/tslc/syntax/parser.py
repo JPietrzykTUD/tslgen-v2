@@ -47,6 +47,7 @@ _KNOWN_PRIMITIVE_FIELDS: dict[str, ParsedPrimitiveFieldKind] = {
     "generic_params": "generic_params",
     "impls": "impls",
     "operation": "operation",
+    "overload": "overload",
     "return_type": "return_type",
     "semantics": "semantics",
     "sImm_type": "simm_type",

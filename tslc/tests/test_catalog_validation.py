@@ -203,6 +203,83 @@ def test_overload_registry_diagnostics_have_stable_source_order() -> None:
     assert diagnostics == tuple(sorted(diagnostics))
 
 
+@pytest.mark.parametrize(
+    ("overload", "code"),
+    (
+        (
+            "  overload:\n"
+            "    value uniform\n",
+            "TSL-CATALOG-OVERLOAD-MISSING-FIELD",
+        ),
+        (
+            "  overload:\n"
+            "    axis count_distribution\n",
+            "TSL-CATALOG-OVERLOAD-MISSING-FIELD",
+        ),
+        (
+            "  overload:\n"
+            "    axis count_distribution\n"
+            "    axis payload_extent\n"
+            "    value uniform\n",
+            "TSL-CATALOG-DUPLICATE-FIELD",
+        ),
+        (
+            "  overload:\n"
+            "    axis count_distribution\n"
+            "    value uniform\n"
+            "    typo true\n",
+            "TSL-CATALOG-UNKNOWN-FIELD",
+        ),
+        (
+            "  overload:\n"
+            "    axis count_distribution\n"
+            "    value uniform\n"
+            "    primary sometimes\n",
+            "TSL-CATALOG-OVERLOAD-MALFORMED-PRIMARY",
+        ),
+        (
+            "  overload:\n"
+            "    axis [count_distribution]\n"
+            "    value uniform\n",
+            "TSL-CATALOG-OVERLOAD-MALFORMED-FIELD",
+        ),
+        (
+            "  overload:\n"
+            "    axis count_distribution\n"
+            "    value {name uniform}\n",
+            "TSL-CATALOG-OVERLOAD-MALFORMED-FIELD",
+        ),
+    ),
+)
+def test_primitive_overload_block_rejects_malformed_fields(
+    overload: str,
+    code: str,
+) -> None:
+    source = _base_source().replace("  impls:\n", overload + "  impls:\n")
+
+    diagnostics = _diagnostics(source)
+
+    assert any(diagnostic.code == code for diagnostic in diagnostics)
+
+
+@pytest.mark.parametrize("primary", ("", "    primary false\n", "    primary true\n"))
+def test_valid_primitive_overload_primary_forms(primary: str) -> None:
+    overload = (
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        f"{primary}"
+    )
+    source = _base_source().replace("  impls:\n", overload + "  impls:\n")
+
+    diagnostics = _diagnostics(source)
+
+    assert not any(
+        diagnostic.code.startswith("TSL-CATALOG-OVERLOAD")
+        for diagnostic in diagnostics
+    )
+
+
 def test_implementation_selector_rejects_unknown_scalar_metadata() -> None:
     source = _base_source().replace(
         "        implementation:\n",

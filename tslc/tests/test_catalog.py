@@ -311,6 +311,45 @@ def test_boolean_wildcard_attributes_expand_to_concrete_variants() -> None:
     assert len(bodies) == 1
 
 
+@pytest.mark.parametrize(
+    ("primary_line", "declares_primary"),
+    (("", False), ("    primary false\n", False), ("    primary true\n", True)),
+)
+def test_primitive_overload_is_promoted_with_source_spans(
+    primary_line: str,
+    declares_primary: bool,
+) -> None:
+    source = SourceDocument(
+        Path("primitive_overload_fixture.tsl"),
+        (
+            "prim<v:=(v,s)> demo(data, count):\n"
+            "  overload:\n"
+            "    axis count_distribution\n"
+            "    value uniform\n"
+            f"{primary_line}"
+        ),
+        "d",
+        "tsl",
+    )
+    parsed = TslParser(load_default_tsl_grammar()).parse((source,))
+    assert parsed.diagnostics == ()
+    assert parsed.documents[0].primitives[0].fields_by_name("overload")[0].kind == (
+        "overload"
+    )
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+
+    primitive = result.catalog.primitive("demo")
+    assert primitive is not None and primitive.overload is not None
+    assert primitive.overload.axis == "count_distribution"
+    assert primitive.overload.value == "uniform"
+    assert primitive.overload.declares_primary is declares_primary
+    assert primitive.overload.source is not None
+    assert primitive.overload.axis_source is not None
+    assert primitive.overload.value_source is not None
+    assert (primitive.overload.primary_source is not None) is bool(primary_line)
+
+
 def test_extension_inheritance_respects_explicit_false_and_empty_overrides() -> None:
     source = SourceDocument(
         Path("extension_inheritance_fixture.tsl"),

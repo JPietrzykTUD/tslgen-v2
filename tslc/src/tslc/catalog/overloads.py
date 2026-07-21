@@ -59,8 +59,22 @@ class OverloadRegistry:
         return value_spec is not None and kind in value_spec.operand_kinds
 
 
+@dataclass(frozen=True, slots=True)
+class PrimitiveOverload:
+    """One primitive declaration's authored semantic-overload metadata."""
+
+    axis: str
+    value: str
+    declares_primary: bool = False
+    source: SourceSpan | None = None
+    axis_source: SourceSpan | None = None
+    value_source: SourceSpan | None = None
+    primary_source: SourceSpan | None = None
+
+
 __all__ = (
     "OverloadAxisSpec",
     "OverloadRegistry",
     "OverloadValueSpec",
+    "PrimitiveOverload",
 )

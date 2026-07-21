@@ -20,6 +20,7 @@ from tslc.catalog.param_types import (
     parse_base_width_constraint,
     parse_param_type_condition,
 )
+from tslc.catalog.overloads import PrimitiveOverload
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.test_promotion import build_test_cases
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
@@ -70,6 +71,7 @@ def _build_primitives(
     brief_description = _primitive_field_text(declaration, "brief_description")
     detailed_description = _primitive_field_text(declaration, "detailed_description")
     semantics = _primitive_field_text(declaration, "semantics")
+    overload = _primitive_overload(declaration)
     cross_lane_fields = declaration.fields_by_name("cross_lane")
     cross_lane = _bool_field(cross_lane_fields[0].field) if cross_lane_fields else False
 
@@ -90,6 +92,7 @@ def _build_primitives(
             brief_description=brief_description,
             detailed_description=detailed_description,
             semantics=semantics,
+            overload=overload,
             cross_lane=cross_lane,
             source=_source_span(declaration.source),
             header_source=_source_span(declaration.header_source),
@@ -106,6 +109,29 @@ def _primitive_field_text(
     if not fields:
         return None
     return _field_text(fields[0].field)
+
+
+def _primitive_overload(
+    declaration: ParsedPrimitiveDeclaration,
+) -> PrimitiveOverload | None:
+    fields = declaration.fields_by_name("overload")
+    if not fields:
+        return None
+    field = fields[0].field
+    axis_field = _child(field, "axis")
+    value_field = _child(field, "value")
+    primary_field = _child(field, "primary")
+    return PrimitiveOverload(
+        axis=_field_text(axis_field) or "",
+        value=_field_text(value_field) or "",
+        declares_primary=_field_text(primary_field) == "true",
+        source=_source_span(field.source),
+        axis_source=None if axis_field is None else _source_span(axis_field.source),
+        value_source=None if value_field is None else _source_span(value_field.source),
+        primary_source=(
+            None if primary_field is None else _source_span(primary_field.source)
+        ),
+    )
 
 
 
