@@ -751,31 +751,34 @@ def _assert_gnu_linux_avx2_reduction_hot_loop(
     hot_loop = assembly_text[
         marker.start() : assembly_text.index(".Lfunc_end", marker.start())
     ]
-    assert re.search(
-        r"callq[^\n]*Avx2[^\n]*HaddImpl[^\n]*__tsl_target_feature_body",
+    default_call = re.search(
+        r"callq\s+(\S*Avx2\S*HaddImpl\S*__tsl_target_feature_body\S*)",
         hot_loop,
     )
-    assert re.search(
-        r"callq[^\n]*Avx2[^\n]*Hadd_generic_fallbackImpl"
-        r"[^\n]*__tsl_target_feature_body",
+    assert default_call is not None
+    fallback_call = re.search(
+        r"callq\s+(\S*Avx2\S*Hadd_generic_fallbackImpl"
+        r"\S*__tsl_target_feature_body\S*)",
         hot_loop,
     )
+    assert fallback_call is not None
     assert not re.search(r"callq[^\n]*invoke_", hot_loop)
 
-    def target_body(pattern: str) -> str:
-        target = re.search(rf"\.section[^\n]*{pattern}[^\n]*", assembly_text)
-        assert target is not None
-        return assembly_text[
-            target.start() : assembly_text.index(".Lfunc_end", target.start())
-        ]
+    def target_body(symbol: str) -> str:
+        label_pattern = re.compile(rf"(?m)^{re.escape(symbol)}:$")
+        for assembly_file in assembly_files:
+            target_assembly = assembly_file.read_text()
+            target = label_pattern.search(target_assembly)
+            if target is not None:
+                return target_assembly[
+                    target.start() : target_assembly.index(
+                        ".Lfunc_end", target.start()
+                    )
+                ]
+        pytest.fail(f"generated assembly does not define called target {symbol}")
 
-    default = target_body(
-        r"Simd\$LT\$i32.*Avx2.*HaddImpl.*__tsl_target_feature_body"
-    )
-    fallback = target_body(
-        r"Simd\$LT\$i32.*Avx2.*Hadd_generic_fallbackImpl"
-        r".*__tsl_target_feature_body"
-    )
+    default = target_body(default_call.group(1))
+    fallback = target_body(fallback_call.group(1))
     assert default.count("vpaddd") >= 3
     assert fallback.count("vpaddd") >= 3
     assert "vpshufd\t$78" in default
