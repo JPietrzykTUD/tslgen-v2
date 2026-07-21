@@ -10,6 +10,7 @@ supplementary/docs/site/specializations/react/node_modules/
 supplementary/docs/site/specializations/react/dist/
 
 test-sort/build*/
+test-sort/
 
 node_modules/
 .vscode-test/
