@@ -24,12 +24,42 @@ from tslc.syntax.parser import TslParser
 
 
 def _diagnostics(text: str, *, backends: tuple[str, ...] = ("cpp", "rust")):
+    _, diagnostics = _catalog_and_diagnostics(text, backends=backends)
+    return diagnostics
+
+
+def _catalog_and_diagnostics(
+    text: str,
+    *,
+    backends: tuple[str, ...] = ("cpp", "rust"),
+):
     document = SourceDocument(Path("catalog_validation_fixture.tsl"), text, "d", "tsl")
     parsed = TslParser(load_default_tsl_grammar()).parse((document,))
     assert parsed.diagnostics == (), parsed.diagnostics
     result = CatalogBuilder().build(parsed)
     assert result.catalog is not None
-    return (*result.diagnostics, *validate_catalog(result.catalog, parsed, required_backends=backends))
+    diagnostics = (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=backends),
+    )
+    return result.catalog, diagnostics
+
+
+_OVERLOAD_REGISTRY = (
+    "overload_axes:\n"
+    "  count_distribution:\n"
+    "    values:\n"
+    "      uniform:\n"
+    "        operand_kinds [s, sImm]\n"
+    "      per_lane:\n"
+    "        operand_kinds [v]\n"
+    "  payload_extent:\n"
+    "    values:\n"
+    "      vector:\n"
+    "        operand_kinds [v]\n"
+    "      scalar:\n"
+    "        operand_kinds [s]\n"
+)
 
 
 def _target_family_catalog() -> TargetFamilyCatalog:
@@ -263,7 +293,7 @@ def test_primitive_overload_block_rejects_malformed_fields(
 
 
 @pytest.mark.parametrize("primary", ("", "    primary false\n", "    primary true\n"))
-def test_valid_primitive_overload_primary_forms(primary: str) -> None:
+def test_primitive_overload_primary_boolean_forms_are_locally_valid(primary: str) -> None:
     overload = (
         "  overload:\n"
         "    axis count_distribution\n"
@@ -275,9 +305,368 @@ def test_valid_primitive_overload_primary_forms(primary: str) -> None:
     diagnostics = _diagnostics(source)
 
     assert not any(
-        diagnostic.code.startswith("TSL-CATALOG-OVERLOAD")
+        diagnostic.code == "TSL-CATALOG-OVERLOAD-MALFORMED-PRIMARY"
         for diagnostic in diagnostics
     )
+
+
+def test_overload_family_validates_and_promotes_primary_value() -> None:
+    family = (
+        "prim<v:=(v,s)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "    primary true\n"
+        "prim<v:=(v,sImm)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "prim<v:=(m,v,sImm)>[mask=pass_through] family(mask, data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "prim<v:=(v,v)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value per_lane\n"
+    )
+    catalog, diagnostics = _catalog_and_diagnostics(
+        _base_source(_OVERLOAD_REGISTRY + family)
+    )
+
+    assert not any("OVERLOAD" in diagnostic.code for diagnostic in diagnostics)
+    resolved = tuple(
+        catalog.resolve_primitive_overload(primitive)
+        for primitive in catalog.primitives_named("family", unmasked=False)
+    )
+    assert all(item is not None for item in resolved)
+    assert [item.is_primary_value for item in resolved if item is not None] == [
+        True,
+        True,
+        True,
+        False,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("axis", "value", "code"),
+    (
+        (
+            "count_distribution",
+            "scalar",
+            "TSL-CATALOG-OVERLOAD-INVALID-VALUE",
+        ),
+        ("payload_extent", "uniform", "TSL-CATALOG-OVERLOAD-INVALID-VALUE"),
+        ("unknown_axis", "uniform", "TSL-CATALOG-OVERLOAD-UNKNOWN-AXIS"),
+    ),
+)
+def test_overload_family_rejects_unregistered_axis_value_pairs(
+    axis: str,
+    value: str,
+    code: str,
+) -> None:
+    family = (
+        "prim<v:=(v,s)> family(data, count):\n"
+        "  overload:\n"
+        f"    axis {axis}\n"
+        f"    value {value}\n"
+        "    primary true\n"
+    )
+
+    diagnostics = _diagnostics(_base_source(_OVERLOAD_REGISTRY + family))
+
+    diagnostic = next(item for item in diagnostics if item.code == code)
+    assert diagnostic.span is not None
+    assert diagnostic.help
+
+
+def test_overload_family_requires_every_same_name_declaration() -> None:
+    family = (
+        "prim<v:=(v,s)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "    primary true\n"
+        "prim<v:=(v,v)> family(data, count):\n"
+        "  semantics \"missing metadata\"\n"
+    )
+
+    diagnostics = _diagnostics(_base_source(_OVERLOAD_REGISTRY + family))
+
+    diagnostic = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-OVERLOAD-MISSING-MEMBER"
+    )
+    assert diagnostic.related
+
+
+def test_overload_family_rejects_mixed_axes() -> None:
+    family = (
+        "prim<v:=(v,s)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "    primary true\n"
+        "prim<v:=(v,v)> family(data, payload):\n"
+        "  overload:\n"
+        "    axis payload_extent\n"
+        "    value vector\n"
+    )
+
+    diagnostics = _diagnostics(_base_source(_OVERLOAD_REGISTRY + family))
+
+    diagnostic = next(
+        item for item in diagnostics if item.code == "TSL-CATALOG-OVERLOAD-MIXED-AXIS"
+    )
+    assert diagnostic.related
+
+
+def test_overload_family_rejects_primary_markers_for_different_values() -> None:
+    family = (
+        "prim<v:=(v,s)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "    primary true\n"
+        "prim<v:=(v,v)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value per_lane\n"
+        "    primary true\n"
+    )
+
+    diagnostics = _diagnostics(_base_source(_OVERLOAD_REGISTRY + family))
+
+    diagnostic = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-OVERLOAD-DUPLICATE-PRIMARY"
+    )
+    assert diagnostic.related
+
+
+def test_overload_family_rejects_multiple_primary_markers_for_same_value() -> None:
+    family = (
+        "prim<v:=(v,s)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "    primary true\n"
+        "prim<v:=(v,sImm)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "    primary true\n"
+        "prim<v:=(v,v)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value per_lane\n"
+    )
+
+    diagnostics = _diagnostics(_base_source(_OVERLOAD_REGISTRY + family))
+
+    assert any(
+        item.code == "TSL-CATALOG-OVERLOAD-DUPLICATE-PRIMARY"
+        for item in diagnostics
+    )
+
+
+def test_overload_family_rejects_duplicate_composite_identity() -> None:
+    family = (
+        "prim<v:=(v,s)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "    primary true\n"
+        "prim<v:=(v,s)> family(other_data, other_count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "prim<v:=(v,v)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value per_lane\n"
+    )
+
+    diagnostics = _diagnostics(_base_source(_OVERLOAD_REGISTRY + family))
+
+    assert any(
+        item.code == "TSL-CATALOG-OVERLOAD-DUPLICATE-COMPOSITE"
+        for item in diagnostics
+    )
+    assert any(item.code == "TSL-CATALOG-DUPLICATE-PRIMITIVE" for item in diagnostics)
+
+
+def test_overload_family_requires_one_primary_marker() -> None:
+    family = (
+        "prim<v:=(v,s)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "prim<v:=(v,v)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value per_lane\n"
+    )
+
+    diagnostics = _diagnostics(_base_source(_OVERLOAD_REGISTRY + family))
+
+    assert any(
+        item.code == "TSL-CATALOG-OVERLOAD-MISSING-PRIMARY"
+        for item in diagnostics
+    )
+
+
+def test_overload_family_rejects_swapped_operand_kinds() -> None:
+    family = (
+        "prim<v:=(v,v)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "    primary true\n"
+        "prim<v:=(v,s)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value per_lane\n"
+    )
+
+    diagnostics = _diagnostics(_base_source(_OVERLOAD_REGISTRY + family))
+
+    diagnostic = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-OVERLOAD-SHAPE-MISMATCH"
+    )
+    assert "accepted kinds" in diagnostic.message
+    assert "observes" in diagnostic.message
+
+
+def test_overload_family_rejects_result_or_arity_mismatch() -> None:
+    family = (
+        "prim<v:=(v,s)> family(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "    primary true\n"
+        "prim<s:=(v,v,v)> family(data, other, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value per_lane\n"
+    )
+
+    diagnostics = _diagnostics(_base_source(_OVERLOAD_REGISTRY + family))
+
+    diagnostic = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-OVERLOAD-SHAPE-MISMATCH"
+    )
+    assert diagnostic.related
+
+
+def test_ordinary_leading_mask_operand_is_not_policy_normalized() -> None:
+    family = (
+        "prim<v:=(m,s)> family(active, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "    primary true\n"
+        "prim<v:=(m,v)> family(active, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value per_lane\n"
+    )
+
+    diagnostics = _diagnostics(_base_source(_OVERLOAD_REGISTRY + family))
+
+    assert not any("OVERLOAD" in item.code for item in diagnostics)
+
+
+def test_wildcard_expansion_does_not_duplicate_primary_marker() -> None:
+    family = (
+        "prim<void:=(ptr,v)>[aligned=*] family(ptr, data):\n"
+        "  overload:\n"
+        "    axis payload_extent\n"
+        "    value vector\n"
+        "    primary true\n"
+        "prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] family(mask, ptr, data):\n"
+        "  overload:\n"
+        "    axis payload_extent\n"
+        "    value vector\n"
+        "prim<void:=(ptr,s)>[aligned=*] family(ptr, data):\n"
+        "  overload:\n"
+        "    axis payload_extent\n"
+        "    value scalar\n"
+    )
+    catalog, diagnostics = _catalog_and_diagnostics(
+        _base_source(_OVERLOAD_REGISTRY + family)
+    )
+
+    assert not any("OVERLOAD" in item.code for item in diagnostics)
+    variants = catalog.primitives_named("family", unmasked=False)
+    assert len(variants) == 6
+    assert sum(
+        bool(resolved and resolved.is_primary_value)
+        for primitive in variants
+        if (resolved := catalog.resolve_primitive_overload(primitive)) is not None
+    ) == 4
+
+
+def test_result_target_dimension_distinguishes_duplicate_headers() -> None:
+    family = (
+        "prim<void:=(ptr,v)> family(ptr, data):\n"
+        "  return_type:\n"
+        "    base: ToBase\n"
+        "  overload:\n"
+        "    axis payload_extent\n"
+        "    value vector\n"
+        "    primary true\n"
+        "prim<void:=(ptr,v)> family(ptr, data):\n"
+        "  return_type:\n"
+        "    extension: ToExtension\n"
+        "  overload:\n"
+        "    axis payload_extent\n"
+        "    value vector\n"
+        "prim<void:=(ptr,s)> family(ptr, data):\n"
+        "  overload:\n"
+        "    axis payload_extent\n"
+        "    value scalar\n"
+    )
+
+    diagnostics = _diagnostics(_base_source(_OVERLOAD_REGISTRY + family))
+
+    assert not any("OVERLOAD" in item.code for item in diagnostics)
+    assert not any(item.code == "TSL-CATALOG-DUPLICATE-PRIMITIVE" for item in diagnostics)
+
+
+def test_synthetic_overload_axis_is_additive_at_catalog_boundary() -> None:
+    registry = (
+        "overload_axes:\n"
+        "  synthetic_axis:\n"
+        "    values:\n"
+        "      alpha:\n"
+        "        operand_kinds [s]\n"
+        "      beta:\n"
+        "        operand_kinds [v]\n"
+    )
+    family = (
+        "prim<v:=(v,s)> family(data, payload):\n"
+        "  overload:\n"
+        "    axis synthetic_axis\n"
+        "    value alpha\n"
+        "    primary true\n"
+        "prim<v:=(v,v)> family(data, payload):\n"
+        "  overload:\n"
+        "    axis synthetic_axis\n"
+        "    value beta\n"
+    )
+    catalog, diagnostics = _catalog_and_diagnostics(_base_source(registry + family))
+
+    assert not any("OVERLOAD" in item.code for item in diagnostics)
+    assert catalog.resolve_primitive_overload(
+        catalog.primitives_named("family")[0]
+    ).is_primary_value
 
 
 def test_implementation_selector_rejects_unknown_scalar_metadata() -> None:

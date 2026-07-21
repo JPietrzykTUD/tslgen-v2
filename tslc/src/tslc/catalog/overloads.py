@@ -72,9 +72,19 @@ class PrimitiveOverload:
     primary_source: SourceSpan | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvedPrimitiveOverload:
+    """A validated primitive overload with family-primary status resolved."""
+
+    axis: str
+    value: str
+    is_primary_value: bool
+
+
 __all__ = (
     "OverloadAxisSpec",
     "OverloadRegistry",
     "OverloadValueSpec",
     "PrimitiveOverload",
+    "ResolvedPrimitiveOverload",
 )
