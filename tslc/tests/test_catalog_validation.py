@@ -77,6 +77,132 @@ def test_valid_tiny_catalog_has_no_validation_diagnostics() -> None:
     assert _diagnostics(_base_source()) == ()
 
 
+def test_valid_overload_registry_has_no_schema_diagnostics() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "overload_axes:\n"
+            "  demo_axis:\n"
+            "    values:\n"
+            "      first:\n"
+            "        operand_kinds [s, sImm]\n"
+            "      second:\n"
+            "        operand_kinds [v]\n"
+        )
+    )
+
+    assert not any("OVERLOAD" in diagnostic.code for diagnostic in diagnostics)
+
+
+def test_overload_registry_rejects_duplicate_axes_values_and_kinds() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "overload_axes:\n"
+            "  duplicate:\n"
+            "    values:\n"
+            "      same:\n"
+            "        operand_kinds [s, s]\n"
+            "      same:\n"
+            "        operand_kinds [v]\n"
+            "  duplicate:\n"
+            "    values:\n"
+            "      other:\n"
+            "        operand_kinds [s]\n"
+        )
+    )
+
+    codes = [diagnostic.code for diagnostic in diagnostics]
+    assert "TSL-CATALOG-DUPLICATE-OVERLOAD-AXIS" in codes
+    assert "TSL-CATALOG-DUPLICATE-OVERLOAD-VALUE" in codes
+    duplicate_kind = next(
+        diagnostic
+        for diagnostic in diagnostics
+        if diagnostic.code == "TSL-CATALOG-OVERLOAD-DUPLICATE-OPERAND-KIND"
+    )
+    assert duplicate_kind.related
+
+
+def test_overload_registry_rejects_duplicate_top_level_declarations() -> None:
+    registry = (
+        "overload_axes:\n"
+        "  demo:\n"
+        "    values:\n"
+        "      value:\n"
+        "        operand_kinds [s]\n"
+    )
+    diagnostics = _diagnostics(_base_source(registry + registry))
+
+    diagnostic = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-DUPLICATE-OVERLOAD-REGISTRY"
+    )
+    assert diagnostic.related
+
+
+@pytest.mark.parametrize(
+    ("registry", "code"),
+    (
+        (
+            "overload_axes:\n"
+            "  demo:\n"
+            "    typo:\n"
+            "      value:\n"
+            "        operand_kinds [s]\n",
+            "TSL-CATALOG-UNKNOWN-FIELD",
+        ),
+        (
+            "overload_axes:\n"
+            "  demo:\n"
+            "    values: {}\n",
+            "TSL-CATALOG-OVERLOAD-MISSING-VALUES",
+        ),
+        (
+            "overload_axes:\n"
+            "  demo:\n"
+            "    values:\n"
+            "      value:\n"
+            "        operand_kinds [not_a_signature_kind]\n",
+            "TSL-CATALOG-OVERLOAD-UNKNOWN-OPERAND-KIND",
+        ),
+        (
+            "overload_axes:\n"
+            "  demo:\n"
+            "    values:\n"
+            "      value:\n"
+            "        operand_kinds []\n",
+            "TSL-CATALOG-OVERLOAD-MALFORMED-OPERAND-KINDS",
+        ),
+    ),
+)
+def test_overload_registry_reports_malformed_schema(
+    registry: str,
+    code: str,
+) -> None:
+    diagnostics = _diagnostics(_base_source(registry))
+
+    assert any(diagnostic.code == code for diagnostic in diagnostics)
+
+
+def test_overload_registry_diagnostics_have_stable_source_order() -> None:
+    source = _base_source(
+        "overload_axes:\n"
+        "  z_axis:\n"
+        "    values: {}\n"
+        "  a_axis:\n"
+        "    values:\n"
+        "      value:\n"
+        "        operand_kinds [bad]\n"
+    )
+
+    diagnostics = tuple(
+        (diagnostic.span.line, diagnostic.code, diagnostic.message)
+        for diagnostic in _diagnostics(source)
+        if "OVERLOAD" in diagnostic.code
+    )
+
+    assert diagnostics == tuple(sorted(diagnostics))
+
+
 def test_implementation_selector_rejects_unknown_scalar_metadata() -> None:
     source = _base_source().replace(
         "        implementation:\n",

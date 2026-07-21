@@ -1,0 +1,13 @@
+overload_axes:
+  count_distribution:
+    values:
+      uniform:
+        operand_kinds [s, sImm]
+      per_lane:
+        operand_kinds [v]
+  payload_extent:
+    values:
+      vector:
+        operand_kinds [v]
+      scalar:
+        operand_kinds [s]

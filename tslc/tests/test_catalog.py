@@ -453,6 +453,25 @@ def test_target_families_promoted(catalog: Catalog) -> None:
     assert catalog.extensions["neon"].family_capability.documented_family == "aarch64"
 
 
+def test_overload_registry_promoted_from_source(catalog: Catalog) -> None:
+    registry = catalog.overload_registry
+
+    assert tuple(registry.axes) == ("count_distribution", "payload_extent")
+    assert tuple(registry.axes["count_distribution"].values) == (
+        "per_lane",
+        "uniform",
+    )
+    assert registry.value("count_distribution", "uniform") is not None
+    assert registry.value("count_distribution", "uniform").operand_kinds == (
+        "s",
+        "sImm",
+    )
+    assert registry.accepts_operand_kind("count_distribution", "per_lane", "v")
+    assert not registry.accepts_operand_kind("payload_extent", "scalar", "v")
+    assert registry.axes["payload_extent"].source is not None
+    assert registry.axes["payload_extent"].values["vector"].source is not None
+
+
 def test_clang_vector_extensions_are_cpp_opt_in_overlays(catalog: Catalog) -> None:
     for width in (128, 256, 512):
         extension = catalog.extensions[f"clang_v{width}"]
@@ -510,6 +529,14 @@ def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:
     with pytest.raises(TypeError):
         catalog.target_families.profile_families["new"] = (  # type: ignore[index]
             catalog.target_families.profile_families["x86"]
+        )
+    with pytest.raises(TypeError):
+        catalog.overload_registry.axes["new"] = (  # type: ignore[index]
+            catalog.overload_registry.axes["payload_extent"]
+        )
+    with pytest.raises(TypeError):
+        catalog.overload_registry.axes["payload_extent"].values["new"] = (  # type: ignore[index]
+            catalog.overload_registry.axes["payload_extent"].values["scalar"]
         )
 
 

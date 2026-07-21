@@ -13,6 +13,7 @@ from types import MappingProxyType
 from typing import Literal, TypeVar
 
 from tslc.diagnostics import SourceSpan
+from tslc.catalog.overloads import OverloadRegistry
 from tslc.catalog.target_families import (
     ExtensionFamilyCapability,
     TargetFamilyCatalog,
@@ -672,6 +673,7 @@ class Catalog:
     type_spellings: Mapping[str, Mapping[str, str]]
     # backend_id -> translation-template key (e.g. "complete", "loop_backend") -> template
     translations: Mapping[str, Mapping[str, str]]
+    overload_registry: OverloadRegistry = field(default_factory=OverloadRegistry)
     target_families: TargetFamilyCatalog = field(default_factory=TargetFamilyCatalog)
 
     def __post_init__(self) -> None:

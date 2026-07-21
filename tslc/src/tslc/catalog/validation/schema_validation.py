@@ -19,6 +19,7 @@ from tslc.catalog.validation._schema_extensions import (
     validate_extension_block,
 )
 from tslc.catalog.validation._schema_primitives import validate_primitive
+from tslc.catalog.validation._schema_overloads import validate_overload_axes
 from tslc.catalog.validation._schema_target_families import validate_target_families
 from tslc.syntax.access import child, children, source_span
 from tslc.diagnostics import Diagnostic, RelatedLocation, diagnostic_at
@@ -56,6 +57,7 @@ def validate_parsed_documents(
         _PrimitiveCallableIdentity,
         dict[str | None, ParsedPrimitiveDeclaration],
     ] = {}
+    overload_axis_fields: list[ParsedTslField] = []
     target_family_fields: list[ParsedTslField] = []
 
     for document in parsed.documents:
@@ -84,12 +86,24 @@ def validate_parsed_documents(
             ):
                 target_family_fields.append(declaration.field)
                 validate_target_families(declaration.field, backend_ids, diagnostics)
+            elif (
+                isinstance(declaration, ParsedFieldDeclaration)
+                and declaration.field.key.text == "overload_axes"
+            ):
+                overload_axis_fields.append(declaration.field)
+                validate_overload_axes(declaration.field, diagnostics)
 
     diagnose_duplicate_fields(
         type_group_fields,
         diagnostics,
         code="TSL-CATALOG-DUPLICATE-TYPE-GROUP",
         label="type group",
+    )
+    diagnose_duplicate_fields(
+        overload_axis_fields,
+        diagnostics,
+        code="TSL-CATALOG-DUPLICATE-OVERLOAD-REGISTRY",
+        label="overload_axes declaration",
     )
     diagnose_duplicate_fields(
         target_family_fields,
