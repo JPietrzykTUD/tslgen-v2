@@ -101,7 +101,7 @@ translation cpp:
   mask_set_to_boolean_lane_vector "{name}[{index}] = static_cast<bool>({value})"
   mask_test_boolean_lane_vector "({mask}[{index}])"
   mask_none_native_predicate_by_lanes "0"
-  mask_all_native_predicate_by_lanes "static_cast<typename Vec::mask_type>(~0ull)"
+  mask_all_native_predicate_by_lanes "static_cast<typename Vec::mask_type>(~0ull >> (64 - Vec::vector_element_count))"
   mask_set_native_predicate_by_lanes "{name} |= (1ull << ({index}))"
   mask_clear_native_predicate_by_lanes "{name} &= ~(1ull << ({index}))"
   mask_set_to_native_predicate_by_lanes "{name} = ({name} & ~(1ull << ({index}))) | ((static_cast<std::uint64_t>({value}) & 1ull) << ({index}))"

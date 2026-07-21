@@ -88,7 +88,7 @@ translation rust:
   mask_test_imask "(((({mask}) as u64 >> {index}) & 1u64) != 0)"
   mask_test_lane_register "{owner}::mask_lane_test({mask}, {index})"
   mask_none_native_predicate_by_lanes "0"
-  mask_all_native_predicate_by_lanes "u64::MAX as _"
+  mask_all_native_predicate_by_lanes "(u64::MAX >> (64 - {owner}::lane_count())) as _"
   mask_set_native_predicate_by_lanes "{name} |= ((1u64 << {index}) as _)"
   mask_clear_native_predicate_by_lanes "{name} &= !((1u64 << {index}) as _)"
   mask_set_to_native_predicate_by_lanes "{name} = ({name} & !((1u64 << {index}) as _)) | ((((({value}) as u64) & 1u64) << {index}) as _)"
