@@ -50,6 +50,7 @@ KNOWN_GENERIC_PARAM_FIELDS = frozenset(
 )
 KNOWN_IMMEDIATE_PARAM_FIELDS = frozenset({"type", "value_range", "dispatch"})
 KNOWN_RETURN_TYPE_FIELDS = frozenset({"base", "extension"})
+KNOWN_PRIMITIVE_OVERLOAD_FIELDS = frozenset({"axis", "value", "primary"})
 KNOWN_PRIMITIVE_FIELDS = frozenset(
     {
         "benchmarks",
@@ -124,7 +125,7 @@ def _validate_overload(
         overload_fields = children(field)
         validate_known_fields(
             overload_fields,
-            frozenset({"axis", "value", "primary"}),
+            KNOWN_PRIMITIVE_OVERLOAD_FIELDS,
             diagnostics,
             owner=f"primitive {declaration.name!r} overload",
         )

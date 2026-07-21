@@ -20,6 +20,7 @@ from tslc.lsp.features import (
     definition_locations,
     document_symbols,
     hover,
+    lsp_diagnostic,
     reference_locations,
     semantic_tokens,
 )
@@ -920,6 +921,121 @@ def test_navigation_hover_completion_and_tokens_use_latest_index(
     assert "avx512_fp16" in nested_required_features
     assert "arith" not in required_features
     assert "si32" not in required_features
+
+
+def test_overload_live_features_project_the_latest_catalog_index(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.index is not None
+
+    occurrence = next(
+        item
+        for occurrences in snapshot.index.occurrences_by_path.values()
+        for item in occurrences
+        if item.kind == "overload-value"
+        and item.name == "uniform"
+        and not item.definition
+    )
+    text = workspace.document_text(occurrence.span.path)
+    assert text is not None
+    position = span_to_range(occurrence.span, text).start
+
+    definitions = definition_locations(
+        snapshot.index,
+        occurrence.span.path,
+        text,
+        position,
+        workspace,
+    )
+    references = reference_locations(
+        snapshot.index,
+        occurrence.span.path,
+        text,
+        position,
+        workspace,
+        include_declaration=True,
+    )
+    hovered = hover(
+        snapshot.index,
+        occurrence.span.path,
+        text,
+        position,
+    )
+
+    assert len(definitions) == 1
+    assert definitions[0].uri.endswith("/tsldata/detail/overload_axes.tsl")
+    assert len(references) > len(definitions)
+    assert hovered is not None
+    assert isinstance(hovered.contents, types.MarkupContent)
+    assert "count_distribution=uniform" in hovered.contents.value
+    assert "Accepted operand kinds" in hovered.contents.value
+
+    baseline = (
+        "prim<v:=(v,s)> probe(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "    primary true\n"
+    )
+    assert _completion_labels(
+        snapshot,
+        "prim<v:=(v,s)> probe(data, count):\n  overload:\n    axis pay",
+        baseline,
+    ) == {"payload_extent"}
+    assert _completion_labels(
+        snapshot,
+        (
+            "prim<v:=(v,s)> probe(data, count):\n"
+            "  overload:\n"
+            "    axis count_distribution\n"
+            "    value "
+        ),
+        baseline,
+    ) == {"per_lane", "uniform"}
+
+
+def test_overload_diagnostics_retain_related_locations_and_last_valid_index(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    initial = workspace.check()
+    assert initial is not None
+    assert initial.index is not None
+    path = data_root / "primitives" / "bitwise" / "shifts.tsl"
+    original = path.read_text(encoding="utf-8")
+
+    invalid_pair = original.replace("    value uniform", "    value vector", 1)
+    invalid = workspace.check(workspace.open(path, invalid_pair, 1))
+    assert invalid is not None
+    assert invalid.index is initial.index
+    assert any(
+        item.code == "TSL-CATALOG-OVERLOAD-INVALID-VALUE"
+        for item in invalid.diagnostics
+    )
+
+    duplicate_source = original.replace(
+        "    value uniform\n",
+        "    value uniform\n    primary true\n",
+        1,
+    )
+    duplicate = workspace.check(workspace.change(path, duplicate_source, 2))
+    assert duplicate is not None
+    assert duplicate.index is initial.index
+    diagnostic = next(
+        item
+        for item in duplicate.diagnostics
+        if item.code == "TSL-CATALOG-OVERLOAD-DUPLICATE-PRIMARY"
+    )
+    assert diagnostic.related
+    converted = lsp_diagnostic(diagnostic, workspace)
+    assert converted.related_information
+    assert all(
+        item.location.uri.endswith("/tsldata/primitives/bitwise/shifts.tsl")
+        for item in converted.related_information
+    )
 
 
 def _completion_labels(snapshot, text: str, baseline: str) -> set[str]:
