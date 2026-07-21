@@ -479,7 +479,9 @@ async function waitForDiagnostic(
   code: string,
   present = true,
 ): Promise<boolean> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  // The frozen runtime validates the full corpus after an overlay edit and is
+  // substantially slower than the contributor-mode Python server on CI hosts.
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     const found = vscode.languages
       .getDiagnostics(uri)
       .some((diagnostic) => diagnostic.code === code);
