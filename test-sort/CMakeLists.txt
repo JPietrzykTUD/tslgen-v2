@@ -150,4 +150,30 @@ add_executable(benchmark_compact_merge benchmark_compact_merge.cpp)
 target_compile_features(benchmark_compact_merge PRIVATE cxx_std_17)
 target_link_libraries(benchmark_compact_merge PRIVATE tsl::tsl)
 
+add_executable(benchmark_cosort_network benchmark_cosort_network.cpp)
+target_compile_features(benchmark_cosort_network PRIVATE cxx_std_17)
+target_link_libraries(benchmark_cosort_network PRIVATE tsl::tsl)
+
+add_executable(benchmark_multicolumn_sort benchmark_multicolumn_sort.cpp)
+target_compile_features(benchmark_multicolumn_sort PRIVATE cxx_std_17)
+target_link_libraries(benchmark_multicolumn_sort PRIVATE tsl::tsl)
+
+option(ENABLE_GBENCH "Build the Google Benchmark multi-column sweep" ON)
+set(GBENCH_RELEASE_VERSION "v1.9.1" CACHE STRING "Google Benchmark release tag")
+if(ENABLE_GBENCH)
+  set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+  set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+  set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
+  set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(
+    googlebenchmark
+    URL "https://github.com/google/benchmark/archive/refs/tags/${GBENCH_RELEASE_VERSION}.tar.gz"
+  )
+  FetchContent_MakeAvailable(googlebenchmark)
+
+  add_executable(benchmark_multicolumn_gbench benchmark_multicolumn_gbench.cpp)
+  target_compile_features(benchmark_multicolumn_gbench PRIVATE cxx_std_17)
+  target_link_libraries(benchmark_multicolumn_gbench PRIVATE tsl::tsl benchmark::benchmark)
+endif()
+
 add_test(NAME test_sort COMMAND test_sort)
