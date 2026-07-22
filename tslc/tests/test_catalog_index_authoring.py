@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tslc.authoring_completion import authoring_completions
+from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.model import Catalog
+from tslc.catalog.validation import validate_catalog
 from tslc.catalog_index import CatalogIndex, IndexedDocumentSymbol, build_catalog_index
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.lsp.features import document_symbols, semantic_tokens
 from tslc.sources import SourceDocument
 from tslc.syntax.ast import OuterTslParseResult
+from tslc.syntax.authoring import authoring_cursor_context
 from tslc.syntax.parser import TslParser
 
 
@@ -28,6 +32,13 @@ template unary:
   description "demo"
 target_families:
   known_extension_families [demo]
+overload_axes:
+  count_distribution:
+    values:
+      uniform:
+        operand_kinds [s, sImm]
+      per_lane:
+        operand_kinds [v]
 types:
   arith {types [si32]}
 extension ext:
@@ -35,6 +46,10 @@ extension ext:
 extension ext:
   extension_name "ext-duplicate"
 prim<v:=v> sample(data):
+  overload:
+    axis count_distribution
+    value uniform
+    primary true
   generic_params:
     N {kind int}
   return_type:
@@ -113,6 +128,7 @@ def test_document_symbol_hierarchy_covers_outer_and_nested_declarations(
         ("demo", "language"),
         ("unary", "template"),
         ("target_families", "field"),
+        ("overload_axes", "field"),
         ("types", "types"),
         ("ext", "extension"),
         ("sample", "prim<v:=v>"),
@@ -127,6 +143,9 @@ def test_document_symbol_hierarchy_covers_outer_and_nested_declarations(
         ("variant", "fallback"),
         ("test-case", "basic"),
         ("type-group", "arith"),
+        ("field", "count_distribution"),
+        ("field", "uniform"),
+        ("field", "per_lane"),
     }
     assert all(
         (symbol.span.line, symbol.span.column)
@@ -194,6 +213,147 @@ def test_selector_navigation_indexes_list_items_and_local_target_axes(
     assert len(index.type_group_references["arith"]) == 3
 
 
+def test_overload_navigation_hover_and_references_share_registry_owner(
+    catalog: Catalog,
+) -> None:
+    index, _ = _index(catalog)
+    occurrences = index.occurrences_by_path[_PATH]
+    axis_definition = next(
+        item
+        for item in occurrences
+        if item.kind == "overload-axis" and item.definition
+    )
+    axis_reference = next(
+        item
+        for item in occurrences
+        if item.kind == "overload-axis" and not item.definition
+    )
+    value_definition = next(
+        item
+        for item in occurrences
+        if item.kind == "overload-value"
+        and item.name == "uniform"
+        and item.definition
+    )
+    value_reference = next(
+        item
+        for item in occurrences
+        if item.kind == "overload-value"
+        and item.name == "uniform"
+        and not item.definition
+    )
+
+    assert index.definitions(axis_reference) == (axis_definition.span,)
+    assert index.definitions(value_reference) == (value_definition.span,)
+    assert index.references(axis_definition, include_declaration=True) == (
+        axis_definition.span,
+        axis_reference.span,
+    )
+    assert index.references(value_definition, include_declaration=True) == (
+        value_definition.span,
+        value_reference.span,
+    )
+    assert index.hover(axis_reference) == (
+        "**Overload axis** `count_distribution`\n\n"
+        "**Values:** `per_lane`, `uniform`"
+    )
+    assert index.hover(value_reference) == (
+        "**Overload value** `count_distribution=uniform`\n\n"
+        "**Accepted operand kinds:** `s`, `sImm`"
+    )
+
+
+def test_synthetic_overload_axis_projects_one_owner_through_all_editor_facts() -> None:
+    path = Path("tslctmp/synthetic-overload-authoring.tsl").resolve()
+    source = (
+        "overload_axes:\n"
+        "  synthetic_axis:\n"
+        "    values:\n"
+        "      alpha:\n"
+        "        operand_kinds [s]\n"
+        "      beta:\n"
+        "        operand_kinds [v]\n"
+        "prim<v:=(v,s)> synthetic(data, payload):\n"
+        "  overload:\n"
+        "    axis synthetic_axis\n"
+        "    value alpha\n"
+        "    primary true\n"
+        "prim<v:=(v,v)> synthetic(data, payload):\n"
+        "  overload:\n"
+        "    axis synthetic_axis\n"
+        "    value beta\n"
+    )
+    parsed = TslParser(load_default_tsl_grammar()).parse(
+        (SourceDocument(path, source, "", "tsl"),)
+    )
+    assert parsed.diagnostics == ()
+    built = CatalogBuilder().build(parsed)
+    assert built.catalog is not None
+    catalog = built.catalog
+    assert not any(
+        "OVERLOAD" in item.code
+        for item in validate_catalog(catalog, parsed, required_backends=())
+    )
+    index = build_catalog_index(catalog, parsed)
+
+    registry_axis = catalog.overload_registry.axes["synthetic_axis"]
+    assert tuple(registry_axis.values) == ("alpha", "beta")
+    assert set(index.overload_axis_definitions) == set(catalog.overload_registry.axes)
+    assert {
+        value
+        for axis, value in index.overload_value_definitions
+        if axis == "synthetic_axis"
+    } == set(registry_axis.values)
+
+    axis_edit = source.split("    axis synthetic_axis", 1)[0] + "    axis synth"
+    axis_context = authoring_cursor_context(parsed, path, axis_edit, len(axis_edit))
+    assert {item.label for item in authoring_completions(axis_context, catalog)} == {
+        "synthetic_axis"
+    }
+    value_edit = source.split("    value alpha", 1)[0] + "    value "
+    value_context = authoring_cursor_context(parsed, path, value_edit, len(value_edit))
+    assert {item.label for item in authoring_completions(value_context, catalog)} == {
+        "alpha",
+        "beta",
+    }
+
+    occurrences = index.occurrences_by_path[path]
+    for value_name, value_spec in registry_axis.values.items():
+        definition = next(
+            item
+            for item in occurrences
+            if item.kind == "overload-value"
+            and item.name == value_name
+            and item.definition
+        )
+        references = tuple(
+            item
+            for item in occurrences
+            if item.kind == "overload-value"
+            and item.name == value_name
+            and not item.definition
+        )
+        assert references
+        assert index.definitions(references[0]) == (definition.span,)
+        hover_text = index.hover(definition)
+        assert hover_text is not None
+        assert "synthetic_axis" in hover_text
+        assert all(kind in hover_text for kind in value_spec.operand_kinds)
+        token = next(
+            item
+            for item in index.semantic_tokens_by_path[path]
+            if item.span == definition.span
+        )
+        assert token.kind == "enumMember"
+
+    symbols = _flatten(index.document_symbols_by_path[path])
+    assert {(item.name, item.detail) for item in symbols} >= {
+        ("synthetic_axis", "overload axis"),
+        ("alpha", "overload value"),
+        ("beta", "overload value"),
+    }
+
+
 def test_semantic_tokens_cover_typed_sites_but_not_raw_target_text(
     catalog: Catalog,
 ) -> None:
@@ -215,6 +375,9 @@ def test_semantic_tokens_cover_typed_sites_but_not_raw_target_text(
         ("property", "attrs"),
         ("property", "aligned"),
         ("enumMember", "false"),
+        ("class", "count_distribution"),
+        ("enumMember", "uniform"),
+        ("enumMember", "per_lane"),
     } <= values
 
     body_line = next(

@@ -10,6 +10,11 @@ from tslc.backend.primitive_rendering import variant_names as _variant_names
 from tslc.backend.rust_implementation_state import (
     render_implementation_state_queries as _implementation_state_queries,
 )
+from tslc.backend.rust_policy_selection import (
+    RustPolicySelection,
+    RustPolicySelectionProfile,
+    rust_policy_selection_reason,
+)
 from tslc.backend.rust_documentation import rust_doc as _rust_doc
 from tslc.backend.rust_names import rust_primitive_trait_name
 from tslc.backend.rust_type_params import (
@@ -24,6 +29,7 @@ from tslc.backend.rust_type_params import (
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.target_capability import rust_extension_tag
+from tslc.benchmark.model import SpecializationKey
 from tslc.lower.lowerer import (
     LoweredSpecialization,
     effective_param_types,
@@ -36,6 +42,13 @@ from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 _PRIMITIVE_TRAIT_PREFIX = "detail::primitives::"
 
 
+def _qualified_primitive_trait_prefix(module_prefix: str) -> str:
+    module = module_prefix.removesuffix("::")
+    if not module:
+        return _PRIMITIVE_TRAIT_PREFIX
+    return f"{module}::{_PRIMITIVE_TRAIT_PREFIX}"
+
+
 class RustBackend:
     backend_id = "rust"
 
@@ -44,9 +57,17 @@ class RustBackend:
         *,
         feature_spellings: Mapping[str, str] | None = None,
         emit_target_features: bool = True,
+        policy_selection: RustPolicySelectionProfile | None = None,
+        deferred_policy_mapping_file: str | None = None,
     ) -> None:
         self._feature_spellings = dict(feature_spellings or {})
         self._emit_target_features = emit_target_features
+        self._policy_selection = policy_selection
+        if deferred_policy_mapping_file is not None and policy_selection is None:
+            raise ValueError(
+                "deferred Rust policy selection requires a typed selection profile"
+            )
+        self._deferred_policy_mapping_file = deferred_policy_mapping_file
 
     def render_primitive(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -55,10 +76,50 @@ class RustBackend:
         public = self.render_primitive_public(primitive_name, specializations)
         if not internal:
             return public
-        return "\n\n".join([_primitive_module(internal), public])
+        return "\n\n".join([self.render_primitive_module(internal), public])
 
     def render_primitive_module(self, internal: str) -> str:
-        return _primitive_module(internal) if internal.strip() else ""
+        if not internal.strip():
+            return ""
+        if (
+            self._deferred_policy_mapping_file is not None
+            and self._policy_selection is not None
+            and self._policy_selection.selections
+        ):
+            internal = (
+                f"{internal}\n\n"
+                "include!(concat!(env!(\"OUT_DIR\"), "
+                f'"/{self._deferred_policy_mapping_file}"));'
+            )
+        return _primitive_module(internal)
+
+    def render_policy_selection_impl(
+        self,
+        selection: RustPolicySelection,
+    ) -> str:
+        """Render one trusted mapping fragment from typed backend facts."""
+
+        if self._policy_selection is None:
+            raise ValueError("Rust policy mapping rendering requires a selection profile")
+        expected = next(
+            (
+                candidate
+                for candidate in self._policy_selection.selections
+                if candidate.key == selection.key
+            ),
+            None,
+        )
+        if expected is None or (
+            expected.specialization != selection.specialization
+            or expected.candidate_ids != selection.candidate_ids
+        ):
+            raise ValueError(
+                "Rust policy mapping selection is foreign or stale for this profile"
+            )
+        return self._selection_impl(
+            selection,
+            caller_unsafe=selection.specialization.safety.caller_unsafe,
+        )
 
     def render_primitive_internal(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -90,9 +151,33 @@ class RustBackend:
         caller_unsafe = _any_caller_unsafe(specializations)
         trait = self._trait(primitive_name, shape, caller_unsafe=caller_unsafe)
         impls = [
-            self._impl(spec, caller_unsafe=caller_unsafe) for spec in specializations
+            self._impl(spec, caller_unsafe=caller_unsafe)
+            for spec in specializations
+            if self._selection_for(spec) is None
         ]
         parts = [trait, *impls]
+        selections = tuple(
+            selection
+            for spec in specializations
+            if (selection := self._selection_for(spec)) is not None
+        )
+        if selections:
+            default_primitive = _variant_primitive_name(primitive_name, "default")
+            parts.append(
+                self._trait(
+                    default_primitive,
+                    shape,
+                    caller_unsafe=caller_unsafe,
+                )
+            )
+            parts.extend(
+                self._impl(
+                    selection.specialization,
+                    caller_unsafe=caller_unsafe,
+                    implementation_trait_variant="default",
+                )
+                for selection in selections
+            )
         for name in _variant_names(specializations):
             variant_primitive = _variant_primitive_name(primitive_name, name)
             variant_impls = [
@@ -113,6 +198,11 @@ class RustBackend:
                     )
                 )
                 parts.extend(variant_impls)
+        if self._deferred_policy_mapping_file is None:
+            parts.extend(
+                self._selection_impl(selection, caller_unsafe=caller_unsafe)
+                for selection in selections
+            )
         return "\n\n".join(parts)
 
     def render_primitive_public(
@@ -174,6 +264,120 @@ class RustBackend:
                 for primitive_name, specializations in by_primitive.items()
             }
         )
+
+    def concrete_vector_type(self, spec: LoweredSpecialization) -> str:
+        """Spell the concrete Rust SIMD type selected for one specialization."""
+
+        return _vector_type(spec)
+
+    def render_direct_implementation_call(
+        self,
+        spec: LoweredSpecialization,
+        variant_name: str | None,
+        arguments: tuple[str, ...],
+        *,
+        module_prefix: str = "",
+        immediate_value: str | None = None,
+        overload_parameter_positions: tuple[int, ...] = (),
+        selection_key: SpecializationKey | None = None,
+    ) -> str:
+        """Render a direct call to one already-emitted implementation trait.
+
+        This is the backend-owned call boundary for projections such as the
+        generated benchmark harness.  It deliberately bypasses the public
+        wrapper without duplicating Rust trait naming, const-argument order,
+        concrete vector spelling, or caller-unsafe framing.
+        """
+
+        if _body_for(spec, variant_name) is None:
+            candidate = "default" if variant_name is None else variant_name
+            raise ValueError(
+                f"Rust implementation candidate {candidate!r} is not available for "
+                f"{spec.primitive_name!r}"
+            )
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            spec.result_kind,
+            spec.param_kinds,
+        ):
+            raise ValueError("direct Rust implementation trait calls require a SIMD shape")
+        expected_arguments = sum(
+            kind != DEFAULT_SUPPORT_POLICY.immediate_kind for kind in spec.param_kinds
+        )
+        if len(arguments) != expected_arguments:
+            raise ValueError(
+                f"Rust implementation call for {spec.primitive_name!r} requires "
+                f"{expected_arguments} runtime arguments, got {len(arguments)}"
+            )
+        if immediate_value is not None and spec.immediate is None:
+            raise ValueError(
+                f"Rust implementation call for {spec.primitive_name!r} has no immediate"
+            )
+        if spec.type_params:
+            raise ValueError(
+                "direct Rust implementation calls with SIMD type parameters require "
+                "concrete type arguments"
+            )
+        trait_prefix = _qualified_primitive_trait_prefix(module_prefix)
+
+        if overload_parameter_positions:
+            if len(overload_parameter_positions) != 1:
+                raise ValueError(
+                    "direct Rust implementation calls support one overload parameter"
+                )
+            if spec.immediate is not None or spec.target is not None:
+                raise ValueError(
+                    "direct overloaded Rust implementation calls do not support "
+                    "immediate or target-vector shapes"
+                )
+            varying = overload_parameter_positions[0]
+            if not 0 <= varying < len(arguments):
+                raise ValueError("Rust overload parameter position is out of range")
+            overload_trait_arguments = [
+                self.concrete_vector_type(spec),
+                *(value for _name, value in spec.axis),
+                *(default for _name, _type, default in spec.generic_params),
+            ]
+            trait_name = _implementation_trait_name(
+                spec.primitive_name, variant_name
+            )
+            fixed_arguments = [
+                argument
+                for position, argument in enumerate(arguments)
+                if position != varying
+            ]
+            call_arguments = ", ".join(
+                (arguments[varying], *fixed_arguments)
+            )
+            receiver_type = _rust_concrete(spec, spec.param_kinds[varying])
+            call = (
+                f"<{receiver_type} as {trait_prefix}{trait_name}Arg"
+                f"<{', '.join(overload_trait_arguments)}>>::apply({call_arguments})"
+            )
+            return _unsafe_call(call, spec.safety.caller_unsafe)
+
+        trait_arguments: list[str] = []
+        if spec.target is not None:
+            trait_arguments.append(spec.target.vector_spelling)
+        trait_arguments.extend(value for _name, value in spec.axis)
+        if spec.immediate is not None:
+            trait_arguments.append(immediate_value or spec.immediate[0])
+        trait_arguments.extend(default for _name, _type, default in spec.generic_params)
+        generic_args = (
+            f"<{', '.join(trait_arguments)}>" if trait_arguments else ""
+        )
+        direct_variant = variant_name
+        if (
+            variant_name is None
+            and selection_key is not None
+            and rust_policy_selection_reason(selection_key, spec) is None
+        ):
+            direct_variant = "default"
+        trait_name = _implementation_trait_name(spec.primitive_name, direct_variant)
+        call = (
+            f"<{self.concrete_vector_type(spec)} as {trait_prefix}{trait_name}"
+            f"{generic_args}>::apply({', '.join(arguments)})"
+        )
+        return _unsafe_call(call, spec.safety.caller_unsafe)
 
     def _render_overloaded_internal(
         self,
@@ -251,7 +455,7 @@ class RustBackend:
                 if has_lane_generic and lane_parameter is not None
                 else []
             ) + [name for name, _, _ in spec.generic_params]
-            vec = _vector_type(spec)
+            vec = self.concrete_vector_type(spec)
             impl_prefix = f"impl<{', '.join(impl_generics)}>" if impl_generics else "impl"
             self_ty = _rust_concrete(spec, spec.param_kinds[vi])
             trait_args = (
@@ -406,6 +610,7 @@ class RustBackend:
         *,
         caller_unsafe: bool,
         variant_name: str | None = None,
+        implementation_trait_variant: str | None = None,
     ) -> str:
         body_ref = _body_for(spec, variant_name)
         if body_ref is None:
@@ -414,7 +619,7 @@ class RustBackend:
         # is a further free const generic. A monomorphized slot (numeric `lane_parameter`) is over
         # a concrete `Generic<N>` instead, so it declares no lane generic.
         impl_parts, impl_generic_names = _impl_generic_parts(spec)
-        key = _vector_type(spec)
+        key = self.concrete_vector_type(spec)
         impl_generics = f"<{', '.join(impl_parts)}>" if impl_parts else ""
         targs = _trait_args_by_value(spec)
         ret = _kind_type(spec.result_kind, "Self")
@@ -480,10 +685,15 @@ class RustBackend:
             else f"Rust specialization variant {variant_name}"
         )
         doc = _rust_doc(spec, context=doc_context)
-        trait_primitive = _variant_primitive_name(spec.primitive_name, variant_name)
+        trait_name = _implementation_trait_name(
+            spec.primitive_name,
+            implementation_trait_variant
+            if implementation_trait_variant is not None
+            else variant_name,
+        )
         return (
             (f"{doc}\n" if doc else "")
-            + f"impl{impl_generics} {rust_primitive_trait_name(trait_primitive)}"
+            + f"impl{impl_generics} {trait_name}"
             + f"{trait_args} for {key}"
             f"{_index_where(spec, impl_register=impl_register, base_dispatch='concrete')} {{\n"
             f"    const IMPLEMENTATION_STATE: ImplementationState = "
@@ -492,6 +702,60 @@ class RustBackend:
             f"{_indent(body, 8)}\n"
             f"    }}\n"
             f"}}"
+        )
+
+    def _selection_for(
+        self,
+        spec: LoweredSpecialization,
+    ) -> RustPolicySelection | None:
+        if self._policy_selection is None:
+            return None
+        return next(
+            (
+                selection
+                for selection in self._policy_selection.selections
+                if selection.specialization == spec
+            ),
+            None,
+        )
+
+    def _selection_impl(
+        self,
+        selection: RustPolicySelection,
+        *,
+        caller_unsafe: bool,
+    ) -> str:
+        spec = selection.specialization
+        reason = rust_policy_selection_reason(selection.key, spec)
+        if reason is not None:
+            raise ValueError(
+                f"Rust policy selection renderer received an unsupported shape: {reason}"
+            )
+        selected_variant = (
+            "default"
+            if selection.selected_candidate == "default"
+            else selection.selected_candidate
+        )
+        trait_name = _implementation_trait_name(spec.primitive_name)
+        selected_trait_name = _implementation_trait_name(
+            spec.primitive_name, selected_variant
+        )
+        key = self.concrete_vector_type(spec)
+        params = _params(spec, "Self")
+        result = _kind_type(spec.result_kind, "Self")
+        call = (
+            f"<Self as {selected_trait_name}>::apply({_runtime_names(spec)})"
+        )
+        call = _unsafe_call(call, caller_unsafe)
+        return (
+            f"impl {trait_name} for {key} {{\n"
+            f"    const IMPLEMENTATION_STATE: ImplementationState = "
+            f"<Self as {selected_trait_name}>::IMPLEMENTATION_STATE;\n"
+            "    #[inline(always)]\n"
+            f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {result} {{\n"
+            f"        {call}\n"
+            "    }\n"
+            "}"
         )
 
     def _wrapper(
@@ -822,6 +1086,14 @@ def _variant_primitive_name(
     if variant_name is None:
         return primitive_name
     return f"{primitive_name}_{variant_name}"
+
+
+def _implementation_trait_name(
+    primitive_name: str, variant_name: str | None = None
+) -> str:
+    return rust_primitive_trait_name(
+        _variant_primitive_name(primitive_name, variant_name)
+    )
 
 
 def _primitive_module(internal: str) -> str:

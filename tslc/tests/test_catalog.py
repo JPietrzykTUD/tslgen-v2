@@ -311,6 +311,45 @@ def test_boolean_wildcard_attributes_expand_to_concrete_variants() -> None:
     assert len(bodies) == 1
 
 
+@pytest.mark.parametrize(
+    ("primary_line", "declares_primary"),
+    (("", False), ("    primary false\n", False), ("    primary true\n", True)),
+)
+def test_primitive_overload_is_promoted_with_source_spans(
+    primary_line: str,
+    declares_primary: bool,
+) -> None:
+    source = SourceDocument(
+        Path("primitive_overload_fixture.tsl"),
+        (
+            "prim<v:=(v,s)> demo(data, count):\n"
+            "  overload:\n"
+            "    axis count_distribution\n"
+            "    value uniform\n"
+            f"{primary_line}"
+        ),
+        "d",
+        "tsl",
+    )
+    parsed = TslParser(load_default_tsl_grammar()).parse((source,))
+    assert parsed.diagnostics == ()
+    assert parsed.documents[0].primitives[0].fields_by_name("overload")[0].kind == (
+        "overload"
+    )
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+
+    primitive = result.catalog.primitive("demo")
+    assert primitive is not None and primitive.overload is not None
+    assert primitive.overload.axis == "count_distribution"
+    assert primitive.overload.value == "uniform"
+    assert primitive.overload.declares_primary is declares_primary
+    assert primitive.overload.source is not None
+    assert primitive.overload.axis_source is not None
+    assert primitive.overload.value_source is not None
+    assert (primitive.overload.primary_source is not None) is bool(primary_line)
+
+
 def test_extension_inheritance_respects_explicit_false_and_empty_overrides() -> None:
     source = SourceDocument(
         Path("extension_inheritance_fixture.tsl"),
@@ -453,6 +492,47 @@ def test_target_families_promoted(catalog: Catalog) -> None:
     assert catalog.extensions["neon"].family_capability.documented_family == "aarch64"
 
 
+def test_overload_registry_promoted_from_source(catalog: Catalog) -> None:
+    registry = catalog.overload_registry
+
+    assert tuple(registry.axes) == ("count_distribution", "payload_extent")
+    assert tuple(registry.axes["count_distribution"].values) == (
+        "per_lane",
+        "uniform",
+    )
+    assert registry.value("count_distribution", "uniform") is not None
+    assert registry.value("count_distribution", "uniform").operand_kinds == (
+        "s",
+        "sImm",
+    )
+    assert registry.accepts_operand_kind("count_distribution", "per_lane", "v")
+    assert not registry.accepts_operand_kind("payload_extent", "scalar", "v")
+    assert registry.axes["payload_extent"].source is not None
+    assert registry.axes["payload_extent"].values["vector"].source is not None
+
+
+def test_overload_annotations_preserve_corpus_inventory(catalog: Catalog) -> None:
+    assert len(catalog.primitives) == 172
+    authored_sources = {primitive.source for primitive in catalog.primitives}
+    assert None not in authored_sources
+    assert len(authored_sources) == 160
+
+    annotated = tuple(
+        primitive for primitive in catalog.primitives if primitive.overload is not None
+    )
+    assert {primitive.name for primitive in annotated} == {
+        "shift_left",
+        "shift_right",
+        "store",
+    }
+    assert len({primitive.source for primitive in annotated}) == 10
+    assert all(
+        primitive.overload is not None
+        for primitive in catalog.primitives
+        if primitive.name in {"shift_left", "shift_right", "store"}
+    )
+
+
 def test_clang_vector_extensions_are_cpp_opt_in_overlays(catalog: Catalog) -> None:
     for width in (128, 256, 512):
         extension = catalog.extensions[f"clang_v{width}"]
@@ -510,6 +590,14 @@ def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:
     with pytest.raises(TypeError):
         catalog.target_families.profile_families["new"] = (  # type: ignore[index]
             catalog.target_families.profile_families["x86"]
+        )
+    with pytest.raises(TypeError):
+        catalog.overload_registry.axes["new"] = (  # type: ignore[index]
+            catalog.overload_registry.axes["payload_extent"]
+        )
+    with pytest.raises(TypeError):
+        catalog.overload_registry.axes["payload_extent"].values["new"] = (  # type: ignore[index]
+            catalog.overload_registry.axes["payload_extent"].values["scalar"]
         )
 
 

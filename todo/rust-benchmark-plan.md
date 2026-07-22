@@ -128,8 +128,11 @@ host supports it, but AVX2 availability is not an ordinary CI assumption.
 
 There is one backend-parameterized benchmark planner. It consumes the same
 typed catalog, emitted-profile, value-test, correctness, and scenario facts for
-C++ and Rust. It may use a small literal backend context for genuine profile
-manifest differences; it must not become a strategy framework.
+C++ and Rust. Backend admission contains only a named
+`profile × scenario-family` pair. Profile family, features, backend spellings,
+compile modes, flags, and manifest content come from the live typed machine
+profile rather than a copied backend snapshot; the planner must not become a
+strategy framework.
 
 C++ and Rust retain separate candidate, correctness, scenario, runtime, policy,
 and project renderers. Target-language source generation is not generalized
@@ -355,7 +358,10 @@ Changes:
 
 - Implement the existing median paired-improvement, win-count, dispersion, and
   default-on-inconclusive contract in the generated Rust runtime.
-- Emit raw JSONL, a human-readable summary, and typed Rust policy JSON.
+- Emit raw JSONL, a human-readable summary, and typed Rust policy JSON for
+  profiles with a consumable mapping. The summary keeps the observed result for
+  report-only sets while the policy decision remains the authored default;
+  all-report-only profiles reject policy output.
 - Bind policy decisions to the Rust backend ID, manifest, profile, exact tune
   context, and CPU identity.
 - Reject incomplete correctness, missing scenarios/candidates, duplicate
@@ -448,30 +454,71 @@ Exit criterion: every current Rust variant-bearing slot either reaches an
 emitted report and, where supported, a policy mapping, or appears as a
 deterministic actionable gap without altering C++ evidence.
 
-### Slice 7+: One Scenario Family Per Follow-Up Slice
+### Optional Slice 7+: Evidence-Driven Scenario-Family Coverage
 
-**Outcome:** each follow-up adds complete report behavior for one already-typed
-scenario family and closes only that family's Rust coverage gaps.
+**Status:** Slices 0–6 complete the first Rust autotuning version. These
+follow-ups expand report coverage; they are not prerequisites for claiming the
+native SSE2 register workflow, policy production, or policy consumption.
 
-Suggested order:
+**Outcome:** each independently justified follow-up adds complete report
+behavior for one already-typed scenario family and closes only that family's
+Rust coverage gaps.
 
-1. vector-plus-scalar;
-2. vector result with authored immediate values;
-3. vector-input mask result;
-4. integral-mask density;
-5. one-vector scalar reductions; and
-6. indexed hot-L1 loads.
+Evidence-driven order:
 
-Each family slice includes its Rust correctness rendering, timing rendering,
-manifest evidence, generated compilation, short native mechanics run, and an
-explicit policy-supported or structured report-only decision. Policy selection
-for a family is a separate slice whenever its stable-Rust mapping differs from
-the proven register mapping.
+1. **Completed:** add shared exact-lane planning plus Rust vector-result
+   immediate reports for the six current native SSE2 candidate slots,
+   retaining structured report-only Rust policy decisions; matching C++
+   immediate evidence may improve wherever the same exact-width specialization
+   is selected;
+2. **Completed:** before enabling any additional machine profile, replace
+   independent profile and scenario allowlists with explicit
+   `profile × scenario-family` admission so capability expansion cannot admit
+   an unintended Cartesian product;
+3. **Completed:** add AVX2 one-vector scalar reductions after confirming 40
+   exact candidate slots with authored correctness and two emitted candidates;
+4. add integral-mask density or indexed hot-L1 loads only after choosing and
+   proving their exact native target profiles; and
+5. defer the Wasm-only vector-plus-scalar and vector-input mask-result families
+   until benchmarking under a Wasm runtime is an explicit product decision.
 
-Exit criterion for each family: every selected candidate set in that family
-either emits correct deterministic report artifacts or has one precise
-backend-specific reason why it cannot; unrelated families and C++ evidence are
-unchanged.
+The completed SSE2 immediate follow-up binds each authored immediate into its
+direct Rust candidate call, uses exact-width correctness inputs, guards the
+unary latency dependency against compiler collapse, and proves the native
+`shufps` hot loop. All six decisions remain report-only with the explicit
+`immediate specializations are report-only` reason.
+
+The completed AVX2 reduction follow-up emits throughput reports for `hadd`,
+`hand`, `hmax`, `hmin`, and `hor` across the eight fixed-width integer types.
+All 40 candidate sets use authored exact-width scalar expectations and remain
+report-only with the explicit
+`scalar-result reduction specializations are report-only` reason. Native short
+execution covers every set, and the `hadd/si32` assembly proof follows both
+production target-feature call paths to distinct, call-free vector-reduction
+bodies. Report-only summaries retain the observed result, while these
+all-report-only profiles neither advertise nor produce a consumable policy.
+
+Mask-density and indexed-load support remain deferred. The current exact Rust
+gaps provide only two canonical AVX2 mask-density slots without a demonstrated
+tuning question, while indexed loads are spread across AVX-512 profiles and do
+not yet have one selected native profile and host proof. Their target choice and
+workload value must be justified before adding either admission pair.
+
+Each implemented family slice includes Rust correctness rendering, timing
+rendering, manifest evidence, generated compilation, a short native mechanics
+run, and an explicit policy-supported or structured report-only decision.
+Policy selection for a family is a separate slice whenever its stable-Rust
+mapping differs from the proven register mapping. Cross-compiled or emulated
+correctness never substitutes for the native mechanics evidence required by a
+timing slice.
+
+Exit criterion for each implemented family: every selected candidate set in
+that family either emits correct deterministic report artifacts or has one
+precise backend-specific reason why it cannot. Unrelated families remain
+unchanged; shared planner improvements may update matching C++ family evidence
+but must not alter unrelated C++ candidate identities. A deferred family
+remains an exact coverage gap rather than an incomplete implementation
+commitment.
 
 ## Validation Matrix
 
@@ -493,7 +540,7 @@ PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds \
   tslc/tests/test_build_verify.py \
   tslc/tests/test_value_tests.py \
   tslc/tests/test_benchmark_variants.py \
-  tslc/tests/test_rust_benchmark_generated.py
+  tslc/tests/test_rust_benchmark_rendering.py
 ```
 
 Validation must include these invariants:

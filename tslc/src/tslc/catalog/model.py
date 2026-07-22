@@ -13,6 +13,11 @@ from types import MappingProxyType
 from typing import Literal, TypeVar
 
 from tslc.diagnostics import SourceSpan
+from tslc.catalog.overloads import (
+    OverloadRegistry,
+    PrimitiveOverload,
+    ResolvedPrimitiveOverload,
+)
 from tslc.catalog.target_families import (
     ExtensionFamilyCapability,
     TargetFamilyCatalog,
@@ -229,6 +234,9 @@ class Primitive:
     brief_description: str | None = None
     detailed_description: str | None = None
     semantics: str | None = None
+    # Source-authored semantic-overload identity. Cross-declaration validation resolves
+    # the family primary value; selection/lowering intentionally do not consume it yet.
+    overload: PrimitiveOverload | None = None
     # Corpus-declared cross-lane fact: True iff an output lane reads more than its own input
     # lane (a reduction, shuffle, compress, conflict, iota, gather …). It gates every *scalable*
     # (runtime-length, e.g. SVE) value-test kind that tiles an authored fixed-length pattern
@@ -672,7 +680,13 @@ class Catalog:
     type_spellings: Mapping[str, Mapping[str, str]]
     # backend_id -> translation-template key (e.g. "complete", "loop_backend") -> template
     translations: Mapping[str, Mapping[str, str]]
+    overload_registry: OverloadRegistry = field(default_factory=OverloadRegistry)
     target_families: TargetFamilyCatalog = field(default_factory=TargetFamilyCatalog)
+    _overload_primary_values: Mapping[tuple[str, str], str] = field(
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "type_groups", _freeze_mapping(self.type_groups))
@@ -701,6 +715,27 @@ class Catalog:
             "translations",
             _freeze_nested_mapping(self.translations),
         )
+        primary_markers: dict[tuple[str, str], dict[object, str]] = {}
+        for primitive in self.primitives:
+            overload = primitive.overload
+            if overload is None or not overload.declares_primary:
+                continue
+            marker = overload.source if overload.source is not None else id(overload)
+            primary_markers.setdefault((primitive.name, overload.axis), {}).setdefault(
+                marker,
+                overload.value,
+            )
+        object.__setattr__(
+            self,
+            "_overload_primary_values",
+            MappingProxyType(
+                {
+                    family: next(iter(markers.values()))
+                    for family, markers in sorted(primary_markers.items())
+                    if len(markers) == 1
+                }
+            ),
+        )
 
     def primitive(self, name: str, *, unmasked: bool = True) -> Primitive | None:
         for primitive in self.primitives:
@@ -712,6 +747,24 @@ class Catalog:
                 continue
             return primitive
         return None
+
+    def resolve_primitive_overload(
+        self,
+        primitive: Primitive,
+    ) -> ResolvedPrimitiveOverload | None:
+        overload = primitive.overload
+        if overload is None:
+            return None
+        primary_value = self._overload_primary_values.get(
+            (primitive.name, overload.axis)
+        )
+        if primary_value is None:
+            return None
+        return ResolvedPrimitiveOverload(
+            axis=overload.axis,
+            value=overload.value,
+            is_primary_value=overload.value == primary_value,
+        )
 
     def primitives_named(self, name: str, *, unmasked: bool = True) -> tuple[Primitive, ...]:
         """Every primitive of this name — there can be more than one when a boolean

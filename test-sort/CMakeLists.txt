@@ -20,7 +20,7 @@ set(
   CACHE PATH
   "Path to a local generated TSL output root, or to its cpp directory"
 )
-set(TSL_RELEASE_VERSION "v0.1.3" CACHE STRING "Generated TSL release tag")
+set(TSL_RELEASE_VERSION "v0.2.3" CACHE STRING "Generated TSL release tag")
 set(
   TSL_RELEASE_ARCHIVE_URL
   # "https://github.com/JPietrzykTUD/tslgen-v2/releases/download/${TSL_RELEASE_VERSION}/tsl-generated-1daeecdd39aa2b02a1bb60697d67fe6ae70b23cc.tar.gz"
@@ -28,13 +28,9 @@ set(
   CACHE STRING
   "URL of the generated TSL release archive"
 )
-# set(
-#   TSL_RELEASE_ARCHIVE_SHA256
-#   "428af929846e06ecd891eb0e322a6713f10829cfb7412f420c0a548e38a28e95"
-#   CACHE STRING
-#   "Optional SHA256 digest for the generated TSL release archive"
-# )
 set(TSL_PROFILE "auto" CACHE STRING "Generated TSL profile consumed by this test")
+set(TSL_BUILD_TESTS OFF CACHE BOOL "Build TSL tests")
+
 
 option(ENABLE_VQSORT_BENCHMARK "Include Google Highway VQSort in the benchmark" ON)
 set(
@@ -84,40 +80,15 @@ if(ENABLE_VQSORT_BENCHMARK AND (NOT DEFINED CMAKE_C_COMPILER OR CMAKE_C_COMPILER
   endif()
 endif()
 
-if(TSL_LOCAL_SOURCE_DIR)
-  get_filename_component(
-    _tsl_local_source_dir
-    "${TSL_LOCAL_SOURCE_DIR}"
-    ABSOLUTE
-    BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
-  )
-  if(EXISTS "${_tsl_local_source_dir}/cpp/CMakeLists.txt")
-    set(_tsl_local_cpp_dir "${_tsl_local_source_dir}/cpp")
-  elseif(EXISTS "${_tsl_local_source_dir}/CMakeLists.txt")
-    set(_tsl_local_cpp_dir "${_tsl_local_source_dir}")
-  else()
-    message(
-      FATAL_ERROR
-      "TSL_LOCAL_SOURCE_DIR must point to a generated TSL root containing cpp/CMakeLists.txt, or to the cpp directory itself"
-    )
-  endif()
-
-  message(STATUS "Using local generated TSL from ${_tsl_local_cpp_dir}")
-  add_subdirectory("${_tsl_local_cpp_dir}" "${CMAKE_CURRENT_BINARY_DIR}/_deps/tsl-local-build")
-else()
-  set(_tsl_release_hash_args)
-  if(TSL_RELEASE_ARCHIVE_SHA256)
-    list(APPEND _tsl_release_hash_args URL_HASH "SHA256=${TSL_RELEASE_ARCHIVE_SHA256}")
-  endif()
-
-  FetchContent_Declare(
+set(_tsl_release_hash_args)
+FetchContent_Declare(
     tsl
     URL "${TSL_RELEASE_ARCHIVE_URL}"
     SOURCE_SUBDIR cpp
     ${_tsl_release_hash_args}
-  )
-  FetchContent_MakeAvailable(tsl)
-endif()
+)
+FetchContent_MakeAvailable(tsl)
+
 
 if(ENABLE_VQSORT_BENCHMARK)
   set(HWY_ENABLE_CONTRIB ON CACHE BOOL "" FORCE)
@@ -178,5 +149,31 @@ endif()
 add_executable(benchmark_compact_merge benchmark_compact_merge.cpp)
 target_compile_features(benchmark_compact_merge PRIVATE cxx_std_17)
 target_link_libraries(benchmark_compact_merge PRIVATE tsl::tsl)
+
+add_executable(benchmark_cosort_network benchmark_cosort_network.cpp)
+target_compile_features(benchmark_cosort_network PRIVATE cxx_std_17)
+target_link_libraries(benchmark_cosort_network PRIVATE tsl::tsl)
+
+add_executable(benchmark_multicolumn_sort benchmark_multicolumn_sort.cpp)
+target_compile_features(benchmark_multicolumn_sort PRIVATE cxx_std_17)
+target_link_libraries(benchmark_multicolumn_sort PRIVATE tsl::tsl)
+
+option(ENABLE_GBENCH "Build the Google Benchmark multi-column sweep" ON)
+set(GBENCH_RELEASE_VERSION "v1.9.1" CACHE STRING "Google Benchmark release tag")
+if(ENABLE_GBENCH)
+  set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+  set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+  set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
+  set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(
+    googlebenchmark
+    URL "https://github.com/google/benchmark/archive/refs/tags/${GBENCH_RELEASE_VERSION}.tar.gz"
+  )
+  FetchContent_MakeAvailable(googlebenchmark)
+
+  add_executable(benchmark_multicolumn_gbench benchmark_multicolumn_gbench.cpp)
+  target_compile_features(benchmark_multicolumn_gbench PRIVATE cxx_std_17)
+  target_link_libraries(benchmark_multicolumn_gbench PRIVATE tsl::tsl benchmark::benchmark)
+endif()
 
 add_test(NAME test_sort COMMAND test_sort)

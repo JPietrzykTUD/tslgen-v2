@@ -14,7 +14,7 @@ from tslc.backend.capability import (
 )
 from tslc.backend.cpp_translation import CppBackendDialect
 from tslc.backend.cpp import CppBackend
-from tslc.benchmark.planner import CppBenchmarkPlanner
+from tslc.benchmark.planner import BenchmarkPlanner
 from tslc.benchmark.render_cpp import cpp_benchmark_artifacts
 from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.cpp_validation import validate_cpp_profiles
@@ -72,7 +72,38 @@ def cpp_benchmark_plan(
     profiles: tuple[EmittedProfile, ...],
     value_tests: ValueTestProjectPlan,
 ) -> BenchmarkProjectPlan:
-    return CppBenchmarkPlanner(catalog).plan(profiles, value_tests)
+    return BenchmarkPlanner(catalog, backend_id="cpp").plan(profiles, value_tests)
+
+
+def cpp_benchmark_project_artifacts(
+    plan: BenchmarkProjectPlan,
+    profiles: tuple[EmittedProfile, ...],
+    assets: RenderAssets,
+    media_type: str,
+) -> list[Artifact]:
+    del profiles
+    return cpp_benchmark_artifacts(plan, assets, media_type)
+
+
+def cpp_backend_artifacts(
+    profiles: tuple[EmittedProfile, ...],
+    value_tests: ValueTestProjectPlan,
+    benchmarks: BenchmarkProjectPlan,
+    assets: RenderAssets,
+    media_type: str,
+) -> list[Artifact]:
+    """Render the complete C++ artifact set from one fact snapshot."""
+
+    return [
+        *cpp_project_artifacts(profiles, assets, media_type),
+        *cpp_value_test_artifacts(value_tests, assets, media_type),
+        *cpp_benchmark_project_artifacts(
+            benchmarks,
+            profiles,
+            assets,
+            media_type,
+        ),
+    ]
 
 
 def cpp_documentation_formatter() -> BackendDocumentationFormatter:
@@ -97,16 +128,14 @@ CPP_BACKEND = BackendCapability(
     root_path="cpp",
     artifact_media_type="text/x-c++",
     dialect_factory=create_cpp_dialect,
-    project_renderer=cpp_project_artifacts,
+    artifact_renderer=cpp_backend_artifacts,
     verify_profiles=cpp_profile_verification,
     value_test_support_factory=cpp_value_test_support,
-    test_renderer=cpp_value_test_artifacts,
     verify_driver_factory=create_cpp_verify_driver,
     verify_machine_profile=cpp_verify_profile,
     toolchain_commands=cpp_toolchain_commands,
     documentation_formatter_factory=cpp_documentation_formatter,
     benchmark_plan_builder=cpp_benchmark_plan,
-    benchmark_renderer=cpp_benchmark_artifacts,
     helper_manifest=CPP_HELPER_MANIFEST,
     profile_validator=validate_cpp_profiles,
     primitive_preview_renderer=cpp_primitive_preview,

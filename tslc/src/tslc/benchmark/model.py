@@ -28,7 +28,7 @@ BenchmarkOperandGenerator = Literal[
 
 @dataclass(frozen=True, slots=True)
 class SpecializationKey:
-    """Backend-neutral identity of one policy-selectable specialization."""
+    """Backend-local identity of one policy-selectable specialization."""
 
     backend_id: str
     profile_name: str
@@ -823,6 +823,7 @@ class BenchmarkCoverageEntry:
     mask_policy: str | None
     axis: tuple[tuple[str, str], ...]
     variant_names: tuple[str, ...]
+    slot_hash: str
     status: BenchmarkCoverageStatus
     reason: str = ""
 
@@ -833,6 +834,8 @@ class BenchmarkProfilePlan:
     profile_name: str
     candidate_sets: tuple[BenchmarkCandidateSet, ...]
     manifest_hash: str
+    profile_family: str
+    backend_feature_spellings: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)

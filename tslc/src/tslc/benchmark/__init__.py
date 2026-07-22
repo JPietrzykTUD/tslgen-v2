@@ -1,5 +1,10 @@
 """Typed variant benchmark planning and policy artifacts."""
 
+from tslc.benchmark.identity import (
+    implementation_body_hash,
+    specialization_key,
+    specialization_stable_id,
+)
 from tslc.benchmark.model import (
     BenchmarkCandidate,
     BenchmarkCandidateSet,
@@ -20,7 +25,7 @@ from tslc.benchmark.model import (
     BenchmarkVectorScalarScenario,
     SpecializationKey,
 )
-from tslc.benchmark.planner import CppBenchmarkPlanner
+from tslc.benchmark.planner import BenchmarkPlanner
 
 __all__ = (
     "BenchmarkCandidate",
@@ -32,7 +37,7 @@ __all__ = (
     "BenchmarkIndexedLoadCorrectnessCase",
     "BenchmarkIndexedLoadScenario",
     "BenchmarkMaskResultScenario",
-    "CppBenchmarkPlanner",
+    "BenchmarkPlanner",
     "BenchmarkProfilePlan",
     "BenchmarkProjectPlan",
     "BenchmarkReductionCorrectnessCase",
@@ -42,4 +47,7 @@ __all__ = (
     "BenchmarkVectorScalarCorrectnessCase",
     "BenchmarkVectorScalarScenario",
     "SpecializationKey",
+    "implementation_body_hash",
+    "specialization_key",
+    "specialization_stable_id",
 )

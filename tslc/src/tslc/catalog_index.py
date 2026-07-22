@@ -23,6 +23,7 @@ from tslc.ir.region_syntax import parse_call_selector
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region, Segment
+from tslc.syntax.access import child, children
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedBlockDeclaration,
@@ -40,6 +41,8 @@ SymbolKind = Literal[
     "type-group",
     "region",
     "target-axis",
+    "overload-axis",
+    "overload-value",
 ]
 _TSIL_REGION_GUIDE = (
     "https://github.com/JPietrzykTUD/tslgen-v2/blob/main/docs/tsil-keywords.md"
@@ -69,6 +72,18 @@ class CatalogIndex:
     target_axis_references: Mapping[tuple[str, str], tuple[SourceSpan, ...]] = field(
         default_factory=dict
     )
+    overload_axis_definitions: Mapping[str, tuple[SourceSpan, ...]] = field(
+        default_factory=dict
+    )
+    overload_axis_references: Mapping[str, tuple[SourceSpan, ...]] = field(
+        default_factory=dict
+    )
+    overload_value_definitions: Mapping[tuple[str, str], tuple[SourceSpan, ...]] = field(
+        default_factory=dict
+    )
+    overload_value_references: Mapping[tuple[str, str], tuple[SourceSpan, ...]] = field(
+        default_factory=dict
+    )
     primitive_calls: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     primitive_callers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     occurrences_by_path: Mapping[Path, tuple[IndexedOccurrence, ...]] = field(default_factory=dict)
@@ -79,6 +94,7 @@ class CatalogIndex:
         default_factory=dict
     )
     hover_text: Mapping[tuple[SymbolKind, str], str] = field(default_factory=dict)
+    overload_value_hover: Mapping[tuple[str, str], str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         for name in (
@@ -90,12 +106,17 @@ class CatalogIndex:
             "type_group_references",
             "target_axis_definitions",
             "target_axis_references",
+            "overload_axis_definitions",
+            "overload_axis_references",
+            "overload_value_definitions",
+            "overload_value_references",
             "primitive_calls",
             "primitive_callers",
             "occurrences_by_path",
             "document_symbols_by_path",
             "semantic_tokens_by_path",
             "hover_text",
+            "overload_value_hover",
         ):
             values = getattr(self, name)
             object.__setattr__(self, name, MappingProxyType(dict(values)))
@@ -109,6 +130,12 @@ class CatalogIndex:
         return min(candidates, key=lambda item: _span_size(item.span), default=None)
 
     def definitions(self, occurrence: IndexedOccurrence) -> tuple[SourceSpan, ...]:
+        if occurrence.kind == "overload-value":
+            if occurrence.scope is None:
+                return ()
+            return self.overload_value_definitions.get(
+                (occurrence.scope, occurrence.name), ()
+            )
         if occurrence.kind == "target-axis":
             if occurrence.scope is None:
                 return ()
@@ -128,12 +155,22 @@ class CatalogIndex:
                     (occurrence.scope, occurrence.name), ()
                 )
             )
+        elif occurrence.kind == "overload-value":
+            referenced = (
+                ()
+                if occurrence.scope is None
+                else self.overload_value_references.get(
+                    (occurrence.scope, occurrence.name), ()
+                )
+            )
         else:
             referenced = _references(self, occurrence.kind).get(occurrence.name, ())
         declared = self.definitions(occurrence) if include_declaration else ()
         return _sorted_spans((*declared, *referenced))
 
     def hover(self, occurrence: IndexedOccurrence) -> str | None:
+        if occurrence.kind == "overload-value" and occurrence.scope is not None:
+            return self.overload_value_hover.get((occurrence.scope, occurrence.name))
         return self.hover_text.get((occurrence.kind, occurrence.name))
 
 
@@ -143,6 +180,8 @@ class _DocumentIndex:
     references: Mapping[SymbolKind, Mapping[str, tuple[SourceSpan, ...]]]
     target_axis_definitions: Mapping[tuple[str, str], tuple[SourceSpan, ...]]
     target_axis_references: Mapping[tuple[str, str], tuple[SourceSpan, ...]]
+    overload_value_definitions: Mapping[tuple[str, str], tuple[SourceSpan, ...]]
+    overload_value_references: Mapping[tuple[str, str], tuple[SourceSpan, ...]]
     occurrences: tuple[IndexedOccurrence, ...]
     primitive_calls: tuple[tuple[str, str], ...]
     symbols: tuple[IndexedDocumentSymbol, ...]
@@ -195,6 +234,8 @@ def build_catalog_index(
         "type-group": {},
         "region": {},
         "target-axis": {},
+        "overload-axis": {},
+        "overload-value": {},
     }
     references: dict[SymbolKind, dict[str, list[SourceSpan]]] = {
         "primitive": {},
@@ -202,9 +243,13 @@ def build_catalog_index(
         "type-group": {},
         "region": {},
         "target-axis": {},
+        "overload-axis": {},
+        "overload-value": {},
     }
     target_axis_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
     target_axis_references: dict[tuple[str, str], list[SourceSpan]] = {}
+    overload_value_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
+    overload_value_references: dict[tuple[str, str], list[SourceSpan]] = {}
     occurrences: list[IndexedOccurrence] = []
     primitive_calls: set[tuple[str, str]] = set()
     symbols_by_path: dict[Path, tuple[IndexedDocumentSymbol, ...]] = {}
@@ -226,6 +271,10 @@ def build_catalog_index(
             target_axis_definitions.setdefault(key, []).extend(spans)
         for key, spans in fragment.target_axis_references.items():
             target_axis_references.setdefault(key, []).extend(spans)
+        for key, spans in fragment.overload_value_definitions.items():
+            overload_value_definitions.setdefault(key, []).extend(spans)
+        for key, spans in fragment.overload_value_references.items():
+            overload_value_references.setdefault(key, []).extend(spans)
         occurrences.extend(fragment.occurrences)
         primitive_calls.update(fragment.primitive_calls)
         if fragment.symbols:
@@ -253,6 +302,10 @@ def build_catalog_index(
         type_group_references=_freeze_spans(references["type-group"]),
         target_axis_definitions=_freeze_scoped_spans(target_axis_definitions),
         target_axis_references=_freeze_scoped_spans(target_axis_references),
+        overload_axis_definitions=_freeze_spans(definitions["overload-axis"]),
+        overload_axis_references=_freeze_spans(references["overload-axis"]),
+        overload_value_definitions=_freeze_scoped_spans(overload_value_definitions),
+        overload_value_references=_freeze_scoped_spans(overload_value_references),
         primitive_calls={
             name: tuple(sorted(values)) for name, values in sorted(calls.items())
         },
@@ -266,6 +319,7 @@ def build_catalog_index(
         document_symbols_by_path=symbols_by_path,
         semantic_tokens_by_path=semantic_tokens_by_path,
         hover_text=_hover_text(catalog, definitions),
+        overload_value_hover=_overload_value_hover(catalog),
     )
 
 
@@ -276,6 +330,8 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         "type-group": {},
         "region": {},
         "target-axis": {},
+        "overload-axis": {},
+        "overload-value": {},
     }
     references: dict[SymbolKind, dict[str, list[SourceSpan]]] = {
         "primitive": {},
@@ -283,9 +339,13 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         "type-group": {},
         "region": {},
         "target-axis": {},
+        "overload-axis": {},
+        "overload-value": {},
     }
     target_axis_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
     target_axis_references: dict[tuple[str, str], list[SourceSpan]] = {}
+    overload_value_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
+    overload_value_references: dict[tuple[str, str], list[SourceSpan]] = {}
     occurrences: list[IndexedOccurrence] = []
     primitive_calls: set[tuple[str, str]] = set()
     _index_document(
@@ -294,6 +354,8 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         references,
         target_axis_definitions,
         target_axis_references,
+        overload_value_definitions,
+        overload_value_references,
         occurrences,
         primitive_calls,
     )
@@ -307,6 +369,8 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         },
         target_axis_definitions=_freeze_scoped_spans(target_axis_definitions),
         target_axis_references=_freeze_scoped_spans(target_axis_references),
+        overload_value_definitions=_freeze_scoped_spans(overload_value_definitions),
+        overload_value_references=_freeze_scoped_spans(overload_value_references),
         occurrences=tuple(sorted(occurrences, key=_occurrence_key)),
         primitive_calls=tuple(sorted(primitive_calls)),
         symbols=authoring.symbols,
@@ -320,6 +384,8 @@ def _index_document(
     references: dict[SymbolKind, dict[str, list[SourceSpan]]],
     target_axis_definitions: dict[tuple[str, str], list[SourceSpan]],
     target_axis_references: dict[tuple[str, str], list[SourceSpan]],
+    overload_value_definitions: dict[tuple[str, str], list[SourceSpan]],
+    overload_value_references: dict[tuple[str, str], list[SourceSpan]],
     occurrences: list[IndexedOccurrence],
     primitive_calls: set[tuple[str, str]],
 ) -> None:
@@ -328,6 +394,12 @@ def _index_document(
         result_target = _result_target(primitive)
         span = _name_in_source(primitive.header_source, primitive.name)
         _record(definitions, occurrences, "primitive", primitive.name, span, True)
+        _index_primitive_overload(
+            primitive,
+            references,
+            overload_value_references,
+            occurrences,
+        )
         if result_target is not None:
             _, target_name, target_span = result_target
             _record_scoped(
@@ -388,6 +460,61 @@ def _index_document(
                     span,
                     True,
                 )
+
+    for declaration in document.fields:
+        if declaration.field.key.text != "overload_axes":
+            continue
+        for axis in children(declaration.field):
+            _record(
+                definitions,
+                occurrences,
+                "overload-axis",
+                axis.key.text,
+                _source_span(axis.key.source),
+                True,
+            )
+            for value in children(child(axis, "values")):
+                _record_scoped(
+                    overload_value_definitions,
+                    occurrences,
+                    "overload-value",
+                    axis.key.text,
+                    value.key.text,
+                    _source_span(value.key.source),
+                    True,
+                )
+
+
+def _index_primitive_overload(
+    primitive: ParsedPrimitiveDeclaration,
+    references: dict[SymbolKind, dict[str, list[SourceSpan]]],
+    overload_value_references: dict[tuple[str, str], list[SourceSpan]],
+    occurrences: list[IndexedOccurrence],
+) -> None:
+    for primitive_field in primitive.fields_by_name("overload"):
+        axis_field = child(primitive_field.field, "axis")
+        value_field = child(primitive_field.field, "value")
+        if axis_field is None or not isinstance(axis_field.value, ParsedTslScalarValue):
+            continue
+        axis_value = axis_field.value
+        _record_scalar_reference(
+            axis_value,
+            references,
+            occurrences,
+            "overload-axis",
+        )
+        if value_field is None or not isinstance(value_field.value, ParsedTslScalarValue):
+            continue
+        value = value_field.value
+        _record_scoped(
+            overload_value_references,
+            occurrences,
+            "overload-value",
+            axis_value.text,
+            value.text,
+            _source_span(value.payload_source or value.source),
+            False,
+        )
 
 
 def _index_implementation_selectors(
@@ -484,7 +611,7 @@ def _primitive_scope(primitive: ParsedPrimitiveDeclaration) -> str:
 def _record_scoped(
     values: dict[tuple[str, str], list[SourceSpan]],
     occurrences: list[IndexedOccurrence],
-    kind: Literal["target-axis"],
+    kind: Literal["target-axis", "overload-value"],
     scope: str,
     name: str,
     span: SourceSpan,
@@ -657,7 +784,27 @@ def _hover_text(
                 f"[TSIL region guide]({guide})",
             )
         )
+    for name, axis in catalog.overload_registry.axes.items():
+        hover[("overload-axis", name)] = "\n\n".join(
+            (
+                f"**Overload axis** `{name}`",
+                f"**Values:** {_inline_code(axis.values)}",
+            )
+        )
     return hover
+
+
+def _overload_value_hover(catalog: Catalog) -> dict[tuple[str, str], str]:
+    return {
+        (axis_name, value_name): "\n\n".join(
+            (
+                f"**Overload value** `{axis_name}={value_name}`",
+                f"**Accepted operand kinds:** {_inline_code(value.operand_kinds)}",
+            )
+        )
+        for axis_name, axis in catalog.overload_registry.axes.items()
+        for value_name, value in axis.values.items()
+    }
 
 
 def _optional_span_key(span: SourceSpan | None) -> tuple[str, int, int]:
@@ -688,6 +835,8 @@ def _definitions(index: CatalogIndex, kind: SymbolKind) -> Mapping[str, tuple[So
         return index.extension_definitions
     if kind == "type-group":
         return index.type_group_definitions
+    if kind == "overload-axis":
+        return index.overload_axis_definitions
     return {}
 
 
@@ -698,6 +847,8 @@ def _references(index: CatalogIndex, kind: SymbolKind) -> Mapping[str, tuple[Sou
         return index.extension_references
     if kind == "type-group":
         return index.type_group_references
+    if kind == "overload-axis":
+        return index.overload_axis_references
     return {}
 
 

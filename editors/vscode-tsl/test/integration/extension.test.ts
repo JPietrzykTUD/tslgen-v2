@@ -304,6 +304,108 @@ suite("TSL extension", () => {
       ),
     );
   });
+
+  test("presents source-owned overload semantics through standard LSP", async () => {
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    assert.ok(root);
+    const uri = vscode.Uri.file(
+      path.join(root, "tsldata", "primitives", "bitwise", "shifts.tsl"),
+    );
+    const document = await vscode.workspace.openTextDocument(uri);
+    const editor = await vscode.window.showTextDocument(document);
+    const lines = document.getText().split(/\r?\n/);
+    const axisLine = lines.findIndex(
+      (value) => value.trim() === "axis count_distribution",
+    );
+    const valueLine = lines.findIndex((value) => value.trim() === "value uniform");
+    assert.ok(axisLine >= 0);
+    assert.ok(valueLine >= 0);
+
+    const axisStart = document.lineAt(axisLine).text.indexOf("count_distribution");
+    await editor.edit((edit) =>
+      edit.delete(
+        new vscode.Range(
+          axisLine,
+          axisStart,
+          axisLine,
+          axisStart + "count_distribution".length,
+        ),
+      ),
+    );
+    const axisCompletions = await waitForCompletions(
+      uri,
+      new vscode.Position(axisLine, axisStart),
+    );
+    const axisLabels = new Set(
+      axisCompletions.items.map((item) => item.label.toString()),
+    );
+    assert.ok(axisLabels.has("count_distribution"));
+    assert.ok(axisLabels.has("payload_extent"));
+    await vscode.commands.executeCommand("undo");
+
+    const valueStart = document.lineAt(valueLine).text.indexOf("uniform");
+    await editor.edit((edit) =>
+      edit.delete(
+        new vscode.Range(
+          valueLine,
+          valueStart,
+          valueLine,
+          valueStart + "uniform".length,
+        ),
+      ),
+    );
+    const valueCompletions = await waitForCompletions(
+      uri,
+      new vscode.Position(valueLine, valueStart),
+    );
+    const valueLabels = new Set(
+      valueCompletions.items.map((item) => item.label.toString()),
+    );
+    assert.deepEqual(valueLabels, new Set(["per_lane", "uniform"]));
+    await vscode.commands.executeCommand("undo");
+
+    const valuePosition = new vscode.Position(valueLine, valueStart);
+    const hovers = await waitForHover(uri, valuePosition);
+    const hoverText = hovers
+      .flatMap((item) => item.contents)
+      .map((item) =>
+        item instanceof vscode.MarkdownString
+          ? item.value
+          : typeof item === "string"
+            ? item
+            : item.value,
+      )
+      .join("\n");
+    assert.match(hoverText, /count_distribution=uniform/);
+    assert.match(hoverText, /Accepted operand kinds/);
+    assert.match(hoverText, /`s`, `sImm`/);
+
+    const definitions = await waitForDefinitions(uri, valuePosition);
+    assert.equal(definitions.length, 1);
+    const definitionUri =
+      "targetUri" in definitions[0]
+        ? definitions[0].targetUri
+        : definitions[0].uri;
+    assert.ok(definitionUri.fsPath.endsWith(path.join("detail", "overload_axes.tsl")));
+
+    await editor.edit((edit) =>
+      edit.replace(
+        new vscode.Range(
+          valueLine,
+          valueStart,
+          valueLine,
+          valueStart + "uniform".length,
+        ),
+        "scalar",
+      ),
+    );
+    assert.ok(await waitForDiagnostic(uri, "TSL-CATALOG-OVERLOAD-INVALID-VALUE"));
+    await vscode.commands.executeCommand("undo");
+    assert.ok(
+      await waitForDiagnostic(uri, "TSL-CATALOG-OVERLOAD-INVALID-VALUE", false),
+    );
+    assert.equal(document.isDirty, false);
+  });
 });
 
 async function waitForHover(
@@ -318,6 +420,40 @@ async function waitForHover(
     );
     if (hovers.length > 0) {
       return hovers;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return [];
+}
+
+async function waitForCompletions(
+  uri: vscode.Uri,
+  position: vscode.Position,
+): Promise<vscode.CompletionList> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const completions = await vscode.commands.executeCommand<vscode.CompletionList>(
+      "vscode.executeCompletionItemProvider",
+      uri,
+      position,
+    );
+    if (completions.items.length > 0) {
+      return completions;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return new vscode.CompletionList();
+}
+
+async function waitForDefinitions(
+  uri: vscode.Uri,
+  position: vscode.Position,
+): Promise<(vscode.Location | vscode.LocationLink)[]> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const definitions = await vscode.commands.executeCommand<
+      (vscode.Location | vscode.LocationLink)[]
+    >("vscode.executeDefinitionProvider", uri, position);
+    if (definitions.length > 0) {
+      return definitions;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -343,7 +479,9 @@ async function waitForDiagnostic(
   code: string,
   present = true,
 ): Promise<boolean> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  // The frozen runtime validates the full corpus after an overlay edit and is
+  // substantially slower than the contributor-mode Python server on CI hosts.
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     const found = vscode.languages
       .getDiagnostics(uri)
       .some((diagnostic) => diagnostic.code === code);

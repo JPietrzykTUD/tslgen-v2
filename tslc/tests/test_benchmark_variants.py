@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from hashlib import sha256
 import os
@@ -367,6 +368,25 @@ def shift_benchmark_result(data_root: Path, machine_profiles_path: Path):
             "f64",
         ],
         backends=["cpp"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    return result
+
+
+@pytest.fixture(scope="module")
+def exact_immediate_benchmark_result(
+    data_root: Path,
+    machine_profiles_path: Path,
+):
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["permute_lanes"],
+        profiles=["sse2"],
+        type_tags=["si32", "ui32", "si64", "ui64", "f32", "f64"],
+        backends=["cpp", "rust"],
         test_harness=True,
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -989,6 +1009,105 @@ def test_immediate_shift_candidates_are_planned_per_authored_value(
     assert "shift_right_imm_impl<Vec_" in source
 
 
+def test_cross_lane_immediates_require_exact_width_correctness(
+    exact_immediate_benchmark_result,
+) -> None:
+    plan = exact_immediate_benchmark_result.rendered.benchmarks
+    cpp = plan.profile("cpp", "sse2")
+    rust = plan.profile("rust", "sse2")
+    assert cpp is not None
+    assert rust is not None
+    candidate_sets = [
+        candidate_set
+        for candidate_set in cpp.candidate_sets
+        if candidate_set.key.primitive_name == "permute_lanes_imm"
+        and candidate_set.key.extension_name == "sse"
+    ]
+
+    assert {
+        (candidate_set.key.type_tag, candidate_set.key.immediate)
+        for candidate_set in candidate_sets
+    } == {
+        ("f32", "78"),
+        ("f64", "255"),
+        ("si32", "27"),
+        ("si64", "1"),
+        ("ui32", "78"),
+        ("ui64", "0"),
+    }
+    assert all(
+        len(case.vector_input) == candidate_set.key.lanes
+        and len(case.expected) == candidate_set.key.lanes
+        for candidate_set in candidate_sets
+        for case in candidate_set.correctness_cases
+    )
+    assert {
+        case.case_name
+        for candidate_set in candidate_sets
+        for case in candidate_set.correctness_cases
+        if candidate_set.key.type_tag == "si32"
+    } == {"permute_lanes_si32_sse_sse_exact_reverse"}
+    assert all(
+        isinstance(scenario, BenchmarkImmediateScenario)
+        for candidate_set in candidate_sets
+        for scenario in candidate_set.scenarios
+    )
+
+    rust_candidate_sets = [
+        candidate_set
+        for candidate_set in rust.candidate_sets
+        if candidate_set.key.primitive_name == "permute_lanes_imm"
+        and candidate_set.key.extension_name == "sse"
+    ]
+    cpp_by_binding = {
+        (candidate_set.key.type_tag, candidate_set.key.immediate): candidate_set
+        for candidate_set in candidate_sets
+    }
+    rust_by_binding = {
+        (candidate_set.key.type_tag, candidate_set.key.immediate): candidate_set
+        for candidate_set in rust_candidate_sets
+    }
+    assert rust_by_binding.keys() == cpp_by_binding.keys()
+    for binding, rust_candidate_set in rust_by_binding.items():
+        cpp_candidate_set = cpp_by_binding[binding]
+        assert replace(rust_candidate_set.key, backend_id="cpp") == cpp_candidate_set.key
+        assert rust_candidate_set.correctness_cases == cpp_candidate_set.correctness_cases
+        assert all(
+            isinstance(scenario, BenchmarkImmediateScenario)
+            for scenario in rust_candidate_set.scenarios
+        )
+    rust_entries = [
+        entry
+        for entry in plan.coverage
+        if entry.backend_id == "rust"
+        and entry.primitive_name == "permute_lanes_imm"
+        and entry.extension_name == "sse"
+    ]
+    assert len(rust_entries) == 6
+    assert {entry.status for entry in rust_entries} == {"emitted"}
+    assert {entry.reason for entry in rust_entries} == {""}
+
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in exact_immediate_benchmark_result.artifacts.artifacts
+    }
+    manifest = json.loads(artifacts["cpp/bench/manifest_sse2.json"])
+    assert {
+        scenario["family"]
+        for candidate_set in manifest["candidate_sets"]
+        for scenario in candidate_set["scenarios"]
+    } == {"immediate"}
+    source = artifacts["cpp/bench/tsl_variant_bench_sse2.cpp"]
+    assert "permute_lanes_imm_impl<Vec_0, 78>::apply(value_0)" in source
+    assert "permute_lanes_imm_impl_scalar_lanes_fallback<Vec_0, 78>" in source
+    rust_manifest = json.loads(artifacts["rust/bench/manifest_sse2.json"])
+    assert {
+        scenario["family"]
+        for candidate_set in rust_manifest["candidate_sets"]
+        for scenario in candidate_set["scenarios"]
+    } == {"immediate"}
+
+
 def test_cpp_selector_defaults_and_policy_include_order(benchmark_result) -> None:
     artifacts = {
         artifact.logical_path: artifact.content
@@ -1360,6 +1479,42 @@ def test_avx2_benchmark_source_compiles(
             "-B",
             str(build),
             "-DTSL_PROFILE=avx2",
+            "-DTSL_BUILD_TESTS=OFF",
+            "-DTSL_BUILD_BENCHMARKS=ON",
+        ),
+        environment,
+    )
+    assert configured.returncode == 0, configured.stderr + configured.stdout
+    built = _run(
+        ("cmake", "--build", str(build), "--target", "tsl_variant_bench"),
+        environment,
+    )
+    assert built.returncode == 0, built.stderr + built.stdout
+
+
+@pytest.mark.generated_build
+def test_exact_immediate_benchmark_source_compiles(
+    exact_immediate_benchmark_result,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cmake") is None:
+        pytest.skip("cmake is required")
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(exact_immediate_benchmark_result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    environment = os.environ.copy()
+    if _compiler_name(environment.get("CXX", "")) == "zig":
+        environment["CXX"] = "c++"
+    build = tmp_path / "build"
+    configured = _run(
+        (
+            "cmake",
+            "-S",
+            str(generated / "cpp"),
+            "-B",
+            str(build),
+            "-DTSL_PROFILE=sse2",
             "-DTSL_BUILD_TESTS=OFF",
             "-DTSL_BUILD_BENCHMARKS=ON",
         ),

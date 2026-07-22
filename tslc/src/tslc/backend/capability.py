@@ -33,9 +33,6 @@ if TYPE_CHECKING:
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
 
 DialectFactory = Callable[["Catalog"], "BackendDialect"]
-ProjectArtifactRenderer = Callable[
-    [tuple["EmittedProfile", ...], "RenderAssets", str], list["Artifact"]
-]
 VerifyProfileRenderer = Callable[
     [tuple["EmittedProfile", ...]], tuple["VerifyProfile", ...]
 ]
@@ -45,15 +42,19 @@ VerifyMachineProfileProjector = Callable[
 ToolchainCommandsResolver = Callable[
     ["VerifyProfile", "BuildVerifierConfig"], "ToolchainCommands"
 ]
-TestArtifactRenderer = Callable[
-    ["ValueTestProjectPlan", "RenderAssets", str], list["Artifact"]
-]
-BenchmarkArtifactRenderer = Callable[
-    ["BenchmarkProjectPlan", "RenderAssets", str], list["Artifact"]
-]
 BenchmarkPlanBuilder = Callable[
     ["Catalog", tuple["EmittedProfile", ...], "ValueTestProjectPlan"],
     "BenchmarkProjectPlan",
+]
+BackendArtifactRenderer = Callable[
+    [
+        tuple["EmittedProfile", ...],
+        "ValueTestProjectPlan",
+        "BenchmarkProjectPlan",
+        "RenderAssets",
+        str,
+    ],
+    list["Artifact"],
 ]
 DocumentationFormatterFactory = Callable[[], "BackendDocumentationFormatter"]
 ValueTestSupportFactory = Callable[[], "ValueTestBackendSupport"]
@@ -110,15 +111,6 @@ def _no_profile_diagnostics(
     return ()
 
 
-def _no_benchmark_artifacts(
-    plan: BenchmarkProjectPlan,
-    assets: RenderAssets,
-    media_type: str,
-) -> list[Artifact]:
-    del plan, assets, media_type
-    return []
-
-
 def _unsupported_primitive_preview(
     profile: EmittedProfile,
     primitive_name: str,
@@ -134,16 +126,14 @@ class BackendCapability:
     root_path: str
     artifact_media_type: str
     dialect_factory: DialectFactory
-    project_renderer: ProjectArtifactRenderer
+    artifact_renderer: BackendArtifactRenderer
     verify_profiles: VerifyProfileRenderer
     value_test_support_factory: ValueTestSupportFactory
-    test_renderer: TestArtifactRenderer
     verify_driver_factory: VerifyDriverFactory
     verify_machine_profile: VerifyMachineProfileProjector
     toolchain_commands: ToolchainCommandsResolver
     documentation_formatter_factory: DocumentationFormatterFactory
     benchmark_plan_builder: BenchmarkPlanBuilder | None = None
-    benchmark_renderer: BenchmarkArtifactRenderer = _no_benchmark_artifacts
     helper_manifest: BackendHelperManifest = EMPTY_HELPER_MANIFEST
     profile_validator: ProfileValidator = _no_profile_diagnostics
     primitive_preview_renderer: PrimitivePreviewRenderer = (
@@ -158,26 +148,22 @@ class BackendCapability:
     def value_test_support(self) -> ValueTestBackendSupport:
         return self.value_test_support_factory()
 
-    def render_project_artifacts(
+    def render_artifacts(
         self,
         profiles: tuple[EmittedProfile, ...],
+        value_tests: ValueTestProjectPlan,
+        benchmarks: BenchmarkProjectPlan,
         assets: RenderAssets,
     ) -> list[Artifact]:
-        return self.project_renderer(profiles, assets, self.artifact_media_type)
+        """Render the backend's complete artifact set from one fact snapshot."""
 
-    def render_test_artifacts(
-        self,
-        plan: ValueTestProjectPlan,
-        assets: RenderAssets,
-    ) -> list[Artifact]:
-        return self.test_renderer(plan, assets, self.artifact_media_type)
-
-    def render_benchmark_artifacts(
-        self,
-        plan: BenchmarkProjectPlan,
-        assets: RenderAssets,
-    ) -> list[Artifact]:
-        return self.benchmark_renderer(plan, assets, self.artifact_media_type)
+        return self.artifact_renderer(
+            profiles,
+            value_tests,
+            benchmarks,
+            assets,
+            self.artifact_media_type,
+        )
 
     def plan_benchmarks(
         self,
@@ -227,6 +213,7 @@ class BackendCapability:
 
 
 __all__ = [
+    "BackendArtifactRenderer",
     "BackendCapability",
     "BackendDocumentationFormatter",
     "DocumentationSiteInput",

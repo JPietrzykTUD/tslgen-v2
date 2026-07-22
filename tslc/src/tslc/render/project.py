@@ -42,9 +42,9 @@ def render_project(
 
     drivers = backend_capabilities(backends)
     for driver in drivers:
-        artifacts.extend(driver.render_project_artifacts(ordered, assets))
-        artifacts.extend(driver.render_test_artifacts(value_tests, assets))
-        artifacts.extend(driver.render_benchmark_artifacts(benchmarks, assets))
+        artifacts.extend(
+            driver.render_artifacts(ordered, value_tests, benchmarks, assets)
+        )
         verify_backends.append(driver.verify_backend(ordered))
     artifacts.extend(documentation_artifacts(ordered))
     artifacts.extend(generated_license_artifacts(drivers, assets))

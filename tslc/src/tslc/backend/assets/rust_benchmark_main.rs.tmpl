@@ -1,0 +1,9 @@
+const _: () = {
+    if option_env!("TSL_RUST_VARIANT_POLICY_ACTIVE").is_some() {
+        panic!("TSL_RUST_VARIANT_POLICY_FILE must be unset for benchmark targets");
+    }
+};
+
+fn main() {
+    std::process::exit(tsl::tsl_variant_bench_@{profile_slug}::main());
+}

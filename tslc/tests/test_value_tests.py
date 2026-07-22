@@ -338,15 +338,36 @@ def test_value_full_corpus_avx2_rust_parity_inventory_is_explicit(
         (entry.primitive_name, entry.case_name)
         for entry in overlay_only
     } == {
+        ("concat", "concat_si32_clang_v128_to_clang_v256_concat_clang"),
         ("extract", "extract_f64_clang_v512_to_clang_v256_clang_high"),
         ("extract", "extract_si32_clang_v256_to_clang_v128_clang_low"),
         ("extract", "extract_si32_clang_v512_to_clang_v128_clang_high"),
+        (
+            "extract_imask",
+            "extract_imask_ui32_clang_v256_to_clang_v128_clang",
+        ),
         ("insert", "insert_f64_clang_v128_to_clang_v512_clang_middle"),
         ("insert", "insert_f64_clang_v256_to_clang_v512_clang_high"),
         ("insert", "insert_si32_clang_v128_to_clang_v256_clang_low"),
         (
+            "insert_imask",
+            "insert_imask_ui32_clang_v128_to_clang_v256_clang",
+        ),
+        (
             "load_mask_repr",
             "load_mask_repr_ui32_clang_v256_aligned_false_packed_false_mask_clang_unpacked",
+        ),
+        (
+            "resize_down",
+            "resize_down_si32_clang_v512_to_clang_v128_low_clang",
+        ),
+        (
+            "resize_up_undef",
+            "resize_up_undef_si32_clang_v128_to_clang_v512_undef_clang",
+        ),
+        (
+            "resize_up_zero",
+            "resize_up_zero_si32_clang_v128_to_clang_v512_zero_clang",
         ),
     }
     assert all(

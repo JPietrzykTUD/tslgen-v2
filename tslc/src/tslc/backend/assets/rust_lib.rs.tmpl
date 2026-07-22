@@ -8,6 +8,22 @@ pub mod tsl_algorithm;
 pub mod tsl_test_core;
 pub use tsl_algorithm::dataparallel;
 
+#[cfg(feature = "variant_benchmarks")]
+#[doc(hidden)]
+pub mod tsl_benchmark_core;
+#[cfg(feature = "variant_benchmarks")]
+#[doc(hidden)]
+pub mod tsl_benchmark_reducer;
+#[cfg(feature = "variant_benchmarks")]
+#[doc(hidden)]
+pub mod tsl_benchmark_policy;
+#[cfg(feature = "variant_benchmarks")]
+#[doc(hidden)]
+pub mod tsl_benchmark_self_test;
+#[cfg(feature = "variant_benchmarks")]
+#[doc(hidden)]
+pub(crate) mod tsl_rust_cpu_identity;
+
 #[cfg(doc)]
 #[doc(hidden)]
 pub mod tsl_documentation;
@@ -17,3 +33,5 @@ pub mod tsl_documentation;
 pub use crate::tsl_documentation as profile;
 
 @{primitive_tags}@{profile_modules}
+
+@{benchmark_modules}

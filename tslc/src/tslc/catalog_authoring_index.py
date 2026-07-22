@@ -25,6 +25,7 @@ from tslc.ir.region_syntax import parse_call_selector
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region, Segment
 from tslc.lower.query_authoring import DEFAULT_QUERY_AUTHORING_INDEX
+from tslc.syntax.access import child, children
 from tslc.syntax.ast import (
     ParsedBlockDeclaration,
     ParsedFieldDeclaration,
@@ -144,6 +145,8 @@ def build_document_authoring_index(
         assert isinstance(declaration, ParsedFieldDeclaration)
         symbols.append(_field_declaration_symbol(declaration))
         tokens.extend(_field_semantic_tokens(declaration.field))
+        if declaration.field.key.text == "overload_axes":
+            tokens.extend(_overload_registry_semantic_tokens(declaration.field))
     return DocumentAuthoringIndex(tuple(symbols), _deduplicated_tokens(tokens))
 
 
@@ -301,12 +304,35 @@ def _field_declaration_symbol(
     declaration: ParsedFieldDeclaration,
 ) -> IndexedDocumentSymbol:
     field = declaration.field
+    nested: tuple[IndexedDocumentSymbol, ...] = ()
+    if field.key.text == "overload_axes":
+        nested = tuple(
+            IndexedDocumentSymbol(
+                axis.key.text,
+                "field",
+                _source_span(axis.source),
+                _source_span(axis.key.source),
+                "overload axis",
+                tuple(
+                    IndexedDocumentSymbol(
+                        value.key.text,
+                        "field",
+                        _source_span(value.source),
+                        _source_span(value.key.source),
+                        "overload value",
+                    )
+                    for value in children(child(axis, "values"))
+                ),
+            )
+            for axis in children(field)
+        )
     return IndexedDocumentSymbol(
         field.key.text,
         "field",
         _source_span(field.source),
         _source_span(field.key.source),
         declaration.kind,
+        nested,
     )
 
 
@@ -330,6 +356,28 @@ def _primitive_semantic_tokens(
                 if isinstance(item.value, ParsedTslScalarValue):
                     source = item.value.payload_source or item.value.source
                     tokens.append(IndexedSemanticToken("typeParameter", _source_span(source)))
+        elif primitive_field.kind == "overload":
+            axis = child(field, "axis")
+            value = child(field, "value")
+            if axis is not None and isinstance(axis.value, ParsedTslScalarValue):
+                source = axis.value.payload_source or axis.value.source
+                tokens.append(IndexedSemanticToken("class", _source_span(source)))
+            if value is not None and isinstance(value.value, ParsedTslScalarValue):
+                source = value.value.payload_source or value.value.source
+                tokens.append(IndexedSemanticToken("enumMember", _source_span(source)))
+    return tuple(tokens)
+
+
+def _overload_registry_semantic_tokens(
+    field: ParsedTslField,
+) -> tuple[IndexedSemanticToken, ...]:
+    tokens: list[IndexedSemanticToken] = []
+    for axis in children(field):
+        tokens.append(IndexedSemanticToken("class", _source_span(axis.key.source)))
+        for value in children(child(axis, "values")):
+            tokens.append(
+                IndexedSemanticToken("enumMember", _source_span(value.key.source))
+            )
     return tuple(tokens)
 
 

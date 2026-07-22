@@ -18,6 +18,7 @@ from tslc.catalog._builder_extensions import (
     _declared_extension_fields,
     _resolve_extension_inheritance,
 )
+from tslc.catalog._builder_overloads import _build_overload_registry
 from tslc.catalog._builder_primitives import _build_primitives
 from tslc.catalog._builder_target_families import _build_target_families
 from tslc.catalog.model import Catalog, Extension, Primitive
@@ -46,6 +47,7 @@ class CatalogBuilder:
         type_spellings: dict[str, dict[str, str]] = {}
         translations: dict[str, dict[str, str]] = {}
         diagnostics: list[Diagnostic] = []
+        overload_axis_fields: list[ParsedTslField] = []
         target_family_fields: list[ParsedTslField] = []
 
         extension_names = frozenset(
@@ -89,8 +91,14 @@ class CatalogBuilder:
                     and declaration.field.key.text == "target_families"
                 ):
                     target_family_fields.append(declaration.field)
+                elif (
+                    isinstance(declaration, ParsedFieldDeclaration)
+                    and declaration.field.key.text == "overload_axes"
+                ):
+                    overload_axis_fields.append(declaration.field)
 
         extensions = _resolve_extension_inheritance(extensions, extension_declared_fields)
+        overload_registry = _build_overload_registry(overload_axis_fields)
         target_families = _build_target_families(target_family_fields)
         catalog = Catalog(
             primitives=tuple(primitives),
@@ -98,6 +106,7 @@ class CatalogBuilder:
             extensions=extensions,
             type_spellings=type_spellings,
             translations=translations,
+            overload_registry=overload_registry,
             target_families=target_families,
         )
         return CatalogBuildResult(catalog=catalog, diagnostics=tuple(diagnostics))

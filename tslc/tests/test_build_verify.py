@@ -1275,9 +1275,10 @@ def test_mask_boolean_algebra_builds(
 
 
 def test_mask_true_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
-    # `mask_true` (`m:=()`) builds on all targets now that `mask<lane_true>()` resolves: native
-    # `__mmaskN` all-ones (avx512), `set1(mask_lane_all_true<T>())` on the lane-bitmask ISAs
-    # (sse/avx2 — the previously-pruned path), `true` (scalar), generic bit-loop. The lane value
+    # `mask_true` (`m:=()`) builds on all targets: native `__mmaskN` predicates have exactly the
+    # low lane-count bits set (avx512 and the `_vl` sse/avx2 variants), while the non-VL
+    # sse/avx2 path uses `set1(mask_lane_all_true<T>())`; scalar uses `true`, and generic uses a
+    # bit-loop. The lane value
     # comes from the `::tsl::mask_lane_all_true<T>()` / `<T as TslMaskLaneValue>::all_true()`
     # substrate (all-ones bytes → int all-ones / float all-ones-bit NaN). Both backends.
     result = generate_project(

@@ -171,10 +171,20 @@ jobs:
               bash -lc '
                 set -e
                 trap "rm -rf tslctmp/pytest" EXIT
-                PYTHONPATH=tslc/src python -m pytest -q \
-                  --run-generated-builds \
-                  -m generated_build \
-                  tslc/tests/test_benchmark_variants.py
+                # Keep generated Rust crates in separate pytest processes so
+                # module-scoped render results are released before the next
+                # rustc benchmark build starts.
+                for test_target in \
+                  tslc/tests/test_benchmark_variants.py \
+                  tslc/tests/test_rust_benchmark_rendering.py::test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop \
+                  tslc/tests/test_rust_benchmark_rendering.py::test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop \
+                  tslc/tests/test_rust_benchmark_rendering.py::test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence
+                do
+                  PYTHONPATH=tslc/src python -m pytest -q \
+                    --run-generated-builds \
+                    -m generated_build \
+                    "${test_target}"
+                done
               '
 
       - name: Upload generated benchmark logs

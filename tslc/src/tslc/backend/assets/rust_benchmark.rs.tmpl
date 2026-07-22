@@ -1,0 +1,156 @@
+use crate::tsl_benchmark_core::{Options, RawSample};
+use crate::tsl_benchmark_policy::{
+    write_reports, BuildContext, ReportMetadata, RUST_BACKEND_ID,
+};
+use crate::tsl_benchmark_reducer::{reduce_profile, CandidateSetSpec, ScenarioSpec};
+use crate::tsl_benchmark_self_test::runtime_self_test;
+use crate::tsl_core::{Simd, SimdVector};
+use crate::tsl_test_core::LaneEq;
+use crate::tsl_@{profile_slug}::*;
+
+const PROTOCOL_VERSION: u32 = @{protocol_version};
+const POLICY_SCHEMA_VERSION: u32 = @{policy_schema_version};
+const PROFILE: &str = @{profile_name};
+const BENCHMARK_TARGET: &str = @{benchmark_target};
+const CARGO_FEATURES: &str = @{cargo_features};
+const MANIFEST_HASH: &str = @{manifest_hash};
+const REQUIRED_FEATURES: &str = @{required_features};
+const POLICY_OUTPUT_SUPPORTED: bool = @{policy_output_supported};
+const REQUIRED_POLICY_RUSTFLAGS: &[&str] = @{required_policy_rustflags};
+const REQUIRED_POLICY_INCREMENTAL_ENVIRONMENT: &str =
+    @{required_policy_incremental_environment};
+const BUILD_HOST: &str = env!("TSL_BUILD_HOST");
+const BUILD_TARGET: &str = env!("TSL_BUILD_TARGET");
+const BUILD_CONTEXT: BuildContext = BuildContext {
+    rustc_verbose_version: env!("TSL_RUSTC_VERBOSE_VERSION"),
+    cargo_verbose_version: env!("TSL_CARGO_VERBOSE_VERSION"),
+    host: BUILD_HOST,
+    target: BUILD_TARGET,
+    linker: env!("TSL_RUST_LINKER"),
+    rustc_wrapper: env!("TSL_RUSTC_WRAPPER"),
+    rustc_workspace_wrapper: env!("TSL_RUSTC_WORKSPACE_WRAPPER"),
+    target_cpu: env!("TSL_RUST_TARGET_CPU"),
+    target_features: env!("TSL_RUST_TARGET_FEATURES"),
+    cargo_features: env!("TSL_RUST_CARGO_FEATURES"),
+    cargo_profile: env!("TSL_RUST_CARGO_PROFILE"),
+    opt_level: env!("TSL_RUST_OPT_LEVEL"),
+    debug_assertions: env!("TSL_RUST_DEBUG_ASSERTIONS"),
+    overflow_checks: env!("TSL_RUST_OVERFLOW_CHECKS"),
+    lto: env!("TSL_RUST_LTO"),
+    codegen_units: env!("TSL_RUST_CODEGEN_UNITS"),
+    panic: env!("TSL_RUST_PANIC"),
+    incremental: env!("TSL_RUST_INCREMENTAL"),
+    debug: env!("TSL_RUST_DEBUG"),
+    rustflags: env!("TSL_RUSTFLAGS"),
+    encoded_rustflags: env!("TSL_RUST_ENCODED_RUSTFLAGS"),
+    profile_overrides: env!("TSL_RUST_PROFILE_OVERRIDES"),
+    benchmark_codegen_contract: @{benchmark_codegen_contract},
+    external_context: env!("TSL_RUST_BENCHMARK_CONTEXT"),
+};
+
+fn native_build_matches(host: &str, target: &str) -> bool {
+    host == target
+}
+
+@{native_cpu_check}
+
+@{declarations}
+
+const CANDIDATE_SETS: [CandidateSetSpec; @{candidate_set_count}] = [
+@{candidate_set_specs}
+];
+
+fn print_help() {
+    println!("TSL Rust variant benchmark for profile {PROFILE}");
+    println!();
+    println!("Usage:");
+    println!(
+        "  cargo bench --profile bench --bench {BENCHMARK_TARGET} --no-default-features --features {CARGO_FEATURES} -- [OPTIONS]"
+    );
+    println!();
+    println!("Options:");
+    println!("  --results PATH            Write raw JSONL samples");
+    println!("  --summary PATH            Write the human-readable summary");
+@{policy_json_help}
+    println!("  --rounds N                Override timing rounds (minimum 3)");
+    println!("  --minimum-sample-ns N     Override minimum sample duration");
+    println!("  --threshold FRACTION      Select only above this improvement");
+    println!("  --self-test               Run deterministic runtime checks");
+    println!("  -h, --help                Print this help");
+@{policy_help}
+}
+
+fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
+    let options = Options::parse(arguments)?;
+    if options.help {
+        print_help();
+        return Ok(());
+    }
+    if options.self_test {
+        return runtime_self_test();
+    }
+    if options.policy_json_path.is_some() && !POLICY_OUTPUT_SUPPORTED {
+        return Err(format!(
+            "profile {PROFILE} is report-only and cannot produce a consumable Rust policy"
+        ));
+    }
+    if !native_build_matches(BUILD_HOST, BUILD_TARGET) {
+        return Err(format!(
+            "profile {} benchmark requires a native build, got host {} and target {}",
+            PROFILE,
+            BUILD_HOST,
+            BUILD_TARGET,
+        ));
+    }
+    if !native_cpu_supported() {
+        return Err(format!(
+            "profile {PROFILE} requires CPU features [{REQUIRED_FEATURES}] on this native host"
+        ));
+    }
+    if @{candidate_set_count} == 0 {
+        return Err(format!("profile {PROFILE} has no supported Rust benchmarks"));
+    }
+@{correctness_calls}
+    let mut samples = Vec::<RawSample>::new();
+@{scenario_calls}
+    let decisions = reduce_profile(&CANDIDATE_SETS, &samples, &options)?;
+    write_reports(
+        &CANDIDATE_SETS,
+        &samples,
+        &decisions,
+        ReportMetadata {
+            policy_schema_version: POLICY_SCHEMA_VERSION,
+            protocol_version: PROTOCOL_VERSION,
+            backend: RUST_BACKEND_ID,
+            profile: PROFILE,
+            manifest_hash: MANIFEST_HASH,
+            required_features: REQUIRED_FEATURES,
+            required_rustflags: REQUIRED_POLICY_RUSTFLAGS,
+            required_incremental_environment: REQUIRED_POLICY_INCREMENTAL_ENVIRONMENT,
+            build_context: BUILD_CONTEXT,
+        },
+        &options,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn cross_target_build_is_not_native() {
+        assert!(!super::native_build_matches(
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu",
+        ));
+    }
+}
+
+#[doc(hidden)]
+pub fn main() -> i32 {
+    match run(std::env::args().skip(1)) {
+        Ok(()) => 0,
+        Err(error) => {
+            eprintln!("TSL Rust benchmark error: {error}");
+            1
+        }
+    }
+}

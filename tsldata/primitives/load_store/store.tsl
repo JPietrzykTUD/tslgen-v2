@@ -1,4 +1,8 @@
 prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
+  overload:
+    axis payload_extent
+    value vector
+    primary true
   brief_description "Stores a vector register to contiguous memory."
   detailed_description """
     Stores one full vector register to contiguous memory. The `aligned`
@@ -440,6 +444,9 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
             }
           """
 prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
+  overload:
+    axis payload_extent
+    value scalar
   brief_description "Stores one scalar value to memory."
   detailed_description """
     Stores one scalar value to memory. The `aligned` attribute selects whether
@@ -521,6 +528,9 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
           tsil "*ptr = scalar;"
 
 prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
+  overload:
+    axis payload_extent
+    value vector
   brief_description "Stores active mask lanes of a vector register to contiguous memory and leaves inactive lanes untouched."
   detailed_description """
     Stores mask-selected vector lanes to contiguous memory and leaves inactive

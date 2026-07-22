@@ -9,6 +9,7 @@ from typing import Literal
 from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.model import Catalog, Primitive
 from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
+from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS
 from tslc.catalog.validation._schema_benchmarks import (
     KNOWN_BENCHMARK_FIELDS,
     KNOWN_OPERAND_DOMAINS,
@@ -44,7 +45,12 @@ from tslc.catalog.validation._schema_primitives import (
     KNOWN_IMMEDIATE_DISPATCH,
     KNOWN_IMMEDIATE_PARAM_FIELDS,
     KNOWN_PRIMITIVE_FIELDS,
+    KNOWN_PRIMITIVE_OVERLOAD_FIELDS,
     KNOWN_RETURN_TYPE_FIELDS,
+)
+from tslc.catalog.validation._schema_overloads import (
+    KNOWN_OVERLOAD_AXIS_FIELDS,
+    KNOWN_OVERLOAD_VALUE_FIELDS,
 )
 from tslc.catalog.validation._schema_target_families import (
     KNOWN_BACKEND_PROFILE_FIELDS,
@@ -110,6 +116,7 @@ _BOOLEAN_FIELDS = frozenset(
         "index_vector_register",
         "internal_unsafe",
         "native_without_runner",
+        "primary",
         "requires_declared_vector_register",
         "specialize_base",
         "supported",
@@ -137,6 +144,7 @@ _TOP_LEVEL_SNIPPETS = (
     ("lane_set", "lane_set ${1:name}:\n  ${0}"),
     ("description", 'description "${1}"'),
     ("target_families", "target_families:\n  ${0}"),
+    ("overload_axes", "overload_axes:\n  ${0}"),
 )
 
 
@@ -731,6 +739,8 @@ def _field_candidates(
     backends = _backend_ids(catalog)
     if path == ("primitive",):
         return KNOWN_PRIMITIVE_FIELDS, "field", "primitive field"
+    if path == ("primitive", "overload"):
+        return KNOWN_PRIMITIVE_OVERLOAD_FIELDS, "field", "primitive overload field"
     if path[:2] == ("primitive", "impls"):
         return _implementation_fields(context, catalog)
     if path[:2] == ("primitive", "generic_params"):
@@ -774,7 +784,29 @@ def _field_candidates(
         return KNOWN_LANGUAGE_TYPE_FIELDS, "field", "language type field"
     if path[:1] == ("target_families",):
         return _target_family_fields(path, catalog, backends)
+    if path[:1] == ("overload_axes",):
+        return _overload_registry_fields(path, catalog)
     return (), "field", "TSL field"
+
+
+def _overload_registry_fields(
+    path: tuple[str, ...],
+    catalog: Catalog,
+) -> tuple[Iterable[str], AuthoringCompletionKind, str]:
+    if path == ("overload_axes",):
+        return catalog.overload_registry.axes, "class", "overload axis"
+    if len(path) == 2:
+        return KNOWN_OVERLOAD_AXIS_FIELDS, "field", "overload axis field"
+    if len(path) == 3 and path[-1] == "values":
+        axis = catalog.overload_registry.axis(path[-2])
+        return (
+            () if axis is None else axis.values,
+            "value",
+            "overload value",
+        )
+    if len(path) == 4 and path[-2] == "values":
+        return KNOWN_OVERLOAD_VALUE_FIELDS, "field", "overload value field"
+    return (), "field", "overload registry field"
 
 
 def _implementation_fields(
@@ -911,6 +943,17 @@ def _value_completions(
     if field in _BOOLEAN_FIELDS:
         values = KNOWN_BOOLEAN_VALUES
         detail = "boolean"
+    elif field == "axis" and context.block_path == ("primitive", "overload"):
+        values = catalog.overload_registry.axes
+        detail = "overload axis"
+    elif field == "value" and context.block_path == ("primitive", "overload"):
+        sibling_scalars = dict(context.sibling_scalars)
+        axis = catalog.overload_registry.axis(sibling_scalars.get("axis", ""))
+        values = () if axis is None else axis.values
+        detail = "overload value"
+    elif field == "operand_kinds" and "overload_axes" in context.block_path:
+        values = DEFAULT_SIGNATURE_KINDS.supported_kinds
+        detail = "signature kind"
     elif field == "requires" or (
         context.position_kind == "list-value" and "requires" in context.block_path
     ):

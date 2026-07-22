@@ -3,21 +3,32 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 from pathlib import Path
 
 import pytest
 
 from tslc.api import generate_project
+from tslc.backend.rust_policy_consumption import (
+    plan_rust_policy_coverage,
+)
+from tslc.backend.rust_policy_selection import plan_rust_policy_selection
 from tslc.catalog.model import Catalog
 from tslc.diagnostics import has_errors
 from tslc.maintenance.benchmark_coverage import (
     audit_benchmark_coverage,
     benchmark_issue_baseline,
+    deserialize_rust_benchmark_baseline,
     deserialize_issue_baseline,
     diff_benchmark_issues,
+    diff_rust_benchmark_coverage,
+    main as benchmark_coverage_main,
     render_benchmark_shape_inventory,
+    rust_benchmark_coverage_baseline,
+    serialize_rust_benchmark_baseline,
     serialize_issue_baseline,
 )
+from tslc.maintenance.rust_benchmark_evidence import RustBenchmarkEvidence
 from tslc.pipeline import SkippedEntry
 
 
@@ -35,6 +46,41 @@ def focused_benchmark_result(data_root: Path, machine_profiles_path: Path):
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
     return result
+
+
+@pytest.fixture(scope="module")
+def focused_rust_benchmark_result(data_root: Path, machine_profiles_path: Path):
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["mul"],
+        profiles=["sse2"],
+        type_tags=["si8"],
+        backends=["rust"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    return result
+
+
+def _rust_audit(catalog: Catalog, result, *, plan=None):
+    assert result.rendered is not None
+    benchmarks = result.rendered.benchmarks if plan is None else plan
+    policy_coverage = plan_rust_policy_coverage(
+        benchmarks,
+        plan_rust_policy_selection(result.emitted_profiles),
+    )
+    return audit_benchmark_coverage(
+        catalog,
+        benchmarks,
+        backend_id="rust",
+        primitive_names=("mul",),
+        selection_coverage=result.coverage,
+        selection_skips=result.skipped,
+        emitted_profiles=result.emitted_profiles,
+        rust_policy_coverage=policy_coverage,
+    )
 
 
 def test_audit_accounts_for_every_selected_variant_slot(
@@ -234,3 +280,438 @@ def test_shape_inventory_is_deterministic_and_marks_default_only_shapes(
     ):
         assert special_cases[name].variant_declarations > 0
         assert special_cases[name].status == "gap"
+
+
+def test_rust_audit_keeps_report_and_policy_eligibility_separate(
+    catalog: Catalog,
+    focused_rust_benchmark_result,
+) -> None:
+    audit = _rust_audit(catalog, focused_rust_benchmark_result)
+
+    assert audit.backend_id == "rust"
+    assert audit.candidate_sets == 1
+    assert audit.policy_supported_reports == 1
+    assert audit.policy_report_only_reports == 0
+    assert audit.rust_evidence is not None
+    assert len(audit.rust_evidence.profiles) == 1
+    assert len(audit.rust_evidence.candidates) == 3
+    assert [policy.status for policy in audit.rust_evidence.policies] == [
+        "supported",
+        "report_only",
+        "report_only",
+    ]
+    rendered = render_benchmark_shape_inventory(audit)
+    assert "Policy mapped" in rendered
+    assert "Report-only" in rendered
+
+
+def test_rust_issue_baseline_preserves_equal_slot_memberships(
+    catalog: Catalog,
+    focused_rust_benchmark_result,
+) -> None:
+    plan = focused_rust_benchmark_result.rendered.benchmarks
+    first = next(
+        entry for entry in plan.coverage if entry.source_primitive_name == "mul"
+    )
+    duplicated_gap = replace(
+        first,
+        status="unsupported",
+        reason="exact-membership sentinel",
+    )
+    broken = replace(
+        plan,
+        coverage=(duplicated_gap, duplicated_gap, *plan.coverage),
+    )
+
+    audit = _rust_audit(catalog, focused_rust_benchmark_result, plan=broken)
+    sentinels = tuple(
+        issue for issue in audit.issues if "exact-membership sentinel" in issue.detail
+    )
+
+    assert len(sentinels) == 2
+    assert [issue.slot.membership for issue in sentinels if issue.slot is not None] == [
+        0,
+        1,
+    ]
+    assert all(
+        issue.slot is not None and issue.slot.specialization_hash == first.slot_hash
+        for issue in sentinels
+    )
+    baseline = rust_benchmark_coverage_baseline(audit)
+    assert len(baseline.issues) == len(audit.issues)
+
+    changed_coverage = list(broken.coverage)
+    changed_coverage[1] = replace(
+        changed_coverage[1], slot_hash="3" * 64
+    )
+    changed = _rust_audit(
+        catalog,
+        focused_rust_benchmark_result,
+        plan=replace(broken, coverage=tuple(changed_coverage)),
+    )
+    assert diff_rust_benchmark_coverage(baseline, changed).issue_diff.new_issues
+
+
+def test_rust_gap_membership_is_stable_per_exact_slot_hash(
+    catalog: Catalog,
+    focused_rust_benchmark_result,
+) -> None:
+    result = focused_rust_benchmark_result
+    plan = result.rendered.benchmarks
+    first = next(
+        entry for entry in plan.coverage if entry.source_primitive_name == "mul"
+    )
+    gap_a = replace(
+        first,
+        slot_hash="6" * 64,
+        status="unsupported",
+        reason="first distinct exact slot",
+    )
+    gap_b = replace(
+        first,
+        slot_hash="7" * 64,
+        status="unsupported",
+        reason="second distinct exact slot",
+    )
+    broken = replace(plan, coverage=(gap_a, gap_b, *plan.coverage))
+    baseline = rust_benchmark_coverage_baseline(_rust_audit(catalog, result, plan=broken))
+
+    changed = _rust_audit(
+        catalog,
+        result,
+        plan=replace(plan, coverage=(gap_b, *plan.coverage)),
+    )
+    diff = diff_rust_benchmark_coverage(baseline, changed).issue_diff
+
+    assert not diff.new_issues
+    assert any(
+        issue.kind == "coverage-gap"
+        and issue.slot is not None
+        and issue.slot.specialization_hash == gap_a.slot_hash
+        for issue in diff.resolved_issues
+    )
+    assert not any(
+        issue.kind == "coverage-gap"
+        and issue.slot is not None
+        and issue.slot.specialization_hash == gap_b.slot_hash
+        for issue in diff.resolved_issues
+    )
+
+
+def test_rust_audit_detects_planner_slot_identity_drift(
+    catalog: Catalog,
+    focused_rust_benchmark_result,
+) -> None:
+    result = focused_rust_benchmark_result
+    plan = result.rendered.benchmarks
+    selection = plan_rust_policy_selection(result.emitted_profiles)
+    policy_coverage = plan_rust_policy_coverage(plan, selection)
+    baseline_audit = _rust_audit(catalog, result)
+    baseline = rust_benchmark_coverage_baseline(baseline_audit)
+
+    planner_index = next(
+        index
+        for index, entry in enumerate(plan.coverage)
+        if entry.source_primitive_name == "mul"
+    )
+    changed_planner = list(plan.coverage)
+    changed_planner[planner_index] = replace(
+        changed_planner[planner_index],
+        primitive_name="foreign_emitted_name",
+        slot_hash="4" * 64,
+    )
+    planner_audit = audit_benchmark_coverage(
+        catalog,
+        replace(plan, coverage=tuple(changed_planner)),
+        backend_id="rust",
+        primitive_names=("mul",),
+        selection_coverage=result.coverage,
+        selection_skips=result.skipped,
+        emitted_profiles=result.emitted_profiles,
+        rust_policy_coverage=policy_coverage,
+    )
+    assert diff_rust_benchmark_coverage(
+        baseline, planner_audit
+    ).issue_diff.new_issues
+
+    changed_planner[planner_index] = replace(
+        plan.coverage[planner_index], slot_hash="5" * 64
+    )
+    hash_audit = audit_benchmark_coverage(
+        catalog,
+        replace(plan, coverage=tuple(changed_planner)),
+        backend_id="rust",
+        primitive_names=("mul",),
+        selection_coverage=result.coverage,
+        selection_skips=result.skipped,
+        emitted_profiles=result.emitted_profiles,
+        rust_policy_coverage=policy_coverage,
+    )
+    assert {
+        issue.kind for issue in diff_rust_benchmark_coverage(
+            baseline, hash_audit
+        ).issue_diff.new_issues
+    } == {
+        "candidate-without-coverage",
+        "emitted-without-candidates",
+        "planner-slot-without-selection",
+        "selected-slot-missing-planner",
+    }
+
+
+def test_rust_audit_rejects_duplicate_emitted_planner_membership(
+    catalog: Catalog,
+    focused_rust_benchmark_result,
+) -> None:
+    result = focused_rust_benchmark_result
+    plan = result.rendered.benchmarks
+    emitted = next(
+        entry
+        for entry in plan.coverage
+        if entry.source_primitive_name == "mul" and entry.status == "emitted"
+    )
+
+    audit = _rust_audit(
+        catalog,
+        result,
+        plan=replace(plan, coverage=(emitted, *plan.coverage)),
+    )
+
+    extras = tuple(
+        issue
+        for issue in audit.issues
+        if issue.kind == "planner-slot-without-selection"
+        and issue.slot is not None
+        and issue.slot.specialization_hash == emitted.slot_hash
+    )
+    assert len(extras) == 1
+
+
+def test_rust_policy_gap_issue_baseline_round_trips(
+    catalog: Catalog,
+    focused_rust_benchmark_result,
+) -> None:
+    result = focused_rust_benchmark_result
+    plan = result.rendered.benchmarks
+    selections = plan_rust_policy_selection(result.emitted_profiles)
+    supported_key = next(
+        selection.key
+        for profile in selections.profiles
+        for selection in profile.selections
+    )
+    broken_profiles = tuple(
+        replace(
+            profile,
+            candidate_sets=tuple(
+                candidate
+                for candidate in profile.candidate_sets
+                if candidate.key != supported_key
+            ),
+            manifest_hash="8" * 64,
+        )
+        if profile.profile_name == supported_key.profile_name
+        else profile
+        for profile in plan.profiles
+    )
+    broken = replace(plan, profiles=broken_profiles)
+    policy_coverage = plan_rust_policy_coverage(broken, selections)
+
+    audit = audit_benchmark_coverage(
+        catalog,
+        broken,
+        backend_id="rust",
+        primitive_names=("mul",),
+        selection_coverage=result.coverage,
+        selection_skips=result.skipped,
+        emitted_profiles=result.emitted_profiles,
+        rust_policy_coverage=policy_coverage,
+    )
+    gaps = tuple(
+        issue
+        for issue in audit.issues
+        if issue.kind == "policy-supported-without-report"
+    )
+    assert len(gaps) == 1
+    assert gaps[0].slot is not None
+    assert gaps[0].slot.primitive_name == supported_key.primitive_name
+
+    baseline = rust_benchmark_coverage_baseline(audit)
+    rendered = serialize_rust_benchmark_baseline(baseline)
+    assert deserialize_rust_benchmark_baseline(rendered) == baseline
+
+
+def test_rust_baseline_round_trips_and_rejects_exact_evidence_drift(
+    catalog: Catalog,
+    focused_rust_benchmark_result,
+) -> None:
+    audit = _rust_audit(catalog, focused_rust_benchmark_result)
+    baseline = rust_benchmark_coverage_baseline(audit)
+    rendered = serialize_rust_benchmark_baseline(baseline)
+
+    assert deserialize_rust_benchmark_baseline(rendered) == baseline
+    assert serialize_rust_benchmark_baseline(
+        deserialize_rust_benchmark_baseline(rendered)
+    ) == rendered
+
+    evidence = baseline.evidence
+    changed_profile = replace(
+        evidence,
+        profiles=(
+            replace(evidence.profiles[0], manifest_hash="0" * 64),
+            *evidence.profiles[1:],
+        ),
+    )
+    assert diff_rust_benchmark_coverage(
+        baseline, replace(audit, rust_evidence=changed_profile)
+    ).evidence_changed
+
+    policy_index = next(
+        index
+        for index, policy in enumerate(evidence.policies)
+        if policy.status == "report_only"
+    )
+    policy = evidence.policies[policy_index]
+    candidate_index = next(
+        index
+        for index, candidate in enumerate(evidence.candidates)
+        if candidate.stable_id == policy.stable_id
+    )
+    candidate = evidence.candidates[candidate_index]
+
+    changed_hashes = (
+        candidate.candidates[0],
+        (candidate.candidates[1][0], "1" * 64),
+    )
+    candidates = list(evidence.candidates)
+    policies = list(evidence.policies)
+    candidates[candidate_index] = replace(candidate, candidates=changed_hashes)
+    policies[policy_index] = replace(policy, candidates=changed_hashes)
+    changed_body = RustBenchmarkEvidence(
+        evidence.profiles, tuple(candidates), tuple(policies)
+    )
+    assert diff_rust_benchmark_coverage(
+        baseline, replace(audit, rust_evidence=changed_body)
+    ).evidence_changed
+
+    changed_ids = (
+        candidate.candidates[0],
+        ("renamed_candidate", candidate.candidates[1][1]),
+    )
+    candidates[candidate_index] = replace(candidate, candidates=changed_ids)
+    policies[policy_index] = replace(policy, candidates=changed_ids)
+    changed_candidate = RustBenchmarkEvidence(
+        evidence.profiles, tuple(candidates), tuple(policies)
+    )
+    assert diff_rust_benchmark_coverage(
+        baseline, replace(audit, rust_evidence=changed_candidate)
+    ).evidence_changed
+
+    candidates[candidate_index] = candidate
+    policies[policy_index] = replace(
+        policy,
+        status="supported",
+        mappings=tuple((candidate_id, "2" * 64) for candidate_id, _ in policy.candidates),
+    )
+    changed_policy = RustBenchmarkEvidence(
+        evidence.profiles, tuple(candidates), tuple(policies)
+    )
+    assert diff_rust_benchmark_coverage(
+        baseline, replace(audit, rust_evidence=changed_policy)
+    ).evidence_changed
+
+
+def test_cpp_and_rust_baseline_formats_are_backend_separated(
+    catalog: Catalog,
+    focused_benchmark_result,
+    focused_rust_benchmark_result,
+) -> None:
+    cpp_audit = audit_benchmark_coverage(
+        catalog,
+        focused_benchmark_result.rendered.benchmarks,
+        primitive_names=("mul",),
+        selection_coverage=focused_benchmark_result.coverage,
+        selection_skips=focused_benchmark_result.skipped,
+    )
+    rust_audit = _rust_audit(catalog, focused_rust_benchmark_result)
+
+    cpp_text = serialize_issue_baseline(benchmark_issue_baseline(cpp_audit.issues))
+    rust_text = serialize_rust_benchmark_baseline(
+        rust_benchmark_coverage_baseline(rust_audit)
+    )
+    with pytest.raises(ValueError, match="Rust benchmark baseline"):
+        deserialize_rust_benchmark_baseline(cpp_text)
+    with pytest.raises(ValueError, match="benchmark baseline version"):
+        deserialize_issue_baseline(rust_text)
+
+    cpp_payload = json.loads(cpp_text)
+    cpp_payload["version"] = True
+    with pytest.raises(ValueError, match="benchmark baseline version"):
+        deserialize_issue_baseline(json.dumps(cpp_payload))
+    cpp_payload["version"] = 1
+    cpp_payload["issues"] = [
+        ["policy-supported-without-report", ["mul", "v", ["v", "v"], None], None]
+    ]
+    with pytest.raises(ValueError, match="unknown benchmark issue kind"):
+        deserialize_issue_baseline(json.dumps(cpp_payload))
+
+    rust_payload = json.loads(rust_text)
+    rust_payload["version"] = True
+    with pytest.raises(ValueError, match="Rust benchmark baseline"):
+        deserialize_rust_benchmark_baseline(json.dumps(rust_payload))
+    rust_payload["version"] = 1
+    rust_payload["profiles"][0][1] = "not-a-sha256"
+    with pytest.raises(ValueError, match="profile evidence"):
+        deserialize_rust_benchmark_baseline(json.dumps(rust_payload))
+    rust_payload = json.loads(rust_text)
+    rust_payload["issues"] = [
+        [
+            "coverage-gap",
+            ["mul", "v", ["v", "v"], None],
+            ["cpp", "sse2", "sse", "si8", [], ["generic_fallback"], "mul", 0, "a" * 64],
+        ]
+    ]
+    with pytest.raises(ValueError, match="slot backend must be 'rust'"):
+        deserialize_rust_benchmark_baseline(json.dumps(rust_payload))
+
+    rust_payload["issues"] = [
+        [
+            "coverage-gap",
+            ["mul", "v", ["v", "v"], None],
+            [
+                "rust",
+                "sse2",
+                "sse",
+                "si8",
+                [],
+                ["generic_fallback"],
+                "mul",
+                0,
+                "not-a-sha256",
+            ],
+        ]
+    ]
+    with pytest.raises(ValueError, match="canonical SHA-256"):
+        deserialize_rust_benchmark_baseline(json.dumps(rust_payload))
+
+
+def test_benchmark_cli_rejects_an_unowned_backend_before_writing(
+    tmp_path: Path,
+) -> None:
+    baseline = tmp_path / "baseline.json"
+    inventory = tmp_path / "inventory.md"
+
+    with pytest.raises(SystemExit, match="2"):
+        benchmark_coverage_main(
+            [
+                "--backend",
+                "future-backend",
+                "--baseline",
+                str(baseline),
+                "--inventory",
+                str(inventory),
+                "--update",
+            ]
+        )
+
+    assert not baseline.exists()
+    assert not inventory.exists()

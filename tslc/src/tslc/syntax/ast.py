@@ -37,6 +37,7 @@ ParsedPrimitiveFieldKind = Literal[
     "generic_params",
     "impls",
     "operation",
+    "overload",
     "return_type",
     "semantics",
     "simm_type",

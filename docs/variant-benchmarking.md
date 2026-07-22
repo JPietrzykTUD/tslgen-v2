@@ -1,12 +1,36 @@
 # Variant Benchmarking And Autotuning
 
-Generated C++ projects can benchmark implementation variants.
+Generated C++ and Rust projects can benchmark implementation variants.
+
+C++ supports report-only benchmarking, reusable policies, and an optional
+one-build autotune workflow. Rust supports explicitly admitted native report
+families plus a deliberately narrow compile-time policy mapping. Its autotune
+workflow is an explicit policy-free benchmark followed by a separate
+policy-enabled build.
 
 The feature is opt-in.
 
 Normal generation does not run benchmarks.
 
 Normal builds keep the authored default variant.
+
+## Rust Capability Matrix
+
+| Profile | Scenario family | Report | Consumable policy |
+| --- | --- | ---: | ---: |
+| `sse2` | Register | yes | Only the proven `mul/sse/si8` mapping |
+| `sse2` | Vector plus immediate | yes | no |
+| `avx2` | One-vector scalar reduction | yes | no |
+
+Every other `profile × scenario-family` pair remains an explicit coverage gap.
+The admission key contains only the named profile and scenario family; live
+machine-profile facts remain owned by `MachineProfile` and flow into the
+manifest and native feature checks.
+
+Report-only summaries retain the reducer's observed candidate and improvement,
+but the corresponding policy decision remains the authored default. A profile
+with no consumable mapping does not advertise policy output and rejects
+`--policy-json`; its raw JSONL and summary are the complete report artifacts.
 
 ## The Word `key` Has Three Meanings
 
@@ -292,10 +316,11 @@ primitive signature + benchmarks block + authored tests + lowered variants
   -> typed timing scenarios
   -> candidate set
   -> manifest
-  -> generated C++ benchmark tool
+  -> generated backend benchmark tool
   -> JSONL results
-  -> validated policy
-  -> compile-time variant selection
+  -> observed report decision
+  -> validated policy when the specialization has a compile-time mapping
+  -> optional compile-time variant selection
 ```
 
 Every candidate must pass authored expected-value cases before timing.
@@ -308,10 +333,17 @@ Omit `--primitives` to benchmark the full catalog.
 
 ## Coverage Gate
 
-Run the corpus audit:
+Benchmark coverage is ratcheted independently for C++ and Rust. The no-option
+command remains the C++ compatibility gate:
 
 ```bash
 ./dev.sh benchmark-ratchet
+```
+
+Run the separate Rust report-and-policy gate with:
+
+```bash
+./dev.sh benchmark-ratchet --backend rust
 ```
 
 The audit checks:
@@ -322,17 +354,29 @@ The audit checks:
 - a typed scenario exists;
 - emitted candidates match coverage identity.
 
-The gate compares stable issue identities to
-`coverage/benchmark-baseline.json`, so newly introduced gaps fail while known
-gaps can be closed incrementally. Explanatory reason text is not part of issue
-identity. The audit also checks the deterministic
-`coverage/benchmark-shape-inventory.md`.
+The C++ gate retains `coverage/benchmark-baseline.json` and
+`coverage/benchmark-shape-inventory.md`. Its existing issue identities and
+inventory remain unchanged.
 
-Refresh both evidence files after an intentional coverage change with:
+Rust uses `coverage/benchmark-rust-baseline.json` and
+`coverage/benchmark-rust-shape-inventory.md`. Its baseline records every raw
+gap membership rather than collapsing equal-looking lowered slots. It also
+records every profile manifest hash, emitted specialization identity, ordered
+candidate ID/body hash, independent policy status, and compiler-rendered
+mapping hash. A report can therefore remain honestly `report_only`; only a
+policy-supported report must have a complete mapping. Explanatory reason text
+is excluded from stable identity for both backends.
+
+Refresh only the intended backend's two evidence files after reviewing a
+deliberate coverage change:
 
 ```bash
 ./dev.sh benchmark-ratchet --update
+./dev.sh benchmark-ratchet --backend rust --update
 ```
+
+The Rust command never reads or updates the C++ evidence files, and conversely
+the default C++ command does not accept Rust evidence.
 
 Run generated benchmark tests with:
 
@@ -345,7 +389,74 @@ The ARM emulation check is functional only.
 
 Its timings never create a consumed policy.
 
-## Report Only
+## Rust Explicit Two-Phase Autotune
+
+Run these POSIX-shell commands from the generated Rust crate. The benchmark
+help prints the profile-specific commands and the compiler-owned flag set:
+
+```bash
+cd generated/rust
+env -u TSL_RUST_VARIANT_POLICY_FILE \
+  cargo bench --profile bench \
+    --bench tsl_variant_bench_sse2 \
+    --no-default-features \
+    --features variant_benchmarks,sse2 \
+    -- --help
+```
+
+First, create raw samples, a summary, and a native build-local policy without
+allowing an existing policy input into the benchmark build:
+
+```bash
+artifact_dir="${CARGO_TARGET_DIR:-$PWD/target}/tsl-benchmark/sse2"
+mkdir -p "$artifact_dir"
+
+export TSL_RUST_BENCHMARK_CONTEXT='local-native-sse2-v1'
+export CARGO_INCREMENTAL=0
+export RUSTFLAGS='-Copt-level=3 -Cdebuginfo=0 -Cdebug-assertions=no -Coverflow-checks=no -Clto=off -Clinker-plugin-lto=no -Cembed-bitcode=no -Ccodegen-units=1 -Cpanic=unwind -Crpath=no -Cstrip=none'
+
+env -u CARGO_ENCODED_RUSTFLAGS -u TSL_RUST_VARIANT_POLICY_FILE \
+  cargo bench --profile bench \
+    --bench tsl_variant_bench_sse2 \
+    --no-default-features \
+    --features variant_benchmarks,sse2 \
+    -- \
+    --results "$artifact_dir/results.jsonl" \
+    --summary "$artifact_dir/summary.txt" \
+    --policy-json "$artifact_dir/policy.json"
+```
+
+`TSL_RUST_VARIANT_POLICY_FILE` must be absent, not present with an empty value.
+The benchmark target also rejects policy-enabled builds independently. If the
+runner or another build-local input changes, use a new
+`TSL_RUST_BENCHMARK_CONTEXT` identity.
+
+Second, build the consumer separately with the precomputed policy and the same
+profile, feature set, context, and compiler flags:
+
+```bash
+env -u CARGO_ENCODED_RUSTFLAGS \
+  TSL_RUST_VARIANT_POLICY_FILE="$artifact_dir/policy.json" \
+  cargo build --profile bench \
+    --no-default-features \
+    --features variant_benchmarks,sse2
+```
+
+The consumer keeps `variant_benchmarks` enabled only so its generated-code
+context exactly matches the producer; the build script validates the policy and
+does not execute timing code. An ordinary build with no policy input still uses
+the authored default. Results and policies belong below the Cargo target tree,
+never below generated `src/`. The artifact expression follows a custom
+`CARGO_TARGET_DIR`; pass an absolute policy path when a downstream build runs
+from a different working directory.
+
+Rust policies are native x86-64, CPU-, compiler-, Cargo-, generated-source-, and
+context-bound artifacts. They are not portable across machines, emulators, or
+unrecorded build inputs. Keep the generated defaults for production tuning;
+the short `--rounds 3 --minimum-sample-ns 1000` settings are only for harness
+checks.
+
+## C++ Report Only
 
 ```bash
 cmake -S generated/cpp -B build/tsl-report \
@@ -359,7 +470,7 @@ This writes `tsl_variant_results.jsonl`.
 
 It does not change wrapper selection.
 
-## One-Build Autotune
+## C++ One-Build Autotune
 
 ```bash
 cmake -S generated/cpp -B build/tsl-tuned \
@@ -384,7 +495,7 @@ It requires a single-config CMake generator.
 
 An inconclusive result keeps the authored default.
 
-## Reuse A Policy
+## C++ Policy Reuse
 
 ```bash
 cmake -S generated/cpp -B build/tsl-policy \

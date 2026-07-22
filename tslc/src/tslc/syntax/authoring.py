@@ -71,6 +71,7 @@ class AuthoringCursorContext:
     position_kind: AuthoringPositionKind
     current_field: str | None
     existing_fields: tuple[str, ...]
+    sibling_scalars: tuple[tuple[str, str], ...] = ()
     primitive_parameters: tuple[str, ...] = ()
     primitive_attributes: tuple[str, ...] = ()
     generic_parameters: tuple[str, ...] = ()
@@ -266,6 +267,11 @@ def authoring_cursor_context(
         position_kind=position_kind,
         current_field=current_field,
         existing_fields=tuple(field.key.text for field in parent.fields),
+        sibling_scalars=tuple(
+            (field.key.text, field.value.text)
+            for field in parent.fields
+            if isinstance(field.value, ParsedTslScalarValue)
+        ),
         primitive_parameters=primitive_parameters,
         primitive_attributes=primitive_attributes,
         generic_parameters=generic_parameters,

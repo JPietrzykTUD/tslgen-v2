@@ -561,22 +561,66 @@ def test_native_mask_registration_per_profile(
 def test_mask_all_and_none_lower_for_native_predicate_masks(
     catalog: Catalog, machine_profiles
 ) -> None:
-    cpp_true = _spec(catalog, machine_profiles, "skylake", "mask_true", "avx512", "ui32")
+    cpp_sse_true = _spec(
+        catalog, machine_profiles, "skylake", "mask_true", "sse_vl", "ui64"
+    )
+    cpp_avx2_true = _spec(
+        catalog, machine_profiles, "skylake", "mask_true", "avx2_vl", "ui64"
+    )
+    cpp_avx512_true = _spec(
+        catalog, machine_profiles, "skylake", "mask_true", "avx512", "ui8"
+    )
+    cpp_clang_true = _spec(
+        catalog, machine_profiles, "skylake", "mask_true", "clang_v128", "ui64"
+    )
     cpp_false = _spec(catalog, machine_profiles, "skylake", "mask_false", "avx512", "ui32")
-    rust_true = _spec(
-        catalog, machine_profiles, "skylake", "mask_true", "avx512", "ui32", backend="rust"
+    rust_sse_true = _spec(
+        catalog,
+        machine_profiles,
+        "skylake",
+        "mask_true",
+        "sse_vl",
+        "ui64",
+        backend="rust",
+    )
+    rust_avx2_true = _spec(
+        catalog,
+        machine_profiles,
+        "skylake",
+        "mask_true",
+        "avx2_vl",
+        "ui64",
+        backend="rust",
+    )
+    rust_avx512_true = _spec(
+        catalog, machine_profiles, "skylake", "mask_true", "avx512", "ui8", backend="rust"
     )
     generic_true = _spec(catalog, machine_profiles, "avx2", "mask_true", "generic", "ui32")
 
-    assert cpp_true is not None
-    assert cpp_true.body_text == "return static_cast<typename Vec::mask_type>(~0ull);"
+    assert cpp_sse_true is not None
+    assert cpp_avx2_true is not None
+    assert cpp_avx512_true is not None
+    expected_cpp = (
+        "return static_cast<typename Vec::mask_type>("
+        "~0ull >> (64 - Vec::vector_element_count));"
+    )
+    assert cpp_sse_true.body_text == expected_cpp
+    assert cpp_avx2_true.body_text == expected_cpp
+    assert cpp_avx512_true.body_text == expected_cpp
+    assert cpp_clang_true is not None
+    assert cpp_clang_true.body_text == "return static_cast<typename Vec::mask_type>(-1);"
     assert cpp_false is not None
     assert cpp_false.body_text == "return 0;"
-    assert rust_true is not None
-    assert rust_true.body_text == "return u64::MAX as _;"
+    assert rust_sse_true is not None
+    assert rust_avx2_true is not None
+    assert rust_avx512_true is not None
+    expected_rust = "return (u64::MAX >> (64 - Self::lane_count())) as _;"
+    assert rust_sse_true.body_text == expected_rust
+    assert rust_avx2_true.body_text == expected_rust
+    assert rust_avx512_true.body_text == expected_rust
     assert generic_true is not None
     assert "LANES" in generic_true.body_text
-    assert "mask<all>" not in cpp_true.body_text + rust_true.body_text + generic_true.body_text
+    assert "mask<all>" not in expected_cpp + expected_rust + generic_true.body_text
 
 
 def test_mask_test_imask_lowers_integral_mask_bit_test(

@@ -466,6 +466,10 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
     - {tags [repeat], type "ui64", case {inputs [[10, 20, 30, 40], 0], expected [10, 10, 10, 10]}}
     - {tags [float], type "f32", case {inputs [[1.0, 2.0, 3.0, 4.0], 78], expected [3.0, 4.0, 1.0, 2.0]}}
     - {tags [short_vector], type "f64", case {inputs [[-2.0, 3.0], 255], expected [3.0, 3.0]}}
+    - {tags [sse_exact, reverse], extension "sse", type "si32", case {inputs [[10, 20, 30, 40], 27], expected [40, 30, 20, 10]}}
+    - {tags [sse_exact, rotate], extension "sse", type "ui32", case {inputs [[10, 20, 30, 40], 78], expected [30, 40, 10, 20]}}
+    - {tags [sse_exact, swap], extension "sse", type "si64", case {inputs [[-1, 2], 1], expected [2, -1]}}
+    - {tags [sse_exact, repeat], extension "sse", type "ui64", case {inputs [[10, 20], 0], expected [10, 10]}}
   impls:
     scalar:
       arith:

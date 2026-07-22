@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from hashlib import sha256
 import json
-import re
 
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.benchmark.correctness import (
@@ -19,6 +19,12 @@ from tslc.benchmark.correctness import (
     vector_mask_cases as _vector_mask_correctness_cases,
     vector_scalar_cases as _vector_scalar_correctness_cases,
 )
+from tslc.benchmark.identity import (
+    benchmark_slot_identity_hash,
+    implementation_body_hash,
+    specialization_key,
+    specialization_stable_id,
+)
 from tslc.benchmark.model import (
     BenchmarkCandidate,
     BenchmarkCandidateSet,
@@ -28,7 +34,7 @@ from tslc.benchmark.model import (
     BenchmarkProfilePlan,
     BenchmarkProjectPlan,
     BenchmarkScenario,
-    SpecializationKey,
+    BenchmarkScenarioFamily,
 )
 from tslc.benchmark.scenarios import (
     immediate_scenarios,
@@ -39,28 +45,50 @@ from tslc.benchmark.scenarios import (
     register_scenarios,
     vector_scalar_scenarios,
 )
+from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, Extension, Primitive
 from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.catalog.signatures import parse_signature
-from tslc.lower.lowerer import LoweredSpecialization, varying_positions
+from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests.harness import discover_harness_primitives
 from tslc.value_tests.lane_math import tiling_preserves_lane_semantics, whole_lanes
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestProjectPlan
 
-_STABLE_ID_RE = re.compile(r"[^0-9A-Za-z_]+")
 BENCHMARK_PROTOCOL_VERSION = 1
 
 
-class CppBenchmarkPlanner:
-    """Plan typed benchmark scenarios for authored implementation variants.
+@dataclass(frozen=True, slots=True)
+class BenchmarkScenarioAdmission:
+    """One named machine profile admitted for one scenario family."""
+
+    profile_name: str
+    scenario_family: BenchmarkScenarioFamily
+
+    def __post_init__(self) -> None:
+        if not self.profile_name:
+            raise ValueError("benchmark scenario admissions require a profile name")
+
+
+class BenchmarkPlanner:
+    """Plan typed benchmark scenarios for one generated backend.
 
     Eligibility is expressed entirely through typed signature/catalog facts.
     Unsupported variant slots remain visible in coverage rather than being
     silently dropped or classified by primitive name.
     """
 
-    def __init__(self, catalog: Catalog) -> None:
+    def __init__(
+        self,
+        catalog: Catalog,
+        *,
+        backend_id: str,
+        supported_admissions: frozenset[BenchmarkScenarioAdmission] | None = None,
+    ) -> None:
+        if not backend_id:
+            raise ValueError("benchmark planner requires a backend ID")
         self._catalog = catalog
+        self._backend_id = backend_id
+        self._supported_admissions = supported_admissions
         self._harness = discover_harness_primitives(catalog)
 
     def plan(
@@ -75,7 +103,11 @@ class CppBenchmarkPlanner:
             for profile in value_tests.profiles
         }
         for emitted_profile in sorted(profiles, key=lambda item: item.profile.name):
-            backend_id = "cpp"
+            backend_id = self._backend_id
+            profile_admission_reason = _profile_admission_reason(
+                emitted_profile.profile,
+                self._supported_admissions,
+            )
             by_primitive = emitted_profile.specializations(backend_id)
             cases = value_profiles.get((backend_id, emitted_profile.profile.name), ())
             candidate_sets: list[BenchmarkCandidateSet] = []
@@ -85,11 +117,23 @@ class CppBenchmarkPlanner:
                 ):
                     if not spec.variant_bodies:
                         continue
+                    if profile_admission_reason is not None:
+                        coverage.append(
+                            _coverage(
+                                emitted_profile,
+                                spec,
+                                backend_id,
+                                "unsupported",
+                                profile_admission_reason,
+                            )
+                        )
+                        continue
                     if _selector_slot_count(by_primitive[primitive_name], spec) > 1:
                         coverage.append(
                             _coverage(
                                 emitted_profile,
                                 spec,
+                                backend_id,
                                 "unsupported",
                                 "overloaded selector slots require overload-specific policy identity",
                             )
@@ -123,20 +167,30 @@ class CppBenchmarkPlanner:
                             _coverage(
                                 emitted_profile,
                                 spec,
+                                backend_id,
                                 "missing_correctness" if missing_correctness else "unsupported",
                                 reason,
                             )
                         )
                         continue
                     candidate_sets.extend(candidate_sets_for_spec)
-                    coverage.append(_coverage(emitted_profile, spec, "emitted", ""))
+                    coverage.append(
+                        _coverage(emitted_profile, spec, backend_id, "emitted", "")
+                    )
             ordered_sets = tuple(sorted(candidate_sets, key=lambda item: item.stable_id))
             planned_profiles.append(
                 BenchmarkProfilePlan(
                     backend_id=backend_id,
                     profile_name=emitted_profile.profile.name,
                     candidate_sets=ordered_sets,
-                    manifest_hash=_manifest_hash(ordered_sets, emitted_profile),
+                    manifest_hash=_manifest_hash(
+                        ordered_sets, emitted_profile, backend_id
+                    ),
+                    profile_family=emitted_profile.profile.family,
+                    backend_feature_spellings=tuple(
+                        emitted_profile.profile.feature_spelling(feature, backend_id)
+                        for feature in sorted(emitted_profile.profile.features)
+                    ),
                 )
             )
         return BenchmarkProjectPlan(
@@ -159,39 +213,44 @@ class CppBenchmarkPlanner:
     ) -> tuple[BenchmarkCandidateSet | None, str, bool]:
         primitive = _source_primitive(self._catalog, spec)
         extension = profile.extensions.get(spec.extension_name)
-        reason = _common_unsupported_reason(spec, primitive, extension)
+        reason = _common_unsupported_reason(
+            spec, primitive, extension, self._backend_id
+        )
         if reason is not None:
             return None, reason, False
         assert primitive is not None and extension is not None
         bits = scalar_bit_width(spec.type_tag)
         assert bits is not None and extension.vector_bits > 0
-        lanes = whole_lanes(extension.vector_bits, spec.type_tag)
-        if lanes is None:
-            return None, "extension width does not contain a complete scalar lane", False
-        key = SpecializationKey(
-            backend_id="cpp",
-            profile_name=profile.profile.name,
-            primitive_name=spec.primitive_name,
-            source_primitive_name=spec.source_primitive_name,
-            extension_name=spec.extension_name,
-            type_tag=spec.type_tag,
-            result_kind=spec.result_kind,
-            param_kinds=spec.param_kinds,
-            immediate=immediate_value,
+        key = specialization_key(
+            backend_id=self._backend_id,
+            profile=profile,
+            specialization=spec,
+            primitive_specializations=by_primitive[spec.primitive_name],
+            immediate_value=immediate_value,
             simd_type_base_bindings=simd_type_base_bindings,
-            generic_values=tuple(
-                (name, default) for name, _type, default in spec.generic_params
-            ),
-            overload_parameter_positions=varying_positions(
-                by_primitive[spec.primitive_name]
-            ),
-            lanes=lanes,
         )
-        stable_id = _stable_id(key)
+        if key.lanes is None:
+            return None, "extension width does not contain a complete scalar lane", False
+        lanes = key.lanes
+        scenario_family = _scenario_family(spec)
+        if scenario_family is None:
+            return (
+                None,
+                "no typed benchmark scenario supports this result and parameter shape",
+                False,
+            )
+        admission_reason = _scenario_admission_reason(
+            profile.profile,
+            scenario_family,
+            self._supported_admissions,
+        )
+        if admission_reason is not None:
+            return None, admission_reason, False
+        stable_id = specialization_stable_id(key)
         seed = int(sha256(stable_id.encode("utf-8")).hexdigest()[:16], 16)
         correctness: tuple[BenchmarkCorrectnessCase, ...]
         scenarios: tuple[BenchmarkScenario, ...]
-        if _is_indexed_load_shape(spec):
+        if scenario_family == "indexed_load":
             if immediate_value is None or len(simd_type_base_bindings) != 1:
                 return None, "no concrete indexed-load binding was planned", True
             try:
@@ -244,7 +303,7 @@ class CppBenchmarkPlanner:
                 to_array,
             )
             scenarios = indexed_load_scenarios(index_lanes, seed)
-        elif spec.result_kind == "v" and spec.param_kinds == ("v", "sImm"):
+        elif scenario_family == "immediate":
             if immediate_value is None:
                 return None, "no concrete immediate value was planned", True
             harness, harness_reason = _require_harness(
@@ -265,9 +324,10 @@ class CppBenchmarkPlanner:
                 immediate_value,
                 from_array,
                 to_array,
+                allow_tiling=tiling_preserves_lane_semantics(primitive),
             )
             scenarios = immediate_scenarios(primitive, spec, seed)
-        elif spec.result_kind == "v" and spec.param_kinds == ("v", "s"):
+        elif scenario_family == "vector_scalar":
             if not tiling_preserves_lane_semantics(primitive):
                 return (
                     None,
@@ -293,9 +353,7 @@ class CppBenchmarkPlanner:
                 to_array,
             )
             scenarios = vector_scalar_scenarios(primitive, spec, seed)
-        elif spec.result_kind == "v" and spec.param_kinds and all(
-            kind == "v" for kind in spec.param_kinds
-        ):
+        elif scenario_family == "register":
             if not tiling_preserves_lane_semantics(primitive):
                 return (
                     None,
@@ -321,9 +379,7 @@ class CppBenchmarkPlanner:
                 to_array,
             )
             scenarios = register_scenarios(primitive, spec, seed)
-        elif spec.result_kind == "m" and spec.param_kinds and all(
-            kind == "v" for kind in spec.param_kinds
-        ):
+        elif scenario_family == "mask_result":
             harness, harness_reason = _require_harness(
                 by_primitive,
                 (self._harness.from_array, self._harness.to_integral),
@@ -343,7 +399,7 @@ class CppBenchmarkPlanner:
                 to_integral,
             )
             scenarios = mask_result_scenarios(primitive, spec, seed)
-        elif spec.result_kind == "s" and spec.param_kinds == ("v",):
+        elif scenario_family == "reduction":
             harness, harness_reason = _require_harness(
                 by_primitive,
                 (self._harness.from_array,),
@@ -362,7 +418,7 @@ class CppBenchmarkPlanner:
                 from_array,
             )
             scenarios = reduction_scenarios(seed)
-        elif spec.result_kind == "m" and spec.param_kinds == ("im",):
+        elif scenario_family == "mask_density":
             harness, harness_reason = _require_harness(
                 by_primitive,
                 (self._harness.to_integral,),
@@ -385,9 +441,11 @@ class CppBenchmarkPlanner:
         if not correctness:
             return None, "no authored expected-value case covers this specialization", True
         candidates = (
-            BenchmarkCandidate("default", _body_hash(spec.body_text)),
+            BenchmarkCandidate("default", implementation_body_hash(spec.body_text)),
             *(
-                BenchmarkCandidate(variant.name, _body_hash(variant.body_text))
+                BenchmarkCandidate(
+                    variant.name, implementation_body_hash(variant.body_text)
+                )
                 for variant in spec.variant_bodies
             ),
         )
@@ -420,15 +478,50 @@ def _require_harness(
     return resolved, ""
 
 
+def _profile_admission_reason(
+    profile: MachineProfile,
+    supported: frozenset[BenchmarkScenarioAdmission] | None,
+) -> str | None:
+    if supported is None:
+        return None
+    if not any(item.profile_name == profile.name for item in supported):
+        return (
+            "backend benchmark support does not include profile "
+            f"{profile.name!r}"
+        )
+    return None
+
+
+def _scenario_admission_reason(
+    profile: MachineProfile,
+    scenario_family: BenchmarkScenarioFamily,
+    supported: frozenset[BenchmarkScenarioAdmission] | None,
+) -> str | None:
+    if supported is None:
+        return None
+    if any(
+        item.profile_name == profile.name
+        and item.scenario_family == scenario_family
+        for item in supported
+    ):
+        return None
+    return (
+        "backend benchmark support does not include the "
+        f"{scenario_family!r} scenario family"
+    )
+
+
 def _common_unsupported_reason(
     spec: LoweredSpecialization,
     primitive: Primitive | None,
     extension: Extension | None,
+    backend_id: str,
 ) -> str | None:
     if primitive is None:
         return "source primitive is not present in the catalog"
     if not tiling_preserves_lane_semantics(primitive) and not (
         (spec.result_kind == "s" and spec.param_kinds == ("v",))
+        or (spec.result_kind == "v" and spec.param_kinds == ("v", "sImm"))
         or _is_indexed_load_shape(spec)
     ):
         return "cross-lane primitives require a dedicated benchmark scenario"
@@ -453,8 +546,8 @@ def _common_unsupported_reason(
         return "only fixed-width hardware vectors are benchmarked"
     if not extension.default_test_target:
         return "extension is not enabled as a native value-test target"
-    if extension.header_group_for_backend("cpp") is not None:
-        return "opt-in header-group extensions are not benchmarked in the first slice"
+    if extension.header_group_for_backend(backend_id) is not None:
+        return "opt-in header-group extensions are not supported by benchmark planning"
     return None
 
 
@@ -466,6 +559,34 @@ def _is_indexed_load_shape(spec: LoweredSpecialization) -> bool:
         and len(spec.type_params) == 1
         and spec.target is None
     )
+
+
+def _scenario_family(
+    spec: LoweredSpecialization,
+) -> BenchmarkScenarioFamily | None:
+    if _is_indexed_load_shape(spec):
+        return "indexed_load"
+    if spec.result_kind == "v" and spec.param_kinds == ("v", "sImm"):
+        return "immediate"
+    if spec.result_kind == "v" and spec.param_kinds == ("v", "s"):
+        return "vector_scalar"
+    if (
+        spec.result_kind == "v"
+        and spec.param_kinds
+        and all(kind == "v" for kind in spec.param_kinds)
+    ):
+        return "register"
+    if (
+        spec.result_kind == "m"
+        and spec.param_kinds
+        and all(kind == "v" for kind in spec.param_kinds)
+    ):
+        return "mask_result"
+    if spec.result_kind == "s" and spec.param_kinds == ("v",):
+        return "reduction"
+    if spec.result_kind == "m" and spec.param_kinds == ("im",):
+        return "mask_density"
+    return None
 
 
 def _has_vector_specialization(
@@ -497,25 +618,10 @@ def _source_primitive(
     return None
 
 
-def _stable_id(key: SpecializationKey) -> str:
-    readable = _STABLE_ID_RE.sub(
-        "_",
-        "_".join(
-            (
-                key.profile_name,
-                key.primitive_name,
-                key.extension_name,
-                key.type_tag,
-            )
-        ),
-    ).strip("_")
-    digest = sha256(repr(key.canonical_fields()).encode("utf-8")).hexdigest()[:12]
-    return f"{readable}_{digest}"
-
-
 def _manifest_hash(
     candidate_sets: tuple[BenchmarkCandidateSet, ...],
     profile: EmittedProfile,
+    backend_id: str,
 ) -> str:
     payload = {
         "protocol_version": BENCHMARK_PROTOCOL_VERSION,
@@ -524,10 +630,10 @@ def _manifest_hash(
             "family": profile.profile.family,
             "features": sorted(profile.profile.features),
             "feature_spellings": sorted(
-                profile.profile.feature_spellings("cpp").items()
+                profile.profile.feature_spellings(backend_id).items()
             ),
             "compile_modes": sorted(profile.profile.compile_modes),
-            "cpp_flags": profile.profile.flags_for_backend("cpp"),
+            f"{backend_id}_flags": profile.profile.flags_for_backend(backend_id),
         },
         "candidate_sets": [
             {
@@ -554,10 +660,6 @@ def _manifest_hash(
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return sha256(canonical.encode("utf-8")).hexdigest()
-
-
-def _body_hash(body: str) -> str:
-    return sha256(body.encode("utf-8")).hexdigest()
 
 
 def _specialization_sort_key(spec: LoweredSpecialization) -> tuple[object, ...]:
@@ -601,11 +703,12 @@ def _selector_slot_key(spec: LoweredSpecialization) -> tuple[object, ...]:
 def _coverage(
     profile: EmittedProfile,
     spec: LoweredSpecialization,
+    backend_id: str,
     status: BenchmarkCoverageStatus,
     reason: str,
 ) -> BenchmarkCoverageEntry:
     return BenchmarkCoverageEntry(
-        backend_id="cpp",
+        backend_id=backend_id,
         profile_name=profile.profile.name,
         primitive_name=spec.primitive_name,
         source_primitive_name=spec.source_primitive_name,
@@ -616,6 +719,11 @@ def _coverage(
         mask_policy=spec.mask_policy,
         axis=spec.axis,
         variant_names=spec.variant_names,
+        slot_hash=(
+            benchmark_slot_identity_hash(profile.profile.name, spec)
+            if backend_id == "rust"
+            else ""
+        ),
         status=status,
         reason=reason,
     )
@@ -634,9 +742,14 @@ def _coverage_sort_key(entry: BenchmarkCoverageEntry) -> tuple[str, ...]:
         entry.mask_policy or "",
         ",".join(f"{name}={value}" for name, value in entry.axis),
         ",".join(entry.variant_names),
+        entry.slot_hash,
         entry.status,
         entry.reason,
     )
 
 
-__all__ = ("BENCHMARK_PROTOCOL_VERSION", "CppBenchmarkPlanner")
+__all__ = (
+    "BENCHMARK_PROTOCOL_VERSION",
+    "BenchmarkPlanner",
+    "BenchmarkScenarioAdmission",
+)

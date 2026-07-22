@@ -25,6 +25,14 @@ from tslc.syntax.ast import (
     ParsedTslScalarValue,
 )
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+from tslc.catalog.validation._invariants_overloads import validate_overload_families
+
+
+def validate_primitive_overload_families(
+    catalog: Catalog,
+    diagnostics: list[Diagnostic],
+) -> None:
+    validate_overload_families(catalog, diagnostics)
 
 
 def validate_required_backends(

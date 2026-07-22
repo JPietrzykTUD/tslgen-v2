@@ -50,6 +50,7 @@ KNOWN_GENERIC_PARAM_FIELDS = frozenset(
 )
 KNOWN_IMMEDIATE_PARAM_FIELDS = frozenset({"type", "value_range", "dispatch"})
 KNOWN_RETURN_TYPE_FIELDS = frozenset({"base", "extension"})
+KNOWN_PRIMITIVE_OVERLOAD_FIELDS = frozenset({"axis", "value", "primary"})
 KNOWN_PRIMITIVE_FIELDS = frozenset(
     {
         "benchmarks",
@@ -59,6 +60,7 @@ KNOWN_PRIMITIVE_FIELDS = frozenset(
         "generic_params",
         "impls",
         "operation",
+        "overload",
         "param_types",
         "params",
         "return_type",
@@ -103,6 +105,7 @@ def validate_primitive(
                 sorted(KNOWN_BOOLEAN_VALUES),
             )
     _validate_attributes(declaration.attributes, diagnostics)
+    _validate_overload(declaration, diagnostics)
     _validate_generic_params(declaration, diagnostics)
     _validate_immediate_params(declaration, backend_ids, diagnostics)
     _validate_param_types(declaration, diagnostics)
@@ -111,6 +114,69 @@ def validate_primitive(
     validate_benchmarks(declaration, diagnostics)
     validate_tests(declaration, diagnostics)
     validate_requires(declaration, diagnostics, known_target_features)
+
+
+def _validate_overload(
+    declaration: ParsedPrimitiveDeclaration,
+    diagnostics: list[Diagnostic],
+) -> None:
+    for parsed in declaration.fields_by_name("overload"):
+        field = parsed.field
+        overload_fields = children(field)
+        validate_known_fields(
+            overload_fields,
+            KNOWN_PRIMITIVE_OVERLOAD_FIELDS,
+            diagnostics,
+            owner=f"primitive {declaration.name!r} overload",
+        )
+        diagnose_duplicate_fields(
+            overload_fields,
+            diagnostics,
+            label=f"primitive {declaration.name!r} overload field",
+        )
+        for required in ("axis", "value"):
+            required_field = child(field, required)
+            value = field_text(required_field)
+            if required_field is None:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-OVERLOAD-MISSING-FIELD",
+                        message=(
+                            f"primitive {declaration.name!r} overload must declare "
+                            f"{required!r}"
+                        ),
+                        source=source_span(field.source),
+                    )
+                )
+            elif not value:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-OVERLOAD-MALFORMED-FIELD",
+                        message=(
+                            f"primitive {declaration.name!r} overload {required!r} "
+                            "must be a non-empty scalar"
+                        ),
+                        source=source_span(required_field.source),
+                    )
+                )
+        primary_field = child(field, "primary")
+        if primary_field is None:
+            continue
+        primary = field_text(primary_field)
+        if primary not in KNOWN_BOOLEAN_VALUES:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-OVERLOAD-MALFORMED-PRIMARY",
+                    message=(
+                        f"primitive {declaration.name!r} overload 'primary' must be "
+                        "true or false"
+                    ),
+                    source=source_span(primary_field.source),
+                )
+            )
 
 
 def _validate_attributes(

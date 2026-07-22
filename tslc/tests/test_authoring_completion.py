@@ -30,6 +30,7 @@ def test_empty_file_and_primitive_header_complete_declarations_and_shapes(
         "extension",
         "types",
         "language",
+        "overload_axes",
         "target_families",
     }
     primitive = next(item for item in declarations if item.label == "prim")
@@ -145,6 +146,98 @@ def test_requires_and_datatype_lists_use_distinct_vocabularies(
 
     assert {"si8", "si16", "si32", "si64"} <= datatypes
     assert "avx512_fp16" not in datatypes
+
+
+def test_primitive_overload_completion_is_registry_backed_and_axis_scoped(
+    catalog: Catalog,
+) -> None:
+    baseline = (
+        "prim<v:=(v,s)> probe(data, count):\n"
+        "  overload:\n"
+        "    axis count_distribution\n"
+        "    value uniform\n"
+        "    primary true\n"
+    )
+
+    incomplete_root = "prim<v:=(v,s)> probe(data, count):\n  over"
+    assert "overload" in _labels(catalog, baseline, incomplete_root)
+
+    missing_baseline = baseline.replace("    value uniform\n", "")
+    missing_field = missing_baseline + "    "
+    fields = _labels(catalog, missing_baseline, missing_field)
+    assert "value" in fields
+    assert "axis" not in fields
+    assert "primary" not in fields
+
+    axis_edit = baseline.split("    axis count_distribution", 1)[0] + "    axis pay"
+    assert _labels(catalog, baseline, axis_edit) == {"payload_extent"}
+
+    count_value_edit = baseline.split("    value uniform", 1)[0] + "    value "
+    assert _labels(catalog, baseline, count_value_edit) == {"per_lane", "uniform"}
+
+    payload_baseline = baseline.replace("count_distribution", "payload_extent").replace(
+        "uniform", "vector"
+    )
+    payload_value_edit = (
+        payload_baseline.split("    value vector", 1)[0] + "    value "
+    )
+    assert _labels(catalog, payload_baseline, payload_value_edit) == {
+        "scalar",
+        "vector",
+    }
+
+    unknown_baseline = baseline.replace("count_distribution", "not_registered")
+    unknown_value_edit = (
+        unknown_baseline.split("    value uniform", 1)[0] + "    value "
+    )
+    assert _labels(catalog, unknown_baseline, unknown_value_edit) == set()
+
+    primary_edit = baseline.split("    primary true", 1)[0] + "    primary "
+    assert _labels(catalog, baseline, primary_edit) == {"false", "true"}
+
+
+def test_overload_registry_completion_reuses_schema_and_typed_registry(
+    catalog: Catalog,
+) -> None:
+    baseline = (
+        "overload_axes:\n"
+        "  count_distribution:\n"
+        "    values:\n"
+        "      uniform:\n"
+        "        operand_kinds [s, sImm]\n"
+        "      per_lane:\n"
+        "        operand_kinds [v]\n"
+    )
+
+    assert "payload_extent" in _labels(catalog, baseline, "overload_axes:\n  pay")
+    assert _labels(
+        catalog,
+        baseline,
+        "overload_axes:\n  count_distribution:\n    val",
+    ) == {"values"}
+    values_baseline = baseline.replace(
+        "      per_lane:\n        operand_kinds [v]\n",
+        "",
+    )
+    assert _labels(
+        catalog,
+        values_baseline,
+        "overload_axes:\n  count_distribution:\n    values:\n      per",
+    ) == {"per_lane"}
+    assert _labels(
+        catalog,
+        baseline,
+        (
+            "overload_axes:\n"
+            "  count_distribution:\n"
+            "    values:\n"
+            "      uniform:\n"
+            "        oper"
+        ),
+    ) == {"operand_kinds"}
+
+    kind_edit = baseline.replace("operand_kinds [s, sImm]", "operand_kinds [sI")
+    assert "sImm" in _labels(catalog, baseline, kind_edit)
 
 
 def test_scoped_requires_selectors_and_repeatable_implementation_branches(
