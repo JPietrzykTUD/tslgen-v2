@@ -7,6 +7,12 @@ from dataclasses import dataclass
 from typing import Literal
 
 from tslc.backend.registry import registered_backend_ids
+from tslc.catalog.arithmetic import (
+    arithmetic_guarantee_values,
+    arithmetic_operand_role_values,
+    arithmetic_operation_values,
+)
+from tslc.catalog.arithmetic_promotion import KNOWN_ARITHMETIC_FIELDS
 from tslc.catalog.model import Catalog, Primitive
 from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
 from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS
@@ -741,6 +747,10 @@ def _field_candidates(
         return KNOWN_PRIMITIVE_FIELDS, "field", "primitive field"
     if path == ("primitive", "overload"):
         return KNOWN_PRIMITIVE_OVERLOAD_FIELDS, "field", "primitive overload field"
+    if path == ("primitive", "arithmetic"):
+        return KNOWN_ARITHMETIC_FIELDS, "field", "arithmetic contract field"
+    if path == ("primitive", "arithmetic", "operand_roles"):
+        return arithmetic_operand_role_values(), "field", "arithmetic operand role"
     if path[:2] == ("primitive", "impls"):
         return _implementation_fields(context, catalog)
     if path[:2] == ("primitive", "generic_params"):
@@ -943,6 +953,18 @@ def _value_completions(
     if field in _BOOLEAN_FIELDS:
         values = KNOWN_BOOLEAN_VALUES
         detail = "boolean"
+    elif field == "operations" and context.block_path == ("primitive", "arithmetic"):
+        values = arithmetic_operation_values()
+        detail = "arithmetic operation"
+    elif field == "guarantees" and context.block_path == ("primitive", "arithmetic"):
+        values = arithmetic_guarantee_values()
+        detail = "arithmetic guarantee"
+    elif (
+        context.block_path == ("primitive", "arithmetic", "operand_roles")
+        and field in arithmetic_operand_role_values()
+    ):
+        values = context.primitive_parameters
+        detail = "primitive parameter"
     elif field == "axis" and context.block_path == ("primitive", "overload"):
         values = catalog.overload_registry.axes
         detail = "overload axis"

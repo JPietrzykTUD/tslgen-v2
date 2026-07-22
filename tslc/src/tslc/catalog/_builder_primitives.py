@@ -6,6 +6,7 @@ from typing import cast
 
 from tslc.catalog._builder_common import _bool_field
 from tslc.catalog._builder_implementations import _implementations_from_entries
+from tslc.catalog.arithmetic_promotion import build_arithmetic_contract
 from tslc.catalog.benchmark_promotion import build_benchmark_spec
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
@@ -71,6 +72,7 @@ def _build_primitives(
     brief_description = _primitive_field_text(declaration, "brief_description")
     detailed_description = _primitive_field_text(declaration, "detailed_description")
     semantics = _primitive_field_text(declaration, "semantics")
+    arithmetic = build_arithmetic_contract(declaration, diagnostics)
     overload = _primitive_overload(declaration)
     cross_lane_fields = declaration.fields_by_name("cross_lane")
     cross_lane = _bool_field(cross_lane_fields[0].field) if cross_lane_fields else False
@@ -92,6 +94,7 @@ def _build_primitives(
             brief_description=brief_description,
             detailed_description=detailed_description,
             semantics=semantics,
+            arithmetic=arithmetic,
             overload=overload,
             cross_lane=cross_lane,
             source=_source_span(declaration.source),

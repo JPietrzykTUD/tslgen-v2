@@ -12,7 +12,7 @@ from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Literal, TypeVar
 
-from tslc.diagnostics import SourceSpan
+from tslc.catalog.arithmetic import ArithmeticContract
 from tslc.catalog.overloads import (
     OverloadRegistry,
     PrimitiveOverload,
@@ -22,6 +22,7 @@ from tslc.catalog.target_families import (
     ExtensionFamilyCapability,
     TargetFamilyCatalog,
 )
+from tslc.diagnostics import SourceSpan
 
 _K = TypeVar("_K")
 _V = TypeVar("_V")
@@ -234,6 +235,10 @@ class Primitive:
     brief_description: str | None = None
     detailed_description: str | None = None
     semantics: str | None = None
+    # Explicit language-neutral arithmetic operations, operand roles, and
+    # guarantees. Selection and backend code must not infer these facts from
+    # primitive names, signature positions, prose, or implementation text.
+    arithmetic: ArithmeticContract | None = None
     # Source-authored semantic-overload identity. Cross-declaration validation resolves
     # the family primary value; selection/lowering intentionally do not consume it yet.
     overload: PrimitiveOverload | None = None
