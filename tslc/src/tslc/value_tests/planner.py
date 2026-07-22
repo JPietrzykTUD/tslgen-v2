@@ -17,7 +17,11 @@ from tslc.value_tests._pattern_base import (
     unplanned_case_reason,
 )
 from tslc.value_tests.case_capabilities import DEFAULT_VALUE_TEST_CASE_REQUIREMENTS
-from tslc.value_tests.case_plans import compile_only_case, runtime_failure_case
+from tslc.value_tests.case_plans import (
+    compile_failure_case,
+    compile_only_case,
+    runtime_failure_case,
+)
 from tslc.value_tests.coverage import (
     CoverageIdentity,
     ValueTestCaseDrop,
@@ -175,8 +179,10 @@ class ValueTestPlanner:
                         )
                         planned = (plan,) if plan is not None else ()
                     elif test_case.role == "compile_failure":
-                        # Slice 5 lowers these into negative-compilation units.
-                        planned = ()
+                        plan = compile_failure_case(
+                            emitted_name, index, test_case, specs
+                        )
+                        planned = (plan,) if plan is not None else ()
                     else:
                         planned = (
                             pattern.plan_case(case_context) if pattern is not None else ()

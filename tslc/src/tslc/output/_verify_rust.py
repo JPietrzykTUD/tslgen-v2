@@ -238,8 +238,8 @@ def _rust_command_groups(
     for profile in backend.profiles:
         target_dir = project_root / "target" / profile.file_stem
         # Build verification still uses `cargo test` so generated test targets
-            # compile. Cross-target builds cannot execute those binaries natively, so
-            # they use --no-run unless value-test mode has a runner follow-up.
+        # compile. Cross-target builds cannot execute those binaries natively, so
+        # they use --no-run unless value-test mode has a runner follow-up.
         features = profile.profile_name
         severity: Severity = "error"
         step = "test"
@@ -257,31 +257,55 @@ def _rust_command_groups(
             if runner_prefix(profile, config):
                 step = "build-tests"
                 extra_args = ("--no-run", "--message-format=json")
-        groups.append(
-            (
-                BuildCommand(
-                    backend_id="rust",
-                    profile_name=profile.profile_name,
-                    step=step,
-                    argv=(
-                        "cargo",
-                        "test",
-                        "--manifest-path",
-                        str(manifest),
-                        "--no-default-features",
-                        "--features",
-                        features,
-                        *rust_target_args(profile, config),
-                        "--target-dir",
-                        str(target_dir),
-                        *extra_args,
-                    ),
-                    cwd=root,
-                    env=rust_environment(profile, config),
-                    severity_on_failure=severity,
+        commands = [
+            BuildCommand(
+                backend_id="rust",
+                profile_name=profile.profile_name,
+                step=step,
+                argv=(
+                    "cargo",
+                    "test",
+                    "--manifest-path",
+                    str(manifest),
+                    "--no-default-features",
+                    "--features",
+                    features,
+                    *rust_target_args(profile, config),
+                    "--target-dir",
+                    str(target_dir),
+                    *extra_args,
                 ),
+                cwd=root,
+                env=rust_environment(profile, config),
+                severity_on_failure=severity,
             )
+        ]
+        commands.extend(
+            BuildCommand(
+                backend_id="rust",
+                profile_name=profile.profile_name,
+                step="compile-failure",
+                argv=(
+                    "cargo",
+                    "build",
+                    "--manifest-path",
+                    str(manifest),
+                    "--no-default-features",
+                    "--features",
+                    f"{profile.profile_name},{failure.target_name}",
+                    "--example",
+                    failure.target_name,
+                    *rust_target_args(profile, config),
+                    "--target-dir",
+                    str(target_dir),
+                ),
+                cwd=root,
+                env=rust_environment(profile, config),
+                expected_failure_marker=failure.marker,
+            )
+            for failure in profile.compile_failures
         )
+        groups.append(tuple(commands))
     return tuple(groups)
 
 

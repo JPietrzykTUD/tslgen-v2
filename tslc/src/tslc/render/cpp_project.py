@@ -16,6 +16,7 @@ from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact
 from tslc.render._common import slug, text
 from tslc.render.cpp_build import _cpp_cmakelists
+from tslc.value_tests.model import ValueTestProjectPlan
 
 _CPP_STATIC_HEADERS = (
     "tsl_core.hpp",
@@ -34,6 +35,7 @@ def cpp_artifacts(
     assets: RenderAssets,
     *,
     media_type: str,
+    value_tests: ValueTestProjectPlan | None = None,
 ) -> list[Artifact]:
     backend = CppBackend()
     model = cpp_project_render_model(profiles)
@@ -126,7 +128,7 @@ def cpp_artifacts(
     artifacts.append(
         text(
             "cpp/CMakeLists.txt",
-            _cpp_cmakelists(profiles, assets),
+            _cpp_cmakelists(profiles, assets, value_tests=value_tests),
             media_type=media_type,
         )
     )

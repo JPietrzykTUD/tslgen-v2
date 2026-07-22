@@ -21,6 +21,7 @@ class ValueTestRendererCapability:
     case_renderers: Mapping[str, ValueTestCaseRenderer]
     supports_differential: bool = False
     overload_inference_placeholders: int = 0
+    isolated_case_kinds: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         if not self.backend_id:
@@ -38,13 +39,28 @@ class ValueTestRendererCapability:
             kind: renderer
             for kind, renderer in sorted(self.case_renderers.items())
         }
+        isolated = frozenset(self.isolated_case_kinds)
+        if not all(isolated):
+            raise ValueError(
+                f"value-test renderer capability {self.backend_id!r} "
+                "contains an empty isolated case kind"
+            )
+        overlap = set(normalized) & isolated
+        if overlap:
+            names = ", ".join(repr(kind) for kind in sorted(overlap))
+            raise ValueError(
+                f"value-test renderer capability {self.backend_id!r} declares "
+                f"case kind(s) as both runner and isolated: {names}"
+            )
         for kind in normalized:
             if not kind:
                 raise ValueError(
                     f"value-test renderer capability {self.backend_id!r} "
                     "contains an empty case kind"
                 )
-        unknown_kinds = set(normalized) - DEFAULT_VALUE_TEST_CASE_KINDS
+        unknown_kinds = (
+            set(normalized) | set(isolated)
+        ) - DEFAULT_VALUE_TEST_CASE_KINDS
         if unknown_kinds:
             names = ", ".join(repr(kind) for kind in sorted(unknown_kinds))
             raise ValueError(
@@ -56,10 +72,11 @@ class ValueTestRendererCapability:
             "case_renderers",
             MappingProxyType(normalized),
         )
+        object.__setattr__(self, "isolated_case_kinds", isolated)
 
     @property
     def case_kinds(self) -> frozenset[str]:
-        return frozenset(self.case_renderers)
+        return frozenset(self.case_renderers) | self.isolated_case_kinds
 
     def backend_support(self) -> ValueTestBackendSupport:
         return ValueTestBackendSupport(

@@ -263,6 +263,13 @@ def _serialize_verify_profile(profile: VerifyProfile) -> dict[str, object]:
         "target": profile.target,
         "linker": profile.linker,
         "runner": _serialize_verify_runner(profile.runner),
+        "compile_failures": tuple(
+            {
+                "target_name": failure.target_name,
+                "marker": failure.marker,
+            }
+            for failure in profile.compile_failures
+        ),
     }
 
 
@@ -326,7 +333,7 @@ def _serialize_value_test_failure(
 ) -> dict[str, object] | None:
     if value is None:
         return None
-    return {"reason": value.reason.value}
+    return {"reason": value.reason.value, "phase": value.phase}
 
 
 def _serialize_value_test_invocation(value: ValueTestInvocation) -> dict[str, object]:

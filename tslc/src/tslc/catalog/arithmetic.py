@@ -152,6 +152,7 @@ ARITHMETIC_OPERAND_ROLE_DESCRIPTIONS: Mapping[ArithmeticOperandRole, str] = (
 )
 
 ARITHMETIC_DIVISOR_KINDS = frozenset({"v", "s", "sImm"})
+ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER = "TSL_ARITH_INTEGER_IMMEDIATE_ZERO"
 
 
 def _spec(
@@ -269,6 +270,7 @@ def arithmetic_guarantee_values() -> tuple[str, ...]:
 __all__ = (
     "ARITHMETIC_DIVISOR_KINDS",
     "ARITHMETIC_GUARANTEE_SPECS",
+    "ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER",
     "ARITHMETIC_OPERAND_ROLE_DESCRIPTIONS",
     "ARITHMETIC_OPERATION_DESCRIPTIONS",
     "ArithmeticConflictGroup",

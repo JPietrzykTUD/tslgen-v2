@@ -56,10 +56,10 @@ def render_rust_values_file(
 ) -> str:
     modules = []
     for profile in profiles:
-        if not profile.cases:
+        if not profile.runner_cases:
             continue
         profile_slug = slug(profile.profile_name)
-        body = "\n\n".join(_render_case(case) for case in profile.cases)
+        body = "\n\n".join(_render_case(case) for case in profile.runner_cases)
         modules.append(
             assets.fill(
                 "rust_value_tests_profile.rs.tmpl",
@@ -83,6 +83,7 @@ RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
     backend_id="rust",
     supports_differential=True,
     overload_inference_placeholders=1,
+    isolated_case_kinds=frozenset({"compile_failure"}),
     case_renderers={
         "array_to_vector": _array_to_vector,
         "broadcast": _broadcast,

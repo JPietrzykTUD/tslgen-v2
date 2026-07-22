@@ -46,9 +46,14 @@ def create_cpp_dialect(catalog: Catalog) -> BackendDialect:
 
 
 def cpp_project_artifacts(
-    profiles: tuple[EmittedProfile, ...], assets: RenderAssets, media_type: str
+    profiles: tuple[EmittedProfile, ...],
+    assets: RenderAssets,
+    media_type: str,
+    value_tests: ValueTestProjectPlan | None = None,
 ) -> list[Artifact]:
-    return cpp_artifacts(profiles, assets, media_type=media_type)
+    return cpp_artifacts(
+        profiles, assets, media_type=media_type, value_tests=value_tests
+    )
 
 
 def cpp_profile_verification(
@@ -95,7 +100,7 @@ def cpp_backend_artifacts(
     """Render the complete C++ artifact set from one fact snapshot."""
 
     return [
-        *cpp_project_artifacts(profiles, assets, media_type),
+        *cpp_project_artifacts(profiles, assets, media_type, value_tests),
         *cpp_value_test_artifacts(value_tests, assets, media_type),
         *cpp_benchmark_project_artifacts(
             benchmarks,

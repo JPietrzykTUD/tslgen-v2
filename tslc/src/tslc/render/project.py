@@ -45,7 +45,7 @@ def render_project(
         artifacts.extend(
             driver.render_artifacts(ordered, value_tests, benchmarks, assets)
         )
-        verify_backends.append(driver.verify_backend(ordered))
+        verify_backends.append(driver.verify_backend(ordered, value_tests))
     artifacts.extend(documentation_artifacts(ordered))
     artifacts.extend(generated_license_artifacts(drivers, assets))
     artifacts = [add_generated_license_notice(artifact) for artifact in artifacts]

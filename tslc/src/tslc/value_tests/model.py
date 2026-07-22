@@ -101,6 +101,14 @@ class ValueTestProfilePlan:
     cases: tuple[ValueTestCasePlan, ...]
     support_headers: tuple[str, ...] = ()
 
+    @property
+    def runner_cases(self) -> tuple[ValueTestCasePlan, ...]:
+        return tuple(case for case in self.cases if case.kind != "compile_failure")
+
+    @property
+    def compile_failure_cases(self) -> tuple[ValueTestCasePlan, ...]:
+        return tuple(case for case in self.cases if case.kind == "compile_failure")
+
 
 @dataclass(frozen=True, slots=True)
 class ValueTestProjectPlan:

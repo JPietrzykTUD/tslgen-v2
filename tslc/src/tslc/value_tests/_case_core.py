@@ -247,6 +247,35 @@ def runtime_failure_case(
     )
 
 
+def compile_failure_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> ValueTestCasePlan | None:
+    if case.role != "compile_failure" or case.failure is None or case.lanes is None:
+        return None
+    if not _args_match(case, specs[0].param_kinds):
+        return None
+    base_spelling = _base_spelling(specs, case.type_tag)
+    immediate_inputs = _scalar_inputs(case)
+    if base_spelling is None or len(immediate_inputs) != 1:
+        return None
+    return _plan(
+        "compile_failure",
+        name,
+        index,
+        case,
+        specs,
+        base_spelling,
+        vector_inputs=_vector_inputs(case),
+        mask_inputs=_mask_inputs(case),
+        expected=(),
+        immediate_value=_immediate_value(immediate_inputs[0], specs[0].immediate),
+        failure=ValueTestFailure(reason=case.failure, phase="compile"),
+    )
+
+
 def status_pointer_case(
     name: str,
     index: int,
@@ -473,6 +502,7 @@ __all__ = (
     "lane_list_case",
     "mask_to_vector_case",
     "compile_only_case",
+    "compile_failure_case",
     "runtime_failure_case",
     "array_to_vector_case",
     "scalar_result_case",

@@ -116,6 +116,7 @@ def rust_backend_artifacts(
             selection_plan=selection_plan,
             consumption_plan=consumption_plan,
             benchmark_layout_plan=benchmark_layout_plan,
+            value_tests=value_tests,
         ),
         *rust_test_artifacts(value_tests, assets, media_type=media_type),
         *rust_benchmark_artifacts(

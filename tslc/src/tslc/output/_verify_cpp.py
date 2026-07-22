@@ -199,6 +199,24 @@ def _cpp_command_groups(
                     severity_on_failure="warning",
                 )
             )
+        commands.extend(
+            BuildCommand(
+                backend_id="cpp",
+                profile_name=profile.profile_name,
+                step="compile-failure",
+                argv=(
+                    "cmake",
+                    "--build",
+                    str(build_dir),
+                    "--target",
+                    failure.target_name,
+                ),
+                cwd=root,
+                env=env,
+                expected_failure_marker=failure.marker,
+            )
+            for failure in profile.compile_failures
+        )
         groups.append(tuple(commands))
     return tuple(groups)
 

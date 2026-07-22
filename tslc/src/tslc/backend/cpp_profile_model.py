@@ -30,6 +30,7 @@ from tslc.backend.emitted_profile import EmittedProfile, used_extensions
 from tslc.backend.target_capability import is_x86_register_extension
 from tslc.catalog.model import Extension
 from tslc.lower.lowerer import (
+    LoweredArithmeticPreconditionKind,
     LoweredSpecialization,
     LoweredTypeParam,
     varying_positions,
@@ -397,7 +398,7 @@ def _cpp_smoke_instantiations(
                     for param in spec.type_params
                 ]
                 + [value for _, value in spec.axis]
-                + (["0"] if spec.immediate is not None else [])
+                + ([_cpp_smoke_immediate(spec)] if spec.immediate is not None else [])
                 + [default for _, _, default in spec.generic_params]
                 + [_cpp_concrete_arg_type(vec, spec.param_kinds[i]) for i in varying]
             )
@@ -414,6 +415,16 @@ def _cpp_smoke_instantiations(
                 )
             )
     return tuple(instantiations)
+
+
+def _cpp_smoke_immediate(spec: LoweredSpecialization) -> str:
+    if any(
+        precondition.kind
+        is LoweredArithmeticPreconditionKind.INTEGER_IMMEDIATE_NONZERO
+        for precondition in spec.arithmetic_preconditions
+    ):
+        return "1"
+    return "0"
 
 
 def _cpp_specializations_for_group(

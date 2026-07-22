@@ -6,12 +6,14 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Literal
 
+from tslc.catalog.arithmetic import ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER
 from tslc.catalog.model import TestFailureReason
 
 ExpectedArity = Literal["optional", "non_empty", "one", "lanes", "target_lanes"]
 InputArity = Literal["optional", "non_empty", "one"]
 MemoryStorage = Literal["packed", "unpacked"]
 IndexStyle = Literal["register", "pointer"]
+ValueTestFailurePhase = Literal["runtime", "compile"]
 
 
 class ValueTestFact(Enum):
@@ -87,13 +89,22 @@ class ValueTestFailure:
     """Backend-neutral failure expected from one generated case."""
 
     reason: TestFailureReason
+    phase: ValueTestFailurePhase = "runtime"
+
+    def __post_init__(self) -> None:
+        if self.phase not in {"runtime", "compile"}:
+            raise ValueError(f"unsupported value-test failure phase {self.phase!r}")
 
     @property
     def marker(self) -> str:
         """Stable backend payload used to distinguish the intended failure."""
 
         if self.reason is TestFailureReason.INTEGER_ZERO_DIVISOR:
-            return "TSL_ARITH_INTEGER_ZERO_DIVISOR"
+            return (
+                ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER
+                if self.phase == "compile"
+                else "TSL_ARITH_INTEGER_ZERO_DIVISOR"
+            )
         raise AssertionError(f"unhandled value-test failure reason {self.reason!r}")
 
 

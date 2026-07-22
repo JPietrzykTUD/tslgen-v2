@@ -49,6 +49,7 @@ from tslc.value_tests.model import (
     ValueTestDifferential,
     ValueTestExpectation,
     ValueTestFact,
+    ValueTestFailure,
     ValueTestIndex,
     ValueTestInputs,
     ValueTestInvocation,
@@ -177,6 +178,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
             if hardware_extension is not None
             else None
         ),
+        failure=values.pop("failure", None),
         header_group=values.pop("header_group", None),
         required_compiler_features=values.pop("required_compiler_features", ()),
     )
@@ -391,6 +393,26 @@ def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverag
         assert len(failure_cases) == 6
         assert all(case.failure is not None for case in failure_cases)
         assert all(case.differential is None for case in failure_cases)
+        compile_failure_cases = [
+            case
+            for case in cases
+            if case.kind == "compile_failure" and case.call_name.startswith("mod_imm")
+        ]
+        assert len(compile_failure_cases) == 4
+        assert {
+            (case.call_name, case.invocation.immediate, case.inputs.masks)
+            for case in compile_failure_cases
+        } >= {
+            ("mod_imm", "0", ()),
+            ("mod_imm", "256", ()),
+            ("mod_imm_mask", "0", ("0",)),
+            ("mod_imm_maskz", "0", ("0",)),
+        }
+        assert all(
+            case.failure
+            == ValueTestFailure(FailureReason.INTEGER_ZERO_DIVISOR, phase="compile")
+            for case in compile_failure_cases
+        )
 
         masked_differentials = [
             case
@@ -425,6 +447,68 @@ def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverag
                 and case.case_name == "div_si32_edge_overflow_signs"
                 for case in cases
             )
+
+    emitted = result.emitted_profiles[0]
+    for backend in ("cpp", "rust"):
+        specializations = tuple(
+            spec
+            for name in ("mod_imm", "mod_imm_mask", "mod_imm_maskz")
+            for spec in emitted.specializations(backend)[name]
+        )
+        assert all(
+            len(spec.arithmetic_preconditions) == 1
+            for spec in specializations
+            if spec.type_tag.startswith(("si", "ui"))
+        )
+        assert all(
+            spec.arithmetic_preconditions == ()
+            for spec in specializations
+            if spec.type_tag.startswith("f")
+        )
+
+    assert result.rendered is not None
+    for backend in result.rendered.verify.backends:
+        assert len(backend.profiles[0].compile_failures) == 4
+        assert all(
+            failure.marker == "TSL_ARITH_INTEGER_IMMEDIATE_ZERO"
+            for failure in backend.profiles[0].compile_failures
+        )
+
+    artifacts = {
+        artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts
+    }
+    cpp_negative_paths = sorted(
+        path
+        for path in artifacts
+        if path.startswith("cpp/tests/tsl_compile_failure_")
+    )
+    rust_negative_paths = sorted(
+        path
+        for path in artifacts
+        if path.startswith("rust/examples/tsl_compile_failure_")
+    )
+    assert len(cpp_negative_paths) == 4
+    assert len(rust_negative_paths) == 4
+    assert all(
+        path.removeprefix("cpp/tests/").removesuffix(".cpp")
+        not in artifacts["cpp/tests/values_avx2.cpp"]
+        for path in cpp_negative_paths
+    )
+    assert all(
+        path.removeprefix("rust/examples/").removesuffix(".rs")
+        not in artifacts["rust/tests/values.rs"]
+        for path in rust_negative_paths
+    )
+    assert "static_assert(static_cast<std::uint8_t>(divisor)" in artifacts[
+        "cpp/include/tsl_avx2.hpp"
+    ]
+    assert "const { assert!((divisor as u8) != 0" in artifacts[
+        "rust/src/tsl_avx2.rs"
+    ]
+    assert "EXCLUDE_FROM_ALL" in artifacts["cpp/CMakeLists.txt"]
+    assert 'required-features = ["tsl_compile_failure_' in artifacts[
+        "rust/Cargo.toml"
+    ]
 
 
 def test_emitted_name_split_preserves_source_primitive_identity() -> None:

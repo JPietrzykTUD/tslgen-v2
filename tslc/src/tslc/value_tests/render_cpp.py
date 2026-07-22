@@ -13,11 +13,13 @@ CPP_VALUE_TEST_SUPPORT = CPP_VALUE_TEST_RENDERER.backend_support()
 def render_cpp_values_runner(
     profile: ValueTestProfilePlan, assets: RenderAssets
 ) -> str:
-    functions = [_guarded(render_cpp_case(case), case) for case in profile.cases]
+    functions = [
+        _guarded(render_cpp_case(case), case) for case in profile.runner_cases
+    ]
     body = "\n\n".join(functions)
     call_lines = "\n".join(
         _guarded(f"  failures += {case.function_name}();", case)
-        for case in profile.cases
+        for case in profile.runner_cases
     )
     support_includes = "".join(
         f'#include "{header}"\n' for header in profile.support_headers

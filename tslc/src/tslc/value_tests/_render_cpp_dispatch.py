@@ -57,6 +57,7 @@ from tslc.value_tests.renderer_capability import ValueTestRendererCapability
 CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
     backend_id="cpp",
     supports_differential=True,
+    isolated_case_kinds=frozenset({"compile_failure"}),
     case_renderers={
         "array_to_vector": _array_to_vector,
         "broadcast": _broadcast,
