@@ -442,8 +442,6 @@ becoming another owner of primitive selection or semantics.
 
 These are deliberately not settled by the initial ordering:
 
-- Whether and under which exact exceptional-value contracts `Div` and `Rem`
-  should join the standard-operator surface.
 - Whether shift counts at least the lane width should retain the current TSL
   zero/sign-fill behavior or change to the modulo-width behavior used by Rust
   portable SIMD, and consequently whether `Shl`/`Shr` can be exposed without
@@ -560,8 +558,14 @@ These are deliberately not settled by the initial ordering:
   integer-only `BitAnd`, `BitOr`, `BitXor`, and `Not` in addition to the
   previously selected numeric `Add`, `Sub`, and `Mul`. Every admitted binary
   operator also receives its assignment trait in the same slice. Float
-  bit-pattern operations remain named methods, while `Div`, `Rem`, `Shl`, and
-  `Shr` remain deferred pending their semantic contracts.
+  bit-pattern operations remain named methods. `Shl` and `Shr` remain deferred
+  pending their semantic contracts.
+- 2026-07-22: The exceptional-value contracts required by Rust `Div` and `Rem`
+  are settled and implemented by `arithmetic-contract-plan.md` Slices 1 through
+  5. Their trait projection remains deferred until this plan implements the
+  owned fixed-lane `Simd<T, N>` facade and its typed facade-planning boundary;
+  the current zero-sized `Simd<T, Ext>` descriptor and its associated raw
+  register type are not substitute public trait owners.
 - 2026-07-20: Agreed that `tsldata` may and should gain further
   target-independent primitive metadata when a language facade needs semantic
   facts that are not yet representable, following implementation safety as an

@@ -3,8 +3,20 @@
 ## Status and authority
 
 This is the implementation plan for making `div`, `mod`, and `mod_imm`
-backend-independent arithmetic operations and then exposing the normalized
-unmasked operations through Rust's `Div` and `Rem` traits.
+backend-independent arithmetic operations, with a follow-on projection of the
+normalized unmasked operations through Rust's `Div` and `Rem` traits.
+
+Implementation status as of 2026-07-22:
+
+- Slices 1 through 5 are implemented, reviewed, validated, and committed.
+- Slice 6 is explicitly deferred until the separate generated Rust API work
+  provides the owned fixed-lane `Simd<T, N>` facade and its typed facade-planning
+  boundary. The current generated Rust `Simd<T, Ext>` is a zero-sized type
+  descriptor whose associated `RegisterType` owns the lanes; it is not a sound
+  substitute for the planned public value facade.
+- No `Div` or `Rem` implementation is projected onto the current descriptor,
+  generic storage type, scalar primitives, or hardware register types while
+  that prerequisite is absent.
 
 The repository charters, active source data, compiler code, and tests remain
 authoritative. This plan records the following settled product decisions:
@@ -43,8 +55,9 @@ authoritative. This plan records the following settled product decisions:
 
 The existing [generated Rust API plan](rust-api-plan.md) continues to own the
 overall public Rust facade topology. This plan supplies the previously deferred
-`Div`/`Rem` semantic prerequisite and a focused operator integration slice; it
-does not reopen unrelated Rust API decisions.
+`Div`/`Rem` semantic prerequisite. Its focused operator integration slice is
+deferred until that topology exists; it does not reopen or pre-empt unrelated
+Rust API decisions.
 
 ## Goal and observable acceptance criteria
 
@@ -74,8 +87,9 @@ After this work:
    harness syntax.
 8. Generated differential cases compare generic and hardware behavior over the
    valid integer domain and cover invalid zero divisors separately.
-9. Rust `Div` and `Rem` implementations are admitted only for compatible typed
-   contracts and delegate directly to the corresponding unmasked primitive.
+9. In the deferred Rust facade follow-on, `Div` and `Rem` implementations are
+   admitted only for compatible typed contracts and delegate directly to the
+   corresponding unmasked primitive.
 
 ## Exact source contract
 
@@ -366,7 +380,8 @@ eligibility must verify the typed operations, guarantees, roles, and signature.
 - masked-immediate planning, valid-domain differential fuzz, and masked or
   immediate generic-versus-hardware evidence;
 - generated C++ and Rust build/value verification;
-- a forwarding-only Rust `Div`/`Rem` facade slice;
+- a deferred forwarding-only Rust `Div`/`Rem` facade slice after the owned
+  fixed-lane Rust facade exists;
 - the mechanical `divident` to `dividend` correction and directly affected
   tests/baselines.
 
@@ -427,7 +442,8 @@ typed contract
     -> normalized mod/mod_imm
     -> runtime-failure and differential test support
     -> derived static immediate rejection and compile-failure verification
-    -> Rust Div/Rem facade
+    -> [owned Rust facade prerequisite, separate plan]
+    -> deferred Rust Div/Rem facade
 ```
 
 Each slice must leave the repository in a coherent state and include focused
@@ -728,7 +744,14 @@ their defined behavior.
 - negative compilation cannot pass because of an unrelated syntax or toolchain
   failure.
 
-### Slice 6 — forwarding-only Rust `Div` and `Rem`
+### Slice 6 — deferred forwarding-only Rust `Div` and `Rem`
+
+**Status:** deferred until `rust-api-plan.md` has implemented the owned
+fixed-lane `Simd<T, N>` facade and its typed facade-planning boundary. Do not
+approximate this slice by implementing standard traits on the current
+zero-sized `Simd<T, Ext>` descriptor, `ArrayStorage`, scalar primitives, or
+architecture register types. Resume this slice as part of, or after, that
+separate Rust API work.
 
 **Outcome:** admitted owned fixed-lane Rust vectors support `/` and `%` through
 standard traits with no facade-local arithmetic corrections.
@@ -916,7 +939,8 @@ Stop the affected slice and report the blocker if:
 
 ## Completion criteria
 
-The complete plan is done only when:
+The arithmetic normalization and verification phase (Slices 1 through 5) is
+complete only when:
 
 - every affected declaration carries the correct operation set, resolved
   divisor role, and guarantee set, and every malformed contract has
@@ -936,10 +960,19 @@ The complete plan is done only when:
   typed reason, or verified—none disappear silently;
 - valid-domain generic-versus-hardware comparisons cover unmasked, masked, and
   immediate forms supported by the test infrastructure;
-- Rust `Div`/`Rem` bodies contain only typed forwarding and pass external
-  consumer tests;
 - the `divident` spelling is absent from the active family and all required
   baseline changes are explained;
 - focused tests, the full Python suite, mypy, compileall, generated build/value
   gates, and `git diff --check` pass, with unavailable hardware checks reported
   explicitly.
+
+The deferred Rust facade follow-on (Slice 6) is complete only when:
+
+- the separately owned fixed-lane Rust facade prerequisite exists;
+- Rust `Div`/`Rem` bodies contain only typed forwarding and pass external
+  consumer tests; and
+- every Slice 6 acceptance criterion above passes without projecting traits
+  onto the current descriptor or raw register types.
+
+The complete plan remains open until that deferred follow-on is implemented;
+deferral closes the current arithmetic phase without claiming Slice 6 is done.
