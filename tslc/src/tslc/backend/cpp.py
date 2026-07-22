@@ -18,6 +18,8 @@ from tslc.backend.primitive_rendering import body_for as _body_for
 from tslc.backend.primitive_rendering import variant_names as _variant_names
 from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
 from tslc.lower.lowerer import (
+    LoweredArithmeticPrecondition,
+    LoweredArithmeticPreconditionKind,
     LoweredSpecialization,
     LoweredTypeParam,
     effective_param_types,
@@ -284,9 +286,11 @@ class CppBackend:
             )
             doc = _cpp_doc(spec, context=doc_context, indent="    ")
             prefix = f"{doc}\n" if doc else ""
+            preconditions = _cpp_arithmetic_preconditions(spec)
             applies.append(
                 f"{prefix}"
                 f"    static inline {_apply_result_type(spec)} apply({params}) {{\n"
+                f"{preconditions}"
                 f"        {body.render()}\n"
                 f"    }}"
             )
@@ -754,6 +758,29 @@ def _apply_result_type(spec: LoweredSpecialization) -> str:
             vector=spec.target.vector_spelling,
         )
     return _result_type(spec.result_kind)
+
+
+def _cpp_arithmetic_preconditions(spec: LoweredSpecialization) -> str:
+    return "".join(
+        f"        {_cpp_arithmetic_precondition(precondition)}\n"
+        for precondition in spec.arithmetic_preconditions
+    )
+
+
+def _cpp_arithmetic_precondition(
+    precondition: LoweredArithmeticPrecondition,
+) -> str:
+    if (
+        precondition.kind
+        is LoweredArithmeticPreconditionKind.INTEGER_IMMEDIATE_NONZERO
+    ):
+        unsigned_type = f"std::uint{precondition.lane_bit_width}_t"
+        return (
+            f"static_assert(static_cast<{unsigned_type}>("
+            f"{precondition.parameter_name}) != {unsigned_type}{{0}}, "
+            f'"{precondition.marker}");'
+        )
+    raise AssertionError(f"unhandled arithmetic precondition {precondition.kind!r}")
 
 
 def _result_type(kind: str) -> str:

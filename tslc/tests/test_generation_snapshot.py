@@ -31,6 +31,7 @@ from tslc.benchmark.model import (
     BenchmarkVectorScalarScenario,
     SpecializationKey,
 )
+from tslc.catalog.model import TestFailureReason as FailureReason
 from tslc.diagnostics import Diagnostic, SourceLocation, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.maintenance import _generation_snapshot_semantics as semantics_module
@@ -55,6 +56,7 @@ from tslc.render.project import RenderedProject
 from tslc.value_tests.case_components import (
     ValueTestDifferential,
     ValueTestExpectation,
+    ValueTestFailure,
     ValueTestIndex,
     ValueTestInputs,
     ValueTestInvocation,
@@ -438,6 +440,12 @@ def _serialized_records() -> list[tuple[object, dict[str, object]]]:
         (
             ValueTestExpectation(),
             semantics_module._serialize_value_test_expectation(ValueTestExpectation()),
+        ),
+        (
+            ValueTestFailure(FailureReason.INTEGER_ZERO_DIVISOR),
+            semantics_module._serialize_value_test_failure(
+                ValueTestFailure(FailureReason.INTEGER_ZERO_DIVISOR)
+            ),
         ),
         (
             ValueTestInvocation(),

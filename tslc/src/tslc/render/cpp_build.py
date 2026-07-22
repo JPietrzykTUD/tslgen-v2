@@ -14,6 +14,8 @@ from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.compiler_assets import RenderAssets
 from tslc.output.verify_model import VerifyProfile, VerifyRunner
 from tslc.render._common import slug
+from tslc.value_tests.compile_failure import compile_failure_target_name
+from tslc.value_tests.model import ValueTestProjectPlan
 from tslc.backend.cpp_profile import (
     cpp_compile_guard_condition,
     cpp_header_group,
@@ -101,7 +103,13 @@ def _verify_runner(profile: MachineProfile) -> VerifyRunner | None:
         args=profile.runner.args,
     )
 
-def _cpp_cmakelists(profiles: tuple[EmittedProfile, ...], assets: RenderAssets) -> str:
+
+def _cpp_cmakelists(
+    profiles: tuple[EmittedProfile, ...],
+    assets: RenderAssets,
+    *,
+    value_tests: ValueTestProjectPlan | None = None,
+) -> str:
     slugs = tuple(slug(profile.profile.name) for profile in profiles)
     ungated_slugs = tuple(
         slug(profile.profile.name)
@@ -134,8 +142,30 @@ def _cpp_cmakelists(profiles: tuple[EmittedProfile, ...], assets: RenderAssets) 
         profile_auto_modes=_cpp_profile_auto_modes(profiles),
         profile_targets=_cpp_profile_targets(profiles),
         overlay_test_targets=_cpp_overlay_test_targets(profiles),
+        compile_failure_targets=_cpp_compile_failure_targets(value_tests),
     )
     return rendered.rstrip("\n") + "\n"
+
+
+def _cpp_compile_failure_targets(
+    plan: ValueTestProjectPlan | None,
+) -> str:
+    if plan is None:
+        return ""
+    blocks: list[str] = []
+    for profile in plan.profiles_for("cpp"):
+        for case in profile.compile_failure_cases:
+            target = compile_failure_target_name(profile, case)
+            blocks.append(
+                "\n".join(
+                    (
+                        f"add_executable({target} EXCLUDE_FROM_ALL tests/{target}.cpp)",
+                        f"target_link_libraries({target} PRIVATE "
+                        f"tsl_profile_{slug(profile.profile_name)})",
+                    )
+                )
+            )
+    return "\n\n".join(blocks)
 
 
 def _profile_alias_choices(profiles: tuple[EmittedProfile, ...]) -> tuple[str, ...]:

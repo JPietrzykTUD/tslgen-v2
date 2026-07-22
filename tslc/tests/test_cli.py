@@ -416,6 +416,7 @@ def test_cli_test_flag_fails_when_planned_value_tests_do_not_run(
                     returncode=0,
                     stdout="",
                     stderr="",
+                    matches_expectation=True,
                 ),
             ),
         )

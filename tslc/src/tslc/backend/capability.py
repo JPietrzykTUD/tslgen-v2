@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
@@ -11,7 +11,8 @@ from tslc.backend.helper_requirements import (
     BackendHelperManifest,
     EMPTY_HELPER_MANIFEST,
 )
-from tslc.output.verify_model import VerifyBackend
+from tslc.output.verify_model import VerifyBackend, VerifyCompileFailure
+from tslc.value_tests.compile_failure import compile_failure_target_name
 
 if TYPE_CHECKING:
     from tslc.backend.emitted_profile import EmittedProfile
@@ -183,11 +184,48 @@ class BackendCapability:
     ) -> Mapping[str, tuple[LoweredSpecialization, ...]]:
         return profile.specializations(self.backend_id)
 
-    def verify_backend(self, profiles: tuple[EmittedProfile, ...]) -> VerifyBackend:
+    def verify_backend(
+        self,
+        profiles: tuple[EmittedProfile, ...],
+        value_tests: ValueTestProjectPlan,
+    ) -> VerifyBackend:
+        test_profiles = {
+            profile.profile_name: profile
+            for profile in value_tests.profiles_for(self.backend_id)
+        }
+        projected_profiles = self.verify_profiles(profiles)
+        source_names = {
+            projected.profile_name: emitted.profile.name
+            for emitted in profiles
+            if (
+                projected := self.verify_machine_profile(
+                    emitted.profile, emitted.profile_family
+                )
+            )
+            is not None
+        }
+        verify_profiles = []
+        for profile in projected_profiles:
+            test_profile = test_profiles.get(
+                source_names.get(profile.profile_name, profile.profile_name)
+            )
+            failures = (
+                tuple(
+                    VerifyCompileFailure(
+                        target_name=compile_failure_target_name(test_profile, case),
+                        marker=case.failure.marker,
+                    )
+                    for case in test_profile.compile_failure_cases
+                    if case.failure is not None
+                )
+                if test_profile is not None
+                else ()
+            )
+            verify_profiles.append(replace(profile, compile_failures=failures))
         return VerifyBackend(
             backend_id=self.backend_id,
             root_path=self.root_path,
-            profiles=self.verify_profiles(profiles),
+            profiles=tuple(verify_profiles),
         )
 
     def verify_driver(self) -> VerifyBackendDriver:

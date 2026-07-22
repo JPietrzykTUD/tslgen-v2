@@ -20,6 +20,14 @@ class VerifyRunner:
 
 
 @dataclass(frozen=True, slots=True)
+class VerifyCompileFailure:
+    """One isolated target that must fail compilation for an exact marker."""
+
+    target_name: str
+    marker: str
+
+
+@dataclass(frozen=True, slots=True)
 class VerifyProfile:
     profile_name: str
     file_stem: str
@@ -32,6 +40,7 @@ class VerifyProfile:
     linker: str | None = None
     # Optional runner profile used to run value tests for this profile.
     runner: VerifyRunner | None = None
+    compile_failures: tuple[VerifyCompileFailure, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +162,7 @@ class BuildCommand:
     cwd: Path
     env: tuple[BuildCommandEnvironment, ...] = ()
     severity_on_failure: Severity = "error"
+    expected_failure_marker: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +171,13 @@ class BuildCommandResult:
     returncode: int
     stdout: str = ""
     stderr: str = ""
+
+    @property
+    def matches_expectation(self) -> bool:
+        marker = self.command.expected_failure_marker
+        if marker is None:
+            return self.returncode == 0
+        return self.returncode != 0 and marker in f"{self.stdout}\n{self.stderr}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,6 +219,7 @@ __all__ = [
     "BackendToolchain",
     "ToolchainCommands",
     "VerifyBackend",
+    "VerifyCompileFailure",
     "VerifyProfile",
     "VerifyProject",
     "VerifyRunner",

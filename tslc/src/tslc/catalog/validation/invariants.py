@@ -12,12 +12,14 @@ from tslc.catalog.signatures import (
     SignatureTerm,
     parse_signature,
 )
+from tslc.catalog.validation._invariants_arithmetic import validate_arithmetic_contracts
+from tslc.catalog.validation._invariants_overloads import validate_overload_families
+from tslc.diagnostics import Diagnostic, RelatedLocation, SourceSpan, diagnostic_at
 from tslc.syntax.access import (
     child,
     child_from_sequence,
     source_span,
 )
-from tslc.diagnostics import Diagnostic, RelatedLocation, SourceSpan, diagnostic_at
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedBlockDeclaration,
@@ -25,7 +27,13 @@ from tslc.syntax.ast import (
     ParsedTslScalarValue,
 )
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
-from tslc.catalog.validation._invariants_overloads import validate_overload_families
+
+
+def validate_primitive_arithmetic_contracts(
+    catalog: Catalog,
+    diagnostics: list[Diagnostic],
+) -> None:
+    validate_arithmetic_contracts(catalog, diagnostics)
 
 
 def validate_primitive_overload_families(

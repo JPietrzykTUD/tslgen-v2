@@ -225,6 +225,18 @@ prim<v:=(v,v)> add(left, right):
   parameter names or implementation text. This fact currently ends at the
   catalog and editor projection: `LoweredSpecialization`, backend/API naming,
   generated artifacts, tests, and benchmarks do not carry or consume it yet.
+- **Arithmetic contracts**: a primitive may declare an explicit nonempty set of
+  `operations`, parameter-bound `operand_roles`, and atomic `guarantees` in an
+  `arithmetic:` block. The catalog promotes this into the frozen enum-backed
+  types in
+  [catalog/arithmetic.py](src/tslc/catalog/arithmetic.py), resolving each role to
+  its parameter index, non-mask ordinal, and signature kind. The compiler-owned
+  guarantee descriptor table validates operation, numeric-domain, mask, role,
+  and conflict prerequisites; same-name declarations must agree on operations,
+  corresponding role bindings, and non-mask guarantees. Catalog inspection and
+  editor completion, tokens, navigation, and hover project those same facts.
+  Consumers never infer arithmetic semantics from primitive names, parameter
+  spellings or positions, prose, or implementation text.
 - **Fixed-width SVE**: `sve128`/`sve256`/`sve512` inherit scalable `sve` bodies
   but supersede `sve` in their fixed profiles, so one profile emits one SVE
   model. The fixed width is a compile mode (`sve_vector_bits_N`) plus C++ flags

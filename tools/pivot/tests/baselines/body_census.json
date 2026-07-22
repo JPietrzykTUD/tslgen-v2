@@ -1,15 +1,14 @@
 {
-  "digest": "661dd0200d865bac596c4385c0b98dd7273403077a3617097b4bd42e2b62d309",
   "languages": {
     "cpp": {
       "categories": {
-        "call_and_local": 89,
-        "call_only": 2962,
+        "call_and_local": 77,
+        "call_only": 2912,
         "local_only": 10,
-        "native_leaf": 4222,
+        "native_leaf": 4092,
         "synthetic_fixed": 2758
       },
-      "entries": 10041,
+      "entries": 9849,
       "failures": 0,
       "feature_combinations": [
         {
@@ -36,7 +35,7 @@
           ]
         },
         {
-          "count": 60,
+          "count": 48,
           "features": [
             "call_and_local",
             "multi_statement",
@@ -69,7 +68,7 @@
           ]
         },
         {
-          "count": 2228,
+          "count": 2190,
           "features": [
             "multi_statement",
             "nested_typed_call",
@@ -79,7 +78,7 @@
           ]
         },
         {
-          "count": 734,
+          "count": 722,
           "features": [
             "multi_statement",
             "residual_expression",
@@ -96,7 +95,7 @@
           ]
         },
         {
-          "count": 4222,
+          "count": 4092,
           "features": [
             "residual_expression",
             "result_only"
@@ -121,31 +120,31 @@
         }
       ],
       "features": {
-        "call_and_local": 89,
-        "multi_statement": 3061,
+        "call_and_local": 77,
+        "multi_statement": 2999,
         "multiple_locals": 3,
-        "nested_typed_call": 2313,
-        "residual_expression": 9891,
-        "result_only": 10002,
+        "nested_typed_call": 2263,
+        "residual_expression": 9699,
+        "result_only": 9810,
         "synthetic_fixed": 2758,
-        "typed_call": 5809,
-        "typed_local": 99
+        "typed_call": 5747,
+        "typed_local": 87
       },
-      "multi_statement": 3061,
+      "multi_statement": 2999,
       "origins": {
         "fixed_wrapper": 2758,
-        "lowered_source": 7283
+        "lowered_source": 7091
       }
     },
     "rust": {
       "categories": {
         "call_and_local": 5,
-        "call_only": 1654,
+        "call_only": 1640,
         "local_only": 10,
-        "native_leaf": 2176,
+        "native_leaf": 2166,
         "synthetic_fixed": 2734
       },
-      "entries": 6579,
+      "entries": 6555,
       "failures": 0,
       "feature_combinations": [
         {
@@ -185,7 +184,7 @@
           ]
         },
         {
-          "count": 1390,
+          "count": 1376,
           "features": [
             "multi_statement",
             "nested_typed_call",
@@ -224,7 +223,7 @@
           ]
         },
         {
-          "count": 566,
+          "count": 556,
           "features": [
             "residual_expression",
             "result_only"
@@ -258,30 +257,32 @@
       ],
       "features": {
         "call_and_local": 5,
-        "multi_statement": 1669,
+        "multi_statement": 1655,
         "multiple_locals": 3,
-        "nested_typed_call": 1491,
-        "residual_expression": 6429,
-        "result_only": 6564,
-        "rust_unsafe_frame": 3169,
+        "nested_typed_call": 1477,
+        "residual_expression": 6405,
+        "result_only": 6540,
+        "rust_unsafe_frame": 3155,
         "synthetic_fixed": 2734,
-        "typed_call": 4393,
+        "typed_call": 4379,
         "typed_local": 15
       },
-      "multi_statement": 1669,
+      "multi_statement": 1655,
       "origins": {
         "fixed_wrapper": 2734,
-        "lowered_source": 3845
+        "lowered_source": 3821
       }
     }
   },
-  "schema": "tslc-pivot-body-census-v1",
+  "location_digest": "769f24db008c6177afd042ba73ec741b1d750269a23304cc86424b8da08fdf82",
+  "schema": "tslc-pivot-body-census-v2",
+  "semantic_digest": "6f4d97ac0216dd2013099fcb11c828be241abcc37556ebd94ab895ce2fe0ebb3",
   "summary": {
-    "entries": 16620,
+    "entries": 16404,
     "failures": 0,
     "fixed_wrappers": 5492,
-    "multi_statement": 4730,
-    "nominal_collision_entries": 656,
-    "nominal_collision_groups": 328
+    "multi_statement": 4654,
+    "nominal_collision_entries": 640,
+    "nominal_collision_groups": 320
   }
 }

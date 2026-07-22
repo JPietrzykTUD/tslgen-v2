@@ -189,7 +189,29 @@ def _primitive(item: Primitive) -> dict[str, object]:
         ],
         "tests": len(item.tests),
         "brief": item.brief_description,
+        "arithmetic": _arithmetic(item),
         "source": _source(item.source),
+    }
+
+
+def _arithmetic(item: Primitive) -> dict[str, object] | None:
+    contract = item.arithmetic
+    if contract is None:
+        return None
+    return {
+        "operations": [operation.value for operation in contract.ordered_operations],
+        "operand_roles": {
+            binding.role.value: {
+                "parameter": binding.parameter_name,
+                "index": binding.parameter_index,
+                "non_mask_ordinal": binding.non_mask_ordinal,
+                "kind": binding.parameter_kind,
+            }
+            for binding in contract.operand_bindings
+        },
+        "guarantees": [
+            guarantee.value for guarantee in contract.ordered_guarantees
+        ],
     }
 
 

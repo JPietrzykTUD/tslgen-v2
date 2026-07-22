@@ -17,6 +17,7 @@ from tslc.value_tests.case_components import (
     ValueTestCaseRequirements,
     ValueTestDifferential,
     ValueTestExpectation,
+    ValueTestFailure,
     ValueTestFact,
     ValueTestIndex,
     ValueTestInputs,
@@ -44,6 +45,7 @@ class HarnessPrimitiveNames:
     from_array: str | None
     to_array: str | None
     to_integral: str | None
+    to_mask: str | None = None
     load: str | None = None
     store: str | None = None
     diagnostics: tuple[Diagnostic, ...] = ()
@@ -83,6 +85,21 @@ class ValueTestParityEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class ValueTestProfileCaseExclusion:
+    """One case kind a backend cannot observe for a machine-profile family."""
+
+    profile_family: str
+    case_kind: str
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.profile_family or not self.case_kind or not self.reason:
+            raise ValueError(
+                "value-test profile case exclusion requires family, kind, and reason"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class ValueTestBackendSupport:
     """Value-test case kinds one backend renderer can consume."""
 
@@ -90,6 +107,20 @@ class ValueTestBackendSupport:
     case_kinds: frozenset[str]
     supports_differential: bool = False
     overload_inference_placeholders: int = 0
+    profile_case_exclusions: tuple[ValueTestProfileCaseExclusion, ...] = ()
+
+    def exclusion_for(
+        self, profile_family: str, case_kind: str
+    ) -> ValueTestProfileCaseExclusion | None:
+        return next(
+            (
+                exclusion
+                for exclusion in self.profile_case_exclusions
+                if exclusion.profile_family == profile_family
+                and exclusion.case_kind == case_kind
+            ),
+            None,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +129,14 @@ class ValueTestProfilePlan:
     profile_name: str
     cases: tuple[ValueTestCasePlan, ...]
     support_headers: tuple[str, ...] = ()
+
+    @property
+    def runner_cases(self) -> tuple[ValueTestCasePlan, ...]:
+        return tuple(case for case in self.cases if case.kind != "compile_failure")
+
+    @property
+    def compile_failure_cases(self) -> tuple[ValueTestCasePlan, ...]:
+        return tuple(case for case in self.cases if case.kind == "compile_failure")
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +157,7 @@ __all__ = (
     "HarnessPrimitiveNames",
     "IndexStyle",
     "MemoryStorage",
+    "ValueTestFailure",
     "ValueTestBackendSupport",
     "ValueTestCaseCapability",
     "ValueTestCasePlan",
@@ -132,6 +172,7 @@ __all__ = (
     "ValueTestInvocation",
     "ValueTestMemory",
     "ValueTestParityEntry",
+    "ValueTestProfileCaseExclusion",
     "ValueTestProfilePlan",
     "ValueTestProjectPlan",
     "ValueTestRepresentation",

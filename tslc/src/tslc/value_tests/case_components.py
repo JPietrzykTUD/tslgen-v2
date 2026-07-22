@@ -6,10 +6,14 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Literal
 
+from tslc.catalog.arithmetic import ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER
+from tslc.catalog.model import TestFailureReason
+
 ExpectedArity = Literal["optional", "non_empty", "one", "lanes", "target_lanes"]
 InputArity = Literal["optional", "non_empty", "one"]
 MemoryStorage = Literal["packed", "unpacked"]
 IndexStyle = Literal["register", "pointer"]
+ValueTestFailurePhase = Literal["runtime", "compile"]
 
 
 class ValueTestFact(Enum):
@@ -34,6 +38,7 @@ class ValueTestFact(Enum):
     SCALABLE_MASK_INPUTS = auto()
     SCALABLE_LOAD = auto()
     DIFFERENTIAL = auto()
+    FAILURE = auto()
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +82,30 @@ class ValueTestExpectation:
 
     values: tuple[str, ...] = ()
     text: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ValueTestFailure:
+    """Backend-neutral failure expected from one generated case."""
+
+    reason: TestFailureReason
+    phase: ValueTestFailurePhase = "runtime"
+
+    def __post_init__(self) -> None:
+        if self.phase not in {"runtime", "compile"}:
+            raise ValueError(f"unsupported value-test failure phase {self.phase!r}")
+
+    @property
+    def marker(self) -> str:
+        """Stable backend payload used to distinguish the intended failure."""
+
+        if self.reason is TestFailureReason.INTEGER_ZERO_DIVISOR:
+            return (
+                ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER
+                if self.phase == "compile"
+                else "TSL_ARITH_INTEGER_ZERO_DIVISOR"
+            )
+        raise AssertionError(f"unhandled value-test failure reason {self.reason!r}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,6 +271,9 @@ class ValueTestDifferential:
     from_array_name: str
     to_array_name: str | None = None
     to_integral_name: str | None = None
+    to_mask_name: str | None = None
+    mask_from_bits_template: str | None = None
+    nonzero_argument_index: int | None = None
     fuzz_seed: int | None = None
     fuzz_iterations: int = 0
 
@@ -253,4 +285,8 @@ class ValueTestDifferential:
         if self.fuzz_iterations < 0:
             raise ValueError(
                 "differential value-test fuzz iterations must be non-negative"
+            )
+        if self.nonzero_argument_index is not None and self.nonzero_argument_index < 0:
+            raise ValueError(
+                "differential nonzero argument index must be non-negative"
             )

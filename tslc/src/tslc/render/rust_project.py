@@ -40,6 +40,8 @@ from tslc.render.rust_policy_consumption import (
 )
 from tslc.backend.rust_algorithm import rust_algorithm_module
 from tslc.backend.rust_vectors import rust_registrations
+from tslc.value_tests.compile_failure import compile_failure_target_name
+from tslc.value_tests.model import ValueTestProjectPlan
 
 
 def rust_artifacts(
@@ -52,6 +54,7 @@ def rust_artifacts(
         EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN
     ),
     benchmark_layout_plan: RustBenchmarkLayoutPlan | None = None,
+    value_tests: ValueTestProjectPlan | None = None,
 ) -> list[Artifact]:
     validate_rust_policy_selection_plan(profiles, selection_plan)
     emitted_names = {profile.profile.name for profile in profiles}
@@ -228,7 +231,7 @@ def rust_artifacts(
     artifacts.append(
         text(
             "rust/Cargo.toml",
-            _rust_cargo(benchmark_layout_plan, assets),
+            _rust_cargo(benchmark_layout_plan, assets, value_tests=value_tests),
             media_type=media_type,
         )
     )
@@ -473,6 +476,8 @@ def _rust_build_policy_modules(
 def _rust_cargo(
     benchmark_layout_plan: RustBenchmarkLayoutPlan,
     assets: RenderAssets,
+    *,
+    value_tests: ValueTestProjectPlan | None = None,
 ) -> str:
     profile_slugs = tuple(
         profile.profile_slug for profile in benchmark_layout_plan.profiles
@@ -488,6 +493,22 @@ def _rust_cargo(
     features.append("value_tests = []")
     # Benchmark targets stay outside ordinary builds unless explicitly requested.
     features.append("variant_benchmarks = []")
+    compile_failure_targets: list[str] = []
+    if value_tests is not None:
+        for profile in value_tests.profiles_for("rust"):
+            for case in profile.compile_failure_cases:
+                target = compile_failure_target_name(profile, case)
+                features.append(f"{target} = []")
+                compile_failure_targets.append(
+                    "\n".join(
+                        (
+                            "[[example]]",
+                            f'name = "{target}"',
+                            f'path = "examples/{target}.rs"',
+                            f'required-features = ["{target}"]',
+                        )
+                    )
+                )
     bench_targets = "\n\n".join(
         assets.fill(
             "rust_benchmark_target.toml.tmpl",
@@ -502,6 +523,13 @@ def _rust_cargo(
     return assets.fill(
         "rust_cargo.toml.tmpl",
         features="\n".join(features),
-        bench_targets=(f"\n\n{bench_targets}" if bench_targets else ""),
+        bench_targets=(
+            "\n\n"
+            + "\n\n".join(
+                part for part in (bench_targets, *compile_failure_targets) if part
+            )
+            if bench_targets or compile_failure_targets
+            else ""
+        ),
         benchmark_profile=RUST_BENCHMARK_CODEGEN_CONTRACT.render_cargo_profile(),
     )

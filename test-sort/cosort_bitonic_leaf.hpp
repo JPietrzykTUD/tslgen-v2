@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <type_traits>
 #include <vector>
 
 #include <tsl.hpp>
@@ -23,11 +24,16 @@
 // those masks (permute + blend). Shorter inputs are padded with the type max.
 //
 // `rows` is fixed so the resident key bank stays within the register file; the
-// capacity therefore scales with the native lane count (256 for u32, 128 for u64).
+// capacity therefore scales with the chosen extension's lane count -- e.g. u32:
+// 256 (16 lanes) / 128 (8) / 64 (4); u64: 128 (8) / 64 (4) / 32 (2). SimdStyle
+// selects the extension, defaulting to the native (widest) one.
 // -----------------------------------------------------------------------------
-template <class DataType = std::uint32_t>
+template <class DataType = std::uint32_t,
+          class SimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, DataType>>
 class TslCoSortBitonicLeaf {
-  using Vec = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, DataType>;
+  using Vec = SimdStyle;
+  static_assert(std::is_same_v<typename SimdStyle::base_type, DataType>,
+                "SimdStyle::base_type must match DataType");
   using register_type = typename Vec::register_type;
   using mask_type = typename Vec::mask_type;
   using imask_type = typename Vec::imask_type;

@@ -7,7 +7,10 @@ from tslc.value_tests.lane_model import (
     render_mask_conversion,
     render_value_case,
 )
-from tslc.value_tests.model import ValueTestCasePlan
+from tslc.value_tests.model import (
+    ValueTestCasePlan,
+    ValueTestProfileCaseExclusion,
+)
 from tslc.value_tests._render_cpp_core import (
     _array_to_vector,
     _broadcast,
@@ -16,6 +19,7 @@ from tslc.value_tests._render_cpp_core import (
     _lane_list,
     _mask_to_vector,
     _reduction,
+    _runtime_failure,
     _scalar_result,
     _scalar_vector,
     _status_pointer,
@@ -56,6 +60,17 @@ from tslc.value_tests.renderer_capability import ValueTestRendererCapability
 CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
     backend_id="cpp",
     supports_differential=True,
+    isolated_case_kinds=frozenset({"compile_failure"}),
+    profile_case_exclusions=(
+        ValueTestProfileCaseExclusion(
+            profile_family="wasm32",
+            case_kind="runtime_failure",
+            reason=(
+                "the generated wasm32 C++ toolchain does not provide the exception "
+                "unwinding required to observe the runtime-failure marker"
+            ),
+        ),
+    ),
     case_renderers={
         "array_to_vector": _array_to_vector,
         "broadcast": _broadcast,
@@ -85,6 +100,7 @@ CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "pointer_free": _pointer_free,
         "pointer_lifetime": _pointer_lifetime,
         "reduction": _reduction,
+        "runtime_failure": _runtime_failure,
         "repr_cast": _repr_cast,
         "scalar_pointer_load": _scalar_pointer_load,
         "scalar_result": _scalar_result,

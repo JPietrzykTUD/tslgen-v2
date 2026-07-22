@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
+from tslc.value_tests.render_cpp_helpers import render_extension_test_template
 
 
 def _convert(case: ValueTestCasePlan) -> str:
@@ -296,8 +297,6 @@ def _differential(case: ValueTestCasePlan) -> str:
         f"  using Hw = tsl::simd<{case.base_spelling}, tsl::{differential.hardware_extension}>;",
         f"  using Ref = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
     ]
-    hw_args = []
-    ref_args = []
     for position, values in enumerate(case.inputs.vectors):
         literals = cpp_literal_list(values, case.type_tag)
         lines.append(f"  static const {case.base_spelling} in{position}[{case.lanes}] = {{{literals}}};")
@@ -307,10 +306,48 @@ def _differential(case: ValueTestCasePlan) -> str:
             f"  for (std::size_t i = 0; i < {case.lanes}; ++i) "
             f"{{ hin{position}[i] = in{position}[i]; r{position}[i] = in{position}[i]; }}"
         )
-        hw_args.append(f"tsl::{differential.from_array_name}<Hw>(hin{position})")
-        ref_args.append(f"r{position}")
-    hw_call = f"tsl::{case.call_name}<Hw>({', '.join(hw_args)})"
-    ref_call = f"tsl::{case.call_name}<Ref>({', '.join(ref_args)})"
+    for position, mask in enumerate(case.inputs.masks):
+        if differential.to_mask_name is None:
+            raise ValueError("masked differential case requires to_mask_name")
+        hardware_mask = _differential_hardware_mask(case, f"{mask}ull")
+        lines.append(
+            f"  typename Hw::mask_type hm{position} = {hardware_mask};"
+        )
+        lines.append(
+            f"  typename Ref::mask_type rm{position} = "
+            f"tsl::{differential.to_mask_name}<Ref>("
+            f"static_cast<typename Ref::imask_type>({mask}ull));"
+        )
+    hw_args = []
+    ref_args = []
+    vector_index = 0
+    mask_index = 0
+    for kind in case.invocation.param_kinds:
+        if kind == "v":
+            hw_args.append(
+                f"tsl::{differential.from_array_name}<Hw>(hin{vector_index})"
+            )
+            ref_args.append(f"r{vector_index}")
+            vector_index += 1
+        elif kind == "m":
+            hw_args.append(f"hm{mask_index}")
+            ref_args.append(f"rm{mask_index}")
+            mask_index += 1
+        elif kind != "sImm":
+            raise ValueError(f"unsupported differential argument kind {kind!r}")
+    template_args_hw = ["Hw"]
+    template_args_ref = ["Ref"]
+    if case.invocation.immediate is not None:
+        template_args_hw.append(case.invocation.immediate)
+        template_args_ref.append(case.invocation.immediate)
+    template_args_hw.extend(case.invocation.generic_defaults)
+    template_args_ref.extend(case.invocation.generic_defaults)
+    hw_call = (
+        f"tsl::{case.call_name}<{', '.join(template_args_hw)}>({', '.join(hw_args)})"
+    )
+    ref_call = (
+        f"tsl::{case.call_name}<{', '.join(template_args_ref)}>({', '.join(ref_args)})"
+    )
     if case.invocation.result_kind == "m":
         lines.append(f"  auto hw = tsl::{differential.to_integral_name}<Hw>({hw_call});")
         lines.append(f"  typename Ref::mask_type ref = {ref_call};")
@@ -328,6 +365,29 @@ def _differential(case: ValueTestCasePlan) -> str:
     lines.append("}")
     return "\n".join(lines)
 
+
+def _differential_hardware_mask(case: ValueTestCasePlan, mask_bits: str) -> str:
+    """Materialize authored lane bits through the extension's mask test adapter."""
+
+    differential = case.differential
+    assert differential is not None and differential.to_mask_name is not None
+    template = differential.mask_from_bits_template
+    if template is None:
+        return (
+            f"tsl::{differential.to_mask_name}<Hw>("
+            f"static_cast<typename Hw::imask_type>({mask_bits}))"
+        )
+    return render_extension_test_template(
+        template,
+        vec="Hw",
+        mask_bits=mask_bits,
+        authored_lanes=str(case.lanes),
+        lanes=str(case.lanes),
+        base_type=case.base_spelling,
+        base=case.base_spelling,
+    )
+
+
 def _differential_fuzz(case: ValueTestCasePlan) -> str:
     """A runtime PRNG loop comparing `prim<Hw>` to the generic reference `prim<Ref>` over many
     random inputs. On the first disagreement it prints the failing lane (via check_match) plus the
@@ -335,7 +395,23 @@ def _differential_fuzz(case: ValueTestCasePlan) -> str:
 
     differential = case.differential
     assert differential is not None
-    arity = len(case.invocation.param_kinds)
+    param_kinds = case.invocation.param_kinds
+    vector_positions = [
+        position for position, kind in enumerate(param_kinds) if kind == "v"
+    ]
+    vector_index_by_position = {
+        position: vector_index
+        for vector_index, position in enumerate(vector_positions)
+    }
+    mask_positions = [
+        position for position, kind in enumerate(param_kinds) if kind == "m"
+    ]
+    if len(mask_positions) > 1:
+        raise ValueError("differential fuzz supports at most one mask argument")
+    if any(kind not in {"m", "v"} for kind in param_kinds):
+        raise ValueError("differential fuzz supports only mask and vector arguments")
+    if mask_positions and differential.to_mask_name is None:
+        raise ValueError("masked differential fuzz requires to_mask_name")
     lanes = case.lanes
     base = case.base_spelling
     lines = [
@@ -345,22 +421,66 @@ def _differential_fuzz(case: ValueTestCasePlan) -> str:
         f"  std::uint64_t rng = {differential.fuzz_seed}ULL;",
         f"  for (std::size_t iter = 0; iter < {differential.fuzz_iterations}; ++iter) {{",
     ]
-    for position in range(arity):
-        lines.append(f"    typename tsl::array_for<Hw>::type hin{position};")
-        lines.append(f"    typename Ref::register_type r{position};")
+    if mask_positions:
+        to_mask_name = differential.to_mask_name
+        lines.extend(
+            [
+                "    const std::uint64_t mask_bits = "
+                "tsl::test::fuzz_next<std::uint64_t>(rng);",
+                "    typename Hw::mask_type hm = "
+                f"{_differential_hardware_mask(case, 'mask_bits')};",
+                "    typename Ref::mask_type rm = "
+                f"tsl::{to_mask_name}<Ref>("
+                "static_cast<typename Ref::imask_type>(mask_bits));",
+            ]
+        )
+    for vector_index in range(len(vector_positions)):
+        lines.append(f"    typename tsl::array_for<Hw>::type hin{vector_index};")
+        lines.append(f"    typename Ref::register_type r{vector_index};")
     lines.append(f"    for (std::size_t i = 0; i < {lanes}; ++i) {{")
-    for position in range(arity):
+    for position in vector_positions:
+        vector_index = vector_index_by_position[position]
+        qualifier = (
+            "" if position == differential.nonzero_argument_index else "const "
+        )
         lines.append(
-            f"      const {base} v{position} = tsl::test::fuzz_next<{base}>(rng); "
-            f"hin{position}[i] = v{position}; r{position}[i] = v{position};"
+            f"      {qualifier}{base} v{vector_index} = "
+            f"tsl::test::fuzz_next<{base}>(rng);"
+        )
+        if position == differential.nonzero_argument_index:
+            if mask_positions:
+                lines.append(
+                    f"      if (((mask_bits >> i) & 1ULL) == 0) v{vector_index} = "
+                    f"static_cast<{base}>(0);"
+                )
+                lines.append(
+                    f"      else if (v{vector_index} == static_cast<{base}>(0)) "
+                    f"v{vector_index} = static_cast<{base}>(1);"
+                )
+            else:
+                lines.append(
+                    f"      if (v{vector_index} == static_cast<{base}>(0)) "
+                    f"v{vector_index} = static_cast<{base}>(1);"
+                )
+        lines.append(
+            f"      hin{vector_index}[i] = v{vector_index}; "
+            f"r{vector_index}[i] = v{vector_index};"
         )
     lines.append("    }")
-    hw_args = ", ".join(
-        f"tsl::{differential.from_array_name}<Hw>(hin{p})" for p in range(arity)
-    )
-    ref_args = ", ".join(f"r{p}" for p in range(arity))
-    hw_call = f"tsl::{case.call_name}<Hw>({hw_args})"
-    ref_call = f"tsl::{case.call_name}<Ref>({ref_args})"
+    hw_args: list[str] = []
+    ref_args: list[str] = []
+    for position, kind in enumerate(param_kinds):
+        if kind == "m":
+            hw_args.append("hm")
+            ref_args.append("rm")
+        else:
+            vector_index = vector_index_by_position[position]
+            hw_args.append(
+                f"tsl::{differential.from_array_name}<Hw>(hin{vector_index})"
+            )
+            ref_args.append(f"r{vector_index}")
+    hw_call = f"tsl::{case.call_name}<Hw>({', '.join(hw_args)})"
+    ref_call = f"tsl::{case.call_name}<Ref>({', '.join(ref_args)})"
     if case.invocation.result_kind == "m":
         lines.append(f"    auto hw = tsl::{differential.to_integral_name}<Hw>({hw_call});")
         lines.append(f"    typename Ref::mask_type ref = {ref_call};")
@@ -373,11 +493,19 @@ def _differential_fuzz(case: ValueTestCasePlan) -> str:
     lines.append(
         f'      std::fprintf(stderr, "  reproduce: fuzz iter %zu, seed {differential.fuzz_seed}\\n", iter);'
     )
+    if mask_positions:
+        lines.append(
+            '      std::fprintf(stderr, "    mask_bits=%llu\\n", '
+            "static_cast<unsigned long long>(mask_bits));"
+        )
     lines.append(f"      for (std::size_t i = 0; i < {lanes}; ++i) {{")
     lines.append('        std::fprintf(stderr, "    lane %zu:", i);')
-    for position in range(arity):
+    for position in vector_positions:
+        vector_index = vector_index_by_position[position]
         lines.append(f'        std::fprintf(stderr, " arg{position}=");')
-        lines.append(f"        tsl::test::print_lane<{base}>(hin{position}[i]);")
+        lines.append(
+            f"        tsl::test::print_lane<{base}>(hin{vector_index}[i]);"
+        )
     lines.append('        std::fprintf(stderr, "\\n");')
     lines.append("      }")
     lines.append("      return 1;")

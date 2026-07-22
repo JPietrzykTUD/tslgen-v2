@@ -27,6 +27,7 @@ from tslc.output.verify_model import (
     BuildVerificationReport,
     BuildVerifierConfig,
     VerifyBackend,
+    VerifyCompileFailure,
     VerifyProfile,
     VerifyProject,
     VerifyRunner,
@@ -107,9 +108,11 @@ def verify_generated_project(
             for command in group:
                 result = runner(command)
                 results.append(result)
-                if result.returncode != 0:
-                    diagnostics.append(command_failure_diagnostic(result))
+                if not result.matches_expectation:
+                    diagnostics.append(_command_expectation_diagnostic(result))
                     break
+                if command.expected_failure_marker is not None:
+                    continue
                 follow_up = driver.after_successful_command(
                     result,
                     profiles_by_name,
@@ -123,6 +126,30 @@ def verify_generated_project(
         commands=tuple(results),
         diagnostics=tuple(diagnostics),
         skipped=tuple(skipped),
+    )
+
+
+def _command_expectation_diagnostic(result: BuildCommandResult) -> Diagnostic:
+    marker = result.command.expected_failure_marker
+    if marker is None:
+        return command_failure_diagnostic(result)
+    command_text = " ".join(result.command.argv)
+    detail = result.stderr.strip() or result.stdout.strip()
+    if result.returncode == 0:
+        message = (
+            f"expected compilation to fail with marker {marker!r}, but command "
+            f"succeeded: {command_text}"
+        )
+    else:
+        suffix = f": {detail}" if detail else ""
+        message = (
+            f"compilation failed without expected marker {marker!r}: "
+            f"{command_text}{suffix}"
+        )
+    return Diagnostic(
+        severity=result.command.severity_on_failure,
+        code="TSL-BUILD-VERIFY-EXPECTED-COMPILE-FAILURE",
+        message=message,
     )
 
 

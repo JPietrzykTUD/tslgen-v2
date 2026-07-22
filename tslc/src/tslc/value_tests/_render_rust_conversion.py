@@ -330,8 +330,6 @@ def _differential(case: ValueTestCasePlan) -> str:
         f"        type Hw = Simd<{case.base_spelling}, {rust_extension_tag(differential.hardware_extension)}>;",
         f"        type Ref = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
-    hw_args: list[str] = []
-    ref_args: list[str] = []
     for position, values in enumerate(case.inputs.vectors):
         literals = rust_literal_list(values, case.type_tag)
         lines.append(
@@ -348,10 +346,36 @@ def _differential(case: ValueTestCasePlan) -> str:
             f"hin{position}[i] = in{position}[i]; "
             f"r{position}[i] = in{position}[i]; }}"
         )
-        hw_args.append(f"{from_array}::<Hw>(&hin{position})")
-        ref_args.append(f"r{position}")
+    for position, mask in enumerate(case.inputs.masks):
+        to_mask = _required_name(differential.to_mask_name, "to_mask_name")
+        lines.append(
+            f"        let hm{position} = {to_mask}::<Hw>("
+            f"{mask}u64 as <Hw as SimdVector>::ImaskType);"
+        )
+        lines.append(
+            f"        let rm{position} = {to_mask}::<Ref>("
+            f"{mask}u64 as <Ref as SimdVector>::ImaskType);"
+        )
+    hw_args: list[str] = []
+    ref_args: list[str] = []
+    vector_index = 0
+    mask_index = 0
+    for kind in case.invocation.param_kinds:
+        if kind == "v":
+            hw_args.append(f"{from_array}::<Hw>(&hin{vector_index})")
+            ref_args.append(f"r{vector_index}")
+            vector_index += 1
+        elif kind == "m":
+            hw_args.append(f"hm{mask_index}")
+            ref_args.append(f"rm{mask_index}")
+            mask_index += 1
+        elif kind != "sImm":
+            raise ValueError(f"unsupported differential argument kind {kind!r}")
     hw_template_args = ["Hw", *case.invocation.generic_defaults]
     ref_template_args = ["Ref", *case.invocation.generic_defaults]
+    if case.invocation.immediate is not None:
+        hw_template_args.insert(1, case.invocation.immediate)
+        ref_template_args.insert(1, case.invocation.immediate)
     hw_template_args.extend("_" for _ in range(case.invocation.inferred_type_args))
     ref_template_args.extend("_" for _ in range(case.invocation.inferred_type_args))
     hw_call = (

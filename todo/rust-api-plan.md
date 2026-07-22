@@ -18,7 +18,9 @@ API.
   especially element type and fixed parallel lane count.
 - `Simd<T, N>` is the canonical owned fixed-lane type and means exactly `N`
   logical lanes of `T`. `Fixed<N>` is not part of that value's public spelling;
-  it may remain an internal mapping concept or a higher-level algorithm marker.
+  it remains compiler-internal in the initial API. A future higher-level
+  algorithm/dispatch layer may introduce a public zero-sized fixed-policy
+  marker only when that layer demonstrates a concrete use for it.
 - A public `(T, N)` shape is admitted only when `N == 1` for the scalar shape or
   `N * bits(T)` is one of the source-authored fixed vector widths. The current
   ordinary width ladder is 128, 256, and 512 bits; it is not an arbitrary
@@ -134,18 +136,64 @@ API.
   `_imm`, even when no runtime sibling currently exists. The immediate is a
   const generic rather than a runtime argument. An authored name that already
   ends in `_imm` is not suffixed again.
+- The implemented source-owned overload registry distinguishes primary and
+  non-primary semantic forms without prescribing Rust spelling. For
+  `count_distribution`, Rust exposes the primary `uniform` runtime form as
+  `shift_left`/`shift_right` and projects the non-primary `per_lane` form as
+  `shift_left_each`/`shift_right_each`. The compiler-oriented phrase
+  `per_lane` does not leak into the public Rust method name. Immediate forms
+  remain `shift_left_imm`/`shift_right_imm` independently.
+- Rust composes comprehensive method-name distinctions in the stable order
+  semantic overload form, immediate binding, then mask policy. For example,
+  the masked immediate shift is `shift_left_imm_masked`, not
+  `shift_left_masked_imm`; a zeroing form would be
+  `shift_left_imm_masked_zero`. This ordering is independent of which sibling
+  forms a selected profile emits and preserves authored names that already end
+  in `_imm`, such as `mul_imm_masked`.
+- `Shl` and `Shr` are not added merely to avoid a named overload suffix. Rust's
+  portable SIMD supports scalar and vector right-hand sides through the
+  operator traits, but masks large counts modulo the lane width; the current
+  TSL shift contract instead produces zero or sign-fill values when a count is
+  at least the lane width. Operator projection remains deferred until that
+  target-independent semantic difference is deliberately resolved.
 - The primary safe slice API uses `from_slice` and `copy_to_slice`. Both operate
   on the first logical vector-width elements of a longer slice and panic when
   the slice is too short. Ordinary use does not introduce a public
   `SliceTooShort` error or require `Result` handling.
+- The initial API has no `try_from_slice` or `try_copy_to_slice` variants.
+  Callers that need recovery can check `slice.len() >= N`; adding recoverable
+  conveniences later would be backward-compatible and does not justify an
+  initial public error or inconsistent `Option`/`Result` design.
+- The source `payload_extent=vector` store is the form used by
+  `copy_to_slice`. The non-primary `payload_extent=scalar` store has no vector
+  operand and does not become a `Simd<T, N>` method or associated function. If
+  the comprehensive primitive layer publicly retains every TSL primitive, it
+  exposes scalar store as an explicitly unsafe free function such as
+  `primitives::store_scalar(ptr, value)`; its final raw-module path remains a
+  separate topology decision.
 - Safe slice access selects the unaligned TSL load/store variant because a Rust
   slice guarantees element alignment, not vector alignment. Raw-pointer access
   is separate, explicitly `unsafe`, and documents the caller obligations
   derived from the selected TSL primitive.
+- The initial raw-pointer methods are
+  `unsafe Simd::<T, N>::from_ptr(*const T) -> Self` and
+  `unsafe value.copy_to_ptr(*mut T)`. They read or write exactly `N`
+  consecutive initialized `T` values through the vector-unaligned TSL forms;
+  callers must provide ordinary `T` alignment and a valid range. No aligned
+  raw-pointer variants are initially exposed because the required vector
+  alignment follows the private profile-selected representation and has no
+  stable public proof or contract yet.
 - Rust standard operators are explicit, compiler-owned projections of
   compatible TSL primitives onto the owned vector type. Rust trait names and
   method spellings do not become `tsldata` primitive metadata, and renderers do
   not infer operator compatibility from target text.
+- The initial standard-operator surface includes `Add`, `Sub`, and `Mul` for
+  their admitted numeric element types, plus integer-only `BitAnd`, `BitOr`,
+  `BitXor`, and `Not`. Float bit-pattern operations remain explicitly named
+  primitive methods because Rust does not define scalar bitwise traits for
+  `f32` or `f64`. Each admitted binary base operator also includes its ordinary
+  assignment trait (`AddAssign`, `SubAssign`, `MulAssign`, `BitAndAssign`,
+  `BitOrAssign`, or `BitXorAssign`) in the same slice.
 - Lane-wise comparisons remain explicitly SIMD operations: `simd_eq`,
   `simd_ne`, `simd_lt`, and the corresponding ordering methods return an opaque
   mask. `PartialEq` has the ordinary Rust whole-value meaning: `a == b` is true
@@ -289,16 +337,32 @@ becoming another owner of primitive selection or semantics.
   lane-count, vector type, and profile availability from their existing typed
   owners. The Rust projection may decide Rust method and trait spellings,
   receiver placement, and documented slice failure behavior.
-- Add source-owned semantic primitive or operand forms when signatures alone
-  cannot identify stable overload roles. Parse and validate those forms into
-  typed catalog facts before facade planning; do not add primitive-name
-  branches to compensate for missing source semantics.
+- Propagate the implemented source-owned `PrimitiveOverload` fact through
+  `Catalog.resolve_primitive_overload(...)` into a backend-neutral
+  `ResolvedPrimitiveOverload | None` field on `LoweredSpecialization` before
+  facade planning. `SelectedImplementation` already preserves the originating
+  `Primitive`, so it needs no duplicate field. Do not reconstruct overload
+  roles from parameter kinds or primitive-name branches.
+- Project non-primary overload values through explicit Rust facade spelling
+  policy keyed by typed `(axis, value)`, not by primitive name. The initial
+  `count_distribution=per_lane` spelling is `_each`; primary values add no
+  overload suffix. Unknown values fail facade validation until their Rust
+  presentation is deliberately added.
+- Compose the typed facade-name components in one place and in the settled
+  order: overload suffix, `_imm`, then `_masked`/`_masked_zero`. Renderers,
+  documentation, tests, and benchmark consumers receive the already-finalized
+  name and do not repeat this ordering logic.
 - Derive ordinary masked-computation receivers from typed parameter kinds: skip
   a leading control mask, select the first ordinary vector operand as `self`,
   and retain the mask as the first explicit method argument. Do not inspect
   parameter names, target text, or human documentation, and do not add
   Rust-specific receiver metadata to source data. Express genuine exceptions
   as explicit typed facade descriptors.
+- Require a genuine owned vector operand before projecting a primitive as a
+  `Simd<T, N>` method. A form such as `payload_extent=scalar` store, whose typed
+  signature has no vector operand, is either a free function in the separately
+  named comprehensive/raw primitive layer or is not publicly projected; it is
+  never attached to `Simd<T, N>` merely to provide a namespace.
 - Reject a facade before rendering when its primitive is missing or has an
   incompatible signature, attributes, safety contract, result type, or profile
   availability. Templates only format validated facade models.
@@ -315,8 +379,8 @@ becoming another owner of primitive selection or semantics.
 - Require at least the logical lane count, operate on the first lane count of a
   longer slice, and use ordinary bounds-check panics for shorter slices.
 - Do not add `SliceTooShort` to the primary public API. A recoverable
-  `try_from_slice` or `try_copy_to_slice` convenience may be considered later
-  without changing the primary contract.
+  convenience is deliberately omitted from the initial API; callers may check
+  the slice length explicitly.
 - Select the existing `aligned=false` TSL primitive for a normal slice. Keep
   the internal unsafe block small: the slice length check proves that the full
   vector-width pointer range is readable or writable.
@@ -324,6 +388,10 @@ becoming another owner of primitive selection or semantics.
   Generate their `# Safety` documentation from the primitive's typed safety
   reasons. Do not expose a safe aligned variant without an alignment-bearing
   input type that can prove the stronger precondition.
+- Spell the initial vector-unaligned raw methods `from_ptr` and `copy_to_ptr`,
+  mirroring the safe `from_slice`/`copy_to_slice` direction. Do not initially
+  emit aligned raw variants; revisit them only with an explicit stable
+  alignment contract or alignment-bearing input abstraction.
 - Test slices shorter than, equal to, and longer than the lane count; verify
   that longer stores modify only the prefix. Include element-aligned but
   vector-misaligned storage and representative `Simd<T, N>`, native, hardware,
@@ -343,7 +411,8 @@ becoming another owner of primitive selection or semantics.
 ### 4. Add Rust standard operators
 
 - Define an explicit typed Rust operator mapping from compatible canonical TSL
-  primitives to traits such as `core::ops::Add`, `Sub`, and `Mul`.
+  primitives to `core::ops::Add`, `Sub`, and `Mul`, plus integer-only
+  `BitAnd`, `BitOr`, `BitXor`, and `Not`.
 - Admit a mapping only when the resolved primitive has the required unmasked
   homogeneous shape, returns the same logical vector type, needs no unexpressed
   attribute or immediate, and is caller-safe.
@@ -357,10 +426,15 @@ becoming another owner of primitive selection or semantics.
   `!=` is its ordinary negation and therefore true when any lane comparison is
   false. Do not give `<`, `<=`, `>`, or `>=` an implicit all-lanes or any-lane
   reduction through `PartialOrd`.
-- Add assignment traits only after their base operators are established.
-  Named operations such as reductions, `min`, `max`, conversions, saturating
-  arithmetic, and masked forms remain explicit methods unless a separate
+- Add `AddAssign`, `SubAssign`, `MulAssign`, `BitAndAssign`, `BitOrAssign`, and
+  `BitXorAssign` alongside their admitted base operators; assignment does not
+  introduce a second arithmetic contract. Named operations such as reductions,
+  `min`, `max`, conversions, saturating arithmetic, float bit-pattern
+  operations, and masked forms remain explicit methods unless a separate
   compatible mapping is agreed.
+- Keep `Shl` and `Shr` out of the initial mapping. Revisit them only after the
+  large-count contract is made compatible with the intended Rust operator
+  semantics for both scalar and vector right-hand sides.
 - Test operator syntax in an external consumer and compare its results with
   direct primitive calls across generic and representative hardware mappings.
 
@@ -368,17 +442,10 @@ becoming another owner of primitive selection or semantics.
 
 These are deliberately not settled by the initial ordering:
 
-- Whether `Fixed<N>` remains public solely as a higher-level algorithm-selection
-  marker or becomes entirely compiler-internal.
-- Whether optional recoverable `try_from_slice`/`try_copy_to_slice` methods are
-  useful in addition to the primary panicking API.
-- The exact naming and stability promise for advanced raw-pointer and aligned
-  memory entry points.
-- Which additional named primitives should receive Rust standard-operator or
-  assignment-trait projections after `Add`, `Sub`, and `Mul`.
-- The exact target-independent source shape and form vocabulary for overloaded
-  primitive families that a non-overloading backend must expose under distinct
-  names, including uniform and per-lane shift counts.
+- Whether shift counts at least the lane width should retain the current TSL
+  zero/sign-fill behavior or change to the modulo-width behavior used by Rust
+  portable SIMD, and consequently whether `Shl`/`Shr` can be exposed without
+  surprising Rust semantics.
 - The public helper/algorithm API that performs runtime CPU dispatch into a
   statically specialized kernel.
 - Whether the C++ `dataparallel::fixed<N>` mapping should be updated to the same
@@ -457,6 +524,48 @@ These are deliberately not settled by the initial ordering:
   suffix and exposes the immediate as a Rust const generic. Existing `_imm`
   source names are not doubled, and adding a runtime sibling cannot rename the
   immediate method.
+- 2026-07-22: Agreed that the implemented source
+  `count_distribution=per_lane` value is projected as the more idiomatic Rust
+  suffix `_each`, yielding `shift_left_each` and `shift_right_each`; `per_lane`
+  remains source/compiler vocabulary. The primary uniform forms remain
+  unsuffixed and immediate forms retain `_imm`. `Shl`/`Shr` stay deferred
+  because current TSL large-count behavior differs from Rust portable SIMD.
+- 2026-07-22: Agreed that comprehensive Rust method names compose semantic
+  overload form first, immediate binding second, and mask policy last. The
+  resulting spellings include `shift_left_imm_masked` and
+  `shift_left_imm_masked_zero`, never `shift_left_masked_imm`; authored `_imm`
+  names such as `mul_imm` retain their natural `mul_imm_masked` form.
+- 2026-07-22: Agreed that `payload_extent=vector` store feeds the friendly
+  `copy_to_slice` method, while `payload_extent=scalar` store does not become a
+  `Simd<T, N>` method or associated function because it has no vector operand.
+  If retained in the public comprehensive primitive layer, scalar store is an
+  explicitly unsafe free function; its final raw-module path remains open.
+- 2026-07-22: Agreed that `Fixed<N>` is entirely compiler-internal in the
+  initial Rust API. `Simd<T, N>` is the sole fixed-lane value spelling; a future
+  algorithm/dispatch layer may add a public policy marker only when it has a
+  concrete user-facing role.
+- 2026-07-22: Agreed that the initial safe slice API has no
+  `try_from_slice`/`try_copy_to_slice` variants. `from_slice` and
+  `copy_to_slice` panic on a short slice, and callers needing recovery check
+  `len() >= N`; recoverable conveniences can be added later without breaking
+  the API.
+- 2026-07-22: Agreed that the initial unsafe raw memory methods are
+  `Simd::from_ptr` and `Simd::copy_to_ptr`. They use vector-unaligned TSL access
+  and require a valid `N`-element range with ordinary `T` alignment. Aligned raw
+  variants are deferred until the private profile-selected representation has
+  a stable public alignment contract or proof type.
+- 2026-07-22: Agreed that the initial standard-operator facade includes
+  integer-only `BitAnd`, `BitOr`, `BitXor`, and `Not` in addition to the
+  previously selected numeric `Add`, `Sub`, and `Mul`. Every admitted binary
+  operator also receives its assignment trait in the same slice. Float
+  bit-pattern operations remain named methods. `Shl` and `Shr` remain deferred
+  pending their semantic contracts.
+- 2026-07-22: The exceptional-value contracts required by Rust `Div` and `Rem`
+  are settled and implemented by `arithmetic-contract-plan.md` Slices 1 through
+  5. Their trait projection remains deferred until this plan implements the
+  owned fixed-lane `Simd<T, N>` facade and its typed facade-planning boundary;
+  the current zero-sized `Simd<T, Ext>` descriptor and its associated raw
+  register type are not substitute public trait owners.
 - 2026-07-20: Agreed that `tsldata` may and should gain further
   target-independent primitive metadata when a language facade needs semantic
   facts that are not yet representable, following implementation safety as an

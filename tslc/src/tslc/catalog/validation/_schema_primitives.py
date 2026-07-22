@@ -53,6 +53,7 @@ KNOWN_RETURN_TYPE_FIELDS = frozenset({"base", "extension"})
 KNOWN_PRIMITIVE_OVERLOAD_FIELDS = frozenset({"axis", "value", "primary"})
 KNOWN_PRIMITIVE_FIELDS = frozenset(
     {
+        "arithmetic",
         "benchmarks",
         "brief_description",
         "cross_lane",

@@ -6,6 +6,11 @@ from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact
 from tslc.render._common import slug, text
 from tslc.value_tests.model import ValueTestProjectPlan
+from tslc.value_tests.compile_failure import (
+    compile_failure_target_name,
+    render_cpp_compile_failure,
+    render_rust_compile_failure,
+)
 from tslc.value_tests.render_cpp import render_cpp_values_runner
 from tslc.value_tests.render_rust import render_rust_values_file
 
@@ -45,6 +50,14 @@ def cpp_test_artifacts(
                 media_type=media_type,
             )
         )
+        artifacts.extend(
+            text(
+                f"cpp/tests/{compile_failure_target_name(profile, case)}.cpp",
+                render_cpp_compile_failure(case),
+                media_type=media_type,
+            )
+            for case in profile.compile_failure_cases
+        )
     return artifacts
 
 
@@ -56,7 +69,7 @@ def rust_test_artifacts(
 ) -> list[Artifact]:
     """Rust value-test sources: shared helper module plus the cfg-gated test file."""
 
-    return [
+    artifacts = [
         text(
             "rust/src/tsl_test_core.rs",
             assets.text("tsl_test_core.rs"),
@@ -68,6 +81,16 @@ def rust_test_artifacts(
             media_type=media_type,
         ),
     ]
+    for profile in plan.profiles_for("rust"):
+        artifacts.extend(
+            text(
+                f"rust/examples/{compile_failure_target_name(profile, case)}.rs",
+                render_rust_compile_failure(case),
+                media_type=media_type,
+            )
+            for case in profile.compile_failure_cases
+        )
+    return artifacts
 
 
 __all__ = ["cpp_test_artifacts", "rust_test_artifacts"]

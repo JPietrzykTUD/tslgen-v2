@@ -8,6 +8,10 @@ from pathlib import Path
 import re
 from typing import Literal
 
+from tslc.catalog.arithmetic import (
+    arithmetic_guarantee_values,
+    arithmetic_operation_values,
+)
 from tslc.catalog.validation._schema_benchmarks import KNOWN_OPERAND_DOMAINS
 from tslc.catalog.validation._schema_common import KNOWN_BOOLEAN_VALUES
 from tslc.catalog.validation._schema_implementation import (
@@ -77,6 +81,8 @@ _CLOSED_ENUM_VALUES = frozenset(
         *KNOWN_TARGET_FAMILY_RELATIONS,
         *KNOWN_TARGET_WIDTH_RELATIONS,
         *KNOWN_TEST_ROLES,
+        *arithmetic_operation_values(),
+        *arithmetic_guarantee_values(),
         *(value for values in KNOWN_PRIMITIVE_ATTRIBUTES.values() for value in values),
     )
 )
@@ -365,6 +371,12 @@ def _primitive_semantic_tokens(
             if value is not None and isinstance(value.value, ParsedTslScalarValue):
                 source = value.value.payload_source or value.value.source
                 tokens.append(IndexedSemanticToken("enumMember", _source_span(source)))
+        elif primitive_field.kind == "arithmetic":
+            roles = child(field, "operand_roles")
+            for role in children(roles):
+                if isinstance(role.value, ParsedTslScalarValue):
+                    source = role.value.payload_source or role.value.source
+                    tokens.append(IndexedSemanticToken("parameter", _source_span(source)))
     return tuple(tokens)
 
 

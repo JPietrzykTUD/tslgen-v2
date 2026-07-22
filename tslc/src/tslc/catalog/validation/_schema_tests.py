@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import get_args
 
-from tslc.catalog.model import TestCaseRole
+from tslc.catalog.model import TestCaseRole, TestFailureReason
 from tslc.catalog.validation._schema_common import (
     diagnose_duplicate_fields,
     invalid_enum,
@@ -47,7 +47,8 @@ KNOWN_TEST_FIELDS = frozenset(
 _REQUIRED_TEST_FIELDS = ("tags", "type", "case")
 # Derived from the typed catalog role so the validator cannot drift from the model.
 KNOWN_TEST_ROLES: frozenset[str] = frozenset(get_args(TestCaseRole))
-KNOWN_TEST_CASE_FIELDS = frozenset({"inputs", "expected"})
+KNOWN_TEST_FAILURES = frozenset(reason.value for reason in TestFailureReason)
+KNOWN_TEST_CASE_FIELDS = frozenset({"inputs", "expected", "failure"})
 
 
 def validate_tests(
@@ -168,7 +169,13 @@ def _validate_test_case(
             diagnostics,
             label=f"{owner} case field",
         )
-        for required in ("inputs", "expected"):
+        role_value = role or "value"
+        required_case_fields = (
+            ("inputs", "failure")
+            if role_value in {"runtime_failure", "compile_failure"}
+            else ("inputs", "expected")
+        )
+        for required in required_case_fields:
             if child(case, required) is None:
                 diagnostics.append(
                     diagnostic_at(
@@ -178,6 +185,46 @@ def _validate_test_case(
                         source=source_span(case.source),
                     )
                 )
+        expected = child(case, "expected")
+        failure = child(case, "failure")
+        if role_value in {"runtime_failure", "compile_failure"}:
+            if expected is not None:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-TEST-FAILURE-HAS-EXPECTED",
+                        message=f"{owner}: failure case must not contain 'expected'",
+                        source=source_span(expected.source),
+                    )
+                )
+        elif failure is not None:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TEST-VALUE-HAS-FAILURE",
+                    message=(
+                        f"{owner}: role {role_value!r} must not contain 'failure'"
+                    ),
+                    source=source_span(failure.source),
+                )
+            )
+        failure_text = field_text(failure)
+        if failure is not None and failure_text is None:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TEST-BAD-FAILURE",
+                    message=f"{owner}: `failure` must be one scalar reason",
+                    source=source_span(failure.source),
+                )
+            )
+        elif failure_text is not None and failure_text not in KNOWN_TEST_FAILURES:
+            invalid_enum(
+                diagnostics,
+                failure,
+                f"test failure {failure_text!r}",
+                sorted(KNOWN_TEST_FAILURES),
+            )
 
 
 def _test_lane_count(field: ParsedTslField | None) -> int | None:

@@ -15,12 +15,14 @@ def discover_harness_primitives(catalog: Catalog) -> HarnessPrimitiveNames:
     from_array = _unique_primitive_name(catalog, ("v", ("s[]",)), diagnostics)
     to_array = _unique_primitive_name(catalog, ("s[]", ("v",)), diagnostics)
     to_integral = _unique_primitive_name(catalog, ("im", ("m",)), diagnostics)
+    to_mask = _unique_primitive_name(catalog, ("m", ("im",)), diagnostics)
     load = _unique_primitive_name(catalog, ("v", ("cptr",)), diagnostics)
     store = _unique_primitive_name(catalog, ("void", ("ptr", "v")), diagnostics)
     return HarnessPrimitiveNames(
         from_array=from_array,
         to_array=to_array,
         to_integral=to_integral,
+        to_mask=to_mask,
         load=load,
         store=store,
         diagnostics=tuple(diagnostics),

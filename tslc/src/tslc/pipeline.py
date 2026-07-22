@@ -321,6 +321,7 @@ class _GenerationSession:
                 capability.backend_id,
                 profile.profile.name,
                 capability.specializations(profile),
+                profile.profile.family,
             )
             for profile in profiles
             for capability in self.backends
@@ -359,6 +360,7 @@ class _GenerationSession:
                     self.inputs.test_harness.from_array,
                     self.inputs.test_harness.to_array,
                     self.inputs.test_harness.to_integral,
+                    self.inputs.test_harness.to_mask,
                     self.inputs.test_harness.load,
                     self.inputs.test_harness.store,
                 )

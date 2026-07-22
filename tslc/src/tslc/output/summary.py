@@ -222,7 +222,7 @@ def _profile_status(
 
 
 def _passed_commands(commands: tuple[BuildCommandResult, ...]) -> int:
-    return sum(1 for result in commands if result.returncode == 0)
+    return sum(1 for result in commands if result.matches_expectation)
 
 
 def _summary_row(row: ProfileValueTestSummary) -> str:

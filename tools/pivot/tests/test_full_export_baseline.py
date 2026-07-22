@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from tslc.diagnostics import SourceSpan
 from tslc.output.artifacts import ArtifactSet
 from tslc_pivot.baseline import (
     CANONICAL_FULL_EXPORT_ARGV,
@@ -19,7 +20,12 @@ from tslc_pivot.baseline import (
     canonical_full_export,
 )
 from tslc_pivot.exporter import export_pivot
-from tslc_pivot.model import PivotExportResult, PivotLanguage, PivotProjection
+from tslc_pivot.model import (
+    PivotExportResult,
+    PivotLanguage,
+    PivotProjection,
+    PivotSkip,
+)
 
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -63,24 +69,24 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     assert provenance["command"] == CANONICAL_FULL_EXPORT_COMMAND
     assert actual["summary"] == {
         "documents": 186,
-        "definitions": 16_620,
-        "skips": 29_123,
-        "nominal_definition_identities": 16_292,
+        "definitions": 16_404,
+        "skips": 29_251,
+        "nominal_definition_identities": 16_084,
         "definition_identity_collisions": {
-            "groups": 328,
-            "entries": 656,
-            "extra_entries": 328,
-            "conflicting_groups": 328,
+            "groups": 320,
+            "entries": 640,
+            "extra_entries": 320,
+            "conflicting_groups": 320,
             "exact_duplicate_only_groups": 0,
         },
         "languages": {
-            "cpp": {"documents": 93, "definitions": 10_041, "skips": 19_473},
-            "rust": {"documents": 93, "definitions": 6_579, "skips": 9_650},
+            "cpp": {"documents": 93, "definitions": 9_849, "skips": 19_621},
+            "rust": {"documents": 93, "definitions": 6_555, "skips": 9_630},
         },
     }
     artifacts = actual["artifacts"]
     assert artifacts["ordered_content_sha256"] == (
-        "78ede4c2f285414fefa5da989d135e6b24ea6609f29d2ce5a082926efcb5ccf6"
+        "c4e555b5046329c0294a0466350e7258a08697f904a7bbabedd003908059c84c"
     )
     assert actual["skip_category_scheme"] == "reason-prefix-v1"
     assert actual["unclassified_skip_count"] == 0
@@ -88,10 +94,10 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     for item in actual["skips_by_language_and_category"]:
         category_counts[item["category"]] += item["count"]
     assert category_counts == {
-        "callee_resolution": 304,
-        "forwarded_call_arguments": 3_180,
-        "local_declaration": 818,
-        "residual_target_text": 7_352,
+        "callee_resolution": 280,
+        "forwarded_call_arguments": 2_946,
+        "local_declaration": 878,
+        "residual_target_text": 7_678,
         "schema_conflict": 650,
         "signature_admissibility": 12_163,
         "specialization_admissibility": 4_656,
@@ -106,25 +112,46 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         "source",
         "count",
     ]
+    assert actual["skip_semantic_fields"] == [
+        "language",
+        "profile",
+        "primitive",
+        "extension",
+        "type",
+        "reason",
+        "source_path",
+    ]
     skip_records = actual["skips"]
     assert skip_records == sorted(skip_records, key=_canonical_json)
-    assert sum(record[-1] for record in skip_records) == 29_123
+    assert sum(record[-1] for record in skip_records) == 29_251
     assert all(len(record) == len(actual["skip_fields"]) for record in skip_records)
     assert all(
         record[6] is None
         or (isinstance(record[6], list) and len(record[6]) == 5)
         for record in skip_records
     )
-    expanded_skips = [
+    expanded_skip_locations = [
         record[:-1]
         for record in skip_records
         for _ in range(record[-1])
     ]
-    assert sha256(_canonical_json(expanded_skips).encode("utf-8")).hexdigest() == (
-        actual["skip_inventory_sha256"]
-    )
-    assert actual["skip_inventory_sha256"] == (
-        "82e521c005be2652e02f3f9beb07204b1d4d46b7ec255baeeb757cd1648177b6"
+    expanded_skip_semantics = [
+        [*record[:6], None if record[6] is None else record[6][0]]
+        for record in skip_records
+        for _ in range(record[-1])
+    ]
+    assert sha256(
+        _canonical_json(sorted(expanded_skip_semantics, key=_canonical_json)).encode(
+            "utf-8"
+        )
+    ).hexdigest() == actual["skip_semantic_inventory_sha256"]
+    assert sha256(
+        _canonical_json(sorted(expanded_skip_locations, key=_canonical_json)).encode(
+            "utf-8"
+        )
+    ).hexdigest() == actual["skip_location_inventory_sha256"]
+    assert actual["skip_semantic_inventory_sha256"] == (
+        "d5333a7d590e4c59d969eaafe57eb4c2b499f7ddd667aea51081e98e742900bb"
     )
 
 
@@ -138,26 +165,26 @@ def _assert_complete_body_census(
         "rust",
     )
     assert tuple(len(census.entries) for census in result.body_censuses) == (
-        10_041,
-        6_579,
+        9_849,
+        6_555,
     )
     assert tuple(census.multi_statement_count for census in result.body_censuses) == (
-        3_061,
-        1_669,
+        2_999,
+        1_655,
     )
     assert tuple(census.category_counts for census in result.body_censuses) == (
         (
-            ("call_and_local", 89),
-            ("call_only", 2_962),
+            ("call_and_local", 77),
+            ("call_only", 2_912),
             ("local_only", 10),
-            ("native_leaf", 4_222),
+            ("native_leaf", 4_092),
             ("synthetic_fixed", 2_758),
         ),
         (
             ("call_and_local", 5),
-            ("call_only", 1_654),
+            ("call_only", 1_640),
             ("local_only", 10),
-            ("native_leaf", 2_176),
+            ("native_leaf", 2_166),
             ("synthetic_fixed", 2_734),
         ),
     )
@@ -168,14 +195,14 @@ def _assert_complete_body_census(
         if entry.category is not None
     ) == {
         "synthetic_fixed": 5_492,
-        "native_leaf": 6_398,
-        "call_only": 4_616,
+        "native_leaf": 6_258,
+        "call_only": 4_552,
         "local_only": 20,
-        "call_and_local": 94,
+        "call_and_local": 82,
     }
     assert sum(
         census.multi_statement_count for census in result.body_censuses
-    ) == 4_730
+    ) == 4_654
     assert all(census.failures == () for census in result.body_censuses)
     assert all(
         body.body is not None
@@ -211,8 +238,8 @@ def _assert_complete_body_census(
         for entry in census.entries
     )
     collisions = tuple(count for count in nominal_identities.values() if count > 1)
-    assert len(collisions) == 328
-    assert sum(collisions) == 656
+    assert len(collisions) == 320
+    assert sum(collisions) == 640
     assert all(count == 2 for count in collisions)
     assert all(
         "\x00" not in artifact.content for artifact in result.artifacts.artifacts
@@ -263,15 +290,13 @@ def _assert_complete_body_census(
         entry.occurrence == 1
         for census in result.body_censuses
         for entry in census.entries
-    ) == 328
+    ) == 320
 
     actual_body = build_body_census_manifest(
         result,
         source_root=_REPOSITORY_ROOT,
     )
     assert actual_body == body_baseline
-
-
 
 
 def test_manifest_rejects_inputs_changed_after_snapshot(tmp_path: Path) -> None:
@@ -303,6 +328,59 @@ def test_manifest_rejects_inputs_changed_after_snapshot(tmp_path: Path) -> None:
         build_full_export_manifest(run, result)
 
 
+def test_manifest_separates_skip_semantics_from_source_locations(
+    tmp_path: Path,
+) -> None:
+    sources = tmp_path / "sources"
+    sources.mkdir()
+    source = sources / "demo.tsl"
+    source.write_text("demo\n", encoding="utf-8")
+    (tmp_path / "profiles.json").write_text("{}\n", encoding="utf-8")
+    (tmp_path / "tslc.toml").write_text(
+        "[tslc]\n"
+        'sources = ["sources"]\n'
+        'machine_profiles = "profiles.json"\n'
+        'backends = ["cpp", "rust"]\n',
+        encoding="utf-8",
+    )
+    run = canonical_full_export(tmp_path)
+
+    def manifest(line: int, *, source_path: Path = source) -> dict[str, object]:
+        skip = PivotSkip(
+            PivotLanguage.CPP,
+            "scalar",
+            "demo",
+            "scalar",
+            "si32",
+            "unsupported demo",
+            SourceSpan(source_path, line, 1, line + 1, 1),
+        )
+        result = PivotExportResult(
+            artifacts=ArtifactSet.create(()),
+            projections=(
+                PivotProjection(PivotLanguage.CPP, (), (skip,)),
+                PivotProjection(PivotLanguage.RUST, (), ()),
+            ),
+            diagnostics=(),
+        )
+        return build_full_export_manifest(run, result)
+
+    original = manifest(1)
+    shifted = manifest(20)
+    moved = manifest(1, source_path=sources / "moved.tsl")
+
+    assert original["skip_semantic_inventory_sha256"] == (
+        shifted["skip_semantic_inventory_sha256"]
+    )
+    assert original["skip_location_inventory_sha256"] != (
+        shifted["skip_location_inventory_sha256"]
+    )
+    assert original["skips"] != shifted["skips"]
+    assert original["skip_semantic_inventory_sha256"] != (
+        moved["skip_semantic_inventory_sha256"]
+    )
+
+
 def _definitions_by_identity(manifest: dict[str, Any]) -> dict[str, tuple[str, ...]]:
     assert manifest["definition_fields"] == [
         "language",
@@ -322,7 +400,7 @@ def _definitions_by_identity(manifest: dict[str, Any]) -> dict[str, tuple[str, .
         )
         direct_sha256 = item[5]
         by_identity.setdefault(identity, []).append(direct_sha256)
-    assert sum(len(items) for items in by_identity.values()) == 16_620
+    assert sum(len(items) for items in by_identity.values()) == 16_404
     return {
         identity: tuple(sorted(direct_hashes))
         for identity, direct_hashes in by_identity.items()

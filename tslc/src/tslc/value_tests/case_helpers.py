@@ -10,6 +10,7 @@ from tslc.value_tests.case_components import IndexStyle, MemoryStorage
 from tslc.value_tests.model import (
     ValueTestCasePlan,
     ValueTestExpectation,
+    ValueTestFailure,
     ValueTestIndex,
     ValueTestInputs,
     ValueTestInvocation,
@@ -48,6 +49,7 @@ def plan_case(
     index_lanes: int | None = None,
     index_style: IndexStyle | None = None,
     lanes: int | None = None,
+    failure: ValueTestFailure | None = None,
 ) -> ValueTestCasePlan:
     target = None
     if expected_type_tag is not None or target_base_spelling is not None or target_lanes is not None:
@@ -113,6 +115,7 @@ def plan_case(
         target=target,
         index=case_index,
         memory=memory,
+        failure=failure,
     )
 
 

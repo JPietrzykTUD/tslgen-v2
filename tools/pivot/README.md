@@ -136,15 +136,18 @@ emitted, including pre-existing nominal-identity collisions. Coverage may
 increase, but aggregate counts cannot conceal a removed or replaced entry, and
 changed `direct` hashes require focused review.
 
-The manifest retains exact skip reasons and an inventory hash. Its
+The manifest retains exact skip reasons and source spans. A line/column-free
+semantic inventory hash ratchets skip identity, source path, multiplicity, and
+reason independently of a separate exact source-location hash. Its
 `reason-prefix-v1` census also groups those messages into stable evidence
 families; this is a manifest-only classification until runtime skips gain typed
 categories in the rework.
 
 The body census is architectural evidence rather than part of the external
-YAML schema. Any reviewed change to lowering capture, body construction,
-parsing, or inlining must update its digest without weakening the full-export
-definition and artifact ratchets.
+YAML schema. Its span-free semantic digest ratchets lowering capture, body
+construction, parsing, and inlining; a separate normalized location digest
+keeps exact source traceability without treating line movement as a semantic
+change. Neither weakens the full-export definition and artifact ratchets.
 
 Regenerate both committed authorities only through their guarded
 maintenance tool:
@@ -153,9 +156,10 @@ maintenance tool:
 python tools/pivot/scripts/update_full_export_baseline.py
 ```
 
-The production ratchet accepts added entries but refuses removed entries,
-reduced multiplicity, or replaced `direct` hashes. Because an addition also
-changes the complete body census, the combined command still requires explicit
+The production ratchet accepts added entries and location-only refreshes but
+refuses removed entries, reduced multiplicity, replaced `direct` hashes,
+semantic skip changes, or body-semantic changes. Because an addition also
+changes the semantic body census, the combined command still requires explicit
 review for that evidence change. Use
 `--allow-reviewed-incompatible-baseline` only after the explicit product or
 correctness review named by the tool charter.

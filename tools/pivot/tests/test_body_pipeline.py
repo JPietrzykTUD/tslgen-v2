@@ -37,6 +37,7 @@ from tslc_pivot.body_ir import (
     PivotBodyEntry,
     PivotBodyOrigin,
     pivot_body_census_digest,
+    pivot_body_census_location_digest,
 )
 from tslc_pivot.model import PivotDefinition, PivotLanguage
 from tslc_pivot.body_builder import build_pivot_body, synthetic_pivot_body
@@ -315,7 +316,7 @@ def test_synthetic_fixed_wrapper_is_an_explicit_typed_call() -> None:
     assert tuple(argument_texts) == ("left", "right")
 
 
-def test_body_digest_normalizes_source_roots_but_retains_relative_paths(
+def test_body_semantic_digest_ignores_source_paths_and_spans(
     tmp_path: Path,
 ) -> None:
     left_root = tmp_path / "checkout-a"
@@ -323,13 +324,45 @@ def test_body_digest_normalizes_source_roots_but_retains_relative_paths(
     left = _fixed_census(left_root, Path("sources/demo.tsl"))
     right = _fixed_census(right_root, Path("sources/demo.tsl"))
     moved = _fixed_census(right_root, Path("sources/moved.tsl"))
+    shifted = _fixed_census(right_root, Path("sources/demo.tsl"), line=20)
+    changed = _fixed_census(
+        right_root,
+        Path("sources/demo.tsl"),
+        callable_name="other",
+    )
 
-    left_digest = pivot_body_census_digest((left,), source_root=left_root)
-    right_digest = pivot_body_census_digest((right,), source_root=right_root)
-    moved_digest = pivot_body_census_digest((moved,), source_root=right_root)
+    left_digest = pivot_body_census_digest((left,))
+
+    assert pivot_body_census_digest((right,)) == left_digest
+    assert pivot_body_census_digest((moved,)) == left_digest
+    assert pivot_body_census_digest((shifted,)) == left_digest
+    assert pivot_body_census_digest((changed,)) != left_digest
+
+
+def test_body_location_digest_normalizes_roots_but_retains_locations(
+    tmp_path: Path,
+) -> None:
+    left_root = tmp_path / "checkout-a"
+    right_root = tmp_path / "checkout-b"
+    left = _fixed_census(left_root, Path("sources/demo.tsl"))
+    right = _fixed_census(right_root, Path("sources/demo.tsl"))
+    moved = _fixed_census(right_root, Path("sources/moved.tsl"))
+    shifted = _fixed_census(right_root, Path("sources/demo.tsl"), line=20)
+
+    left_digest = pivot_body_census_location_digest(
+        (left,), source_root=left_root
+    )
+    right_digest = pivot_body_census_location_digest(
+        (right,), source_root=right_root
+    )
 
     assert left_digest == right_digest
-    assert moved_digest != right_digest
+    assert pivot_body_census_location_digest(
+        (moved,), source_root=right_root
+    ) != right_digest
+    assert pivot_body_census_location_digest(
+        (shifted,), source_root=right_root
+    ) != right_digest
 
 
 def test_body_call_retains_compiler_caller_unsafe_fact(
@@ -698,12 +731,18 @@ def _body(result: PivotBodyBuildResult) -> PivotBody:
     return result.body
 
 
-def _fixed_census(root: Path, relative_source: Path) -> PivotBodyCensus:
-    source = SourceSpan(root / relative_source, 1, 1, 2, 1)
+def _fixed_census(
+    root: Path,
+    relative_source: Path,
+    *,
+    line: int = 1,
+    callable_name: str = "demo",
+) -> PivotBodyCensus:
+    source = SourceSpan(root / relative_source, line, 1, line + 1, 1)
     body = synthetic_pivot_body(
         PivotLanguage.CPP,
         ("value",),
-        "demo",
+        callable_name,
         "__m128i",
         source,
     )
@@ -716,7 +755,7 @@ def _fixed_census(root: Path, relative_source: Path) -> PivotBodyCensus:
                     isa="tsl_128",
                     dtype="int8",
                     signature=(("value", "__m128i"), ("result", "__m128i")),
-                    direct=("result = demo<__m128i>(value);",),
+                    direct=(f"result = {callable_name}<__m128i>(value);",),
                 ),
                 occurrence=0,
                 origin=PivotBodyOrigin.FIXED_WRAPPER,

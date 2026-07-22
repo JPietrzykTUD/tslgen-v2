@@ -18,6 +18,7 @@ from tslc.output.verify import (
     BuildCommandResult,
     BuildVerifierConfig,
     VerifyBackend,
+    VerifyCompileFailure,
     VerifyProfile,
     VerifyProject,
     VerifyRunner,
@@ -162,6 +163,47 @@ def test_cpp_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
     assert "-DCMAKE_LINKER=/usr/bin/ld" in seen[1].argv
     assert _env(seen[1])["CXX"] == "/usr/bin/c++"
     assert _env(seen[2])["CXX"] == "/usr/bin/c++"
+
+
+def test_expected_compile_failure_requires_nonzero_status_and_exact_marker(
+    tmp_path: Path,
+) -> None:
+    marker = "TSL_ARITH_INTEGER_IMMEDIATE_ZERO"
+    profile = VerifyProfile(
+        profile_name="scalar",
+        file_stem="scalar",
+        compile_failures=(VerifyCompileFailure("negative_case", marker),),
+    )
+    project = VerifyProject(
+        backends=(VerifyBackend("cpp", "cpp", (profile,)),)
+    )
+
+    def report_for(returncode: int, stderr: str):
+        def runner(command: BuildCommand) -> BuildCommandResult:
+            if command.step == "compile-failure":
+                return BuildCommandResult(command, returncode, stderr=stderr)
+            return BuildCommandResult(command, 0)
+
+        return verify_generated_project(
+            tmp_path,
+            project,
+            runner,
+            config=_config(cpp_compiler="/usr/bin/c++"),
+        )
+
+    accepted = report_for(1, f"static assertion failed: {marker}")
+    wrong_failure = report_for(1, "unrelated syntax error")
+    unexpected_success = report_for(0, "")
+
+    assert accepted.diagnostics == ()
+    assert accepted.commands[-1].matches_expectation
+    assert accepted.commands[-1].command.argv[-1] == "negative_case"
+    assert [item.code for item in wrong_failure.diagnostics] == [
+        "TSL-BUILD-VERIFY-EXPECTED-COMPILE-FAILURE"
+    ]
+    assert [item.code for item in unexpected_success.diagnostics] == [
+        "TSL-BUILD-VERIFY-EXPECTED-COMPILE-FAILURE"
+    ]
 
 
 def test_cpp_prepare_backend_returns_frozen_preparation(tmp_path: Path) -> None:

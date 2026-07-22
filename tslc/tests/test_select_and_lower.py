@@ -20,6 +20,7 @@ from _select_lower_core_support import (
     _slots,
     _TYPES,
 )
+from tslc.lower.lowerer import LoweredArithmeticPreconditionKind
 
 
 def test_lowerer_keeps_target_vector_resolution_boundary() -> None:
@@ -46,6 +47,52 @@ def test_lowerer_catalog_facts_cache_is_owned_by_catalog_identity(
     assert lowerer._facts_for(catalog) is first
     assert lowerer._facts_for(equivalent_catalog) is not first
     assert lowerer._catalog_facts_catalog is equivalent_catalog
+
+
+def test_integer_immediate_zero_precondition_is_derived_from_arithmetic_contract(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    selected = Selector().select_profile(
+        catalog,
+        machine_profiles["avx2"],
+        "mod_imm",
+        ("si8", "si32", "f32"),
+        backend_id="cpp",
+    ).selected
+
+    lowered = tuple(
+        result.specialization
+        for slot in selected
+        if (
+            result := Lowerer().lower(
+                slot, catalog, create_backend_dialect(catalog, "cpp")
+            )
+        ).specialization
+        is not None
+    )
+    integer = tuple(spec for spec in lowered if spec.type_tag in {"si8", "si32"})
+    floating = tuple(spec for spec in lowered if spec.type_tag == "f32")
+
+    assert integer
+    assert floating
+    assert {
+        (precondition.kind, precondition.parameter_name, precondition.lane_bit_width)
+        for spec in integer
+        for precondition in spec.arithmetic_preconditions
+    } == {
+        (
+            LoweredArithmeticPreconditionKind.INTEGER_IMMEDIATE_NONZERO,
+            "divisor",
+            8,
+        ),
+        (
+            LoweredArithmeticPreconditionKind.INTEGER_IMMEDIATE_NONZERO,
+            "divisor",
+            32,
+        ),
+    }
+    assert all(not spec.arithmetic_preconditions for spec in floating)
 
 
 def test_unknown_primitive_is_error(catalog: Catalog, machine_profiles) -> None:

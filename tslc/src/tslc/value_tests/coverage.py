@@ -20,13 +20,18 @@ ParityIdentity = tuple[str, str, str | None]
 
 ValueTestCaseDropCause = Literal[
     "renderer_unsupported",
+    "profile_unsupported",
     "fuzz_unsupported",
     "differential_harness_missing",
     "header_group_conflict",
 ]
 
 _DETAIL_CAUSES = frozenset(
-    {"differential_harness_missing", "header_group_conflict"}
+    {
+        "profile_unsupported",
+        "differential_harness_missing",
+        "header_group_conflict",
+    }
 )
 
 

@@ -77,7 +77,6 @@ def _immediate(case: ValueTestCasePlan) -> str:
         f"    fn {case.function_name}() {{",
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
-    arg_names = []
     for position, values in enumerate(case.inputs.vectors):
         literals = rust_literal_list(values, case.type_tag)
         lines.append(f"        let in{position}: [{case.base_spelling}; {case.lanes}] = [{literals}];")
@@ -86,7 +85,25 @@ def _immediate(case: ValueTestCasePlan) -> str:
             "Default::default();"
         )
         lines.append(f"        for i in 0..{case.lanes} {{ a{position}[i] = in{position}[i]; }}")
-        arg_names.append(f"a{position}")
+    arg_names: list[str] = []
+    vector_index = 0
+    mask_index = 0
+    param_kinds = case.invocation.param_kinds or (
+        ("v",) * len(case.inputs.vectors) + ("sImm",)
+    )
+    for kind in param_kinds:
+        if kind == "v":
+            arg_names.append(f"a{vector_index}")
+            vector_index += 1
+        elif kind == "m":
+            lines.append(
+                f"        let m{mask_index}: <Vec as SimdVector>::MaskType = "
+                f"{case.inputs.masks[mask_index]}u64;"
+            )
+            arg_names.append(f"m{mask_index}")
+            mask_index += 1
+        elif kind != "sImm":
+            raise ValueError(f"unsupported immediate argument kind {kind!r}")
     template_args = ["Vec"]
     if case.invocation.immediate is not None:
         template_args.append(case.invocation.immediate)
@@ -386,6 +403,33 @@ def _compile_only(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 
+def _runtime_failure(case: ValueTestCasePlan) -> str:
+    assert case.failure is not None
+    marker = case.failure.marker
+    lines = [
+        "    #[test]",
+        f"    fn {case.function_name}() {{",
+        f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
+    ]
+    args = append_call_args(lines, case)
+    call = f"{rust_raw_identifier(case.call_name)}::<Vec>({', '.join(args)})"
+    lines.extend(
+        [
+            f"        let outcome = std::panic::catch_unwind(|| {{ let _ = {call}; }});",
+            "        match outcome {",
+            f'            Ok(_) => panic!("{case.case_name}: expected integer-zero-divisor panic"),',
+            "            Err(payload) => {",
+            "                let message = payload.downcast_ref::<&str>().copied()",
+            "                    .or_else(|| payload.downcast_ref::<String>().map(String::as_str));",
+            f'                assert_eq!(message, Some("{marker}"), "{case.case_name}: wrong panic payload");',
+            "            }",
+            "        }",
+            "    }",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _status_pointer(case: ValueTestCasePlan) -> str:
     value = rust_literal(case.inputs.scalars[0], case.type_tag)
     call_name = rust_raw_identifier(case.call_name)
@@ -426,6 +470,7 @@ __all__ = [
     "_mask_to_vector",
     "_masked",
     "_reduction",
+    "_runtime_failure",
     "_scalar_result",
     "_scalar_vector",
     "_status_pointer",

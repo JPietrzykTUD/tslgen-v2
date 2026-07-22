@@ -41,10 +41,15 @@ def _manifest(*definitions: list[object]) -> dict[str, object]:
     }
 
 
-def _body_manifest(digest: str = _HASH_A) -> dict[str, object]:
+def _body_manifest(
+    semantic_digest: str = _HASH_A,
+    *,
+    location_digest: str = _HASH_A,
+) -> dict[str, object]:
     return {
-        "schema": "tslc-pivot-body-census-v1",
-        "digest": digest,
+        "schema": "tslc-pivot-body-census-v2",
+        "semantic_digest": semantic_digest,
+        "location_digest": location_digest,
         "summary": {"entries": 1, "failures": 0},
         "languages": {},
     }
@@ -88,12 +93,23 @@ def test_baseline_guard_allows_additions_without_refreshing_old_entries() -> Non
 
 def test_baseline_guard_rejects_skip_fact_refresh_without_coverage_growth() -> None:
     previous = _manifest(_definition("kept"))
-    previous["skips"] = [["old"]]
+    previous["skip_semantic_inventory_sha256"] = _HASH_A
     candidate = _manifest(_definition("kept"))
-    candidate["skips"] = [["new"]]
+    candidate["skip_semantic_inventory_sha256"] = _HASH_B
 
     with pytest.raises(ValueError, match="product facts changed"):
         validate_full_export_baseline_update(previous, candidate)
+
+
+def test_baseline_guard_accepts_skip_location_only_refresh() -> None:
+    previous = _manifest(_definition("kept"))
+    previous["skips"] = [["same", ["demo.tsl", 1, 1, 2, 1]]]
+    previous["skip_location_inventory_sha256"] = _HASH_A
+    candidate = _manifest(_definition("kept"))
+    candidate["skips"] = [["same", ["demo.tsl", 20, 1, 21, 1]]]
+    candidate["skip_location_inventory_sha256"] = _HASH_B
+
+    validate_full_export_baseline_update(previous, candidate)
 
 
 def test_reviewed_incompatibility_override_is_explicit() -> None:
@@ -105,7 +121,7 @@ def test_reviewed_incompatibility_override_is_explicit() -> None:
 
 
 def test_body_census_changes_require_explicit_review() -> None:
-    with pytest.raises(ValueError, match="body-census baseline facts changed"):
+    with pytest.raises(ValueError, match="body-census semantic facts changed"):
         validate_body_census_baseline_update(
             _body_manifest(_HASH_A),
             _body_manifest(_HASH_B),
@@ -117,6 +133,14 @@ def test_body_census_changes_require_explicit_review() -> None:
         allow_reviewed_incompatible_baseline=True,
     )
 
+
+def test_body_census_location_only_refresh_does_not_require_review() -> None:
+    validate_body_census_baseline_update(
+        _body_manifest(location_digest=_HASH_A),
+        _body_manifest(location_digest=_HASH_B),
+    )
+
+
 def test_combined_updater_validates_all_baselines_before_writing(
     tmp_path: Path,
 ) -> None:
@@ -127,7 +151,7 @@ def test_combined_updater_validates_all_baselines_before_writing(
     full_path.write_text(full_text, encoding="utf-8")
     body_path.write_text(body_text, encoding="utf-8")
 
-    with pytest.raises(ValueError, match="body-census baseline facts changed"):
+    with pytest.raises(ValueError, match="body-census semantic facts changed"):
         update_pivot_baselines(
             full_path,
             _manifest(_definition("kept"), _definition("added")),

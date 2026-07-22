@@ -39,10 +39,7 @@ manifest = build_full_export_manifest(run, result)
 rendered = render_full_export_manifest(manifest).encode("utf-8")
 print(sha256(rendered).hexdigest())
 print(
-    pivot_body_census_digest(
-        result.body_censuses,
-        source_root=repository_root,
-    )
+    pivot_body_census_digest(result.body_censuses)
 )
 source = SourceSpan(Path("determinism.tsl"), 1, 1, 1, 2)
 unknown = f"{CAPTURE_OPEN}{'d' * 24}:complete:0{CAPTURE_CLOSE}"
@@ -79,7 +76,7 @@ def test_full_export_manifest_is_identical_across_hash_seeds() -> None:
     expected_digest = sha256(_BASELINE.read_bytes()).hexdigest()
     expected_body_digest = json.loads(
         _BODY_BASELINE.read_text(encoding="utf-8")
-    )["digest"]
+    )["semantic_digest"]
     digests: list[tuple[str, str, str]] = []
     for hash_seed in ("0", "12345"):
         env = os.environ.copy()

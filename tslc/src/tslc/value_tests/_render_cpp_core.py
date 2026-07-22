@@ -30,21 +30,40 @@ def _mask_to_vector(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 def _immediate(case: ValueTestCasePlan) -> str:
-    lines = [f"int {case.function_name}() {{"]
-    arg_names = []
+    lines = [
+        f"int {case.function_name}() {{",
+        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
+    ]
     for position, values in enumerate(case.inputs.vectors):
         literals = cpp_literal_list(values, case.type_tag)
         lines.append(f"  static const {case.base_spelling} in{position}[{case.lanes}] = {{{literals}}};")
         lines.append(
-            f"  typename tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>::register_type "
-            f"a{position};"
+            f"  typename Vec::register_type a{position};"
         )
         lines.append(
             f"  for (std::size_t i = 0; i < {case.lanes}; ++i) a{position}[i] = in{position}[i];"
         )
-        arg_names.append(f"a{position}")
+    arg_names: list[str] = []
+    vector_index = 0
+    mask_index = 0
+    param_kinds = case.invocation.param_kinds or (
+        ("v",) * len(case.inputs.vectors) + ("sImm",)
+    )
+    for kind in param_kinds:
+        if kind == "v":
+            arg_names.append(f"a{vector_index}")
+            vector_index += 1
+        elif kind == "m":
+            lines.append(
+                f"  typename Vec::mask_type m{mask_index} = "
+                f"{case.inputs.masks[mask_index]}ull;"
+            )
+            arg_names.append(f"m{mask_index}")
+            mask_index += 1
+        elif kind != "sImm":
+            raise ValueError(f"unsupported immediate argument kind {kind!r}")
     expected = cpp_literal_list(case.expectation.values, case.type_tag)
-    targs = [f"tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>"]
+    targs = ["Vec"]
     if case.invocation.immediate is not None:
         targs.append(case.invocation.immediate)
     targs.extend(case.invocation.generic_defaults)
@@ -73,6 +92,31 @@ def _compile_only(case: ValueTestCasePlan) -> str:
         lines.append("  (void)result;")
     lines.append("  return 0;")
     lines.append("}")
+    return "\n".join(lines)
+
+
+def _runtime_failure(case: ValueTestCasePlan) -> str:
+    assert case.failure is not None
+    marker = case.failure.marker
+    lines = [
+        f"int {case.function_name}() {{",
+        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
+    ]
+    args = _append_call_args(lines, case)
+    call = f"tsl::{case.call_name}<Vec>({', '.join(args)})"
+    lines.extend(
+        [
+            "  try {",
+            f"    (void){call};",
+            "  } catch (const std::domain_error& error) {",
+            f'    return std::string(error.what()) == "{marker}" ? 0 : 1;',
+            "  } catch (...) {",
+            "    return 1;",
+            "  }",
+            "  return 1;",
+            "}",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -223,6 +267,7 @@ __all__ = (
     "_mask_to_vector",
     "_immediate",
     "_compile_only",
+    "_runtime_failure",
     "_array_to_vector",
     "_broadcast",
     "_scalar_vector",

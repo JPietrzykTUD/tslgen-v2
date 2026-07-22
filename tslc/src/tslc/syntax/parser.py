@@ -41,6 +41,7 @@ from tslc.syntax.ast import (
 
 
 _KNOWN_PRIMITIVE_FIELDS: dict[str, ParsedPrimitiveFieldKind] = {
+    "arithmetic": "arithmetic",
     "benchmarks": "benchmarks",
     "brief_description": "brief_description",
     "detailed_description": "detailed_description",

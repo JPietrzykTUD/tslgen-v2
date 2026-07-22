@@ -27,6 +27,7 @@ from tslc.value_tests._render_rust_core import (
     _mask_to_vector,
     _masked,
     _reduction,
+    _runtime_failure,
     _scalar_result,
     _scalar_vector,
     _status_pointer,
@@ -46,7 +47,11 @@ from tslc.value_tests._render_rust_memory import (
     _store,
     _stream,
 )
-from tslc.value_tests.model import ValueTestCasePlan, ValueTestProfilePlan
+from tslc.value_tests.model import (
+    ValueTestCasePlan,
+    ValueTestProfileCaseExclusion,
+    ValueTestProfilePlan,
+)
 from tslc.value_tests.renderer_capability import ValueTestRendererCapability
 
 
@@ -55,10 +60,10 @@ def render_rust_values_file(
 ) -> str:
     modules = []
     for profile in profiles:
-        if not profile.cases:
+        if not profile.runner_cases:
             continue
         profile_slug = slug(profile.profile_name)
-        body = "\n\n".join(_render_case(case) for case in profile.cases)
+        body = "\n\n".join(_render_case(case) for case in profile.runner_cases)
         modules.append(
             assets.fill(
                 "rust_value_tests_profile.rs.tmpl",
@@ -82,6 +87,17 @@ RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
     backend_id="rust",
     supports_differential=True,
     overload_inference_placeholders=1,
+    isolated_case_kinds=frozenset({"compile_failure"}),
+    profile_case_exclusions=(
+        ValueTestProfileCaseExclusion(
+            profile_family="wasm32",
+            case_kind="runtime_failure",
+            reason=(
+                "the generated wasm32 Rust target uses aborting panics, so "
+                "catch_unwind cannot observe the runtime-failure marker"
+            ),
+        ),
+    ),
     case_renderers={
         "array_to_vector": _array_to_vector,
         "broadcast": _broadcast,
@@ -110,6 +126,7 @@ RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "pointer_free": _pointer_free,
         "pointer_lifetime": _pointer_lifetime,
         "reduction": _reduction,
+        "runtime_failure": _runtime_failure,
         "repr_cast": _repr_cast,
         "scalar_pointer_load": _scalar_pointer_load,
         "scalar_result": _scalar_result,

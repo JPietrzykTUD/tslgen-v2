@@ -18,10 +18,16 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from enum import StrEnum
 from types import MappingProxyType
 
 from tslc.backend import translation_common
 from tslc.backend.translation import BackendDialect
+from tslc.catalog.arithmetic import (
+    ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER,
+    ArithmeticGuarantee,
+    ArithmeticOperandRole,
+)
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     Catalog,
@@ -30,7 +36,7 @@ from tslc.catalog.model import (
     Primitive,
 )
 from tslc.catalog.param_types import parse_param_type_expression
-from tslc.catalog.scalar_types import scalar_bit_width_or_default
+from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS, scalar_bit_width_or_default
 from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
 from tslc.documentation import PrimitiveDocumentation, primitive_documentation
@@ -96,6 +102,35 @@ class LoweredImplementationVariant:
         return self.body.render()
 
 
+class LoweredArithmeticPreconditionKind(StrEnum):
+    """Closed arithmetic preconditions derived during lowering."""
+
+    INTEGER_IMMEDIATE_NONZERO = "integer_immediate_nonzero"
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredArithmeticPrecondition:
+    """A backend-neutral well-formedness requirement for one specialization."""
+
+    kind: LoweredArithmeticPreconditionKind
+    parameter_name: str
+    lane_bit_width: int
+
+    def __post_init__(self) -> None:
+        if not self.parameter_name:
+            raise ValueError("arithmetic precondition requires a parameter name")
+        if self.lane_bit_width not in {8, 16, 32, 64}:
+            raise ValueError(
+                "arithmetic precondition requires a supported integer lane width"
+            )
+
+    @property
+    def marker(self) -> str:
+        if self.kind is LoweredArithmeticPreconditionKind.INTEGER_IMMEDIATE_NONZERO:
+            return ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER
+        raise AssertionError(f"unhandled arithmetic precondition {self.kind!r}")
+
+
 @dataclass(frozen=True, slots=True)
 class LoweredSpecialization:
     """One `<primitive, extension, type>` body, ready for the backend to wrap in a
@@ -134,6 +169,7 @@ class LoweredSpecialization:
     # ("factor", "std::uint32_t"). Emitted as a C++ non-type template param / Rust const
     # generic (NOT a runtime arg); None when the signature has no `sImm`.
     immediate: tuple[str, str] | None = None
+    arithmetic_preconditions: tuple[LoweredArithmeticPrecondition, ...] = ()
     # Free template params from a `generic_params` block, as (name, type, default), e.g.
     # (("PreserveSign", "bool", "true"),). Emitted as C++ non-type template params (with the
     # default) / Rust const generics (no default); bodies reference them symbolically.
@@ -377,6 +413,7 @@ class Lowerer:
             return resolved_immediate
         immediate, immediate_dispatch, immediate_range = resolved_immediate
         immediate_name = immediate[0] if immediate is not None else None
+        arithmetic_preconditions = _arithmetic_preconditions(selected, immediate)
 
         catalog_facts = self._facts_for(catalog)
         env = LoweringEnv(
@@ -560,6 +597,7 @@ class Lowerer:
                 if key in BOOLEAN_WILDCARD_ATTRIBUTES
             ),
             immediate=immediate,
+            arithmetic_preconditions=arithmetic_preconditions,
             # `generic_params` split by kind: `bool`/`int` are non-type (const) params; a
             # `simd_type` is a free type param (see `type_params`).
             generic_params=tuple(
@@ -634,6 +672,34 @@ class Lowerer:
             self._catalog_facts = _LowererCatalogFacts.build(catalog, self._support)
             self._catalog_facts_catalog = catalog
         return self._catalog_facts
+
+
+def _arithmetic_preconditions(
+    selected: SelectedImplementation,
+    immediate: tuple[str, str] | None,
+) -> tuple[LoweredArithmeticPrecondition, ...]:
+    contract = selected.primitive.arithmetic
+    info = SCALAR_TYPE_INFOS.get(selected.type_tag)
+    if contract is None or info is None or info.floating or immediate is None:
+        return ()
+    if not contract.has_guarantee(
+        ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS
+    ):
+        return ()
+    binding = contract.binding(ArithmeticOperandRole.DIVISOR)
+    if (
+        binding is None
+        or binding.parameter_kind != "sImm"
+        or binding.parameter_name != immediate[0]
+    ):
+        return ()
+    return (
+        LoweredArithmeticPrecondition(
+            kind=LoweredArithmeticPreconditionKind.INTEGER_IMMEDIATE_NONZERO,
+            parameter_name=binding.parameter_name,
+            lane_bit_width=info.bit_width,
+        ),
+    )
 
 
 def _resolve_immediate_range(

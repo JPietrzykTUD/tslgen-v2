@@ -31,6 +31,8 @@ from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.benchmark.model import SpecializationKey
 from tslc.lower.lowerer import (
+    LoweredArithmeticPrecondition,
+    LoweredArithmeticPreconditionKind,
     LoweredSpecialization,
     effective_param_types,
     varying_positions,
@@ -691,6 +693,7 @@ class RustBackend:
             if implementation_trait_variant is not None
             else variant_name,
         )
+        preconditions = _rust_arithmetic_preconditions(spec)
         return (
             (f"{doc}\n" if doc else "")
             + f"impl{impl_generics} {trait_name}"
@@ -699,6 +702,7 @@ class RustBackend:
             f"    const IMPLEMENTATION_STATE: ImplementationState = "
             f"{_rust_implementation_state(_spec_implementation_state(spec, variant_name))};\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret} {{\n"
+            f"{preconditions}"
             f"{_indent(body, 8)}\n"
             f"    }}\n"
             f"}}"
@@ -1210,6 +1214,28 @@ def _vector_type(spec: LoweredSpecialization) -> str:
             f"{_ext_tag(spec.extension_name)}<{lane_parameter}>>"
         )
     return f"Simd<{spec.base_type_spelling}, {_ext_tag(spec.extension_name)}>"
+
+
+def _rust_arithmetic_preconditions(spec: LoweredSpecialization) -> str:
+    return "".join(
+        f"        {_rust_arithmetic_precondition(precondition)}\n"
+        for precondition in spec.arithmetic_preconditions
+    )
+
+
+def _rust_arithmetic_precondition(
+    precondition: LoweredArithmeticPrecondition,
+) -> str:
+    if (
+        precondition.kind
+        is LoweredArithmeticPreconditionKind.INTEGER_IMMEDIATE_NONZERO
+    ):
+        return (
+            f"const {{ assert!(({precondition.parameter_name} as "
+            f"u{precondition.lane_bit_width}) != 0, "
+            f'"{precondition.marker}"); }}'
+        )
+    raise AssertionError(f"unhandled arithmetic precondition {precondition.kind!r}")
 
 
 def _kind_type(kind: str, owner: str) -> str:

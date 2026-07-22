@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from enum import StrEnum
 from types import MappingProxyType
 from typing import Literal, TypeVar
 
-from tslc.diagnostics import SourceSpan
+from tslc.catalog.arithmetic import ArithmeticContract
 from tslc.catalog.overloads import (
     OverloadRegistry,
     PrimitiveOverload,
@@ -22,6 +23,7 @@ from tslc.catalog.target_families import (
     ExtensionFamilyCapability,
     TargetFamilyCatalog,
 )
+from tslc.diagnostics import SourceSpan
 
 _K = TypeVar("_K")
 _V = TypeVar("_V")
@@ -42,7 +44,20 @@ RESULT_DIM_EXTENSION = "extension"
 # from these aliases (`typing.get_args`), so the model owns each vocabulary once.
 GenericParamKind = Literal["bool", "int", "simd_type"]
 TestArgKind = Literal["vector", "mask", "scalar"]
-TestCaseRole = Literal["value", "compile"]
+TestCaseRole = Literal[
+    "value",
+    "compile",
+    "runtime_failure",
+    "compile_failure",
+]
+
+
+class TestFailureReason(StrEnum):
+    """Closed language-neutral reasons authored failure cases may expect."""
+
+    INTEGER_ZERO_DIVISOR = "integer_zero_divisor"
+
+
 MaskPolicyKind = Literal[
     "bool",
     "boolean_lane_vector",
@@ -234,6 +249,10 @@ class Primitive:
     brief_description: str | None = None
     detailed_description: str | None = None
     semantics: str | None = None
+    # Explicit language-neutral arithmetic operations, operand roles, and
+    # guarantees. Selection and backend code must not infer these facts from
+    # primitive names, signature positions, prose, or implementation text.
+    arithmetic: ArithmeticContract | None = None
     # Source-authored semantic-overload identity. Cross-declaration validation resolves
     # the family primary value; selection/lowering intentionally do not consume it yet.
     overload: PrimitiveOverload | None = None
@@ -360,7 +379,8 @@ class TestCase:
     ``index`` (compile-time lane index), ``index_type`` (the scalar type tag of a ``vidx``
     test vector when it differs from the result vector base), ``scale``/``alignment`` and
     ``offset``/``src_offset``/``dst_offset`` (gather/scatter and load/store buffer placement),
-    ``attrs`` (the ``aligned``/``packed`` axes).
+    ``attrs`` (the ``aligned``/``packed`` axes). Runtime and compile failure
+    roles carry a typed ``failure`` reason instead of an expected value.
     """
 
     name: str
@@ -369,6 +389,7 @@ class TestCase:
     inputs: tuple[TestArg, ...]
     expected: tuple[str, ...]
     role: TestCaseRole = "value"
+    failure: TestFailureReason | None = None
     lanes: int | None = None
     id: str | None = None
     extension: str | None = None
@@ -384,6 +405,7 @@ class TestCase:
     alignment: int | None = None
     attrs: Mapping[str, str] = field(default_factory=dict)
     source: SourceSpan | None = None
+    failure_source: SourceSpan | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "attrs", _freeze_mapping(self.attrs))

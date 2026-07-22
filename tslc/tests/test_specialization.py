@@ -236,6 +236,15 @@ def test_cpp_core_vectors_expose_metadata_constants(
     )
 
 
+def test_cpp_zero_divisor_failure_traps_on_non_unwinding_targets(
+    specialization_artifacts: dict[str, str]
+) -> None:
+    core = specialization_artifacts["cpp/include/tsl_core.hpp"]
+
+    assert "defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)" in core
+    assert '__builtin_trap();\n#else\n    throw std::domain_error(' in core
+
+
 def test_cpp_core_base_dispatch_admits_explicit_scalar_types(
     specialization_artifacts: dict[str, str]
 ) -> None:

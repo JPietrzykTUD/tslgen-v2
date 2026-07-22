@@ -42,6 +42,12 @@ _CASE_REQUIREMENTS = {
         required_facts=frozenset({ValueTestFact.SCALAR_INPUT}),
     ),
     "compile_only": ValueTestCaseRequirements(required_facts=_RESULT),
+    "compile_failure": ValueTestCaseRequirements(
+        required_facts=frozenset(
+            {ValueTestFact.IMMEDIATE, ValueTestFact.FAILURE}
+        ),
+        vector_inputs_match_lanes=True,
+    ),
     "convert": ValueTestCaseRequirements(
         expected="target_lanes",
         vector_inputs="one",
@@ -165,6 +171,10 @@ _CASE_REQUIREMENTS = {
     "pointer_lifetime": ValueTestCaseRequirements(scalar_inputs="non_empty"),
     "reduction": ValueTestCaseRequirements(
         expected="one", vector_inputs="one", vector_inputs_match_lanes=True
+    ),
+    "runtime_failure": ValueTestCaseRequirements(
+        required_facts=_RESULT | frozenset({ValueTestFact.FAILURE}),
+        vector_inputs_match_lanes=True,
     ),
     "repr_cast": ValueTestCaseRequirements(
         expected="target_lanes",
