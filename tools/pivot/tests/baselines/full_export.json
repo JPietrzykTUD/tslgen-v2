@@ -17720,7 +17720,7 @@
     },
     "working_directory": "<repository-root>"
   },
-  "schema": "tslc-pivot-full-export-v3",
+  "schema": "tslc-pivot-full-export-v4",
   "skip_category_scheme": "reason-prefix-v1",
   "skip_fields": [
     "language",
@@ -17732,7 +17732,17 @@
     "source",
     "count"
   ],
-  "skip_inventory_sha256": "0feb2a0b136aa4f580c0e2b09d49673ef7f882bfd36592bb386dfac0dcc496a4",
+  "skip_location_inventory_sha256": "0feb2a0b136aa4f580c0e2b09d49673ef7f882bfd36592bb386dfac0dcc496a4",
+  "skip_semantic_fields": [
+    "language",
+    "profile",
+    "primitive",
+    "extension",
+    "type",
+    "reason",
+    "source_path"
+  ],
+  "skip_semantic_inventory_sha256": "d5333a7d590e4c59d969eaafe57eb4c2b499f7ddd667aea51081e98e742900bb",
   "skips": [
     ["cpp","avx","abs","avx2","si16","PIVOT body contains residual top-level target statements",["tsldata/primitives/arithmetic/fundamental.tsl",1296,19,1303,11],1],
     ["cpp","avx","abs","avx2","si32","PIVOT body contains residual top-level target statements",["tsldata/primitives/arithmetic/fundamental.tsl",1296,19,1303,11],1],

@@ -51,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=(
             "allow removed definitions, replaced direct hashes, or changed typed-"
-            "body facts after an explicit product or correctness review"
+            "body semantics after an explicit product or correctness review"
         ),
     )
     args = parser.parse_args(argv)

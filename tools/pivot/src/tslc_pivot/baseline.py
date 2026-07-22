@@ -10,7 +10,10 @@ import json
 from pathlib import Path
 
 from tslc.diagnostics import SourceSpan
-from tslc_pivot.body_ir import pivot_body_census_digest
+from tslc_pivot.body_ir import (
+    pivot_body_census_digest,
+    pivot_body_census_location_digest,
+)
 from tslc_pivot.cli import (
     PivotCliInvocation,
     render_cli_command,
@@ -37,11 +40,16 @@ _STABLE_PRODUCT_FACT_FIELDS = (
     "diagnostics",
     "skip_category_scheme",
     "skip_fields",
-    "skip_inventory_sha256",
-    "skips",
+    "skip_semantic_fields",
+    "skip_semantic_inventory_sha256",
     "skips_by_language_and_category",
     "skips_by_language_and_reason",
     "unclassified_skip_count",
+)
+_STABLE_BODY_FACT_FIELDS = (
+    "semantic_digest",
+    "summary",
+    "languages",
 )
 
 type _DefinitionIdentity = tuple[
@@ -190,9 +198,13 @@ def build_full_export_manifest(
         {"language": language, "category": category, "count": count}
         for (language, category), count in sorted(skip_category_counts.items())
     ]
-    raw_skip_records, grouped_skip_records = _skip_inventory_records(run, result)
+    (
+        semantic_skip_records,
+        location_skip_records,
+        grouped_skip_records,
+    ) = _skip_inventory_records(run, result)
     return {
-        "schema": "tslc-pivot-full-export-v3",
+        "schema": "tslc-pivot-full-export-v4",
         "provenance": {
             "command": run.command,
             "argv": list(run.argv),
@@ -259,8 +271,22 @@ def build_full_export_manifest(
             "source",
             "count",
         ],
+        "skip_semantic_fields": [
+            "language",
+            "profile",
+            "primitive",
+            "extension",
+            "type",
+            "reason",
+            "source_path",
+        ],
         "skips": grouped_skip_records,
-        "skip_inventory_sha256": _canonical_sha256(raw_skip_records),
+        "skip_semantic_inventory_sha256": _canonical_sha256(
+            semantic_skip_records
+        ),
+        "skip_location_inventory_sha256": _canonical_sha256(
+            location_skip_records
+        ),
         "diagnostics": _diagnostic_records(run, result),
         "definitions": definitions,
         "definition_identity_collision_fields": [
@@ -337,8 +363,9 @@ def build_body_census_manifest(
     )
     collisions = tuple(count for count in nominal_identities.values() if count > 1)
     return {
-        "schema": "tslc-pivot-body-census-v1",
-        "digest": pivot_body_census_digest(
+        "schema": "tslc-pivot-body-census-v2",
+        "semantic_digest": pivot_body_census_digest(result.body_censuses),
+        "location_digest": pivot_body_census_location_digest(
             result.body_censuses,
             source_root=source_root,
         ),
@@ -462,33 +489,37 @@ def _collision_direct_hash_count(record: list[object]) -> int:
 def _skip_inventory_records(
     run: CanonicalFullExport,
     result: PivotExportResult,
-) -> tuple[list[list[object]], list[list[object]]]:
+) -> tuple[list[list[object]], list[list[object]], list[list[object]]]:
     root = run.repository_root.resolve()
-    records: list[list[object]] = []
+    semantic_records: list[list[object]] = []
+    location_records: list[list[object]] = []
     for skip in result.skipped:
         source: list[object] | None = None
+        source_path: str | None = None
         if skip.source is not None:
+            source_path = _portable_path(skip.source.path, root)
             source = [
-                _portable_path(skip.source.path, root),
+                source_path,
                 skip.source.line,
                 skip.source.column,
                 skip.source.end_line,
                 skip.source.end_column,
             ]
-        records.append(
-            [
-                skip.language.value,
-                skip.profile,
-                skip.primitive,
-                skip.extension,
-                skip.type_tag,
-                skip.reason,
-                source,
-            ]
-        )
-    records.sort(key=_canonical_json)
+        identity_record: list[object] = [
+            skip.language.value,
+            skip.profile,
+            skip.primitive,
+            skip.extension,
+            skip.type_tag,
+            skip.reason,
+        ]
+        semantic_record = [*identity_record, source_path]
+        semantic_records.append(semantic_record)
+        location_records.append([*identity_record, source])
+    semantic_records.sort(key=_canonical_json)
+    location_records.sort(key=_canonical_json)
     grouped: list[list[object]] = []
-    for record in records:
+    for record in location_records:
         if grouped and grouped[-1][:-1] == record:
             count = grouped[-1][-1]
             if not isinstance(count, int):
@@ -496,7 +527,7 @@ def _skip_inventory_records(
             grouped[-1][-1] = count + 1
         else:
             grouped.append([*record, 1])
-    return records, grouped
+    return semantic_records, location_records, grouped
 
 
 def _diagnostic_records(
@@ -684,19 +715,25 @@ def validate_body_census_baseline_update(
     *,
     allow_reviewed_incompatible_baseline: bool = False,
 ) -> None:
-    """Require explicit review for every typed-body evidence change."""
+    """Require explicit review for typed-body semantic changes."""
 
-    _validate_body_census_manifest(previous)
     _validate_body_census_manifest(candidate)
-    if allow_reviewed_incompatible_baseline or previous == candidate:
+    _validate_body_census_manifest(previous)
+    if allow_reviewed_incompatible_baseline:
+        return
+    changed = tuple(
+        field
+        for field in _STABLE_BODY_FACT_FIELDS
+        if previous.get(field) != candidate.get(field)
+    )
+    if not changed:
         return
     raise ValueError(
-        "body-census baseline facts changed. Pass "
+        "body-census semantic facts changed: "
+        f"{', '.join(changed)}. Pass "
         "--allow-reviewed-incompatible-baseline only after an explicit "
-        "typed-body semantics or corpus review."
+        "typed-body semantics review."
     )
-
-
 
 
 def update_pivot_baselines(
@@ -782,15 +819,16 @@ def _manifest_definition_inventory(
 
 
 def _validate_body_census_manifest(manifest: Mapping[str, object]) -> None:
-    if manifest.get("schema") != "tslc-pivot-body-census-v1":
+    if manifest.get("schema") != "tslc-pivot-body-census-v2":
         raise ValueError("body-census baseline has an unsupported schema")
-    digest = manifest.get("digest")
-    if (
-        not isinstance(digest, str)
-        or len(digest) != 64
-        or any(character not in "0123456789abcdef" for character in digest)
-    ):
-        raise ValueError("body-census baseline has an invalid digest")
+    for field in ("semantic_digest", "location_digest"):
+        digest = manifest.get(field)
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            raise ValueError(f"body-census baseline has an invalid {field}")
     summary = manifest.get("summary")
     if not isinstance(summary, dict):
         raise ValueError("body-census baseline summary must be an object")
@@ -801,8 +839,6 @@ def _validate_body_census_manifest(manifest: Mapping[str, object]) -> None:
         )
     if not isinstance(manifest.get("languages"), dict):
         raise ValueError("body-census baseline languages must be an object")
-
-
 
 
 def _portable_path(path: Path, repository_root: Path) -> str:

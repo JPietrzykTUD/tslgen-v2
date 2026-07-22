@@ -334,12 +334,33 @@ def pivot_body_trace_semantic_digest(
 
 def pivot_body_census_digest(
     censuses: tuple[PivotBodyCensus, ...],
+) -> str:
+    """Hash exact typed-body semantics independently of source locations."""
+
+    return _pivot_body_census_digest(censuses, spans=False)
+
+
+def pivot_body_census_location_digest(
+    censuses: tuple[PivotBodyCensus, ...],
     *,
     source_root: Path,
 ) -> str:
-    """Hash exact body facts with source paths relative to ``source_root``."""
+    """Hash typed-body facts and normalized source locations."""
 
     normalized_root = source_root.resolve()
+    return _pivot_body_census_digest(
+        censuses,
+        spans=True,
+        source_root=normalized_root,
+    )
+
+
+def _pivot_body_census_digest(
+    censuses: tuple[PivotBodyCensus, ...],
+    *,
+    spans: bool,
+    source_root: Path | None = None,
+) -> str:
     return _digest(
         [
             {
@@ -361,14 +382,14 @@ def pivot_body_census_digest(
                         "features": entry.features,
                         "body": _build_record(
                             entry.body,
-                            spans=True,
-                            source_root=normalized_root,
+                            spans=spans,
+                            source_root=source_root,
                         ),
                         "inlined": [
                             _build_record(
                                 result,
-                                spans=True,
-                                source_root=normalized_root,
+                                spans=spans,
+                                source_root=source_root,
                             )
                             for result in entry.inlined_bodies
                         ],
@@ -631,5 +652,6 @@ __all__ = (
     "PivotUnsupported",
     "classify_body_trace",
     "pivot_body_census_digest",
+    "pivot_body_census_location_digest",
     "pivot_body_trace_semantic_digest",
 )

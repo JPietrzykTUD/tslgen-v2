@@ -1,5 +1,4 @@
 {
-  "digest": "769f24db008c6177afd042ba73ec741b1d750269a23304cc86424b8da08fdf82",
   "languages": {
     "cpp": {
       "categories": {
@@ -275,7 +274,9 @@
       }
     }
   },
-  "schema": "tslc-pivot-body-census-v1",
+  "location_digest": "769f24db008c6177afd042ba73ec741b1d750269a23304cc86424b8da08fdf82",
+  "schema": "tslc-pivot-body-census-v2",
+  "semantic_digest": "6f4d97ac0216dd2013099fcb11c828be241abcc37556ebd94ab895ce2fe0ebb3",
   "summary": {
     "entries": 16404,
     "failures": 0,

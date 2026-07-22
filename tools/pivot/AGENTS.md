@@ -76,8 +76,10 @@ diagnostics, and coverage baseline.
   wrappers and nominal collisions; hidden failures, malformed or lost capture
   acceptance, or an unexplained semantic digest change blocks the slice.
 - Keep `tests/baselines/full_export.json` authoritative for production parser
-  and inliner output. Definition occurrence, order, artifact, exact skip, or
-  `direct`-hash changes require explicit review under the charter.
+  and inliner output. Definition occurrence, order, artifact, semantic skip,
+  or `direct`-hash changes require explicit review under the charter. Exact
+  source spans remain deterministic location evidence, but location-only
+  movement does not constitute a semantic incompatibility.
 
 ## Validation
 
@@ -94,17 +96,17 @@ immutability, exact compiler-version compatibility, fresh lowering state,
 calls, locals, final results, alternative variants, unsafe framing, reserved-
 token corruption, parser edge cases, fail-closed rejection, recursive inlining,
 exact body-entry association, YAML schema/goldens, full-export entry-multiset
-and hash ratchets, source-normalized body-census digest, and cross-
-`PYTHONHASHSEED` determinism.
+and hash ratchets, span-free body-census semantic digest, normalized
+body-location digest, and cross-`PYTHONHASHSEED` determinism.
 Validate ordinary generation remains unchanged from outside the compiler
 package.
 
 Regenerate the durable production and typed-body manifests
 only through `python tools/pivot/scripts/update_full_export_baseline.py`. The
-updater must remain fail-closed for removed entries, reduced multiplicity, or
-replaced `direct` hashes, and for any body-evidence change. Its incompatible-
-baseline override requires an explicit reviewed product or correctness
-decision.
+updater must remain fail-closed for removed entries, reduced multiplicity,
+replaced `direct` hashes, semantic skip changes, and body-semantic changes.
+Corpus provenance and source-location evidence may refresh without the
+incompatible-baseline override when those semantic ratchets are unchanged.
 
 For packaging and command checks:
 

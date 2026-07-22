@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from tslc.diagnostics import SourceSpan
 from tslc.output.artifacts import ArtifactSet
 from tslc_pivot.baseline import (
     CANONICAL_FULL_EXPORT_ARGV,
@@ -19,7 +20,12 @@ from tslc_pivot.baseline import (
     canonical_full_export,
 )
 from tslc_pivot.exporter import export_pivot
-from tslc_pivot.model import PivotExportResult, PivotLanguage, PivotProjection
+from tslc_pivot.model import (
+    PivotExportResult,
+    PivotLanguage,
+    PivotProjection,
+    PivotSkip,
+)
 
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -106,6 +112,15 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         "source",
         "count",
     ]
+    assert actual["skip_semantic_fields"] == [
+        "language",
+        "profile",
+        "primitive",
+        "extension",
+        "type",
+        "reason",
+        "source_path",
+    ]
     skip_records = actual["skips"]
     assert skip_records == sorted(skip_records, key=_canonical_json)
     assert sum(record[-1] for record in skip_records) == 29_251
@@ -115,16 +130,28 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         or (isinstance(record[6], list) and len(record[6]) == 5)
         for record in skip_records
     )
-    expanded_skips = [
+    expanded_skip_locations = [
         record[:-1]
         for record in skip_records
         for _ in range(record[-1])
     ]
-    assert sha256(_canonical_json(expanded_skips).encode("utf-8")).hexdigest() == (
-        actual["skip_inventory_sha256"]
-    )
-    assert actual["skip_inventory_sha256"] == (
-        "0feb2a0b136aa4f580c0e2b09d49673ef7f882bfd36592bb386dfac0dcc496a4"
+    expanded_skip_semantics = [
+        [*record[:6], None if record[6] is None else record[6][0]]
+        for record in skip_records
+        for _ in range(record[-1])
+    ]
+    assert sha256(
+        _canonical_json(sorted(expanded_skip_semantics, key=_canonical_json)).encode(
+            "utf-8"
+        )
+    ).hexdigest() == actual["skip_semantic_inventory_sha256"]
+    assert sha256(
+        _canonical_json(sorted(expanded_skip_locations, key=_canonical_json)).encode(
+            "utf-8"
+        )
+    ).hexdigest() == actual["skip_location_inventory_sha256"]
+    assert actual["skip_semantic_inventory_sha256"] == (
+        "d5333a7d590e4c59d969eaafe57eb4c2b499f7ddd667aea51081e98e742900bb"
     )
 
 
@@ -272,8 +299,6 @@ def _assert_complete_body_census(
     assert actual_body == body_baseline
 
 
-
-
 def test_manifest_rejects_inputs_changed_after_snapshot(tmp_path: Path) -> None:
     sources = tmp_path / "sources"
     sources.mkdir()
@@ -301,6 +326,59 @@ def test_manifest_rejects_inputs_changed_after_snapshot(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="changed after the pre-export snapshot"):
         build_full_export_manifest(run, result)
+
+
+def test_manifest_separates_skip_semantics_from_source_locations(
+    tmp_path: Path,
+) -> None:
+    sources = tmp_path / "sources"
+    sources.mkdir()
+    source = sources / "demo.tsl"
+    source.write_text("demo\n", encoding="utf-8")
+    (tmp_path / "profiles.json").write_text("{}\n", encoding="utf-8")
+    (tmp_path / "tslc.toml").write_text(
+        "[tslc]\n"
+        'sources = ["sources"]\n'
+        'machine_profiles = "profiles.json"\n'
+        'backends = ["cpp", "rust"]\n',
+        encoding="utf-8",
+    )
+    run = canonical_full_export(tmp_path)
+
+    def manifest(line: int, *, source_path: Path = source) -> dict[str, object]:
+        skip = PivotSkip(
+            PivotLanguage.CPP,
+            "scalar",
+            "demo",
+            "scalar",
+            "si32",
+            "unsupported demo",
+            SourceSpan(source_path, line, 1, line + 1, 1),
+        )
+        result = PivotExportResult(
+            artifacts=ArtifactSet.create(()),
+            projections=(
+                PivotProjection(PivotLanguage.CPP, (), (skip,)),
+                PivotProjection(PivotLanguage.RUST, (), ()),
+            ),
+            diagnostics=(),
+        )
+        return build_full_export_manifest(run, result)
+
+    original = manifest(1)
+    shifted = manifest(20)
+    moved = manifest(1, source_path=sources / "moved.tsl")
+
+    assert original["skip_semantic_inventory_sha256"] == (
+        shifted["skip_semantic_inventory_sha256"]
+    )
+    assert original["skip_location_inventory_sha256"] != (
+        shifted["skip_location_inventory_sha256"]
+    )
+    assert original["skips"] != shifted["skips"]
+    assert original["skip_semantic_inventory_sha256"] != (
+        moved["skip_semantic_inventory_sha256"]
+    )
 
 
 def _definitions_by_identity(manifest: dict[str, Any]) -> dict[str, tuple[str, ...]]:
