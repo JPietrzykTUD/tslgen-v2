@@ -10,9 +10,17 @@ pub(crate) const BENCHMARK_PROTOCOL_VERSION: u64 = @{benchmark_protocol_version}
 pub(crate) const BACKEND_ID: &str = "rust";
 
 #[derive(Clone, Copy, Debug)]
+pub struct GeneratedTargetRequirement {
+    pub target_arch: &'static str,
+    pub target_features: &'static [&'static str],
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct GeneratedProfile {
     pub name: &'static str,
-    pub feature_environment: &'static str,
+    pub target_arch: &'static str,
+    pub target_features: &'static [&'static str],
+    pub stronger_requirements: &'static [GeneratedTargetRequirement],
     pub descriptor_relative_path: &'static str,
     pub descriptor: &'static str,
     pub mappings: &'static [GeneratedMapping],

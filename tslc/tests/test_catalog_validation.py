@@ -1750,6 +1750,37 @@ def test_target_family_data_makes_new_extension_family_additive() -> None:
     assert "TSL-CATALOG-INVALID-ENUM" not in {d.code for d in diagnostics}
 
 
+def test_empty_backend_target_arch_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        "target_families:\n"
+        "  known_extension_families [scalar]\n"
+        "  universal_extension_families [scalar]\n"
+        "  profile_families:\n"
+        "    generic:\n"
+        "      extension_families []\n"
+        "      backends:\n"
+        "        rust:\n"
+        '          target_arch ""\n'
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+
+    assert "TSL-CATALOG-TARGET-FAMILIES-MALFORMED-TARGET-ARCH" in {
+        diagnostic.code for diagnostic in diagnostics
+    }
+
+
 def test_target_family_typos_are_still_diagnosed() -> None:
     diagnostics = _diagnostics(
         "target_families:\n"

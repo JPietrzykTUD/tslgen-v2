@@ -265,8 +265,6 @@ def _rust_command_groups(
             "--manifest-path",
             str(manifest),
             "--no-default-features",
-            "--features",
-            profile.profile_name,
             *rust_target_args(profile, config),
             "--target-dir",
             str(target_dir),
@@ -330,7 +328,7 @@ def _rust_command_groups(
         # Build verification still uses `cargo test` so generated test targets
         # compile. Cross-target builds cannot execute those binaries natively, so
         # they use --no-run unless value-test mode has a runner follow-up.
-        features = profile.profile_name
+        features: tuple[str, ...] = ()
         severity: Severity = "error"
         step = "test"
         extra_args: tuple[str, ...] = ()
@@ -342,7 +340,7 @@ def _rust_command_groups(
             # compiles+runs the generated value tests); without it `tests/values.rs`
             # is cfg'd empty. A value-mode failure is reported as a warning
             # (report-then-promote), like the C++ ctest step.
-            features = f"{profile.profile_name},value_tests"
+            features = ("value_tests",)
             severity = "warning"
             if runner_prefix(profile, config):
                 step = "build-tests"
@@ -358,8 +356,7 @@ def _rust_command_groups(
                     "--manifest-path",
                     str(manifest),
                     "--no-default-features",
-                    "--features",
-                    features,
+                    *_cargo_features_args(features),
                     *rust_target_args(profile, config),
                     "--target-dir",
                     str(target_dir),
@@ -382,7 +379,7 @@ def _rust_command_groups(
                     str(manifest),
                     "--no-default-features",
                     "--features",
-                    f"{profile.profile_name},{RUST_COMPILE_FAILURE_FEATURE}",
+                    RUST_COMPILE_FAILURE_FEATURE,
                     "--example",
                     failure.target_name,
                     *rust_target_args(profile, config),
@@ -397,6 +394,10 @@ def _rust_command_groups(
         )
         groups.append(tuple(commands))
     return tuple(groups)
+
+
+def _cargo_features_args(features: tuple[str, ...]) -> tuple[str, ...]:
+    return ("--features", ",".join(features)) if features else ()
 
 
 def _rust_clippy_executable(config: BuildVerifierConfig) -> str:

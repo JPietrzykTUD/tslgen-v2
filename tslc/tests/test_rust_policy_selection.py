@@ -20,6 +20,7 @@ from tslc.backend.rust_policy_selection import (
     RustPolicySelectionPlan,
     plan_rust_policy_selection,
 )
+from tslc.backend.rust_static_selection import plan_rust_static_selection
 from tslc.benchmark.model import SpecializationKey
 from tslc.compiler_assets import RenderAssets
 from tslc.diagnostics import has_errors
@@ -130,7 +131,11 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
         plan_rust_policy_consumption(
             rust_policy_result.rendered.benchmarks,
             plan,
-        )
+        ),
+        plan_rust_static_selection(rust_policy_result.emitted_profiles),
+    )
+    static_selection = plan_rust_static_selection(
+        rust_policy_result.emitted_profiles
     )
 
     default_first = rust_artifacts(
@@ -138,18 +143,21 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
         render_assets,
         media_type="text/rust",
         selection_plan=plan,
+        static_selection_plan=static_selection,
     )
     default_second = rust_artifacts(
         rust_policy_result.emitted_profiles,
         render_assets,
         media_type="text/rust",
         selection_plan=plan,
+        static_selection_plan=static_selection,
     )
     consumable_artifacts = rust_artifacts(
         rust_policy_result.emitted_profiles,
         render_assets,
         media_type="text/rust",
         selection_plan=plan,
+        static_selection_plan=static_selection,
         consumption_plan=consumption,
     )
     forced_artifacts = rust_artifacts(
@@ -157,6 +165,7 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
         render_assets,
         media_type="text/rust",
         selection_plan=forced,
+        static_selection_plan=static_selection,
     )
     assert default_first == default_second
 
@@ -213,6 +222,7 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
             render_assets,
             media_type="text/rust",
             selection_plan=stale_plan,
+            static_selection_plan=static_selection,
         )
 
 
@@ -290,6 +300,9 @@ def _write_policy_crate(
         render_assets,
         media_type="text/rust",
         selection_plan=plan,
+        static_selection_plan=plan_rust_static_selection(
+            result.emitted_profiles
+        ),
     )
     artifacts = _overlay_project_artifacts(
         result.artifacts,
@@ -350,7 +363,9 @@ def _optimized_mul_function(
     candidate: str,
 ) -> tuple[str, tuple[str, ...], str]:
     environment = os.environ.copy()
-    environment["RUSTFLAGS"] = "-Awarnings -Ccodegen-units=1"
+    environment["RUSTFLAGS"] = (
+        "-Awarnings -Ccodegen-units=1 -Ctarget-feature=+sse,+sse2"
+    )
     consumer_build = _run(
         (
             "cargo",
@@ -359,8 +374,6 @@ def _optimized_mul_function(
             "--example",
             "selection_probe",
             "--no-default-features",
-            "--features",
-            "sse2",
             "--",
             "--emit=asm",
         ),
@@ -399,8 +412,6 @@ def _optimized_mul_function(
             "--lib",
             "--release",
             "--no-default-features",
-            "--features",
-            "sse2",
             "--",
             "--emit=asm",
         ),
@@ -472,7 +483,7 @@ def test_generated_rust_default_and_forced_selection_are_static_and_correct(
         common = (
             "--no-default-features",
             "--features",
-            "sse2,value_tests",
+            "value_tests",
         )
         values = _run(("cargo", "test", *common, "--test", "values"), cwd=crate)
         assert values.returncode == 0, values.stderr
@@ -484,8 +495,6 @@ def test_generated_rust_default_and_forced_selection_are_static_and_correct(
                 "--example",
                 "selection_probe",
                 "--no-default-features",
-                "--features",
-                "sse2",
             ),
             cwd=crate,
         )

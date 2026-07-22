@@ -400,7 +400,7 @@ env -u TSL_RUST_VARIANT_POLICY_FILE \
   cargo bench --profile bench \
     --bench tsl_variant_bench_sse2 \
     --no-default-features \
-    --features variant_benchmarks,sse2 \
+    --features variant_benchmarks \
     -- --help
 ```
 
@@ -413,13 +413,13 @@ mkdir -p "$artifact_dir"
 
 export TSL_RUST_BENCHMARK_CONTEXT='local-native-sse2-v1'
 export CARGO_INCREMENTAL=0
-export RUSTFLAGS='-Copt-level=3 -Cdebuginfo=0 -Cdebug-assertions=no -Coverflow-checks=no -Clto=off -Clinker-plugin-lto=no -Cembed-bitcode=no -Ccodegen-units=1 -Cpanic=unwind -Crpath=no -Cstrip=none'
+export RUSTFLAGS='-Copt-level=3 -Cdebuginfo=0 -Cdebug-assertions=no -Coverflow-checks=no -Clto=off -Clinker-plugin-lto=no -Cembed-bitcode=no -Ccodegen-units=1 -Cpanic=unwind -Crpath=no -Cstrip=none -Ctarget-feature=+sse,+sse2'
 
 env -u CARGO_ENCODED_RUSTFLAGS -u TSL_RUST_VARIANT_POLICY_FILE \
   cargo bench --profile bench \
     --bench tsl_variant_bench_sse2 \
     --no-default-features \
-    --features variant_benchmarks,sse2 \
+    --features variant_benchmarks \
     -- \
     --results "$artifact_dir/results.jsonl" \
     --summary "$artifact_dir/summary.txt" \
@@ -439,7 +439,7 @@ env -u CARGO_ENCODED_RUSTFLAGS \
   TSL_RUST_VARIANT_POLICY_FILE="$artifact_dir/policy.json" \
   cargo build --profile bench \
     --no-default-features \
-    --features variant_benchmarks,sse2
+    --features variant_benchmarks
 ```
 
 The consumer keeps `variant_benchmarks` enabled only so its generated-code

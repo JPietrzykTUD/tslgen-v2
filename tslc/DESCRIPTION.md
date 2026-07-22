@@ -43,7 +43,7 @@ sources + compiler assets → parse → catalog → select → scan body → low
 | **select** | [select/](src/tslc/select/) | For each `(backend, extension, type)` slot, pick the best implementation body |
 | **ir / scan** | [ir/](src/tslc/ir/) | Turn a TSIL body into a recursive `tuple[Segment, ...]` — *not* an AST |
 | **lower** | [lower/](src/tslc/lower/) | Walk segments, resolve queries/intrinsics → `LoweredSpecialization` |
-| **backend** | [backend/](src/tslc/backend/) | Own target type projection, helper manifests, emitted profiles, validation, and C++/Rust function text |
+| **backend** | [backend/](src/tslc/backend/) | Own target type projection, helper manifests, emitted profiles, Rust compile-target selection, validation, and C++/Rust function text |
 | **value tests** | [value_tests/](src/tslc/value_tests/) | Plan executable cases from finalized emitted names |
 | **benchmark** | [benchmark/](src/tslc/benchmark/) | Plan explicit implementation-variant measurements and render optional backend-scoped report/policy tools |
 | **render** | [render/](src/tslc/render/) | Format validated profiles and prebuilt test plans into headers/modules, dispatch, CMake/Cargo, and docs |
@@ -211,8 +211,9 @@ prim<v:=(v,v)> add(left, right):
   source-named extension families—fallback classification, free-function
   ownership, declared-register requirements, and index-vector support—and for
   profile families, including whether a profile runs natively without an
-  emulator. It also owns documentation family/order labels and the catalog of
-  accepted target features plus their default/backend compiler spellings;
+  emulator and each backend's explicit target architecture/toolchain facts. It
+  also owns documentation family/order labels and the catalog of accepted
+  target features plus their default/backend compiler spellings;
   machine profiles retain only genuine profile-specific overrides. Selection,
   lowering, translation, documentation, and verification consume those typed
   roles instead of recognizing family or feature-name patterns.

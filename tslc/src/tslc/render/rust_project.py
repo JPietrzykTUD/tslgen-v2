@@ -14,6 +14,10 @@ from tslc.backend.rust_policy_selection import (
     RustPolicySelectionPlan,
     validate_rust_policy_selection_plan,
 )
+from tslc.backend.rust_static_selection import (
+    RustStaticSelectionPlan,
+    validate_rust_static_selection_plan,
+)
 from tslc.backend.emitted_profile import (
     EmittedProfile,
     used_extensions,
@@ -38,6 +42,10 @@ from tslc.render.rust_policy_consumption import (
     RustPolicyConsumptionRenderPlan,
     RustPolicyConsumptionRenderProfile,
 )
+from tslc.render.rust_static_selection import (
+    rust_static_fallback_cfg,
+    rust_static_profile_cfg,
+)
 from tslc.backend.rust_algorithm import rust_algorithm_module
 from tslc.backend.rust_vectors import rust_registrations, rust_vector_registrations
 from tslc.value_tests.compile_failure import (
@@ -53,6 +61,7 @@ def rust_artifacts(
     *,
     media_type: str,
     selection_plan: RustPolicySelectionPlan,
+    static_selection_plan: RustStaticSelectionPlan,
     consumption_plan: RustPolicyConsumptionRenderPlan = (
         EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN
     ),
@@ -60,6 +69,7 @@ def rust_artifacts(
     value_tests: ValueTestProjectPlan | None = None,
 ) -> list[Artifact]:
     validate_rust_policy_selection_plan(profiles, selection_plan)
+    validate_rust_static_selection_plan(profiles, static_selection_plan)
     emitted_names = {profile.profile.name for profile in profiles}
     if any(
         entry.profile.profile_name not in emitted_names
@@ -193,11 +203,15 @@ def rust_artifacts(
         arch_use = _rust_arch_use(
             used_extensions(by_primitive), emitted_profile.extensions
         )
+        static_selection = static_selection_plan.profile(
+            emitted_profile.profile.name
+        )
         content = assets.fill(
             "rust_profile_module.rs.tmpl",
-            target_feature_guard=_rust_target_feature_guard(
-                emitted_profile.profile,
-                capability,
+            module_cfg=(
+                rust_static_profile_cfg(static_selection)
+                if static_selection is not None
+                else "any()"
             ),
             arch_use=arch_use,
             profile_metadata=assets.fill(
@@ -229,8 +243,70 @@ def rust_artifacts(
             )
         )
 
+    fallback_by_primitive = (
+        static_selection_plan.fallback_module.specializations_by_primitive()
+    )
+    fallback_extensions = static_selection_plan.fallback_module.extensions_by_name()
+    fallback_backend = RustBackend(emit_target_features=False)
+    fallback_internal = "\n\n".join(
+        rendered
+        for name in sorted(fallback_by_primitive)
+        if (
+            rendered := fallback_backend.render_primitive_internal(
+                name, fallback_by_primitive[name]
+            )
+        )
+    )
+    fallback_public = "\n\n".join(
+        fallback_backend.render_primitive_public(
+            name, fallback_by_primitive[name]
+        )
+        for name in sorted(fallback_by_primitive)
+    )
+    fallback_bodies = "\n\n".join(
+        part
+        for part in (
+            fallback_backend.render_primitive_module(fallback_internal),
+            fallback_public,
+            fallback_backend.render_implementation_state_queries(
+                fallback_by_primitive
+            ),
+        )
+        if part
+    )
+    fallback_content = assets.fill(
+        "rust_profile_module.rs.tmpl",
+        module_cfg=rust_static_fallback_cfg(static_selection_plan),
+        arch_use=_rust_arch_use(
+            used_extensions(fallback_by_primitive), fallback_extensions
+        ),
+        profile_metadata=assets.fill(
+            "rust_profile_metadata.rs.tmpl",
+            profile_name=json.dumps("target_fallback"),
+            profile_family=json.dumps("generic"),
+        ).rstrip(),
+        registrations=rust_registrations(
+            fallback_by_primitive, fallback_extensions
+        ),
+        bodies=fallback_bodies,
+        algorithm=rust_algorithm_module(
+            fallback_by_primitive, fallback_extensions, assets
+        ),
+    )
     artifacts.append(
-        text("rust/src/lib.rs", _rust_lib(profiles, assets), media_type=media_type)
+        text(
+            "rust/src/tsl_target_fallback.rs",
+            fallback_content,
+            media_type=media_type,
+        )
+    )
+
+    artifacts.append(
+        text(
+            "rust/src/lib.rs",
+            _rust_lib(profiles, static_selection_plan, assets),
+            media_type=media_type,
+        )
     )
     artifacts.append(
         text(
@@ -374,53 +450,55 @@ def _verify_runner(profile: MachineProfile) -> VerifyRunner | None:
     )
 
 
-def _rust_target_feature_guard(
-    profile: MachineProfile,
-    capability: ProfileFamilyCapability,
-) -> str:
-    features = tuple(
-        feature.removeprefix("+")
-        for feature in rust_target_features(profile, capability)
-    )
-    if not features:
-        return ""
-    condition = ", ".join(
-        f'target_feature = {json.dumps(feature)}' for feature in features
-    )
-    required = ", ".join(features)
-    profile_name = slug(profile.name)
-    message = (
-        "TSL_RUST_PROFILE_TARGET_FEATURE_MISMATCH: generated Rust profile "
-        f"`{profile_name}` requires rustc target features: {required}"
-    )
-    return (
-        f"#[cfg(not(all({condition})))]\n"
-        f"compile_error!({json.dumps(message)});\n\n"
-    )
-
-
 def _rust_lib(
     profiles: tuple[EmittedProfile, ...],
+    static_selection_plan: RustStaticSelectionPlan,
     assets: RenderAssets,
 ) -> str:
     # `non_upper_case_globals` is allowed so an `sImm` immediate can keep its corpus name
     # as a lowercase const-generic, matching the body that uses it.
     primitive_tags = _rust_primitive_tags(profiles, assets)
-    profile_slugs = tuple(slug(emitted_profile.profile.name) for emitted_profile in profiles)
+    profile_slugs = tuple(
+        slug(selection.profile_name)
+        for selection in static_selection_plan.profiles
+    )
     profile_modules = "\n\n".join(
         assets.fill(
             "rust_lib_profile.rs.tmpl",
             profile_slug=profile_slug,
-            selected_profile_cfg=_rust_selected_profile_cfg(profile_slug, profile_slugs),
+            selected_profile_cfg=rust_static_profile_cfg(selection),
         ).rstrip()
-        for profile_slug in profile_slugs
+        for profile_slug, selection in zip(
+            profile_slugs, static_selection_plan.profiles, strict=True
+        )
     )
+    fallback_cfg = rust_static_fallback_cfg(static_selection_plan)
+    fallback_module = assets.fill(
+        "rust_lib_profile.rs.tmpl",
+        profile_slug="target_fallback",
+        selected_profile_cfg=fallback_cfg,
+    ).rstrip()
+    profile_modules = "\n\n".join(
+        part for part in (profile_modules, fallback_module) if part
+    )
+    selections_by_name = {
+        selection.profile_name: selection
+        for selection in static_selection_plan.profiles
+    }
     benchmark_modules = "\n\n".join(
         assets.fill(
             "rust_lib_benchmark_profile.rs.tmpl",
-            profile_slug=profile_slug,
+            profile_slug=slug(profile.profile.name),
+            selected_profile_cfg=(
+                rust_static_profile_cfg(selection)
+                if (
+                    selection := selections_by_name.get(profile.profile.name)
+                )
+                is not None
+                else fallback_cfg
+            ),
         ).rstrip()
-        for profile_slug in profile_slugs
+        for profile in profiles
     )
     return assets.fill(
         "rust_lib.rs.tmpl",
@@ -478,14 +556,6 @@ def _rust_primitive_tags(
     ).rstrip()
 
 
-def _rust_selected_profile_cfg(profile_slug: str, profile_slugs: tuple[str, ...]) -> str:
-    other_slugs = tuple(slug for slug in profile_slugs if slug != profile_slug)
-    if not other_slugs:
-        return f'feature = "{profile_slug}"'
-    others = ", ".join(f'feature = "{other}"' for other in other_slugs)
-    return f'all(feature = "{profile_slug}", not(any({others})))'
-
-
 def _rust_build_policy_profiles(
     profiles: tuple[RustPolicyConsumptionRenderProfile, ...],
 ) -> str:
@@ -495,7 +565,27 @@ def _rust_build_policy_profiles(
         (
             "tsl_rust_variant_policy::GeneratedProfile {",
             f"    name: {json.dumps(entry.profile.profile_name)},",
-            f'    feature_environment: "{entry.names.feature_environment}",',
+            "    target_arch: "
+            f"{json.dumps(entry.static_selection.requirement.target_arch)},",
+            "    target_features: &["
+            + ", ".join(
+                json.dumps(feature)
+                for feature in entry.static_selection.requirement.target_features
+            )
+            + "],",
+            "    stronger_requirements: &["
+            + ", ".join(
+                "tsl_rust_variant_policy::GeneratedTargetRequirement { "
+                f"target_arch: {json.dumps(requirement.target_arch)}, "
+                "target_features: &["
+                + ", ".join(
+                    json.dumps(feature)
+                    for feature in requirement.target_features
+                )
+                + "] }"
+                for requirement in entry.static_selection.stronger_requirements
+            )
+            + "],",
             "    descriptor_relative_path: "
             f'"{entry.names.descriptor_path}",',
             "    descriptor: "
@@ -507,7 +597,9 @@ def _rust_build_policy_profiles(
             "    required_rustflags: &["
             + ", ".join(
                 json.dumps(flag)
-                for flag in RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags
+                for flag in RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags_for(
+                    entry.profile.required_features
+                )
             )
             + "],",
             "    required_incremental_environment: "
@@ -547,16 +639,7 @@ def _rust_cargo(
     *,
     value_tests: ValueTestProjectPlan | None = None,
 ) -> str:
-    profile_slugs = tuple(
-        profile.profile_slug for profile in benchmark_layout_plan.profiles
-    )
-    default = (
-        "scalar"
-        if "scalar" in profile_slugs
-        else profile_slugs[0] if profile_slugs else "scalar"
-    )
-    features = [f'default = ["{default}"]']
-    features.extend(f"{profile_slug} = []" for profile_slug in profile_slugs)
+    features = ["default = []"]
     # Opt-in feature that compiles+runs the generated value tests (parity with the C++ ctest gate).
     features.append("value_tests = []")
     # Benchmark targets stay outside ordinary builds unless explicitly requested.
@@ -578,8 +661,7 @@ def _rust_cargo(
                             f'name = "{target}"',
                             f'path = "examples/{target}.rs"',
                             "required-features = "
-                            f'["{RUST_COMPILE_FAILURE_FEATURE}", '
-                            f'"{slug(profile.profile_name)}"]',
+                            f'["{RUST_COMPILE_FAILURE_FEATURE}"]',
                         )
                     )
                 )

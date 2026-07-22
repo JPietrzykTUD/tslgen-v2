@@ -24,6 +24,7 @@ from tslc.backend.rust_policy_selection import (
     RustPolicySelectionPlan,
     plan_rust_policy_selection,
 )
+from tslc.backend.rust_static_selection import plan_rust_static_selection
 from tslc.benchmark.model import (
     BenchmarkReductionCorrectnessCase,
     BenchmarkReductionScenario,
@@ -259,7 +260,7 @@ def test_rust_benchmark_artifacts_are_opt_in_and_deterministic(
     assert "rust/benches/tsl_variant_bench_sse2.rs" in artifacts
     assert "variant_benchmarks = []" in artifacts["rust/Cargo.toml"]
     assert (
-        'required-features = ["variant_benchmarks", "sse2"]'
+        'required-features = ["variant_benchmarks"]'
         in artifacts["rust/Cargo.toml"]
     )
     assert "[dependencies]" not in artifacts["rust/Cargo.toml"]
@@ -277,7 +278,8 @@ def test_rust_benchmark_artifacts_are_opt_in_and_deterministic(
         plan_rust_policy_consumption(
             rust_benchmark_result.rendered.benchmarks,
             selection,
-        )
+        ),
+        plan_rust_static_selection(rust_benchmark_result.emitted_profiles),
     )
     rendered_once = rust_benchmark_artifacts(
         rust_benchmark_result.rendered.benchmarks,
@@ -360,7 +362,8 @@ def test_rust_default_call_uses_actual_selection_membership(
             plan_rust_policy_consumption(
                 rust_benchmark_result.rendered.benchmarks,
                 demoted,
-            )
+            ),
+            plan_rust_static_selection(rust_benchmark_result.emitted_profiles),
         ),
     )
     source = next(
@@ -450,7 +453,7 @@ def test_rust_runtime_produces_backend_scoped_policy_without_consuming_it(
     assert "Explicit two-phase autotune" in source
     assert "env -u CARGO_ENCODED_RUSTFLAGS -u TSL_RUST_VARIANT_POLICY_FILE" in source
     assert 'const BENCHMARK_TARGET: &str = "tsl_variant_bench_sse2";' in source
-    assert 'const CARGO_FEATURES: &str = "variant_benchmarks,sse2";' in source
+    assert 'const CARGO_FEATURES: &str = "variant_benchmarks";' in source
     assert 'let artifact_subdirectory = "tsl-benchmark/sse2";' in source
     assert '${{CARGO_TARGET_DIR:-$PWD/target}}/{artifact_subdirectory}' in source
     assert "if options.help" in source
@@ -458,7 +461,7 @@ def test_rust_runtime_produces_backend_scoped_policy_without_consuming_it(
         'name = "tsl_variant_bench_sse2"\n'
         'path = "benches/tsl_variant_bench_sse2.rs"\n'
         'harness = false\n'
-        'required-features = ["variant_benchmarks", "sse2"]'
+        'required-features = ["variant_benchmarks"]'
     ) in cargo_manifest
     assert "is_x86_feature_detected!(\"sse\")" in source
     assert "is_x86_feature_detected!(\"sse2\")" in source
@@ -499,11 +502,20 @@ def test_documented_rust_workflow_tracks_codegen_contract() -> None:
     ).read_text(encoding="utf-8")
     expected = (
         "export RUSTFLAGS='"
-        + " ".join(RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags)
+        + " ".join(
+            RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags_for(
+                ("sse", "sse2")
+            )
+        )
         + "'"
     )
 
     assert expected in guide
+
+
+def test_rust_benchmark_codegen_contract_rejects_duplicate_target_features() -> None:
+    with pytest.raises(ValueError, match="target features must be unique"):
+        RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags_for(("sse2", "sse2"))
 
 
 def test_rust_report_keeps_canonical_profile_identity(
@@ -527,7 +539,7 @@ def test_rust_report_keeps_canonical_profile_identity(
     )
     assert 'const PROFILE: &str = "skylake\\u{2d}oneapi";' in source
     assert 'const BENCHMARK_TARGET: &str = "tsl_variant_bench_skylake_oneapi";' in source
-    assert 'const CARGO_FEATURES: &str = "variant_benchmarks,skylake_oneapi";' in source
+    assert 'const CARGO_FEATURES: &str = "variant_benchmarks";' in source
     assert "Explicit two-phase autotune" not in source
     assert "const POLICY_OUTPUT_SUPPORTED: bool = false;" in source
     assert "Write a consumable context-bound Rust policy" not in source
@@ -562,7 +574,10 @@ def _run(
     )
 
 
-def _rust_policy_environment(context: str) -> dict[str, str | None]:
+def _rust_policy_environment(
+    context: str,
+    target_features: tuple[str, ...] = ("sse", "sse2"),
+) -> dict[str, str | None]:
     cleared = {
         "CARGO_BUILD_INCREMENTAL",
         "CARGO_BUILD_RUSTC",
@@ -591,7 +606,9 @@ def _rust_policy_environment(context: str) -> dict[str, str | None]:
     return {
         **{name: None for name in cleared},
         "RUSTFLAGS": " ".join(
-            RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags
+            RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags_for(
+                target_features
+            )
         ),
         "CARGO_INCREMENTAL": (
             RUST_BENCHMARK_CODEGEN_CONTRACT.policy_incremental_environment
@@ -614,7 +631,7 @@ def _assert_gnu_linux_hot_loop(
             "--release",
             "--no-default-features",
             "--features",
-            "variant_benchmarks,sse2",
+            "variant_benchmarks",
             "--",
             "--emit=asm",
         ),
@@ -666,7 +683,7 @@ def _assert_gnu_linux_immediate_hot_loop(
             "--release",
             "--no-default-features",
             "--features",
-            "variant_benchmarks,sse2",
+            "variant_benchmarks",
             "--",
             "--emit=asm",
         ),
@@ -723,7 +740,7 @@ def _assert_gnu_linux_avx2_reduction_hot_loop(
             "--release",
             "--no-default-features",
             "--features",
-            "variant_benchmarks,avx2",
+            "variant_benchmarks",
             "--",
             "--emit=asm",
         ),
@@ -751,40 +768,10 @@ def _assert_gnu_linux_avx2_reduction_hot_loop(
     hot_loop = assembly_text[
         marker.start() : assembly_text.index(".Lfunc_end", marker.start())
     ]
-    default_call = re.search(
-        r"callq\s+(\S*Avx2\S*HaddImpl\S*__tsl_target_feature_body\S*)",
-        hot_loop,
-    )
-    assert default_call is not None
-    fallback_call = re.search(
-        r"callq\s+(\S*Avx2\S*Hadd_generic_fallbackImpl"
-        r"\S*__tsl_target_feature_body\S*)",
-        hot_loop,
-    )
-    assert fallback_call is not None
-    assert not re.search(r"callq[^\n]*invoke_", hot_loop)
-
-    def target_body(symbol: str) -> str:
-        label_pattern = re.compile(rf"(?m)^{re.escape(symbol)}:$")
-        for assembly_file in assembly_files:
-            target_assembly = assembly_file.read_text()
-            target = label_pattern.search(target_assembly)
-            if target is not None:
-                return target_assembly[
-                    target.start() : target_assembly.index(
-                        ".Lfunc_end", target.start()
-                    )
-                ]
-        pytest.fail(f"generated assembly does not define called target {symbol}")
-
-    default = target_body(default_call.group(1))
-    fallback = target_body(fallback_call.group(1))
-    assert default.count("vpaddd") >= 3
-    assert fallback.count("vpaddd") >= 3
-    assert "vpshufd\t$78" in default
-    assert "vpshufd\t$238" in fallback
-    assert "callq" not in default
-    assert "callq" not in fallback
+    assert hot_loop.count("vpaddd") >= 6
+    assert "vpshufd\t$78" in hot_loop
+    assert "vpshufd\t$238" in hot_loop
+    assert not re.search(r"callq[^\n]*(?:Hadd|invoke_)", hot_loop)
 
 
 @pytest.mark.generated_build
@@ -818,7 +805,7 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
             "tsl_variant_bench_sse2",
             "--no-default-features",
             "--features",
-            "variant_benchmarks,sse2",
+            "variant_benchmarks",
             "--no-run",
         ),
     ):
@@ -843,7 +830,7 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
             "tsl_variant_bench_sse2",
             "--no-default-features",
             "--features",
-            "variant_benchmarks,sse2",
+            "variant_benchmarks",
             "--",
             "--rounds",
             "3",
@@ -893,7 +880,7 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
             "tsl_variant_bench_sse2",
             "--no-default-features",
             "--features",
-            "variant_benchmarks,sse2",
+            "variant_benchmarks",
             "--",
             "--policy-json",
             str(policy_path),
@@ -930,7 +917,17 @@ def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
     crate = generated / "rust"
     common = ("--manifest-path", str(crate / "Cargo.toml"))
     policy_environment = _rust_policy_environment(
-        "avx2-reduction-generated-test-context"
+        "avx2-reduction-generated-test-context",
+        (
+            "avx",
+            "avx2",
+            "rdrand",
+            "sse",
+            "sse2",
+            "sse4.1",
+            "sse4.2",
+            "ssse3",
+        ),
     )
 
     for command in (
@@ -945,7 +942,7 @@ def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
             "tsl_variant_bench_avx2",
             "--no-default-features",
             "--features",
-            "variant_benchmarks,avx2",
+            "variant_benchmarks",
             "--no-run",
         ),
     ):
@@ -976,7 +973,7 @@ def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
             "tsl_variant_bench_avx2",
             "--no-default-features",
             "--features",
-            "variant_benchmarks,avx2",
+            "variant_benchmarks",
             "--",
             "--rounds",
             "3",
@@ -1031,7 +1028,7 @@ def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
             "tsl_variant_bench_avx2",
             "--no-default-features",
             "--features",
-            "variant_benchmarks,avx2",
+            "variant_benchmarks",
             "--",
             "--policy-json",
             str(policy_path),
@@ -1088,7 +1085,7 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
             *common,
             "--no-default-features",
             "--features",
-            "variant_benchmarks,sse2",
+            "variant_benchmarks",
         ),
         (
             "cargo",
@@ -1100,7 +1097,7 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
             "tsl_variant_bench_sse2",
             "--no-default-features",
             "--features",
-            "variant_benchmarks,sse2",
+            "variant_benchmarks",
             "--no-run",
         ),
     ):
@@ -1117,7 +1114,7 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
         "tsl_variant_bench_sse2",
         "--no-default-features",
         "--features",
-        "variant_benchmarks,sse2",
+        "variant_benchmarks",
         "--",
     )
     help_run = _run(
@@ -1133,7 +1130,11 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
     )
     assert (
         "RUSTFLAGS='"
-        + " ".join(RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags)
+        + " ".join(
+            RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags_for(
+                ("sse", "sse2")
+            )
+        )
         + "'"
         in help_run.stdout
     )
@@ -1305,7 +1306,7 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
             and {"sse", "sse2"}
             <= set(row["tune_context"]["target_features"].split(","))
             and row["tune_context"]["required_features"] == "sse,sse2"
-            and "CARGO_FEATURE_SSE2=1" in row["tune_context"]["cargo_features"]
+            and "CARGO_FEATURE_SSE2=1" not in row["tune_context"]["cargo_features"]
             and "CARGO_FEATURE_VARIANT_BENCHMARKS=1"
             in row["tune_context"]["cargo_features"]
             and row["tune_context"]["cargo_profile"] == "release"
@@ -1319,7 +1320,11 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
             and row["tune_context"]["debug"] == "false"
             and row["tune_context"]["rustflags"] == ""
             and row["tune_context"]["encoded_rustflags"].split("\x1f")
-            == list(RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags)
+            == list(
+                RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags_for(
+                    ("sse", "sse2")
+                )
+            )
             and row["tune_context"]["profile_overrides"]
             == "CARGO_INCREMENTAL=0"
             and row["tune_context"]["external_context"]

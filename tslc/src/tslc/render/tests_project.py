@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact
+from tslc.backend.rust_static_selection import RustStaticSelectionPlan
 from tslc.render._common import slug, text
+from tslc.render.rust_static_selection import (
+    rust_static_fallback_cfg,
+    rust_static_profile_cfg,
+)
 from tslc.value_tests.model import ValueTestProjectPlan
 from tslc.value_tests.compile_failure import (
     compile_failure_target_name,
@@ -66,6 +71,7 @@ def rust_test_artifacts(
     assets: RenderAssets,
     *,
     media_type: str,
+    static_selection_plan: RustStaticSelectionPlan,
 ) -> list[Artifact]:
     """Rust value-test sources: shared helper module plus the cfg-gated test file."""
 
@@ -77,7 +83,23 @@ def rust_test_artifacts(
         ),
         text(
             "rust/tests/values.rs",
-            render_rust_values_file(plan.profiles_for("rust"), assets),
+            render_rust_values_file(
+                plan.profiles_for("rust"),
+                assets,
+                profile_cfgs={
+                    profile.profile_name: (
+                        rust_static_profile_cfg(selection)
+                        if (
+                            selection := static_selection_plan.profile(
+                                profile.profile_name
+                            )
+                        )
+                        is not None
+                        else rust_static_fallback_cfg(static_selection_plan)
+                    )
+                    for profile in plan.profiles_for("rust")
+                },
+            ),
             media_type=media_type,
         ),
     ]

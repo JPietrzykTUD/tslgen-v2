@@ -13,7 +13,7 @@ use crate::tsl_rust_variant_policy_validation::{
 };
 
 pub use crate::tsl_rust_variant_policy_protocol::{
-    BuildContext, GeneratedMapping, GeneratedProfile,
+    BuildContext, GeneratedMapping, GeneratedProfile, GeneratedTargetRequirement,
 };
 
 pub fn consume_policy(
@@ -97,7 +97,7 @@ fn active_profile(
     profiles: &'static [GeneratedProfile],
 ) -> Result<&'static GeneratedProfile, String> {
     active_profile_or_none(profiles)?.ok_or_else(|| {
-        "Rust policy consumption requires exactly one generated profile feature; found 0"
+        "Rust policy consumption requires one generated compile-target profile; found 0"
             .to_string()
     })
 }
@@ -105,17 +105,51 @@ fn active_profile(
 fn active_profile_or_none(
     profiles: &'static [GeneratedProfile],
 ) -> Result<Option<&'static GeneratedProfile>, String> {
+    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH")
+        .map_err(|_| "Cargo did not provide CARGO_CFG_TARGET_ARCH".to_string())?;
+    let target_features = std::env::var("CARGO_CFG_TARGET_FEATURE")
+        .unwrap_or_default()
+        .split(',')
+        .filter(|feature| !feature.is_empty())
+        .map(str::to_string)
+        .collect::<HashSet<_>>();
     let active = profiles
         .iter()
-        .filter(|profile| std::env::var_os(profile.feature_environment).is_some())
+        .filter(|profile| {
+            target_matches(
+                profile.target_arch,
+                profile.target_features,
+                &target_arch,
+                &target_features,
+            ) && !profile.stronger_requirements.iter().any(|requirement| {
+                target_matches(
+                    requirement.target_arch,
+                    requirement.target_features,
+                    &target_arch,
+                    &target_features,
+                )
+            })
+        })
         .collect::<Vec<_>>();
     if active.len() > 1 {
         return Err(format!(
-            "Rust policy consumption requires exactly one generated profile feature; found {}",
+            "Rust policy consumption requires exactly one compile-target profile; found {}",
             active.len()
         ));
     }
     Ok(active.into_iter().next())
+}
+
+fn target_matches(
+    required_arch: &str,
+    required_features: &[&str],
+    target_arch: &str,
+    target_features: &HashSet<String>,
+) -> bool {
+    required_arch == target_arch
+        && required_features
+            .iter()
+            .all(|feature| target_features.contains(*feature))
 }
 
 fn resolve_input_path(manifest_dir: &Path, input: &str) -> PathBuf {

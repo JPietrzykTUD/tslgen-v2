@@ -26,7 +26,6 @@ const TRACKED_ENVIRONMENT: &[&str] = &[
     "RUSTC_WORKSPACE_WRAPPER",
     "RUSTFLAGS",
     "CARGO_ENCODED_RUSTFLAGS",
-    "CARGO_CFG_TARGET_FEATURE",
     "CARGO_CFG_PANIC",
     "PROFILE",
     "OPT_LEVEL",
@@ -54,7 +53,12 @@ const TRACKED_ENVIRONMENT: &[&str] = &[
 
 fn main() {
     println!("cargo:rerun-if-env-changed={POLICY_ENVIRONMENT}");
-    for name in ["HOST", "TARGET"] {
+    for name in [
+        "HOST",
+        "TARGET",
+        "CARGO_CFG_TARGET_ARCH",
+        "CARGO_CFG_TARGET_FEATURE",
+    ] {
         println!("cargo:rerun-if-env-changed={}", name);
     }
     let host = required("HOST");

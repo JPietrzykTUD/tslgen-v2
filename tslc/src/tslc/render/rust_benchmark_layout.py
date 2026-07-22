@@ -28,7 +28,7 @@ class RustBenchmarkLayout:
                 self.artifact_subdirectory,
                 self.context_example,
             )
-        ) or self.cargo_features != ("variant_benchmarks", self.profile_slug):
+        ) or self.cargo_features != ("variant_benchmarks",):
             raise ValueError("Rust benchmark layout must be complete")
 
     @property
@@ -71,7 +71,7 @@ def plan_rust_benchmark_layout(
                 profile_name=profile_name,
                 profile_slug=profile_slug,
                 benchmark_target=f"tsl_variant_bench_{profile_slug}",
-                cargo_features=("variant_benchmarks", profile_slug),
+                cargo_features=("variant_benchmarks",),
                 artifact_subdirectory=f"tsl-benchmark/{profile_slug}",
                 context_example=f"local-native-{profile_slug}-v1",
             )

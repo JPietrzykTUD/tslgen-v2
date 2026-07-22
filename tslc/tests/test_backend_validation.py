@@ -31,10 +31,13 @@ from tslc.diagnostics import SourceSpan
 @dataclass(frozen=True)
 class _Specialization:
     extension_name: str
+    type_tag: str = "si32"
+    base_type_spelling: str = "i32"
     target: None = None
     mask_policy: str | None = None
     result_kind: str = "void"
     param_kinds: tuple[str, ...] = ("ptr",)
+    required_features: frozenset[str] = frozenset()
     immediate: tuple[str, str] | None = None
     generic_params: tuple[tuple[str, str, str], ...] = ()
     source: SourceSpan | None = None

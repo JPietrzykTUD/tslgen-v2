@@ -7,6 +7,7 @@ import pytest
 
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
+from tslc.backend.rust_static_selection import plan_rust_static_selection
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.compiler_assets import (
@@ -81,6 +82,9 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
             "rust_lib_benchmark_profile.rs.tmpl": (
                 "// injected benchmark module @{profile_slug}\n"
             ),
+            "rust_lib_profile.rs.tmpl": "",
+            "rust_profile_metadata.rs.tmpl": "",
+            "rust_profile_module.rs.tmpl": "",
             "rust_smoke.rs": "// injected smoke\n",
         }
     )
@@ -92,6 +96,7 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
             assets,
             media_type="text/rust",
             selection_plan=plan_rust_policy_selection(()),
+            static_selection_plan=plan_rust_static_selection(()),
         )
     }
 
@@ -115,7 +120,7 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
     assert rendered["rust/src/tsl_documentation.rs"] == "// injected docs\n"
     assert rendered["rust/rustfmt.toml"] == "# injected rustfmt\n"
     assert rendered["rust/tests/smoke.rs"] == "// injected smoke\n"
-    assert 'default = ["scalar"]' in rendered["rust/Cargo.toml"]
+    assert "default = []" in rendered["rust/Cargo.toml"]
     assert "value_tests = []" in rendered["rust/Cargo.toml"]
     assert "variant_benchmarks = []" in rendered["rust/Cargo.toml"]
     assert "[[bench]]" not in rendered["rust/Cargo.toml"]
@@ -138,6 +143,7 @@ def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
             load_default_render_assets(),
             media_type="text/rust",
             selection_plan=plan_rust_policy_selection(profiles),
+            static_selection_plan=plan_rust_static_selection(profiles),
         )
     }
 
@@ -150,7 +156,7 @@ def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
             f'[[bench]]\nname = "{target_name}"\n'
             f'path = "benches/{target_name}.rs"\n'
             'harness = false\n'
-            f'required-features = ["variant_benchmarks", "{profile_slug}"]'
+            'required-features = ["variant_benchmarks"]'
         ) in cargo
         benchmark_main = rendered[f"rust/benches/{target_name}.rs"]
         assert "TSL_RUST_VARIANT_POLICY_ACTIVE" in benchmark_main
@@ -167,8 +173,7 @@ def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
     ) in lib
     for profile_slug in ("scalar", "avx2"):
         assert (
-            '#[cfg(all(feature = "variant_benchmarks", '
-            f'feature = "{profile_slug}"))]\n'
+            '#[cfg(all(feature = "variant_benchmarks", all()))]\n'
             "#[doc(hidden)]\n"
             f"pub mod tsl_variant_bench_{profile_slug};"
         ) in lib

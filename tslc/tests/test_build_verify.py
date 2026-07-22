@@ -408,7 +408,7 @@ def test_rust_path_dependency_consumer_builds(
             edition = "2021"
 
             [dependencies]
-            tsl = {{ path = "{(generated / 'rust').as_posix()}", default-features = false, features = ["scalar"] }}
+            tsl = {{ path = "{(generated / 'rust').as_posix()}", default-features = false }}
             """
         ).lstrip(),
         encoding="utf-8",
@@ -528,7 +528,7 @@ def test_rust_path_dependency_consumer_builds(
     assert "function `bit_cast` is private" in arbitrary_output
 
 
-def test_rust_profile_feature_rejects_missing_target_features(
+def test_rust_compile_target_selects_static_mapping(
     data_root: Path,
     machine_profiles_path: Path,
     tmp_path: Path,
@@ -539,7 +539,7 @@ def test_rust_profile_feature_rejects_missing_target_features(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=_build_verified("test_rust_profile_feature_rejects_missing_target_features"),
+        primitives=_build_verified("test_rust_compile_target_selects_static_mapping"),
         profiles=["avx2"],
         backends=["rust"],
     )
@@ -551,15 +551,13 @@ def test_rust_profile_feature_rejects_missing_target_features(
 
     manifest = generated / "rust" / "Cargo.toml"
     target_dir = tmp_path / "rust-profile-guard-target"
-    missing = subprocess.run(
+    fallback = subprocess.run(
         (
             "cargo",
             "check",
             "--manifest-path",
             str(manifest),
             "--no-default-features",
-            "--features",
-            "avx2",
             "--target-dir",
             str(target_dir),
         ),
@@ -567,10 +565,7 @@ def test_rust_profile_feature_rejects_missing_target_features(
         capture_output=True,
         text=True,
     )
-    assert missing.returncode != 0
-    assert "TSL_RUST_PROFILE_TARGET_FEATURE_MISMATCH" in (
-        missing.stderr + missing.stdout
-    )
+    assert fallback.returncode == 0, fallback.stderr + fallback.stdout
 
     rust_backend = next(
         backend
@@ -578,7 +573,40 @@ def test_rust_profile_feature_rejects_missing_target_features(
         if backend.backend_id == "rust"
     )
     profile = rust_backend.profiles[0]
+    examples = generated / "rust" / "examples"
+    examples.mkdir(exist_ok=True)
+    (examples / "avx2_mapping.rs").write_text(
+        "use tsl::profile::Avx2;\n"
+        "use tsl::tsl_core::Simd;\n"
+        "type Vector = Simd<i32, Avx2>;\n"
+        "fn main() { let _: Option<Vector> = None; }\n",
+        encoding="utf-8",
+    )
     env = os.environ.copy()
+    assert "+rdrand" in profile.target_features
+    env["RUSTFLAGS"] = "-C target-feature=+avx2"
+    partial = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(manifest),
+            "--no-default-features",
+            "--example",
+            "avx2_mapping",
+            "--target-dir",
+            str(target_dir),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert partial.returncode != 0
+    assert "no `Avx2` in `tsl_target_fallback`" in (
+        partial.stderr + partial.stdout
+    )
+
     env["RUSTFLAGS"] = f"-C target-feature={','.join(profile.target_features)}"
     admitted = subprocess.run(
         (
@@ -587,8 +615,8 @@ def test_rust_profile_feature_rejects_missing_target_features(
             "--manifest-path",
             str(manifest),
             "--no-default-features",
-            "--features",
-            "avx2",
+            "--example",
+            "avx2_mapping",
             "--target-dir",
             str(target_dir),
         ),

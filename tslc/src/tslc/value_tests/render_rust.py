@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from tslc.compiler_assets import RenderAssets
 from tslc.render._common import slug
 from tslc.value_tests._render_rust_conversion import (
@@ -56,8 +58,12 @@ from tslc.value_tests.renderer_capability import ValueTestRendererCapability
 
 
 def render_rust_values_file(
-    profiles: tuple[ValueTestProfilePlan, ...], assets: RenderAssets
+    profiles: tuple[ValueTestProfilePlan, ...],
+    assets: RenderAssets,
+    *,
+    profile_cfgs: Mapping[str, str] | None = None,
 ) -> str:
+    profile_cfgs = profile_cfgs or {}
     modules = []
     for profile in profiles:
         if not profile.runner_cases:
@@ -68,6 +74,7 @@ def render_rust_values_file(
             assets.fill(
                 "rust_value_tests_profile.rs.tmpl",
                 profile_slug=profile_slug,
+                target_cfg=profile_cfgs.get(profile.profile_name, "all()"),
                 body=body,
             ).rstrip()
         )

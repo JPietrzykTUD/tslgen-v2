@@ -1,7 +1,8 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
+#![cfg(@{module_cfg})]
 
-@{target_feature_guard}use crate::tsl_core::*;
+use crate::tsl_core::*;
 @{arch_use}
 pub struct Profile;
 @{profile_metadata}

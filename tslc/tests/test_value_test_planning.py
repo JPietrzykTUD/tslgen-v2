@@ -599,8 +599,8 @@ def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverag
     assert rust_manifest.count("tsl_compile_failures = []") == 1
     assert (
         rust_manifest.count(
-            'required-features = ["tsl_compile_failures", "avx2"]'
-        )
+                'required-features = ["tsl_compile_failures"]'
+            )
         == 4
     )
     assert "tsl_compile_failure_avx2_" not in rust_manifest.split("[features]")[

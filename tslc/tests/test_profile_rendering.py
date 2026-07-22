@@ -72,7 +72,7 @@ def test_backend_selection_is_honored(data_root: Path, machine_profiles_path: Pa
     assert [b.backend_id for b in cpp_only.rendered.verify.backends] == ["cpp"]
 
 
-def test_rust_profile_module_rejects_missing_compile_target_features(
+def test_rust_profile_module_is_compiled_only_for_its_target_contract(
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
@@ -90,11 +90,11 @@ def test_rust_profile_module_rejects_missing_compile_target_features(
         if artifact.logical_path == "rust/src/tsl_avx2.rs"
     )
 
-    assert '#[cfg(not(all(target_feature = "avx"' in profile
+    assert '#![cfg(all(target_arch = "x86_64"' in profile
+    assert 'target_feature = "avx"' in profile
     assert 'target_feature = "avx2"' in profile
     assert 'target_feature = "rdrand"' in profile
-    assert "TSL_RUST_PROFILE_TARGET_FEATURE_MISMATCH" in profile
-    assert "generated Rust profile `avx2` requires rustc target features" in profile
+    assert "TSL_RUST_PROFILE_TARGET_FEATURE_MISMATCH" not in profile
 
 
 def test_generated_project_carries_apache_license_notices(
@@ -148,10 +148,10 @@ def test_representative_project_shape_is_byte_stable(
         "cpp/include/tsl_primitives.hpp": "49a74d084e4b375d6e0832beb57c54ebfcf85edb25394f9c84d8776520ea0bb8",
         "cpp/include/tsl_scalar.hpp": "4522211f30de0682e1d29d04b8cb322e45c71bb947aa0bd44e05e53e4d10b416",
         "cpp/tests/smoke_scalar.cpp": "b8d0793aa19282d85dab6db70c43f41fb0a029daad3799377eab7a4a3bd8c7bf",
-        "rust/Cargo.toml": "3d45df17be903c3005c89f7d80c6e55af57eab8b2bfcc2eb45f96fc4d71797f8",
-        "rust/src/lib.rs": "33ebbae21ff20f5664a3514a1722b4d59e1aff3efe3bd167cb3b3d60908a8ee3",
+        "rust/Cargo.toml": "c3c713fa53b4e90190c8d46e0eac79d6e5409a62afe5993b9b6b6f04c6d61fc1",
+        "rust/src/lib.rs": "0f6bdc2377e7fafa130a9729d607a05cda620a8aa1acfd7963002dfd5a0d5021",
         "rust/src/tsl_documentation.rs": "61d5fe51a8e119c92d17d953f304fbb6f49a334f300f326f21f3fdac214608bc",
-        "rust/src/tsl_scalar.rs": "f9725feb53a43ccb0cceee8e255c568ad87b565eff78729ff15925ff25b33434",
+        "rust/src/tsl_scalar.rs": "4d49633e26c4a1eb2ef017260bf3f549e4b2c476caab29ba8e146566054fd6ef",
         "rust/tests/smoke.rs": "a4d108f502689e7f29ba5259e22779e8ef0afa36ab83c239022e2772d68d6b44",
     }
     actual = {
@@ -302,7 +302,8 @@ def test_profile_name_sanitized_to_valid_identifiers(
     assert "#if defined(TSL_PROFILE_ICELAKE_ROCKERLAKE_ONEAPI)" in by["cpp/include/tsl.hpp"]
     assert "cpp/include/tsl_icelake_rockerlake_oneapi.hpp" in by
     assert "pub mod tsl_icelake_rockerlake_oneapi;" in by["rust/src/lib.rs"]
-    assert "icelake_rockerlake_oneapi = []" in by["rust/Cargo.toml"]
+    assert "icelake_rockerlake_oneapi = []" not in by["rust/Cargo.toml"]
+    assert "default = []" in by["rust/Cargo.toml"]
 
 
 def test_oneapi_sized_vector_is_distinct_from_generic(
@@ -579,6 +580,13 @@ def test_neon_profile_registers_native_simd_types(
     assert "return vaddq_s32(left, right);" in cpp
 
     rust = by_path["rust/src/tsl_neon.rs"]
+    rust_lib = by_path["rust/src/lib.rs"]
+    assert '#![cfg(all(target_arch = "aarch64", target_feature = "neon"))]' in rust
+    assert (
+        '#[cfg(all(not(doc), all(target_arch = "aarch64", '
+        'target_feature = "neon")))]' in rust_lib
+    )
+    assert 'target_arch = "x86_64"' not in rust_lib
     assert 'pub const ACTIVE_PROFILE: &str = "neon";' in rust
     assert 'pub const ACTIVE_PROFILE_FAMILY: &str = "aarch64";' in rust
     assert "use core::arch::aarch64::*;" in rust

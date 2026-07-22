@@ -533,7 +533,7 @@ def test_rust_compile_failures_share_one_cargo_feature(tmp_path: Path) -> None:
     assert [
         command.argv[command.argv.index("--features") + 1]
         for command in compile_failures
-    ] == ["zen5,tsl_compile_failures", "zen5,tsl_compile_failures"]
+    ] == ["tsl_compile_failures", "tsl_compile_failures"]
     assert [
         command.argv[command.argv.index("--example") + 1]
         for command in compile_failures
@@ -1002,10 +1002,7 @@ def test_runner_value_tests_skip_non_generic_profiles_without_matching_runner(
         tmp_path,
         project,
         runner,
-        config=_config(
-            run_value_tests=True,
-            sde_path=sys.executable,
-        ),
+        config=_config(run_value_tests=True),
     )
 
     assert report.diagnostics == ()

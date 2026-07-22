@@ -1,4 +1,4 @@
-#[cfg(feature = "@{profile_slug}")]
+#[cfg(@{selected_profile_cfg})]
 #[doc(hidden)]
 pub mod tsl_@{profile_slug};
 #[cfg(all(not(doc), @{selected_profile_cfg}))]

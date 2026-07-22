@@ -15,6 +15,10 @@ from tslc.backend.capability import (
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
 from tslc.backend.rust import RustBackend
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
+from tslc.backend.rust_static_selection import (
+    RustStaticSelectionPlan,
+    plan_rust_static_selection,
+)
 from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
 from tslc.backend.rust_translation import RustBackendDialect
 from tslc.backend.rust_validation import validate_rust_profiles
@@ -75,9 +79,17 @@ def rust_value_test_support() -> ValueTestBackendSupport:
 
 
 def rust_value_test_artifacts(
-    plan: ValueTestProjectPlan, assets: RenderAssets, media_type: str
+    plan: ValueTestProjectPlan,
+    assets: RenderAssets,
+    media_type: str,
+    static_selection_plan: RustStaticSelectionPlan,
 ) -> list[Artifact]:
-    return rust_test_artifacts(plan, assets, media_type=media_type)
+    return rust_test_artifacts(
+        plan,
+        assets,
+        media_type=media_type,
+        static_selection_plan=static_selection_plan,
+    )
 
 
 def rust_benchmark_plan(
@@ -102,8 +114,10 @@ def rust_backend_artifacts(
     """Render Rust from one frozen selection/consumption projection."""
 
     selection_plan = plan_rust_policy_selection(profiles)
+    static_selection_plan = plan_rust_static_selection(profiles)
     consumption_plan = plan_rust_policy_consumption_render(
-        plan_rust_policy_consumption(benchmarks, selection_plan)
+        plan_rust_policy_consumption(benchmarks, selection_plan),
+        static_selection_plan,
     )
     benchmark_layout_plan = plan_rust_benchmark_layout(
         tuple(profile.profile.name for profile in profiles)
@@ -114,11 +128,17 @@ def rust_backend_artifacts(
             assets,
             media_type=media_type,
             selection_plan=selection_plan,
+            static_selection_plan=static_selection_plan,
             consumption_plan=consumption_plan,
             benchmark_layout_plan=benchmark_layout_plan,
             value_tests=value_tests,
         ),
-        *rust_test_artifacts(value_tests, assets, media_type=media_type),
+        *rust_test_artifacts(
+            value_tests,
+            assets,
+            media_type=media_type,
+            static_selection_plan=static_selection_plan,
+        ),
         *rust_benchmark_artifacts(
             benchmarks,
             assets,

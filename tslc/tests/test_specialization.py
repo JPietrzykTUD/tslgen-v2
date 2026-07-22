@@ -477,11 +477,12 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "95639a4bdf37653f465c708cec36e44cb19a1af7bf7f3be7f3758fa4d8b4d99e"
+        "e653dd91823dfd49407655b3c9992ae1ab0c1da814d6a4bca3d51412c001c5a1"
     )
 
     assert 'name = "tsl"' in cargo
-    assert 'default = ["scalar"]' in cargo
+    assert "default = []" in cargo
+    assert "avx2 = []" not in cargo
     assert "pub mod tsl_algorithm;" in lib
     assert "pub use tsl_algorithm::dataparallel;" in lib
     assert "#[doc(hidden)]\npub mod tsl_test_core;" in lib
@@ -493,9 +494,12 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     )
     assert "pub use crate::tsl_documentation as profile;" in lib
     assert "#[doc(hidden)]\npub mod tsl_avx2;" in lib
-    assert '#[cfg(all(not(doc), all(feature = "avx2", not(any(' in lib
+    assert '#[cfg(all(not(doc), all(target_arch = "x86_64"' in lib
+    assert 'target_feature = "avx2"' in lib
     assert "#[doc(inline)]\npub use crate::tsl_avx2 as profile;" in lib
     assert "pub use crate::tsl_avx2 as profile;" in lib
+    assert "pub mod tsl_target_fallback;" in lib
+    assert "pub use crate::tsl_target_fallback as profile;" in lib
     documented_functions = re.findall(
         r"^pub (?:unsafe )?fn (?:r#)?([A-Za-z_][A-Za-z0-9_]*)",
         documentation,

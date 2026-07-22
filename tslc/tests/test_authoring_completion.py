@@ -103,6 +103,23 @@ def test_empty_file_and_primitive_header_complete_declarations_and_shapes(
             {"headers", "compile_guards", "dataparallel_inference"},
             {"supported", "active_when"},
         ),
+        (
+            "target_families:\n"
+            "  profile_families:\n"
+            "    x86:\n"
+            "      backends:\n"
+            "        rust:\n"
+            "          feature_flags true\n",
+            "target_families:\n"
+            "  profile_families:\n"
+            "    x86:\n"
+            "      backends:\n"
+            "        rust:\n"
+            "          feature_flags true\n"
+            "          ",
+            {"target_arch", "target", "linker", "detection"},
+            {"feature_flags", "profile_families"},
+        ),
     ),
 )
 def test_parsed_mapping_context_proposes_only_valid_missing_fields(

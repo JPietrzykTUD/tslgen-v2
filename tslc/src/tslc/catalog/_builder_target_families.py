@@ -119,6 +119,7 @@ def _build_backend_profile_families(
                 _child(entry, "feature_flags"),
                 default=True,
             ),
+            target_arch=_field_text(_child(entry, "target_arch")),
             target=_field_text(_child(entry, "target")),
             linker=_field_text(_child(entry, "linker")),
             detection=_field_text(_child(entry, "detection")),

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from tslc.backend.rust_const_args import RUST_CONST_ARG_WRAPPERS
+from tslc.backend.rust_static_selection import validate_rust_static_selection
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.lower.lowerer import varying_positions
 
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def validate_rust_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnostic, ...]:
-    diagnostics: list[Diagnostic] = []
+    diagnostics: list[Diagnostic] = list(validate_rust_static_selection(profiles))
     for profile in profiles:
         by_primitive = profile.specializations("rust")
         for extension_name in profile.used_extensions("rust"):

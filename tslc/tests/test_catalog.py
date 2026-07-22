@@ -470,6 +470,12 @@ def test_target_families_promoted(catalog: Catalog) -> None:
     assert families.extension_family("generic_like").documented_sort_order == 1
     assert families.extension_family("arm").documented_family == "aarch64"
     assert families.extension_family("arm").documented_sort_order == 20
+    assert families.profile_families["x86"].backend("rust").target_arch == "x86_64"
+    assert (
+        families.profile_families["aarch64"].backend("rust").target_arch
+        == "aarch64"
+    )
+    assert families.profile_families["wasm32"].backend("rust").target_arch == "wasm32"
     sse4_1 = families.target_feature("sse4_1")
     rdrand = families.target_feature("rdrand")
     assert sse4_1 is not None and sse4_1.spelling("cpp") == "sse4.1"
