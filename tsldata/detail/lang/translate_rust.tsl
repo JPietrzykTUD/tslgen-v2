@@ -108,7 +108,7 @@ translation rust:
   loop_backend "for {var} in ({start}..{end}).step_by({step})"
   cast_static "({expr}) as {type}"
   cast_saturating "crate::tsl_core::detail::helpers::saturating_cast_value::<_, {type}>({expr})"
-  cast_reinterpret "crate::tsl_core::bit_cast::<_, {type}>({expr})"
+  cast_reinterpret "crate::tsl_core::reinterpret_unchecked::<_, {type}>({expr})"
   cast_bitcast "crate::tsl_core::bit_cast::<_, {type}>({expr})"
   cast_const "({expr}) as {type}"
   cast_dynamic "({expr}) as {type}"

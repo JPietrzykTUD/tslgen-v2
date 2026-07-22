@@ -37,11 +37,36 @@ pub mod mask_layout {
     pub struct Bits;
 }
 
-pub trait VectorFor<Profile, T> {
+mod representation_sealed {
+    pub trait VectorPolicy {}
+    pub trait RebindBase {}
+    pub trait IntegralMaskWord {}
+    pub trait MaskLayout {}
+}
+
+impl representation_sealed::VectorPolicy for dataparallel::Native {}
+impl<const N: usize> representation_sealed::VectorPolicy for dataparallel::Fixed<N> {}
+impl<const N: usize> representation_sealed::VectorPolicy for dataparallel::Generic<N> {}
+
+impl<V: SimdVector> representation_sealed::RebindBase for V {}
+
+impl representation_sealed::IntegralMaskWord for u8 {}
+impl representation_sealed::IntegralMaskWord for u16 {}
+impl representation_sealed::IntegralMaskWord for u32 {}
+impl representation_sealed::IntegralMaskWord for u64 {}
+
+impl representation_sealed::MaskLayout for mask_layout::Integral {}
+impl representation_sealed::MaskLayout for mask_layout::Native {}
+impl representation_sealed::MaskLayout for mask_layout::Bytes {}
+impl representation_sealed::MaskLayout for mask_layout::Bits {}
+
+#[allow(private_bounds)] // intentional sealed-trait boundary
+pub trait VectorFor<Profile, T>: representation_sealed::VectorPolicy {
     type Vec: StaticSimdVector<BaseType = T>;
 }
 
-pub trait RebindBase<ToBase>: SimdVector {
+#[allow(private_bounds)] // intentional sealed-trait boundary
+pub trait RebindBase<ToBase>: SimdVector + representation_sealed::RebindBase {
     type Vec: StaticSimdVector<BaseType = ToBase>;
 }
 
@@ -71,7 +96,10 @@ pub trait SelectedLoad<V: StaticSimdVector, const SCALE: u32> {
     unsafe fn load_selected(input: *const V::BaseType, indices: *const usize) -> V::RegisterType;
 }
 
-pub trait IntegralMaskWord: Copy + Default {
+#[allow(private_bounds)] // intentional sealed-trait boundary
+pub trait IntegralMaskWord:
+    Copy + Default + representation_sealed::IntegralMaskWord
+{
     const BITS: usize;
 
     fn zero() -> Self {
@@ -148,7 +176,8 @@ unsafe fn packed_bit_mask_test(masks: *const u8, row: usize) -> bool {
     ((unsafe { masks.add(byte).read() } >> bit) & 1) != 0
 }
 
-pub trait MaskLayout<Profile, V: StaticSimdVector>
+#[allow(private_bounds)] // intentional sealed-trait boundary
+pub trait MaskLayout<Profile, V: StaticSimdVector>: representation_sealed::MaskLayout
 where
     V::ImaskType: IntegralMaskWord,
 {

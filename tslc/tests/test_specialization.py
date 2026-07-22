@@ -477,7 +477,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "b8408cfb037fbcdd30a37da9c6122d5d2153522f80bc539edc9db13f808a0761"
+        "95639a4bdf37653f465c708cec36e44cb19a1af7bf7f3be7f3758fa4d8b4d99e"
     )
 
     assert 'name = "tsl"' in cargo
@@ -514,6 +514,11 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "pub struct Integral" in helper
     assert "pub struct Bytes" in helper
     assert "pub struct Bits" in helper
+    assert "mod representation_sealed" in helper
+    assert "representation_sealed::VectorPolicy" in helper
+    assert "representation_sealed::RebindBase" in helper
+    assert "representation_sealed::IntegralMaskWord" in helper
+    assert "representation_sealed::MaskLayout" in helper
     assert "pub trait VectorFor<Profile, T>" in helper
     assert "pub trait RebindBase<ToBase>: SimdVector" in helper
     assert "pub type ReboundBase<V, ToBase> = <V as RebindBase<ToBase>>::Vec;" in helper
@@ -1068,6 +1073,17 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "pub struct U32Arg<const VALUE: u32>;" in core
     assert "pub struct I32Arg<const VALUE: i32>;" in core
     assert "pub trait StaticSimdVector: SimdVector" in core
+    assert "pub(crate) mod representation_sealed" in core
+    assert "pub(crate) unsafe trait ValidBitPattern: Copy" in core
+    assert "pub(crate) fn bit_cast<From: Copy, To: ValidBitPattern>" in core
+    assert "pub fn bit_cast<" not in core
+    assert (
+        "pub(crate) unsafe fn reinterpret_unchecked<From: Copy, To: ValidBitPattern>"
+        in core
+    )
+    assert (
+        "unsafe impl ValidBitPattern for core::arch::x86_64::__m256i {}" in core
+    )
     assert "type Extension;" in core
     assert "type WithBaseType<ToBase>;" in core
     assert "type WithExtension<ToExtension>;" in core
@@ -1094,6 +1110,8 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
         in avx2
     )
     assert "impl StaticSimdVector for Simd<i32, Avx2>" in avx2
+    assert "representation_sealed::SimdVector for Simd<i32, Avx2>" in avx2
+    assert "representation_sealed::StaticSimdVector for Simd<i32, Avx2>" in avx2
     assert "type Extension = Avx2;" in avx2
     assert "type WithBaseType<ToBase> = Simd<ToBase, Avx2>;" in avx2
     assert "type WithExtension<ToExtension> = Simd<i32, ToExtension>;" in avx2

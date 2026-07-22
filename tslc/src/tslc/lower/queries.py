@@ -31,6 +31,7 @@ from tslc.lower._query_core import (
 from tslc.lower._query_leaf import resolve_query_leaf
 from tslc.lower._query_model import (
     BoolValue,
+    ObjectSize,
     QueryFunction,
     QueryParser,
     QueryTerm,
@@ -145,6 +146,7 @@ __all__ = [
     "IsSameQuery",
     "IsSignedQuery",
     "MaskQuery",
+    "ObjectSize",
     "QueryEvaluator",
     "QueryFunction",
     "QueryParser",

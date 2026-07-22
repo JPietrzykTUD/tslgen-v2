@@ -32,7 +32,15 @@ pub struct U32Arg<const VALUE: u32>;
 pub struct U64Arg<const VALUE: u64>;
 pub struct USizeArg<const VALUE: usize>;
 
-pub trait SimdVector {
+// Public because generated lower-level APIs use these traits as bounds. The
+// private supertraits keep their representation contracts compiler-owned.
+pub(crate) mod representation_sealed {
+    pub trait SimdVector {}
+    pub trait StaticSimdVector {}
+}
+
+#[allow(private_bounds)] // intentional sealed-trait boundary
+pub trait SimdVector: representation_sealed::SimdVector {
     type BaseType;
     type Extension;
     type RegisterType;
@@ -72,7 +80,8 @@ pub trait SimdVector {
     }
 }
 
-pub trait StaticSimdVector: SimdVector {
+#[allow(private_bounds)] // intentional sealed-trait boundary
+pub trait StaticSimdVector: SimdVector + representation_sealed::StaticSimdVector {
     const ELEMENT_COUNT: usize;
 }
 
@@ -80,6 +89,8 @@ pub trait StaticSimdVector: SimdVector {
 pub struct Scalar;
 
 pub struct Simd<T, Ext>(PhantomData<(T, Ext)>);
+
+impl<T> representation_sealed::SimdVector for Simd<T, Scalar> {}
 
 impl<T> SimdVector for Simd<T, Scalar> {
     type BaseType = T;
@@ -96,6 +107,8 @@ impl<T> SimdVector for Simd<T, Scalar> {
         1
     }
 }
+
+impl<T> representation_sealed::StaticSimdVector for Simd<T, Scalar> {}
 
 impl<T> StaticSimdVector for Simd<T, Scalar> {
     const ELEMENT_COUNT: usize = 1;
@@ -114,6 +127,8 @@ pub struct Generic<const LANES: usize>;
 // CONSTRUCTION for everything tslc emits: size-changing bodies are monomorphized over the 128-bit
 // `size_bits` ladder, and the smoke/value harnesses instantiate the `LANES`-parametric bodies at a
 // 128-bit-multiple lane count. Only a hand-written `Simd<u8, Generic<3>>` would violate it, unchecked.
+impl<T, const LANES: usize> representation_sealed::SimdVector for Simd<T, Generic<LANES>> {}
+
 impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
     type BaseType = T;
     type Extension = Generic<LANES>;
@@ -130,6 +145,11 @@ impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
     fn lane_count() -> usize {
         LANES
     }
+}
+
+impl<T, const LANES: usize> representation_sealed::StaticSimdVector
+    for Simd<T, Generic<LANES>>
+{
 }
 
 impl<T, const LANES: usize> StaticSimdVector for Simd<T, Generic<LANES>> {
@@ -195,11 +215,49 @@ impl<T: Copy + Default, const N: usize> Default for ArrayStorage<T, N> {
 // that call `helper<...>`; `arith_add` is the reductions' accumulate step.
 // Pointer-offset helpers used by the generic vector's element-wise load/store loops. Our
 // pointer kind is `*mut`, so both take it; callers deref inside an `unsafe`-framed body.
-// Type-punning bit reinterpret (`cast<bitcast>` / value `cast<reinterpret>`): reinterpret
-// the object representation as a same-sized type. Counterpart to C++ `tsl::bit_cast`; the
-// `assert_eq!` makes the size precondition a hard error rather than UB.
-pub fn bit_cast<From, To>(value: From) -> To {
+// Implemented only for compiler-known scalar, array, and generated register
+// representations where every bit pattern is a valid value. Concrete register
+// impls are appended from the typed Rust vector-registration plan.
+/// # Safety
+///
+/// Implementors must accept every possible bit pattern of their size as a
+/// valid value.
+pub(crate) unsafe trait ValidBitPattern: Copy {}
+
+macro_rules! valid_scalar_bit_patterns {
+    ($($ty:ty),* $(,)?) => {
+        // SAFETY: the admitted numeric scalar types have no invalid bit patterns.
+        $(unsafe impl ValidBitPattern for $ty {})*
+    };
+}
+
+valid_scalar_bit_patterns!(i8, i16, i32, i64, u8, u16, u32, u64, f32, f64);
+
+// SAFETY: an array is valid for every element representation admitted by its
+// `ValidBitPattern` element bound.
+unsafe impl<T: ValidBitPattern, const N: usize> ValidBitPattern for ArrayStorage<T, N> {}
+
+// Safe only because the destination marker proves that every copied bit
+// pattern is valid. Lowering separately proves the source and destination
+// sizes from typed scalar/register facts; the assertion is a defense in depth.
+pub(crate) fn bit_cast<From: Copy, To: ValidBitPattern>(value: From) -> To {
     assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());
+    // SAFETY: sizes are equal and `To: ValidBitPattern` admits every possible
+    // source representation. `From: Copy` excludes ownership duplication.
+    unsafe { core::mem::transmute_copy(&value) }
+}
+
+// Explicit internal boundary for source-authored value `cast<reinterpret>`.
+// The selected implementation must prove that the concrete destination accepts
+// the source representation; lowering always frames calls in an unsafe block.
+/// # Safety
+///
+/// The selected implementation must provide a source value with exactly the
+/// destination size. `To: ValidBitPattern` supplies the validity proof.
+pub(crate) unsafe fn reinterpret_unchecked<From: Copy, To: ValidBitPattern>(value: From) -> To {
+    assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());
+    // SAFETY: this function's contract requires the compiler-selected pair to
+    // have equal size and a valid destination representation.
     unsafe { core::mem::transmute_copy(&value) }
 }
 

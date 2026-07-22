@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from tslc.backend.translation import PointerCastOperand
+from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.ir.region_syntax import parse_cast_selector, segments_text, split_arg_groups
 from tslc.ir.segments import RawText, Region, Segment
+from tslc.lane_count import LaneCount
 from tslc.lower.context import LoweringSession
-from tslc.lower.queries import QueryEvaluator
+from tslc.lower.object_representation import register_object_size
+from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _resolve_type_expression
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.target_text import RenderField
@@ -93,6 +96,17 @@ class CastLowerer:
                 source=region.source,
             )
             return region.full_text
+        if selector.variant == "bitcast" and not _valid_bitcast_target(
+            resolved[0], context, region
+        ):
+            return region.full_text
+        if selector.variant == "reinterpret":
+            # Value reinterpretation is deliberately distinct from a pointer
+            # cast and from the checked bitcast path. The implementation leaf
+            # owns the concrete pair; lowering records its unsafe boundary so
+            # Rust frames the generated call even if source safety metadata is
+            # accidentally incomplete.
+            context.effects.mark_internal_unsafe("value_reinterpretation")
         return context.env.backend.templates.render_template(
             key, type=resolved[1], expr=render(args[1])
         )
@@ -129,6 +143,58 @@ class CastLowerer:
         return context.env.backend.syntax.render_pointer_cast(
             resolved[1], is_const=is_const, operand=operand
         )
+
+
+def _valid_bitcast_target(
+    target: object,
+    context: LoweringSession,
+    region: Region,
+) -> bool:
+    """Validate the safe bitcast destination from typed query facts.
+
+    The source expression language is intentionally not a target-language AST.
+    Its expected size is therefore the selected scalar width for scalar targets
+    and the selected register width for register targets. Rust additionally
+    constrains the concrete destination with its generated ``ValidBitPattern``
+    marker before the local unsafe copy can compile.
+    """
+
+    if isinstance(target, TypeValue):
+        source_bits = scalar_bit_width(context.env.type_tag)
+        target_bits = scalar_bit_width(target.type_tag)
+        valid = source_bits is not None and source_bits == target_bits
+    elif isinstance(target, TextValue):
+        uses_sized_vector = context.env.support.uses_sized_vector(
+            context.env.extension
+        )
+        lane_count = (
+            LaneCount.fixed(context.env.concrete_lanes)
+            if context.env.concrete_lanes is not None
+            else LaneCount.symbolic(context.env.lane_symbol())
+        )
+        source_size = register_object_size(
+            context.env.type_tag,
+            context.env.extension,
+            uses_sized_vector=uses_sized_vector,
+            lane_count=lane_count,
+        )
+        valid = (
+            target.all_bit_patterns_valid
+            and target.object_size is not None
+            and source_size is not None
+            and target.object_size.same_size_as(source_size)
+        )
+    else:
+        valid = False
+    if valid:
+        return True
+    context.effects.error(
+        "TSL-LOWER-INVALID-BITCAST",
+        "safe bitcast requires a compiler-known, same-sized destination whose "
+        "bit patterns are all valid",
+        source=region.source,
+    )
+    return False
 
 
 def _classify_pointer_operand(

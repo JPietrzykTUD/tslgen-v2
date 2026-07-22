@@ -28,6 +28,7 @@ from tslc.lower.lowerer import Lowerer
 from tslc.lower._query_model import (
     _QUERY_PARSE_CACHE_SIZE,
     _cached_parse_query,
+    ObjectSize,
     QueryParser,
 )
 from tslc.ir.region_syntax import segments_text
@@ -69,6 +70,26 @@ def _ctx(catalog, ext_name, type_tag, backend="cpp"):
 
 
 # --- query layer -------------------------------------------------------------
+
+
+def test_object_size_requires_one_well_formed_representation() -> None:
+    with pytest.raises(ValueError, match="exactly one"):
+        ObjectSize()
+    with pytest.raises(ValueError, match="exactly one"):
+        ObjectSize(fixed_bits=32, element_bits=32, lanes_symbol="LANES")
+    with pytest.raises(ValueError, match="positive"):
+        ObjectSize.fixed(0)
+    with pytest.raises(ValueError, match="lane symbol"):
+        ObjectSize.sized(32, "")
+
+    assert ObjectSize.fixed(32).same_size_as(ObjectSize.fixed(32))
+    assert not ObjectSize.fixed(32).same_size_as(ObjectSize.fixed(64))
+    assert ObjectSize.sized(32, "LANES").same_size_as(
+        ObjectSize.sized(32, "LANES")
+    )
+    assert not ObjectSize.sized(32, "LANES").same_size_as(
+        ObjectSize.sized(64, "LANES")
+    )
 
 
 def test_query_facade_separates_evaluator_from_namespace_functions() -> None:
@@ -199,6 +220,44 @@ def test_lowering_rejects_legacy_pointer_cast_instead_of_repairing_it(
         "TSL-LOWER-UNSUPPORTED-CAST"
     ]
     assert "type=ptr|const_ptr" in context.effects.diagnostics[0].message
+
+
+def test_safe_bitcast_rejects_a_known_size_mismatch(catalog: Catalog) -> None:
+    region = scan("cast<bitcast>(f64, data)")[0]
+    assert isinstance(region, Region)
+    context = _ctx(catalog, "scalar", "si32", backend="rust")
+
+    rendered = CastLowerer().lower(
+        region,
+        context,
+        lambda _segments: literal_text("data"),
+    )
+
+    assert rendered == region.full_text
+    assert [diagnostic.code for diagnostic in context.effects.diagnostics] == [
+        "TSL-LOWER-INVALID-BITCAST"
+    ]
+
+
+def test_value_reinterpretation_uses_an_explicit_unsafe_boundary(
+    catalog: Catalog,
+) -> None:
+    region = scan("cast<reinterpret>(ui32, data)")[0]
+    assert isinstance(region, Region)
+    context = _ctx(catalog, "scalar", "si32", backend="rust")
+
+    rendered = CastLowerer().lower(
+        region,
+        context,
+        lambda _segments: literal_text("data"),
+    )
+
+    assert (
+        render_text(rendered)
+        == "crate::tsl_core::reinterpret_unchecked::<_, u32>(data)"
+    )
+    assert context.effects.requires_unsafe
+    assert "value_reinterpretation" in context.effects.safety.reasons
 
 
 def test_runtime_vector_length_query_uses_static_or_declared_runtime_count(

@@ -39,7 +39,7 @@ from tslc.render.rust_policy_consumption import (
     RustPolicyConsumptionRenderProfile,
 )
 from tslc.backend.rust_algorithm import rust_algorithm_module
-from tslc.backend.rust_vectors import rust_registrations
+from tslc.backend.rust_vectors import rust_registrations, rust_vector_registrations
 from tslc.value_tests.compile_failure import (
     RUST_COMPILE_FAILURE_FEATURE,
     compile_failure_target_name,
@@ -99,7 +99,11 @@ def rust_artifacts(
             ),
             media_type=media_type,
         ),
-        text("rust/src/tsl_core.rs", assets.text("tsl_core.rs"), media_type=media_type),
+        text(
+            "rust/src/tsl_core.rs",
+            _rust_core(profiles, assets),
+            media_type=media_type,
+        ),
         text(
             "rust/src/tsl_algorithm.rs",
             assets.text("tsl_algorithm.rs"),
@@ -250,6 +254,38 @@ def rust_artifacts(
         )
     )
     return artifacts
+
+
+def _rust_core(profiles: Sequence[EmittedProfile], assets: RenderAssets) -> str:
+    core = assets.text("tsl_core.rs").rstrip()
+    register_impls = _rust_valid_bit_pattern_impls(profiles)
+    return f"{core}\n\n{register_impls}\n" if register_impls else f"{core}\n"
+
+
+def _rust_valid_bit_pattern_impls(profiles: Sequence[EmittedProfile]) -> str:
+    """Render destination-validity proofs from typed vector registrations."""
+
+    registers: set[tuple[str, str]] = set()
+    for emitted_profile in profiles:
+        by_primitive = emitted_profile.specializations("rust")
+        for registration in rust_vector_registrations(
+            by_primitive, emitted_profile.extensions
+        ):
+            extension = emitted_profile.extensions.get(registration.extension_name)
+            arch = rust_arch_module(extension)
+            if arch is not None:
+                registers.add((arch, registration.register_spelling))
+    lines: list[str] = []
+    for arch, spelling in sorted(registers):
+        lines.extend(
+            (
+                f'#[cfg(target_arch = "{arch}")]',
+                "// SAFETY: Rust SIMD registers accept every bit pattern; the typed",
+                "// registration plan supplies only concrete register types.",
+                f"unsafe impl ValidBitPattern for {spelling} {{}}",
+            )
+        )
+    return "\n".join(lines)
 
 
 def rust_verify_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[VerifyProfile, ...]:

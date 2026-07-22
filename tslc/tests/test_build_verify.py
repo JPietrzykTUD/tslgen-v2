@@ -442,6 +442,91 @@ def test_rust_path_dependency_consumer_builds(
 
     assert checked.returncode == 0, checked.stderr + checked.stdout
 
+    (consumer / "src" / "main.rs").write_text(
+        textwrap.dedent(
+            """
+            use tsl::tsl_algorithm::{dataparallel, VectorFor};
+            use tsl::tsl_core::{Scalar, Simd, SimdVector, StaticSimdVector};
+
+            struct ExternalRepresentation;
+
+            impl SimdVector for ExternalRepresentation {
+                type BaseType = u8;
+                type Extension = ();
+                type RegisterType = u8;
+                type MaskType = bool;
+                type ImaskType = u8;
+                type Array = [u8; 1];
+                type WithBaseType<ToBase> = ExternalRepresentation;
+                type WithExtension<ToExtension> = ExternalRepresentation;
+                const ALIGN: usize = 1;
+
+                fn lane_count() -> usize { 1 }
+            }
+
+            impl StaticSimdVector for ExternalRepresentation {
+                const ELEMENT_COUNT: usize = 1;
+            }
+
+            struct ExternalPolicy;
+
+            impl VectorFor<tsl::profile::Profile, u8> for ExternalPolicy {
+                type Vec = Simd<u8, Scalar>;
+            }
+
+            fn main() {
+                let _ = dataparallel::native();
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    forged = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(consumer / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "rust-consumer-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    forged_output = forged.stderr + forged.stdout
+    assert forged.returncode != 0
+    assert "representation_sealed::SimdVector" in forged_output
+    assert "representation_sealed::StaticSimdVector" in forged_output
+    assert "representation_sealed::VectorPolicy" in forged_output
+
+    (consumer / "src" / "main.rs").write_text(
+        textwrap.dedent(
+            """
+            fn main() {
+                let _: bool = tsl::tsl_core::bit_cast::<u8, bool>(0);
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    arbitrary_bit_cast = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(consumer / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "rust-consumer-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    arbitrary_output = arbitrary_bit_cast.stderr + arbitrary_bit_cast.stdout
+    assert arbitrary_bit_cast.returncode != 0
+    assert "function `bit_cast` is private" in arbitrary_output
+
 
 def test_rust_profile_feature_rejects_missing_target_features(
     data_root: Path,
