@@ -85,6 +85,21 @@ class ValueTestParityEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class ValueTestProfileCaseExclusion:
+    """One case kind a backend cannot observe for a machine-profile family."""
+
+    profile_family: str
+    case_kind: str
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.profile_family or not self.case_kind or not self.reason:
+            raise ValueError(
+                "value-test profile case exclusion requires family, kind, and reason"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class ValueTestBackendSupport:
     """Value-test case kinds one backend renderer can consume."""
 
@@ -92,6 +107,20 @@ class ValueTestBackendSupport:
     case_kinds: frozenset[str]
     supports_differential: bool = False
     overload_inference_placeholders: int = 0
+    profile_case_exclusions: tuple[ValueTestProfileCaseExclusion, ...] = ()
+
+    def exclusion_for(
+        self, profile_family: str, case_kind: str
+    ) -> ValueTestProfileCaseExclusion | None:
+        return next(
+            (
+                exclusion
+                for exclusion in self.profile_case_exclusions
+                if exclusion.profile_family == profile_family
+                and exclusion.case_kind == case_kind
+            ),
+            None,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +172,7 @@ __all__ = (
     "ValueTestInvocation",
     "ValueTestMemory",
     "ValueTestParityEntry",
+    "ValueTestProfileCaseExclusion",
     "ValueTestProfilePlan",
     "ValueTestProjectPlan",
     "ValueTestRepresentation",

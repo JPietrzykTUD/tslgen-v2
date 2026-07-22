@@ -272,6 +272,7 @@ class ValueTestDifferential:
     to_array_name: str | None = None
     to_integral_name: str | None = None
     to_mask_name: str | None = None
+    mask_from_bits_template: str | None = None
     nonzero_argument_index: int | None = None
     fuzz_seed: int | None = None
     fuzz_iterations: int = 0

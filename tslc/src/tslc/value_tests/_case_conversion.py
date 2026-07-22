@@ -402,6 +402,7 @@ def differential_fuzz_cases(
     specs: tuple[LoweredSpecialization, ...],
     catalog: Catalog,
     harness: HarnessPrimitiveNames,
+    backend_id: str,
     primitive: Primitive | None = None,
     iterations: int = FUZZ_ITERATIONS,
 ) -> list[ValueTestCasePlan]:
@@ -461,6 +462,11 @@ def differential_fuzz_cases(
                     to_array_name=harness.to_array,
                     to_integral_name=harness.to_integral,
                     to_mask_name=harness.to_mask,
+                    mask_from_bits_template=(
+                        extension.test_mask_from_bits.get(backend_id)
+                        if "m" in spec.param_kinds
+                        else None
+                    ),
                     nonzero_argument_index=nonzero_argument_index,
                     fuzz_seed=_fuzz_seed(function_name),
                     fuzz_iterations=iterations,
@@ -500,6 +506,7 @@ def differential_cases(
     specs: tuple[LoweredSpecialization, ...],
     catalog: Catalog,
     harness: HarnessPrimitiveNames,
+    backend_id: str,
 ) -> list[ValueTestCasePlan]:
     if case.lanes is None or case.expected_rule is not None:
         return []
@@ -561,6 +568,11 @@ def differential_cases(
                     to_array_name=harness.to_array,
                     to_integral_name=harness.to_integral,
                     to_mask_name=harness.to_mask,
+                    mask_from_bits_template=(
+                        extension.test_mask_from_bits.get(backend_id)
+                        if mask_inputs
+                        else None
+                    ),
                 ),
             )
         )

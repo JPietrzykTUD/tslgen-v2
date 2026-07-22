@@ -353,7 +353,7 @@ inline T arith_add(T a, T b) {
     }
 }
 [[noreturn]] inline void arith_zero_divisor_fail() {
-#if defined(__SYCL_DEVICE_ONLY__)
+#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)
     __builtin_trap();
 #else
     throw std::domain_error("TSL_ARITH_INTEGER_ZERO_DIVISOR");

@@ -54,6 +54,7 @@ from tslc.value_tests.model import (
     ValueTestInputs,
     ValueTestInvocation,
     ValueTestMemory,
+    ValueTestProfileCaseExclusion,
     ValueTestProfilePlan,
     ValueTestProjectPlan,
     ValueTestRepresentation,
@@ -169,6 +170,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
                 to_array_name=to_array,
                 to_integral_name=to_integral,
                 to_mask_name=to_mask,
+                mask_from_bits_template=values.pop("mask_from_bits_template", None),
                 nonzero_argument_index=values.pop(
                     "nonzero_argument_index", None
                 ),
@@ -289,6 +291,93 @@ def test_runtime_failure_cases_plan_and_render_for_both_backends(
     assert '"TSL_ARITH_INTEGER_ZERO_DIVISOR"' in cpp_source
     assert "std::panic::catch_unwind" in rust_source
     assert 'Some("TSL_ARITH_INTEGER_ZERO_DIVISOR")' in rust_source
+
+
+def test_runtime_failure_cases_report_wasm_profile_capability_exclusions() -> None:
+    primitive = Primitive(
+        "div",
+        "v:=(v,v)",
+        ("dividend", "divisor"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="active_zero",
+                type_tag="si32",
+                tags=("failure",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("8", "-9", "10", "-12")),
+                    TslTestArg("vector", values=("2", "0", "-2", "4")),
+                ),
+                expected=(),
+                role="runtime_failure",
+                failure=FailureReason.INTEGER_ZERO_DIVISOR,
+            ),
+        ),
+    )
+    cpp_spec = _spec("div", "div", param_kinds=("v", "v"))
+    rust_spec = replace(
+        cpp_spec,
+        backend_id="rust",
+        base_type_spelling="i32",
+        register_spelling="[i32; 4]",
+    )
+
+    plan = ValueTestPlanner(
+        _catalog(primitive, *_harness_primitives()),
+        _VALUE_TEST_SUPPORTS,
+    ).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp", "wasm32-simd128", {"div": (cpp_spec,)}, "wasm32"
+            ),
+            ValueTestBackendProfileInput(
+                "rust", "wasm32-simd128", {"div": (rust_spec,)}, "wasm32"
+            ),
+        )
+    )
+
+    assert all(not profile.cases for profile in plan.profiles)
+    exclusions = {
+        entry.backend_id: entry
+        for entry in plan.coverage
+        if entry.case_name == "active_zero"
+    }
+    assert exclusions["cpp"].status == "backend_unsupported"
+    assert "exception unwinding" in exclusions["cpp"].reason
+    assert exclusions["rust"].status == "backend_unsupported"
+    assert "aborting panics" in exclusions["rust"].reason
+
+
+def test_cpp_differential_uses_extension_mask_materialization_template() -> None:
+    case = ValueTestCasePlan(
+        "differential",
+        "test_diff_sve128_div_mask",
+        "div_mask",
+        "div_mask",
+        "si32",
+        "int32_t",
+        4,
+        param_kinds=("m", "v", "v"),
+        result_kind="v",
+        vector_inputs=(("8", "9", "10", "12"), ("2", "3", "5", "4")),
+        mask_inputs=("10",),
+        hardware_extension="sve128",
+        from_array_name="from_array",
+        to_array_name="to_array",
+        to_mask_name="to_mask",
+        mask_from_bits_template=(
+            "::tsl::test::mask_from_bits<{vec}>("
+            "{mask_bits}, {authored_lanes}, {lanes})"
+        ),
+    )
+
+    source = CPP_VALUE_TEST_RENDERER.render_case(case)
+
+    assert "::tsl::test::mask_from_bits<Hw>(10ull, 4, 4)" in source
+    assert "static_cast<typename Hw::imask_type>" not in source
+    assert "static_cast<typename Ref::imask_type>(10ull)" in source
 
 
 def test_masked_immediate_cases_plan_and_render_for_both_backends(
@@ -3231,6 +3320,19 @@ def test_value_test_renderer_rejects_unregistered_case_kind() -> None:
         ValueTestRendererCapability(
             backend_id="unit",
             case_renderers={"not_registered": lambda case: ""},
+        )
+
+
+def test_value_test_renderer_rejects_exclusion_for_undeclared_case_kind() -> None:
+    with pytest.raises(ValueError, match="excludes undeclared case kind"):
+        ValueTestRendererCapability(
+            backend_id="unit",
+            case_renderers={"generic_golden": lambda case: ""},
+            profile_case_exclusions=(
+                ValueTestProfileCaseExclusion(
+                    "wasm32", "runtime_failure", "unobservable failure"
+                ),
+            ),
         )
 
 

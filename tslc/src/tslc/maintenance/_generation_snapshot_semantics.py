@@ -422,6 +422,7 @@ def _serialize_value_test_differential(
         "to_array_name": value.to_array_name,
         "to_integral_name": value.to_integral_name,
         "to_mask_name": value.to_mask_name,
+        "mask_from_bits_template": value.mask_from_bits_template,
         "nonzero_argument_index": value.nonzero_argument_index,
         "fuzz_seed": value.fuzz_seed,
         "fuzz_iterations": value.fuzz_iterations,

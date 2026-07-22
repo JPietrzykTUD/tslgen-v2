@@ -51,6 +51,7 @@ class ValueTestBackendProfileInput:
     backend_id: str
     profile_name: str
     specializations: Mapping[str, tuple[LoweredSpecialization, ...]]
+    profile_family: str = ""
 
 
 class ValueTestPlanner:
@@ -130,6 +131,7 @@ class ValueTestPlanner:
                     fuzz_supported, fuzz_drops = self._supported_cases(
                         fuzz_planned,
                         backend,
+                        profile.profile_family,
                         profile.specializations,
                         diagnostics,
                     )
@@ -201,6 +203,7 @@ class ValueTestPlanner:
                     supported, drops = self._supported_cases(
                         planned,
                         backend,
+                        profile.profile_family,
                         profile.specializations,
                         diagnostics,
                     )
@@ -274,6 +277,7 @@ class ValueTestPlanner:
         self,
         cases: tuple[ValueTestCasePlan, ...],
         backend: ValueTestBackendSupport,
+        profile_family: str,
         specializations: Mapping[str, tuple[LoweredSpecialization, ...]],
         diagnostics: list[Diagnostic],
     ) -> tuple[tuple[ValueTestCasePlan, ...], tuple[ValueTestCaseDrop, ...]]:
@@ -289,6 +293,16 @@ class ValueTestPlanner:
                     else "renderer_unsupported"
                 )
                 drops.append(ValueTestCaseDrop(case, cause))
+                continue
+            exclusion = backend.exclusion_for(profile_family, case.kind)
+            if exclusion is not None:
+                drops.append(
+                    ValueTestCaseDrop(
+                        case,
+                        "profile_unsupported",
+                        detail=exclusion.reason,
+                    )
+                )
                 continue
             missing_helpers = _missing_differential_helpers(case, specializations)
             if missing_helpers:

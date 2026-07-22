@@ -321,6 +321,7 @@ class _GenerationSession:
                 capability.backend_id,
                 profile.profile.name,
                 capability.specializations(profile),
+                profile.profile.family,
             )
             for profile in profiles
             for capability in self.backends

@@ -104,6 +104,7 @@ class _GenericGoldenPattern(_BasePattern):
                     context.specs,
                     context.catalog,
                     context.harness,
+                    context.backend.backend_id,
                 )
             )
         return tuple(plans)
@@ -123,6 +124,7 @@ class _GenericGoldenPattern(_BasePattern):
                 context.specs,
                 context.catalog,
                 context.harness,
+                context.backend.backend_id,
                 primitive=context.primitive,
                 iterations=context.iterations,
             )
@@ -205,6 +207,7 @@ class _MaskedPattern(_BasePattern):
                         context.specs,
                         context.catalog,
                         context.harness,
+                        context.backend.backend_id,
                     )
                 )
         return tuple(plans)
@@ -221,6 +224,7 @@ class _MaskedPattern(_BasePattern):
                 context.specs,
                 context.catalog,
                 context.harness,
+                context.backend.backend_id,
                 primitive=context.primitive,
                 iterations=context.iterations,
             )
@@ -406,6 +410,7 @@ class _ImmediatePattern(_BasePattern):
                     context.specs,
                     context.catalog,
                     context.harness,
+                    context.backend.backend_id,
                 )
             )
         return tuple(plans)

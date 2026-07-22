@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
+from tslc.value_tests.render_cpp_helpers import render_extension_test_template
 
 
 def _convert(case: ValueTestCasePlan) -> str:
@@ -308,10 +309,9 @@ def _differential(case: ValueTestCasePlan) -> str:
     for position, mask in enumerate(case.inputs.masks):
         if differential.to_mask_name is None:
             raise ValueError("masked differential case requires to_mask_name")
+        hardware_mask = _differential_hardware_mask(case, f"{mask}ull")
         lines.append(
-            f"  typename Hw::mask_type hm{position} = "
-            f"tsl::{differential.to_mask_name}<Hw>("
-            f"static_cast<typename Hw::imask_type>({mask}ull));"
+            f"  typename Hw::mask_type hm{position} = {hardware_mask};"
         )
         lines.append(
             f"  typename Ref::mask_type rm{position} = "
@@ -365,6 +365,29 @@ def _differential(case: ValueTestCasePlan) -> str:
     lines.append("}")
     return "\n".join(lines)
 
+
+def _differential_hardware_mask(case: ValueTestCasePlan, mask_bits: str) -> str:
+    """Materialize authored lane bits through the extension's mask test adapter."""
+
+    differential = case.differential
+    assert differential is not None and differential.to_mask_name is not None
+    template = differential.mask_from_bits_template
+    if template is None:
+        return (
+            f"tsl::{differential.to_mask_name}<Hw>("
+            f"static_cast<typename Hw::imask_type>({mask_bits}))"
+        )
+    return render_extension_test_template(
+        template,
+        vec="Hw",
+        mask_bits=mask_bits,
+        authored_lanes=str(case.lanes),
+        lanes=str(case.lanes),
+        base_type=case.base_spelling,
+        base=case.base_spelling,
+    )
+
+
 def _differential_fuzz(case: ValueTestCasePlan) -> str:
     """A runtime PRNG loop comparing `prim<Hw>` to the generic reference `prim<Ref>` over many
     random inputs. On the first disagreement it prints the failing lane (via check_match) plus the
@@ -405,8 +428,7 @@ def _differential_fuzz(case: ValueTestCasePlan) -> str:
                 "    const std::uint64_t mask_bits = "
                 "tsl::test::fuzz_next<std::uint64_t>(rng);",
                 "    typename Hw::mask_type hm = "
-                f"tsl::{to_mask_name}<Hw>("
-                "static_cast<typename Hw::imask_type>(mask_bits));",
+                f"{_differential_hardware_mask(case, 'mask_bits')};",
                 "    typename Ref::mask_type rm = "
                 f"tsl::{to_mask_name}<Ref>("
                 "static_cast<typename Ref::imask_type>(mask_bits));",
