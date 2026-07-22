@@ -387,11 +387,19 @@ inline T arith_mul(T a, T b) {
         return a * b;
     }
 }
-// Remainder for emulated `mod` loops: integer `%`, or `std::fmod` for floats (where `%`
-// is ill-formed). Matches the frozen runtime-support `arith_rem`.
+// Normalized remainder for emulated `mod` loops: checked integer `%`, or `std::fmod`
+// for floats (where `%` is ill-formed).
 template <class T>
 inline T arith_rem(T a, T b) {
     if constexpr (std::is_integral_v<T>) {
+        if (b == T{0}) {
+            arith_zero_divisor_fail();
+        }
+        if constexpr (std::is_signed_v<T>) {
+            if (a == std::numeric_limits<T>::lowest() && b == T{-1}) {
+                return T{0};
+            }
+        }
         return static_cast<T>(a % b);
     } else {
         return static_cast<T>(std::fmod(a, b));

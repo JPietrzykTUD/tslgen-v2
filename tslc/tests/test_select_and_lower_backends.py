@@ -258,6 +258,93 @@ def test_lower_sve_integer_division_checks_participating_zero_lanes(
             assert "mask_binary_and" in body
 
 
+def test_lower_scalar_generic_and_clang_integer_remainder_use_normalized_helper(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slots = (
+        next(
+            slot
+            for slot in Selector()
+            .select_profile(catalog, machine_profiles["scalar"], "mod", ("si32",))
+            .selected
+            if slot.extension.name == extension
+            and slot.primitive.attributes.get("mask") is None
+        )
+        for extension in ("scalar", "generic", "clang_v128")
+    )
+
+    for slot in slots:
+        backend_helpers = [("cpp", "::tsl::detail::helpers::arith_rem")]
+        if slot.extension.name != "clang_v128":
+            backend_helpers.append(
+                ("rust", "crate::tsl_core::detail::helpers::arith_rem")
+            )
+        for backend_id, helper_call in backend_helpers:
+            lowered = Lowerer().lower(
+                slot,
+                catalog,
+                create_backend_dialect(catalog, backend_id),
+            ).specialization
+            assert lowered is not None
+            assert helper_call in lowered.body_text
+
+
+def test_lower_sve_floating_remainder_uses_fmod_helper_without_vector_quotient(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slot = next(
+        slot
+        for slot in Selector()
+        .select_profile(catalog, machine_profiles["sve"], "mod", ("f32",))
+        .selected
+        if slot.extension.name == "sve"
+        and slot.primitive.attributes.get("mask") is None
+    )
+    lowered = Lowerer().lower(
+        slot,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    ).specialization
+
+    assert lowered is not None
+    assert "arith_rem" in lowered.body_text
+    assert "svlastb" in lowered.body_text
+    assert "svdiv" not in lowered.body_text
+
+
+def test_lower_generic_masked_remainder_sanitizes_inactive_operands(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slots = tuple(
+        slot
+        for slot in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "mod", ("si32",))
+        .selected
+        if slot.extension.name == "generic"
+        and slot.primitive.attributes.get("mask") is not None
+    )
+    assert {slot.primitive.attributes.get("mask") for slot in slots} == {
+        "zero",
+        "pass_through",
+    }
+
+    for slot in slots:
+        for backend_id in ("cpp", "rust"):
+            lowered = Lowerer().lower(
+                slot,
+                catalog,
+                create_backend_dialect(catalog, backend_id),
+            ).specialization
+            assert lowered is not None
+            body = lowered.body_text
+            assert "safe_dividend" in body
+            assert "safe_divisor" in body
+            assert body.index("safe_divisor") < body.rindex("mod")
+
+
 @pytest.mark.parametrize(
     ("primitive", "type_tag", "expected_cpp", "expected_rust"),
     (

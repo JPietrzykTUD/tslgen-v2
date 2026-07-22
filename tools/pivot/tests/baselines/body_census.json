@@ -1,15 +1,15 @@
 {
-  "digest": "6954cd4164865b85b8ef817441a3041a200b8ba98da86a3c539ae0829e029e5f",
+  "digest": "3cbe821ac7c7b90fc8cf2ab80fd3f9f31034f28506cc99067a9d537fed79c1ff",
   "languages": {
     "cpp": {
       "categories": {
         "call_and_local": 77,
         "call_only": 2912,
         "local_only": 10,
-        "native_leaf": 4140,
+        "native_leaf": 4092,
         "synthetic_fixed": 2758
       },
-      "entries": 9897,
+      "entries": 9849,
       "failures": 0,
       "feature_combinations": [
         {
@@ -96,7 +96,7 @@
           ]
         },
         {
-          "count": 4140,
+          "count": 4092,
           "features": [
             "residual_expression",
             "result_only"
@@ -125,8 +125,8 @@
         "multi_statement": 2999,
         "multiple_locals": 3,
         "nested_typed_call": 2263,
-        "residual_expression": 9747,
-        "result_only": 9858,
+        "residual_expression": 9699,
+        "result_only": 9810,
         "synthetic_fixed": 2758,
         "typed_call": 5747,
         "typed_local": 87
@@ -134,7 +134,7 @@
       "multi_statement": 2999,
       "origins": {
         "fixed_wrapper": 2758,
-        "lowered_source": 7139
+        "lowered_source": 7091
       }
     },
     "rust": {
@@ -277,7 +277,7 @@
   },
   "schema": "tslc-pivot-body-census-v1",
   "summary": {
-    "entries": 16452,
+    "entries": 16404,
     "failures": 0,
     "fixed_wrappers": 5492,
     "multi_statement": 4654,

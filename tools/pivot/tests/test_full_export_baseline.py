@@ -63,9 +63,9 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     assert provenance["command"] == CANONICAL_FULL_EXPORT_COMMAND
     assert actual["summary"] == {
         "documents": 186,
-        "definitions": 16_452,
-        "skips": 29_279,
-        "nominal_definition_identities": 16_132,
+        "definitions": 16_404,
+        "skips": 29_251,
+        "nominal_definition_identities": 16_084,
         "definition_identity_collisions": {
             "groups": 320,
             "entries": 640,
@@ -74,13 +74,13 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
             "exact_duplicate_only_groups": 0,
         },
         "languages": {
-            "cpp": {"documents": 93, "definitions": 9_897, "skips": 19_611},
-            "rust": {"documents": 93, "definitions": 6_555, "skips": 9_668},
+            "cpp": {"documents": 93, "definitions": 9_849, "skips": 19_621},
+            "rust": {"documents": 93, "definitions": 6_555, "skips": 9_630},
         },
     }
     artifacts = actual["artifacts"]
     assert artifacts["ordered_content_sha256"] == (
-        "90e4ef9cfcf82982b6ffac5fa0db3b7a8c51ff9dcc5a2811c3950fa4eb2afe5b"
+        "c4e555b5046329c0294a0466350e7258a08697f904a7bbabedd003908059c84c"
     )
     assert actual["skip_category_scheme"] == "reason-prefix-v1"
     assert actual["unclassified_skip_count"] == 0
@@ -88,10 +88,10 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     for item in actual["skips_by_language_and_category"]:
         category_counts[item["category"]] += item["count"]
     assert category_counts == {
-        "callee_resolution": 300,
-        "forwarded_call_arguments": 3_144,
-        "local_declaration": 846,
-        "residual_target_text": 7_520,
+        "callee_resolution": 280,
+        "forwarded_call_arguments": 2_946,
+        "local_declaration": 878,
+        "residual_target_text": 7_678,
         "schema_conflict": 650,
         "signature_admissibility": 12_163,
         "specialization_admissibility": 4_656,
@@ -108,7 +108,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     ]
     skip_records = actual["skips"]
     assert skip_records == sorted(skip_records, key=_canonical_json)
-    assert sum(record[-1] for record in skip_records) == 29_279
+    assert sum(record[-1] for record in skip_records) == 29_251
     assert all(len(record) == len(actual["skip_fields"]) for record in skip_records)
     assert all(
         record[6] is None
@@ -124,7 +124,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         actual["skip_inventory_sha256"]
     )
     assert actual["skip_inventory_sha256"] == (
-        "62d9fc15fc8b9bd7986c05d03a73e946e075f66ba2b4da9e66ab4cc7c37339a7"
+        "94d0af06589b07e6a424556ee46a9cd1e7421b2331fcc3e09dff96138d0d0a85"
     )
 
 
@@ -138,7 +138,7 @@ def _assert_complete_body_census(
         "rust",
     )
     assert tuple(len(census.entries) for census in result.body_censuses) == (
-        9_897,
+        9_849,
         6_555,
     )
     assert tuple(census.multi_statement_count for census in result.body_censuses) == (
@@ -150,7 +150,7 @@ def _assert_complete_body_census(
             ("call_and_local", 77),
             ("call_only", 2_912),
             ("local_only", 10),
-            ("native_leaf", 4_140),
+            ("native_leaf", 4_092),
             ("synthetic_fixed", 2_758),
         ),
         (
@@ -168,7 +168,7 @@ def _assert_complete_body_census(
         if entry.category is not None
     ) == {
         "synthetic_fixed": 5_492,
-        "native_leaf": 6_306,
+        "native_leaf": 6_258,
         "call_only": 4_552,
         "local_only": 20,
         "call_and_local": 82,
@@ -322,7 +322,7 @@ def _definitions_by_identity(manifest: dict[str, Any]) -> dict[str, tuple[str, .
         )
         direct_sha256 = item[5]
         by_identity.setdefault(identity, []).append(direct_sha256)
-    assert sum(len(items) for items in by_identity.values()) == 16_452
+    assert sum(len(items) for items in by_identity.values()) == 16_404
     return {
         identity: tuple(sorted(direct_hashes))
         for identity, direct_hashes in by_identity.items()
