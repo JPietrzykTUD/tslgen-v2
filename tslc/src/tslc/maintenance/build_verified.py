@@ -47,6 +47,8 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "to_mask",
         ),
         "test_cpp_fetch_content_consumer_builds": ("add",),
+        "test_rust_path_dependency_consumer_builds": ("add",),
+        "test_rust_profile_feature_rejects_missing_target_features": ("add",),
         "test_cpp_auto_profile_configures": ("add",),
         "test_scalar_mask_comparison_family_builds": _COMPARISON_FAMILY,
         "test_simd_comparison_family_builds": _COMPARISON_FAMILY,

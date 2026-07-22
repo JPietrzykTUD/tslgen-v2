@@ -88,6 +88,7 @@ def verify_project(
     runner_paths: Mapping[str, str] | None = None,
     tool_paths: Mapping[str, str] | None = None,
     run_value_tests: bool = False,
+    run_quality_checks: bool = False,
 ) -> BuildVerificationReport:
     return verify_generated_project(
         Path(output_root),
@@ -97,5 +98,6 @@ def verify_project(
             runner_paths=runner_paths,
             tool_paths=tool_paths,
             run_value_tests=run_value_tests,
+            run_quality_checks=run_quality_checks,
         ),
     )

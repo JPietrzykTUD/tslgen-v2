@@ -45,6 +45,8 @@ def _config(
     qemu_aarch64_path: str | None = None,
     wasmtime_path: str | None = None,
     cpp_linker: str | None = None,
+    rust_clippy_path: str | None = None,
+    run_quality_checks: bool = False,
     tool_paths: dict[str, str] | None = None,
 ) -> BuildVerifierConfig:
     toolchains = {
@@ -69,11 +71,15 @@ def _config(
         )
         if path is not None
     }
+    configured_tools = dict(tool_paths or {})
+    if rust_clippy_path is not None:
+        configured_tools["rust-clippy"] = rust_clippy_path
     return BuildVerifierConfig.create(
         toolchains=toolchains,
         runner_paths=runner_paths,
-        tool_paths=tool_paths,
+        tool_paths=configured_tools,
         run_value_tests=run_value_tests,
+        run_quality_checks=run_quality_checks,
     )
 
 
@@ -346,16 +352,143 @@ def test_rust_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
         tmp_path,
         project,
         runner,
-        config=_config(rust_compiler=sys.executable),
+        config=_config(
+            rust_compiler=sys.executable,
+            rust_clippy_path=sys.executable,
+            run_quality_checks=True,
+        ),
     )
 
     assert report.diagnostics == ()
     assert report.skipped == ()
-    assert [command.step for command in seen] == ["preflight", "test"]
+    assert [command.step for command in seen] == [
+        "preflight",
+        "check-warnings",
+        "rustdoc",
+        "clippy",
+        "test",
+    ]
     assert seen[0].argv[0] == sys.executable
-    assert _env(seen[1])["RUSTC"] == sys.executable
-    assert "--target-dir" in seen[1].argv
-    assert str(tmp_path / "rust" / "target" / "scalar") in seen[1].argv
+    warning_gate, rustdoc_gate, clippy_gate, test = seen[1:]
+    assert warning_gate.argv[:2] == ("cargo", "check")
+    assert "--all-targets" in warning_gate.argv
+    warning_flags = _env(warning_gate)["RUSTFLAGS"]
+    assert "-Dwarnings" in warning_flags
+    assert "-Dinvalid-value" in warning_flags
+    assert "-Dprivate-interfaces" in warning_flags
+    assert "-Dprivate-bounds" in warning_flags
+    assert rustdoc_gate.argv[:2] == ("cargo", "doc")
+    assert "--no-deps" in rustdoc_gate.argv
+    rustdoc_flags = _env(rustdoc_gate)["RUSTDOCFLAGS"]
+    assert "-Dwarnings" in rustdoc_flags
+    assert "-Drustdoc::broken-intra-doc-links" in rustdoc_flags
+    assert "-Drustdoc::bare-urls" in rustdoc_flags
+    assert clippy_gate.argv[:2] == (sys.executable, "clippy")
+    clippy_separator = clippy_gate.argv.index("--")
+    assert clippy_gate.argv[clippy_separator + 1 :] == (
+        "-Awarnings",
+        "-Dclippy::correctness",
+        "-Dclippy::suspicious",
+    )
+    assert _env(test)["RUSTC"] == sys.executable
+    assert "--target-dir" in test.argv
+    assert str(tmp_path / "rust" / "target" / "scalar") in test.argv
+
+
+def test_rust_verifier_reports_missing_optional_clippy_and_runs_other_gates(
+    tmp_path: Path,
+) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(VerifyProfile(profile_name="scalar", file_stem="scalar"),),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=_config(
+            rust_compiler=sys.executable,
+            rust_clippy_path="/definitely/missing/cargo-clippy",
+            run_quality_checks=True,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert report.skipped == (
+        "rust: optional Clippy component /definitely/missing/cargo-clippy not found",
+    )
+    assert [command.step for command in seen] == [
+        "preflight",
+        "check-warnings",
+        "rustdoc",
+        "test",
+    ]
+
+
+def test_rust_warning_gates_report_independent_failures(tmp_path: Path) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(VerifyProfile(profile_name="scalar", file_stem="scalar"),),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(
+            command=command,
+            returncode=(
+                1
+                if command.step in {"check-warnings", "rustdoc", "clippy"}
+                else 0
+            ),
+            stderr=f"{command.step} gate failure",
+        )
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=_config(
+            rust_compiler=sys.executable,
+            rust_clippy_path=sys.executable,
+            run_quality_checks=True,
+        ),
+    )
+
+    assert [command.step for command in seen] == [
+        "preflight",
+        "check-warnings",
+        "rustdoc",
+        "clippy",
+        "test",
+    ]
+    assert [diagnostic.code for diagnostic in report.diagnostics] == [
+        "TSL-BUILD-VERIFY-COMMAND-FAILED",
+        "TSL-BUILD-VERIFY-COMMAND-FAILED",
+        "TSL-BUILD-VERIFY-COMMAND-FAILED",
+    ]
+    assert all(
+        gate in diagnostic.message
+        for gate, diagnostic in zip(
+            ("check-warnings", "rustdoc", "clippy"), report.diagnostics
+        )
+    )
 
 
 def test_rust_compile_failures_share_one_cargo_feature(tmp_path: Path) -> None:
@@ -439,24 +572,38 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
         tmp_path,
         project,
         runner,
-        config=_config(rust_compiler=sys.executable),
+        config=_config(
+            rust_compiler=sys.executable,
+            rust_clippy_path=sys.executable,
+            run_quality_checks=True,
+        ),
     )
 
     assert report.diagnostics == ()
     assert [command.step for command in seen] == [
         "preflight",
         "target-preflight",
+        "check-warnings",
+        "rustdoc",
+        "clippy",
         "build-tests",
     ]
     assert "--target" in seen[1].argv
     assert "aarch64-unknown-linux-musl" in seen[1].argv
     assert "linker=rust-lld" in seen[1].argv
-    assert "--target" in seen[2].argv
-    assert "aarch64-unknown-linux-musl" in seen[2].argv
-    assert "--no-run" in seen[2].argv
-    assert "--message-format=json" not in seen[2].argv
-    env = _env(seen[2])
+    build_tests = next(command for command in seen if command.step == "build-tests")
+    assert "--target" in build_tests.argv
+    assert "aarch64-unknown-linux-musl" in build_tests.argv
+    assert "--no-run" in build_tests.argv
+    assert "--message-format=json" not in build_tests.argv
+    env = _env(build_tests)
     assert env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER"] == "rust-lld"
+    warning_gate = next(
+        command for command in seen if command.step == "check-warnings"
+    )
+    warning_flags = _env(warning_gate)["RUSTFLAGS"]
+    assert warning_flags.startswith("-C target-feature=+neon ")
+    assert "-Dwarnings" in warning_flags
 
 
 def test_rust_target_preflight_failure_skips_only_that_profile(tmp_path: Path) -> None:
@@ -1285,12 +1432,14 @@ def test_rust_qemu_value_tests_use_target_and_run_binaries(tmp_path: Path) -> No
     assert "--target" in seen[1].argv
     assert "aarch64-unknown-linux-musl" in seen[1].argv
     assert "linker=rust-lld" in seen[1].argv
-    assert "--target" in seen[2].argv
-    assert "aarch64-unknown-linux-musl" in seen[2].argv
-    env = _env(seen[2])
+    build_tests = next(command for command in seen if command.step == "build-tests")
+    assert "--target" in build_tests.argv
+    assert "aarch64-unknown-linux-musl" in build_tests.argv
+    env = _env(build_tests)
     assert env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER"] == "rust-lld"
-    assert seen[3].argv[0] == sys.executable
-    assert seen[3].argv[-3:] == ("-cpu", "cortex-a76", executable)
+    run_test = seen[-1]
+    assert run_test.argv[0] == sys.executable
+    assert run_test.argv[-3:] == ("-cpu", "cortex-a76", executable)
 
 
 def test_rust_wasm_value_tests_use_wasmtime_runner(tmp_path: Path) -> None:
@@ -1347,11 +1496,12 @@ def test_rust_wasm_value_tests_use_wasmtime_runner(tmp_path: Path) -> None:
     ]
     assert "--target" in seen[1].argv
     assert "wasm32-wasip1" in seen[1].argv
-    assert "--target" in seen[2].argv
-    assert "wasm32-wasip1" in seen[2].argv
-    assert "--message-format=json" in seen[2].argv
-    assert _env(seen[2])["RUSTFLAGS"] == "-C target-feature=+simd128"
-    assert seen[3].argv == (sys.executable, executable)
+    build_tests = next(command for command in seen if command.step == "build-tests")
+    assert "--target" in build_tests.argv
+    assert "wasm32-wasip1" in build_tests.argv
+    assert "--message-format=json" in build_tests.argv
+    assert _env(build_tests)["RUSTFLAGS"] == "-C target-feature=+simd128"
+    assert seen[-1].argv == (sys.executable, executable)
 
 
 def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None:
@@ -1403,13 +1553,18 @@ def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None
     )
 
     assert report.diagnostics == ()
-    assert [command.step for command in seen] == ["preflight", "build-tests", "test"]
-    assert "--no-run" in seen[1].argv
-    assert "--message-format=json" in seen[1].argv
-    assert "--target-dir" in seen[1].argv
-    assert str(tmp_path / "rust" / "target" / "avx2") in seen[1].argv
-    assert seen[1].argv[0] == "cargo"
-    assert seen[2].argv == (sys.executable, "-hsw", "--", executable)
+    assert [command.step for command in seen] == [
+        "preflight",
+        "build-tests",
+        "test",
+    ]
+    build_tests = next(command for command in seen if command.step == "build-tests")
+    assert "--no-run" in build_tests.argv
+    assert "--message-format=json" in build_tests.argv
+    assert "--target-dir" in build_tests.argv
+    assert str(tmp_path / "rust" / "target" / "avx2") in build_tests.argv
+    assert build_tests.argv[0] == "cargo"
+    assert seen[-1].argv == (sys.executable, "-hsw", "--", executable)
 
 
 def test_rust_sde_value_tests_diagnose_missing_test_binaries(tmp_path: Path) -> None:

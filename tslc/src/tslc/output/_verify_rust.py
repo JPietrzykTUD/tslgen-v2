@@ -24,6 +24,7 @@ from tslc.output.verify_drivers import (
 )
 from tslc.output.verify_model import (
     BuildCommand,
+    BuildCommandEnvironment,
     BuildCommandResult,
     BuildCommandRunner,
     BuildVerifierConfig,
@@ -31,6 +32,24 @@ from tslc.output.verify_model import (
     VerifyProfile,
 )
 from tslc.value_tests.compile_failure import RUST_COMPILE_FAILURE_FEATURE
+
+
+_RUST_WARNING_FLAGS = (
+    "-Dwarnings",
+    "-Dinvalid-value",
+    "-Dprivate-interfaces",
+    "-Dprivate-bounds",
+)
+_RUSTDOC_WARNING_FLAGS = (
+    "-Dwarnings",
+    "-Drustdoc::broken-intra-doc-links",
+    "-Drustdoc::bare-urls",
+)
+_CLIPPY_WARNING_FLAGS = (
+    "-Awarnings",
+    "-Dclippy::correctness",
+    "-Dclippy::suspicious",
+)
 
 
 def create_rust_verify_driver() -> VerifyBackendDriver:
@@ -166,6 +185,10 @@ def _prepare_rust_backend(
             commands=tuple(results),
             skipped=tuple(skipped),
         )
+    if config.run_quality_checks:
+        clippy = _rust_clippy_executable(config)
+        if missing_executable(clippy) is not None:
+            skipped.append(f"rust: optional Clippy component {clippy} not found")
     target_profiles: list[VerifyProfile] = []
     for profile in backend.profiles:
         target = rust_target(profile, config)
@@ -238,6 +261,72 @@ def _rust_command_groups(
     groups: list[tuple[BuildCommand, ...]] = []
     for profile in backend.profiles:
         target_dir = project_root / "target" / profile.file_stem
+        cargo_profile_args = (
+            "--manifest-path",
+            str(manifest),
+            "--no-default-features",
+            "--features",
+            profile.profile_name,
+            *rust_target_args(profile, config),
+            "--target-dir",
+            str(target_dir),
+        )
+        if config.run_quality_checks:
+            groups.append(
+                (
+                    BuildCommand(
+                        backend_id="rust",
+                        profile_name=profile.profile_name,
+                        step="check-warnings",
+                        argv=("cargo", "check", *cargo_profile_args, "--all-targets"),
+                        cwd=root,
+                        env=_rust_lint_environment(
+                            profile,
+                            config,
+                            key="RUSTFLAGS",
+                            flags=_RUST_WARNING_FLAGS,
+                        ),
+                    ),
+                )
+            )
+            groups.append(
+                (
+                    BuildCommand(
+                        backend_id="rust",
+                        profile_name=profile.profile_name,
+                        step="rustdoc",
+                        argv=("cargo", "doc", *cargo_profile_args, "--no-deps"),
+                        cwd=root,
+                        env=_rust_lint_environment(
+                            profile,
+                            config,
+                            key="RUSTDOCFLAGS",
+                            flags=_RUSTDOC_WARNING_FLAGS,
+                        ),
+                    ),
+                )
+            )
+            clippy = _rust_clippy_executable(config)
+            if missing_executable(clippy) is None:
+                groups.append(
+                    (
+                        BuildCommand(
+                            backend_id="rust",
+                            profile_name=profile.profile_name,
+                            step="clippy",
+                            argv=(
+                                clippy,
+                                "clippy",
+                                *cargo_profile_args,
+                                "--all-targets",
+                                "--",
+                                *_CLIPPY_WARNING_FLAGS,
+                            ),
+                            cwd=root,
+                            env=rust_environment(profile, config),
+                        ),
+                    )
+                )
         # Build verification still uses `cargo test` so generated test targets
         # compile. Cross-target builds cannot execute those binaries natively, so
         # they use --no-run unless value-test mode has a runner follow-up.
@@ -308,6 +397,32 @@ def _rust_command_groups(
         )
         groups.append(tuple(commands))
     return tuple(groups)
+
+
+def _rust_clippy_executable(config: BuildVerifierConfig) -> str:
+    return config.tool_path("rust-clippy") or "cargo-clippy"
+
+
+def _rust_lint_environment(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+    *,
+    key: str,
+    flags: tuple[str, ...],
+) -> tuple[BuildCommandEnvironment, ...]:
+    environment = list(rust_environment(profile, config))
+    suffix = " ".join(flags)
+    for index, item in enumerate(environment):
+        if item.key != key:
+            continue
+        environment[index] = BuildCommandEnvironment(
+            key=key,
+            value=f"{item.value} {suffix}",
+        )
+        break
+    else:
+        environment.append(BuildCommandEnvironment(key=key, value=suffix))
+    return tuple(environment)
 
 
 def _rust_emulated_test_commands(

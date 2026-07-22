@@ -191,6 +191,10 @@ def rust_artifacts(
         )
         content = assets.fill(
             "rust_profile_module.rs.tmpl",
+            target_feature_guard=_rust_target_feature_guard(
+                emitted_profile.profile,
+                capability,
+            ),
             arch_use=arch_use,
             profile_metadata=assets.fill(
                 "rust_profile_metadata.rs.tmpl",
@@ -331,6 +335,31 @@ def _verify_runner(profile: MachineProfile) -> VerifyRunner | None:
         kind=profile.runner.kind,
         profile=profile.runner.profile,
         args=profile.runner.args,
+    )
+
+
+def _rust_target_feature_guard(
+    profile: MachineProfile,
+    capability: ProfileFamilyCapability,
+) -> str:
+    features = tuple(
+        feature.removeprefix("+")
+        for feature in rust_target_features(profile, capability)
+    )
+    if not features:
+        return ""
+    condition = ", ".join(
+        f'target_feature = {json.dumps(feature)}' for feature in features
+    )
+    required = ", ".join(features)
+    profile_name = slug(profile.name)
+    message = (
+        "TSL_RUST_PROFILE_TARGET_FEATURE_MISMATCH: generated Rust profile "
+        f"`{profile_name}` requires rustc target features: {required}"
+    )
+    return (
+        f"#[cfg(not(all({condition})))]\n"
+        f"compile_error!({json.dumps(message)});\n\n"
     )
 
 

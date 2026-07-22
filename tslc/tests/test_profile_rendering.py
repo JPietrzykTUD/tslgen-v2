@@ -72,6 +72,31 @@ def test_backend_selection_is_honored(data_root: Path, machine_profiles_path: Pa
     assert [b.backend_id for b in cpp_only.rendered.verify.backends] == ["cpp"]
 
 
+def test_rust_profile_module_rejects_missing_compile_target_features(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["add"],
+        profiles=["avx2"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    profile = next(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path == "rust/src/tsl_avx2.rs"
+    )
+
+    assert '#[cfg(not(all(target_feature = "avx"' in profile
+    assert 'target_feature = "avx2"' in profile
+    assert 'target_feature = "rdrand"' in profile
+    assert "TSL_RUST_PROFILE_TARGET_FEATURE_MISMATCH" in profile
+    assert "generated Rust profile `avx2` requires rustc target features" in profile
+
+
 def test_generated_project_carries_apache_license_notices(
     data_root: Path,
     machine_profiles_path: Path,

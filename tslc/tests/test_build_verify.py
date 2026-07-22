@@ -17,6 +17,12 @@ import pytest
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.diagnostics import has_errors
 from tslc.maintenance.build_verified import BUILD_VERIFIED_PRIMITIVE_SETS
+from tslc.output.verify_model import (
+    VerifyBackend,
+    VerifyCompileFailure,
+    VerifyProfile,
+    VerifyProject,
+)
 
 pytestmark = pytest.mark.generated_build
 
@@ -369,6 +375,287 @@ def test_cpp_fetch_content_consumer_builds(
         env=env,
     )
     assert built.returncode == 0, built.stderr + built.stdout
+
+
+def test_rust_path_dependency_consumer_builds(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cargo") is None:
+        pytest.skip("cargo not available")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_rust_path_dependency_consumer_builds"),
+        profiles=["scalar"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    consumer = tmp_path / "rust-consumer"
+    (consumer / "src").mkdir(parents=True)
+    (consumer / "Cargo.toml").write_text(
+        textwrap.dedent(
+            f"""
+            [package]
+            name = "tsl-rust-consumer"
+            version = "0.0.0"
+            edition = "2021"
+
+            [dependencies]
+            tsl = {{ path = "{(generated / 'rust').as_posix()}", default-features = false, features = ["scalar"] }}
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (consumer / "src" / "main.rs").write_text(
+        textwrap.dedent(
+            """
+            use tsl::tsl_core::{Scalar, Simd};
+
+            fn main() {
+                let sum = tsl::profile::add::<Simd<i32, Scalar>>(1, 2);
+                assert_eq!(sum, 3);
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    checked = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(consumer / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "rust-consumer-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert checked.returncode == 0, checked.stderr + checked.stdout
+
+
+def test_rust_profile_feature_rejects_missing_target_features(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cargo") is None:
+        pytest.skip("cargo not available")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_rust_profile_feature_rejects_missing_target_features"),
+        profiles=["avx2"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    manifest = generated / "rust" / "Cargo.toml"
+    target_dir = tmp_path / "rust-profile-guard-target"
+    missing = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(manifest),
+            "--no-default-features",
+            "--features",
+            "avx2",
+            "--target-dir",
+            str(target_dir),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert missing.returncode != 0
+    assert "TSL_RUST_PROFILE_TARGET_FEATURE_MISMATCH" in (
+        missing.stderr + missing.stdout
+    )
+
+    rust_backend = next(
+        backend
+        for backend in result.rendered.verify.backends
+        if backend.backend_id == "rust"
+    )
+    profile = rust_backend.profiles[0]
+    env = os.environ.copy()
+    env["RUSTFLAGS"] = f"-C target-feature={','.join(profile.target_features)}"
+    admitted = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(manifest),
+            "--no-default-features",
+            "--features",
+            "avx2",
+            "--target-dir",
+            str(target_dir),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert admitted.returncode == 0, admitted.stderr + admitted.stdout
+
+
+def test_rust_warning_gates_reject_compiler_and_clippy_defects(
+    tmp_path: Path,
+) -> None:
+    if any(shutil.which(tool) is None for tool in ("cargo", "rustc", "cargo-clippy")):
+        pytest.skip("cargo, rustc, and cargo-clippy are required")
+
+    crate = tmp_path / "rust"
+    (crate / "src").mkdir(parents=True)
+    (crate / "Cargo.toml").write_text(
+        textwrap.dedent(
+            """
+            [package]
+            name = "tsl-rust-warning-gate"
+            version = "0.0.0"
+            edition = "2021"
+
+            [features]
+            default = []
+            scalar = []
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (crate / "src" / "lib.rs").write_text(
+        textwrap.dedent(
+            """
+            struct Hidden;
+
+            pub fn exposes_hidden() -> Hidden {
+                Hidden
+            }
+
+            pub fn invalid_bool() -> bool {
+                unsafe { core::mem::MaybeUninit::<bool>::uninit().assume_init() }
+            }
+
+            /// Returns a value documented by a deliberately [`MissingItem`].
+            pub fn broken_rustdoc_link() -> u8 {
+                0
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(VerifyProfile(profile_name="scalar", file_stem="scalar"),),
+            ),
+        )
+    )
+
+    report = verify_project(tmp_path, project, run_quality_checks=True)
+
+    failed_steps = {
+        result.command.step for result in report.commands if result.returncode != 0
+    }
+    assert {"check-warnings", "rustdoc", "clippy"} <= failed_steps
+    details = "\n".join(diagnostic.message for diagnostic in report.diagnostics)
+    assert "-D private-interfaces" in details
+    assert "-D invalid-value" in details
+    assert "clippy::uninit-assumed-init" in details
+    assert "unresolved link to `MissingItem`" in details
+
+
+def test_rust_unsealed_representation_consumer_is_reported(
+    tmp_path: Path,
+) -> None:
+    if any(shutil.which(tool) is None for tool in ("cargo", "rustc")):
+        pytest.skip("cargo and rustc are required")
+
+    crate = tmp_path / "rust"
+    (crate / "src").mkdir(parents=True)
+    (crate / "examples").mkdir()
+    (crate / "Cargo.toml").write_text(
+        textwrap.dedent(
+            """
+            [package]
+            name = "tsl-representation-gate"
+            version = "0.0.0"
+            edition = "2021"
+
+            [features]
+            default = []
+            scalar = []
+            tsl_compile_failures = []
+
+            [[example]]
+            name = "unsealed_consumer"
+            path = "examples/unsealed_consumer.rs"
+            required-features = ["scalar", "tsl_compile_failures"]
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (crate / "src" / "lib.rs").write_text(
+        "pub trait Representation { type Register; }\n",
+        encoding="utf-8",
+    )
+    (crate / "examples" / "unsealed_consumer.rs").write_text(
+        textwrap.dedent(
+            """
+            struct ExternalRepresentation;
+
+            impl tsl_representation_gate::Representation for ExternalRepresentation {
+                type Register = u64;
+            }
+
+            fn main() {}
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    marker = "TSL_RUST_REPRESENTATION_TRAIT_SEALED"
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="scalar",
+                        file_stem="scalar",
+                        compile_failures=(
+                            VerifyCompileFailure("unsealed_consumer", marker),
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+
+    report = verify_project(tmp_path, project)
+
+    assert [diagnostic.code for diagnostic in report.diagnostics] == [
+        "TSL-BUILD-VERIFY-EXPECTED-COMPILE-FAILURE"
+    ]
+    assert "expected compilation to fail" in report.diagnostics[0].message
+    assert marker in report.diagnostics[0].message
 
 
 def test_cpp_auto_profile_configures(

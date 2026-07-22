@@ -477,7 +477,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "069a033178bf5fa624ef764f855cdd2a05c9a48f7983c93d21ffb6d70efbd088"
+        "852990c363b741189402e6c9b2585ae36720d4e3794464faa1b042c4a6ca0019"
     )
 
     assert 'name = "tsl"' in cargo
