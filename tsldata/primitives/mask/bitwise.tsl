@@ -607,7 +607,7 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
     """
   semantics """
     input: integral mask data, scalar shift, generic PreserveSign
-    if shift is greater than or equal to the base type bit width:
+    if shift is greater than or equal to the vector lane count:
       return 0
     if integral mask type is signed and PreserveSign is false:
       return unsigned(data) >> shift
@@ -617,6 +617,8 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
     - {tags [basic], type "ui32", lane_count 16, case {inputs [240, 4], expected 15}}
     - {tags [zero], type "ui32", lane_count 16, case {inputs [0, 4], expected 0}}
     - {tags [width], type "ui32", lane_count 16, case {inputs [1, 32], expected 0}}
+    - {tags [width, narrow], type "ui8", lane_count 16, case {inputs [32768, 8], expected 128}}
+    - {tags [width, narrow], type "ui16", lane_count 32, case {inputs [65536, 16], expected 1}}
   generic_params:
     PreserveSign:
       kind bool
@@ -645,7 +647,7 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
           if<compile>(( value(type::is_signed(vector::imask)) ) && (!PreserveSign)) {
              complete(
                select_expr(
-                 shift >= value(type::size_bits(base::in)),
+                 shift >= value(vector::length),
                  cast<static>(vector::imask, 0),
                  cast<static>(
                    vector::imask,
@@ -656,7 +658,7 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
           } else {
              complete(
                select_expr(
-                 shift >= value(type::size_bits(base::in)),
+                 shift >= value(vector::length),
                  cast<static>(vector::imask, 0),
                  cast<static>(vector::imask, data >> shift)
                )
@@ -684,7 +686,7 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
           tsil """
            complete(
              select_expr(
-               shift >= value(type::size_bits(base::in)),
+               shift >= value(vector::length),
                cast<static>(vector::imask, 0),
                cast<static>(vector::imask, data >> shift)
              )
@@ -697,7 +699,7 @@ prim<im:=(im,usize)> shift_left_imask(data, shift):
     """
   semantics """
     input: integral mask data, scalar shift
-    if shift is greater than or equal to the base type bit width:
+    if shift is greater than or equal to the vector lane count:
       return 0
     return data << shift
     """
@@ -705,6 +707,8 @@ prim<im:=(im,usize)> shift_left_imask(data, shift):
     - {tags [basic], type "ui32", lane_count 16, case {inputs [15, 4], expected 240}}
     - {tags [zero], type "ui32", lane_count 16, case {inputs [0, 4], expected 0}}
     - {tags [width], type "ui32", lane_count 16, case {inputs [1, 32], expected 0}}
+    - {tags [width, narrow], type "ui8", lane_count 16, case {inputs [1, 8], expected 256}}
+    - {tags [width, narrow], type "ui16", lane_count 32, case {inputs [1, 16], expected 65536}}
   impls:
     [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128, scalar, generic, oneapi_fpga]:
       arith:
@@ -728,7 +732,7 @@ prim<im:=(im,usize)> shift_left_imask(data, shift):
           tsil """
             complete(
               select_expr(
-                shift >= value(type::size_bits(base::in)),
+                shift >= value(vector::length),
                 cast<static>(vector::imask, 0),
                 cast<static>(vector::imask, data << shift)
               )
