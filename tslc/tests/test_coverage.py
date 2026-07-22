@@ -106,7 +106,7 @@ def test_scalable_fixed_lane_signatures_are_policy_deferred(
     # Compile/runtime branch-local type aliases no longer leak into the opposite arm's
     # dependency closure. Fixed/scalable reinterpret dependencies may regroup the same
     # register bits across lane widths, so those reachable target-base slots count too.
-    assert "3272 emitted / 3272 attempted" in report
+    assert "3326 emitted / 3326 attempted" in report
     assert "30 policy-deferred slots" in report
     assert "skipped because" not in report
     assert "policy-deferred because" in report

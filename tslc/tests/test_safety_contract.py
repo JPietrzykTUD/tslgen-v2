@@ -683,7 +683,9 @@ def test_source_call_to_caller_unsafe_primitive_uses_local_unsafe(
 
     assert lowered is not None
     assert lowered.body.requires_unsafe is False
-    assert "MaybeUninit" in lowered.body_text
+    assert "Default::default()" in lowered.body_text
+    assert "MaybeUninit" not in lowered.body_text
+    assert "assume_init" not in lowered.body_text
     assert "unsafe { store::<Self, false, _>(tmp.data(), a) }" in lowered.body_text
     assert not lowered.body_text.startswith("unsafe {")
 

@@ -72,10 +72,17 @@ def rust_environment(
         )
     if profile.target_features:
         joined = ",".join(profile.target_features)
-        environment.append(
-            BuildCommandEnvironment(
-                key="RUSTFLAGS",
-                value=f"-C target-feature={joined}",
+        target_feature_flags = f"-C target-feature={joined}"
+        environment.extend(
+            (
+                BuildCommandEnvironment(
+                    key="RUSTFLAGS",
+                    value=target_feature_flags,
+                ),
+                BuildCommandEnvironment(
+                    key="RUSTDOCFLAGS",
+                    value=target_feature_flags,
+                ),
             )
         )
     return tuple(environment)

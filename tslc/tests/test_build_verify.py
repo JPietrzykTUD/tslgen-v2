@@ -1630,7 +1630,7 @@ def test_nullary_constants_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
     # The `v:=()` / `m:=()` nullary constructors: `set_zero` (native `setzero`/`0`),
-    # `set_undef` (native `undefined`/uninit), `mask_false` (`set_zero`-of-mask /
+    # `set_undef` (native `undefined`/valid unspecified value), `mask_false` (`set_zero`-of-mask /
     # scalar `false`). No call closure of their own — they ARE the building blocks other
     # bodies call. Builds in C++ and Rust across scalar + SIMD.
     result = generate_project(

@@ -257,7 +257,7 @@ prim<v:=s[]> from_array(data):
           reasons [compiler_builtin, raw_memory]
         implementation:
           tsil """
-            var<typed>(vector::register, result, value(uninit::array));
+            var<typed>(vector::register, result, call<primitive=set_zero[Vec]>());
             mem<copy>(&result, data.as_ptr(), sizeof(result));
             complete(result);
           """
@@ -281,7 +281,7 @@ prim<v:=s[]> from_array(data):
           reasons [raw_memory]
         implementation:
           tsil """
-            var<typed>(vector::register, result, value(uninit::array));
+            var<typed>(vector::register, result, call<primitive=set_zero[Vec]>());
             mem<copy>(
               cast<reinterpret, type=ptr>(void, &result),
               cast<reinterpret, type=const_ptr>(void, data.as_ptr()),

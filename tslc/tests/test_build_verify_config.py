@@ -598,6 +598,7 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
     assert "--message-format=json" not in build_tests.argv
     env = _env(build_tests)
     assert env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER"] == "rust-lld"
+    assert env["RUSTDOCFLAGS"] == "-C target-feature=+neon"
     warning_gate = next(
         command for command in seen if command.step == "check-warnings"
     )

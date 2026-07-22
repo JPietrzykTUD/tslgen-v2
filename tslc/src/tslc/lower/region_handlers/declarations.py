@@ -25,10 +25,10 @@ class VarLowerer:
     additionally carries ``{type}``. An uninitialized declaration is spelled with
     the exact value forms ``value(uninit::array)`` -> ``var_array_uninit`` and
     ``value(uninit::scalar)`` -> ``var_uninit``; both templates carry ``{type}``
-    so Rust's MaybeUninit gets it (a value region alone cannot supply the type).
-    Other ``uninit::*`` spellings are diagnosed, and an ordinary initializer is
-    never classified by its raw text. The declaration syntax itself is
-    backend-neutral, coming from the ``var_*`` translate templates.
+    so target translations can choose a valid placeholder without inferring its
+    type from rendered text. Other ``uninit::*`` spellings are diagnosed, and an
+    ordinary initializer is never classified by its raw text. The declaration
+    syntax itself is backend-neutral, coming from the ``var_*`` translate templates.
     """
 
     keyword = "var"

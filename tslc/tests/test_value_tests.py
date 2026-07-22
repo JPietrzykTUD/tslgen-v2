@@ -77,6 +77,37 @@ def test_golden_value_tests_build_and_pass(
     _assert_value_tests_ran(report, backends=("cpp",))
 
 
+def test_rust_valid_placeholder_paths_build_and_pass(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["set_undef", "set_zero", "set1", "from_array", "to_array"],
+        profiles=["scalar", "avx2"],
+        backends=("rust",),
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    rust_sources = "\n".join(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path.startswith("rust/")
+        and artifact.logical_path.endswith(".rs")
+    )
+    assert "MaybeUninit" not in rust_sources
+    assert "assume_init" not in rust_sources
+    assert "invalid_value" not in rust_sources
+
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify, run_value_tests=True)
+    _assert_value_tests_ran(report, backends=("rust",))
+
+
 def test_sse_integer_differential_round_trip_builds_and_passes(
     data_root: Path,
     machine_profiles_path: Path,

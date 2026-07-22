@@ -470,7 +470,7 @@ prim<v:=()>[value=undef] set_undef():
           reasons []
         implementation:
           tsil """
-              var<typed>(vector::register, result, value(uninit::array));
+              var<const_infer>(result, call<primitive=set1[Vec]>(cast<static>(base::in, 0)));
               complete(result);
             """
     [generic, oneapi_fpga]:
@@ -557,7 +557,7 @@ prim<v:=()>[value=undef] set_undef():
           reasons []
         implementation:
           tsil """
-              var<typed>(vector::register, value, value(uninit::array));
+              var<const_infer>(value, call<primitive=set1[Vec]>(cast<static>(base::in, 0)));
               complete(value);
             """
     sve:

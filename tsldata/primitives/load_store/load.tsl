@@ -69,7 +69,7 @@ prim<v:=cptr>[aligned=*] load(ptr):
           reasons [compiler_builtin, raw_memory, raw_pointer]
         implementation:
           tsil """
-            var<typed>(vector::register, result, value(uninit::array));
+            var<typed>(vector::register, result, call<primitive=set_zero[Vec]>());
             mem<copy>(&result, ptr, sizeof(result));
             complete(result);
           """
