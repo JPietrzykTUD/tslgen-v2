@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -350,6 +351,27 @@ inline T arith_add(T a, T b) {
     } else {
         return a + b;
     }
+}
+[[noreturn]] inline void arith_zero_divisor_fail() {
+#if defined(__SYCL_DEVICE_ONLY__)
+    __builtin_trap();
+#else
+    throw std::domain_error("TSL_ARITH_INTEGER_ZERO_DIVISOR");
+#endif
+}
+template <class T>
+inline T arith_div(T a, T b) {
+    if constexpr (std::is_integral_v<T>) {
+        if (b == T{0}) {
+            arith_zero_divisor_fail();
+        }
+        if constexpr (std::is_signed_v<T>) {
+            if (a == std::numeric_limits<T>::lowest() && b == T{-1}) {
+                return a;
+            }
+        }
+    }
+    return static_cast<T>(a / b);
 }
 template <class T>
 inline T arith_mul(T a, T b) {

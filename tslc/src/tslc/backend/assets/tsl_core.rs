@@ -203,14 +203,17 @@ pub fn bit_cast<From, To>(value: From) -> To {
     unsafe { core::mem::transmute_copy(&value) }
 }
 
-// Lane arithmetic for the `op<add|sub|mul>` operators: SIMD lane arithmetic WRAPS (modular,
+// Lane arithmetic for the `op<add|sub|mul>` operators and normalized division. SIMD lane
+// add/sub/mul arithmetic WRAPS (modular,
 // matching the hardware and C++). Rust's `+`/`-`/`*` panic on overflow in debug builds, so the
-// integer lanes use the `wrapping_*` ops; float lanes use ordinary arithmetic. The generated
-// per-type impls are monomorphized, so these resolve on the concrete lane type with no bound.
+// integer lanes use the `wrapping_*` ops. Integer division rejects zero before `wrapping_div`,
+// which defines MIN/-1 as MIN; float lanes use ordinary arithmetic. The generated per-type impls
+// are monomorphized, so these resolve on the concrete lane type with no bound.
 pub trait LaneArith: Copy {
     fn tsl_add(self, rhs: Self) -> Self;
     fn tsl_sub(self, rhs: Self) -> Self;
     fn tsl_mul(self, rhs: Self) -> Self;
+    fn tsl_div(self, rhs: Self) -> Self;
 }
 
 macro_rules! wrapping_lane_arith {
@@ -219,6 +222,12 @@ macro_rules! wrapping_lane_arith {
             #[inline] fn tsl_add(self, rhs: Self) -> Self { self.wrapping_add(rhs) }
             #[inline] fn tsl_sub(self, rhs: Self) -> Self { self.wrapping_sub(rhs) }
             #[inline] fn tsl_mul(self, rhs: Self) -> Self { self.wrapping_mul(rhs) }
+            #[inline] fn tsl_div(self, rhs: Self) -> Self {
+                if rhs == 0 {
+                    crate::tsl_core::detail::helpers::arith_zero_divisor_fail();
+                }
+                self.wrapping_div(rhs)
+            }
         } )*
     };
 }
@@ -230,6 +239,7 @@ macro_rules! float_lane_arith {
             #[inline] fn tsl_add(self, rhs: Self) -> Self { self + rhs }
             #[inline] fn tsl_sub(self, rhs: Self) -> Self { self - rhs }
             #[inline] fn tsl_mul(self, rhs: Self) -> Self { self * rhs }
+            #[inline] fn tsl_div(self, rhs: Self) -> Self { self / rhs }
         } )*
     };
 }
@@ -566,6 +576,14 @@ pub mod detail {
 
     pub fn arith_add<T: LaneArith>(a: T, b: T) -> T {
         a.tsl_add(b)
+    }
+    #[cold]
+    #[inline(never)]
+    pub fn arith_zero_divisor_fail() -> ! {
+        panic!("TSL_ARITH_INTEGER_ZERO_DIVISOR")
+    }
+    pub fn arith_div<T: LaneArith>(a: T, b: T) -> T {
+        a.tsl_div(b)
     }
     pub fn arith_mul<T: LaneArith>(a: T, b: T) -> T {
         a.tsl_mul(b)

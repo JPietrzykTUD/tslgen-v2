@@ -165,6 +165,99 @@ def test_lower_wasm128_array_roundtrip_primitives(catalog: Catalog, machine_prof
     assert "return tmp;" in cpp_to.body_text
 
 
+def test_lower_scalar_and_generic_division_use_normalized_lane_helper(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    scalar = next(
+        slot
+        for slot in Selector()
+        .select_profile(catalog, machine_profiles["scalar"], "div", ("si32",))
+        .selected
+        if slot.extension.name == "scalar"
+        and slot.primitive.attributes.get("mask") is None
+    )
+    generic = next(
+        slot
+        for slot in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "div", ("si32",))
+        .selected
+        if slot.extension.name == "generic"
+        and slot.primitive.attributes.get("mask") is None
+    )
+
+    for backend_id, helper_call in (
+        ("cpp", "::tsl::detail::helpers::arith_div"),
+        ("rust", "crate::tsl_core::detail::helpers::arith_div"),
+    ):
+        dialect = create_backend_dialect(catalog, backend_id)
+        scalar_body = Lowerer().lower(scalar, catalog, dialect).specialization
+        generic_body = Lowerer().lower(generic, catalog, dialect).specialization
+        assert scalar_body is not None
+        assert generic_body is not None
+        assert helper_call in scalar_body.body_text
+        assert helper_call in generic_body.body_text
+
+
+def test_lower_generic_masked_division_sanitizes_inactive_operands(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    masked = tuple(
+        slot
+        for slot in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "div", ("si32",))
+        .selected
+        if slot.extension.name == "generic"
+        and slot.primitive.attributes.get("mask") is not None
+    )
+    assert {slot.primitive.attributes.get("mask") for slot in masked} == {
+        "zero",
+        "pass_through",
+    }
+
+    for slot in masked:
+        for backend_id in ("cpp", "rust"):
+            lowered = Lowerer().lower(
+                slot,
+                catalog,
+                create_backend_dialect(catalog, backend_id),
+            ).specialization
+            assert lowered is not None
+            body = lowered.body_text
+            assert "safe_dividend" in body
+            assert "safe_divisor" in body
+            assert body.index("safe_divisor") < body.rindex("div")
+
+
+def test_lower_sve_integer_division_checks_participating_zero_lanes(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slots = tuple(
+        slot
+        for slot in Selector()
+        .select_profile(catalog, machine_profiles["sve"], "div", ("si32",))
+        .selected
+        if slot.extension.name == "sve"
+    )
+    assert len(slots) == 3
+
+    for slot in slots:
+        lowered = Lowerer().lower(
+            slot,
+            catalog,
+            create_backend_dialect(catalog, "cpp"),
+        ).specialization
+        assert lowered is not None
+        body = lowered.body_text
+        assert "arith_zero_divisor_fail" in body
+        assert body.index("arith_zero_divisor_fail") < body.index("svdiv")
+        if slot.primitive.attributes.get("mask") is not None:
+            assert "active_zero_divisors" in body
+            assert "mask_binary_and" in body
+
+
 @pytest.mark.parametrize(
     ("primitive", "type_tag", "expected_cpp", "expected_rust"),
     (
@@ -177,8 +270,8 @@ def test_lower_wasm128_array_roundtrip_primitives(catalog: Catalog, machine_prof
         (
             "div",
             "f32",
-            "return wasm_f32x4_div(divident, divisor);",
-            "unsafe { return core::arch::wasm32::f32x4_div(divident, divisor); }",
+            "return wasm_f32x4_div(dividend, divisor);",
+            "unsafe { return core::arch::wasm32::f32x4_div(dividend, divisor); }",
         ),
         (
             "popcnt",

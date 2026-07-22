@@ -383,7 +383,16 @@ def test_every_registered_region_completes_at_a_valid_tsil_boundary(
         ("intrin<name, b", {"build"}),
         ("intrin<name, build[s", {"suffix"}),
         ("intrin<name, build[i", {"immediate", "infix", "infix_sep"}),
-        ("helper<arith_", {"arith_add", "arith_mul", "arith_rem"}),
+        (
+            "helper<arith_",
+            {
+                "arith_add",
+                "arith_div",
+                "arith_mul",
+                "arith_rem",
+                "arith_zero_divisor_fail",
+            },
+        ),
         ("op<a", {"add"}),
         ("var<const_", {"const_infer", "const_typed", "const_init_register"}),
         ("let<t", {"type"}),
