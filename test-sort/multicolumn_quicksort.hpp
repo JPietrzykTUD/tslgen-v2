@@ -49,7 +49,7 @@ class TslMultiColumnQuickSorter {
   static constexpr std::size_t lane_count = DataSimdStyle::lane_count_v;
   static constexpr std::size_t compute_leaf_threshold() {
     if constexpr (LeafKind == TslLeafKind::NETWORK) {
-      return TslCoSortBitonicLeaf<DataType>::capacity;  // per-type network capacity (256 u32 / 128 u64)
+      return TslCoSortBitonicLeaf<DataType, SimdStyle>::capacity;  // scales with the extension's lane count
     } else {
       return 64;
     }
@@ -215,7 +215,7 @@ class TslMultiColumnQuickSorter {
 
   void leaf(DataType * keys, column_pointers const & cols, std::size_t count) {
     if constexpr (LeafKind == TslLeafKind::NETWORK) {
-      TslCoSortBitonicLeaf<DataType>::sort(keys, cols.data(), column_count, count);
+      TslCoSortBitonicLeaf<DataType, SimdStyle>::sort(keys, cols.data(), column_count, count);
     } else {
       insertion_leaf(keys, cols, count);
     }

@@ -162,12 +162,12 @@ class TslPartitionReplayStep {
   static constexpr std::size_t lane_count = DataSimdStyle::lane_count_v;
 
   static auto low_lane_mask(std::size_t count) {
-    // Integer mask with the low `count` lanes set. Computed directly rather than
-    // shifting to_integral(mask_true): the imask backing register can be wider
-    // than the lane count (e.g. __mmask8 backing a 4-lane vector, where mask_true
-    // reports 0xff), which would corrupt the shift-based construction.
-    using imask_t = typename DataSimdStyle::imask_type;
-    return static_cast<imask_t>((static_cast<std::uint64_t>(1) << count) - static_cast<std::uint64_t>(1));
+    // Integer mask with the low `count` lanes set: take the all-lanes mask and
+    // shift the surplus high lanes out. Requires to_integral(mask_true) to report
+    // exactly lane_count bits, which holds as of TSL v0.2.4 (earlier releases
+    // over-reported for sub-native widths, e.g. 0xff for a 4-lane vector).
+    auto const full_mask = tsl::to_integral<DataSimdStyle>(tsl::mask_true<DataSimdStyle>());
+    return tsl::shift_right_imask<DataSimdStyle>(full_mask, lane_count - count);
   }
 
   static auto lane_mask(std::size_t offset, std::size_t count) {

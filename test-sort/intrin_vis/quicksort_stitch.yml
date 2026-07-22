@@ -1,0 +1,137 @@
+# Concrete eight-lane view of TslPartitionReplayStep::apply in
+# test-sort/cosort_network.hpp for a LESS_THAN partition.
+#
+# LESS_THAN keeps values below pivot 50 on the left. The inputs are:
+#   leftInput  = [80, 10, 70, 60, 20, 90, 30, 50]
+#   rightInput = [81, 11, 71, 61, 21, 91, 31, 51]
+#
+# Classification around that pivot:
+#   badLeft input lanes  = [0, 2, 3, 5, 7]  (5 lanes)
+#   badRight input lanes = [1, 4, 6]        (3 lanes)
+#   swappableCount = min(5, 3) = 3
+#   carryLeftCount = 2, carryRightCount = 0
+#   goodLeftCount = 3, goodRightCount = 5
+#
+# The visualization DSL has no native compress/expand instructions, so this
+# file encodes their exact result for the concrete masks above:
+#   * a zero-masked permutexvar is a stable compress; its indices list the
+#     selected source lanes and its low-lane mask zeros the unused result lanes;
+#   * a merge-masked permutexvar is an expand; its mask names the destination
+#     slots and its passthrough is the vector whose inactive lanes are kept.
+#
+# Since swappableCount is the minimum bad-lane count, only one carry can be
+# nonempty in a stitch. This case exercises carryLeft; exchanging the bad-lane
+# counts gives the symmetric carryRight case.
+#
+# A bad value becomes correctly placed when it crosses to the other side. The
+# unique input values make that movement visible in the completed writes:
+#   writeLeft  = [11, 21, 31, 10, 20, 30, 90, 50]
+#   writeRight = [80, 70, 60, 81, 71, 61, 91, 51]
+# The left pointer commits the first 6 lanes and revisits the trailing 90/50
+# carry; the right pointer commits all 8 lanes in this concrete case.
+
+registers:
+  pivot50:    [50, 50, 50, 50, 50, 50, 50, 50]
+  leftInput:  [80, 10, 70, 60, 20, 90, 30, 50]
+  rightInput: [81, 11, 71, 61, 21, 91, 31, 51]
+
+bitmasks:
+  packFive:  [T, T, T, T, T, F, F, F]
+  packThree: [T, T, T, F, F, F, F, F]
+  packTwo:   [T, T, F, F, F, F, F, F]
+  packNone:  [F, F, F, F, F, F, F, F]
+  leftGood:  [F, F, F, T, T, T, F, F]
+  leftCarry: [F, F, F, F, F, F, T, T]
+  rightGood: [F, F, F, T, T, T, T, T]
+
+layout:
+  columns:
+    - title: Left-side flow
+      results: [badLeft, goodLeft, carryLeft, leftReady, writeLeft]
+    - title: Right-side flow
+      results: [badRight, goodRight, carryRight, rightReady, writeRight]
+
+operations:
+  # Pack the five values that are misplaced on the left: [80, 70, 60, 90, 50].
+  - result: badLeft
+    instruction: permutexvar
+    inputs: [leftInput]
+    indices: [0, 2, 3, 5, 7, 0, 0, 0]
+    mask: packFive
+    mask_mode: zero
+
+  # Pack the three values already valid on the left: [10, 20, 30].
+  - result: goodLeft
+    instruction: permutexvar
+    inputs: [leftInput]
+    indices: [1, 4, 6, 0, 0, 0, 0, 0]
+    mask: packThree
+    mask_mode: zero
+
+  # Pack the three values that are misplaced on the right: [11, 21, 31].
+  - result: badRight
+    instruction: permutexvar
+    inputs: [rightInput]
+    indices: [1, 4, 6, 0, 0, 0, 0, 0]
+    mask: packThree
+    mask_mode: zero
+
+  # Pack the five values already valid on the right: [81, 71, 61, 91, 51].
+  - result: goodRight
+    instruction: permutexvar
+    inputs: [rightInput]
+    indices: [0, 2, 3, 5, 7, 0, 0, 0]
+    mask: packFive
+    mask_mode: zero
+
+  # Three bad-left values can cross; pack the remaining [90, 50] as carry.
+  - result: carryLeft
+    instruction: permutexvar
+    inputs: [badLeft]
+    indices: [3, 4, 0, 0, 0, 0, 0, 0]
+    mask: packTwo
+    mask_mode: zero
+
+  # All three bad-right values can cross, so there is no right carry.
+  - result: carryRight
+    instruction: permutexvar
+    inputs: [badRight]
+    indices: [0, 0, 0, 0, 0, 0, 0, 0]
+    mask: packNone
+    mask_mode: zero
+
+  # Start the left write with crossed bad-right values, then existing good-left values.
+  - result: leftReady
+    instruction: permutexvar
+    inputs: [goodLeft]
+    indices: [0, 0, 0, 0, 1, 2, 0, 0]
+    mask: leftGood
+    mask_mode: merge
+    passthrough: badRight
+
+  # Append the uncommitted left carry: [bad-right | good-left | carry-left].
+  - result: writeLeft
+    instruction: permutexvar
+    inputs: [carryLeft]
+    indices: [0, 0, 0, 0, 0, 0, 0, 1]
+    mask: leftCarry
+    mask_mode: merge
+    passthrough: leftReady
+
+  # Start the right write with its empty carry, then three crossed bad-left values.
+  - result: rightReady
+    instruction: permutexvar
+    inputs: [badLeft]
+    indices: [0, 1, 2, 0, 0, 0, 0, 0]
+    mask: packThree
+    mask_mode: merge
+    passthrough: carryRight
+
+  # Append existing good-right values: [carry-right | bad-left | good-right].
+  - result: writeRight
+    instruction: permutexvar
+    inputs: [goodRight]
+    indices: [0, 0, 0, 0, 1, 2, 3, 4]
+    mask: rightGood
+    mask_mode: merge
+    passthrough: rightReady

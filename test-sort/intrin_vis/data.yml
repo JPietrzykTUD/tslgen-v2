@@ -1,0 +1,12 @@
+registers:
+  a: [a0, a1, a2, a3, a4, a5, a6, a7]
+
+operations:
+  - result: b
+    instruction: permutexvar
+    inputs: [a]
+    indices: [1, 0, 3, 2, 5, 4, 7, 6]
+
+  - result: k
+    instruction: cmpgt
+    inputs: [a, b]
