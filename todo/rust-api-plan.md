@@ -6,6 +6,31 @@ Generate a sound, warning-free Rust library whose ordinary API is expressed in
 logical SIMD values rather than architecture extensions. This document records
 the settled public contract and the implementation work needed to provide it.
 
+## Ownership Boundary
+
+This work is a compiler-owned Rust projection over the existing TSL product; it
+is not a second SIMD library or a second primitive implementation path.
+
+- `tsldata` owns which primitives exist, their language-neutral operations,
+  signatures, operand and overload roles, safety, exact behavior, generic and
+  hardware implementations, tests, and availability. Required new primitives
+  or metadata land as separate projection-neutral source-data slices and must
+  work through the ordinary C++ and Rust primitive APIs before the facade uses
+  them.
+- Compiler core owns the typed schema, validation, selection, lowering, and
+  propagation of those facts. It may define semantic enum vocabulary, but it
+  never decides which primitive has a meaning by inspecting its name,
+  parameter names, documentation, or target text.
+- The Rust backend owns only Rust spelling and boundary adaptation: public
+  types, receiver placement, trait and method names, ownership forwarding,
+  bounds or length checks, packaging, and dispatch presentation. It maps typed
+  source semantic facts to Rust conventions and delegates to the same finalized
+  primitive implementation used by the lower-level generated API.
+- Facade code must not contain lane-wise primitive algorithms, arithmetic edge
+  handling, count normalization, conversion rules, mask representation logic,
+  ISA selection, or a parallel registry keyed by primitive names. If a needed
+  fact is absent, extend `tsldata` and its typed compiler model first.
+
 ## Implementation Order
 
 1. Establish compiler-warning, Clippy-safety, rustdoc, invalid-value,
@@ -23,9 +48,10 @@ the settled public contract and the implementation work needed to provide it.
 6. Remove remaining compiler and rustdoc warnings at their generator source,
    then apply a small documented Clippy policy without broad crate-level
    suppression.
-7. Add the missing source-owned negation and wrapping-shift contracts, then the
-   typed facade planner and the public value, mask, memory, conversion,
-   primitive-method, operator, packaging, and dispatch projections below.
+7. Complete and independently verify the missing projection-neutral source
+   contracts and primitives, including negation, wrapping shifts, lane-preserving
+   conversion, and runtime lane access. Only then add the typed facade planner
+   and the public projections below.
 
 ## Public API Contract
 
@@ -77,6 +103,21 @@ Simd<T, N>
 - `Fixed<N>` is compiler-internal and is not part of the initial public API.
 - A shape is public when `N == 1`, or when `N * bits(T)` is a source-authored
   fixed width. The current ordinary widths are 128, 256, and 512 bits.
+- Generic code expresses that compile-time constraint through the public sealed
+  `SupportedSimd<const N: usize>` marker implemented by supported element
+  types:
+
+  ```rust
+  fn process<T, const N: usize>(value: Simd<T, N>)
+  where
+      T: SimdElement + SupportedSimd<N>,
+  {
+      // ...
+  }
+  ```
+
+  Downstream crates may use the bound but cannot add shapes. Representation
+  selection remains private and is not part of the trait's stable contract.
 - An admitted shape maps statically to one exact hardware implementation when
   the compilation target supports it; otherwise it maps to `Generic<N>`.
 - A fixed vector is never composed from multiple narrower hardware registers.
@@ -108,7 +149,8 @@ The explicit API uses a hardware-neutral dispatcher:
 
 ```rust
 let dispatcher = tsl::Dispatcher::new();
-dispatcher.transform_binary::<tsl::primitive::Add>(
+dispatcher.transform_binary(
+    tsl::ops::Add,
     &left,
     &right,
     &mut output,
@@ -123,13 +165,16 @@ dispatcher.transform_binary::<tsl::primitive::Add>(
 - Detection occurs once per dispatcher and selects a table of whole-algorithm
   entry points. Profile-specific vector types remain inside those entry points.
 - Dispatch never occurs per vector operation or per loop iteration.
-- The concrete algorithm names and operation tags come from the existing typed
-  algorithm facade rather than a hand-maintained runtime list.
+- An operation is an explicit value. Generated built-ins such as `tsl::ops::Add`
+  are zero-sized values; a stateful user operation can be passed by mutable
+  reference. Both use the existing typed algorithm-kernel contracts rather than
+  a hand-maintained runtime list.
 
 Convenience functions expose the same algorithms without an explicit value:
 
 ```rust
-tsl::algorithms::transform_binary::<tsl::primitive::Add>(
+tsl::algorithms::transform_binary(
+    tsl::ops::Add,
     &left,
     &right,
     &mut output,
@@ -151,7 +196,13 @@ value.set_lane(index, new_value)
 ```
 
 - `From<[T; N]> for Simd<T, N>` and `From<Simd<T, N>> for [T; N]` are provided.
-- `lane` and `set_lane` panic when `index >= N`.
+- `lane(&self, index) -> T` and `set_lane(&mut self, index, value) -> ()`
+  panic when `index >= N`. The initial facade has no functional `with_lane`
+  sibling.
+- They delegate to target-independent runtime-index source primitives
+  `extract_value_at` and `insert_value_at`; the mutating wrapper assigns the
+  returned vector to `self`. The existing compile-time-indexed `extract_value`
+  and `insert_value` remain unchanged.
 - There is no `Index`, `IndexMut`, `as_array`, `as_mut_array`, `AsRef`, or
   `AsMut`; these would require references into private selected storage.
 - Vectors implement logical `Copy`, `Clone`, array-style `Debug`, zero-valued
@@ -186,7 +237,12 @@ mask.to_bitmask()
 mask.cast::<U>()
 ```
 
-- `test` and `set` panic when `index >= N`; `count_ones` returns `usize`.
+- `test(&self, index) -> bool` and `set(&mut self, index, value) -> ()` panic
+  when `index >= N`; `count_ones` returns `usize`. The initial facade has no
+  functional mask setter.
+- `set` delegates to a target-independent value-returning `set_mask_lane`
+  source primitive and assigns its result to `self`; `test` uses the existing
+  integral-mask conversion and `test_imask` contracts.
 - Bit `i` corresponds to lane `i`. Input bits above `N` are ignored and output
   bits above `N` are zero.
 - `cast::<U>()` preserves logical lanes and requires an admitted
@@ -271,8 +327,9 @@ implementations delegate to the canonical owned operation.
 Unary `Neg` accepts an owned or borrowed value. It delegates to a new
 target-independent source `neg` primitive rather than constructing `0 - value`
 in the facade. Signed integer negation is wrapping, including `MIN -> MIN`;
-floating negation follows an explicit source contract covering signed zero and
-NaN behavior. Unsigned vectors do not implement `Neg`.
+floating negation toggles only the sign bit. Thus signed zero and infinity swap
+sign, while every other NaN payload bit is preserved and its sign bit is
+toggled. Unsigned vectors do not implement `Neg`.
 
 Integer `add`, `sub`, and `mul` must have exact wrapping semantics in
 `tsldata` before their traits are emitted. The implemented arithmetic contracts
@@ -290,6 +347,15 @@ per-lane counts modulo the lane bit width. `Shl`, `Shr`, `ShlAssign`, and
 arithmetic and unsigned right shift is logical. Immediate and floating
 bit-pattern shifts remain named methods rather than operators.
 
+Shift operators accept every owned or borrowed integer scalar right-hand-side
+type in the generated Rust scalar vocabulary. Per-lane counts use an owned or
+borrowed `Simd<T, N>` matching the shifted value and follow the ordinary four
+owned/borrowed vector combinations. Assignment accepts every corresponding
+scalar or per-lane form. The source primitive family owns the supported scalar
+count types and defines the effective count as the unsigned count bit pattern
+modulo `bits(T)`, including for negative signed counts. Operator wrappers only
+forward the typed count; they do not truncate, reduce, or otherwise normalize it.
+
 ### Conversion
 
 Friendly numeric conversion preserves the logical lane count:
@@ -299,11 +365,19 @@ let result: Simd<U, N> = value.cast::<U>();
 ```
 
 - `Simd<U, N>` must be an admitted shape.
-- A new or normalized target-independent source primitive must define exact
-  scalar-style overflow, rounding, saturation, and NaN behavior.
+- A new target-independent `convert_lanes` source primitive takes an explicit
+  target vector type, requires equal source and target lane counts, and owns the
+  generic baseline plus any hardware specializations. The source/compiler
+  return model must therefore represent a target SIMD type rather than only a
+  target base type within the source extension.
+- The source primitive spells the exact language-neutral per-lane conversion
+  rules, including integer truncation or extension, integer/float rounding,
+  truncating and saturating float-to-integer conversion, and `NaN -> 0` for
+  float-to-integer conversion. The Rust facade documents this contract as
+  matching scalar `as`; neither the facade nor the Rust backend implements it.
 - The current register-width `cast`, which may change lane count and has
   backend-dependent edge behavior, remains available through the existing
-  generated primitive API and is not used to implement this method.
+  generated primitive API and is not the facade method's semantic owner.
 
 Friendly bit-pattern conversion is limited initially to same-width pairs:
 
@@ -328,6 +402,12 @@ required. A caller-unsafe primitive remains an `unsafe fn` with its existing
 typed safety contract. A primitive without a coherent receiver remains a
 generated free function.
 
+The ordinary facade is profile-invariant. A method is included when a generic
+implementation exists. The selected profile may replace that baseline with a
+hardware implementation; if it lacks the specialization, the call falls back
+to generic. A primitive without a generic baseline remains available only
+through the profile-specific lower-level generated API.
+
 Receiver and naming rules are uniform:
 
 - For an ordinary mask-first vector operation, the mask remains the first
@@ -342,6 +422,10 @@ Receiver and naming rules are uniform:
   `shift_left_imm_masked`, and `mul_imm_masked`.
 - Primitive names, parameter names, target text, and documentation prose are
   never inspected to infer roles or semantics.
+- Curated traits and methods are selected from source-authored typed operation,
+  guarantee, operand-role, overload, conversion, memory, and safety facts. The
+  Rust backend may map those semantic enums to Rust spellings, but it has no
+  primitive-name-to-facade table.
 - Curated inherent names are reserved. A collision with a mechanically
   projected method is a deterministic facade-planning error.
 
@@ -371,8 +455,10 @@ direct projection would be unsafe or materially misleading.
 ## Compiler Implementation
 
 1. Carry source-owned fixed shapes and the implemented overload facts through
-   typed selection and lowering. Add `ResolvedPrimitiveOverload | None` to
-   `LoweredSpecialization`; do not reconstruct it in the Rust backend.
+   typed selection and lowering together with the semantic operation,
+   guarantee, operand-role, conversion, memory, and safety facts consumed by
+   the facade. Add `ResolvedPrimitiveOverload | None` to
+   `LoweredSpecialization`; do not reconstruct source facts in the Rust backend.
 2. Introduce small frozen Rust facade descriptors that consume finalized
    primitive signature, attributes, receiver roles, caller safety, lane shape,
    overload, and profile availability.
@@ -390,9 +476,14 @@ direct projection would be unsafe or materially misleading.
 8. Build the explicit dispatcher and global convenience functions from one
    typed algorithm/profile dispatch plan. Runtime code must not rediscover
    requirements from profile names, primitive names, or target text.
-9. Emit `Neg`, `Shl`, and `Shr` only when their exact source primitives and
-   arithmetic contracts are present; the facade never synthesizes their
-   semantics.
+9. Add the projection-neutral target-vector return and scalar-count type
+   capabilities required by `convert_lanes` and wrapping shifts, and carry them
+   through selection, lowering, backend validation, and generated value tests.
+10. Emit curated facade items only when their required typed source operations,
+    roles, guarantees, primitives, and implementations are present. Every
+    canonical wrapper performs only its documented Rust boundary adaptation and
+    then calls the finalized primitive implementation; it never synthesizes TSL
+    semantics.
 
 ## Verification
 
@@ -409,6 +500,15 @@ direct projection would be unsafe or materially misleading.
 - Value tests cover arrays, lanes, masks, slices, misalignment, conversions,
   operators, borrowed operands, integer overflow, wrapping and zeroing shift
   edges, negation edges, division failure, and logical formatting/equality.
+- Each new source prerequisite passes ordinary generated C++ and Rust
+  build/value verification before facade projection tests are added.
+- Owner-equivalence tests prove that facade eligibility and naming consume the
+  typed source facts, and an additive or rename probe proves that no primitive
+  name classifier or second registry exists.
+- Generated-wrapper tests prove that canonical facade bodies contain only
+  bounds/length checks, ownership or type forwarding, and delegation to one
+  finalized primitive implementation; edge semantics remain covered by the
+  source primitive value tests.
 - Representative generic and hardware profiles must produce identical
   target-independent results.
 - Hardware/toolchain-dependent checks remain explicit, injectable, or reported

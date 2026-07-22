@@ -30,6 +30,7 @@ from tslc.output.verify_model import (
     VerifyBackend,
     VerifyProfile,
 )
+from tslc.value_tests.compile_failure import RUST_COMPILE_FAILURE_FEATURE
 
 
 def create_rust_verify_driver() -> VerifyBackendDriver:
@@ -292,7 +293,7 @@ def _rust_command_groups(
                     str(manifest),
                     "--no-default-features",
                     "--features",
-                    f"{profile.profile_name},{failure.target_name}",
+                    f"{profile.profile_name},{RUST_COMPILE_FAILURE_FEATURE}",
                     "--example",
                     failure.target_name,
                     *rust_target_args(profile, config),

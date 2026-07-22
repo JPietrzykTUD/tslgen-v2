@@ -595,9 +595,17 @@ def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverag
         "rust/src/tsl_avx2.rs"
     ]
     assert "EXCLUDE_FROM_ALL" in artifacts["cpp/CMakeLists.txt"]
-    assert 'required-features = ["tsl_compile_failure_' in artifacts[
-        "rust/Cargo.toml"
-    ]
+    rust_manifest = artifacts["rust/Cargo.toml"]
+    assert rust_manifest.count("tsl_compile_failures = []") == 1
+    assert (
+        rust_manifest.count(
+            'required-features = ["tsl_compile_failures", "avx2"]'
+        )
+        == 4
+    )
+    assert "tsl_compile_failure_avx2_" not in rust_manifest.split("[features]")[
+        1
+    ].split("[[bench]]")[0]
 
 
 def test_emitted_name_split_preserves_source_primitive_identity() -> None:

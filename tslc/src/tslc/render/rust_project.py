@@ -40,7 +40,10 @@ from tslc.render.rust_policy_consumption import (
 )
 from tslc.backend.rust_algorithm import rust_algorithm_module
 from tslc.backend.rust_vectors import rust_registrations
-from tslc.value_tests.compile_failure import compile_failure_target_name
+from tslc.value_tests.compile_failure import (
+    RUST_COMPILE_FAILURE_FEATURE,
+    compile_failure_target_name,
+)
 from tslc.value_tests.model import ValueTestProjectPlan
 
 
@@ -495,17 +498,23 @@ def _rust_cargo(
     features.append("variant_benchmarks = []")
     compile_failure_targets: list[str] = []
     if value_tests is not None:
+        if any(
+            profile.compile_failure_cases
+            for profile in value_tests.profiles_for("rust")
+        ):
+            features.append(f"{RUST_COMPILE_FAILURE_FEATURE} = []")
         for profile in value_tests.profiles_for("rust"):
             for case in profile.compile_failure_cases:
                 target = compile_failure_target_name(profile, case)
-                features.append(f"{target} = []")
                 compile_failure_targets.append(
                     "\n".join(
                         (
                             "[[example]]",
                             f'name = "{target}"',
                             f'path = "examples/{target}.rs"',
-                            f'required-features = ["{target}"]',
+                            "required-features = "
+                            f'["{RUST_COMPILE_FAILURE_FEATURE}", '
+                            f'"{slug(profile.profile_name)}"]',
                         )
                     )
                 )

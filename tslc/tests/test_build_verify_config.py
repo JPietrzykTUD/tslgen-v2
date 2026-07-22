@@ -358,6 +358,55 @@ def test_rust_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
     assert str(tmp_path / "rust" / "target" / "scalar") in seen[1].argv
 
 
+def test_rust_compile_failures_share_one_cargo_feature(tmp_path: Path) -> None:
+    marker = "TSL_ARITH_INTEGER_IMMEDIATE_ZERO"
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="zen5",
+                        file_stem="zen5",
+                        compile_failures=(
+                            VerifyCompileFailure("negative_zero", marker),
+                            VerifyCompileFailure("negative_narrowed_zero", marker),
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        if command.step == "compile-failure":
+            return BuildCommandResult(command, 1, stderr=marker)
+        return BuildCommandResult(command, 0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=_config(rust_compiler=sys.executable),
+    )
+
+    assert report.diagnostics == ()
+    compile_failures = [
+        command for command in seen if command.step == "compile-failure"
+    ]
+    assert [
+        command.argv[command.argv.index("--features") + 1]
+        for command in compile_failures
+    ] == ["zen5,tsl_compile_failures", "zen5,tsl_compile_failures"]
+    assert [
+        command.argv[command.argv.index("--example") + 1]
+        for command in compile_failures
+    ] == ["negative_zero", "negative_narrowed_zero"]
+
+
 def test_rust_build_verifier_cross_target_does_not_run_test_binary(
     tmp_path: Path,
 ) -> None:

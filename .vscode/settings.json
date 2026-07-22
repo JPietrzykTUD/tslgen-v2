@@ -4,5 +4,6 @@
             "approve": true,
             "matchCommandLine": true
         }
-    }
+    },
+    "cmake.sourceDirectory": "/workspaces/tslgen-v99/examples/cpp"
 }
