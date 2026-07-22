@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import cast
 
 from tslc.catalog._builder_common import _opt_int
-from tslc.catalog.model import TestArg, TestCase, TestCaseRole
+from tslc.catalog.model import TestArg, TestCase, TestCaseRole, TestFailureReason
 from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS
 from tslc.catalog.test_cases import derive_test_case_name, infer_test_lane_count
@@ -47,6 +47,8 @@ def build_test_cases(
         shape = parse_signature(declaration.signature)
         inputs = _test_inputs(_child(case_field, "inputs"), shape)
         expected = _expected_tokens(_child(case_field, "expected"))
+        failure_field = _child(case_field, "failure")
+        failure = _failure_reason(failure_field)
         attrs = _attr_map(entries.get("attrs"))
         explicit_lane_count = _opt_int(_field_text(entries.get("lane_count")))
         to_type = _field_text(entries.get("to_type"))
@@ -83,6 +85,7 @@ def build_test_cases(
                 # Typing-only narrow: schema validation diagnoses roles outside
                 # TestCaseRole.
                 role=cast(TestCaseRole, _field_text(entries.get("role")) or "value"),
+                failure=failure,
                 lanes=lanes,
                 extension=_field_text(entries.get("extension")),
                 expected_rule=_field_text(entries.get("expected_rule")),
@@ -97,6 +100,11 @@ def build_test_cases(
                 alignment=_opt_int(_field_text(entries.get("alignment"))),
                 attrs=attrs,
                 source=_source_span(item.source),
+                failure_source=(
+                    _source_span(failure_field.source)
+                    if failure_field is not None
+                    else None
+                ),
             )
         )
     _diagnose_duplicate_test_names(declaration.name, cases, diagnostics)
@@ -192,6 +200,17 @@ def _expected_tokens(field: ParsedTslField | None) -> tuple[str, ...]:
     if field is not None and isinstance(field.value, ParsedTslScalarValue):
         return (field.value.text,)
     return _list_text(field)
+
+
+def _failure_reason(field: ParsedTslField | None) -> TestFailureReason | None:
+    text = _field_text(field)
+    if text is None:
+        return None
+    try:
+        return TestFailureReason(text)
+    except ValueError:
+        # Schema validation owns the source-located closed-vocabulary diagnostic.
+        return None
 
 
 __all__ = ("build_test_cases",)

@@ -166,6 +166,10 @@ _CASE_REQUIREMENTS = {
     "reduction": ValueTestCaseRequirements(
         expected="one", vector_inputs="one", vector_inputs_match_lanes=True
     ),
+    "runtime_failure": ValueTestCaseRequirements(
+        required_facts=_RESULT | frozenset({ValueTestFact.FAILURE}),
+        vector_inputs_match_lanes=True,
+    ),
     "repr_cast": ValueTestCaseRequirements(
         expected="target_lanes",
         vector_inputs="one",

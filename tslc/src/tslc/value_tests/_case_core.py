@@ -17,7 +17,7 @@ from tslc.value_tests.case_helpers import (
     vector_inputs as _vector_inputs,
 )
 from tslc.value_tests.literals import token_truthy
-from tslc.value_tests.model import ValueTestCasePlan
+from tslc.value_tests.model import ValueTestCasePlan, ValueTestFailure
 
 def generic_golden_case(
     name: str,
@@ -220,6 +220,33 @@ def compile_only_case(
     )
 
 
+def runtime_failure_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> ValueTestCasePlan | None:
+    if case.role != "runtime_failure" or case.failure is None or case.lanes is None:
+        return None
+    if not _args_match(case, specs[0].param_kinds):
+        return None
+    base_spelling = _base_spelling(specs, case.type_tag)
+    if base_spelling is None:
+        return None
+    return _plan(
+        "runtime_failure",
+        name,
+        index,
+        case,
+        specs,
+        base_spelling,
+        vector_inputs=_vector_inputs(case),
+        mask_inputs=_mask_inputs(case),
+        scalar_inputs=_scalar_inputs(case),
+        failure=ValueTestFailure(reason=case.failure),
+    )
+
+
 def status_pointer_case(
     name: str,
     index: int,
@@ -413,10 +440,14 @@ def immediate_case(
         return None
     base_spelling = _base_spelling(specs, case.type_tag)
     vector_inputs = _vector_inputs(case)
+    mask_inputs = _mask_inputs(case)
     imm_inputs = _scalar_inputs(case)
     if base_spelling is None or len(imm_inputs) != 1 or len(case.expected) != case.lanes:
         return None
-    if len(vector_inputs) != specs[0].param_kinds.count("v"):
+    if (
+        len(vector_inputs) != specs[0].param_kinds.count("v")
+        or len(mask_inputs) != specs[0].param_kinds.count("m")
+    ):
         return None
     return _plan(
         "immediate",
@@ -426,6 +457,7 @@ def immediate_case(
         specs,
         base_spelling,
         vector_inputs=vector_inputs,
+        mask_inputs=mask_inputs,
         expected=case.expected,
         immediate_value=_immediate_value(imm_inputs[0], specs[0].immediate),
         generic_defaults=tuple(default for _name, _type, default in specs[0].generic_params),
@@ -441,6 +473,7 @@ __all__ = (
     "lane_list_case",
     "mask_to_vector_case",
     "compile_only_case",
+    "runtime_failure_case",
     "array_to_vector_case",
     "scalar_result_case",
     "masked_mask_result_case",

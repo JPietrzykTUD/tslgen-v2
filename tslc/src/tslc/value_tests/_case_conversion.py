@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from tslc.catalog.model import Catalog, TestCase
+from tslc.catalog.arithmetic import ArithmeticGuarantee, ArithmeticOperandRole
+from tslc.catalog.model import Catalog, Primitive, TestCase
+from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests.case_helpers import (
     args_match as _args_match,
@@ -10,6 +12,7 @@ from tslc.value_tests.case_helpers import (
     convert_match as _convert_match,
     extension_repr_match as _extension_repr_match,
     function_name as _function_name,
+    immediate_value as _immediate_value,
     load_convert_match as _load_convert_match,
     mask_inputs as _mask_inputs,
     repr_cast_match as _repr_cast_match,
@@ -399,20 +402,26 @@ def differential_fuzz_cases(
     specs: tuple[LoweredSpecialization, ...],
     catalog: Catalog,
     harness: HarnessPrimitiveNames,
+    primitive: Primitive | None = None,
     iterations: int = FUZZ_ITERATIONS,
 ) -> list[ValueTestCasePlan]:
     """Random-input differential cases: one runtime PRNG loop per hardware extension, comparing
     ``prim<Hw>`` against the generic scalar reference ``prim<Ref>`` over ``iterations`` random
-    inputs. Needs no authored inputs — the generic impl is the oracle. All-vector primitives only
-    (the caller restricts to the generic-golden shape); each emitted slot derives its own lane
-    count from the extension width."""
+    inputs. Needs no authored inputs — the generic impl is the oracle. Vector primitives may have
+    one mask argument; each emitted slot derives its own lane count from the extension width."""
 
     spec0 = specs[0]
     if harness.from_array is None:
         return []
-    if not spec0.param_kinds or any(kind != "v" for kind in spec0.param_kinds):
+    if (
+        not spec0.param_kinds
+        or any(kind not in {"m", "v"} for kind in spec0.param_kinds)
+        or spec0.param_kinds.count("m") > 1
+    ):
         return []
     if spec0.result_kind == "m" and harness.to_integral is None:
+        return []
+    if "m" in spec0.param_kinds and harness.to_mask is None:
         return []
     emitted: list[ValueTestCasePlan] = []
     for spec in specs:
@@ -428,6 +437,10 @@ def differential_fuzz_cases(
         base_spelling = _base_spelling((spec,), spec.type_tag)
         if lanes is None or base_spelling is None:
             continue
+        nonzero_argument_index = _fuzz_nonzero_argument_index(
+            primitive,
+            spec.type_tag,
+        )
         function_name = f"fuzz_diff_{spec.extension_name}_{_sanitize(name)}_{spec.type_tag}"
         emitted.append(
             ValueTestCasePlan(
@@ -447,12 +460,37 @@ def differential_fuzz_cases(
                     from_array_name=harness.from_array,
                     to_array_name=harness.to_array,
                     to_integral_name=harness.to_integral,
+                    to_mask_name=harness.to_mask,
+                    nonzero_argument_index=nonzero_argument_index,
                     fuzz_seed=_fuzz_seed(function_name),
                     fuzz_iterations=iterations,
                 ),
             )
         )
     return emitted
+
+
+def _fuzz_nonzero_argument_index(
+    primitive: Primitive | None,
+    type_tag: str,
+) -> int | None:
+    if primitive is None:
+        return None
+    info = SCALAR_TYPE_INFOS.get(type_tag)
+    contract = primitive.arithmetic
+    if (
+        info is None
+        or info.floating
+        or contract is None
+        or not contract.has_guarantee(
+            ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS
+        )
+    ):
+        return None
+    binding = contract.binding(ArithmeticOperandRole.DIVISOR)
+    if binding is None or binding.parameter_kind != "v":
+        return None
+    return binding.parameter_index
 
 
 def differential_cases(
@@ -469,12 +507,21 @@ def differential_cases(
         return []
     base_spelling = _base_spelling(specs, case.type_tag)
     vector_inputs = _vector_inputs(case)
+    mask_inputs = _mask_inputs(case)
+    scalar_inputs = _scalar_inputs(case)
     if base_spelling is None:
         return []
-    if len(vector_inputs) != len(specs[0].param_kinds):
+    if not _args_match(case, specs[0].param_kinds):
         return []
     if specs[0].result_kind == "m" and harness.to_integral is None:
         return []
+    if "m" in specs[0].param_kinds and harness.to_mask is None:
+        return []
+    immediate = None
+    if "sImm" in specs[0].param_kinds:
+        if len(scalar_inputs) != 1 or specs[0].immediate is None:
+            return []
+        immediate = _immediate_value(scalar_inputs[0], specs[0].immediate)
     emitted: list[ValueTestCasePlan] = []
     for spec in specs:
         extension = catalog.extensions.get(spec.extension_name)
@@ -498,7 +545,7 @@ def differential_cases(
                 type_tag=case.type_tag,
                 base_spelling=base_spelling,
                 lanes=case.lanes,
-                inputs=ValueTestInputs(vectors=vector_inputs),
+                inputs=ValueTestInputs(vectors=vector_inputs, masks=mask_inputs),
                 invocation=ValueTestInvocation(
                     result_kind=specs[0].result_kind,
                     param_kinds=specs[0].param_kinds,
@@ -506,12 +553,14 @@ def differential_cases(
                         default
                         for _name, _type, default in specs[0].generic_params
                     ),
+                    immediate=immediate,
                 ),
                 differential=ValueTestDifferential(
                     hardware_extension=spec.extension_name,
                     from_array_name=harness.from_array,
                     to_array_name=harness.to_array,
                     to_integral_name=harness.to_integral,
+                    to_mask_name=harness.to_mask,
                 ),
             )
         )

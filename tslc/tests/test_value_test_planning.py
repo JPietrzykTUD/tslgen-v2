@@ -17,6 +17,7 @@ from tslc.catalog.model import (
     ExtensionMetadata,
     ParamTypeRule,
     Primitive,
+    TestFailureReason as FailureReason,
     TestArg as TslTestArg,
     TestCase as TslTestCase,
 )
@@ -112,6 +113,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
     from_array = values.pop("from_array_name", None)
     to_array = values.pop("to_array_name", None)
     to_integral = values.pop("to_integral_name", None)
+    to_mask = values.pop("to_mask_name", None)
 
     plan = _ValueTestCasePlan(
         **core,
@@ -165,6 +167,10 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
                 from_array_name=from_array or "",
                 to_array_name=to_array,
                 to_integral_name=to_integral,
+                to_mask_name=to_mask,
+                nonzero_argument_index=values.pop(
+                    "nonzero_argument_index", None
+                ),
                 fuzz_seed=values.pop("fuzz_seed", None),
                 fuzz_iterations=values.pop("fuzz_iterations", 0),
             )
@@ -206,6 +212,7 @@ def test_harness_discovery_uses_signatures_not_names() -> None:
         Primitive("lane_in", "v:=s[]", ("data",), (), ()),
         Primitive("lane_out", "s[]:=v", ("data",), (), ()),
         Primitive("mask_bits", "im:=m", ("mask",), (), ()),
+        Primitive("mask_from_bits", "m:=im", ("bits",), (), ()),
         Primitive("load", "v:=cptr", ("ptr",), (), ()),
         Primitive("store", "void:=(ptr,v)", ("ptr", "data"), (), ()),
     )
@@ -215,9 +222,209 @@ def test_harness_discovery_uses_signatures_not_names() -> None:
     assert harness.from_array == "lane_in"
     assert harness.to_array == "lane_out"
     assert harness.to_integral == "mask_bits"
+    assert harness.to_mask == "mask_from_bits"
     assert harness.load == "load"
     assert harness.store == "store"
     assert harness.diagnostics == ()
+
+
+def test_runtime_failure_cases_plan_and_render_for_both_backends(
+    render_assets: RenderAssets,
+) -> None:
+    primitive = Primitive(
+        "div",
+        "v:=(v,v)",
+        ("dividend", "divisor"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="active_zero",
+                type_tag="si32",
+                tags=("failure",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("8", "-9", "10", "-12")),
+                    TslTestArg("vector", values=("2", "0", "-2", "4")),
+                ),
+                expected=(),
+                role="runtime_failure",
+                failure=FailureReason.INTEGER_ZERO_DIVISOR,
+            ),
+        ),
+    )
+    cpp_spec = _spec("div", "div", param_kinds=("v", "v"))
+    rust_spec = replace(
+        cpp_spec,
+        backend_id="rust",
+        base_type_spelling="i32",
+        register_spelling="[i32; 4]",
+    )
+    plan = ValueTestPlanner(
+        _catalog(primitive, *_harness_primitives()),
+        _VALUE_TEST_SUPPORTS,
+    ).plan(
+        _inputs(
+            _profile(
+                cpp={"div": (cpp_spec,)},
+                rust={"div": (rust_spec,)},
+            )
+        )
+    )
+
+    assert plan.diagnostics == ()
+    assert [case.kind for case in plan.profiles_for("cpp")[0].cases] == [
+        "runtime_failure"
+    ]
+    assert [case.kind for case in plan.profiles_for("rust")[0].cases] == [
+        "runtime_failure"
+    ]
+    cpp_source = render_cpp_values_runner(
+        plan.profiles_for("cpp")[0], render_assets
+    )
+    rust_source = render_rust_values_file(plan.profiles_for("rust"), render_assets)
+    assert "catch (const std::domain_error& error)" in cpp_source
+    assert '"TSL_ARITH_INTEGER_ZERO_DIVISOR"' in cpp_source
+    assert "std::panic::catch_unwind" in rust_source
+    assert 'Some("TSL_ARITH_INTEGER_ZERO_DIVISOR")' in rust_source
+
+
+def test_masked_immediate_cases_plan_and_render_for_both_backends(
+    render_assets: RenderAssets,
+) -> None:
+    primitive = Primitive(
+        "mod_imm",
+        "v:=(m,v,sImm)",
+        ("mask", "dividend", "divisor"),
+        ("mask",),
+        (),
+        attributes={"mask": "zero"},
+        tests=(
+            TslTestCase(
+                name="masked_immediate",
+                type_tag="si32",
+                tags=("masked",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("mask", mask_bits="5"),
+                    TslTestArg("vector", values=("10", "-9", "8", "-7")),
+                    TslTestArg("scalar", scalar="3"),
+                ),
+                expected=("1", "0", "2", "0"),
+            ),
+        ),
+    )
+    cpp_spec = _spec(
+        "mod_imm",
+        "mod_imm",
+        param_kinds=("m", "v", "sImm"),
+        immediate=("divisor", "std::int32_t"),
+        mask_policy="zero",
+    )
+    rust_spec = replace(
+        cpp_spec,
+        backend_id="rust",
+        base_type_spelling="i32",
+        register_spelling="[i32; 4]",
+        immediate=("divisor", "i32"),
+    )
+    plan = ValueTestPlanner(
+        _catalog(primitive, *_harness_primitives()),
+        _VALUE_TEST_SUPPORTS,
+    ).plan(
+        _inputs(
+            _profile(
+                cpp={"mod_imm": (cpp_spec,)},
+                rust={"mod_imm": (rust_spec,)},
+            )
+        )
+    )
+
+    assert plan.diagnostics == ()
+    assert [case.kind for case in plan.profiles_for("cpp")[0].cases] == [
+        "immediate"
+    ]
+    assert [case.kind for case in plan.profiles_for("rust")[0].cases] == [
+        "immediate"
+    ]
+    cpp_source = render_cpp_values_runner(
+        plan.profiles_for("cpp")[0], render_assets
+    )
+    rust_source = render_rust_values_file(plan.profiles_for("rust"), render_assets)
+    assert "typename Vec::mask_type m0 = 5ull;" in cpp_source
+    assert "tsl::mod_imm<Vec, 3>(m0, a0)" in cpp_source
+    assert "let m0: <Vec as SimdVector>::MaskType = 5u64;" in rust_source
+    assert "mod_imm::<Vec, 3>(m0, a0)" in rust_source
+
+
+def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverage(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["div", "mod", "mod_imm"],
+        profiles=["avx2"],
+        backends=["cpp", "rust"],
+        test_harness=True,
+        value_test_warnings=True,
+    )
+    assert result.rendered is not None
+    plan = result.rendered.value_tests
+    blocking = [
+        entry
+        for entry in plan.coverage
+        if entry.primitive_name in {"div", "mod", "mod_imm"}
+        and entry.status in {"authored_unplanned", "backend_unsupported"}
+    ]
+    assert not blocking
+
+    for backend in ("cpp", "rust"):
+        cases = [case for profile in plan.profiles_for(backend) for case in profile.cases]
+        failure_cases = [
+            case
+            for case in cases
+            if case.kind == "runtime_failure"
+            and (case.call_name.startswith("div") or case.call_name.startswith("mod"))
+        ]
+        assert len(failure_cases) == 6
+        assert all(case.failure is not None for case in failure_cases)
+        assert all(case.differential is None for case in failure_cases)
+
+        masked_differentials = [
+            case
+            for case in cases
+            if case.kind == "differential"
+            and case.inputs.masks
+            and (case.call_name.startswith("div") or case.call_name.startswith("mod"))
+        ]
+        assert masked_differentials
+        assert all(
+            case.differential is not None
+            and case.differential.to_mask_name == "to_mask"
+            for case in masked_differentials
+        )
+        assert any(
+            case.call_name in {"mod_imm_mask", "mod_imm_maskz"}
+            and case.invocation.immediate is not None
+            for case in masked_differentials
+        )
+        differential_names = {
+            case.case_name for case in cases if case.kind == "differential"
+        }
+        assert differential_names >= {
+            "mod_si32_edge_overflow",
+            "mod_si32_edge_signs",
+        }
+        if backend == "cpp":
+            assert "div_si32_edge_overflow_signs" in differential_names
+        else:
+            assert any(
+                case.kind == "generic_golden"
+                and case.case_name == "div_si32_edge_overflow_signs"
+                for case in cases
+            )
 
 
 def test_emitted_name_split_preserves_source_primitive_identity() -> None:
@@ -2990,6 +3197,7 @@ def _harness_primitives() -> tuple[Primitive, ...]:
         Primitive("lane_in", "v:=s[]", ("data",), (), ()),
         Primitive("lane_out", "s[]:=v", ("data",), (), ()),
         Primitive("mask_bits", "im:=m", ("mask",), (), ()),
+        Primitive("mask_from_bits", "m:=im", ("bits",), (), ()),
         Primitive("load", "v:=cptr", ("ptr",), (), ()),
         Primitive("store", "void:=(ptr,v)", ("ptr", "data"), (), ()),
     )

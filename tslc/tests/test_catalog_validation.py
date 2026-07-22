@@ -2541,7 +2541,7 @@ def test_validator_kind_sets_derive_from_typed_catalog_kinds() -> None:
     ) == {"bool", "int", "simd_type"}
     assert _schema_tests.KNOWN_TEST_ROLES == frozenset(
         get_args(model.TestCaseRole)
-    ) == {"value", "compile"}
+    ) == {"value", "compile", "runtime_failure", "compile_failure"}
     assert schema_extensions.KNOWN_MASK_POLICY_KINDS == frozenset(
         get_args(model.MaskPolicyKind)
     ) == {

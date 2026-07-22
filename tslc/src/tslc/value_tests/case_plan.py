@@ -10,6 +10,7 @@ from tslc.value_tests.case_components import (
     ValueTestCaseRequirements,
     ValueTestDifferential,
     ValueTestExpectation,
+    ValueTestFailure,
     ValueTestFact,
     ValueTestIndex,
     ValueTestInputs,
@@ -43,6 +44,7 @@ class ValueTestCasePlan:
     representation: ValueTestRepresentation | None = None
     scalable: ValueTestScalable | None = None
     differential: ValueTestDifferential | None = None
+    failure: ValueTestFailure | None = None
     # Optional generated C++ header group needed by this case (for example
     # ``clang`` for compiler-builtin overlay extensions). The runner guards
     # such cases and the build emits a matching opt-in value-test target.
@@ -258,6 +260,7 @@ class ValueTestCasePlan:
                 self.scalable is not None and self.scalable.load_name is not None
             ),
             ValueTestFact.DIFFERENTIAL: self.differential is not None,
+            ValueTestFact.FAILURE: self.failure is not None,
         }
         return checks[fact]
 

@@ -17,6 +17,7 @@ from tslc.value_tests.case_components import (
     ValueTestCaseRequirements,
     ValueTestDifferential,
     ValueTestExpectation,
+    ValueTestFailure,
     ValueTestFact,
     ValueTestIndex,
     ValueTestInputs,
@@ -44,6 +45,7 @@ class HarnessPrimitiveNames:
     from_array: str | None
     to_array: str | None
     to_integral: str | None
+    to_mask: str | None = None
     load: str | None = None
     store: str | None = None
     diagnostics: tuple[Diagnostic, ...] = ()
@@ -118,6 +120,7 @@ __all__ = (
     "HarnessPrimitiveNames",
     "IndexStyle",
     "MemoryStorage",
+    "ValueTestFailure",
     "ValueTestBackendSupport",
     "ValueTestCaseCapability",
     "ValueTestCasePlan",

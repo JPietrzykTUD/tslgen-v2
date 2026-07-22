@@ -6,7 +6,9 @@ from collections.abc import Hashable
 
 from tslc.catalog.arithmetic import (
     ARITHMETIC_GUARANTEE_SPECS,
+    ArithmeticGuarantee,
     ArithmeticNumericDomain,
+    ArithmeticOperandRole,
 )
 from tslc.catalog.model import Catalog, Primitive
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS, ScalarTypeInfo
@@ -23,6 +25,8 @@ def validate_arithmetic_contracts(
 
     for name in sorted(families):
         declarations = _unique_source_declarations(families[name])
+        for primitive in declarations:
+            _validate_failure_cases(primitive, diagnostics)
         annotated = tuple(
             primitive for primitive in declarations if primitive.arithmetic is not None
         )
@@ -98,6 +102,80 @@ def validate_arithmetic_contracts(
                     )
                 )
             _validate_domains(catalog, primitive, diagnostics)
+
+
+def _validate_failure_cases(
+    primitive: Primitive,
+    diagnostics: list[Diagnostic],
+) -> None:
+    for case in primitive.tests:
+        if case.role not in {"runtime_failure", "compile_failure"}:
+            continue
+        contract = primitive.arithmetic
+        source = case.failure_source or case.source or primitive.source
+        if contract is None or not contract.has_guarantee(
+            ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS
+        ):
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TEST-FAILURE-CONTRACT",
+                    message=(
+                        f"primitive {primitive.name!r} test {case.name!r}: "
+                        "integer-zero-divisor failure requires arithmetic guarantee "
+                        f"{ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS.value!r}"
+                    ),
+                    source=source,
+                )
+            )
+            continue
+        binding = contract.binding(ArithmeticOperandRole.DIVISOR)
+        if binding is None:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TEST-FAILURE-DIVISOR",
+                    message=(
+                        f"primitive {primitive.name!r} test {case.name!r}: "
+                        "integer-zero-divisor failure requires a resolved divisor role"
+                    ),
+                    source=source,
+                )
+            )
+            continue
+        info = SCALAR_TYPE_INFOS.get(case.type_tag)
+        if info is not None and info.floating:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TEST-FAILURE-DOMAIN",
+                    message=(
+                        f"primitive {primitive.name!r} test {case.name!r}: "
+                        "integer-zero-divisor failure requires an integer lane type"
+                    ),
+                    source=source,
+                )
+            )
+        expected_kind = "sImm" if case.role == "compile_failure" else None
+        phase_matches = (
+            binding.parameter_kind == expected_kind
+            if expected_kind is not None
+            else binding.parameter_kind != "sImm"
+        )
+        if not phase_matches:
+            phase = "compile-time sImm" if case.role == "compile_failure" else "runtime"
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TEST-FAILURE-PHASE",
+                    message=(
+                        f"primitive {primitive.name!r} test {case.name!r}: role "
+                        f"{case.role!r} requires a {phase} divisor binding, got "
+                        f"{binding.parameter_kind!r}"
+                    ),
+                    source=source,
+                )
+            )
 
 
 def _validate_domains(

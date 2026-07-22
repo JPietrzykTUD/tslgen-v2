@@ -123,7 +123,8 @@ class _GenericGoldenPattern(_BasePattern):
                 context.specs,
                 context.catalog,
                 context.harness,
-                context.iterations,
+                primitive=context.primitive,
+                iterations=context.iterations,
             )
         )
 
@@ -192,7 +193,38 @@ class _MaskedPattern(_BasePattern):
                     context.backend,
                 )
             )
+            if (
+                context.backend.supports_differential
+                and context.harness.round_trip_ready
+            ):
+                plans.extend(
+                    differential_cases(
+                        context.emitted_name,
+                        context.index,
+                        context.case,
+                        context.specs,
+                        context.catalog,
+                        context.harness,
+                    )
+                )
         return tuple(plans)
+
+    def fuzz_cases(self, context: ValueTestFuzzContext) -> tuple[ValueTestCasePlan, ...]:
+        if not (
+            context.backend.supports_differential
+            and context.harness.round_trip_ready
+        ):
+            return ()
+        return tuple(
+            differential_fuzz_cases(
+                context.emitted_name,
+                context.specs,
+                context.catalog,
+                context.harness,
+                primitive=context.primitive,
+                iterations=context.iterations,
+            )
+        )
 
 
 class _VectorConstantPattern(_BasePattern):
@@ -326,12 +358,33 @@ class _ImmediatePattern(_BasePattern):
             spec.result_kind == "v"
             and spec.immediate is not None
             and self.support.immediate_kind in spec.param_kinds
-            and all(kind in ("v", self.support.immediate_kind) for kind in spec.param_kinds)
+            and all(
+                kind in ("m", "v", self.support.immediate_kind)
+                for kind in spec.param_kinds
+            )
+            and spec.param_kinds.count("m") <= 1
             and spec.target is None
-            and spec.mask_policy is None
+            and spec.mask_policy in (None, "zero", "pass_through")
             and not spec.axis
             and not spec.type_params
         )
+
+    def source_primitive(
+        self,
+        catalog: Catalog,
+        source_name: str,
+        spec: LoweredSpecialization,
+    ) -> Primitive | None:
+        for primitive in catalog.primitives_named(source_name, unmasked=False):
+            shape = parse_signature(primitive.signature)
+            if (
+                shape is not None
+                and shape.result_kind == spec.result_kind
+                and shape.param_kinds == spec.param_kinds
+                and primitive.attributes.get("mask") == spec.mask_policy
+            ):
+                return primitive
+        return None
 
     def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = immediate_case(
@@ -340,7 +393,22 @@ class _ImmediatePattern(_BasePattern):
             context.case,
             context.specs,
         )
-        return (plan,) if plan is not None else ()
+        plans = [plan] if plan is not None else []
+        if (
+            context.backend.supports_differential
+            and context.harness.round_trip_ready
+        ):
+            plans.extend(
+                differential_cases(
+                    context.emitted_name,
+                    context.index,
+                    context.case,
+                    context.specs,
+                    context.catalog,
+                    context.harness,
+                )
+            )
+        return tuple(plans)
 
 __all__ = (
     "_GenericGoldenPattern",

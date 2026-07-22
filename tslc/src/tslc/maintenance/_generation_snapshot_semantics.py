@@ -36,6 +36,7 @@ from tslc.pipeline import CoverageEntry, GenerationResult, SkippedEntry
 from tslc.value_tests.case_components import (
     ValueTestDifferential,
     ValueTestExpectation,
+    ValueTestFailure,
     ValueTestIndex,
     ValueTestInputs,
     ValueTestInvocation,
@@ -294,6 +295,7 @@ def _serialize_value_test_case(case: ValueTestCasePlan) -> dict[str, object]:
         "lanes": case.lanes,
         "inputs": _serialize_value_test_inputs(case.inputs),
         "expectation": _serialize_value_test_expectation(case.expectation),
+        "failure": _serialize_value_test_failure(case.failure),
         "invocation": _serialize_value_test_invocation(case.invocation),
         "target": _serialize_value_test_target(case.target),
         "index": _serialize_value_test_index(case.index),
@@ -317,6 +319,14 @@ def _serialize_value_test_inputs(value: ValueTestInputs) -> dict[str, object]:
 
 def _serialize_value_test_expectation(value: ValueTestExpectation) -> dict[str, object]:
     return {"values": value.values, "text": value.text}
+
+
+def _serialize_value_test_failure(
+    value: ValueTestFailure | None,
+) -> dict[str, object] | None:
+    if value is None:
+        return None
+    return {"reason": value.reason.value}
 
 
 def _serialize_value_test_invocation(value: ValueTestInvocation) -> dict[str, object]:
@@ -404,6 +414,8 @@ def _serialize_value_test_differential(
         "from_array_name": value.from_array_name,
         "to_array_name": value.to_array_name,
         "to_integral_name": value.to_integral_name,
+        "to_mask_name": value.to_mask_name,
+        "nonzero_argument_index": value.nonzero_argument_index,
         "fuzz_seed": value.fuzz_seed,
         "fuzz_iterations": value.fuzz_iterations,
     }

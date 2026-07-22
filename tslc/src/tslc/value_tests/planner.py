@@ -17,7 +17,7 @@ from tslc.value_tests._pattern_base import (
     unplanned_case_reason,
 )
 from tslc.value_tests.case_capabilities import DEFAULT_VALUE_TEST_CASE_REQUIREMENTS
-from tslc.value_tests.case_plans import compile_only_case
+from tslc.value_tests.case_plans import compile_only_case, runtime_failure_case
 from tslc.value_tests.coverage import (
     CoverageIdentity,
     ValueTestCaseDrop,
@@ -119,7 +119,9 @@ class ValueTestPlanner:
                     continue
                 if self._fuzz and pattern is not None:
                     fuzz_planned = pattern.fuzz_cases(
-                        self._fuzz_context(backend, emitted_name, specs, harness)
+                        self._fuzz_context(
+                            backend, emitted_name, specs, harness, primitive
+                        )
                     )
                     fuzz_supported, fuzz_drops = self._supported_cases(
                         fuzz_planned,
@@ -167,6 +169,14 @@ class ValueTestPlanner:
                     if test_case.role == "compile":
                         plan = compile_only_case(emitted_name, index, test_case, specs)
                         planned = (plan,) if plan is not None else ()
+                    elif test_case.role == "runtime_failure":
+                        plan = runtime_failure_case(
+                            emitted_name, index, test_case, specs
+                        )
+                        planned = (plan,) if plan is not None else ()
+                    elif test_case.role == "compile_failure":
+                        # Slice 5 lowers these into negative-compilation units.
+                        planned = ()
                     else:
                         planned = (
                             pattern.plan_case(case_context) if pattern is not None else ()
@@ -236,9 +246,16 @@ class ValueTestPlanner:
         emitted_name: str,
         specs: tuple[LoweredSpecialization, ...],
         harness: HarnessPrimitiveNames,
+        primitive: Primitive,
     ) -> ValueTestFuzzContext:
         return ValueTestFuzzContext(
-            backend, emitted_name, specs, self._catalog, harness, self._fuzz_iterations
+            backend,
+            emitted_name,
+            specs,
+            self._catalog,
+            harness,
+            self._fuzz_iterations,
+            primitive,
         )
 
     def _pattern_for(self, specs: tuple[LoweredSpecialization, ...]) -> ValueTestPattern | None:
@@ -377,6 +394,11 @@ def _missing_differential_helpers(
     for role, helper_name in (
         ("from_array", differential.from_array_name),
         (result_role, result_helper),
+        *(
+            (("to_mask", differential.to_mask_name),)
+            if "m" in case.invocation.param_kinds
+            else ()
+        ),
     ):
         if helper_name is None:
             missing.append(role)

@@ -13,6 +13,7 @@ from tslc.catalog.arithmetic import (
     ArithmeticOperation,
 )
 from tslc.catalog.builder import CatalogBuilder
+from tslc.catalog.model import TestFailureReason as FailureReason
 from tslc.catalog.validation import validate_catalog
 from tslc.catalog_cli import _primitive
 from tslc.catalog_index import build_catalog_index
@@ -51,6 +52,33 @@ def _contract(
 
 def _source(contract: str, *, signature: str = "v:=(v,v)") -> str:
     return f"prim<{signature}> synthetic_arithmetic(dividend, divisor):\n{contract}"
+
+
+def _failure_source(
+    *,
+    role: str = "runtime_failure",
+    type_tag: str = "si32",
+    signature: str = "v:=(v,v)",
+    failure: str = "integer_zero_divisor",
+    expected: str = "",
+) -> str:
+    inputs = (
+        "[[8, -9, 10, -12], 0]"
+        if signature.endswith("sImm)")
+        else "[[8, -9, 10, -12], [2, 0, -2, 4]]"
+    )
+    return (
+        _source(
+            _contract(
+                operations="division",
+                guarantees="integer_zero_divisor_fails",
+            ),
+            signature=signature,
+        )
+        + "  tests:\n"
+        + f'    - {{role "{role}", tags [failure], type "{type_tag}", '
+        + f'case {{inputs {inputs}, failure "{failure}"{expected}}}}}\n'
+    )
 
 
 def _build(text: str):
@@ -242,6 +270,58 @@ def test_masked_family_binding_compares_non_mask_ordinal() -> None:
     assert not any(
         "ARITHMETIC" in item.code for item in _all_diagnostics(source)
     )
+
+
+def test_runtime_failure_case_promotes_closed_reason_with_source() -> None:
+    _parsed, catalog, diagnostics = _build(_failure_source())
+
+    assert diagnostics == ()
+    (case,) = catalog.primitives[0].tests
+    assert case.role == "runtime_failure"
+    assert case.failure is FailureReason.INTEGER_ZERO_DIVISOR
+    assert case.failure_source is not None
+    assert case.failure_source.path == _PATH
+
+
+@pytest.mark.parametrize(
+    ("source", "code"),
+    (
+        (
+            _failure_source(failure="future_failure"),
+            "TSL-CATALOG-INVALID-ENUM",
+        ),
+        (
+            _failure_source().replace(
+                'failure "integer_zero_divisor"',
+                "failure [integer_zero_divisor]",
+            ),
+            "TSL-CATALOG-TEST-BAD-FAILURE",
+        ),
+        (
+            _failure_source(expected=", expected [4, 0, -5, -3]"),
+            "TSL-CATALOG-TEST-FAILURE-HAS-EXPECTED",
+        ),
+        (
+            _failure_source(type_tag="f32"),
+            "TSL-CATALOG-TEST-FAILURE-DOMAIN",
+        ),
+        (
+            _failure_source(signature="v:=(v,sImm)"),
+            "TSL-CATALOG-TEST-FAILURE-PHASE",
+        ),
+        (
+            _failure_source(role="compile_failure"),
+            "TSL-CATALOG-TEST-FAILURE-PHASE",
+        ),
+    ),
+)
+def test_arithmetic_failure_cases_reject_invalid_reason_domain_and_phase(
+    source: str,
+    code: str,
+) -> None:
+    diagnostics = _all_diagnostics(source)
+
+    assert any(item.code == code and item.span is not None for item in diagnostics)
 
 
 @pytest.mark.parametrize(

@@ -34,6 +34,7 @@ class ValueTestFuzzContext:
     catalog: Catalog
     harness: HarnessPrimitiveNames
     iterations: int
+    primitive: Primitive
 
 
 class CasePlanBuilder(Protocol):

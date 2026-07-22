@@ -124,7 +124,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         actual["skip_inventory_sha256"]
     )
     assert actual["skip_inventory_sha256"] == (
-        "94d0af06589b07e6a424556ee46a9cd1e7421b2331fcc3e09dff96138d0d0a85"
+        "520b58e114f41975032ac3929331ee7f9f09881bade15ee2c45298a49ab5ed2a"
     )
 
 

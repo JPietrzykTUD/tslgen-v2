@@ -19,6 +19,8 @@ def _plan(
     result_kind: str = "v",
     call_name: str = "add",
     param_kinds: tuple[str, ...] = ("v", "v"),
+    to_mask_name: str | None = None,
+    nonzero_argument_index: int | None = None,
 ) -> ValueTestCasePlan:
     return ValueTestCasePlan(
         kind="differential_fuzz",
@@ -37,6 +39,8 @@ def _plan(
             from_array_name="from_array",
             to_array_name="to_array",
             to_integral_name="to_integral",
+            to_mask_name=to_mask_name,
+            nonzero_argument_index=nonzero_argument_index,
             fuzz_seed=12345,
             fuzz_iterations=256,
         ),
@@ -82,6 +86,34 @@ def test_fuzz_renderer_handles_unary_arity() -> None:
     assert "hin0" in code and "hin1" not in code  # exactly one input array
 
 
+def test_fuzz_renderer_keeps_unmasked_participating_divisors_nonzero() -> None:
+    code = _differential_fuzz(
+        _plan(
+            call_name="div",
+            nonzero_argument_index=1,
+        )
+    )
+
+    assert "if (v1 == static_cast<int32_t>(0)) v1 = static_cast<int32_t>(1);" in code
+
+
+def test_fuzz_renderer_zeros_inactive_masked_divisors_without_evaluating_them() -> None:
+    code = _differential_fuzz(
+        _plan(
+            call_name="div",
+            param_kinds=("m", "v", "v"),
+            to_mask_name="to_mask",
+            nonzero_argument_index=2,
+        )
+    )
+
+    assert "tsl::to_mask<Hw>" in code and "tsl::to_mask<Ref>" in code
+    assert "tsl::div<Hw>(hm, tsl::from_array<Hw>(hin0)" in code
+    assert "((mask_bits >> i) & 1ULL) == 0" in code
+    assert "v1 = static_cast<int32_t>(0);" in code
+    assert "else if (v1 == static_cast<int32_t>(0))" in code
+
+
 # --------------------------------------------------------------------------- integration
 
 
@@ -115,6 +147,43 @@ def test_fuzz_cases_emitted_only_when_enabled(
     # default value-test generation is unchanged — no fuzz leaks in
     assert "fuzz_diff" not in without_fuzz
     assert "fuzz_next" not in without_fuzz
+
+
+def test_division_fuzz_uses_typed_divisor_binding_only_for_integer_slots(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["div"],
+        profiles=["avx2"],
+        backends=["cpp"],
+        test_harness=True,
+        value_test_fuzz=True,
+    )
+    assert result.rendered is not None
+    cases = [
+        case
+        for profile in result.rendered.value_tests.profiles_for("cpp")
+        for case in profile.cases
+        if case.kind == "differential_fuzz"
+        and case.call_name in {"div", "div_mask", "div_maskz"}
+    ]
+
+    assert cases
+    assert {
+        (case.call_name, case.type_tag, case.differential.nonzero_argument_index)
+        for case in cases
+        if case.differential is not None and case.type_tag in {"si32", "f32"}
+    } >= {
+        ("div", "si32", 1),
+        ("div_mask", "si32", 2),
+        ("div_maskz", "si32", 2),
+        ("div", "f32", None),
+        ("div_mask", "f32", None),
+        ("div_maskz", "f32", None),
+    }
 
 
 def test_fuzz_covers_every_arith_type(data_root: Path, machine_profiles_path: Path) -> None:
