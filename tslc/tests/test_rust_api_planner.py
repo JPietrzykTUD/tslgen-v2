@@ -1,0 +1,612 @@
+"""Typed, render-independent planning for the ordinary Rust facade."""
+
+from __future__ import annotations
+
+from dataclasses import replace
+from pathlib import Path
+
+import pytest
+
+from tslc.api import generate_project
+from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.rust_api_model import (
+    RustFacadeCoverageStatus,
+    RustFacadeParameterPlacement,
+    RustFacadeReceiverKind,
+    RustFacadeTraitRhsKind,
+)
+from tslc.backend.rust_api_planner import (
+    RustFacadePlanningError,
+    plan_rust_facade,
+)
+from tslc.backend.rust_static_selection import (
+    RustStaticFallbackModule,
+    RustStaticSelectionPlan,
+    RustStaticVectorMapping,
+    plan_rust_static_selection,
+)
+from tslc.catalog.arithmetic import (
+    ArithmeticContract,
+    ArithmeticGuarantee,
+    ArithmeticOperandBinding,
+    ArithmeticOperandRole,
+    ArithmeticOperation,
+)
+from tslc.catalog.conversion import (
+    ConversionKind,
+    LaneCountRelation,
+    NumericConversionMode,
+    PrimitiveConversionContract,
+)
+from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.model import ImplementationSafety
+from tslc.catalog.overloads import ResolvedPrimitiveOverload
+from tslc.catalog.semantics import (
+    OperandBinding,
+    OperandRole,
+    PrimitiveOperation,
+    PrimitiveSemanticContract,
+)
+from tslc.diagnostics import has_errors
+from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam
+from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
+from tslc.lower.target_vectors import TargetVector
+from tslc.target_text import LoweredBody
+
+
+def _operation(
+    kind: PrimitiveOperation,
+    roles: tuple[tuple[OperandRole, int, str], ...],
+    names: tuple[str, ...],
+) -> PrimitiveSemanticContract:
+    return PrimitiveSemanticContract(
+        kind,
+        tuple(
+            OperandBinding(role, names[index], index, parameter_kind)
+            for role, index, parameter_kind in roles
+        ),
+    )
+
+
+def _spec(
+    name: str,
+    *,
+    result_kind: str = "v",
+    param_names: tuple[str, ...] = ("data", "value"),
+    param_kinds: tuple[str, ...] = ("v", "s"),
+    operation: PrimitiveOperation = PrimitiveOperation.BIT_AND_NOT,
+    roles: tuple[tuple[OperandRole, int, str], ...] = (
+        (OperandRole.PRIMARY, 0, "v"),
+        (OperandRole.SECONDARY, 1, "s"),
+    ),
+    overload: ResolvedPrimitiveOverload | None = None,
+    immediate: tuple[str, str] | None = None,
+    mask_policy: str | None = None,
+    safety: ImplementationSafety = ImplementationSafety(),
+    arithmetic: ArithmeticContract | None = None,
+    conversion: PrimitiveConversionContract | None = None,
+    emitted_name: str | None = None,
+) -> LoweredSpecialization:
+    return LoweredSpecialization(
+        backend_id="rust",
+        primitive_name=emitted_name or name,
+        source_primitive_name=name,
+        extension_name="generic",
+        type_tag="si32",
+        base_type_spelling="i32",
+        register_spelling="array_type<i32, LANES>",
+        result_kind=result_kind,
+        param_names=param_names,
+        param_kinds=param_kinds,
+        body=LoweredBody.from_text(""),
+        primitive_semantics=LoweredPrimitiveSemantics(
+            overload=overload,
+            arithmetic=arithmetic,
+            operation=_operation(operation, roles, param_names),
+            conversion=conversion,
+        ),
+        uses_sized_vector=True,
+        lane_parameter="LANES",
+        immediate=immediate,
+        mask_policy=mask_policy,
+        safety=safety,
+    )
+
+
+def _arithmetic_spec(name: str = "sum") -> LoweredSpecialization:
+    names = ("left", "right")
+    arithmetic = ArithmeticContract(
+        frozenset({ArithmeticOperation.ADDITION}),
+        (
+            ArithmeticOperandBinding(
+                ArithmeticOperandRole.PRIMARY, "left", 0, 0, "v"
+            ),
+            ArithmeticOperandBinding(
+                ArithmeticOperandRole.SECONDARY, "right", 1, 1, "v"
+            ),
+        ),
+        frozenset({ArithmeticGuarantee.INTEGER_WRAPPING}),
+    )
+    return _spec(
+        name,
+        param_names=names,
+        param_kinds=("v", "v"),
+        roles=(),
+        arithmetic=arithmetic,
+    )
+
+
+def _plan(
+    *specs: LoweredSpecialization,
+    profiles: tuple[EmittedProfile, ...] = (),
+) -> RustStaticSelectionPlan:
+    by_name: dict[str, list[LoweredSpecialization]] = {}
+    for spec in specs:
+        by_name.setdefault(spec.primitive_name, []).append(spec)
+    return RustStaticSelectionPlan(
+        profiles=(),
+        fallback_mappings=(
+            RustStaticVectorMapping(
+                "si32", "i32", 4, 128, "Simd<i32, Generic<4>>"
+            ),
+        ),
+        fallback_module=RustStaticFallbackModule(
+            tuple(
+                (name, tuple(group)) for name, group in sorted(by_name.items())
+            ),
+            (),
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    (
+        (
+            _spec(
+                "shift_left",
+                overload=ResolvedPrimitiveOverload(
+                    "count_distribution", "uniform", True
+                ),
+            ),
+            "shift_left",
+        ),
+        (
+            _spec(
+                "shift_left",
+                param_names=("data", "shift"),
+                param_kinds=("v", "sImm"),
+                roles=(
+                    (OperandRole.PRIMARY, 0, "v"),
+                    (OperandRole.COUNT, 1, "sImm"),
+                ),
+                overload=ResolvedPrimitiveOverload(
+                    "count_distribution", "uniform", False
+                ),
+                immediate=("shift", "u32"),
+            ),
+            "shift_left_imm",
+        ),
+        (
+            _spec(
+                "shift_left",
+                param_names=("data", "shift"),
+                param_kinds=("v", "v"),
+                roles=(
+                    (OperandRole.PRIMARY, 0, "v"),
+                    (OperandRole.COUNT, 1, "v"),
+                ),
+                overload=ResolvedPrimitiveOverload(
+                    "count_distribution", "per_lane", False
+                ),
+            ),
+            "shift_left_each",
+        ),
+        (
+            _spec(
+                "mul_imm",
+                param_names=("mask", "data", "factor"),
+                param_kinds=("m", "v", "sImm"),
+                roles=(
+                    (OperandRole.CONTROL_MASK, 0, "m"),
+                    (OperandRole.PRIMARY, 1, "v"),
+                    (OperandRole.COUNT, 2, "sImm"),
+                ),
+                immediate=("factor", "i32"),
+                mask_policy="pass_through",
+            ),
+            "mul_imm_masked",
+        ),
+        (
+            _spec(
+                "shift_left",
+                param_names=("mask", "data", "shift"),
+                param_kinds=("m", "v", "sImm"),
+                roles=(
+                    (OperandRole.CONTROL_MASK, 0, "m"),
+                    (OperandRole.PRIMARY, 1, "v"),
+                    (OperandRole.COUNT, 2, "sImm"),
+                ),
+                overload=ResolvedPrimitiveOverload(
+                    "count_distribution", "uniform", False
+                ),
+                immediate=("shift", "u32"),
+                mask_policy="zero",
+            ),
+            "shift_left_imm_masked_zero",
+        ),
+    ),
+)
+def test_public_name_components_are_composed_once(
+    spec: LoweredSpecialization,
+    expected: str,
+) -> None:
+    plan = plan_rust_facade((), _plan(spec))
+
+    assert [method.public_name for method in plan.comprehensive_methods] == [expected]
+
+
+def test_receiver_is_finalized_before_explicit_arguments() -> None:
+    spec = _spec(
+        "masked_op",
+        param_names=("mask", "data", "factor"),
+        param_kinds=("m", "v", "sImm"),
+        roles=(
+            (OperandRole.CONTROL_MASK, 0, "m"),
+            (OperandRole.PRIMARY, 1, "v"),
+            (OperandRole.COUNT, 2, "sImm"),
+        ),
+        immediate=("factor", "i32"),
+        mask_policy="pass_through",
+    )
+
+    method = plan_rust_facade((), _plan(spec)).comprehensive_methods[0]
+
+    assert method.receiver_kind is RustFacadeReceiverKind.VECTOR
+    assert tuple(parameter.placement for parameter in method.parameters) == (
+        RustFacadeParameterPlacement.ARGUMENT,
+        RustFacadeParameterPlacement.RECEIVER,
+        RustFacadeParameterPlacement.CONST_GENERIC,
+    )
+    assert method.parameters[0].role is OperandRole.CONTROL_MASK
+    assert method.parameters[2].public_name == "FACTOR"
+
+
+def test_mask_primary_becomes_a_mask_receiver() -> None:
+    spec = _spec(
+        "mask_not",
+        result_kind="m",
+        param_names=("mask",),
+        param_kinds=("m",),
+        operation=PrimitiveOperation.MASK_NOT,
+        roles=((OperandRole.PRIMARY, 0, "m"),),
+    )
+
+    method = plan_rust_facade((), _plan(spec)).comprehensive_methods[0]
+
+    assert method.receiver_kind is RustFacadeReceiverKind.MASK
+    assert method.parameters[0].placement is RustFacadeParameterPlacement.RECEIVER
+
+
+def test_attribute_and_generic_const_parameters_are_finalized() -> None:
+    spec = replace(
+        _spec("configured"),
+        axis=(("aligned", "true"),),
+        generic_params=(("PreserveSign", "bool", "true"),),
+    )
+
+    method = plan_rust_facade((), _plan(spec)).comprehensive_methods[0]
+
+    assert tuple(item.public_name for item in method.const_parameters) == (
+        "ALIGNED",
+        "PRESERVE_SIGN",
+    )
+    assert method.const_parameters[1].source_default == "true"
+
+
+def test_caller_safety_is_preserved_and_mismatches_are_rejected() -> None:
+    unsafe_spec = _spec(
+        "unsafe_op",
+        safety=ImplementationSafety(caller_unsafe=True),
+    )
+    method = plan_rust_facade((), _plan(unsafe_spec)).comprehensive_methods[0]
+    assert method.caller_unsafe
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade(
+            (),
+            _plan(unsafe_spec, replace(unsafe_spec, safety=ImplementationSafety())),
+        )
+    assert {diagnostic.code for diagnostic in error.value.diagnostics} == {
+        "TSL-BACKEND-RUST-FACADE-SAFETY-MISMATCH"
+    }
+
+
+def test_missing_generic_baseline_is_a_typed_exclusion() -> None:
+    spec = _spec("hardware_only")
+    emitted = EmittedProfile(
+        MachineProfile("hardware", "x86", frozenset(), {}),
+        {"rust": {"hardware_only": (replace(spec, extension_name="avx2"),)}},
+        immediate_split_names=frozenset(),
+    )
+
+    plan = plan_rust_facade(
+        (emitted,),
+        RustStaticSelectionPlan(
+            (),
+            _plan().fallback_mappings,
+            RustStaticFallbackModule((), ()),
+        ),
+    )
+
+    assert plan.comprehensive_methods == ()
+    assert plan.coverage[0].status is RustFacadeCoverageStatus.EXCLUDED
+    assert plan.coverage[0].reason == "missing generic baseline"
+
+
+def test_public_name_collision_is_rejected_before_rendering() -> None:
+    immediate = _spec(
+        "collision",
+        param_names=("data", "factor"),
+        param_kinds=("v", "sImm"),
+        roles=(
+            (OperandRole.PRIMARY, 0, "v"),
+            (OperandRole.COUNT, 1, "sImm"),
+        ),
+        immediate=("factor", "i32"),
+    )
+    already_named = _spec("collision_imm")
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade((), _plan(immediate, already_named))
+
+    assert "TSL-BACKEND-RUST-FACADE-NAME-COLLISION" in {
+        diagnostic.code for diagnostic in error.value.diagnostics
+    }
+
+
+def test_curated_name_is_reserved_before_comprehensive_methods() -> None:
+    comparison = _spec(
+        "comparison_source",
+        result_kind="m",
+        param_names=("left", "right"),
+        param_kinds=("v", "v"),
+        operation=PrimitiveOperation.COMPARE_EQUAL,
+        roles=(
+            (OperandRole.PRIMARY, 0, "v"),
+            (OperandRole.SECONDARY, 1, "v"),
+        ),
+    )
+    comprehensive = _spec("simd_eq")
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade((), _plan(comparison, comprehensive))
+
+    assert {diagnostic.code for diagnostic in error.value.diagnostics} == {
+        "TSL-BACKEND-RUST-FACADE-NAME-COLLISION"
+    }
+
+
+def test_target_vector_admission_is_explicit_and_lane_preserving() -> None:
+    conversion = PrimitiveConversionContract(
+        ConversionKind.NUMERIC,
+        LaneCountRelation.PRESERVE_LANE_COUNT,
+        NumericConversionMode.SCALAR_AS,
+    )
+    result_vector = replace(
+        _spec("convert_lanes", conversion=conversion),
+        type_params=(
+            LoweredTypeParam(
+                "ToVec",
+                base_type_binding="f64",
+                base_type_binding_spelling="f64",
+            ),
+        ),
+        result_vector_param="ToVec",
+    )
+
+    method = plan_rust_facade((), _plan(result_vector)).comprehensive_methods[0]
+
+    assert method.type_parameters[0].source_name == "ToVec"
+    assert method.type_parameters[0].public_name == "U"
+    assert method.type_parameters[0].type_tags == ("f64",)
+
+    concrete_target = replace(
+        _spec("reinterpret_target"),
+        target=TargetVector("Vector", "Register", "avx2", "f64", "f64"),
+    )
+    exclusion = plan_rust_facade((), _plan(concrete_target)).coverage[0]
+    assert exclusion.status is RustFacadeCoverageStatus.EXCLUDED
+    assert exclusion.reason == "concrete target-vector shape is lower-level only"
+
+
+def test_semantic_rename_keeps_curated_trait_and_operation_value() -> None:
+    original = plan_rust_facade((), _plan(_arithmetic_spec("first_name")))
+    renamed = plan_rust_facade((), _plan(_arithmetic_spec("renamed_sum")))
+
+    assert original.trait_implementations[0].trait_path == "core::ops::Add"
+    assert renamed.trait_implementations[0].trait_path == "core::ops::Add"
+    assert original.operation_values[0].public_name == "Add"
+    assert renamed.operation_values[0].public_name == "Add"
+    assert original.comprehensive_methods[0].public_name == "first_name"
+    assert renamed.comprehensive_methods[0].public_name == "renamed_sum"
+
+
+def test_immediate_arithmetic_remains_a_named_method() -> None:
+    vector = _arithmetic_spec("add_imm")
+    assert vector.primitive_semantics.arithmetic is not None
+    arithmetic = replace(
+        vector.primitive_semantics.arithmetic,
+        operand_bindings=(
+            vector.primitive_semantics.arithmetic.operand_bindings[0],
+            replace(
+                vector.primitive_semantics.arithmetic.operand_bindings[1],
+                parameter_kind="sImm",
+            ),
+        ),
+    )
+    immediate = replace(
+        vector,
+        param_names=("left", "right"),
+        param_kinds=("v", "sImm"),
+        immediate=("right", "i32"),
+        primitive_semantics=replace(
+            vector.primitive_semantics,
+            arithmetic=arithmetic,
+        ),
+    )
+
+    plan = plan_rust_facade((), _plan(immediate))
+
+    assert plan.comprehensive_methods[0].public_name == "add_imm"
+    assert plan.trait_implementations == ()
+
+
+def test_neg_trait_excludes_unsigned_element_types() -> None:
+    arithmetic = ArithmeticContract(
+        frozenset({ArithmeticOperation.NEGATION}),
+        (
+            ArithmeticOperandBinding(
+                ArithmeticOperandRole.PRIMARY, "data", 0, 0, "v"
+            ),
+        ),
+        frozenset(
+            {
+                ArithmeticGuarantee.INTEGER_WRAPPING,
+                ArithmeticGuarantee.FLOATING_SIGN_BIT_TOGGLE,
+            }
+        ),
+    )
+    specs = tuple(
+        replace(
+            _spec(
+                "neg",
+                param_names=("data",),
+                param_kinds=("v",),
+                roles=(),
+                arithmetic=arithmetic,
+            ),
+            type_tag=tag,
+        )
+        for tag in ("si32", "ui32", "f32")
+    )
+
+    trait = plan_rust_facade((), _plan(*specs)).trait_implementations[0]
+
+    assert trait.trait_path == "core::ops::Neg"
+    assert trait.type_tags == ("f32", "si32")
+
+
+def test_additive_unaliased_primitive_gets_only_a_comprehensive_method() -> None:
+    plan = plan_rust_facade((), _plan(_spec("future_primitive")))
+
+    assert plan.comprehensive_methods[0].public_name == "future_primitive"
+    assert plan.trait_implementations == ()
+    assert plan.curated_methods == ()
+
+
+def test_selection_curated_method_uses_the_control_mask_receiver() -> None:
+    spec = _spec(
+        "arbitrary_selection_name",
+        param_names=("mask", "true_values", "false_values"),
+        param_kinds=("m", "v", "v"),
+        operation=PrimitiveOperation.SELECT,
+        roles=(
+            (OperandRole.CONTROL_MASK, 0, "m"),
+            (OperandRole.PRIMARY, 1, "v"),
+            (OperandRole.SECONDARY, 2, "v"),
+        ),
+    )
+
+    plan = plan_rust_facade((), _plan(spec))
+
+    assert plan.comprehensive_methods[0].receiver_kind is RustFacadeReceiverKind.VECTOR
+    assert plan.comprehensive_methods[0].public_name == "arbitrary_selection_name_masked"
+    assert plan.curated_methods[0].public_name == "select"
+    assert plan.curated_methods[0].receiver_kind is RustFacadeReceiverKind.MASK
+
+
+def test_unknown_overload_is_rejected_before_rendering() -> None:
+    spec = _spec(
+        "future_overload",
+        overload=ResolvedPrimitiveOverload("future_axis", "future_value", True),
+    )
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade((), _plan(spec))
+
+    assert {diagnostic.code for diagnostic in error.value.diagnostics} == {
+        "TSL-BACKEND-RUST-FACADE-UNKNOWN-OVERLOAD"
+    }
+
+
+def test_role_signature_mismatch_is_rejected_before_rendering() -> None:
+    spec = _spec(
+        "mismatched_role",
+        roles=(
+            (OperandRole.PRIMARY, 0, "m"),
+            (OperandRole.SECONDARY, 1, "s"),
+        ),
+    )
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade((), _plan(spec))
+
+    assert {diagnostic.code for diagnostic in error.value.diagnostics} == {
+        "TSL-BACKEND-RUST-FACADE-ROLE-MISMATCH"
+    }
+
+
+def test_current_lowered_families_plan_without_reopening_the_catalog(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=[
+            "add",
+            "equal",
+            "select",
+            "shift_left_wrapping",
+            "shift_right_wrapping",
+        ],
+        profiles=["scalar", "sse2", "avx2"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    static = plan_rust_static_selection(result.emitted_profiles)
+
+    plan = plan_rust_facade(result.emitted_profiles, static)
+
+    assert any(
+        trait.trait_path == "core::ops::Add"
+        and trait.operation is ArithmeticOperation.ADDITION
+        and trait.rhs_kind is RustFacadeTraitRhsKind.SAME_TYPE
+        for trait in plan.trait_implementations
+    )
+    assert any(method.public_name == "simd_eq" for method in plan.curated_methods)
+    assert any(
+        method.public_name == "select"
+        and method.receiver_kind is RustFacadeReceiverKind.MASK
+        for method in plan.curated_methods
+    )
+    assert any(
+        method.public_name == "shift_left_wrapping_each"
+        for method in plan.comprehensive_methods
+    )
+    assert any(
+        shape.type_tag == "si32"
+        and shape.lanes == 8
+        and {item.profile_name for item in shape.representations}
+        == {None, "sse2", "avx2"}
+        for shape in plan.shapes
+    )
+    assert {
+        trait.rhs_kind
+        for trait in plan.trait_implementations
+        if trait.trait_path in {"core::ops::Shl", "core::ops::Shr"}
+    } == {
+        RustFacadeTraitRhsKind.SAME_TYPE,
+        RustFacadeTraitRhsKind.SCALAR,
+    }

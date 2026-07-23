@@ -418,13 +418,26 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   `core::arch` intrinsic qualification ([backend/rust.py](src/tslc/backend/rust.py)).
   Generated rustdoc uses a `cfg(doc)` profile-neutral facade containing one
   public signature per emitted Rust primitive; concrete profile availability
-  stays in the specialization explorer, while normal builds retain their
-  Cargo-feature-selected `profile` alias. Profile-local algorithm trait impls
+  stays in the specialization explorer, while normal builds select their
+  `profile` alias from compile-target cfgs with an exact generic fallback.
+  Profile-local algorithm trait impls
   share typed Scalar/Generic/concrete render targets in
   [backend/rust_algorithm.py](src/tslc/backend/rust_algorithm.py). Static
   algorithm-wrapper names are reserved by the compiler manifest in
   [backend/rust_algorithm_manifest.py](src/tslc/backend/rust_algorithm_manifest.py),
   with an asset-consistency test preventing drift.
+
+The ordinary Rust API is finalized before source rendering by the frozen records
+in [backend/rust_api_model.py](src/tslc/backend/rust_api_model.py) and the focused
+planner in [backend/rust_api_planner.py](src/tslc/backend/rust_api_planner.py).
+That projection combines lowered language-neutral operation, operand-role,
+overload, conversion, and safety contracts with static fixed-shape selection.
+It owns Rust receiver placement, const/type-parameter spelling, method suffixes,
+curated trait admission, native candidates, cfg/delegate identity, and collision
+diagnostics. It does not inspect implementation text, infer semantics from a
+primitive name, reopen `tsldata`, or render Rust. Backend validation constructs
+the plan at the post-lowering boundary, exposing one compiler-owned input for
+Rust source, rustdoc, fixture, benchmark, and dispatch projections.
 
 A static substrate ships as assets
 ([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),
