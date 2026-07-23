@@ -1,5 +1,11 @@
 description "Type cast operations"
 prim<v:=v>[cast=reinterpret] reinterpret(data):
+  operation reinterpret
+  operand_roles:
+    primary data
+  conversion:
+    kind bit_pattern
+    lane_count preserve_register_width
   brief_description "Reinterprets a vector register as another vector type with the same register width."
   detailed_description """
     Reinterprets the source register as the target vector type without changing
@@ -164,6 +170,12 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
             implementation:
               tsil "complete(cast<bitcast>(register::generic(ToType), data));"
 prim<v:=v>[cast=convert] cast(data):
+  operation convert
+  operand_roles:
+    primary data
+  conversion:
+    kind numeric
+    lane_count preserve_register_width
   brief_description "Numerically converts vector lanes to the target base type."
   detailed_description """
     Converts lanes from the source vector type to the target vector base type.

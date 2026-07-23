@@ -1,4 +1,9 @@
 prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
+  operation select
+  operand_roles:
+    control_mask mask
+    pass_through left
+    primary right
   brief_description "Selects right lanes where the mask is active and left lanes where the mask is inactive."
   detailed_description """
     Selects lanes from two input vectors according to a mask. Active mask lanes

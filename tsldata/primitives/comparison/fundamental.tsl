@@ -1,5 +1,9 @@
 description "Fundamental comparison operations"
 prim<m:=(v,v)> equal(left, right):
+  operation compare_equal
+  operand_roles:
+    primary left
+    secondary right
   brief_description "Compares corresponding lanes for equality and returns the comparison mask."
   detailed_description """
     Compares two vectors lane-wise for equality and returns a mask. Each true
@@ -237,6 +241,10 @@ prim<m:=(v,v)> equal(left, right):
             );
           """
 prim<m:=(v,v)> nequal(left, right):
+  operation compare_not_equal
+  operand_roles:
+    primary left
+    secondary right
   brief_description "Compares corresponding lanes for inequality and returns the comparison mask."
   detailed_description """
     Compares two vectors lane-wise for inequality and returns a mask. Each true
@@ -459,6 +467,10 @@ prim<m:=(v,v)> nequal(left, right):
             );
           """
 prim<m:=(v,v)> less_than(left, right):
+  operation compare_less
+  operand_roles:
+    primary left
+    secondary right
   brief_description "Compares whether each left lane is less than the corresponding right lane."
   detailed_description """
     Compares two vectors lane-wise and returns a mask indicating whether the
@@ -797,6 +809,10 @@ prim<m:=(v,v)> less_than(left, right):
             );
           """
 prim<m:=(v,v)> greater_than(left, right):
+  operation compare_greater
+  operand_roles:
+    primary left
+    secondary right
   brief_description "Compares whether each left lane is greater than the corresponding right lane."
   detailed_description """
     Compares two vectors lane-wise and returns a mask indicating whether the
@@ -1103,6 +1119,10 @@ prim<m:=(v,v)> greater_than(left, right):
             );
           """
 prim<m:=(v,v)> less_than_or_equal(left, right):
+  operation compare_less_equal
+  operand_roles:
+    primary left
+    secondary right
   brief_description "Compares whether each left lane is less than or equal to the corresponding right lane."
   detailed_description """
     Compares two vectors lane-wise and returns a mask indicating whether the
@@ -1392,6 +1412,10 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
             );
           """
 prim<m:=(v,v)> greater_than_or_equal(left, right):
+  operation compare_greater_equal
+  operand_roles:
+    primary left
+    secondary right
   brief_description "Compares whether each left lane is greater than or equal to the corresponding right lane."
   detailed_description """
     Compares two vectors lane-wise and returns a mask indicating whether the
@@ -1682,6 +1706,11 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           """
 
 prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
+  operation compare_equal
+  operand_roles:
+    control_mask mask
+    primary left
+    secondary right
   brief_description "Compares active lanes for equality and clears inactive lanes in the result mask."
   detailed_description """
     Compares active lanes for equality and clears inactive lanes in the result
@@ -1868,6 +1897,11 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
             );
           """
 prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
+  operation compare_not_equal
+  operand_roles:
+    control_mask mask
+    primary left
+    secondary right
   brief_description "Compares active lanes for inequality and clears inactive lanes in the result mask."
   detailed_description """
     Compares active lanes for inequality and clears inactive lanes in the result
@@ -2099,6 +2133,11 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
             );
           """
 prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
+  operation compare_less
+  operand_roles:
+    control_mask mask
+    primary left
+    secondary right
   brief_description "Compares active lanes for less-than and clears inactive lanes in the result mask."
   detailed_description """
     Compares active lanes and marks whether the left lane is less than the
@@ -2329,6 +2368,11 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
             );
           """
 prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
+  operation compare_greater
+  operand_roles:
+    control_mask mask
+    primary left
+    secondary right
   brief_description "Compares active lanes for greater-than and clears inactive lanes in the result mask."
   detailed_description """
     Compares active lanes and marks whether the left lane is greater than the
@@ -2559,6 +2603,11 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
             );
           """
 prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
+  operation compare_less_equal
+  operand_roles:
+    control_mask mask
+    primary left
+    secondary right
   brief_description "Compares active lanes for less-than-or-equal and clears inactive lanes in the result mask."
   detailed_description """
     Compares active lanes and marks whether the left lane is less than or equal
@@ -2789,6 +2838,11 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
             );
           """
 prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
+  operation compare_greater_equal
+  operand_roles:
+    control_mask mask
+    primary left
+    secondary right
   brief_description "Compares active lanes for greater-than-or-equal and clears inactive lanes in the result mask."
   detailed_description """
     Compares active lanes and marks whether the left lane is greater than or

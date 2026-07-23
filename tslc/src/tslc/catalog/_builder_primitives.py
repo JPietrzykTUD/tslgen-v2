@@ -8,6 +8,9 @@ from tslc.catalog._builder_common import _bool_field
 from tslc.catalog._builder_implementations import _implementations_from_entries
 from tslc.catalog.arithmetic_promotion import build_arithmetic_contract
 from tslc.catalog.benchmark_promotion import build_benchmark_spec
+from tslc.catalog.conversion_promotion import build_conversion_contract
+from tslc.catalog.memory_promotion import build_memory_contract
+from tslc.catalog.semantic_promotion import build_semantic_contract
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     GenericParam,
@@ -73,6 +76,14 @@ def _build_primitives(
     detailed_description = _primitive_field_text(declaration, "detailed_description")
     semantics = _primitive_field_text(declaration, "semantics")
     arithmetic = build_arithmetic_contract(declaration, diagnostics)
+    operation = build_semantic_contract(declaration, diagnostics)
+    memory = build_memory_contract(declaration, operation, diagnostics)
+    conversion = build_conversion_contract(
+        declaration,
+        operation,
+        result_target,
+        diagnostics,
+    )
     overload = _primitive_overload(declaration)
     cross_lane_fields = declaration.fields_by_name("cross_lane")
     cross_lane = _bool_field(cross_lane_fields[0].field) if cross_lane_fields else False
@@ -95,6 +106,9 @@ def _build_primitives(
             detailed_description=detailed_description,
             semantics=semantics,
             arithmetic=arithmetic,
+            operation=operation,
+            memory=memory,
+            conversion=conversion,
             overload=overload,
             cross_lane=cross_lane,
             source=_source_span(declaration.source),

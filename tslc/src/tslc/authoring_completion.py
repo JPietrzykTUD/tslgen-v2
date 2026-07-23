@@ -13,7 +13,15 @@ from tslc.catalog.arithmetic import (
     arithmetic_operation_values,
 )
 from tslc.catalog.arithmetic_promotion import KNOWN_ARITHMETIC_FIELDS
+from tslc.catalog.conversion import (
+    conversion_kind_values,
+    lane_count_relation_values,
+)
+from tslc.catalog.conversion_promotion import KNOWN_CONVERSION_FIELDS
+from tslc.catalog.memory import memory_access_values, memory_addressing_values
+from tslc.catalog.memory_promotion import KNOWN_MEMORY_FIELDS
 from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.semantics import operand_role_values, primitive_operation_values
 from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
 from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS
 from tslc.catalog.validation._schema_benchmarks import (
@@ -751,6 +759,12 @@ def _field_candidates(
         return KNOWN_ARITHMETIC_FIELDS, "field", "arithmetic contract field"
     if path == ("primitive", "arithmetic", "operand_roles"):
         return arithmetic_operand_role_values(), "field", "arithmetic operand role"
+    if path == ("primitive", "operand_roles"):
+        return operand_role_values(), "field", "primitive operand role"
+    if path == ("primitive", "memory"):
+        return KNOWN_MEMORY_FIELDS, "field", "memory contract field"
+    if path == ("primitive", "conversion"):
+        return KNOWN_CONVERSION_FIELDS, "field", "conversion contract field"
     if path[:2] == ("primitive", "impls"):
         return _implementation_fields(context, catalog)
     if path[:2] == ("primitive", "generic_params"):
@@ -950,9 +964,30 @@ def _value_completions(
         return ()
     values: Iterable[str] = ()
     detail = f"value for {field}"
-    if field in _BOOLEAN_FIELDS:
+    if (
+        context.block_path == ("primitive", "operand_roles")
+        and field in operand_role_values()
+    ):
+        values = context.primitive_parameters
+        detail = "primitive parameter"
+    elif field in _BOOLEAN_FIELDS:
         values = KNOWN_BOOLEAN_VALUES
         detail = "boolean"
+    elif field == "operation" and context.block_path == ("primitive",):
+        values = primitive_operation_values()
+        detail = "primitive operation"
+    elif field == "access" and context.block_path == ("primitive", "memory"):
+        values = memory_access_values()
+        detail = "memory access"
+    elif field == "addressing" and context.block_path == ("primitive", "memory"):
+        values = memory_addressing_values()
+        detail = "memory addressing"
+    elif field == "kind" and context.block_path == ("primitive", "conversion"):
+        values = conversion_kind_values()
+        detail = "conversion kind"
+    elif field == "lane_count" and context.block_path == ("primitive", "conversion"):
+        values = lane_count_relation_values()
+        detail = "conversion lane-count relation"
     elif field == "operations" and context.block_path == ("primitive", "arithmetic"):
         values = arithmetic_operation_values()
         detail = "arithmetic operation"

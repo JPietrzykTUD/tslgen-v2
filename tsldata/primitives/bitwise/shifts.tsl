@@ -1,5 +1,9 @@
 description "Shift operations"
 prim<v:=(v,sImm)> shift_left(data, shift):
+  operation shift_left
+  operand_roles:
+    count shift
+    primary data
   overload:
     axis count_distribution
     value uniform
@@ -385,6 +389,12 @@ prim<v:=(v,sImm)> shift_left(data, shift):
               complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
+  operation shift_left
+  operand_roles:
+    control_mask mask
+    count shift
+    pass_through data
+    primary data
   overload:
     axis count_distribution
     value uniform
@@ -547,6 +557,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
               complete(call<primitive=blend>(mask, data, shifted));
             """
 prim<v:=(v,s)> shift_left(data, shift):
+  operation shift_left
+  operand_roles:
+    count shift
+    primary data
   overload:
     axis count_distribution
     value uniform
@@ -995,6 +1009,10 @@ prim<v:=(v,s)> shift_left(data, shift):
               complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(v,v)> shift_left(data, shift):
+  operation shift_left
+  operand_roles:
+    count shift
+    primary data
   overload:
     axis count_distribution
     value per_lane
@@ -1585,6 +1603,10 @@ prim<v:=(v,v)> shift_left(data, shift):
               complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(v,sImm)> shift_right(data, shift):
+  operation shift_right
+  operand_roles:
+    count shift
+    primary data
   overload:
     axis count_distribution
     value uniform
@@ -2291,6 +2313,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
               }
             """
 prim<v:=(v,s)> shift_right(data, shift):
+  operation shift_right
+  operand_roles:
+    count shift
+    primary data
   overload:
     axis count_distribution
     value uniform
@@ -3312,6 +3338,10 @@ prim<v:=(v,s)> shift_right(data, shift):
               complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(v,v)> shift_right(data, shift):
+  operation shift_right
+  operand_roles:
+    count shift
+    primary data
   overload:
     axis count_distribution
     value per_lane

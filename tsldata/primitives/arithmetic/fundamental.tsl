@@ -1,5 +1,11 @@
 description "Fundamental arithmetic operations"
 prim<v:=(v,v)> add(left, right):
+  arithmetic:
+    operations [addition]
+    operand_roles:
+      primary left
+      secondary right
+    guarantees [integer_wrapping]
   brief_description "Adds the corresponding lanes of two vector registers."
   detailed_description """
     Computes lane-wise addition of two vector registers. Each output lane depends
@@ -172,6 +178,12 @@ prim<v:=(v,v)> add(left, right):
         implementation:
           tsil "complete(intrin<svadd, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
 prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
+  arithmetic:
+    operations [addition]
+    operand_roles:
+      primary left
+      secondary right
+    guarantees [integer_wrapping]
   brief_description "Adds the corresponding lanes of two vector registers and writes zero to inactive mask lanes."
   detailed_description """
     Computes lane-wise addition for lanes enabled by the mask. Disabled lanes are
@@ -302,6 +314,12 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
         implementation:
           tsil "complete(intrin<svadd, build[post=z]>(mask, left, right));"
 prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
+  arithmetic:
+    operations [addition]
+    operand_roles:
+      primary left
+      secondary right
+    guarantees [integer_wrapping]
   brief_description "Adds active lanes of two vector registers and keeps the pass-through lane value where the mask is inactive."
   detailed_description """
     Computes lane-wise addition for lanes enabled by the mask. Disabled lanes keep
@@ -435,6 +453,12 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
         implementation:
           tsil "complete(intrin<svadd, build[post=m]>(mask, left, right));"
 prim<v:=(v,v)> sub(left, right):
+  arithmetic:
+    operations [subtraction]
+    operand_roles:
+      primary left
+      secondary right
+    guarantees [integer_wrapping]
   brief_description "Subtracts the corresponding right lane from each left lane."
   detailed_description """
     Computes lane-wise subtraction of two vector registers. Each output lane
@@ -607,6 +631,12 @@ prim<v:=(v,v)> sub(left, right):
         implementation:
           tsil "complete(intrin<svsub, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
 prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
+  arithmetic:
+    operations [subtraction]
+    operand_roles:
+      primary left
+      secondary right
+    guarantees [integer_wrapping]
   brief_description "Subtracts active right lanes from left lanes and writes zero to inactive mask lanes."
   detailed_description """
     Computes lane-wise subtraction for lanes enabled by the mask. Disabled lanes
@@ -737,6 +767,12 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
         implementation:
           tsil "complete(intrin<svsub, build[post=z]>(mask, left, right));"
 prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
+  arithmetic:
+    operations [subtraction]
+    operand_roles:
+      primary left
+      secondary right
+    guarantees [integer_wrapping]
   brief_description "Subtracts active right lanes from left lanes and keeps the pass-through lane value where the mask is inactive."
   detailed_description """
     Computes lane-wise subtraction for lanes enabled by the mask. Disabled lanes

@@ -238,6 +238,21 @@ prim<v:=(v,v)> add(left, right):
   editor completion, tokens, navigation, and hover project those same facts.
   Consumers never infer arithmetic semantics from primitive names, parameter
   spellings or positions, prose, or implementation text.
+- **Primitive operation contracts**: curated non-arithmetic families declare a
+  closed language-neutral `operation` plus explicit parameter-bound
+  `operand_roles`. Focused `memory` and `conversion` blocks add only contiguous
+  access direction or conversion/lane-count relations that are not already
+  owned by attributes, result targets, and semantic overloads. The catalog
+  promotes these through the frozen records in
+  [catalog/semantics.py](src/tslc/catalog/semantics.py),
+  [catalog/memory.py](src/tslc/catalog/memory.py), and
+  [catalog/conversion.py](src/tslc/catalog/conversion.py); it validates signature
+  kinds, required roles, same-name families, and domain compatibility while
+  retaining source spans. Catalog inspection and editor completion, tokens,
+  navigation, references, and hover consume those same enums. These facts
+  currently stop at the catalog/editor boundary: selection, lowering, and
+  backends neither carry nor reconstruct them, and source data contains no
+  Rust-specific spelling policy.
 - **Fixed-width SVE**: `sve128`/`sve256`/`sve512` inherit scalable `sve` bodies
   but supersede `sve` in their fixed profiles, so one profile emits one SVE
   model. The fixed width is a compile mode (`sve_vector_bits_N`) plus C++ flags

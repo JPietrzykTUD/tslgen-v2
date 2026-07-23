@@ -1,5 +1,11 @@
 description "Expensive / complex instructions"
 prim<v:=(v,v)> mul(factor1, factor2):
+  arithmetic:
+    operations [multiplication]
+    operand_roles:
+      primary factor1
+      secondary factor2
+    guarantees [integer_wrapping]
   brief_description "Multiplies the corresponding lanes of two vector registers."
   detailed_description """
     Computes lane-wise multiplication of two vector registers. Each output lane
@@ -506,6 +512,12 @@ prim<v:=(v,v)> mul(factor1, factor2):
         implementation:
           tsil "complete(intrin<svmul, build[post=x]>(call<primitive=mask_true[Vec]>(), factor1, factor2));"
 prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
+  arithmetic:
+    operations [multiplication]
+    operand_roles:
+      primary factor1
+      secondary factor2
+    guarantees [integer_wrapping]
   brief_description "Multiplies active lanes of two vector registers and writes zero to inactive mask lanes."
   detailed_description """
     Computes lane-wise multiplication for lanes enabled by the mask. Disabled
@@ -667,6 +679,12 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
         implementation:
           tsil "complete(intrin<svmul, build[post=z]>(mask, factor1, factor2));"
 prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
+  arithmetic:
+    operations [multiplication]
+    operand_roles:
+      primary factor1
+      secondary factor2
+    guarantees [integer_wrapping]
   brief_description "Multiplies active lanes of two vector registers and keeps the left lane where the mask is inactive."
   detailed_description """
     Computes lane-wise multiplication for lanes enabled by the mask. Disabled
@@ -839,6 +857,7 @@ prim<v:=(v,v)> div(dividend, divisor):
   arithmetic:
     operations [division]
     operand_roles:
+      primary dividend
       divisor divisor
     guarantees [
       integer_quotient_toward_zero,
@@ -1088,6 +1107,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
   arithmetic:
     operations [division]
     operand_roles:
+      primary dividend
       divisor divisor
     guarantees [
       integer_quotient_toward_zero,
@@ -1267,6 +1287,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
   arithmetic:
     operations [division]
     operand_roles:
+      primary dividend
       divisor divisor
     guarantees [
       integer_quotient_toward_zero,
@@ -1589,6 +1610,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
   arithmetic:
     operations [remainder]
     operand_roles:
+      primary dividend
       divisor divisor
     guarantees [
       integer_remainder_has_dividend_sign,
@@ -2074,6 +2096,7 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
   arithmetic:
     operations [remainder]
     operand_roles:
+      primary dividend
       divisor divisor
     guarantees [
       integer_remainder_has_dividend_sign,
@@ -2161,6 +2184,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
   arithmetic:
     operations [remainder]
     operand_roles:
+      primary dividend
       divisor divisor
     guarantees [
       integer_remainder_has_dividend_sign,
@@ -2248,6 +2272,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
   arithmetic:
     operations [remainder]
     operand_roles:
+      primary dividend
       divisor divisor
     guarantees [
       integer_remainder_has_dividend_sign,
@@ -2315,6 +2340,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
   arithmetic:
     operations [remainder]
     operand_roles:
+      primary dividend
       divisor divisor
     guarantees [
       integer_remainder_has_dividend_sign,
@@ -2379,6 +2405,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
   arithmetic:
     operations [remainder]
     operand_roles:
+      primary dividend
       divisor divisor
     guarantees [
       integer_remainder_has_dividend_sign,

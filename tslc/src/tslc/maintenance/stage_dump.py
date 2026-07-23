@@ -176,6 +176,24 @@ def _dump_catalog(catalog: Catalog, primitive: str | None) -> tuple[str, object,
         )
         if prim.result_target is not None:
             lines.append(f"    result_target: {prim.result_target}")
+        if prim.operation is not None:
+            roles = ", ".join(
+                f"{binding.role.value}={binding.parameter_name}"
+                for binding in prim.operation.operand_bindings
+            )
+            lines.append(
+                f"    operation: {prim.operation.kind.value}  roles={{{roles}}}"
+            )
+        if prim.memory is not None:
+            lines.append(
+                f"    memory: access={prim.memory.access.value}  "
+                f"addressing={prim.memory.addressing.value}"
+            )
+        if prim.conversion is not None:
+            lines.append(
+                f"    conversion: kind={prim.conversion.kind.value}  "
+                f"lane_count={prim.conversion.lane_count.value}"
+            )
         for impl in prim.implementations:
             lines.append(
                 f"    [{impl.extension} / {impl.type_group}"
@@ -215,6 +233,23 @@ def _primitive_json(prim: Primitive) -> dict:
         "parameters": list(prim.parameters),
         "attributes": dict(prim.attributes),
         "result_target": list(prim.result_target) if prim.result_target else None,
+        "operation": _operation_json(prim),
+        "memory": (
+            {
+                "access": prim.memory.access.value,
+                "addressing": prim.memory.addressing.value,
+            }
+            if prim.memory is not None
+            else None
+        ),
+        "conversion": (
+            {
+                "kind": prim.conversion.kind.value,
+                "lane_count": prim.conversion.lane_count.value,
+            }
+            if prim.conversion is not None
+            else None
+        ),
         "tests": len(prim.tests),
         "implementations": [
             {
@@ -225,6 +260,23 @@ def _primitive_json(prim: Primitive) -> dict:
                 "source": _src(impl.selector_source or impl.source),
             }
             for impl in prim.implementations
+        ],
+    }
+
+
+def _operation_json(prim: Primitive) -> dict | None:
+    if prim.operation is None:
+        return None
+    return {
+        "name": prim.operation.kind.value,
+        "operand_roles": [
+            {
+                "role": binding.role.value,
+                "parameter": binding.parameter_name,
+                "parameter_index": binding.parameter_index,
+                "parameter_kind": binding.parameter_kind,
+            }
+            for binding in prim.operation.operand_bindings
         ],
     }
 

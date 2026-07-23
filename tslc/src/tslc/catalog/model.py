@@ -14,11 +14,14 @@ from types import MappingProxyType
 from typing import Literal, TypeVar
 
 from tslc.catalog.arithmetic import ArithmeticContract
+from tslc.catalog.conversion import PrimitiveConversionContract
+from tslc.catalog.memory import PrimitiveMemoryContract
 from tslc.catalog.overloads import (
     OverloadRegistry,
     PrimitiveOverload,
     ResolvedPrimitiveOverload,
 )
+from tslc.catalog.semantics import PrimitiveSemanticContract
 from tslc.catalog.target_families import (
     ExtensionFamilyCapability,
     TargetFamilyCatalog,
@@ -253,6 +256,12 @@ class Primitive:
     # guarantees. Selection and backend code must not infer these facts from
     # primitive names, signature positions, prose, or implementation text.
     arithmetic: ArithmeticContract | None = None
+    # Explicit language-neutral operation identity and operand bindings. Memory
+    # and conversion add only their domain-specific facts; no target spelling
+    # or facade policy is source data.
+    operation: PrimitiveSemanticContract | None = None
+    memory: PrimitiveMemoryContract | None = None
+    conversion: PrimitiveConversionContract | None = None
     # Source-authored semantic-overload identity. Cross-declaration validation resolves
     # the family primary value; selection/lowering intentionally do not consume it yet.
     overload: PrimitiveOverload | None = None

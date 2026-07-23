@@ -222,10 +222,11 @@ def test_specialization_context_uses_cursor_scope_and_selector_slots(
     path = data_root / "primitives" / "arithmetic" / "fundamental.tsl"
     lines = path.read_text(encoding="utf-8").splitlines()
 
+    sse_line = lines.index("    sse:")
     exact_line = next(
         index
-        for index, line in enumerate(lines, 1)
-        if index > 120 and 'tsil "complete(intrin<add, build>(left, right));"' in line
+        for index, line in enumerate(lines[sse_line + 1 :], sse_line + 2)
+        if 'tsil "complete(intrin<add, build>(left, right));"' in line
     )
     exact = specialization_context(
         snapshot.catalog,

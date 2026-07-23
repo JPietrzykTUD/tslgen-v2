@@ -13,6 +13,7 @@ from tslc.catalog.signatures import (
     parse_signature,
 )
 from tslc.catalog.validation._invariants_arithmetic import validate_arithmetic_contracts
+from tslc.catalog.validation._invariants_semantics import validate_semantic_contracts
 from tslc.catalog.validation._invariants_overloads import validate_overload_families
 from tslc.diagnostics import Diagnostic, RelatedLocation, SourceSpan, diagnostic_at
 from tslc.syntax.access import (
@@ -34,6 +35,12 @@ def validate_primitive_arithmetic_contracts(
     diagnostics: list[Diagnostic],
 ) -> None:
     validate_arithmetic_contracts(catalog, diagnostics)
+
+
+def validate_primitive_semantic_contracts(
+    catalog: Catalog, diagnostics: list[Diagnostic]
+) -> None:
+    validate_semantic_contracts(catalog, diagnostics)
 
 
 def validate_primitive_overload_families(

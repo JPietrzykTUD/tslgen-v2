@@ -177,12 +177,14 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         definitions = client.read_until(lambda item: item.get("id") == 10)["result"]
         assert definitions
 
+        source_lines = text.splitlines()
+        sse_line = source_lines.index("    sse:")
         context_line = next(
             index
-            for index, line in enumerate(text.splitlines())
-            if index > 120 and 'tsil "complete(intrin<add, build>(left, right));"' in line
+            for index, line in enumerate(source_lines[sse_line + 1 :], sse_line + 1)
+            if 'tsil "complete(intrin<add, build>(left, right));"' in line
         )
-        context_character = text.splitlines()[context_line].index("complete")
+        context_character = source_lines[context_line].index("complete")
         client.send(
             {
                 "jsonrpc": "2.0",

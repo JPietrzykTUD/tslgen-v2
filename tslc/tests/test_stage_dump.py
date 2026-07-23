@@ -62,6 +62,27 @@ def test_catalog_lists_primitive_and_implementations(
     assert all(p["implementations"] for p in payload["primitives"])
 
 
+def test_catalog_dumps_language_neutral_operation_and_domain_contracts(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    text, payload, errors = _run(
+        "catalog",
+        data_root,
+        machine_profiles_path,
+        primitive="load",
+    )
+
+    assert errors == []
+    assert "operation: load" in text
+    assert "memory: access=read  addressing=contiguous" in text
+    for primitive in payload["primitives"]:
+        assert primitive["operation"]["name"] == "load"
+        assert primitive["memory"] == {
+            "access": "read",
+            "addressing": "contiguous",
+        }
+
+
 def test_catalog_unknown_primitive_errors(
     data_root: Path, machine_profiles_path: Path
 ) -> None:

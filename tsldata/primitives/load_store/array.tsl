@@ -315,6 +315,9 @@ prim<v:=s[]> from_array(data):
             complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
           """
 prim<s:=v[idx]> extract_value(a):
+  operation extract_lane
+  operand_roles:
+    primary a
   brief_description "Returns the scalar lane value at the compile-time index."
   detailed_description """
     Extracts one scalar lane from a vector register. The lane index is a
@@ -670,6 +673,10 @@ prim<s:=v[idx]> extract_value(a):
           tsil "complete(a);"
 
 prim<v:=(v,s)> insert_value(a, value):
+  operation insert_lane
+  operand_roles:
+    primary a
+    value value
   brief_description "Replaces the scalar lane at the compile-time index."
   detailed_description """
     Returns a vector equal to `a` except that the lane selected by the

@@ -1,4 +1,11 @@
 prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
+  operation store
+  operand_roles:
+    memory_destination ptr
+    value data
+  memory:
+    access write
+    addressing contiguous
   overload:
     axis payload_extent
     value vector
@@ -444,6 +451,13 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
             }
           """
 prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
+  operation store
+  operand_roles:
+    memory_destination ptr
+    value scalar
+  memory:
+    access write
+    addressing contiguous
   overload:
     axis payload_extent
     value scalar
@@ -528,6 +542,14 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
           tsil "*ptr = scalar;"
 
 prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
+  operation store
+  operand_roles:
+    control_mask mask
+    memory_destination ptr
+    value data
+  memory:
+    access write
+    addressing contiguous
   overload:
     axis payload_extent
     value vector
