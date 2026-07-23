@@ -491,7 +491,7 @@ def test_rust_warning_gates_report_independent_failures(tmp_path: Path) -> None:
     )
 
 
-def test_rust_compile_failures_share_one_cargo_feature(tmp_path: Path) -> None:
+def test_rust_compile_failures_use_isolated_unpublished_manifests(tmp_path: Path) -> None:
     marker = "TSL_ARITH_INTEGER_IMMEDIATE_ZERO"
     project = VerifyProject(
         backends=(
@@ -531,13 +531,14 @@ def test_rust_compile_failures_share_one_cargo_feature(tmp_path: Path) -> None:
         command for command in seen if command.step == "compile-failure"
     ]
     assert [
-        command.argv[command.argv.index("--features") + 1]
+        command.argv[command.argv.index("--manifest-path") + 1]
         for command in compile_failures
-    ] == ["tsl_compile_failures", "tsl_compile_failures"]
-    assert [
-        command.argv[command.argv.index("--example") + 1]
-        for command in compile_failures
-    ] == ["negative_zero", "negative_narrowed_zero"]
+    ] == [
+        str(tmp_path / "rust/verify/negative_zero/Cargo.toml"),
+        str(tmp_path / "rust/verify/negative_narrowed_zero/Cargo.toml"),
+    ]
+    assert all("--features" not in command.argv for command in compile_failures)
+    assert all("--example" not in command.argv for command in compile_failures)
 
 
 def test_rust_build_verifier_cross_target_does_not_run_test_binary(
@@ -1498,7 +1499,9 @@ def test_rust_wasm_value_tests_use_wasmtime_runner(tmp_path: Path) -> None:
     assert "--target" in build_tests.argv
     assert "wasm32-wasip1" in build_tests.argv
     assert "--message-format=json" in build_tests.argv
-    assert _env(build_tests)["RUSTFLAGS"] == "-C target-feature=+simd128"
+    assert _env(build_tests)["RUSTFLAGS"] == (
+        "-C target-feature=+simd128 --cfg tsl_value_tests"
+    )
     assert seen[-1].argv == (sys.executable, executable)
 
 

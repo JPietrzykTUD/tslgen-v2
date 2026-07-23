@@ -117,12 +117,14 @@ def test_render_assets_have_one_packaged_source_of_truth() -> None:
         "rust_benchmark_target.toml.tmpl",
         "rust_build.rs",
         "rust_documentation.rs.tmpl",
+        "rust_facade.rs.tmpl",
         "rust_lib.rs.tmpl",
         "rust_lib_benchmark_profile.rs.tmpl",
         "rust_lib_profile.rs.tmpl",
         "rust_primitive_tags.rs.tmpl",
         "rust_profile_module.rs.tmpl",
         "rust_profile_metadata.rs.tmpl",
+        "rust_readme.md.tmpl",
         "rust_smoke.rs",
         "tsl_benchmark_core.rs",
     } <= assets.files.keys()
@@ -237,8 +239,9 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
         benchmarks: object,
         assets: RenderAssets,
         media_type: str,
+        config: object,
     ) -> list[Artifact]:
-        del profiles, value_tests, benchmarks, assets
+        del profiles, value_tests, benchmarks, assets, config
         return [Artifact("fake/lib.fake", "fake\n", media_type)]
 
     fake = BackendCapability(
@@ -673,8 +676,9 @@ def _empty_backend_artifacts(
     benchmarks: object,
     assets: RenderAssets,
     media_type: str,
+    config: object,
 ) -> list[Artifact]:
-    del profiles, value_tests, benchmarks, assets, media_type
+    del profiles, value_tests, benchmarks, assets, media_type, config
     return []
 
 

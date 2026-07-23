@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import json
+
+from tslc.backend.rust_package import (
+    DEFAULT_RUST_PACKAGE_CONFIG,
+    RustPackageConfig,
+)
 from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact
 from tslc.backend.rust_static_selection import RustStaticSelectionPlan
@@ -72,6 +78,7 @@ def rust_test_artifacts(
     *,
     media_type: str,
     static_selection_plan: RustStaticSelectionPlan,
+    package_config: RustPackageConfig = DEFAULT_RUST_PACKAGE_CONFIG,
 ) -> list[Artifact]:
     """Rust value-test sources: shared helper module plus the cfg-gated test file."""
 
@@ -104,15 +111,47 @@ def rust_test_artifacts(
         ),
     ]
     for profile in plan.profiles_for("rust"):
-        artifacts.extend(
-            text(
-                f"rust/examples/{compile_failure_target_name(profile, case)}.rs",
-                render_rust_compile_failure(case),
-                media_type=media_type,
+        for case in profile.compile_failure_cases:
+            target = compile_failure_target_name(profile, case)
+            artifacts.append(
+                text(
+                    f"rust/examples/{target}.rs",
+                    render_rust_compile_failure(case),
+                    media_type=media_type,
+                )
             )
-            for case in profile.compile_failure_cases
-        )
+            artifacts.append(
+                text(
+                    f"rust/verify/{target}/Cargo.toml",
+                    _rust_compile_failure_manifest(target, package_config),
+                    media_type="text/toml",
+                )
+            )
     return artifacts
+
+
+def _rust_compile_failure_manifest(
+    target: str,
+    package: RustPackageConfig,
+) -> str:
+    return "\n".join(
+        (
+            "[package]",
+            f'name = {json.dumps(target.replace("_", "-"))}',
+            'version = "0.0.0"',
+            f"edition = {json.dumps(package.edition)}",
+            "publish = false",
+            "",
+            "[dependencies]",
+            "tsl = { package = "
+            f"{json.dumps(package.name)}, path = \"../..\" }}",
+            "",
+            "[[bin]]",
+            f"name = {json.dumps(target)}",
+            f'path = "../../examples/{target}.rs"',
+            "",
+        )
+    )
 
 
 __all__ = ["cpp_test_artifacts", "rust_test_artifacts"]

@@ -52,6 +52,8 @@ const TRACKED_ENVIRONMENT: &[&str] = &[
 ];
 
 fn main() {
+    println!("cargo::rustc-check-cfg=cfg(tsl_value_tests)");
+    println!("cargo::rustc-check-cfg=cfg(tsl_variant_benchmarks)");
     println!("cargo:rerun-if-env-changed={POLICY_ENVIRONMENT}");
     for name in [
         "HOST",

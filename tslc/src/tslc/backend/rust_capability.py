@@ -14,6 +14,7 @@ from tslc.backend.capability import (
 )
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_api_planner import plan_rust_facade
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
 from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
@@ -53,6 +54,7 @@ if TYPE_CHECKING:
     from tslc.output.verify_model import VerifyProfile
     from tslc.lower.lowerer import LoweredSpecialization
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
+    from tslc.project_render import ProjectRenderConfig
 
 
 _RUST_BENCHMARK_ADMISSIONS = frozenset(
@@ -110,11 +112,13 @@ def rust_backend_artifacts(
     benchmarks: BenchmarkProjectPlan,
     assets: RenderAssets,
     media_type: str,
+    config: ProjectRenderConfig,
 ) -> list[Artifact]:
     """Render Rust from one frozen selection/consumption projection."""
 
     selection_plan = plan_rust_policy_selection(profiles)
     static_selection_plan = plan_rust_static_selection(profiles)
+    facade_plan = plan_rust_facade(profiles, static_selection_plan)
     consumption_plan = plan_rust_policy_consumption_render(
         plan_rust_policy_consumption(benchmarks, selection_plan),
         static_selection_plan,
@@ -129,15 +133,17 @@ def rust_backend_artifacts(
             media_type=media_type,
             selection_plan=selection_plan,
             static_selection_plan=static_selection_plan,
+            facade_plan=facade_plan,
             consumption_plan=consumption_plan,
             benchmark_layout_plan=benchmark_layout_plan,
-            value_tests=value_tests,
+            package_config=config.rust_package,
         ),
         *rust_test_artifacts(
             value_tests,
             assets,
             media_type=media_type,
             static_selection_plan=static_selection_plan,
+            package_config=config.rust_package,
         ),
         *rust_benchmark_artifacts(
             benchmarks,

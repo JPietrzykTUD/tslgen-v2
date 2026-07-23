@@ -439,6 +439,15 @@ primitive name, reopen `tsldata`, or render Rust. Backend validation constructs
 the plan at the post-lowering boundary, exposing one compiler-owned input for
 Rust source, rustdoc, fixture, benchmark, and dispatch projections.
 
+The focused renderer in
+[render/rust_facade.py](src/tslc/render/rust_facade.py) turns those finalized
+shape records into sealed, opaque `Simd<T, N>` and `Mask<T, N>` values. A
+compile target selects one exact private hardware representation or the
+source-backed generic representation; no profile or extension is a Cargo
+feature. Complete release metadata is carried through the backend-neutral
+`ProjectRenderConfig` into the Rust package renderer, so templates format
+configured Cargo facts rather than owning repository release policy.
+
 A static substrate ships as assets
 ([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),
 [tsl_core.rs](src/tslc/backend/assets/tsl_core.rs)) defining `simd<T,Ext>` /

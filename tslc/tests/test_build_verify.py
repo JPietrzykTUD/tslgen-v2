@@ -390,7 +390,7 @@ def test_rust_path_dependency_consumer_builds(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=_build_verified("test_rust_path_dependency_consumer_builds"),
-        profiles=["scalar"],
+        profiles=["scalar", "sse2", "avx2"],
         backends=["rust"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -427,6 +427,45 @@ def test_rust_path_dependency_consumer_builds(
         ).lstrip(),
         encoding="utf-8",
     )
+    (consumer / "src" / "lib.rs").write_text(
+        textwrap.dedent(
+            """
+            #![no_std]
+
+            use tsl::{
+                Mask, NativeMask, NativeSimd, Simd, SimdElement, SupportedSimd,
+            };
+
+            fn assert_owned<V: Copy + Clone + Send + Sync + Unpin + 'static>() {}
+
+            pub fn move_vector<T, const N: usize>(value: Simd<T, N>) -> Simd<T, N>
+            where
+                T: SupportedSimd<N>,
+            {
+                assert_owned::<Simd<T, N>>();
+                value
+            }
+
+            pub fn move_mask<T, const N: usize>(value: Mask<T, N>) -> Mask<T, N>
+            where
+                T: SupportedSimd<N>,
+            {
+                assert_owned::<Mask<T, N>>();
+                value
+            }
+
+            pub fn move_native<T: SimdElement>(
+                vector: NativeSimd<T>,
+                mask: NativeMask<T>,
+            ) -> (NativeSimd<T>, NativeMask<T>) {
+                assert_owned::<NativeSimd<T>>();
+                assert_owned::<NativeMask<T>>();
+                (vector, mask)
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
     checked = subprocess.run(
         (
             "cargo",
@@ -443,6 +482,81 @@ def test_rust_path_dependency_consumer_builds(
 
     assert checked.returncode == 0, checked.stderr + checked.stdout
 
+    generated_manifest = generated / "rust" / "Cargo.toml"
+    packaged = subprocess.run(
+        (
+            "cargo",
+            "package",
+            "--manifest-path",
+            str(generated_manifest),
+            "--allow-dirty",
+            "--no-verify",
+            "--list",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert packaged.returncode == 0, packaged.stderr + packaged.stdout
+    packaged_paths = set(packaged.stdout.splitlines())
+    assert {"Cargo.toml", "README.md", "src/lib.rs", "src/tsl_facade.rs"} <= packaged_paths
+    assert not any(path.startswith("tslc/") for path in packaged_paths)
+    manifest_text = generated_manifest.read_text(encoding="utf-8")
+    assert "[build-dependencies]" not in manifest_text
+    assert 'rust-version = "1.89"' in manifest_text
+
+    documented = subprocess.run(
+        (
+            "cargo",
+            "doc",
+            "--manifest-path",
+            str(generated_manifest),
+            "--no-default-features",
+            "--no-deps",
+            "--target-dir",
+            str(tmp_path / "rust-doc-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "RUSTDOCFLAGS": "-D warnings"},
+    )
+    assert documented.returncode == 0, documented.stderr + documented.stdout
+    root_docs = (
+        tmp_path / "rust-doc-target" / "doc" / "tsl" / "index.html"
+    ).read_text(encoding="utf-8")
+    assert "avx2" not in root_docs.lower()
+    assert "sse2" not in root_docs.lower()
+
+    (consumer / "src" / "main.rs").write_text(
+        textwrap.dedent(
+            """
+            use tsl::Simd;
+
+            fn unsupported(_: Simd<i32, 3>) {}
+
+            fn main() {}
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    unsupported_shape = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(consumer / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "rust-consumer-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    unsupported_output = unsupported_shape.stderr + unsupported_shape.stdout
+    assert unsupported_shape.returncode != 0
+    assert "SupportedSimd<3>" in unsupported_output
+
     (consumer / "src" / "main.rs").write_text(
         textwrap.dedent(
             """
@@ -450,6 +564,12 @@ def test_rust_path_dependency_consumer_builds(
             use tsl::tsl_core::{Scalar, Simd, SimdVector, StaticSimdVector};
 
             struct ExternalRepresentation;
+            struct ExternalElement;
+
+            impl tsl::SimdElement for ExternalElement {
+                type NativeSimd = ();
+                type NativeMask = ();
+            }
 
             impl SimdVector for ExternalRepresentation {
                 type BaseType = u8;
@@ -500,6 +620,7 @@ def test_rust_path_dependency_consumer_builds(
     assert "representation_sealed::SimdVector" in forged_output
     assert "representation_sealed::StaticSimdVector" in forged_output
     assert "representation_sealed::VectorPolicy" in forged_output
+    assert "SealedElement" in forged_output
 
     (consumer / "src" / "main.rs").write_text(
         textwrap.dedent(
@@ -2176,7 +2297,7 @@ def test_set_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path
 
 def test_to_ostream_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `to_ostream` (`o:=(o,v,s)`) writes a vector's lanes into a text buffer. The `o` (ostream)
-    # kind renders as a string buffer (C++ std::string& / Rust &mut String); the body collapses
+    # kind renders as a string buffer (C++ std::string& / Rust alloc::string::String); the body collapses
     # to_array -> io<format> -> complete(out), where io<format> calls the runtime
     # tsl::ostream_write helper (the per-lane base formatting + a TslBits as_u64 in Rust). No
     # scalar impl in the corpus, so it emits for generic + SIMD; builds in C++ and Rust.

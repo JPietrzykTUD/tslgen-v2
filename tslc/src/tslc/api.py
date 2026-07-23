@@ -6,6 +6,10 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from tslc.backend.registry import registered_backend_ids
+from tslc.backend.rust_package import (
+    DEFAULT_RUST_PACKAGE_CONFIG,
+    RustPackageConfig,
+)
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.output.artifacts import ArtifactSet
 from tslc.output.verify import (
@@ -18,6 +22,7 @@ from tslc.output.verify_model import BackendToolchain
 from tslc.output.writer import ArtifactWriteMode, ArtifactWriteReport, ArtifactWriter
 from tslc.pipeline import GenerationMode, GenerationRequest, GenerationResult, generate
 from tslc.sources import expand_source_paths
+from tslc.project_render import ProjectRenderConfig
 
 _ARITH_TYPE_TAGS = DEFAULT_SCALAR_TYPE_TAGS
 
@@ -36,6 +41,7 @@ def generate_project(
     value_test_warnings: bool = False,
     value_test_fuzz: bool = False,
     render_artifacts: bool = True,
+    rust_package: RustPackageConfig = DEFAULT_RUST_PACKAGE_CONFIG,
 ) -> GenerationResult:
     """Run the full compiler pipeline and return in-memory artifacts.
 
@@ -62,6 +68,7 @@ def generate_project(
         value_test_warnings=value_test_warnings,
         value_test_fuzz=value_test_fuzz,
         render_artifacts=render_artifacts,
+        render_config=ProjectRenderConfig(rust_package=rust_package),
     )
     return generate(request)
 

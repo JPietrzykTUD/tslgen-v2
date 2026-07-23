@@ -31,9 +31,6 @@ from tslc.output.verify_model import (
     VerifyBackend,
     VerifyProfile,
 )
-from tslc.value_tests.compile_failure import RUST_COMPILE_FAILURE_FEATURE
-
-
 _RUST_WARNING_FLAGS = (
     "-Dwarnings",
     "-Dinvalid-value",
@@ -328,7 +325,6 @@ def _rust_command_groups(
         # Build verification still uses `cargo test` so generated test targets
         # compile. Cross-target builds cannot execute those binaries natively, so
         # they use --no-run unless value-test mode has a runner follow-up.
-        features: tuple[str, ...] = ()
         severity: Severity = "error"
         step = "test"
         extra_args: tuple[str, ...] = ()
@@ -336,11 +332,10 @@ def _rust_command_groups(
             step = "build-tests"
             extra_args = ("--no-run",)
         if config.run_value_tests:
-            # Value testing adds the opt-in `value_tests` feature (so `cargo test`
-            # compiles+runs the generated value tests); without it `tests/values.rs`
-            # is cfg'd empty. A value-mode failure is reported as a warning
+            # Value testing adds a verifier-owned cfg (so `cargo test`
+            # compiles+runs the generated value tests); without it
+            # `tests/values.rs` is cfg'd empty. A value-mode failure is reported as a warning
             # (report-then-promote), like the C++ ctest step.
-            features = ("value_tests",)
             severity = "warning"
             if runner_prefix(profile, config):
                 step = "build-tests"
@@ -356,14 +351,17 @@ def _rust_command_groups(
                     "--manifest-path",
                     str(manifest),
                     "--no-default-features",
-                    *_cargo_features_args(features),
                     *rust_target_args(profile, config),
                     "--target-dir",
                     str(target_dir),
                     *extra_args,
                 ),
                 cwd=root,
-                env=rust_environment(profile, config),
+                env=(
+                    _rust_environment_with_cfg(profile, config, "tsl_value_tests")
+                    if config.run_value_tests
+                    else rust_environment(profile, config)
+                ),
                 severity_on_failure=severity,
             )
         ]
@@ -376,12 +374,12 @@ def _rust_command_groups(
                     "cargo",
                     "build",
                     "--manifest-path",
-                    str(manifest),
-                    "--no-default-features",
-                    "--features",
-                    RUST_COMPILE_FAILURE_FEATURE,
-                    "--example",
-                    failure.target_name,
+                    str(
+                        project_root
+                        / "verify"
+                        / failure.target_name
+                        / "Cargo.toml"
+                    ),
                     *rust_target_args(profile, config),
                     "--target-dir",
                     str(target_dir),
@@ -396,8 +394,23 @@ def _rust_command_groups(
     return tuple(groups)
 
 
-def _cargo_features_args(features: tuple[str, ...]) -> tuple[str, ...]:
-    return ("--features", ",".join(features)) if features else ()
+def _rust_environment_with_cfg(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+    cfg: str,
+) -> tuple[BuildCommandEnvironment, ...]:
+    environment = list(rust_environment(profile, config))
+    cfg_flag = f"--cfg {cfg}"
+    for index, item in enumerate(environment):
+        if item.key == "RUSTFLAGS":
+            environment[index] = BuildCommandEnvironment(
+                key="RUSTFLAGS",
+                value=f"{item.value} {cfg_flag}",
+            )
+            break
+    else:
+        environment.append(BuildCommandEnvironment(key="RUSTFLAGS", value=cfg_flag))
+    return tuple(environment)
 
 
 def _rust_clippy_executable(config: BuildVerifierConfig) -> str:

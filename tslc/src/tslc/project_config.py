@@ -9,6 +9,10 @@ from types import MappingProxyType
 import tomllib
 
 from tslc.output.verify_model import BackendToolchain
+from tslc.backend.rust_package import (
+    DEFAULT_RUST_PACKAGE_CONFIG,
+    RustPackageConfig,
+)
 
 CONFIG_NAME = "tslc.toml"
 
@@ -24,6 +28,7 @@ class ProjectConfig:
     toolchains: Mapping[str, BackendToolchain] = field(default_factory=dict)
     runner_paths: Mapping[str, str] = field(default_factory=dict)
     tool_paths: Mapping[str, str] = field(default_factory=dict)
+    rust_package: RustPackageConfig = DEFAULT_RUST_PACKAGE_CONFIG
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -93,6 +98,7 @@ def load_project_config(path: Path | str | None = None) -> ProjectConfig | None:
         for key, value in tools.items()
     ):
         raise ValueError(f"{selected}: tslc.tools must map names to non-empty strings")
+    rust_package = _rust_package_config(selected, root.get("rust_package"))
     assert profiles is not None
     return ProjectConfig(
         path=selected,
@@ -104,7 +110,42 @@ def load_project_config(path: Path | str | None = None) -> ProjectConfig | None:
         toolchains=toolchains,
         runner_paths={str(key): str(value) for key, value in runners.items()},
         tool_paths={str(key): str(value) for key, value in tools.items()},
+        rust_package=rust_package,
     )
+
+
+def _rust_package_config(path: Path, value: object) -> RustPackageConfig:
+    if value is None:
+        return DEFAULT_RUST_PACKAGE_CONFIG
+    if not isinstance(value, dict):
+        raise ValueError(f"{path}: tslc.rust_package must be a table")
+    keys = {
+        "name",
+        "version",
+        "edition",
+        "rust_version",
+        "license",
+        "repository",
+        "documentation",
+        "readme",
+    }
+    unknown = sorted(set(value) - keys)
+    if unknown:
+        raise ValueError(
+            f"{path}: unknown tslc.rust_package field(s): {', '.join(unknown)}"
+        )
+    fields = {}
+    for key in sorted(keys):
+        field_value = value.get(key)
+        if not isinstance(field_value, str) or not field_value.strip():
+            raise ValueError(
+                f"{path}: tslc.rust_package.{key} must be a non-empty string"
+            )
+        fields[key] = field_value
+    try:
+        return RustPackageConfig(**fields)
+    except ValueError as error:
+        raise ValueError(f"{path}: {error}") from error
 
 
 def _resolve(base: Path, value: str) -> Path:

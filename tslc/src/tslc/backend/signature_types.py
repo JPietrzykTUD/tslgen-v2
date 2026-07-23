@@ -291,8 +291,8 @@ RUST_SIGNATURE_TYPES = BackendSignatureTypes(
             concrete="{register}",
         ),
         "o": SignatureTypeForms(
-            owner="&mut String",
-            parameter="&mut String",
+            owner="&mut alloc::string::String",
+            parameter="&mut alloc::string::String",
             concrete="{base}",
         ),
     },

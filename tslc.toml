@@ -5,6 +5,16 @@ backends = ["cpp", "rust"]
 authoring_profiles = ["scalar", "avx2"]
 output_root = "tslctmp/generated"
 
+[tslc.rust_package]
+name = "tsl"
+version = "0.1.0"
+edition = "2021"
+rust_version = "1.89"
+license = "Apache-2.0"
+repository = "https://github.com/JPietrzykTUD/tslgen-v2"
+documentation = "https://docs.rs/tsl"
+readme = "README.md"
+
 # Committed repo-canonical tool roles live in [tslc.tools] below. Personal,
 # host-specific overrides use these tables and stay uncommitted.
 # [tslc.toolchains.cpp]

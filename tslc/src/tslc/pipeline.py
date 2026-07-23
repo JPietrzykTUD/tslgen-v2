@@ -47,6 +47,7 @@ from tslc.lower.lowerer import (
 )
 from tslc.output.artifacts import ArtifactSet
 from tslc.render.project import RenderedProject, render_project
+from tslc.project_render import DEFAULT_PROJECT_RENDER_CONFIG, ProjectRenderConfig
 from tslc.select.selector import (
     SelectedImplementation,
     Selector,
@@ -96,6 +97,7 @@ class GenerationRequest:
     # Explicit concrete-analysis commands may retain the lowered call graph.
     # Ordinary checking/generation discards it after closure and propagation.
     collect_lowering_trace: bool = False
+    render_config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG
 
 
 @dataclass(frozen=True, slots=True)
@@ -298,6 +300,7 @@ class _GenerationSession:
                 value_tests,
                 benchmarks,
                 assets=self.inputs.render_assets,
+                config=self.request.render_config,
             )
             if self.emitted_profiles
             else None

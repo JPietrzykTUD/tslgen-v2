@@ -11,6 +11,7 @@ from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact, ArtifactSet
 from tslc.output.verify_model import VerifyBackend, VerifyProject
 from tslc.render.documentation_project import documentation_artifacts
+from tslc.project_render import DEFAULT_PROJECT_RENDER_CONFIG, ProjectRenderConfig
 from tslc.render.licensing import (
     add_generated_license_notice,
     generated_license_artifacts,
@@ -35,6 +36,7 @@ def render_project(
     benchmarks: BenchmarkProjectPlan = EMPTY_BENCHMARK_PROJECT_PLAN,
     *,
     assets: RenderAssets,
+    config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG,
 ) -> RenderedProject:
     ordered = tuple(sorted(profiles, key=lambda profile: profile.profile.name))
     artifacts: list[Artifact] = []
@@ -43,7 +45,7 @@ def render_project(
     drivers = backend_capabilities(backends)
     for driver in drivers:
         artifacts.extend(
-            driver.render_artifacts(ordered, value_tests, benchmarks, assets)
+            driver.render_artifacts(ordered, value_tests, benchmarks, assets, config)
         )
         verify_backends.append(driver.verify_backend(ordered, value_tests))
     artifacts.extend(documentation_artifacts(ordered))

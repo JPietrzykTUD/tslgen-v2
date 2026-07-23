@@ -12,6 +12,7 @@ from tslc.backend.helper_requirements import (
     EMPTY_HELPER_MANIFEST,
 )
 from tslc.output.verify_model import VerifyBackend, VerifyCompileFailure
+from tslc.project_render import DEFAULT_PROJECT_RENDER_CONFIG, ProjectRenderConfig
 from tslc.value_tests.compile_failure import compile_failure_target_name
 
 if TYPE_CHECKING:
@@ -54,6 +55,7 @@ BackendArtifactRenderer = Callable[
         "BenchmarkProjectPlan",
         "RenderAssets",
         str,
+        "ProjectRenderConfig",
     ],
     list["Artifact"],
 ]
@@ -155,6 +157,7 @@ class BackendCapability:
         value_tests: ValueTestProjectPlan,
         benchmarks: BenchmarkProjectPlan,
         assets: RenderAssets,
+        config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG,
     ) -> list[Artifact]:
         """Render the backend's complete artifact set from one fact snapshot."""
 
@@ -164,6 +167,7 @@ class BackendCapability:
             benchmarks,
             assets,
             self.artifact_media_type,
+            config,
         )
 
     def plan_benchmarks(

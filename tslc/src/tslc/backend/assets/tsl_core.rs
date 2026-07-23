@@ -584,7 +584,7 @@ impl_tsl_bits!(i8, i16, i32, i64, u8, u16, u32, u64, f32, f64);
 /// Format a lane array into a text buffer (the `to_ostream` body). `modifier` selects the base
 /// (0 = binary, 16 = hex, 8 = octal, else decimal); the C++ `tsl::ostream_write` counterpart.
 pub fn ostream_write<T: TslBits, const N: usize>(
-    out: &mut String,
+    out: &mut alloc::string::String,
     arr: &ArrayStorage<T, N>,
     modifier: i32,
 ) {

@@ -43,6 +43,7 @@ class RustBenchmarkCodegenContract:
         """Flags that make hidden Cargo profile overrides ineffective."""
 
         return (
+            "--cfg=tsl_variant_benchmarks",
             f"-Copt-level={self.opt_level}",
             f"-Cdebuginfo={2 if self.debug else 0}",
             f"-Cdebug-assertions={'yes' if self.debug_assertions else 'no'}",

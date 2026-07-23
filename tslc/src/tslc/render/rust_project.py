@@ -5,6 +5,11 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_api_model import RustFacadePlan
+from tslc.backend.rust_api_planner import (
+    plan_rust_facade,
+    validate_rust_facade_plan,
+)
 from tslc.backend.rust_benchmark_context import (
     RUST_BENCHMARK_CODEGEN_CONTRACT,
     RUST_BENCHMARK_POLICY_SCHEMA_VERSION,
@@ -13,6 +18,10 @@ from tslc.backend.rust_benchmark_context import (
 from tslc.backend.rust_policy_selection import (
     RustPolicySelectionPlan,
     validate_rust_policy_selection_plan,
+)
+from tslc.backend.rust_package import (
+    DEFAULT_RUST_PACKAGE_CONFIG,
+    RustPackageConfig,
 )
 from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
@@ -37,6 +46,7 @@ from tslc.render.rust_benchmark_layout import (
     RustBenchmarkLayoutPlan,
     plan_rust_benchmark_layout,
 )
+from tslc.render.rust_facade import rust_facade_module
 from tslc.render.rust_policy_consumption import (
     EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN,
     RustPolicyConsumptionRenderPlan,
@@ -48,11 +58,6 @@ from tslc.render.rust_static_selection import (
 )
 from tslc.backend.rust_algorithm import rust_algorithm_module
 from tslc.backend.rust_vectors import rust_registrations, rust_vector_registrations
-from tslc.value_tests.compile_failure import (
-    RUST_COMPILE_FAILURE_FEATURE,
-    compile_failure_target_name,
-)
-from tslc.value_tests.model import ValueTestProjectPlan
 
 
 def rust_artifacts(
@@ -62,14 +67,18 @@ def rust_artifacts(
     media_type: str,
     selection_plan: RustPolicySelectionPlan,
     static_selection_plan: RustStaticSelectionPlan,
+    facade_plan: RustFacadePlan | None = None,
     consumption_plan: RustPolicyConsumptionRenderPlan = (
         EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN
     ),
     benchmark_layout_plan: RustBenchmarkLayoutPlan | None = None,
-    value_tests: ValueTestProjectPlan | None = None,
+    package_config: RustPackageConfig = DEFAULT_RUST_PACKAGE_CONFIG,
 ) -> list[Artifact]:
     validate_rust_policy_selection_plan(profiles, selection_plan)
     validate_rust_static_selection_plan(profiles, static_selection_plan)
+    if facade_plan is None:
+        facade_plan = plan_rust_facade(profiles, static_selection_plan)
+    validate_rust_facade_plan(profiles, static_selection_plan, facade_plan)
     emitted_names = {profile.profile.name for profile in profiles}
     if any(
         entry.profile.profile_name not in emitted_names
@@ -117,6 +126,11 @@ def rust_artifacts(
         text(
             "rust/src/tsl_algorithm.rs",
             assets.text("tsl_algorithm.rs"),
+            media_type=media_type,
+        ),
+        text(
+            "rust/src/tsl_facade.rs",
+            rust_facade_module(facade_plan, assets),
             media_type=media_type,
         ),
         text(
@@ -318,8 +332,24 @@ def rust_artifacts(
     artifacts.append(
         text(
             "rust/Cargo.toml",
-            _rust_cargo(benchmark_layout_plan, assets, value_tests=value_tests),
+            _rust_cargo(
+                benchmark_layout_plan,
+                assets,
+                package_config,
+            ),
             media_type=media_type,
+        )
+    )
+    artifacts.append(
+        text(
+            f"rust/{package_config.readme}",
+            assets.fill(
+                "rust_readme.md.tmpl",
+                package_name=package_config.name,
+                documentation_url=package_config.documentation,
+                repository_url=package_config.repository,
+            ),
+            media_type="text/markdown",
         )
     )
     artifacts.append(
@@ -636,55 +666,34 @@ def _rust_build_policy_modules(
 def _rust_cargo(
     benchmark_layout_plan: RustBenchmarkLayoutPlan,
     assets: RenderAssets,
-    *,
-    value_tests: ValueTestProjectPlan | None = None,
+    package_config: RustPackageConfig,
 ) -> str:
-    features = ["default = []"]
-    # Opt-in feature that compiles+runs the generated value tests (parity with the C++ ctest gate).
-    features.append("value_tests = []")
-    # Benchmark targets stay outside ordinary builds unless explicitly requested.
-    features.append("variant_benchmarks = []")
-    compile_failure_targets: list[str] = []
-    if value_tests is not None:
-        if any(
-            profile.compile_failure_cases
-            for profile in value_tests.profiles_for("rust")
-        ):
-            features.append(f"{RUST_COMPILE_FAILURE_FEATURE} = []")
-        for profile in value_tests.profiles_for("rust"):
-            for case in profile.compile_failure_cases:
-                target = compile_failure_target_name(profile, case)
-                compile_failure_targets.append(
-                    "\n".join(
-                        (
-                            "[[example]]",
-                            f'name = "{target}"',
-                            f'path = "examples/{target}.rs"',
-                            "required-features = "
-                            f'["{RUST_COMPILE_FAILURE_FEATURE}"]',
-                        )
-                    )
-                )
+    features = ["default = []", "std = []", 'runtime-dispatch = ["std"]']
     bench_targets = "\n\n".join(
         assets.fill(
             "rust_benchmark_target.toml.tmpl",
             profile_slug=profile.profile_slug,
             benchmark_target=profile.benchmark_target,
-            required_features=", ".join(
-                json.dumps(feature) for feature in profile.cargo_features
-            ),
         ).rstrip()
         for profile in benchmark_layout_plan.profiles
     )
     return assets.fill(
         "rust_cargo.toml.tmpl",
+        package_name=json.dumps(package_config.name),
+        package_version=json.dumps(package_config.version),
+        package_edition=json.dumps(package_config.edition),
+        rust_version=json.dumps(package_config.rust_version),
+        package_license=json.dumps(package_config.license),
+        repository_url=json.dumps(package_config.repository),
+        documentation_url=json.dumps(package_config.documentation),
+        readme_path=json.dumps(package_config.readme),
         features="\n".join(features),
         bench_targets=(
             "\n\n"
             + "\n\n".join(
-                part for part in (bench_targets, *compile_failure_targets) if part
+                part for part in (bench_targets,) if part
             )
-            if bench_targets or compile_failure_targets
+            if bench_targets
             else ""
         ),
         benchmark_profile=RUST_BENCHMARK_CODEGEN_CONTRACT.render_cargo_profile(),

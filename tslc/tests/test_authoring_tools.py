@@ -206,6 +206,15 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
                 'backends = ["cpp"]',
                 'authoring_profiles = ["scalar"]',
                 'output_root = "out"',
+                "[tslc.rust_package]",
+                'name = "custom-tsl"',
+                'version = "1.2.3"',
+                'edition = "2024"',
+                'rust_version = "1.85"',
+                'license = "Apache-2.0"',
+                'repository = "https://example.test/repository"',
+                'documentation = "https://example.test/documentation"',
+                'readme = "CRATE.md"',
                 "[tslc.toolchains.cpp]",
                 'compiler = "clang++"',
                 "[tslc.runners]",
@@ -228,6 +237,11 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
     assert config.toolchains["cpp"].compiler == ("clang++",)
     assert config.runner_paths == {"sde": "/opt/sde64"}
     assert config.tool_paths == {"oneapi-cpp": "/opt/oneapi/icpx"}
+    assert config.rust_package.name == "custom-tsl"
+    assert config.rust_package.version == "1.2.3"
+    assert config.rust_package.edition == "2024"
+    assert config.rust_package.rust_version == "1.85"
+    assert config.rust_package.readme == "CRATE.md"
 
 
 def test_generate_uses_discovered_backend_defaults_for_formatting(

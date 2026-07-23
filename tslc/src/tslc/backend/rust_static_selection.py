@@ -50,12 +50,17 @@ class RustStaticVectorMapping:
     total_bits: int
     vector_spelling: str
     extension_name: str | None = None
+    extension_tag_spelling: str | None = None
 
     def __post_init__(self) -> None:
         if not self.type_tag or not self.base_spelling or not self.vector_spelling:
             raise ValueError("Rust static vector mappings require complete type facts")
         if self.lanes <= 0 or self.total_bits <= 0:
             raise ValueError("Rust static vector mappings require positive sizes")
+        if (self.extension_name is None) != (self.extension_tag_spelling is None):
+            raise ValueError(
+                "Rust hardware mappings require both extension identity and tag spelling"
+            )
 
     @property
     def uses_hardware(self) -> bool:
@@ -622,6 +627,7 @@ def _profile_mappings(
                     f"Simd<{best.base_spelling}, {rust_extension_tag(extension)}>"
                 ),
                 extension_name=best.extension_name,
+                extension_tag_spelling=rust_extension_tag(extension),
             )
         )
     return (

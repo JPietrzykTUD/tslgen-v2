@@ -1,0 +1,74 @@
+//! Opaque logical SIMD values selected from the compilation target.
+
+mod private {
+    pub trait SealedElement {}
+
+    pub trait Representation<const N: usize>: SealedElement {
+        type Vector: Copy + Send + Sync + Unpin + 'static;
+        type Mask: Copy + Send + Sync + Unpin + 'static;
+    }
+}
+
+/// An element type admitted by the generated fixed-width SIMD surface.
+///
+/// This trait is sealed. Its associated types select the generated native lane
+/// count for the compilation target without exposing the private register type.
+#[allow(private_bounds)]
+pub trait SimdElement:
+    private::SealedElement + Copy + Send + Sync + Unpin + 'static
+{
+    type NativeSimd: Copy + Send + Sync + Unpin + 'static;
+    type NativeMask: Copy + Send + Sync + Unpin + 'static;
+}
+
+/// Proof that element type `Self` supports exactly `N` logical lanes.
+///
+/// The generated crate implements this sealed trait only for scalar shapes and
+/// source-authored fixed 128-, 256-, or 512-bit shapes.
+#[allow(private_bounds)]
+pub trait SupportedSimd<const N: usize>:
+    SimdElement + private::Representation<N>
+{
+}
+
+impl<T, const N: usize> SupportedSimd<N> for T
+where
+    T: SimdElement + private::Representation<N>,
+{
+}
+
+/// An opaque owned SIMD value containing `N` lanes of `T`.
+///
+/// Its size, alignment, and byte layout are deliberately unspecified. Do not
+/// transmute, serialize, or pass this value through FFI by layout.
+#[derive(Clone, Copy)]
+#[allow(private_bounds)]
+pub struct Simd<T, const N: usize>
+where
+    T: SupportedSimd<N>,
+{
+    value: <T as private::Representation<N>>::Vector,
+}
+
+/// An opaque owned lane mask associated with `Simd<T, N>`.
+///
+/// Its size, alignment, and byte layout are deliberately unspecified. Do not
+/// transmute, serialize, or pass this value through FFI by layout.
+#[derive(Clone, Copy)]
+#[allow(private_bounds)]
+pub struct Mask<T, const N: usize>
+where
+    T: SupportedSimd<N>,
+{
+    value: <T as private::Representation<N>>::Mask,
+}
+
+/// The generated native-width SIMD value for element type `T`.
+pub type NativeSimd<T> = <T as SimdElement>::NativeSimd;
+
+/// The generated native-width mask for element type `T`.
+pub type NativeMask<T> = <T as SimdElement>::NativeMask;
+
+@{representation_impls}
+
+@{element_impls}

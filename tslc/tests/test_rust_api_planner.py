@@ -602,6 +602,14 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
         == {None, "sse2", "avx2"}
         for shape in plan.shapes
     )
+    expected_native_profiles = {None} | {
+        profile.profile_name for profile in static.profiles
+    }
+    assert all(
+        {selection.profile_name for selection in alias.selections}
+        == expected_native_profiles
+        for alias in plan.native_aliases
+    )
     assert {
         trait.rhs_kind
         for trait in plan.trait_implementations

@@ -1,6 +1,9 @@
+#![no_std]
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 #![allow(non_upper_case_globals)]
+
+extern crate alloc;
 
 pub mod tsl_core;
 pub mod tsl_algorithm;
@@ -8,19 +11,27 @@ pub mod tsl_algorithm;
 pub mod tsl_test_core;
 pub use tsl_algorithm::dataparallel;
 
-#[cfg(feature = "variant_benchmarks")]
+mod tsl_facade;
+pub use tsl_facade::{
+    Mask, NativeMask, NativeSimd, Simd, SimdElement, SupportedSimd,
+};
+
+#[cfg(any(feature = "std", tsl_variant_benchmarks))]
+extern crate std;
+
+#[cfg(tsl_variant_benchmarks)]
 #[doc(hidden)]
 pub mod tsl_benchmark_core;
-#[cfg(feature = "variant_benchmarks")]
+#[cfg(tsl_variant_benchmarks)]
 #[doc(hidden)]
 pub mod tsl_benchmark_reducer;
-#[cfg(feature = "variant_benchmarks")]
+#[cfg(tsl_variant_benchmarks)]
 #[doc(hidden)]
 pub mod tsl_benchmark_policy;
-#[cfg(feature = "variant_benchmarks")]
+#[cfg(tsl_variant_benchmarks)]
 #[doc(hidden)]
 pub mod tsl_benchmark_self_test;
-#[cfg(feature = "variant_benchmarks")]
+#[cfg(tsl_variant_benchmarks)]
 #[doc(hidden)]
 pub(crate) mod tsl_rust_cpu_identity;
 

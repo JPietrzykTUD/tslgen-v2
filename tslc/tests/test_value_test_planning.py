@@ -652,6 +652,13 @@ def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverag
     )
     assert len(cpp_negative_paths) == 4
     assert len(rust_negative_paths) == 4
+    rust_negative_manifests = sorted(
+        path
+        for path in artifacts
+        if path.startswith("rust/verify/tsl_compile_failure_")
+        and path.endswith("/Cargo.toml")
+    )
+    assert len(rust_negative_manifests) == 4
     assert all(
         path.removeprefix("cpp/tests/").removesuffix(".cpp")
         not in artifacts["cpp/tests/values_avx2.cpp"]
@@ -670,16 +677,13 @@ def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverag
     ]
     assert "EXCLUDE_FROM_ALL" in artifacts["cpp/CMakeLists.txt"]
     rust_manifest = artifacts["rust/Cargo.toml"]
-    assert rust_manifest.count("tsl_compile_failures = []") == 1
-    assert (
-        rust_manifest.count(
-                'required-features = ["tsl_compile_failures"]'
-            )
-        == 4
+    assert "tsl_compile_failures" not in rust_manifest
+    assert "required-features" not in rust_manifest
+    assert 'runtime-dispatch = ["std"]' in rust_manifest
+    assert all(
+        'tsl = { package = "tsl", path = "../.." }' in artifacts[path]
+        for path in rust_negative_manifests
     )
-    assert "tsl_compile_failure_avx2_" not in rust_manifest.split("[features]")[
-        1
-    ].split("[[bench]]")[0]
 
 
 def test_emitted_name_split_preserves_source_primitive_identity() -> None:
@@ -3491,7 +3495,7 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
     assert "rust_value_tests.rs.tmpl" in render_rust
     assert "rust_value_tests_profile.rs.tmpl" in render_rust
     assert "#![cfg(feature = \"value_tests\")]" not in render_rust
-    assert "#![cfg(feature = \"value_tests\")]" in rust_values_template
+    assert "#![cfg(tsl_value_tests)]" in rust_values_template
     assert "tsl::tsl_core" not in render_rust
     assert "tsl::tsl_core" in rust_profile_template
     assert "Catalog" not in render_rust

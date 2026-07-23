@@ -130,6 +130,15 @@ def validate_rust_facade(
     return diagnostics
 
 
+def validate_rust_facade_plan(
+    profiles: tuple[EmittedProfile, ...],
+    static_selection: RustStaticSelectionPlan,
+    plan: RustFacadePlan,
+) -> None:
+    if plan != plan_rust_facade(profiles, static_selection):
+        raise ValueError("Rust facade plan does not match the lowered profile inventory")
+
+
 def _plan_rust_facade(
     profiles: tuple[EmittedProfile, ...],
     static_selection: RustStaticSelectionPlan,
@@ -744,7 +753,9 @@ def _logical_shapes(plan: RustStaticSelectionPlan) -> tuple[RustFacadeShape, ...
     profiles = {profile.profile_name: profile for profile in plan.profiles}
     shapes: list[RustFacadeShape] = []
     for fallback in plan.fallback_mappings:
-        representations = [RustFacadeRepresentation(None, None, fallback)]
+        if fallback.lanes != 1 and fallback.total_bits not in _FACADE_FIXED_WIDTHS:
+            continue
+        representations: list[RustFacadeRepresentation] = []
         for profile_name, profile in sorted(profiles.items()):
             mapping = next(
                 (
@@ -756,8 +767,27 @@ def _logical_shapes(plan: RustStaticSelectionPlan) -> tuple[RustFacadeShape, ...
             )
             if mapping is not None:
                 representations.append(
-                    RustFacadeRepresentation(profile_name, profile.requirement, mapping)
+                    RustFacadeRepresentation(
+                        profile_name,
+                        profile.requirement,
+                        profile.stronger_requirements,
+                        mapping,
+                    )
                 )
+        fallback_exclusions = tuple(
+            sorted(
+                {
+                    representation.requirement
+                    for representation in representations
+                    if representation.requirement is not None
+                },
+                key=lambda item: (item.target_arch, item.target_features),
+            )
+        )
+        representations.insert(
+            0,
+            RustFacadeRepresentation(None, None, fallback_exclusions, fallback),
+        )
         shapes.append(
             RustFacadeShape(
                 fallback.type_tag,
@@ -777,39 +807,89 @@ def _native_aliases(
     emitted = {profile.profile.name: profile for profile in emitted_profiles}
     aliases: dict[str, list[RustNativeAliasSelection]] = defaultdict(list)
     spellings = {mapping.type_tag: mapping.base_spelling for mapping in plan.fallback_mappings}
+    fallback_by_type: dict[str, list] = defaultdict(list)
+    for mapping in plan.fallback_mappings:
+        if mapping.lanes > 1 and mapping.total_bits in _FACADE_FIXED_WIDTHS:
+            fallback_by_type[mapping.type_tag].append(mapping)
+    fallback_lanes: dict[str, int] = {}
+    for type_tag, mappings in fallback_by_type.items():
+        best_fallback = min(mappings, key=lambda item: (item.total_bits, item.lanes))
+        fallback_lanes[type_tag] = best_fallback.lanes
+        aliases[type_tag].append(
+            RustNativeAliasSelection(None, None, (), best_fallback.lanes)
+        )
     for profile in plan.profiles:
         source_profile = emitted.get(profile.profile_name)
         if source_profile is None:
             continue
         by_type: dict[str, list] = defaultdict(list)
         for mapping in profile.mappings:
-            if mapping.uses_hardware:
+            if mapping.uses_hardware and mapping.total_bits in _FACADE_FIXED_WIDTHS:
                 by_type[mapping.type_tag].append(mapping)
-        for type_tag, mappings in by_type.items():
-            best = max(
-                mappings,
-                key=lambda item: (
-                    source_profile.extensions[item.extension_name].metadata.native_sort_order
-                    if item.extension_name in source_profile.extensions
-                    and source_profile.extensions[item.extension_name].metadata.native_sort_order
-                    is not None
-                    else 0,
-                    item.total_bits,
-                    item.lanes,
-                ),
+        for type_tag, fallback_lane_count in fallback_lanes.items():
+            mappings = by_type.get(type_tag, [])
+            best = (
+                max(
+                    mappings,
+                    key=lambda item: (
+                        source_profile.extensions[
+                            item.extension_name
+                        ].metadata.native_sort_order
+                        if item.extension_name in source_profile.extensions
+                        and source_profile.extensions[
+                            item.extension_name
+                        ].metadata.native_sort_order
+                        is not None
+                        else 0,
+                        item.total_bits,
+                        item.lanes,
+                    ),
+                )
+                if mappings
+                else None
             )
             aliases[type_tag].append(
                 RustNativeAliasSelection(
                     profile.profile_name,
                     profile.requirement,
-                    best.lanes,
+                    profile.stronger_requirements,
+                    best.lanes if best is not None else fallback_lane_count,
                 )
             )
+    for type_tag, selections in aliases.items():
+        hardware_requirements = tuple(
+            sorted(
+                {
+                    selection.requirement
+                    for selection in selections
+                    if selection.requirement is not None
+                },
+                key=lambda item: (item.target_arch, item.target_features),
+            )
+        )
+        aliases[type_tag] = [
+            (
+                RustNativeAliasSelection(
+                    selection.profile_name,
+                    selection.requirement,
+                    hardware_requirements,
+                    selection.lanes,
+                )
+                if selection.requirement is None
+                else selection
+            )
+            for selection in selections
+        ]
     return tuple(
         RustNativeAlias(
             type_tag,
             spellings[type_tag],
-            tuple(sorted(selections, key=lambda item: item.profile_name)),
+            tuple(
+                sorted(
+                    selections,
+                    key=lambda item: (item.profile_name is not None, item.profile_name or ""),
+                )
+            ),
         )
         for type_tag, selections in sorted(aliases.items())
     )
@@ -1105,6 +1185,7 @@ def _coverage_sort_key(
 _REPRESENTABLE_KINDS = frozenset(
     {"void", "v", "m", "im", "imt", "s", "sImm", "usize", "ptr", "cptr"}
 )
+_FACADE_FIXED_WIDTHS = frozenset({128, 256, 512})
 _MASK_OPERATIONS = frozenset(
     {
         PrimitiveOperation.MASK_AND,
@@ -1119,4 +1200,5 @@ __all__ = (
     "RustFacadePlanningError",
     "plan_rust_facade",
     "validate_rust_facade",
+    "validate_rust_facade_plan",
 )

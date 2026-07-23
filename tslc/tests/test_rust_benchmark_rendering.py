@@ -258,11 +258,8 @@ def test_rust_benchmark_artifacts_are_opt_in_and_deterministic(
     }
     assert expected <= artifacts.keys()
     assert "rust/benches/tsl_variant_bench_sse2.rs" in artifacts
-    assert "variant_benchmarks = []" in artifacts["rust/Cargo.toml"]
-    assert (
-        'required-features = ["variant_benchmarks"]'
-        in artifacts["rust/Cargo.toml"]
-    )
+    assert "variant_benchmarks = []" not in artifacts["rust/Cargo.toml"]
+    assert "required-features" not in artifacts["rust/Cargo.toml"]
     assert "[dependencies]" not in artifacts["rust/Cargo.toml"]
     assert "std::process::exit(tsl::tsl_variant_bench_sse2::main());" in artifacts[
         "rust/benches/tsl_variant_bench_sse2.rs"
@@ -453,15 +450,14 @@ def test_rust_runtime_produces_backend_scoped_policy_without_consuming_it(
     assert "Explicit two-phase autotune" in source
     assert "env -u CARGO_ENCODED_RUSTFLAGS -u TSL_RUST_VARIANT_POLICY_FILE" in source
     assert 'const BENCHMARK_TARGET: &str = "tsl_variant_bench_sse2";' in source
-    assert 'const CARGO_FEATURES: &str = "variant_benchmarks";' in source
+    assert 'const CARGO_FEATURES: &str = "";' in source
     assert 'let artifact_subdirectory = "tsl-benchmark/sse2";' in source
     assert '${{CARGO_TARGET_DIR:-$PWD/target}}/{artifact_subdirectory}' in source
     assert "if options.help" in source
     assert (
         'name = "tsl_variant_bench_sse2"\n'
         'path = "benches/tsl_variant_bench_sse2.rs"\n'
-        'harness = false\n'
-        'required-features = ["variant_benchmarks"]'
+        "harness = false"
     ) in cargo_manifest
     assert "is_x86_feature_detected!(\"sse\")" in source
     assert "is_x86_feature_detected!(\"sse2\")" in source
@@ -475,9 +471,7 @@ def test_rust_runtime_produces_backend_scoped_policy_without_consuming_it(
     assert 'encoded_rustflags: env!("TSL_RUST_ENCODED_RUSTFLAGS")' in source
     assert 'benchmark_codegen_contract: "profile.bench:v1;' in source
     build_script = artifacts["rust/build.rs"]
-    assert build_script.index('CARGO_FEATURE_VARIANT_BENCHMARKS') < build_script.index(
-        'let rustc = required("RUSTC")'
-    )
+    assert "cargo::rustc-check-cfg=cfg(tsl_variant_benchmarks)" in build_script
     assert "native_build_matches(BUILD_HOST, BUILD_TARGET)" in source
     assert "let mut iterations = 1usize;" in source
     assert (
@@ -539,7 +533,7 @@ def test_rust_report_keeps_canonical_profile_identity(
     )
     assert 'const PROFILE: &str = "skylake\\u{2d}oneapi";' in source
     assert 'const BENCHMARK_TARGET: &str = "tsl_variant_bench_skylake_oneapi";' in source
-    assert 'const CARGO_FEATURES: &str = "variant_benchmarks";' in source
+    assert 'const CARGO_FEATURES: &str = "";' in source
     assert "Explicit two-phase autotune" not in source
     assert "const POLICY_OUTPUT_SUPPORTED: bool = false;" in source
     assert "Write a consumable context-bound Rust policy" not in source
@@ -630,8 +624,6 @@ def _assert_gnu_linux_hot_loop(
             "--lib",
             "--release",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--",
             "--emit=asm",
         ),
@@ -682,8 +674,6 @@ def _assert_gnu_linux_immediate_hot_loop(
             "--lib",
             "--release",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--",
             "--emit=asm",
         ),
@@ -739,8 +729,6 @@ def _assert_gnu_linux_avx2_reduction_hot_loop(
             "--lib",
             "--release",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--",
             "--emit=asm",
         ),
@@ -804,8 +792,6 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
             "--bench",
             "tsl_variant_bench_sse2",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--no-run",
         ),
     ):
@@ -829,8 +815,6 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
             "--bench",
             "tsl_variant_bench_sse2",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--",
             "--rounds",
             "3",
@@ -879,8 +863,6 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
             "--bench",
             "tsl_variant_bench_sse2",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--",
             "--policy-json",
             str(policy_path),
@@ -941,8 +923,6 @@ def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
             "--bench",
             "tsl_variant_bench_avx2",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--no-run",
         ),
     ):
@@ -972,8 +952,6 @@ def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
             "--bench",
             "tsl_variant_bench_avx2",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--",
             "--rounds",
             "3",
@@ -1027,8 +1005,6 @@ def test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop(
             "--bench",
             "tsl_variant_bench_avx2",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--",
             "--policy-json",
             str(policy_path),
@@ -1084,8 +1060,6 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
             "test",
             *common,
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
         ),
         (
             "cargo",
@@ -1096,8 +1070,6 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
             "--bench",
             "tsl_variant_bench_sse2",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--no-run",
         ),
     ):
@@ -1113,8 +1085,6 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
         "--bench",
         "tsl_variant_bench_sse2",
         "--no-default-features",
-        "--features",
-        "variant_benchmarks",
         "--",
     )
     help_run = _run(

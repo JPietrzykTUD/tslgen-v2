@@ -50,7 +50,23 @@ class RustFacadeRepresentation:
 
     profile_name: str | None
     requirement: RustTargetRequirement | None
+    stronger_requirements: tuple[RustTargetRequirement, ...]
     mapping: RustStaticVectorMapping
+
+    def __post_init__(self) -> None:
+        if (self.profile_name is None) != (self.requirement is None):
+            raise ValueError(
+                "Rust facade representations require profile and target facts together"
+            )
+        if self.requirement is None and self.mapping.uses_hardware:
+            raise ValueError("Rust facade fallback representations cannot use hardware")
+        if self.requirement is not None and any(
+            not item.strictly_contains(self.requirement)
+            for item in self.stronger_requirements
+        ):
+            raise ValueError(
+                "Rust facade profile exclusions must be stronger target requirements"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +76,32 @@ class RustFacadeShape:
     lanes: int
     total_bits: int
     representations: tuple[RustFacadeRepresentation, ...]
+
+    def __post_init__(self) -> None:
+        if not self.type_tag or not self.base_spelling or self.lanes <= 0:
+            raise ValueError("Rust facade shapes require complete positive type facts")
+        if self.lanes != 1 and self.total_bits not in {128, 256, 512}:
+            raise ValueError(
+                "Rust facade fixed shapes must have 128, 256, or 512 total bits"
+            )
+        if sum(item.requirement is None for item in self.representations) != 1:
+            raise ValueError("Rust facade shapes require exactly one generic fallback")
+        if any(
+            (
+                item.mapping.type_tag,
+                item.mapping.base_spelling,
+                item.mapping.lanes,
+                item.mapping.total_bits,
+            )
+            != (self.type_tag, self.base_spelling, self.lanes, self.total_bits)
+            for item in self.representations
+        ):
+            raise ValueError(
+                "Rust facade shape representations must preserve the logical shape"
+            )
+        profiles = tuple(item.profile_name for item in self.representations)
+        if len(set(profiles)) != len(profiles):
+            raise ValueError("Rust facade shape representations must be unique by profile")
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,9 +181,25 @@ class RustCuratedTraitImplementation:
 
 @dataclass(frozen=True, slots=True)
 class RustNativeAliasSelection:
-    profile_name: str
-    requirement: RustTargetRequirement
+    profile_name: str | None
+    requirement: RustTargetRequirement | None
+    stronger_requirements: tuple[RustTargetRequirement, ...]
     lanes: int
+
+    def __post_init__(self) -> None:
+        if (self.profile_name is None) != (self.requirement is None):
+            raise ValueError(
+                "Rust native alias selections require profile and target facts together"
+            )
+        if self.lanes <= 0:
+            raise ValueError("Rust native alias selections require positive lane counts")
+        if self.requirement is not None and any(
+            not item.strictly_contains(self.requirement)
+            for item in self.stronger_requirements
+        ):
+            raise ValueError(
+                "Rust native profile exclusions must be stronger target requirements"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +207,15 @@ class RustNativeAlias:
     type_tag: str
     base_spelling: str
     selections: tuple[RustNativeAliasSelection, ...]
+
+    def __post_init__(self) -> None:
+        if not self.type_tag or not self.base_spelling:
+            raise ValueError("Rust native aliases require complete type facts")
+        if sum(item.requirement is None for item in self.selections) != 1:
+            raise ValueError("Rust native aliases require exactly one generic fallback")
+        profiles = tuple(item.profile_name for item in self.selections)
+        if len(set(profiles)) != len(profiles):
+            raise ValueError("Rust native alias selections must be unique by profile")
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +258,16 @@ class RustFacadePlan:
         shape_keys = tuple((item.type_tag, item.lanes) for item in self.shapes)
         if len(set(shape_keys)) != len(shape_keys):
             raise ValueError("Rust facade logical shapes must be unique")
+        shape_key_set = set(shape_keys)
+        if any(
+            (alias.type_tag, selection.lanes) not in shape_key_set
+            for alias in self.native_aliases
+            for selection in alias.selections
+        ):
+            raise ValueError("Rust native aliases must select an admitted logical shape")
+        native_type_tags = tuple(item.type_tag for item in self.native_aliases)
+        if len(set(native_type_tags)) != len(native_type_tags):
+            raise ValueError("Rust native aliases must be unique by element type")
 
 
 __all__ = (
