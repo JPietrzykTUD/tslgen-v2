@@ -14,7 +14,10 @@ from tslc.backend.capability import (
 )
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
 from tslc.backend.rust import RustBackend
-from tslc.backend.rust_api_planner import plan_rust_facade
+from tslc.backend.rust_api_planner import (
+    plan_rust_facade,
+    rust_facade_closure_seed_primitives,
+)
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
 from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
@@ -197,6 +200,7 @@ RUST_BACKEND = BackendCapability(
     documentation_formatter_factory=rust_documentation_formatter,
     benchmark_plan_builder=rust_benchmark_plan,
     helper_manifest=RUST_HELPER_MANIFEST,
+    additional_closure_seeds=rust_facade_closure_seed_primitives,
     profile_validator=validate_rust_profiles,
     primitive_preview_renderer=rust_primitive_preview,
     generated_format=GeneratedFormatSpec(

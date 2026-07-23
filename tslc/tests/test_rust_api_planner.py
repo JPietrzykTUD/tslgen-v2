@@ -18,6 +18,7 @@ from tslc.backend.rust_api_model import (
 from tslc.backend.rust_api_planner import (
     RustFacadePlanningError,
     plan_rust_facade,
+    validate_rust_facade,
 )
 from tslc.backend.rust_static_selection import (
     RustStaticFallbackModule,
@@ -147,7 +148,7 @@ def _plan(
         profiles=(),
         fallback_mappings=(
             RustStaticVectorMapping(
-                "si32", "i32", 4, 128, "Simd<i32, Generic<4>>"
+                "si32", "i32", 4, 128, "Simd<i32, Generic<4>>", "u64"
             ),
         ),
         fallback_module=RustStaticFallbackModule(
@@ -577,6 +578,7 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
     assert not has_errors(result.diagnostics), result.diagnostics
     static = plan_rust_static_selection(result.emitted_profiles)
 
+    assert validate_rust_facade(result.emitted_profiles, static) == ()
     plan = plan_rust_facade(result.emitted_profiles, static)
 
     assert any(
@@ -617,4 +619,19 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
     } == {
         RustFacadeTraitRhsKind.SAME_TYPE,
         RustFacadeTraitRhsKind.SCALAR,
+    }
+    assert {
+        delegate.role
+        for delegate in plan.core_delegates
+        if delegate.type_tag == "si32"
+        and delegate.lanes == 8
+        and delegate.profile_name == "avx2"
+    } >= {
+        "vector_splat",
+        "vector_from_array",
+        "vector_to_array",
+        "load",
+        "store",
+        "mask_from_integral",
+        "mask_to_integral",
     }

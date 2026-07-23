@@ -231,6 +231,8 @@ def rust_imask_type(
 
 __all__ = (
     "RustVectorRegistration",
+    "rust_imask_type",
+    "rust_mask_type",
     "rust_registrations",
     "rust_vector_registrations",
 )

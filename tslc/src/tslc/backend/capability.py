@@ -48,6 +48,7 @@ BenchmarkPlanBuilder = Callable[
     ["Catalog", tuple["EmittedProfile", ...], "ValueTestProjectPlan"],
     "BenchmarkProjectPlan",
 ]
+ClosureSeedProjector = Callable[["Catalog"], tuple[str, ...]]
 BackendArtifactRenderer = Callable[
     [
         tuple["EmittedProfile", ...],
@@ -114,6 +115,11 @@ def _no_profile_diagnostics(
     return ()
 
 
+def _no_additional_closure_seeds(catalog: Catalog) -> tuple[str, ...]:
+    del catalog
+    return ()
+
+
 def _unsupported_primitive_preview(
     profile: EmittedProfile,
     primitive_name: str,
@@ -138,6 +144,7 @@ class BackendCapability:
     documentation_formatter_factory: DocumentationFormatterFactory
     benchmark_plan_builder: BenchmarkPlanBuilder | None = None
     helper_manifest: BackendHelperManifest = EMPTY_HELPER_MANIFEST
+    additional_closure_seeds: ClosureSeedProjector = _no_additional_closure_seeds
     profile_validator: ProfileValidator = _no_profile_diagnostics
     primitive_preview_renderer: PrimitivePreviewRenderer = (
         _unsupported_primitive_preview
@@ -236,7 +243,14 @@ class BackendCapability:
         return self.verify_driver_factory()
 
     def closure_seed_primitives(self, catalog: Catalog) -> tuple[str, ...]:
-        return self.helper_manifest.closure_seed_primitives(catalog)
+        return tuple(
+            dict.fromkeys(
+                (
+                    *self.helper_manifest.closure_seed_primitives(catalog),
+                    *self.additional_closure_seeds(catalog),
+                )
+            )
+        )
 
     def validate_profiles(
         self, profiles: tuple[EmittedProfile, ...]

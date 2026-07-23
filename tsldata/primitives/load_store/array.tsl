@@ -1,4 +1,7 @@
 prim<s[]:=v> to_array(a):
+  operation vector_to_array
+  operand_roles:
+    primary a
   brief_description "Copies the lanes of a vector register into an array value."
   detailed_description """
     Materializes the lanes of a vector register into an array-like value in
@@ -211,6 +214,9 @@ prim<s[]:=v> to_array(a):
                complete(temp) ;
             """
 prim<v:=s[]> from_array(data):
+  operation vector_from_array
+  operand_roles:
+    value data
   brief_description "Builds a vector register from an array of lane values."
   detailed_description """
     Constructs a vector register from an array-like value in increasing lane

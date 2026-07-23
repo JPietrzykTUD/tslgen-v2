@@ -15,7 +15,11 @@ from tslc.backend.rust_api_model import (
     RustFacadeCoverageStatus,
     RustFacadeConstParameter,
     RustFacadeConstParameterSource,
+    RustFacadeCoreDelegate,
+    RustFacadeCoreOperationRequirement,
     RustFacadeDelegate,
+    RustFacadeDelegateVector,
+    RustFacadeOperationBinding,
     RustFacadeParameter,
     RustFacadeParameterPlacement,
     RustFacadePlan,
@@ -41,7 +45,9 @@ from tslc.catalog.conversion import (
     NumericConversionMode,
 )
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
+from tslc.catalog.model import Catalog
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
+from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, diagnostic_at, sort_diagnostics
 from tslc.lower.lowerer import LoweredSpecialization
 
@@ -115,7 +121,9 @@ def plan_rust_facade(
     profiles: tuple[EmittedProfile, ...],
     static_selection: RustStaticSelectionPlan,
 ) -> RustFacadePlan:
-    plan, diagnostics = _plan_rust_facade(profiles, static_selection)
+    plan, diagnostics = _plan_rust_facade(
+        profiles, static_selection, require_core=False
+    )
     if diagnostics:
         raise RustFacadePlanningError(diagnostics)
     assert plan is not None
@@ -126,7 +134,9 @@ def validate_rust_facade(
     profiles: tuple[EmittedProfile, ...],
     static_selection: RustStaticSelectionPlan,
 ) -> tuple[Diagnostic, ...]:
-    _plan, diagnostics = _plan_rust_facade(profiles, static_selection)
+    _plan, diagnostics = _plan_rust_facade(
+        profiles, static_selection, require_core=True
+    )
     return diagnostics
 
 
@@ -139,9 +149,41 @@ def validate_rust_facade_plan(
         raise ValueError("Rust facade plan does not match the lowered profile inventory")
 
 
+def rust_facade_closure_seed_primitives(catalog: Catalog) -> tuple[str, ...]:
+    """Source primitives needed by the logical value boundary.
+
+    Selection uses semantic operation identities and typed signatures. Primitive
+    names remain outputs of this projection, never its classifier.
+    """
+
+    required_shapes = {
+        (
+            requirement.operation,
+            requirement.result_kind,
+            requirement.parameter_kinds,
+        )
+        for requirement in RUST_FACADE_CORE_OPERATION_REQUIREMENTS
+    }
+    names = {
+        primitive.name
+        for primitive in catalog.primitives
+        if primitive.operation is not None
+        and (shape := parse_signature(primitive.signature)) is not None
+        and (
+            primitive.operation.kind,
+            shape.result_kind,
+            shape.param_kinds,
+        )
+        in required_shapes
+    }
+    return tuple(sorted(names))
+
+
 def _plan_rust_facade(
     profiles: tuple[EmittedProfile, ...],
     static_selection: RustStaticSelectionPlan,
+    *,
+    require_core: bool,
 ) -> tuple[RustFacadePlan | None, tuple[Diagnostic, ...]]:
     candidates = _candidates(profiles, static_selection)
     baseline_keys = {
@@ -185,13 +227,35 @@ def _plan_rust_facade(
         return None, ordered_diagnostics
 
     operation_values = _operation_values(traits)
+    operation_bindings = _operation_bindings(candidates, baseline_keys)
+    facade_type_tags = _core_facade_type_tags(operation_bindings)
+    if facade_type_tags is None:
+        facade_type_tags = {
+            spec.type_tag
+            for _primitive_name, specs in (
+                static_selection.fallback_module.primitive_specializations
+            )
+            for spec in specs
+        }
+    shapes = _logical_shapes(static_selection, facade_type_tags)
+    core_delegates, core_diagnostics = _core_delegates(
+        shapes,
+        operation_bindings,
+        require_complete=require_core,
+    )
+    if core_diagnostics:
+        return None, sort_diagnostics(core_diagnostics)
     return (
         RustFacadePlan(
-            shapes=_logical_shapes(static_selection),
+            shapes=shapes,
+            operation_bindings=operation_bindings,
+            core_delegates=core_delegates,
             comprehensive_methods=tuple(sorted(methods, key=_method_sort_key)),
             curated_methods=tuple(sorted(curated_methods, key=_curated_method_sort_key)),
             trait_implementations=tuple(sorted(traits, key=_trait_sort_key)),
-            native_aliases=_native_aliases(profiles, static_selection),
+            native_aliases=_native_aliases(
+                profiles, static_selection, facade_type_tags
+            ),
             operation_values=operation_values,
             coverage=tuple(sorted(coverage, key=_coverage_sort_key)),
         ),
@@ -217,13 +281,14 @@ def _candidates(
         for _name, specs in sorted(profile.specializations("rust").items())
         for spec in sorted(specs, key=_specialization_sort_key)
     )
-    seen: set[tuple[str | None, _CandidateKey, str, str, bool]] = set()
+    seen: set[tuple[str | None, _CandidateKey, str, str, str, bool]] = set()
     for profile_name, spec in inputs:
         key = _candidate_key(spec)
         identity = (
             profile_name,
             key,
             spec.primitive_name,
+            spec.extension_name,
             spec.type_tag,
             spec.safety.caller_unsafe,
         )
@@ -344,13 +409,7 @@ def _comprehensive_method(
         "v",
         "m",
     }:
-        return None, None, (
-            _diagnostic(
-                candidate,
-                "TSL-BACKEND-RUST-FACADE-INVALID-RECEIVER",
-                "binds primary to a non-vector/non-mask parameter",
-            ),
-        )
+        return None, "source-authored primary has no coherent vector or mask receiver", ()
 
     public_name, name_diagnostic = _public_name(candidate)
     if name_diagnostic is not None:
@@ -749,10 +808,15 @@ def _arithmetic_guarantees_admit(
     return required <= guarantees
 
 
-def _logical_shapes(plan: RustStaticSelectionPlan) -> tuple[RustFacadeShape, ...]:
+def _logical_shapes(
+    plan: RustStaticSelectionPlan,
+    admitted_type_tags: set[str],
+) -> tuple[RustFacadeShape, ...]:
     profiles = {profile.profile_name: profile for profile in plan.profiles}
     shapes: list[RustFacadeShape] = []
     for fallback in plan.fallback_mappings:
+        if fallback.type_tag not in admitted_type_tags:
+            continue
         if fallback.lanes != 1 and fallback.total_bits not in _FACADE_FIXED_WIDTHS:
             continue
         representations: list[RustFacadeRepresentation] = []
@@ -803,13 +867,18 @@ def _logical_shapes(plan: RustStaticSelectionPlan) -> tuple[RustFacadeShape, ...
 def _native_aliases(
     emitted_profiles: tuple[EmittedProfile, ...],
     plan: RustStaticSelectionPlan,
+    admitted_type_tags: set[str],
 ) -> tuple[RustNativeAlias, ...]:
     emitted = {profile.profile.name: profile for profile in emitted_profiles}
     aliases: dict[str, list[RustNativeAliasSelection]] = defaultdict(list)
     spellings = {mapping.type_tag: mapping.base_spelling for mapping in plan.fallback_mappings}
     fallback_by_type: dict[str, list] = defaultdict(list)
     for mapping in plan.fallback_mappings:
-        if mapping.lanes > 1 and mapping.total_bits in _FACADE_FIXED_WIDTHS:
+        if (
+            mapping.type_tag in admitted_type_tags
+            and mapping.lanes > 1
+            and mapping.total_bits in _FACADE_FIXED_WIDTHS
+        ):
             fallback_by_type[mapping.type_tag].append(mapping)
     fallback_lanes: dict[str, int] = {}
     for type_tag, mappings in fallback_by_type.items():
@@ -957,15 +1026,28 @@ def _roles_by_index(
 
 
 def _delegates(candidate: _Candidate) -> tuple[RustFacadeDelegate, ...]:
-    by_profile: dict[str | None, set[str]] = defaultdict(set)
+    by_profile: dict[
+        str | None, dict[str, set[RustFacadeDelegateVector]]
+    ] = defaultdict(lambda: defaultdict(set))
     for profile_name, spec in candidate.specs:
-        by_profile[profile_name].add(spec.primitive_name)
+        by_profile[profile_name][spec.primitive_name].add(
+            RustFacadeDelegateVector(spec.extension_name, spec.type_tag)
+        )
     return tuple(
-        RustFacadeDelegate(profile_name, next(iter(names)))
-        for profile_name, names in sorted(
+        RustFacadeDelegate(
+            profile_name,
+            next(iter(by_name)),
+            tuple(
+                sorted(
+                    next(iter(by_name.values())),
+                    key=lambda item: (item.extension_name, item.type_tag),
+                )
+            ),
+        )
+        for profile_name, by_name in sorted(
             by_profile.items(), key=lambda item: (item[0] is not None, item[0] or "")
         )
-        if len(names) == 1
+        if len(by_name) == 1
     )
 
 
@@ -991,6 +1073,144 @@ def _delegate_diagnostic(candidate: _Candidate) -> Diagnostic | None:
         "TSL-BACKEND-RUST-FACADE-DELEGATE-MISMATCH",
         f"has multiple lower-level delegates for one profile ({rendered})",
     )
+
+
+def _operation_bindings(
+    candidates: dict[_CandidateKey, _Candidate],
+    baseline_keys: set[_CandidateKey],
+) -> tuple[RustFacadeOperationBinding, ...]:
+    bindings: list[RustFacadeOperationBinding] = []
+    for candidate in candidates.values():
+        key = candidate.key
+        if key not in baseline_keys or key.operation is None:
+            continue
+        safety_values = {
+            spec.safety.caller_unsafe for _profile, spec in candidate.specs
+        }
+        if len(safety_values) != 1 or _delegate_diagnostic(candidate) is not None:
+            continue
+        bindings.append(
+            RustFacadeOperationBinding(
+                operation=key.operation,
+                source_primitive_name=key.source_name,
+                result_kind=key.result_kind,
+                parameter_kinds=key.param_kinds,
+                axis_names=key.axis_names,
+                mask_policy=key.mask_policy,
+                overload=key.overload,
+                type_tags=candidate.type_tags,
+                caller_unsafe=next(iter(safety_values)),
+                delegates=_delegates(candidate),
+            )
+        )
+    return tuple(sorted(bindings, key=_operation_binding_sort_key))
+
+
+def _core_delegates(
+    shapes: tuple[RustFacadeShape, ...],
+    bindings: tuple[RustFacadeOperationBinding, ...],
+    *,
+    require_complete: bool,
+) -> tuple[tuple[RustFacadeCoreDelegate, ...], tuple[Diagnostic, ...]]:
+    delegates: list[RustFacadeCoreDelegate] = []
+    diagnostics: list[Diagnostic] = []
+    for shape in shapes:
+        for representation in shape.representations:
+            expected_extension = (
+                representation.mapping.extension_name
+                or ("scalar" if shape.lanes == 1 else "generic")
+            )
+            for requirement in RUST_FACADE_CORE_OPERATION_REQUIREMENTS:
+                candidates = tuple(
+                    delegate
+                    for binding in bindings
+                    if binding.operation is requirement.operation
+                    and binding.result_kind == requirement.result_kind
+                    and binding.parameter_kinds == requirement.parameter_kinds
+                    and binding.axis_names == requirement.axis_names
+                    and binding.mask_policy is None
+                    and binding.overload == requirement.overload
+                    and shape.type_tag in binding.type_tags
+                    and binding.caller_unsafe
+                    == (
+                        requirement.operation
+                        in {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
+                    )
+                    for delegate in binding.delegates
+                    if delegate.profile_name == representation.profile_name
+                    and any(
+                        vector.extension_name == expected_extension
+                        and vector.type_tag == shape.type_tag
+                        for vector in delegate.vectors
+                    )
+                )
+                if len(candidates) != 1:
+                    if require_complete:
+                        diagnostics.append(
+                            Diagnostic(
+                                severity="error",
+                                code="TSL-BACKEND-RUST-FACADE-MISSING-CORE-DELEGATE",
+                                message=(
+                                    f"Rust facade role {requirement.role!r} has "
+                                    f"{len(candidates)} delegates for "
+                                    f"{shape.type_tag}x{shape.lanes} under "
+                                    f"{representation.profile_name or 'fallback'}"
+                                ),
+                            )
+                        )
+                    continue
+                delegates.append(
+                    RustFacadeCoreDelegate(
+                        role=requirement.role,
+                        type_tag=shape.type_tag,
+                        lanes=shape.lanes,
+                        profile_name=representation.profile_name,
+                        source_primitive_name=candidates[0].primitive_name,
+                    )
+                )
+    return (
+        tuple(
+            sorted(
+                delegates,
+                key=lambda item: (
+                    item.type_tag,
+                    item.lanes,
+                    item.profile_name is not None,
+                    item.profile_name or "",
+                    item.role,
+                ),
+            )
+        ),
+        tuple(diagnostics),
+    )
+
+
+def _core_facade_type_tags(
+    bindings: tuple[RustFacadeOperationBinding, ...],
+) -> set[str] | None:
+    supported_by_role: list[set[str]] = []
+    for requirement in RUST_FACADE_CORE_OPERATION_REQUIREMENTS:
+        type_tags = {
+            type_tag
+            for binding in bindings
+            if binding.operation is requirement.operation
+            and binding.result_kind == requirement.result_kind
+            and binding.parameter_kinds == requirement.parameter_kinds
+            and binding.axis_names == requirement.axis_names
+            and binding.mask_policy is None
+            and binding.overload == requirement.overload
+            and binding.caller_unsafe
+            == (
+                requirement.operation
+                in {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
+            )
+            and any(delegate.profile_name is None for delegate in binding.delegates)
+            for type_tag in binding.type_tags
+        }
+        if not type_tags:
+            return None
+        supported_by_role.append(type_tags)
+    return set.intersection(*supported_by_role)
 
 
 def _method_for_candidate(
@@ -1160,6 +1380,28 @@ def _curated_method_sort_key(method: RustCuratedMethod) -> tuple[str, str, str]:
     return (method.receiver_kind.value, method.public_name, method.source_primitive_name)
 
 
+def _operation_binding_sort_key(
+    binding: RustFacadeOperationBinding,
+) -> tuple[
+    str,
+    str,
+    str,
+    tuple[str, ...],
+    tuple[str, ...],
+    str,
+    tuple[str, str, bool],
+]:
+    return (
+        binding.operation.value,
+        binding.source_primitive_name,
+        binding.result_kind,
+        binding.parameter_kinds,
+        binding.axis_names,
+        binding.mask_policy or "",
+        binding.overload or ("", "", False),
+    )
+
+
 def _trait_sort_key(
     trait: RustCuratedTraitImplementation,
 ) -> tuple[str, str, str, tuple[str, ...]]:
@@ -1182,6 +1424,90 @@ def _coverage_sort_key(
     )
 
 
+RUST_FACADE_CORE_OPERATION_REQUIREMENTS = (
+    RustFacadeCoreOperationRequirement(
+        "vector_splat", PrimitiveOperation.VECTOR_SPLAT, "v", ("s",)
+    ),
+    RustFacadeCoreOperationRequirement(
+        "vector_from_array", PrimitiveOperation.VECTOR_FROM_ARRAY, "v", ("s[]",)
+    ),
+    RustFacadeCoreOperationRequirement(
+        "vector_to_array", PrimitiveOperation.VECTOR_TO_ARRAY, "s[]", ("v",)
+    ),
+    RustFacadeCoreOperationRequirement(
+        "vector_zero", PrimitiveOperation.VECTOR_ZERO, "v", ()
+    ),
+    RustFacadeCoreOperationRequirement(
+        "extract_lane",
+        PrimitiveOperation.EXTRACT_LANE,
+        "s",
+        ("v", "usize"),
+    ),
+    RustFacadeCoreOperationRequirement(
+        "insert_lane",
+        PrimitiveOperation.INSERT_LANE,
+        "v",
+        ("v", "usize", "s"),
+    ),
+    RustFacadeCoreOperationRequirement(
+        "load",
+        PrimitiveOperation.LOAD,
+        "v",
+        ("cptr",),
+        axis_names=("aligned",),
+    ),
+    RustFacadeCoreOperationRequirement(
+        "store",
+        PrimitiveOperation.STORE,
+        "void",
+        ("ptr", "v"),
+        axis_names=("aligned",),
+        overload=("payload_extent", "vector", True),
+    ),
+    RustFacadeCoreOperationRequirement(
+        "mask_false", PrimitiveOperation.MASK_ALL_FALSE, "m", ()
+    ),
+    RustFacadeCoreOperationRequirement(
+        "mask_true", PrimitiveOperation.MASK_ALL_TRUE, "m", ()
+    ),
+    RustFacadeCoreOperationRequirement(
+        "mask_to_integral", PrimitiveOperation.MASK_TO_INTEGRAL, "im", ("m",)
+    ),
+    RustFacadeCoreOperationRequirement(
+        "mask_from_integral", PrimitiveOperation.MASK_FROM_INTEGRAL, "m", ("im",)
+    ),
+    RustFacadeCoreOperationRequirement(
+        "integral_mask_test",
+        PrimitiveOperation.INTEGRAL_MASK_TEST,
+        "im",
+        ("im", "usize"),
+    ),
+    RustFacadeCoreOperationRequirement(
+        "mask_set_lane",
+        PrimitiveOperation.MASK_SET_LANE,
+        "m",
+        ("m", "usize", "im"),
+    ),
+    RustFacadeCoreOperationRequirement(
+        "mask_population_count",
+        PrimitiveOperation.MASK_POPULATION_COUNT,
+        "usize",
+        ("m",),
+    ),
+    RustFacadeCoreOperationRequirement(
+        "mask_and", PrimitiveOperation.MASK_AND, "m", ("m", "m")
+    ),
+    RustFacadeCoreOperationRequirement(
+        "mask_or", PrimitiveOperation.MASK_OR, "m", ("m", "m")
+    ),
+    RustFacadeCoreOperationRequirement(
+        "mask_xor", PrimitiveOperation.MASK_XOR, "m", ("m", "m")
+    ),
+    RustFacadeCoreOperationRequirement(
+        "mask_not", PrimitiveOperation.MASK_NOT, "m", ("m",)
+    ),
+)
+
 _REPRESENTABLE_KINDS = frozenset(
     {"void", "v", "m", "im", "imt", "s", "sImm", "usize", "ptr", "cptr"}
 )
@@ -1197,8 +1523,10 @@ _MASK_OPERATIONS = frozenset(
 
 
 __all__ = (
+    "RUST_FACADE_CORE_OPERATION_REQUIREMENTS",
     "RustFacadePlanningError",
     "plan_rust_facade",
+    "rust_facade_closure_seed_primitives",
     "validate_rust_facade",
     "validate_rust_facade_plan",
 )

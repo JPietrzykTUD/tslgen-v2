@@ -24,13 +24,18 @@ class PrimitiveOperation(StrEnum):
     COMPARE_NOT_EQUAL = "compare_not_equal"
     CONVERT = "convert"
     EXTRACT_LANE = "extract_lane"
+    INTEGRAL_MASK_TEST = "integral_mask_test"
     INSERT_LANE = "insert_lane"
     LOAD = "load"
+    MASK_ALL_FALSE = "mask_all_false"
+    MASK_ALL_TRUE = "mask_all_true"
     MASK_AND = "mask_and"
+    MASK_FROM_INTEGRAL = "mask_from_integral"
     MASK_NOT = "mask_not"
     MASK_OR = "mask_or"
     MASK_POPULATION_COUNT = "mask_population_count"
     MASK_SET_LANE = "mask_set_lane"
+    MASK_TO_INTEGRAL = "mask_to_integral"
     MASK_XOR = "mask_xor"
     REINTERPRET = "reinterpret"
     SELECT = "select"
@@ -39,6 +44,10 @@ class PrimitiveOperation(StrEnum):
     SHIFT_RIGHT = "shift_right"
     SHIFT_RIGHT_WRAPPING = "shift_right_wrapping"
     STORE = "store"
+    VECTOR_FROM_ARRAY = "vector_from_array"
+    VECTOR_SPLAT = "vector_splat"
+    VECTOR_TO_ARRAY = "vector_to_array"
+    VECTOR_ZERO = "vector_zero"
 
 
 class OperandRole(StrEnum):
@@ -99,14 +108,25 @@ PRIMITIVE_OPERATION_DESCRIPTIONS: Mapping[PrimitiveOperation, str] = MappingProx
         PrimitiveOperation.COMPARE_NOT_EQUAL: "Compares corresponding lanes for inequality.",
         PrimitiveOperation.CONVERT: "Converts lane values to a declared result vector type.",
         PrimitiveOperation.EXTRACT_LANE: "Extracts one lane value from a vector.",
+        PrimitiveOperation.INTEGRAL_MASK_TEST: (
+            "Tests one runtime-indexed bit of an integral mask value."
+        ),
         PrimitiveOperation.INSERT_LANE: "Returns a vector with one lane value replaced.",
         PrimitiveOperation.LOAD: "Loads a vector payload from memory.",
+        PrimitiveOperation.MASK_ALL_FALSE: "Constructs an all-inactive lane mask.",
+        PrimitiveOperation.MASK_ALL_TRUE: "Constructs an all-active lane mask.",
         PrimitiveOperation.MASK_AND: "Computes logical AND of corresponding mask lanes.",
+        PrimitiveOperation.MASK_FROM_INTEGRAL: (
+            "Converts an integral mask representation to a lane mask."
+        ),
         PrimitiveOperation.MASK_NOT: "Computes logical inversion of mask lanes.",
         PrimitiveOperation.MASK_OR: "Computes logical OR of corresponding mask lanes.",
         PrimitiveOperation.MASK_POPULATION_COUNT: "Counts active mask lanes.",
         PrimitiveOperation.MASK_SET_LANE: (
             "Returns a mask with one runtime-indexed logical lane replaced."
+        ),
+        PrimitiveOperation.MASK_TO_INTEGRAL: (
+            "Converts a lane mask to its integral mask representation."
         ),
         PrimitiveOperation.MASK_XOR: "Computes logical XOR of corresponding mask lanes.",
         PrimitiveOperation.REINTERPRET: (
@@ -122,6 +142,14 @@ PRIMITIVE_OPERATION_DESCRIPTIONS: Mapping[PrimitiveOperation, str] = MappingProx
             "Shifts vector lanes right with source-defined wrapping counts."
         ),
         PrimitiveOperation.STORE: "Stores a vector or scalar payload to memory.",
+        PrimitiveOperation.VECTOR_FROM_ARRAY: (
+            "Constructs a vector from an array of logical lane values."
+        ),
+        PrimitiveOperation.VECTOR_SPLAT: "Broadcasts one scalar value to every vector lane.",
+        PrimitiveOperation.VECTOR_TO_ARRAY: (
+            "Materializes vector lanes as an array in logical lane order."
+        ),
+        PrimitiveOperation.VECTOR_ZERO: "Constructs a vector whose lanes are all zero.",
     }
 )
 

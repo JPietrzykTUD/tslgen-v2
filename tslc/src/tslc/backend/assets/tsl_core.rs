@@ -170,6 +170,14 @@ pub struct ArrayStorage<T, const N: usize> {
 }
 
 impl<T, const N: usize> ArrayStorage<T, N> {
+    pub(crate) fn from_array(storage: [T; N]) -> Self {
+        Self { storage }
+    }
+
+    pub(crate) fn into_array(self) -> [T; N] {
+        self.storage
+    }
+
     pub fn data(&mut self) -> *mut T {
         self.as_mut_ptr()
     }

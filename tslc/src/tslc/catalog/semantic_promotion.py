@@ -36,7 +36,7 @@ _ROLE_KINDS: dict[OperandRole, frozenset[str]] = {
     OperandRole.PASS_THROUGH: frozenset({"v"}),
     OperandRole.PRIMARY: _VECTOR_VALUES,
     OperandRole.SECONDARY: _VECTOR_VALUES,
-    OperandRole.VALUE: frozenset({"s", "v", "im"}),
+    OperandRole.VALUE: frozenset({"s", "s[]", "v", "im"}),
 }
 
 _BINARY_VALUE_ROLES = frozenset({OperandRole.PRIMARY, OperandRole.SECONDARY})
@@ -83,6 +83,10 @@ _OPERATION_ROLES: dict[
         frozenset({OperandRole.PRIMARY}),
         frozenset({OperandRole.INDEX}),
     ),
+    PrimitiveOperation.INTEGRAL_MASK_TEST: (
+        frozenset({OperandRole.PRIMARY, OperandRole.INDEX}),
+        frozenset(),
+    ),
     PrimitiveOperation.INSERT_LANE: (
         frozenset({OperandRole.PRIMARY, OperandRole.VALUE}),
         frozenset({OperandRole.INDEX}),
@@ -91,7 +95,13 @@ _OPERATION_ROLES: dict[
         frozenset({OperandRole.MEMORY_SOURCE}),
         frozenset({OperandRole.CONTROL_MASK, OperandRole.PASS_THROUGH}),
     ),
+    PrimitiveOperation.MASK_ALL_FALSE: (frozenset(), frozenset()),
+    PrimitiveOperation.MASK_ALL_TRUE: (frozenset(), frozenset()),
     PrimitiveOperation.MASK_AND: (_BINARY_VALUE_ROLES, frozenset()),
+    PrimitiveOperation.MASK_FROM_INTEGRAL: (
+        frozenset({OperandRole.VALUE}),
+        frozenset(),
+    ),
     PrimitiveOperation.MASK_NOT: (frozenset({OperandRole.PRIMARY}), frozenset()),
     PrimitiveOperation.MASK_OR: (_BINARY_VALUE_ROLES, frozenset()),
     PrimitiveOperation.MASK_POPULATION_COUNT: (
@@ -100,6 +110,10 @@ _OPERATION_ROLES: dict[
     ),
     PrimitiveOperation.MASK_SET_LANE: (
         frozenset({OperandRole.PRIMARY, OperandRole.INDEX, OperandRole.VALUE}),
+        frozenset(),
+    ),
+    PrimitiveOperation.MASK_TO_INTEGRAL: (
+        frozenset({OperandRole.PRIMARY}),
         frozenset(),
     ),
     PrimitiveOperation.MASK_XOR: (_BINARY_VALUE_ROLES, frozenset()),
@@ -137,6 +151,19 @@ _OPERATION_ROLES: dict[
         frozenset({OperandRole.MEMORY_DESTINATION, OperandRole.VALUE}),
         frozenset({OperandRole.CONTROL_MASK}),
     ),
+    PrimitiveOperation.VECTOR_FROM_ARRAY: (
+        frozenset({OperandRole.VALUE}),
+        frozenset(),
+    ),
+    PrimitiveOperation.VECTOR_SPLAT: (
+        frozenset({OperandRole.VALUE}),
+        frozenset(),
+    ),
+    PrimitiveOperation.VECTOR_TO_ARRAY: (
+        frozenset({OperandRole.PRIMARY}),
+        frozenset(),
+    ),
+    PrimitiveOperation.VECTOR_ZERO: (frozenset(), frozenset()),
 }
 
 _OPERATION_RESULT_KINDS: dict[PrimitiveOperation, frozenset[str]] = {
@@ -153,13 +180,18 @@ _OPERATION_RESULT_KINDS: dict[PrimitiveOperation, frozenset[str]] = {
     PrimitiveOperation.COMPARE_NOT_EQUAL: frozenset({"m"}),
     PrimitiveOperation.CONVERT: frozenset({"v"}),
     PrimitiveOperation.EXTRACT_LANE: frozenset({"s"}),
+    PrimitiveOperation.INTEGRAL_MASK_TEST: frozenset({"im"}),
     PrimitiveOperation.INSERT_LANE: frozenset({"v"}),
     PrimitiveOperation.LOAD: frozenset({"v"}),
+    PrimitiveOperation.MASK_ALL_FALSE: frozenset({"m"}),
+    PrimitiveOperation.MASK_ALL_TRUE: frozenset({"m"}),
     PrimitiveOperation.MASK_AND: frozenset({"m"}),
+    PrimitiveOperation.MASK_FROM_INTEGRAL: frozenset({"m"}),
     PrimitiveOperation.MASK_NOT: frozenset({"m"}),
     PrimitiveOperation.MASK_OR: frozenset({"m"}),
     PrimitiveOperation.MASK_POPULATION_COUNT: frozenset({"usize"}),
     PrimitiveOperation.MASK_SET_LANE: frozenset({"m"}),
+    PrimitiveOperation.MASK_TO_INTEGRAL: frozenset({"im"}),
     PrimitiveOperation.MASK_XOR: frozenset({"m"}),
     PrimitiveOperation.REINTERPRET: frozenset({"v"}),
     PrimitiveOperation.SELECT: frozenset({"v"}),
@@ -168,6 +200,10 @@ _OPERATION_RESULT_KINDS: dict[PrimitiveOperation, frozenset[str]] = {
     PrimitiveOperation.SHIFT_RIGHT: frozenset({"v"}),
     PrimitiveOperation.SHIFT_RIGHT_WRAPPING: frozenset({"v"}),
     PrimitiveOperation.STORE: frozenset({"void"}),
+    PrimitiveOperation.VECTOR_FROM_ARRAY: frozenset({"v"}),
+    PrimitiveOperation.VECTOR_SPLAT: frozenset({"v"}),
+    PrimitiveOperation.VECTOR_TO_ARRAY: frozenset({"s[]"}),
+    PrimitiveOperation.VECTOR_ZERO: frozenset({"v"}),
 }
 
 _OPERATION_ROLE_KINDS: dict[
@@ -198,6 +234,10 @@ _OPERATION_ROLE_KINDS.update(
             OperandRole.PRIMARY: frozenset({"v"}),
             OperandRole.INDEX: frozenset({"usize"}),
         },
+        PrimitiveOperation.INTEGRAL_MASK_TEST: {
+            OperandRole.PRIMARY: frozenset({"im"}),
+            OperandRole.INDEX: frozenset({"usize"}),
+        },
         PrimitiveOperation.INSERT_LANE: {
             OperandRole.PRIMARY: frozenset({"v"}),
             OperandRole.INDEX: frozenset({"usize"}),
@@ -206,6 +246,9 @@ _OPERATION_ROLE_KINDS.update(
         PrimitiveOperation.MASK_AND: {
             OperandRole.PRIMARY: frozenset({"m"}),
             OperandRole.SECONDARY: frozenset({"m"}),
+        },
+        PrimitiveOperation.MASK_FROM_INTEGRAL: {
+            OperandRole.VALUE: frozenset({"im"})
         },
         PrimitiveOperation.MASK_NOT: {OperandRole.PRIMARY: frozenset({"m"})},
         PrimitiveOperation.MASK_OR: {
@@ -219,6 +262,9 @@ _OPERATION_ROLE_KINDS.update(
             OperandRole.PRIMARY: frozenset({"m"}),
             OperandRole.INDEX: frozenset({"usize"}),
             OperandRole.VALUE: frozenset({"im"}),
+        },
+        PrimitiveOperation.MASK_TO_INTEGRAL: {
+            OperandRole.PRIMARY: frozenset({"m"})
         },
         PrimitiveOperation.MASK_XOR: {
             OperandRole.PRIMARY: frozenset({"m"}),
@@ -238,6 +284,15 @@ _OPERATION_ROLE_KINDS.update(
             OperandRole.PRIMARY: frozenset({"v"})
         },
         PrimitiveOperation.STORE: {OperandRole.VALUE: frozenset({"s", "v"})},
+        PrimitiveOperation.VECTOR_FROM_ARRAY: {
+            OperandRole.VALUE: frozenset({"s[]"})
+        },
+        PrimitiveOperation.VECTOR_SPLAT: {
+            OperandRole.VALUE: frozenset({"s"})
+        },
+        PrimitiveOperation.VECTOR_TO_ARRAY: {
+            OperandRole.PRIMARY: frozenset({"v"})
+        },
     }
 )
 
@@ -263,20 +318,7 @@ def build_semantic_contract(
             )
         )
         return None
-    if not role_fields:
-        diagnostics.append(
-            diagnostic_at(
-                severity="error",
-                code="TSL-CATALOG-OPERATION-MISSING-FIELD",
-                message=(
-                    f"primitive {declaration.name!r} operation requires an "
-                    "'operand_roles' field"
-                ),
-                source=source_span(operation_fields[0].field.source),
-            )
-        )
-        return None
-    if len(operation_fields) != 1 or len(role_fields) != 1:
+    if len(operation_fields) != 1 or len(role_fields) > 1:
         return None
     operation_field = operation_fields[0].field
     operation_text = field_text(operation_field)
@@ -295,8 +337,27 @@ def build_semantic_contract(
         )
         return None
 
+    required, optional = _OPERATION_ROLES[operation]
+    if not role_fields and required:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-OPERATION-MISSING-FIELD",
+                message=(
+                    f"primitive {declaration.name!r} operation requires an "
+                    "'operand_roles' field"
+                ),
+                source=source_span(operation_field.source),
+            )
+        )
+        return None
+
     start_diagnostics = len(diagnostics)
-    bindings = _operand_bindings(declaration, role_fields[0].field, diagnostics)
+    bindings = (
+        _operand_bindings(declaration, role_fields[0].field, diagnostics)
+        if role_fields
+        else ()
+    )
     shape = parse_signature(declaration.signature)
     if shape is not None and shape.result_kind not in _OPERATION_RESULT_KINDS[operation]:
         diagnostics.append(
@@ -333,7 +394,6 @@ def build_semantic_contract(
                 help="compatible kinds: " + ", ".join(sorted(compatible)),
             )
         )
-    required, optional = _OPERATION_ROLES[operation]
     roles = frozenset(binding.role for binding in bindings)
     missing = required - roles
     unexpected = roles - required - optional
@@ -347,7 +407,11 @@ def build_semantic_contract(
                     f"{declaration.name!r} requires operand roles "
                     f"{_joined(role.value for role in missing)}"
                 ),
-                source=source_span(role_fields[0].field.source),
+                source=(
+                    source_span(role_fields[0].field.source)
+                    if role_fields
+                    else source_span(operation_field.source)
+                ),
             )
         )
     if unexpected:
@@ -360,7 +424,11 @@ def build_semantic_contract(
                     f"{declaration.name!r} does not accept operand roles "
                     f"{_joined(role.value for role in unexpected)}"
                 ),
-                source=source_span(role_fields[0].field.source),
+                source=(
+                    source_span(role_fields[0].field.source)
+                    if role_fields
+                    else source_span(operation_field.source)
+                ),
             )
         )
     if len(diagnostics) != start_diagnostics:
@@ -370,7 +438,9 @@ def build_semantic_contract(
         operand_bindings=tuple(sorted(bindings, key=lambda item: item.role.value)),
         source=source_span(operation_field.source),
         operation_source=_member_value_source(operation_field),
-        operand_roles_source=source_span(role_fields[0].field.source),
+        operand_roles_source=(
+            source_span(role_fields[0].field.source) if role_fields else None
+        ),
     )
 
 

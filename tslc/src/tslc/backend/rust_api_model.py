@@ -132,11 +132,88 @@ class RustFacadeTypeParameter:
 
 
 @dataclass(frozen=True, slots=True)
+class RustFacadeDelegateVector:
+    extension_name: str
+    type_tag: str
+
+    def __post_init__(self) -> None:
+        if not self.extension_name or not self.type_tag:
+            raise ValueError("Rust facade delegate vectors require complete source keys")
+
+
+@dataclass(frozen=True, slots=True)
 class RustFacadeDelegate:
     """Lower-level generated entry point used by one selected profile or fallback."""
 
     profile_name: str | None
     primitive_name: str
+    vectors: tuple[RustFacadeDelegateVector, ...]
+
+    def __post_init__(self) -> None:
+        if not self.primitive_name or not self.vectors:
+            raise ValueError("Rust facade delegates require an entry point and vectors")
+        if len(set(self.vectors)) != len(self.vectors):
+            raise ValueError("Rust facade delegate vectors must be unique")
+
+
+@dataclass(frozen=True, slots=True)
+class RustFacadeOperationBinding:
+    """One source-owned semantic operation available to facade planning."""
+
+    operation: PrimitiveOperation
+    source_primitive_name: str
+    result_kind: str
+    parameter_kinds: tuple[str, ...]
+    axis_names: tuple[str, ...]
+    mask_policy: str | None
+    overload: tuple[str, str, bool] | None
+    type_tags: tuple[str, ...]
+    caller_unsafe: bool
+    delegates: tuple[RustFacadeDelegate, ...]
+
+    def __post_init__(self) -> None:
+        if not self.source_primitive_name or not self.result_kind or not self.type_tags:
+            raise ValueError("Rust facade operation bindings require complete source facts")
+        if not self.delegates or all(
+            delegate.profile_name is not None for delegate in self.delegates
+        ):
+            raise ValueError(
+                "Rust facade operation bindings require a generic baseline delegate"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class RustFacadeCoreOperationRequirement:
+    role: str
+    operation: PrimitiveOperation
+    result_kind: str
+    parameter_kinds: tuple[str, ...]
+    axis_names: tuple[str, ...] = ()
+    overload: tuple[str, str, bool] | None = None
+
+    def __post_init__(self) -> None:
+        if not self.role or not self.result_kind:
+            raise ValueError("Rust facade core requirements require complete roles")
+
+
+@dataclass(frozen=True, slots=True)
+class RustFacadeCoreDelegate:
+    """Final lower-level delegate for one logical shape and static selection arm."""
+
+    role: str
+    type_tag: str
+    lanes: int
+    profile_name: str | None
+    source_primitive_name: str
+
+    def __post_init__(self) -> None:
+        if (
+            not self.role
+            or not self.type_tag
+            or self.lanes <= 0
+            or not self.source_primitive_name
+        ):
+            raise ValueError("Rust facade core delegates require complete shape facts")
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,6 +316,8 @@ class RustFacadeCoverageEntry:
 @dataclass(frozen=True, slots=True)
 class RustFacadePlan:
     shapes: tuple[RustFacadeShape, ...]
+    operation_bindings: tuple[RustFacadeOperationBinding, ...]
+    core_delegates: tuple[RustFacadeCoreDelegate, ...]
     comprehensive_methods: tuple[RustComprehensiveMethod, ...]
     curated_methods: tuple[RustCuratedMethod, ...]
     trait_implementations: tuple[RustCuratedTraitImplementation, ...]
@@ -258,6 +337,26 @@ class RustFacadePlan:
         shape_keys = tuple((item.type_tag, item.lanes) for item in self.shapes)
         if len(set(shape_keys)) != len(shape_keys):
             raise ValueError("Rust facade logical shapes must be unique")
+        operation_keys = tuple(
+            (
+                item.operation,
+                item.source_primitive_name,
+                item.result_kind,
+                item.parameter_kinds,
+                item.axis_names,
+                item.mask_policy,
+                item.overload,
+            )
+            for item in self.operation_bindings
+        )
+        if len(set(operation_keys)) != len(operation_keys):
+            raise ValueError("Rust facade operation bindings must be unique")
+        core_delegate_keys = tuple(
+            (item.role, item.type_tag, item.lanes, item.profile_name)
+            for item in self.core_delegates
+        )
+        if len(set(core_delegate_keys)) != len(core_delegate_keys):
+            raise ValueError("Rust facade core delegates must be unique")
         shape_key_set = set(shape_keys)
         if any(
             (alias.type_tag, selection.lanes) not in shape_key_set
@@ -279,6 +378,10 @@ __all__ = (
     "RustFacadeConstParameter",
     "RustFacadeConstParameterSource",
     "RustFacadeDelegate",
+    "RustFacadeDelegateVector",
+    "RustFacadeCoreDelegate",
+    "RustFacadeCoreOperationRequirement",
+    "RustFacadeOperationBinding",
     "RustFacadeParameter",
     "RustFacadeParameterPlacement",
     "RustFacadePlan",

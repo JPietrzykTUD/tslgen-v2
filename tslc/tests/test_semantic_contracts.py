@@ -194,12 +194,17 @@ def test_current_corpus_promotes_curated_operation_domains(catalog: Catalog) -> 
         ("less_than_or_equal", PrimitiveOperation.COMPARE_LESS_EQUAL),
         ("greater_than", PrimitiveOperation.COMPARE_GREATER),
         ("greater_than_or_equal", PrimitiveOperation.COMPARE_GREATER_EQUAL),
+        ("test_imask", PrimitiveOperation.INTEGRAL_MASK_TEST),
         ("mask_binary_and", PrimitiveOperation.MASK_AND),
         ("mask_binary_or", PrimitiveOperation.MASK_OR),
         ("mask_binary_xor", PrimitiveOperation.MASK_XOR),
         ("mask_binary_not", PrimitiveOperation.MASK_NOT),
         ("mask_population_count", PrimitiveOperation.MASK_POPULATION_COUNT),
+        ("mask_false", PrimitiveOperation.MASK_ALL_FALSE),
+        ("mask_true", PrimitiveOperation.MASK_ALL_TRUE),
+        ("to_mask", PrimitiveOperation.MASK_FROM_INTEGRAL),
         ("set_mask_lane", PrimitiveOperation.MASK_SET_LANE),
+        ("to_integral", PrimitiveOperation.MASK_TO_INTEGRAL),
         ("select", PrimitiveOperation.SELECT),
         ("shift_left", PrimitiveOperation.SHIFT_LEFT),
         ("shift_left_wrapping", PrimitiveOperation.SHIFT_LEFT_WRAPPING),
@@ -209,7 +214,11 @@ def test_current_corpus_promotes_curated_operation_domains(catalog: Catalog) -> 
         ("extract_value_at", PrimitiveOperation.EXTRACT_LANE),
         ("insert_value", PrimitiveOperation.INSERT_LANE),
         ("insert_value_at", PrimitiveOperation.INSERT_LANE),
+        ("from_array", PrimitiveOperation.VECTOR_FROM_ARRAY),
         ("load", PrimitiveOperation.LOAD),
+        ("set1", PrimitiveOperation.VECTOR_SPLAT),
+        ("to_array", PrimitiveOperation.VECTOR_TO_ARRAY),
+        ("set_zero", PrimitiveOperation.VECTOR_ZERO),
         ("store", PrimitiveOperation.STORE),
         ("reinterpret", PrimitiveOperation.REINTERPRET),
         ("cast", PrimitiveOperation.CONVERT),
@@ -262,6 +271,20 @@ def test_runtime_lane_operations_bind_typed_index_operands(catalog: Catalog) -> 
     assert compile_insert is not None and compile_insert.operation is not None
     assert compile_extract.operation.binding(OperandRole.INDEX) is None
     assert compile_insert.operation.binding(OperandRole.INDEX) is None
+
+
+def test_zero_operand_operations_need_no_synthetic_operand_role() -> None:
+    _, catalog, diagnostics = _build(
+        "prim<v:=()> zero():\n"
+        "  operation vector_zero\n"
+    )
+
+    assert diagnostics == ()
+    operation = catalog.primitives[0].operation
+    assert operation is not None
+    assert operation.kind is PrimitiveOperation.VECTOR_ZERO
+    assert operation.operand_bindings == ()
+    assert operation.operand_roles_source is None
 
 
 @pytest.mark.parametrize(
@@ -537,6 +560,13 @@ def test_completion_hover_navigation_references_and_tokens_share_semantic_enums(
     assert _completion_labels(catalog, source, operation_edit) == {
         "bit_and",
         "bit_and_not",
+    }
+    vector_operation_edit = source.split("bit_and", 1)[0] + "vector_"
+    assert _completion_labels(catalog, source, vector_operation_edit) == {
+        "vector_from_array",
+        "vector_splat",
+        "vector_to_array",
+        "vector_zero",
     }
     role_edit = source.split("    primary", 1)[0] + "    prim"
     assert _completion_labels(catalog, source, role_edit) == {"primary"}

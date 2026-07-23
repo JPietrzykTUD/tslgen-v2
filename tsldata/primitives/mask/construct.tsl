@@ -1,4 +1,5 @@
 prim<m:=()>[value=zero] mask_false():
+  operation mask_all_false
   brief_description "Creates a mask with every lane inactive."
   detailed_description """
     Constructs a mask value in which every lane is inactive.
@@ -33,8 +34,7 @@ prim<m:=()>[value=zero] mask_false():
         requires:
           avx2 [avx, avx2]
           sse:
-            [si8, ui8, si16, ui16, si32, ui32, f64] [sse, sse2]
-            ?i64 [sse, sse2, sse4_1]
+            arith [sse, sse2]
             f32 [sse]
           neon [neon]
         safety:
@@ -82,6 +82,7 @@ prim<m:=()>[value=zero] mask_false():
         implementation:
           tsil "complete(mask<none>());"
 prim<m:=()>[value=all] mask_true():
+  operation mask_all_true
   brief_description "Creates a mask with every lane active."
   detailed_description """
     Constructs a mask value in which every lane is active.
@@ -116,8 +117,7 @@ prim<m:=()>[value=all] mask_true():
         requires:
           avx2 [avx, avx2]
           sse:
-            [si8, ui8, si16, ui16, si32, ui32, f64] [sse, sse2]
-            ?i64 [sse, sse2, sse4_1]
+            arith [sse, sse2]
             f32 [sse]
           neon [neon]
         safety:

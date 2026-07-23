@@ -1,4 +1,8 @@
 prim<im:=(im,usize)> test_imask(mask, position):
+  operation integral_mask_test
+  operand_roles:
+    primary mask
+    index position
   brief_description "Tests whether the mask bit at the supplied position is active."
   detailed_description """
     Extracts the bit at a runtime position from an integral mask value and
@@ -74,8 +78,10 @@ prim<m:=(m,usize,im)> set_mask_lane(mask, index, value):
     - {tags [middle, clear], extension "avx512", type "ui64", lane_count 8, case {inputs [255, 4, 0], expected 239}}
     - {tags [false], extension "generic", type "ui8", lane_count 16, case {inputs [65535, 15, 0], expected 32767}}
     - {tags [true], extension "generic", type "f64", lane_count 2, case {inputs [0, 1, 1], expected 2}}
+    - {tags [sse2, set], extension "sse", type "ui64", lane_count 2, case {inputs [0, 1, 1], expected 2}}
+    - {tags [sse2, set], extension "sse", type "f64", lane_count 2, case {inputs [0, 1, 1], expected 2}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, neon, sve, wasm128]:
       arith:
         requires:
           scalar []
@@ -87,7 +93,6 @@ prim<m:=(m,usize,im)> set_mask_lane(mask, index, value):
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
           avx2 [avx]
-          sse [sse]
           neon [neon]
           sve [sve]
           wasm128 [simd128]
@@ -107,6 +112,29 @@ prim<m:=(m,usize,im)> set_mask_lane(mask, index, value):
             complete(call<primitive=mask_binary_and[Vec]>(
               mask,
               call<primitive=mask_binary_not[Vec]>(lane_mask)
+            ));
+          """
+    sse:
+      arith:
+        requires:
+          arith [sse, sse2]
+          f32 [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(
+              lane_bit,
+              (cast<static>(vector::imask, 1)) << index
+            );
+            var<infer>(bits, call<primitive=to_integral[Vec]>(mask));
+            if (value != cast<static>(vector::imask, 0)) {
+              complete(call<primitive=to_mask[Vec]>(bits | lane_bit));
+            }
+            complete(call<primitive=to_mask[Vec]>(
+              bits & op<bit_negate>(lane_bit)
             ));
           """
 

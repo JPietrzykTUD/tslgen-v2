@@ -432,7 +432,9 @@ prim<m:=m> mask_binary_not(mask):
           tsil "complete(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
     sse:
       arith:
-        requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2, sse4_1], ui64 [sse, sse2, sse4_1], f32 [sse, sse2], f64 [sse, sse2, sse4_1]}
+        requires:
+          arith [sse, sse2]
+          f32 [sse]
         safety:
           internal_unsafe false
           caller_unsafe false

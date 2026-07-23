@@ -7,7 +7,12 @@ from dataclasses import dataclass
 import re
 
 from tslc.backend.emitted_profile import EmittedProfile, used_vector_type_specs
-from tslc.backend.rust_vectors import RustVectorRegistration, rust_vector_registrations
+from tslc.backend.rust_vectors import (
+    RustVectorRegistration,
+    rust_imask_type,
+    rust_mask_type,
+    rust_vector_registrations,
+)
 from tslc.backend.target_capability import rust_arch_module, rust_extension_tag
 from tslc.catalog.model import Extension
 from tslc.catalog.scalar_types import scalar_bit_width
@@ -49,11 +54,17 @@ class RustStaticVectorMapping:
     lanes: int
     total_bits: int
     vector_spelling: str
+    imask_spelling: str
     extension_name: str | None = None
     extension_tag_spelling: str | None = None
 
     def __post_init__(self) -> None:
-        if not self.type_tag or not self.base_spelling or not self.vector_spelling:
+        if (
+            not self.type_tag
+            or not self.base_spelling
+            or not self.vector_spelling
+            or not self.imask_spelling
+        ):
             raise ValueError("Rust static vector mappings require complete type facts")
         if self.lanes <= 0 or self.total_bits <= 0:
             raise ValueError("Rust static vector mappings require positive sizes")
@@ -538,6 +549,7 @@ def _fallback_mappings(
                 1,
                 element_bits,
                 f"Simd<{base_spelling}, Scalar>",
+                "u64",
             )
         )
         for total_bits in admitted_widths:
@@ -551,6 +563,7 @@ def _fallback_mappings(
                     lanes,
                     total_bits,
                     f"Simd<{base_spelling}, Generic<{lanes}>>",
+                    "u64",
                 )
             )
     return tuple(sorted(mappings, key=lambda item: (item.type_tag, item.lanes)))
@@ -617,6 +630,9 @@ def _profile_mappings(
             )
             continue
         extension = emitted_profile.extensions[best.extension_name]
+        mask_spelling = rust_mask_type(
+            extension, best.type_bits, best.register_spelling
+        )
         mappings.append(
             RustStaticVectorMapping(
                 type_tag=best.type_tag,
@@ -625,6 +641,12 @@ def _profile_mappings(
                 total_bits=best.vector_bits,
                 vector_spelling=(
                     f"Simd<{best.base_spelling}, {rust_extension_tag(extension)}>"
+                ),
+                imask_spelling=rust_imask_type(
+                    extension,
+                    best.type_bits,
+                    mask_spelling,
+                    best.vector_bits,
                 ),
                 extension_name=best.extension_name,
                 extension_tag_spelling=rust_extension_tag(extension),

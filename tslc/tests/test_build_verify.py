@@ -417,11 +417,63 @@ def test_rust_path_dependency_consumer_builds(
     (consumer / "src" / "main.rs").write_text(
         textwrap.dedent(
             """
-            use tsl::tsl_core::{Scalar, Simd};
+            use tsl::{Mask, Simd};
+            use tsl::tsl_core::{Scalar, Simd as LowerSimd};
 
             fn main() {
-                let sum = tsl::profile::add::<Simd<i32, Scalar>>(1, 2);
+                let sum = tsl::profile::add::<LowerSimd<i32, Scalar>>(1, 2);
                 assert_eq!(sum, 3);
+
+                let source = [1_i32, 2, 3, 4, 99];
+                let mut value = Simd::<i32, 4>::from_slice(&source);
+                assert_eq!(Simd::<i32, 4>::LANES, 4);
+                assert_eq!(value.to_array(), [1, 2, 3, 4]);
+                assert_eq!(value.lane(0), 1);
+                assert_eq!(value.lane(3), 4);
+                value.set_lane(1, 7);
+                assert_eq!(format!("{value:?}"), "[1, 7, 3, 4]");
+
+                let mut destination = [88_i32; 6];
+                value.copy_to_slice(&mut destination);
+                assert_eq!(destination, [1, 7, 3, 4, 88, 88]);
+
+                let mut pointer_destination = [0_i32; 4];
+                let pointer_value =
+                    unsafe { Simd::<i32, 4>::from_ptr(source.as_ptr()) };
+                unsafe {
+                    pointer_value.copy_to_ptr(pointer_destination.as_mut_ptr());
+                }
+                assert_eq!(pointer_destination, [1, 2, 3, 4]);
+
+                let bytes = [
+                    0_u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+                    16, 17,
+                ];
+                let unaligned = Simd::<u8, 16>::from_slice(&bytes[1..]);
+                assert_eq!(
+                    unaligned.to_array(),
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+                );
+
+                let mut mask = Mask::<i32, 4>::from_bitmask(0b1_0101);
+                assert_eq!(Mask::<i32, 4>::LANES, 4);
+                assert_eq!(mask.to_bitmask(), 0b0101);
+                assert_eq!(mask.to_array(), [true, false, true, false]);
+                assert!(mask.test(0));
+                assert_eq!(mask.count_ones(), 2);
+                assert!(mask.any());
+                assert!(!mask.all());
+                mask.set(3, true);
+                assert_eq!(mask.to_bitmask(), 0b1101);
+                assert_eq!(mask.cast::<f32>().to_bitmask(), 0b1101);
+                assert_eq!((mask & !Mask::splat(false)).to_bitmask(), 0b1101);
+
+                assert!(std::panic::catch_unwind(|| {
+                    let _ = Simd::<i32, 4>::from_slice(&source[..3]);
+                })
+                .is_err());
+                assert!(std::panic::catch_unwind(|| value.lane(4)).is_err());
+                assert!(std::panic::catch_unwind(|| mask.test(4)).is_err());
             }
             """
         ).lstrip(),
@@ -462,6 +514,19 @@ def test_rust_path_dependency_consumer_builds(
                 assert_owned::<NativeMask<T>>();
                 (vector, mask)
             }
+
+            pub fn round_trip<T, const N: usize>(
+                values: [T; N],
+                mask: [bool; N],
+            ) -> ([T; N], [bool; N])
+            where
+                T: SupportedSimd<N>,
+            {
+                (
+                    Simd::<T, N>::from_array(values).to_array(),
+                    Mask::<T, N>::from_array(mask).to_array(),
+                )
+            }
             """
         ).lstrip(),
         encoding="utf-8",
@@ -481,6 +546,22 @@ def test_rust_path_dependency_consumer_builds(
     )
 
     assert checked.returncode == 0, checked.stderr + checked.stdout
+
+    executed = subprocess.run(
+        (
+            "cargo",
+            "run",
+            "--quiet",
+            "--manifest-path",
+            str(consumer / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "rust-consumer-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert executed.returncode == 0, executed.stderr + executed.stdout
 
     generated_manifest = generated / "rust" / "Cargo.toml"
     packaged = subprocess.run(

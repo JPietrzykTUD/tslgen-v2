@@ -3,9 +3,32 @@
 mod private {
     pub trait SealedElement {}
 
-    pub trait Representation<const N: usize>: SealedElement {
+    pub trait Representation<const N: usize>: SealedElement + Sized {
         type Vector: Copy + Send + Sync + Unpin + 'static;
         type Mask: Copy + Send + Sync + Unpin + 'static;
+    }
+
+    pub trait FacadeOps<const N: usize>: Representation<N> {
+        fn vector_splat(value: Self) -> Self::Vector;
+        fn vector_from_array(values: [Self; N]) -> Self::Vector;
+        fn vector_to_array(value: Self::Vector) -> [Self; N];
+        fn vector_zero() -> Self::Vector;
+        fn extract_lane(value: Self::Vector, index: usize) -> Self;
+        fn insert_lane(value: Self::Vector, index: usize, lane: Self) -> Self::Vector;
+        unsafe fn load(source: *const Self) -> Self::Vector;
+        unsafe fn store(destination: *mut Self, value: Self::Vector);
+
+        fn mask_false() -> Self::Mask;
+        fn mask_true() -> Self::Mask;
+        fn mask_from_bitmask(bits: u64) -> Self::Mask;
+        fn mask_to_bitmask(value: Self::Mask) -> u64;
+        fn mask_test(value: Self::Mask, index: usize) -> bool;
+        fn mask_set(value: Self::Mask, index: usize, active: bool) -> Self::Mask;
+        fn mask_count(value: Self::Mask) -> usize;
+        fn mask_and(left: Self::Mask, right: Self::Mask) -> Self::Mask;
+        fn mask_or(left: Self::Mask, right: Self::Mask) -> Self::Mask;
+        fn mask_xor(left: Self::Mask, right: Self::Mask) -> Self::Mask;
+        fn mask_not(value: Self::Mask) -> Self::Mask;
     }
 }
 
@@ -15,7 +38,7 @@ mod private {
 /// count for the compilation target without exposing the private register type.
 #[allow(private_bounds)]
 pub trait SimdElement:
-    private::SealedElement + Copy + Send + Sync + Unpin + 'static
+    private::SealedElement + Copy + core::fmt::Debug + Send + Sync + Unpin + 'static
 {
     type NativeSimd: Copy + Send + Sync + Unpin + 'static;
     type NativeMask: Copy + Send + Sync + Unpin + 'static;
@@ -27,13 +50,13 @@ pub trait SimdElement:
 /// source-authored fixed 128-, 256-, or 512-bit shapes.
 #[allow(private_bounds)]
 pub trait SupportedSimd<const N: usize>:
-    SimdElement + private::Representation<N>
+    SimdElement + private::Representation<N> + private::FacadeOps<N>
 {
 }
 
 impl<T, const N: usize> SupportedSimd<N> for T
 where
-    T: SimdElement + private::Representation<N>,
+    T: SimdElement + private::Representation<N> + private::FacadeOps<N>,
 {
 }
 
@@ -71,4 +94,436 @@ pub type NativeMask<T> = <T as SimdElement>::NativeMask;
 
 @{representation_impls}
 
+@{facade_impls}
+
 @{element_impls}
+
+impl<T, const N: usize> Simd<T, N>
+where
+    T: SupportedSimd<N>,
+{
+    /// Number of logical lanes in this value.
+    pub const LANES: usize = N;
+
+    /// Broadcasts `value` to every lane.
+    #[inline]
+    #[must_use]
+    pub fn splat(value: T) -> Self {
+        Self {
+            value: <T as private::FacadeOps<N>>::vector_splat(value),
+        }
+    }
+
+    /// Constructs a vector from values in increasing logical lane order.
+    #[inline]
+    #[must_use]
+    pub fn from_array(values: [T; N]) -> Self {
+        Self {
+            value: <T as private::FacadeOps<N>>::vector_from_array(values),
+        }
+    }
+
+    /// Returns the logical lane values in increasing lane order.
+    #[inline]
+    #[must_use]
+    pub fn to_array(self) -> [T; N] {
+        <T as private::FacadeOps<N>>::vector_to_array(self.value)
+    }
+
+    /// Returns one logical lane.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `index >= N`.
+    #[inline]
+    #[must_use]
+    #[track_caller]
+    pub fn lane(&self, index: usize) -> T {
+        assert!(index < N, "lane index {index} is out of bounds for {N} lanes");
+        <T as private::FacadeOps<N>>::extract_lane(self.value, index)
+    }
+
+    /// Replaces one logical lane.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `index >= N`.
+    #[inline]
+    #[track_caller]
+    pub fn set_lane(&mut self, index: usize, value: T) {
+        assert!(index < N, "lane index {index} is out of bounds for {N} lanes");
+        self.value = <T as private::FacadeOps<N>>::insert_lane(self.value, index, value);
+    }
+
+    /// Loads the first `N` elements of `source`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `source.len() < N`.
+    #[inline]
+    #[must_use]
+    #[track_caller]
+    pub fn from_slice(source: &[T]) -> Self {
+        assert!(
+            source.len() >= N,
+            "source slice has {} elements but {N} are required",
+            source.len()
+        );
+        // SAFETY: the length check proves that `source` contains `N`
+        // initialized, properly aligned `T` values.
+        unsafe { Self::from_ptr(source.as_ptr()) }
+    }
+
+    /// Loads exactly `N` elements from `source`.
+    ///
+    /// # Safety
+    ///
+    /// `source` must be aligned for `T`, valid to read `N` initialized
+    /// consecutive `T` values, and remain valid for the duration of the call.
+    #[inline]
+    #[must_use]
+    pub unsafe fn from_ptr(source: *const T) -> Self {
+        Self {
+            // SAFETY: upheld by this function's caller contract.
+            value: unsafe { <T as private::FacadeOps<N>>::load(source) },
+        }
+    }
+
+    /// Stores into the first `N` elements of `destination`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `destination.len() < N`.
+    #[inline]
+    #[track_caller]
+    pub fn copy_to_slice(self, destination: &mut [T]) {
+        assert!(
+            destination.len() >= N,
+            "destination slice has {} elements but {N} are required",
+            destination.len()
+        );
+        // SAFETY: the length check proves that `destination` contains `N`
+        // writable, properly aligned `T` values.
+        unsafe { self.copy_to_ptr(destination.as_mut_ptr()) }
+    }
+
+    /// Stores exactly `N` elements into `destination`.
+    ///
+    /// # Safety
+    ///
+    /// `destination` must be aligned for `T`, valid to write `N` consecutive
+    /// `T` values, and remain valid for the duration of the call.
+    #[inline]
+    pub unsafe fn copy_to_ptr(self, destination: *mut T) {
+        // SAFETY: upheld by this function's caller contract.
+        unsafe { <T as private::FacadeOps<N>>::store(destination, self.value) }
+    }
+}
+
+impl<T, const N: usize> From<[T; N]> for Simd<T, N>
+where
+    T: SupportedSimd<N>,
+{
+    #[inline]
+    fn from(values: [T; N]) -> Self {
+        Self::from_array(values)
+    }
+}
+
+impl<T, const N: usize> Default for Simd<T, N>
+where
+    T: SupportedSimd<N>,
+{
+    #[inline]
+    fn default() -> Self {
+        Self {
+            value: <T as private::FacadeOps<N>>::vector_zero(),
+        }
+    }
+}
+
+impl<T, const N: usize> core::fmt::Debug for Simd<T, N>
+where
+    T: SupportedSimd<N>,
+{
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Debug::fmt(&self.to_array(), formatter)
+    }
+}
+
+impl<T, const N: usize> Mask<T, N>
+where
+    T: SupportedSimd<N>,
+{
+    /// Number of logical lanes in this mask.
+    pub const LANES: usize = N;
+
+    /// Constructs a mask whose lanes all have the same active state.
+    #[inline]
+    #[must_use]
+    pub fn splat(value: bool) -> Self {
+        Self {
+            value: if value {
+                <T as private::FacadeOps<N>>::mask_true()
+            } else {
+                <T as private::FacadeOps<N>>::mask_false()
+            },
+        }
+    }
+
+    /// Constructs a mask from logical lane states.
+    #[inline]
+    #[must_use]
+    pub fn from_array(values: [bool; N]) -> Self {
+        let mut result = Self::splat(false);
+        let mut index = 0;
+        while index < N {
+            result.value =
+                <T as private::FacadeOps<N>>::mask_set(result.value, index, values[index]);
+            index += 1;
+        }
+        result
+    }
+
+    /// Returns the mask's logical lane states.
+    #[inline]
+    #[must_use]
+    pub fn to_array(self) -> [bool; N] {
+        let mut result = [false; N];
+        let mut index = 0;
+        while index < N {
+            result[index] = <T as private::FacadeOps<N>>::mask_test(self.value, index);
+            index += 1;
+        }
+        result
+    }
+
+    /// Tests one logical lane.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `index >= N`.
+    #[inline]
+    #[must_use]
+    #[track_caller]
+    pub fn test(&self, index: usize) -> bool {
+        assert!(index < N, "mask index {index} is out of bounds for {N} lanes");
+        <T as private::FacadeOps<N>>::mask_test(self.value, index)
+    }
+
+    /// Replaces one logical lane state.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `index >= N`.
+    #[inline]
+    #[track_caller]
+    pub fn set(&mut self, index: usize, value: bool) {
+        assert!(index < N, "mask index {index} is out of bounds for {N} lanes");
+        self.value = <T as private::FacadeOps<N>>::mask_set(self.value, index, value);
+    }
+
+    /// Returns whether at least one lane is active.
+    #[inline]
+    #[must_use]
+    pub fn any(self) -> bool {
+        self.count_ones() != 0
+    }
+
+    /// Returns whether every lane is active.
+    #[inline]
+    #[must_use]
+    pub fn all(self) -> bool {
+        self.count_ones() == N
+    }
+
+    /// Counts active lanes.
+    #[inline]
+    #[must_use]
+    pub fn count_ones(self) -> usize {
+        <T as private::FacadeOps<N>>::mask_count(self.value)
+    }
+
+    /// Constructs a mask from a bitset where bit `i` corresponds to lane `i`.
+    ///
+    /// Bits at positions greater than or equal to `N` are ignored.
+    #[inline]
+    #[must_use]
+    pub fn from_bitmask(bits: u64) -> Self {
+        Self {
+            value: <T as private::FacadeOps<N>>::mask_from_bitmask(bits),
+        }
+    }
+
+    /// Returns a bitset where bit `i` corresponds to lane `i`.
+    ///
+    /// Bits at positions greater than or equal to `N` are zero.
+    #[inline]
+    #[must_use]
+    pub fn to_bitmask(self) -> u64 {
+        <T as private::FacadeOps<N>>::mask_to_bitmask(self.value)
+    }
+
+    /// Converts this mask to another admitted element type with the same lanes.
+    #[inline]
+    #[must_use]
+    pub fn cast<U>(self) -> Mask<U, N>
+    where
+        U: SupportedSimd<N>,
+    {
+        Mask::<U, N>::from_array(self.to_array())
+    }
+}
+
+impl<T, const N: usize> From<[bool; N]> for Mask<T, N>
+where
+    T: SupportedSimd<N>,
+{
+    #[inline]
+    fn from(values: [bool; N]) -> Self {
+        Self::from_array(values)
+    }
+}
+
+impl<T, const N: usize> Default for Mask<T, N>
+where
+    T: SupportedSimd<N>,
+{
+    #[inline]
+    fn default() -> Self {
+        Self::splat(false)
+    }
+}
+
+impl<T, const N: usize> core::fmt::Debug for Mask<T, N>
+where
+    T: SupportedSimd<N>,
+{
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Debug::fmt(&self.to_array(), formatter)
+    }
+}
+
+impl<T, const N: usize> PartialEq for Mask<T, N>
+where
+    T: SupportedSimd<N>,
+{
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        <T as private::FacadeOps<N>>::mask_count(
+            <T as private::FacadeOps<N>>::mask_xor(self.value, other.value),
+        ) == 0
+    }
+}
+
+impl<T, const N: usize> Eq for Mask<T, N>
+where
+    T: SupportedSimd<N>,
+{
+}
+
+@{array_from_impls}
+
+macro_rules! impl_mask_binary_operator {
+    ($trait:ident, $method:ident, $assign_trait:ident, $assign_method:ident, $delegate:ident) => {
+        impl<T, const N: usize> core::ops::$trait for Mask<T, N>
+        where
+            T: SupportedSimd<N>,
+        {
+            type Output = Self;
+
+            #[inline]
+            fn $method(self, rhs: Self) -> Self::Output {
+                Self {
+                    value: <T as private::FacadeOps<N>>::$delegate(self.value, rhs.value),
+                }
+            }
+        }
+
+        impl<T, const N: usize> core::ops::$trait<Mask<T, N>> for &Mask<T, N>
+        where
+            T: SupportedSimd<N>,
+        {
+            type Output = Mask<T, N>;
+
+            #[inline]
+            fn $method(self, rhs: Mask<T, N>) -> Self::Output {
+                <Mask<T, N> as core::ops::$trait<Mask<T, N>>>::$method(*self, rhs)
+            }
+        }
+
+        impl<T, const N: usize> core::ops::$trait<&Mask<T, N>> for Mask<T, N>
+        where
+            T: SupportedSimd<N>,
+        {
+            type Output = Self;
+
+            #[inline]
+            fn $method(self, rhs: &Mask<T, N>) -> Self::Output {
+                <Mask<T, N> as core::ops::$trait<Mask<T, N>>>::$method(self, *rhs)
+            }
+        }
+
+        impl<T, const N: usize> core::ops::$trait<&Mask<T, N>> for &Mask<T, N>
+        where
+            T: SupportedSimd<N>,
+        {
+            type Output = Mask<T, N>;
+
+            #[inline]
+            fn $method(self, rhs: &Mask<T, N>) -> Self::Output {
+                <Mask<T, N> as core::ops::$trait<Mask<T, N>>>::$method(*self, *rhs)
+            }
+        }
+
+        impl<T, const N: usize> core::ops::$assign_trait for Mask<T, N>
+        where
+            T: SupportedSimd<N>,
+        {
+            #[inline]
+            fn $assign_method(&mut self, rhs: Self) {
+                *self = <Mask<T, N> as core::ops::$trait<Mask<T, N>>>::$method(*self, rhs);
+            }
+        }
+
+        impl<T, const N: usize> core::ops::$assign_trait<&Mask<T, N>> for Mask<T, N>
+        where
+            T: SupportedSimd<N>,
+        {
+            #[inline]
+            fn $assign_method(&mut self, rhs: &Mask<T, N>) {
+                *self = <Mask<T, N> as core::ops::$trait<Mask<T, N>>>::$method(*self, *rhs);
+            }
+        }
+    };
+}
+
+impl_mask_binary_operator!(BitAnd, bitand, BitAndAssign, bitand_assign, mask_and);
+impl_mask_binary_operator!(BitOr, bitor, BitOrAssign, bitor_assign, mask_or);
+impl_mask_binary_operator!(BitXor, bitxor, BitXorAssign, bitxor_assign, mask_xor);
+
+impl<T, const N: usize> core::ops::Not for Mask<T, N>
+where
+    T: SupportedSimd<N>,
+{
+    type Output = Self;
+
+    #[inline]
+    fn not(self) -> Self::Output {
+        Self {
+            value: <T as private::FacadeOps<N>>::mask_not(self.value),
+        }
+    }
+}
+
+impl<T, const N: usize> core::ops::Not for &Mask<T, N>
+where
+    T: SupportedSimd<N>,
+{
+    type Output = Mask<T, N>;
+
+    #[inline]
+    fn not(self) -> Self::Output {
+        !*self
+    }
+}
