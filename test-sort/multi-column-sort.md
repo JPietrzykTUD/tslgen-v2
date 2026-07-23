@@ -8,10 +8,13 @@ the prototype in:
 - [`multicolumn_quicksort.hpp`](multicolumn_quicksort.hpp)
 - [`benchmark_multicolumn_gbench.cpp`](benchmark_multicolumn_gbench.cpp)
 
-The current prototype sorts one key column in ascending order and applies every
-key exchange to a runtime number of payload columns. The target algorithm makes
-each column a sort key with its own direction and produces a lexicographic
-ordering across all columns.
+The original prototype sorted one key column in ascending order and applied
+every key exchange to a runtime number of payload columns. The implementation
+now makes each column a sort key with its own direction and produces a
+lexicographic ordering across all columns. It provides serial and parallel
+post-sort discovery plus serial and parallel incremental three-way discovery.
+Two-way sorting intentionally uses complete-range discovery; DSA remains a
+future optional detector because no concrete integration contract is present.
 
 For example, given these directions:
 
@@ -249,8 +252,7 @@ That direction must be applied consistently throughout the active quicksort:
 - median-of-three pivot selection;
 - SIMD and scalar partition predicates;
 - insertion-leaf comparisons;
-- bitonic-network compare/exchange decisions;
-- padding sentinels used by short network leaves;
+- bitonic-leaf result orientation;
 - reference validation in tests and benchmarks.
 
 For three-way partitioning, the logical regions are:
@@ -417,11 +419,10 @@ strict pivot boundary, so a leaf run cannot silently continue into another
 piece of this decomposition. Scanning every leaf, then every parent, then every
 ancestor would repeat work and generate duplicate child tasks.
 
-The current prototype's `sort_impl` recursively handles the smaller partition
-and iterates over the larger partition to bound stack depth. Incremental
-completion therefore needs either explicit quicksort frames, completion
-callbacks, or equivalent bookkeeping; a C++ function return alone does not
-identify every logically completed region.
+`sort_impl` recursively handles the smaller partition and iterates over the
+larger partition to bound stack depth. It therefore threads absolute offsets
+through the loop and emits explicit equal-band and completed-leaf callbacks; a
+C++ function return alone does not identify every logically completed region.
 
 ## Variant axis 2: two-way versus three-way partitioning
 
@@ -641,11 +642,10 @@ Workers should not block waiting for their own child tasks; they should enqueue
 children and return to the pool. A global outstanding-task count or equivalent
 structured task-group mechanism can provide termination.
 
-The current sorter object contains mutable `rng` and `column_count` members.
-Sharing one instance across workers would introduce data races. Parallel work
-needs task-local sorter state, immutable column metadata, and either
-deterministic task-local pivot seeds or an explicitly synchronized random
-source.
+The sorter retains only an immutable root seed. Payload counts and RNGs are
+task-local, and each task derives a deterministic pivot seed from its column
+and absolute range. The sorter instance and immutable column metadata can
+therefore be shared by workers without a shared RNG or mutable column count.
 
 Task creation should normally have a size threshold. Very small equal runs are
 better processed serially by the current worker, while larger runs provide
@@ -666,7 +666,8 @@ The existing leaf choices remain orthogonal to run discovery:
 
 - sorts a fixed-capacity padded key block with SIMD operations;
 - records exchange masks and replays them on payload columns;
-- direction support affects comparator decisions and the padding sentinel;
+- produces descending output by co-reversing the valid ascending network result,
+  avoiding an in-band minimum-value padding sentinel;
 - RLE can scan the valid, unpadded portion after the leaf completes.
 
 The leaf threshold determines the granularity of incremental RLE. Smaller

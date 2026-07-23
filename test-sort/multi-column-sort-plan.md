@@ -27,21 +27,54 @@ Incremental two-way run discovery and DSA-backed run detection are planned
 extensions with explicit gates. They must not complicate or weaken the serial
 complete-range baseline.
 
-## Current-state inventory
+## Implementation status and gate decisions
 
-The implementation starts from these files:
+As of 2026-07-23, Slices 1 through 7 are implemented in `test-sort`:
 
-| File | Current responsibility | Required evolution |
+- direction-aware, stateless active-key sorting;
+- scalar equal-run spans;
+- serial post-sort lexicographic sorting;
+- a dedicated correctness target;
+- a true multi-column Google Benchmark;
+- a C++17 task executor and parallel post-sort sorting;
+- serial and parallel incremental three-way discovery with structural probes.
+
+The Slice 8 two-way-incremental gate is closed. Representative local `u32`,
+16-lane measurements showed that the two conditions did not coincide:
+
+- On uniform L2-sized input, two-way network sorting was competitive
+  (`14.90 ms` versus `15.12 ms` for post-sort three-way), but incremental
+  three-way reduced scanned values by less than one percent and did not show an
+  RLE-driven total-time win.
+- On low-entropy L2-sized input, incremental three-way insertion reduced RLE
+  scanning from about `2.0` to `0.98` values per row and improved its matching
+  post-sort path only slightly (`28.00 ms` to `27.77 ms`), while two-way
+  insertion was materially slower (`37.31 ms`).
+
+This does not establish post-sort RLE as a material bottleneck on a
+competitively important two-way case, so two-way intentionally retains the
+complete-range detector.
+
+The Slice 9 DSA gate is also closed: the repository contains no concrete DSA
+API, library integration, device capability contract, or injectable runner.
+Scalar span detection remains the portable implementation. DSA can be added
+later without changing span semantics when those external facts exist.
+
+## Pre-implementation inventory
+
+The implementation work started from these files:
+
+| File | Original responsibility | Required evolution |
 |---|---|---|
 | [`multicolumn_quicksort.hpp`](multicolumn_quicksort.hpp) | Sort one ascending key and replay its permutation across payload columns | Add order-aware active-range sorting and lexicographic range orchestration |
 | [`cosort_network.hpp`](cosort_network.hpp) | Build and replay SIMD partition plans for ascending partition predicates | Make the before/after-pivot logic direction-aware |
-| [`cosort_bitonic_leaf.hpp`](cosort_bitonic_leaf.hpp) | Sort short key ranges ascending and replay exchange masks | Support an overall descending network and the correct padding sentinel |
+| [`cosort_bitonic_leaf.hpp`](cosort_bitonic_leaf.hpp) | Sort short key ranges ascending and replay exchange masks | Support descending output without allowing padded payload into the valid range |
 | [`benchmark_cosort_network.cpp`](benchmark_cosort_network.cpp) | Directly benchmark the partition replay step and sorting networks | Preserve its explicit ascending microbenchmark when partition templates gain an order parameter |
 | [`benchmark_multicolumn_gbench.cpp`](benchmark_multicolumn_gbench.cpp) | Benchmark one key plus passive payload columns | Benchmark true lexicographic sort columns and mixed directions |
 | [`benchmark_multicolumn_sort.cpp`](benchmark_multicolumn_sort.cpp) | Standalone one-key co-sort benchmark and correctness smoke test | Retain temporarily as a legacy active-key microbenchmark; do not make it a second multi-column correctness oracle |
 | [`CMakeLists.txt`](CMakeLists.txt) | Build one pairwise quicksort test and the benchmark executables | Add a dedicated multi-column correctness target and thread linkage when parallel execution is introduced |
 
-Important constraints in the existing code:
+Important constraints in the original code:
 
 - The project is compiled as C++17; the plan must not depend on `std::span`,
   `std::jthread`, or other C++20 facilities.
@@ -62,8 +95,8 @@ Important constraints in the existing code:
 - There is no project-owned task queue or thread pool in `test-sort`; downloaded
   dependencies under `test-sort/build` are not implementation dependencies.
 
-The existing local change to the TSL release version in `CMakeLists.txt` is
-unrelated and must be preserved while implementing this plan.
+The pinned TSL release version in `CMakeLists.txt` is unrelated to the
+multi-column design and remains preserved.
 
 ## Scope and non-goals
 
@@ -216,21 +249,16 @@ direction parameter must affect:
 - scalar `left_good` and `right_good` predicates;
 - the after-pivot predicate in the equal partition;
 - insertion-leaf comparisons;
-- bitonic-network compare/exchange directions;
-- short-leaf padding values.
+- bitonic-network result orientation.
 
 The equal comparison remains `==` for the integer types currently in scope.
 
-For a descending bitonic leaf:
-
-- invert the overall comparator orientation while retaining the bitonic network
-  topology;
-- record the resulting exchanges exactly as the ascending path does;
-- replay those exchange masks without direction-specific payload logic;
-- pad invalid lanes with the type's lowest value instead of its maximum so
-  padding sorts to the end.
-
-Unit tests must cover real values equal to either padding sentinel.
+The bitonic leaf always uses its proven ascending network and maximum-value
+padding. For descending output it replays the recorded payload exchanges and
+then reverses only the valid key and payload ranges. A direct minimum-padded
+descending network is unsafe because the padding value is in-band: an unstable
+network can move padded payload ahead of a valid minimum key. Unit tests cover
+real zero and maximum values at short leaf lengths.
 
 ## Randomness and determinism
 
@@ -394,7 +422,8 @@ recursive multi-column orchestration.
 5. Implement descending two-way and three-way scalar/SIMD partition predicates.
 6. Make median-of-three use the active order.
 7. Make insertion leaves use the active order.
-8. Add overall direction support to the bitonic leaf, including padding.
+8. Add descending bitonic-leaf output through valid-range co-reversal after
+   ascending exchange replay.
 9. Preserve recorded exchange-mask replay for every payload column.
 10. Reject runtime payload counts greater than `MaxColumns`.
 11. Add the named `sort_key` entry point with a runtime direction that dispatches
@@ -422,7 +451,7 @@ For each combination verify:
 - duplicate-heavy data;
 - ascending, descending, nearly sorted, organ-pipe, uniform, and all-equal
   inputs;
-- values equal to `0`, `max()`, and both network padding sentinels;
+- values equal to `0` and `max()` at short network lengths;
 - sizes around the leaf threshold;
 - multiple fixed seeds.
 
@@ -1120,7 +1149,7 @@ Primary questions:
 | Queue order assumed to define output order | Scheduler-dependent behavior | Fixed disjoint ranges; randomized completion-order tests |
 | Too many small tasks | Parallel slowdown | Inline threshold, then optional batching based on measurement |
 | Large all-equal input with two-way partitioning | Expected quadratic benchmark runtime | Keep correctness coverage bounded and exclude pathological sizes from default performance sweeps |
-| Network padding mishandled in descending mode | Sentinel values enter valid output incorrectly | Direction-specific sentinel tests at every short length |
+| Network padding mishandled in descending mode | Sentinel values enter valid output incorrectly | Keep maximum padding, co-reverse only valid output, and test zero/maximum values at every short length |
 | Benchmark still measures passive payloads | Misleading performance claims | Rebuild workload and scalar baseline around complete row comparison |
 | DSA becomes a hidden host dependency | Non-reproducible builds/tests | Default-off option, capability checks, scalar fallback or explicit skip |
 | Standalone and Google benchmarks duplicate correctness logic | Drift between two semantic definitions | Dedicated test target owns correctness; standalone target remains legacy-only |
