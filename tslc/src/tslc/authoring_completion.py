@@ -23,6 +23,8 @@ from tslc.catalog.memory_promotion import KNOWN_MEMORY_FIELDS
 from tslc.catalog.model import Catalog, Primitive
 from tslc.catalog.semantics import operand_role_values, primitive_operation_values
 from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
+from tslc.catalog.shift import shift_count_rule_values, shift_lane_rule_values
+from tslc.catalog.shift_promotion import KNOWN_SHIFT_FIELDS
 from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS
 from tslc.catalog.validation._schema_benchmarks import (
     KNOWN_BENCHMARK_FIELDS,
@@ -766,6 +768,8 @@ def _field_candidates(
         return KNOWN_MEMORY_FIELDS, "field", "memory contract field"
     if path == ("primitive", "conversion"):
         return KNOWN_CONVERSION_FIELDS, "field", "conversion contract field"
+    if path == ("primitive", "shift"):
+        return KNOWN_SHIFT_FIELDS, "field", "shift contract field"
     if path[:2] == ("primitive", "impls"):
         return _implementation_fields(context, catalog)
     if path[:2] == ("primitive", "generic_params"):
@@ -989,6 +993,18 @@ def _value_completions(
     elif field == "lane_count" and context.block_path == ("primitive", "conversion"):
         values = lane_count_relation_values()
         detail = "conversion lane-count relation"
+    elif field == "count_rule" and context.block_path == ("primitive", "shift"):
+        values = shift_count_rule_values()
+        detail = "shift count rule"
+    elif field == "lane_rule" and context.block_path == ("primitive", "shift"):
+        values = shift_lane_rule_values()
+        detail = "shift lane rule"
+    elif field == "scalar_count_types" and context.block_path == (
+        "primitive",
+        "shift",
+    ):
+        values = KNOWN_SCALAR_TYPE_TAGS
+        detail = "shift scalar count type"
     elif field == "operations" and context.block_path == ("primitive", "arithmetic"):
         values = arithmetic_operation_values()
         detail = "arithmetic operation"

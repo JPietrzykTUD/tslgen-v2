@@ -34,7 +34,9 @@ class PrimitiveOperation(StrEnum):
     REINTERPRET = "reinterpret"
     SELECT = "select"
     SHIFT_LEFT = "shift_left"
+    SHIFT_LEFT_WRAPPING = "shift_left_wrapping"
     SHIFT_RIGHT = "shift_right"
+    SHIFT_RIGHT_WRAPPING = "shift_right_wrapping"
     STORE = "store"
 
 
@@ -107,7 +109,13 @@ PRIMITIVE_OPERATION_DESCRIPTIONS: Mapping[PrimitiveOperation, str] = MappingProx
         ),
         PrimitiveOperation.SELECT: "Selects between value operands under a control mask.",
         PrimitiveOperation.SHIFT_LEFT: "Shifts vector lane bit patterns left.",
+        PrimitiveOperation.SHIFT_LEFT_WRAPPING: (
+            "Shifts vector lanes left with source-defined wrapping counts."
+        ),
         PrimitiveOperation.SHIFT_RIGHT: "Shifts vector lane bit patterns right.",
+        PrimitiveOperation.SHIFT_RIGHT_WRAPPING: (
+            "Shifts vector lanes right with source-defined wrapping counts."
+        ),
         PrimitiveOperation.STORE: "Stores a vector or scalar payload to memory.",
     }
 )

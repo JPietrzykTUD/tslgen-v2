@@ -116,9 +116,17 @@ _OPERATION_ROLES: dict[
         frozenset({OperandRole.PRIMARY, OperandRole.COUNT}),
         _OPTIONAL_MASK_ROLES,
     ),
+    PrimitiveOperation.SHIFT_LEFT_WRAPPING: (
+        frozenset({OperandRole.PRIMARY, OperandRole.COUNT}),
+        frozenset(),
+    ),
     PrimitiveOperation.SHIFT_RIGHT: (
         frozenset({OperandRole.PRIMARY, OperandRole.COUNT}),
         _OPTIONAL_MASK_ROLES,
+    ),
+    PrimitiveOperation.SHIFT_RIGHT_WRAPPING: (
+        frozenset({OperandRole.PRIMARY, OperandRole.COUNT}),
+        frozenset(),
     ),
     PrimitiveOperation.STORE: (
         frozenset({OperandRole.MEMORY_DESTINATION, OperandRole.VALUE}),
@@ -150,7 +158,9 @@ _OPERATION_RESULT_KINDS: dict[PrimitiveOperation, frozenset[str]] = {
     PrimitiveOperation.REINTERPRET: frozenset({"v"}),
     PrimitiveOperation.SELECT: frozenset({"v"}),
     PrimitiveOperation.SHIFT_LEFT: frozenset({"v"}),
+    PrimitiveOperation.SHIFT_LEFT_WRAPPING: frozenset({"v"}),
     PrimitiveOperation.SHIFT_RIGHT: frozenset({"v"}),
+    PrimitiveOperation.SHIFT_RIGHT_WRAPPING: frozenset({"v"}),
     PrimitiveOperation.STORE: frozenset({"void"}),
 }
 
@@ -205,7 +215,13 @@ _OPERATION_ROLE_KINDS.update(
             OperandRole.PRIMARY: frozenset({"v"}),
         },
         PrimitiveOperation.SHIFT_LEFT: {OperandRole.PRIMARY: frozenset({"v"})},
+        PrimitiveOperation.SHIFT_LEFT_WRAPPING: {
+            OperandRole.PRIMARY: frozenset({"v"})
+        },
         PrimitiveOperation.SHIFT_RIGHT: {OperandRole.PRIMARY: frozenset({"v"})},
+        PrimitiveOperation.SHIFT_RIGHT_WRAPPING: {
+            OperandRole.PRIMARY: frozenset({"v"})
+        },
         PrimitiveOperation.STORE: {OperandRole.VALUE: frozenset({"s", "v"})},
     }
 )

@@ -69,6 +69,7 @@ KNOWN_PRIMITIVE_FIELDS = frozenset(
         "params",
         "return_type",
         "semantics",
+        "shift",
         "sImm_type",
         "tests",
     }

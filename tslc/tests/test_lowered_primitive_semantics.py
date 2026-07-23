@@ -85,6 +85,18 @@ def _lower(
             ResolvedPrimitiveOverload("count_distribution", "per_lane", False),
         ),
         (
+            "shift_left_wrapping",
+            "v:=(v,s)",
+            {},
+            ResolvedPrimitiveOverload("count_distribution", "uniform", True),
+        ),
+        (
+            "shift_left_wrapping",
+            "v:=(v,v)",
+            {},
+            ResolvedPrimitiveOverload("count_distribution", "per_lane", False),
+        ),
+        (
             "store",
             "void:=(ptr,v)",
             {"aligned": "false"},
@@ -132,6 +144,7 @@ def test_lowering_carries_resolved_overload_matrix(
             {"cast": "reinterpret"},
             "conversion",
         ),
+        ("shift_left_wrapping", "v:=(v,s)", {}, "shift"),
     ),
 )
 def test_lowering_carries_promoted_contract_objects(

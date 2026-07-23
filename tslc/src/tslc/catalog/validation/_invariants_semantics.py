@@ -61,6 +61,7 @@ def validate_semantic_contracts(
             )
             _validate_domain_contract(name, primitive, first, "memory", diagnostics)
             _validate_domain_contract(name, primitive, first, "conversion", diagnostics)
+            _validate_domain_contract(name, primitive, first, "shift", diagnostics)
 
 
 def _validate_operand_roles(
@@ -145,6 +146,16 @@ def _validate_domain_contract(
             actual.kind,
             actual.lane_count,
         ) == (expected.kind, expected.lane_count):
+            return
+        if field == "shift" and (
+            actual.count_rule,
+            actual.lane_rule,
+            actual.scalar_count_types,
+        ) == (
+            expected.count_rule,
+            expected.lane_rule,
+            expected.scalar_count_types,
+        ):
             return
     diagnostics.append(
         _mismatch(

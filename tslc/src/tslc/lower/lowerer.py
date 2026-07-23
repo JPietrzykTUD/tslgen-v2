@@ -589,6 +589,7 @@ class Lowerer:
                 operation=selected.primitive.operation,
                 memory=selected.primitive.memory,
                 conversion=selected.primitive.conversion,
+                shift=selected.primitive.shift,
             ),
             param_identity_tokens=tuple(
                 self._support.overload_identity_token(

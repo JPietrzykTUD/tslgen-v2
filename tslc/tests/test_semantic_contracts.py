@@ -17,6 +17,7 @@ from tslc.catalog.conversion import ConversionKind, LaneCountRelation
 from tslc.catalog.memory import MemoryAccess, MemoryAddressing
 from tslc.catalog.model import Catalog
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
+from tslc.catalog.shift import ShiftCountRule, ShiftLaneRule
 from tslc.catalog.validation import validate_catalog
 from tslc.catalog_cli import _primitive
 from tslc.catalog_index import build_catalog_index
@@ -36,6 +37,26 @@ def _binary_source(name: str = "semantic_and") -> str:
         "  operand_roles:\n"
         "    primary left\n"
         "    secondary right\n"
+    )
+
+
+def _wrapping_shift_source(
+    *,
+    operation: str = "shift_left_wrapping",
+    count_rule: str = "unsigned_bit_pattern_modulo_lane_width",
+    lane_rule: str = "unsigned_bit_pattern_left",
+    scalar_count_types: str = "[si8, si16, si32, si64, ui8, ui16, ui32, ui64]",
+) -> str:
+    return (
+        "prim<v:=(v,s)> wrapping(data, shift):\n"
+        f"  operation {operation}\n"
+        "  operand_roles:\n"
+        "    count shift\n"
+        "    primary data\n"
+        "  shift:\n"
+        f"    count_rule {count_rule}\n"
+        f"    lane_rule {lane_rule}\n"
+        f"    scalar_count_types {scalar_count_types}\n"
     )
 
 
@@ -81,6 +102,8 @@ def test_current_corpus_promotes_curated_operation_domains(catalog: Catalog) -> 
     reinterpret = catalog.primitive("reinterpret")
     add = catalog.primitive("add")
     neg = catalog.primitive("neg")
+    shift_left_wrapping = catalog.primitive("shift_left_wrapping")
+    shift_right_wrapping = catalog.primitive("shift_right_wrapping")
     assert select is not None and select.operation is not None
     assert select.operation.kind is PrimitiveOperation.SELECT
     assert {
@@ -114,6 +137,27 @@ def test_current_corpus_promotes_curated_operation_domains(catalog: Catalog) -> 
             ArithmeticGuarantee.FLOATING_SIGN_BIT_TOGGLE,
         }
     )
+    assert shift_left_wrapping is not None and shift_left_wrapping.shift is not None
+    assert shift_left_wrapping.shift.count_rule is (
+        ShiftCountRule.UNSIGNED_BIT_PATTERN_MODULO_LANE_WIDTH
+    )
+    assert shift_left_wrapping.shift.lane_rule is (
+        ShiftLaneRule.UNSIGNED_BIT_PATTERN_LEFT
+    )
+    assert shift_left_wrapping.shift.scalar_count_types == (
+        "si8",
+        "si16",
+        "si32",
+        "si64",
+        "ui8",
+        "ui16",
+        "ui32",
+        "ui64",
+    )
+    assert shift_right_wrapping is not None and shift_right_wrapping.shift is not None
+    assert shift_right_wrapping.shift.lane_rule is (
+        ShiftLaneRule.SIGNED_ARITHMETIC_UNSIGNED_LOGICAL_RIGHT
+    )
 
 
 @pytest.mark.parametrize(
@@ -137,7 +181,9 @@ def test_current_corpus_promotes_curated_operation_domains(catalog: Catalog) -> 
         ("mask_population_count", PrimitiveOperation.MASK_POPULATION_COUNT),
         ("select", PrimitiveOperation.SELECT),
         ("shift_left", PrimitiveOperation.SHIFT_LEFT),
+        ("shift_left_wrapping", PrimitiveOperation.SHIFT_LEFT_WRAPPING),
         ("shift_right", PrimitiveOperation.SHIFT_RIGHT),
+        ("shift_right_wrapping", PrimitiveOperation.SHIFT_RIGHT_WRAPPING),
         ("extract_value", PrimitiveOperation.EXTRACT_LANE),
         ("insert_value", PrimitiveOperation.INSERT_LANE),
         ("load", PrimitiveOperation.LOAD),
@@ -162,6 +208,11 @@ def test_every_current_curated_family_variant_has_an_explicit_operation(
         assert all(primitive.memory is not None for primitive in variants)
     if operation in {PrimitiveOperation.CONVERT, PrimitiveOperation.REINTERPRET}:
         assert all(primitive.conversion is not None for primitive in variants)
+    if operation in {
+        PrimitiveOperation.SHIFT_LEFT_WRAPPING,
+        PrimitiveOperation.SHIFT_RIGHT_WRAPPING,
+    }:
+        assert all(primitive.shift is not None for primitive in variants)
 
 
 @pytest.mark.parametrize(
@@ -272,6 +323,24 @@ def test_unannotated_ordinary_primitive_has_no_curated_operation() -> None:
             "    lane_count preserve_lane_count\n",
             "TSL-CATALOG-CONVERSION-MISSING-TARGET",
         ),
+        (
+            _wrapping_shift_source().split("  shift:\n", 1)[0],
+            "TSL-CATALOG-OPERATION-MISSING-SHIFT",
+        ),
+        (
+            _wrapping_shift_source(count_rule="zero_large_counts"),
+            "TSL-CATALOG-SHIFT-COUNT-RULE",
+        ),
+        (
+            _wrapping_shift_source(
+                lane_rule="signed_arithmetic_unsigned_logical_right"
+            ),
+            "TSL-CATALOG-SHIFT-LANE-RULE-OPERATION",
+        ),
+        (
+            _wrapping_shift_source(scalar_count_types="[si32, f32]"),
+            "TSL-CATALOG-SHIFT-SCALAR-COUNT-TYPE",
+        ),
     ),
 )
 def test_semantic_contracts_reject_invalid_nearby_forms(
@@ -302,6 +371,21 @@ def test_same_name_family_rejects_different_core_operand_positions() -> None:
     assert diagnostic.related
 
 
+def test_same_name_wrapping_shift_family_rejects_different_count_vocabularies() -> None:
+    source = _wrapping_shift_source() + _wrapping_shift_source(
+        scalar_count_types="[si32, ui32]"
+    )
+
+    diagnostic = next(
+        item
+        for item in _all_diagnostics(source)
+        if item.code == "TSL-CATALOG-INCONSISTENT-OPERATION-FAMILY"
+        and "shift contract" in item.message
+    )
+
+    assert diagnostic.related
+
+
 def test_cli_projection_exposes_normalized_operation_roles() -> None:
     _, catalog, diagnostics = _build(_binary_source())
     assert diagnostics == ()
@@ -315,6 +399,58 @@ def test_cli_projection_exposes_normalized_operation_roles() -> None:
             "secondary": {"parameter": "right", "index": 1, "kind": "v"},
         },
     }
+
+
+def test_cli_projection_exposes_wrapping_shift_contract() -> None:
+    _, catalog, diagnostics = _build(_wrapping_shift_source())
+    assert diagnostics == ()
+
+    shown = _primitive(catalog.primitives[0])
+
+    assert shown["shift"] == {
+        "count_rule": "unsigned_bit_pattern_modulo_lane_width",
+        "lane_rule": "unsigned_bit_pattern_left",
+        "scalar_count_types": [
+            "si8",
+            "si16",
+            "si32",
+            "si64",
+            "ui8",
+            "ui16",
+            "ui32",
+            "ui64",
+        ],
+    }
+
+
+def test_wrapping_shift_contract_editor_projection_uses_typed_enums() -> None:
+    source = _wrapping_shift_source()
+    parsed, catalog, diagnostics = _build(source)
+    assert diagnostics == ()
+    index = build_catalog_index(catalog, parsed)
+
+    occurrences = index.occurrences_by_path[_PATH]
+    count_rule = next(item for item in occurrences if item.kind == "shift-count-rule")
+    lane_rule = next(item for item in occurrences if item.kind == "shift-lane-rule")
+
+    assert "Shift count rule" in (index.hover(count_rule) or "")
+    assert "Shift lane rule" in (index.hover(lane_rule) or "")
+
+    token_text = {
+        (
+            token.kind,
+            source.splitlines()[token.span.line - 1][
+                token.span.column - 1 : token.span.end_column - 1
+            ],
+        )
+        for token in index.semantic_tokens_by_path[_PATH]
+    }
+    assert (
+        "enumMember",
+        "unsigned_bit_pattern_modulo_lane_width",
+    ) in token_text
+    assert ("enumMember", "unsigned_bit_pattern_left") in token_text
+    assert ("type", "si8") in token_text
 
 
 def test_completion_hover_navigation_references_and_tokens_share_semantic_enums() -> None:

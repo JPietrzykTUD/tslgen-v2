@@ -18,6 +18,7 @@ from tslc.catalog.conversion import (
 )
 from tslc.catalog.memory import memory_access_values, memory_addressing_values
 from tslc.catalog.semantics import primitive_operation_values
+from tslc.catalog.shift import shift_count_rule_values, shift_lane_rule_values
 from tslc.catalog.validation._schema_benchmarks import KNOWN_OPERAND_DOMAINS
 from tslc.catalog.validation._schema_common import KNOWN_BOOLEAN_VALUES
 from tslc.catalog.validation._schema_implementation import (
@@ -89,6 +90,8 @@ _CLOSED_ENUM_VALUES = frozenset(
         *KNOWN_TEST_ROLES,
         *arithmetic_operation_values(),
         *arithmetic_guarantee_values(),
+        *shift_count_rule_values(),
+        *shift_lane_rule_values(),
         *(value for values in KNOWN_PRIMITIVE_ATTRIBUTES.values() for value in values),
     )
 )
@@ -421,6 +424,29 @@ def _primitive_semantic_tokens(
                     },
                 )
             )
+        elif primitive_field.kind == "shift":
+            tokens.extend(
+                _closed_contract_value_tokens(
+                    field,
+                    {
+                        "count_rule": shift_count_rule_values(),
+                        "lane_rule": shift_lane_rule_values(),
+                    },
+                )
+            )
+            scalar_count_types = child(field, "scalar_count_types")
+            if scalar_count_types is not None and isinstance(
+                scalar_count_types.value,
+                ParsedTslListValue,
+            ):
+                tokens.extend(
+                    IndexedSemanticToken(
+                        "type",
+                        _source_span(item.payload_source or item.source),
+                    )
+                    for item in scalar_count_types.value.items
+                    if isinstance(item, ParsedTslScalarValue)
+                )
     return tuple(tokens)
 
 

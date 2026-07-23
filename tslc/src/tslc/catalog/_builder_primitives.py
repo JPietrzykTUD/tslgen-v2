@@ -11,6 +11,7 @@ from tslc.catalog.benchmark_promotion import build_benchmark_spec
 from tslc.catalog.conversion_promotion import build_conversion_contract
 from tslc.catalog.memory_promotion import build_memory_contract
 from tslc.catalog.semantic_promotion import build_semantic_contract
+from tslc.catalog.shift_promotion import build_shift_contract
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     GenericParam,
@@ -84,6 +85,7 @@ def _build_primitives(
         result_target,
         diagnostics,
     )
+    shift = build_shift_contract(declaration, operation, diagnostics)
     overload = _primitive_overload(declaration)
     cross_lane_fields = declaration.fields_by_name("cross_lane")
     cross_lane = _bool_field(cross_lane_fields[0].field) if cross_lane_fields else False
@@ -109,6 +111,7 @@ def _build_primitives(
             operation=operation,
             memory=memory,
             conversion=conversion,
+            shift=shift,
             overload=overload,
             cross_lane=cross_lane,
             source=_source_span(declaration.source),

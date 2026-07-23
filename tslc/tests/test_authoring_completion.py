@@ -312,6 +312,39 @@ def test_inline_test_map_completion_uses_map_fields_and_closed_values(
     assert comparisons == {"bitwise"}
 
 
+def test_shift_contract_completion_uses_typed_source_vocabulary(
+    catalog: Catalog,
+) -> None:
+    baseline = (
+        "prim<v:=(v,s)> probe(data, count):\n"
+        "  operation shift_left_wrapping\n"
+        "  operand_roles:\n"
+        "    primary data\n"
+        "    count count\n"
+        "  shift:\n"
+        "    count_rule unsigned_bit_pattern_modulo_lane_width\n"
+        "    lane_rule unsigned_bit_pattern_left\n"
+        "    scalar_count_types [si32]\n"
+    )
+    field_edit = baseline.split("    count_rule", 1)[0] + "    count"
+    assert "count_rule" in _labels(catalog, baseline, field_edit)
+
+    count_edit = baseline.split("unsigned_bit_pattern_modulo_lane_width", 1)[0]
+    count_edit += "unsigned_bit"
+    assert _labels(catalog, baseline, count_edit) == {
+        "unsigned_bit_pattern_modulo_lane_width"
+    }
+
+    lane_edit = baseline.split("unsigned_bit_pattern_left", 1)[0]
+    lane_edit += "signed_arithmetic"
+    assert _labels(catalog, baseline, lane_edit) == {
+        "signed_arithmetic_unsigned_logical_right"
+    }
+
+    type_edit = baseline.split("[si32]", 1)[0] + "[ui"
+    assert _labels(catalog, baseline, type_edit) == {"ui8", "ui16", "ui32", "ui64"}
+
+
 def test_representation_target_axis_and_where_are_contextual(
     catalog: Catalog,
 ) -> None:

@@ -241,16 +241,18 @@ prim<v:=(v,v)> add(left, right):
   spellings or positions, prose, or implementation text.
 - **Primitive operation contracts**: curated non-arithmetic families declare a
   closed language-neutral `operation` plus explicit parameter-bound
-  `operand_roles`. Focused `memory` and `conversion` blocks add only contiguous
-  access direction or conversion/lane-count relations that are not already
-  owned by attributes, result targets, and semantic overloads. The catalog
+  `operand_roles`. Focused `memory`, `conversion`, and `shift` blocks add only
+  contiguous access direction, conversion/lane-count relations, or wrapping
+  count/lane rules and admitted scalar count types that are not already owned
+  by attributes, result targets, and semantic overloads. The catalog
   promotes these through the frozen records in
   [catalog/semantics.py](src/tslc/catalog/semantics.py),
   [catalog/memory.py](src/tslc/catalog/memory.py), and
-  [catalog/conversion.py](src/tslc/catalog/conversion.py); it validates signature
-  kinds, required roles, same-name families, and domain compatibility while
-  retaining source spans. Catalog inspection and editor completion, tokens,
-  navigation, references, and hover consume those same enums. Lowering carries
+  [catalog/conversion.py](src/tslc/catalog/conversion.py), and
+  [catalog/shift.py](src/tslc/catalog/shift.py); it validates signature kinds,
+  required roles, same-name families, and domain compatibility while retaining
+  source spans. Catalog inspection and editor completion, tokens, navigation,
+  references, and hover consume those same enums. Lowering carries
   the promoted contracts unchanged inside `LoweredSpecialization`; backend and
   downstream projections therefore receive typed facts without reconstructing
   them. Source data contains no Rust-specific spelling policy, and this stage

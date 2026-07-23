@@ -26,6 +26,10 @@ from tslc.catalog.semantics import (
     OPERAND_ROLE_DESCRIPTIONS,
     PRIMITIVE_OPERATION_DESCRIPTIONS,
 )
+from tslc.catalog.shift import (
+    SHIFT_COUNT_RULE_DESCRIPTIONS,
+    SHIFT_LANE_RULE_DESCRIPTIONS,
+)
 from tslc.catalog.selector_paths import classify_selector_path
 from tslc.catalog_authoring_index import (
     DocumentSymbolKind,
@@ -71,6 +75,8 @@ SymbolKind = Literal[
     "memory-addressing",
     "conversion-kind",
     "lane-count-relation",
+    "shift-count-rule",
+    "shift-lane-rule",
 ]
 
 _ENUM_SYMBOL_KINDS: frozenset[SymbolKind] = frozenset(
@@ -84,6 +90,8 @@ _ENUM_SYMBOL_KINDS: frozenset[SymbolKind] = frozenset(
         "memory-addressing",
         "conversion-kind",
         "lane-count-relation",
+        "shift-count-rule",
+        "shift-lane-rule",
     }
 )
 _TSIL_REGION_GUIDE = (
@@ -353,6 +361,8 @@ def build_catalog_index(
         "memory-addressing": {},
         "conversion-kind": {},
         "lane-count-relation": {},
+        "shift-count-rule": {},
+        "shift-lane-rule": {},
     }
     references: dict[SymbolKind, dict[str, list[SourceSpan]]] = {
         "primitive": {},
@@ -373,6 +383,8 @@ def build_catalog_index(
         "memory-addressing": {},
         "conversion-kind": {},
         "lane-count-relation": {},
+        "shift-count-rule": {},
+        "shift-lane-rule": {},
     }
     target_axis_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
     target_axis_references: dict[tuple[str, str], list[SourceSpan]] = {}
@@ -502,6 +514,8 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         "memory-addressing": {},
         "conversion-kind": {},
         "lane-count-relation": {},
+        "shift-count-rule": {},
+        "shift-lane-rule": {},
     }
     references: dict[SymbolKind, dict[str, list[SourceSpan]]] = {
         "primitive": {},
@@ -522,6 +536,8 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         "memory-addressing": {},
         "conversion-kind": {},
         "lane-count-relation": {},
+        "shift-count-rule": {},
+        "shift-lane-rule": {},
     }
     target_axis_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
     target_axis_references: dict[tuple[str, str], list[SourceSpan]] = {}
@@ -854,6 +870,13 @@ def _index_primitive_semantics(
             (
                 ("kind", "conversion-kind"),
                 ("lane_count", "lane-count-relation"),
+            ),
+        ),
+        (
+            "shift",
+            (
+                ("count_rule", "shift-count-rule"),
+                ("lane_rule", "shift-lane-rule"),
             ),
         ),
     )
@@ -1217,6 +1240,16 @@ def _hover_text(
             "lane-count-relation",
             "Lane-count relation",
             LANE_COUNT_RELATION_DESCRIPTIONS.items(),
+        ),
+        (
+            "shift-count-rule",
+            "Shift count rule",
+            SHIFT_COUNT_RULE_DESCRIPTIONS.items(),
+        ),
+        (
+            "shift-lane-rule",
+            "Shift lane rule",
+            SHIFT_LANE_RULE_DESCRIPTIONS.items(),
         ),
     )
     for symbol_kind, label, descriptions in semantic_descriptions:

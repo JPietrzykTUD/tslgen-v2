@@ -9,6 +9,7 @@ from tslc.catalog.conversion import PrimitiveConversionContract
 from tslc.catalog.memory import PrimitiveMemoryContract
 from tslc.catalog.overloads import ResolvedPrimitiveOverload
 from tslc.catalog.semantics import PrimitiveSemanticContract
+from tslc.catalog.shift import PrimitiveShiftContract
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +26,7 @@ class LoweredPrimitiveSemantics:
     operation: PrimitiveSemanticContract | None = None
     memory: PrimitiveMemoryContract | None = None
     conversion: PrimitiveConversionContract | None = None
+    shift: PrimitiveShiftContract | None = None
 
 
 __all__ = ("LoweredPrimitiveSemantics",)

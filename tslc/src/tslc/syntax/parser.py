@@ -54,6 +54,7 @@ _KNOWN_PRIMITIVE_FIELDS: dict[str, ParsedPrimitiveFieldKind] = {
     "memory": "memory",
     "return_type": "return_type",
     "semantics": "semantics",
+    "shift": "shift",
     "sImm_type": "simm_type",
     "tests": "tests",
 }

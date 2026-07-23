@@ -22,6 +22,7 @@ from tslc.catalog.overloads import (
     ResolvedPrimitiveOverload,
 )
 from tslc.catalog.semantics import PrimitiveSemanticContract
+from tslc.catalog.shift import PrimitiveShiftContract
 from tslc.catalog.target_families import (
     ExtensionFamilyCapability,
     TargetFamilyCatalog,
@@ -269,6 +270,7 @@ class Primitive:
     operation: PrimitiveSemanticContract | None = None
     memory: PrimitiveMemoryContract | None = None
     conversion: PrimitiveConversionContract | None = None
+    shift: PrimitiveShiftContract | None = None
     # Source-authored semantic-overload identity. Cross-declaration validation resolves
     # the family primary value; lowering carries only that resolved declaration fact.
     overload: PrimitiveOverload | None = None

@@ -207,6 +207,15 @@ def _primitive(item: Primitive) -> dict[str, object]:
                 "lane_count": item.conversion.lane_count.value,
             }
         ),
+        "shift": (
+            None
+            if item.shift is None
+            else {
+                "count_rule": item.shift.count_rule.value,
+                "lane_rule": item.shift.lane_rule.value,
+                "scalar_count_types": list(item.shift.scalar_count_types),
+            }
+        ),
         "source": _source(item.source),
     }
 

@@ -185,6 +185,36 @@ def test_neg_selects_only_signed_and_floating_lane_types(
     assert selected_types == {"si8", "si16", "si32", "si64", "f32", "f64"}
 
 
+@pytest.mark.parametrize(
+    "primitive_name",
+    ("shift_left_wrapping", "shift_right_wrapping"),
+)
+def test_wrapping_shifts_select_only_integer_lane_types(
+    catalog: Catalog,
+    machine_profiles,
+    primitive_name: str,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles["avx2"],
+        primitive_name,
+        _ALL_ARITH_TYPES,
+        backend_id="rust",
+    )
+    selected_types = {slot.type_tag for slot in selection.selected}
+
+    assert selected_types == {
+        "si8",
+        "si16",
+        "si32",
+        "si64",
+        "ui8",
+        "ui16",
+        "ui32",
+        "ui64",
+    }
+
+
 def test_requirement_scoped_implementations_are_not_dead(catalog: Catalog) -> None:
     dead: list[str] = []
     for primitive in catalog.primitives:

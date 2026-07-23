@@ -44,6 +44,7 @@ ParsedPrimitiveFieldKind = Literal[
     "memory",
     "return_type",
     "semantics",
+    "shift",
     "simm_type",
     "tests",
     "preserved",
