@@ -347,7 +347,14 @@ def _differential(case: ValueTestCasePlan) -> str:
             f"hin{position}[i] = in{position}[i]; "
             f"r{position}[i] = in{position}[i]; }}"
         )
-    for position, mask in enumerate(case.inputs.masks):
+    mask_kinds = tuple(
+        kind for kind in case.invocation.param_kinds if kind in {"m", "im"}
+    )
+    for position, (kind, mask) in enumerate(
+        zip(mask_kinds, case.inputs.masks, strict=True)
+    ):
+        if kind != "m":
+            continue
         to_mask = _required_name(differential.to_mask_name, "to_mask_name")
         lines.append(
             f"        let hm{position} = {to_mask}::<Hw>("
@@ -361,6 +368,7 @@ def _differential(case: ValueTestCasePlan) -> str:
     ref_args: list[str] = []
     vector_index = 0
     mask_index = 0
+    scalar_index = 0
     for kind in case.invocation.param_kinds:
         if kind == "v":
             hw_args.append(f"{from_array}::<Hw>(&hin{vector_index})")
@@ -370,6 +378,21 @@ def _differential(case: ValueTestCasePlan) -> str:
             hw_args.append(f"hm{mask_index}")
             ref_args.append(f"rm{mask_index}")
             mask_index += 1
+        elif kind == "im":
+            mask = case.inputs.masks[mask_index]
+            hw_args.append(f"{mask}u64 as <Hw as SimdVector>::ImaskType")
+            ref_args.append(f"{mask}u64 as <Ref as SimdVector>::ImaskType")
+            mask_index += 1
+        elif kind == "s":
+            value = rust_literal(case.inputs.scalars[scalar_index], case.type_tag)
+            hw_args.append(value)
+            ref_args.append(value)
+            scalar_index += 1
+        elif kind == "usize":
+            value = case.inputs.scalars[scalar_index]
+            hw_args.append(f"{value}usize")
+            ref_args.append(f"{value}usize")
+            scalar_index += 1
         elif kind != "sImm":
             raise ValueError(f"unsupported differential argument kind {kind!r}")
     hw_template_args = ["Hw", *case.invocation.generic_defaults]
@@ -398,6 +421,14 @@ def _differential(case: ValueTestCasePlan) -> str:
             f"        for i in 0..{case.lanes} {{ assert_eq!("
             "mask_bit(hw as u64, i), mask_bit(reference as u64, i), "
             f'"{case.function_name} lane {{}}", i); }}'
+        )
+    elif case.invocation.result_kind == "s":
+        lines.append(f"        let hw: {case.base_spelling} = {hw_call};")
+        lines.append(f"        let reference: {case.base_spelling} = {ref_call};")
+        lines.append(
+            "        assert!(hw.lane_eq(reference), "
+            f'"{case.function_name}: expected {{:?}}, got {{:?}}", '
+            "reference, hw);"
         )
     else:
         lines.append(f"        let hw = {to_array}::<Hw>({hw_call});")

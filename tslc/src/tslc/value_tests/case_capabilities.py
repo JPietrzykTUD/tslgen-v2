@@ -54,9 +54,7 @@ _CASE_REQUIREMENTS = {
         required_facts=_CONVERSION_TARGET_FACTS
         | frozenset({ValueTestFact.INDEX_VALUE}),
     ),
-    "differential": ValueTestCaseRequirements(
-        vector_inputs="non_empty", required_facts=_DIFFERENTIAL_FACTS
-    ),
+    "differential": ValueTestCaseRequirements(required_facts=_DIFFERENTIAL_FACTS),
     "differential_fuzz": ValueTestCaseRequirements(
         required_facts=_DIFFERENTIAL_FACTS, fuzz_case=True
     ),

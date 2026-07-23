@@ -911,6 +911,26 @@ def test_wrapping_shifts_build(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_runtime_lane_mutation_builds(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_runtime_lane_mutation_builds"),
+        profiles=["avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_to_from_array_roundtrip_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:

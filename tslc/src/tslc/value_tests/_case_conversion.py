@@ -570,7 +570,11 @@ def differential_cases(
                 type_tag=case.type_tag,
                 base_spelling=base_spelling,
                 lanes=case.lanes,
-                inputs=ValueTestInputs(vectors=vector_inputs, masks=mask_inputs),
+                inputs=ValueTestInputs(
+                    vectors=vector_inputs,
+                    masks=mask_inputs,
+                    scalars=scalar_inputs,
+                ),
                 expectation=ValueTestExpectation(comparison=case.comparison),
                 invocation=ValueTestInvocation(
                     result_kind=specs[0].result_kind,

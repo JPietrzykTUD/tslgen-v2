@@ -179,13 +179,16 @@ def test_current_corpus_promotes_curated_operation_domains(catalog: Catalog) -> 
         ("mask_binary_xor", PrimitiveOperation.MASK_XOR),
         ("mask_binary_not", PrimitiveOperation.MASK_NOT),
         ("mask_population_count", PrimitiveOperation.MASK_POPULATION_COUNT),
+        ("set_mask_lane", PrimitiveOperation.MASK_SET_LANE),
         ("select", PrimitiveOperation.SELECT),
         ("shift_left", PrimitiveOperation.SHIFT_LEFT),
         ("shift_left_wrapping", PrimitiveOperation.SHIFT_LEFT_WRAPPING),
         ("shift_right", PrimitiveOperation.SHIFT_RIGHT),
         ("shift_right_wrapping", PrimitiveOperation.SHIFT_RIGHT_WRAPPING),
         ("extract_value", PrimitiveOperation.EXTRACT_LANE),
+        ("extract_value_at", PrimitiveOperation.EXTRACT_LANE),
         ("insert_value", PrimitiveOperation.INSERT_LANE),
+        ("insert_value_at", PrimitiveOperation.INSERT_LANE),
         ("load", PrimitiveOperation.LOAD),
         ("store", PrimitiveOperation.STORE),
         ("reinterpret", PrimitiveOperation.REINTERPRET),
@@ -213,6 +216,31 @@ def test_every_current_curated_family_variant_has_an_explicit_operation(
         PrimitiveOperation.SHIFT_RIGHT_WRAPPING,
     }:
         assert all(primitive.shift is not None for primitive in variants)
+
+
+def test_runtime_lane_operations_bind_typed_index_operands(catalog: Catalog) -> None:
+    extract = catalog.primitive("extract_value_at")
+    insert = catalog.primitive("insert_value_at")
+    set_mask = catalog.primitive("set_mask_lane")
+    assert extract is not None and extract.operation is not None
+    assert insert is not None and insert.operation is not None
+    assert set_mask is not None and set_mask.operation is not None
+
+    extract_index = extract.operation.binding(OperandRole.INDEX)
+    insert_index = insert.operation.binding(OperandRole.INDEX)
+    mask_index = set_mask.operation.binding(OperandRole.INDEX)
+    mask_value = set_mask.operation.binding(OperandRole.VALUE)
+    assert extract_index is not None and extract_index.parameter_kind == "usize"
+    assert insert_index is not None and insert_index.parameter_kind == "usize"
+    assert mask_index is not None and mask_index.parameter_kind == "usize"
+    assert mask_value is not None and mask_value.parameter_kind == "im"
+
+    compile_extract = catalog.primitive("extract_value")
+    compile_insert = catalog.primitive("insert_value")
+    assert compile_extract is not None and compile_extract.operation is not None
+    assert compile_insert is not None and compile_insert.operation is not None
+    assert compile_extract.operation.binding(OperandRole.INDEX) is None
+    assert compile_insert.operation.binding(OperandRole.INDEX) is None
 
 
 @pytest.mark.parametrize(
@@ -293,6 +321,14 @@ def test_unannotated_ordinary_primitive_has_no_curated_operation() -> None:
         (
             _binary_source().replace("bit_and", "compare_equal"),
             "TSL-CATALOG-INCOMPATIBLE-OPERATION-SIGNATURE",
+        ),
+        (
+            "prim<s:=(v,s)> bad_index(data, index):\n"
+            "  operation extract_lane\n"
+            "  operand_roles:\n"
+            "    primary data\n"
+            "    index index\n",
+            "TSL-CATALOG-INCOMPATIBLE-OPERAND-ROLE",
         ),
         (
             "prim<m:=(m,m)> wrong_comparison(left, right):\n"
@@ -506,6 +542,40 @@ def test_completion_hover_navigation_references_and_tokens_share_semantic_enums(
     assert ("enumMember", "bit_and") in token_text
     assert ("enumMember", "primary") in token_text
     assert ("parameter", "left") in token_text
+
+
+def test_runtime_index_role_shares_authoring_enum_projection() -> None:
+    source = (
+        "prim<s:=(v,usize)> lane_at(data, index):\n"
+        "  operation extract_lane\n"
+        "  operand_roles:\n"
+        "    primary data\n"
+        "    index index\n"
+    )
+    parsed, catalog, diagnostics = _build(source)
+    assert diagnostics == ()
+
+    role_edit = source.split("    index index", 1)[0] + "    ind"
+    assert _completion_labels(catalog, source, role_edit) == {"index"}
+
+    index = build_catalog_index(catalog, parsed)
+    occurrence = next(
+        item
+        for item in index.occurrences_by_path[_PATH]
+        if item.kind == "operand-role" and item.name == "index"
+    )
+    assert "runtime logical lane index" in (index.hover(occurrence) or "")
+    assert len(index.references(occurrence)) == 1
+    token_text = {
+        (
+            token.kind,
+            source.splitlines()[token.span.line - 1][
+                token.span.column - 1 : token.span.end_column - 1
+            ],
+        )
+        for token in index.semantic_tokens_by_path[_PATH]
+    }
+    assert ("enumMember", "index") in token_text
 
 
 def test_memory_and_conversion_completions_use_closed_typed_values() -> None:

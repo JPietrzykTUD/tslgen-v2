@@ -307,7 +307,14 @@ def _differential(case: ValueTestCasePlan) -> str:
             f"  for (std::size_t i = 0; i < {case.lanes}; ++i) "
             f"{{ hin{position}[i] = in{position}[i]; r{position}[i] = in{position}[i]; }}"
         )
-    for position, mask in enumerate(case.inputs.masks):
+    mask_kinds = tuple(
+        kind for kind in case.invocation.param_kinds if kind in {"m", "im"}
+    )
+    for position, (kind, mask) in enumerate(
+        zip(mask_kinds, case.inputs.masks, strict=True)
+    ):
+        if kind != "m":
+            continue
         if differential.to_mask_name is None:
             raise ValueError("masked differential case requires to_mask_name")
         hardware_mask = _differential_hardware_mask(case, f"{mask}ull")
@@ -323,6 +330,7 @@ def _differential(case: ValueTestCasePlan) -> str:
     ref_args = []
     vector_index = 0
     mask_index = 0
+    scalar_index = 0
     for kind in case.invocation.param_kinds:
         if kind == "v":
             hw_args.append(
@@ -334,6 +342,27 @@ def _differential(case: ValueTestCasePlan) -> str:
             hw_args.append(f"hm{mask_index}")
             ref_args.append(f"rm{mask_index}")
             mask_index += 1
+        elif kind == "im":
+            mask = case.inputs.masks[mask_index]
+            hw_args.append(
+                "static_cast<typename Hw::imask_type>("
+                f"{mask}ull)"
+            )
+            ref_args.append(
+                "static_cast<typename Ref::imask_type>("
+                f"{mask}ull)"
+            )
+            mask_index += 1
+        elif kind == "s":
+            value = cpp_literal(case.inputs.scalars[scalar_index], case.type_tag)
+            hw_args.append(value)
+            ref_args.append(value)
+            scalar_index += 1
+        elif kind == "usize":
+            value = case.inputs.scalars[scalar_index]
+            hw_args.append(f"static_cast<std::size_t>({value})")
+            ref_args.append(f"static_cast<std::size_t>({value})")
+            scalar_index += 1
         elif kind != "sImm":
             raise ValueError(f"unsupported differential argument kind {kind!r}")
     template_args_hw = ["Hw"]
@@ -355,6 +384,13 @@ def _differential(case: ValueTestCasePlan) -> str:
         lines.append(
             f'  return tsl::test::check_mask_match_for<Hw>("{case.function_name}", '
             f"hw, ref, {case.lanes});"
+        )
+    elif case.invocation.result_kind == "s":
+        lines.append(f"  {case.base_spelling} hw = {hw_call};")
+        lines.append(f"  {case.base_spelling} ref = {ref_call};")
+        lines.append(
+            f'  return tsl::test::check_scalar<{case.base_spelling}>('
+            f'"{case.function_name}", hw, ref);'
         )
     else:
         lines.append(f"  typename tsl::array_for<Hw>::type hout = tsl::{differential.to_array_name}<Hw>({hw_call});")

@@ -46,6 +46,70 @@ prim<im:=(im,usize)> test_imask(mask, position):
               complete(cast<static>(vector::imask, mask<test, imask>(mask, position)));
             """
 
+prim<m:=(m,usize,im)> set_mask_lane(mask, index, value):
+  operation mask_set_lane
+  operand_roles:
+    primary mask
+    index index
+    value value
+  brief_description "Returns the mask with one valid runtime-indexed lane replaced."
+  detailed_description """
+    Returns a mask equal to `mask` except that the lane at the runtime index is
+    active when `value` is nonzero and inactive when `value` is zero. The
+    caller must provide an index less than the selected mask lane count.
+    """
+  semantics """
+    input: mask mask, runtime size index, integral truth value
+    precondition: index < lane_count(mask)
+    result = mask
+    result[index] = value != 0
+    return result
+    """
+  tests:
+    - {tags [first, set], extension "avx512", type "ui8", lane_count 64, case {inputs [0, 0, 1], expected 1}}
+    - {tags [last, set], extension "avx512", type "ui8", lane_count 64, case {inputs [0, 63, 1], expected 9223372036854775808}}
+    - {tags [first, clear], extension "avx512", type "ui16", lane_count 32, case {inputs [4294967295, 0, 0], expected 4294967294}}
+    - {tags [last, clear], extension "avx512", type "ui16", lane_count 32, case {inputs [4294967295, 31, 0], expected 2147483647}}
+    - {tags [middle, set], extension "avx512", type "ui32", lane_count 16, case {inputs [0, 8, 7], expected 256}}
+    - {tags [middle, clear], extension "avx512", type "ui64", lane_count 8, case {inputs [255, 4, 0], expected 239}}
+    - {tags [false], extension "generic", type "ui8", lane_count 16, case {inputs [65535, 15, 0], expected 32767}}
+    - {tags [true], extension "generic", type "f64", lane_count 2, case {inputs [0, 1, 1], expected 2}}
+  impls:
+    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+      arith:
+        requires:
+          scalar []
+          generic []
+          clang_v128 []
+          oneapi_fpga []
+          oneapi_fpga_rtl []
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx]
+          sse [sse]
+          neon [neon]
+          sve [sve]
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(lane_mask, call<primitive=equal[Vec]>(
+              call<primitive=sequence[Vec]>(),
+              call<primitive=set1[Vec]>(cast<static>(base::in, index))
+            ));
+            if (value != cast<static>(vector::imask, 0)) {
+              complete(call<primitive=mask_binary_or[Vec]>(mask, lane_mask));
+            }
+            complete(call<primitive=mask_binary_and[Vec]>(
+              mask,
+              call<primitive=mask_binary_not[Vec]>(lane_mask)
+            ));
+          """
+
 prim<im:=(im,im,usize)> overlay_imask(mask_a, mask_b, position):
   brief_description "Overlays one integral mask onto another at a runtime bit position."
   detailed_description """

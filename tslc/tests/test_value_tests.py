@@ -167,6 +167,66 @@ def test_wrapping_shift_value_tests_build_and_pass(
     _assert_value_tests_ran(report, backends=("cpp", "rust"))
 
 
+def test_runtime_lane_mutation_value_tests_build_and_pass(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    sde = Path("/opt/intel-sde/sde64")
+    assert sde.exists(), "x86 value-test gate needs /opt/intel-sde/sde64"
+
+    primitives = ["extract_value_at", "insert_value_at", "set_mask_lane"]
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=primitives,
+        profiles=["avx2", "skylake"],
+        backends=("cpp", "rust"),
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    cases = [
+        case
+        for profile in result.rendered.value_tests.profiles
+        for case in profile.cases
+        if case.call_name in set(primitives)
+    ]
+    assert cases
+    assert {case.call_name for case in cases} == set(primitives)
+    assert {case.kind for case in cases} == {
+        "differential",
+        "mask_result",
+        "scalar_result",
+        "scalar_vector",
+    }
+    assert {
+        case.call_name for case in cases if case.kind == "differential"
+    } == set(primitives)
+    assert {case.type_tag for case in cases if case.call_name != "set_mask_lane"} == {
+        "f32",
+        "f64",
+        "si8",
+        "si16",
+        "si32",
+        "si64",
+        "ui8",
+        "ui16",
+        "ui32",
+        "ui64",
+    }
+
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        runner_paths={"sde": str(sde)},
+        run_value_tests=True,
+    )
+    _assert_value_tests_ran(report, backends=("cpp", "rust"))
+
+
 def test_rust_valid_placeholder_paths_build_and_pass(
     data_root: Path,
     machine_profiles_path: Path,

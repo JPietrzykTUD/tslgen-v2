@@ -58,6 +58,11 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "shift_left_wrapping",
             "shift_right_wrapping",
         ),
+        "test_runtime_lane_mutation_builds": (
+            "extract_value_at",
+            "insert_value_at",
+            "set_mask_lane",
+        ),
         "test_to_from_array_roundtrip_builds": ("to_array", "from_array"),
         "test_select_composition_builds": ("mul", "select", "mov", "min", "max"),
         "test_generic_masks_build": _COMPARISON_FAMILY,

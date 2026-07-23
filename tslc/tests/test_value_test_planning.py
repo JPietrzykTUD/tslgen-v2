@@ -382,6 +382,78 @@ def test_cpp_differential_uses_extension_mask_materialization_template() -> None
     assert "static_cast<typename Ref::imask_type>(10ull)" in source
 
 
+def test_differential_renderers_support_runtime_lane_scalar_kinds() -> None:
+    extract = ValueTestCasePlan(
+        "differential",
+        "test_diff_avx2_extract_value_at",
+        "extract_value_at_si32",
+        "extract_value_at",
+        "si32",
+        "i32",
+        8,
+        vector_inputs=(("1", "2", "3", "4", "5", "6", "7", "8"),),
+        scalar_inputs=("7",),
+        result_kind="s",
+        param_kinds=("v", "usize"),
+        hardware_extension="avx2",
+        from_array_name="from_array",
+        to_array_name="to_array",
+    )
+    insert = ValueTestCasePlan(
+        "differential",
+        "test_diff_avx2_insert_value_at",
+        "insert_value_at_si32",
+        "insert_value_at",
+        "si32",
+        "i32",
+        8,
+        vector_inputs=(("1", "2", "3", "4", "5", "6", "7", "8"),),
+        scalar_inputs=("7", "9"),
+        result_kind="v",
+        param_kinds=("v", "usize", "s"),
+        hardware_extension="avx2",
+        from_array_name="from_array",
+        to_array_name="to_array",
+    )
+    set_mask = ValueTestCasePlan(
+        "differential",
+        "test_diff_avx512_set_mask_lane",
+        "set_mask_lane_ui32",
+        "set_mask_lane",
+        "ui32",
+        "u32",
+        16,
+        mask_inputs=("5", "1"),
+        scalar_inputs=("15",),
+        result_kind="m",
+        param_kinds=("m", "usize", "im"),
+        hardware_extension="avx512",
+        from_array_name="from_array",
+        to_array_name="to_array",
+        to_integral_name="to_integral",
+        to_mask_name="to_mask",
+    )
+
+    cpp_extract = CPP_VALUE_TEST_RENDERER.render_case(extract)
+    rust_extract = RUST_VALUE_TEST_RENDERER.render_case(extract)
+    assert "extract_value_at<Hw>(tsl::from_array<Hw>(hin0), static_cast<std::size_t>(7))" in cpp_extract
+    assert "check_scalar<i32>" in cpp_extract
+    assert "extract_value_at::<Hw>(from_array::<Hw>(&hin0), 7usize)" in rust_extract
+    assert "hw.lane_eq(reference)" in rust_extract
+
+    cpp_insert = CPP_VALUE_TEST_RENDERER.render_case(insert)
+    rust_insert = RUST_VALUE_TEST_RENDERER.render_case(insert)
+    assert "static_cast<std::size_t>(7), 9" in cpp_insert
+    assert "7usize, 9" in rust_insert
+
+    cpp_mask = CPP_VALUE_TEST_RENDERER.render_case(set_mask)
+    rust_mask = RUST_VALUE_TEST_RENDERER.render_case(set_mask)
+    assert "static_cast<typename Hw::imask_type>(1ull)" in cpp_mask
+    assert "to_integral<Hw>(tsl::set_mask_lane<Hw>" in cpp_mask
+    assert "1u64 as <Hw as SimdVector>::ImaskType" in rust_mask
+    assert "to_integral::<Hw>(set_mask_lane::<Hw>" in rust_mask
+
+
 def test_masked_immediate_cases_plan_and_render_for_both_backends(
     render_assets: RenderAssets,
 ) -> None:
@@ -1111,6 +1183,109 @@ def test_planner_emits_fixed_masked_mask_result_cases() -> None:
     assert cpp_case.inputs.masks == ("5",)
     assert cpp_case.inputs.vectors == (("1", "2", "3", "4"), ("1", "0", "3", "0"))
     assert cpp_case.expectation.values == ("5",)
+    assert {entry.status for entry in plan.coverage} == {"emitted"}
+
+
+def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
+    extract = Primitive(
+        "extract_value_at",
+        "s:=(v,usize)",
+        ("data", "index"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="extract_last",
+                type_tag="si32",
+                tags=("last",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("scalar", scalar="3"),
+                ),
+                expected=("4",),
+            ),
+        ),
+    )
+    insert = Primitive(
+        "insert_value_at",
+        "v:=(v,usize,s)",
+        ("data", "index", "value"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="insert_last",
+                type_tag="si32",
+                tags=("last",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("scalar", scalar="3"),
+                    TslTestArg("scalar", scalar="9"),
+                ),
+                expected=("1", "2", "3", "9"),
+            ),
+        ),
+    )
+    set_mask = Primitive(
+        "set_mask_lane",
+        "m:=(m,usize,im)",
+        ("mask", "index", "value"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="set_mask_last",
+                type_tag="si32",
+                tags=("last",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("mask", mask_bits="5"),
+                    TslTestArg("scalar", scalar="3"),
+                    TslTestArg("mask", mask_bits="1"),
+                ),
+                expected=("13",),
+            ),
+        ),
+    )
+    specs = {
+        "extract_value_at": (
+            _spec(
+                "extract_value_at",
+                "extract_value_at",
+                result_kind="s",
+                param_kinds=("v", "usize"),
+            ),
+        ),
+        "insert_value_at": (
+            _spec(
+                "insert_value_at",
+                "insert_value_at",
+                param_kinds=("v", "usize", "s"),
+            ),
+        ),
+        "set_mask_lane": (
+            _spec(
+                "set_mask_lane",
+                "set_mask_lane",
+                result_kind="m",
+                param_kinds=("m", "usize", "im"),
+            ),
+        ),
+    }
+    plan = ValueTestPlanner(
+        _catalog(extract, insert, set_mask, *_harness_primitives()),
+        (CPP_VALUE_TEST_SUPPORT,),
+    ).plan((ValueTestBackendProfileInput("cpp", "unit", specs),))
+
+    assert plan.diagnostics == ()
+    cases = plan.profiles_for("cpp")[0].cases
+    assert [(case.call_name, case.kind) for case in cases] == [
+        ("extract_value_at", "scalar_result"),
+        ("insert_value_at", "scalar_vector"),
+        ("set_mask_lane", "mask_result"),
+    ]
     assert {entry.status for entry in plan.coverage} == {"emitted"}
 
 

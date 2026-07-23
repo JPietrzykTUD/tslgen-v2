@@ -30,12 +30,13 @@ _VECTOR_VALUES = frozenset({"v", "m", "im"})
 _ROLE_KINDS: dict[OperandRole, frozenset[str]] = {
     OperandRole.CONTROL_MASK: frozenset({"m"}),
     OperandRole.COUNT: frozenset({"s", "sImm", "usize", "v"}),
+    OperandRole.INDEX: frozenset({"usize"}),
     OperandRole.MEMORY_DESTINATION: frozenset({"ptr", "ptr+"}),
     OperandRole.MEMORY_SOURCE: frozenset({"cptr", "cptr+"}),
     OperandRole.PASS_THROUGH: frozenset({"v"}),
     OperandRole.PRIMARY: _VECTOR_VALUES,
     OperandRole.SECONDARY: _VECTOR_VALUES,
-    OperandRole.VALUE: frozenset({"s", "v"}),
+    OperandRole.VALUE: frozenset({"s", "v", "im"}),
 }
 
 _BINARY_VALUE_ROLES = frozenset({OperandRole.PRIMARY, OperandRole.SECONDARY})
@@ -80,11 +81,11 @@ _OPERATION_ROLES: dict[
     PrimitiveOperation.CONVERT: (frozenset({OperandRole.PRIMARY}), frozenset()),
     PrimitiveOperation.EXTRACT_LANE: (
         frozenset({OperandRole.PRIMARY}),
-        frozenset(),
+        frozenset({OperandRole.INDEX}),
     ),
     PrimitiveOperation.INSERT_LANE: (
         frozenset({OperandRole.PRIMARY, OperandRole.VALUE}),
-        frozenset(),
+        frozenset({OperandRole.INDEX}),
     ),
     PrimitiveOperation.LOAD: (
         frozenset({OperandRole.MEMORY_SOURCE}),
@@ -95,6 +96,10 @@ _OPERATION_ROLES: dict[
     PrimitiveOperation.MASK_OR: (_BINARY_VALUE_ROLES, frozenset()),
     PrimitiveOperation.MASK_POPULATION_COUNT: (
         frozenset({OperandRole.PRIMARY}),
+        frozenset(),
+    ),
+    PrimitiveOperation.MASK_SET_LANE: (
+        frozenset({OperandRole.PRIMARY, OperandRole.INDEX, OperandRole.VALUE}),
         frozenset(),
     ),
     PrimitiveOperation.MASK_XOR: (_BINARY_VALUE_ROLES, frozenset()),
@@ -154,6 +159,7 @@ _OPERATION_RESULT_KINDS: dict[PrimitiveOperation, frozenset[str]] = {
     PrimitiveOperation.MASK_NOT: frozenset({"m"}),
     PrimitiveOperation.MASK_OR: frozenset({"m"}),
     PrimitiveOperation.MASK_POPULATION_COUNT: frozenset({"usize"}),
+    PrimitiveOperation.MASK_SET_LANE: frozenset({"m"}),
     PrimitiveOperation.MASK_XOR: frozenset({"m"}),
     PrimitiveOperation.REINTERPRET: frozenset({"v"}),
     PrimitiveOperation.SELECT: frozenset({"v"}),
@@ -188,9 +194,13 @@ _OPERATION_ROLE_KINDS.update(
     {
         PrimitiveOperation.BIT_NOT: {OperandRole.PRIMARY: frozenset({"v"})},
         PrimitiveOperation.CONVERT: {OperandRole.PRIMARY: frozenset({"v"})},
-        PrimitiveOperation.EXTRACT_LANE: {OperandRole.PRIMARY: frozenset({"v"})},
+        PrimitiveOperation.EXTRACT_LANE: {
+            OperandRole.PRIMARY: frozenset({"v"}),
+            OperandRole.INDEX: frozenset({"usize"}),
+        },
         PrimitiveOperation.INSERT_LANE: {
             OperandRole.PRIMARY: frozenset({"v"}),
+            OperandRole.INDEX: frozenset({"usize"}),
             OperandRole.VALUE: frozenset({"s"}),
         },
         PrimitiveOperation.MASK_AND: {
@@ -204,6 +214,11 @@ _OPERATION_ROLE_KINDS.update(
         },
         PrimitiveOperation.MASK_POPULATION_COUNT: {
             OperandRole.PRIMARY: frozenset({"m"})
+        },
+        PrimitiveOperation.MASK_SET_LANE: {
+            OperandRole.PRIMARY: frozenset({"m"}),
+            OperandRole.INDEX: frozenset({"usize"}),
+            OperandRole.VALUE: frozenset({"im"}),
         },
         PrimitiveOperation.MASK_XOR: {
             OperandRole.PRIMARY: frozenset({"m"}),

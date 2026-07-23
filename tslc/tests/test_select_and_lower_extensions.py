@@ -215,6 +215,26 @@ def test_wrapping_shifts_select_only_integer_lane_types(
     }
 
 
+@pytest.mark.parametrize(
+    "primitive_name",
+    ("extract_value_at", "insert_value_at", "set_mask_lane"),
+)
+def test_runtime_lane_mutation_selects_every_arithmetic_lane_type(
+    catalog: Catalog,
+    machine_profiles,
+    primitive_name: str,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles["avx2"],
+        primitive_name,
+        _ALL_ARITH_TYPES,
+        backend_id="rust",
+    )
+
+    assert {slot.type_tag for slot in selection.selected} == set(_ALL_ARITH_TYPES)
+
+
 def test_requirement_scoped_implementations_are_not_dead(catalog: Catalog) -> None:
     dead: list[str] = []
     for primitive in catalog.primitives:

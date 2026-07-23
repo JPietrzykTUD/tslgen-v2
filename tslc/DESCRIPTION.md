@@ -241,7 +241,8 @@ prim<v:=(v,v)> add(left, right):
   spellings or positions, prose, or implementation text.
 - **Primitive operation contracts**: curated non-arithmetic families declare a
   closed language-neutral `operation` plus explicit parameter-bound
-  `operand_roles`. Focused `memory`, `conversion`, and `shift` blocks add only
+  `operand_roles`, including runtime lane indices where applicable. Focused
+  `memory`, `conversion`, and `shift` blocks add only
   contiguous access direction, conversion/lane-count relations, or wrapping
   count/lane rules and admitted scalar count types that are not already owned
   by attributes, result targets, and semantic overloads. The catalog

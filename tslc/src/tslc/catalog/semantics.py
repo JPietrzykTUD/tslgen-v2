@@ -30,6 +30,7 @@ class PrimitiveOperation(StrEnum):
     MASK_NOT = "mask_not"
     MASK_OR = "mask_or"
     MASK_POPULATION_COUNT = "mask_population_count"
+    MASK_SET_LANE = "mask_set_lane"
     MASK_XOR = "mask_xor"
     REINTERPRET = "reinterpret"
     SELECT = "select"
@@ -43,6 +44,7 @@ class PrimitiveOperation(StrEnum):
 class OperandRole(StrEnum):
     CONTROL_MASK = "control_mask"
     COUNT = "count"
+    INDEX = "index"
     MEMORY_DESTINATION = "memory_destination"
     MEMORY_SOURCE = "memory_source"
     PASS_THROUGH = "pass_through"
@@ -103,6 +105,9 @@ PRIMITIVE_OPERATION_DESCRIPTIONS: Mapping[PrimitiveOperation, str] = MappingProx
         PrimitiveOperation.MASK_NOT: "Computes logical inversion of mask lanes.",
         PrimitiveOperation.MASK_OR: "Computes logical OR of corresponding mask lanes.",
         PrimitiveOperation.MASK_POPULATION_COUNT: "Counts active mask lanes.",
+        PrimitiveOperation.MASK_SET_LANE: (
+            "Returns a mask with one runtime-indexed logical lane replaced."
+        ),
         PrimitiveOperation.MASK_XOR: "Computes logical XOR of corresponding mask lanes.",
         PrimitiveOperation.REINTERPRET: (
             "Reinterprets a vector's bit pattern as another declared vector type."
@@ -124,6 +129,7 @@ OPERAND_ROLE_DESCRIPTIONS: Mapping[OperandRole, str] = MappingProxyType(
     {
         OperandRole.CONTROL_MASK: "The mask controlling active lanes.",
         OperandRole.COUNT: "The uniform or per-lane count operand.",
+        OperandRole.INDEX: "The runtime logical lane index operand.",
         OperandRole.MEMORY_DESTINATION: "The memory destination written by the operation.",
         OperandRole.MEMORY_SOURCE: "The memory source read by the operation.",
         OperandRole.PASS_THROUGH: "The value preserved where a control mask is inactive.",
