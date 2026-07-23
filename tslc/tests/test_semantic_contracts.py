@@ -80,6 +80,7 @@ def test_current_corpus_promotes_curated_operation_domains(catalog: Catalog) -> 
     load = catalog.primitive("load")
     reinterpret = catalog.primitive("reinterpret")
     add = catalog.primitive("add")
+    neg = catalog.primitive("neg")
     assert select is not None and select.operation is not None
     assert select.operation.kind is PrimitiveOperation.SELECT
     assert {
@@ -105,6 +106,14 @@ def test_current_corpus_promotes_curated_operation_domains(catalog: Catalog) -> 
     assert ArithmeticGuarantee.INTEGER_WRAPPING in add.arithmetic.guarantees
     assert add.arithmetic.binding(ArithmeticOperandRole.PRIMARY) is not None
     assert add.arithmetic.binding(ArithmeticOperandRole.SECONDARY) is not None
+    assert neg is not None and neg.arithmetic is not None
+    assert neg.arithmetic.operations == frozenset({ArithmeticOperation.NEGATION})
+    assert neg.arithmetic.guarantees == frozenset(
+        {
+            ArithmeticGuarantee.INTEGER_WRAPPING,
+            ArithmeticGuarantee.FLOATING_SIGN_BIT_TOGGLE,
+        }
+    )
 
 
 @pytest.mark.parametrize(
@@ -161,6 +170,7 @@ def test_every_current_curated_family_variant_has_an_explicit_operation(
         ("add", ArithmeticOperation.ADDITION, True),
         ("sub", ArithmeticOperation.SUBTRACTION, True),
         ("mul", ArithmeticOperation.MULTIPLICATION, True),
+        ("neg", ArithmeticOperation.NEGATION, True),
         ("div", ArithmeticOperation.DIVISION, False),
         ("mod", ArithmeticOperation.REMAINDER, False),
         ("mod_imm", ArithmeticOperation.REMAINDER, False),
@@ -187,7 +197,10 @@ def test_every_current_curated_arithmetic_variant_has_explicit_roles(
                 primitive.arithmetic.binding(ArithmeticOperandRole.SECONDARY)
                 is not None
             )
-        else:
+        elif operation in {
+            ArithmeticOperation.DIVISION,
+            ArithmeticOperation.REMAINDER,
+        }:
             assert (
                 primitive.arithmetic.binding(ArithmeticOperandRole.DIVISOR) is not None
             )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.catalog.model import TestComparison
 from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 from tslc.value_tests.render_cpp_helpers import render_extension_test_template
@@ -358,8 +359,13 @@ def _differential(case: ValueTestCasePlan) -> str:
     else:
         lines.append(f"  typename tsl::array_for<Hw>::type hout = tsl::{differential.to_array_name}<Hw>({hw_call});")
         lines.append(f"  typename Ref::register_type ref = {ref_call};")
+        check = (
+            "check_match_bitwise"
+            if case.expectation.comparison is TestComparison.BITWISE
+            else "check_match"
+        )
         lines.append(
-            f'  return tsl::test::check_match<{case.base_spelling}>('
+            f"  return tsl::test::{check}<{case.base_spelling}>("
             f'"{case.function_name}", hout, ref, {case.lanes});'
         )
     lines.append("}")

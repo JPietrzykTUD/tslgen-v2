@@ -532,6 +532,11 @@ components
 [case-kind capabilities](src/tslc/value_tests/case_capabilities.py) validate
 those facts through the focused
 [case plan](src/tslc/value_tests/case_plan.py) before rendering. The
+source-authored `comparison bitwise` mode is deliberately limited to vector
+results with vector operands; it makes C++ and Rust golden and differential
+tests compare exact lane representations, including NaN sign and payload bits.
+The default `comparison value` remains NaN-aware while retaining exact signed
+zero and infinity checks. The
 `status_pointer` case kind validates nondeterministic status-plus-output
 contracts by checking the status domain and failure-path output preservation,
 without inventing vector lanes or a deterministic success value. The

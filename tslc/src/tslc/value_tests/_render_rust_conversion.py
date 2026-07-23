@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.catalog.model import TestComparison
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.value_tests._render_rust_helpers import rust_extension_tag
 from tslc.value_tests.literals import rust_literal, rust_literal_list
@@ -401,8 +402,13 @@ def _differential(case: ValueTestCasePlan) -> str:
     else:
         lines.append(f"        let hw = {to_array}::<Hw>({hw_call});")
         lines.append(f"        let reference = {ref_call};")
+        comparison = (
+            "lane_bitwise_eq"
+            if case.expectation.comparison is TestComparison.BITWISE
+            else "lane_eq"
+        )
         lines.append(
-            f"        for i in 0..{case.lanes} {{ assert!(hw[i].lane_eq(reference[i]), "
+            f"        for i in 0..{case.lanes} {{ assert!(hw[i].{comparison}(reference[i]), "
             f'"{case.function_name} lane {{}}: expected {{:?}}, got {{:?}}", '
             "i, reference[i], hw[i]); }"
         )

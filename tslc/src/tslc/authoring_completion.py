@@ -73,6 +73,7 @@ from tslc.catalog.validation._schema_target_families import (
     KNOWN_TARGET_FAMILIES_FIELDS,
 )
 from tslc.catalog.validation._schema_tests import (
+    KNOWN_TEST_COMPARISONS,
     KNOWN_TEST_CASE_FIELDS,
     KNOWN_TEST_FIELDS,
     KNOWN_TEST_ROLES,
@@ -1047,6 +1048,9 @@ def _value_completions(
     elif field == "role":
         values = KNOWN_TEST_ROLES
         detail = "test role"
+    elif field == "comparison":
+        values = KNOWN_TEST_COMPARISONS
+        detail = "test comparison"
     elif field == "latency_chain":
         values = context.primitive_parameters
         detail = "primitive parameter"

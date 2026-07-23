@@ -1,9 +1,9 @@
 #pragma once
 // Shared, profile-independent helpers for the generated value-correctness tests.
-// Comparison is typed: integers compare exactly; floats compare BITWISE (so -0.0, the
-// infinities, and NaN payloads are distinguished — `==` would conflate -0.0 with 0.0 and
-// never match NaN). The matching Rust helper (`tsl_test_core.rs`) mirrors this semantics so
-// the same expected data drives both backends.
+// Comparison is typed: integers compare exactly; floats compare by representation except that
+// the default mode treats all NaNs as equivalent. Source cases can request exact bitwise
+// comparison when sign or payload preservation is part of the primitive contract. The matching
+// Rust helper (`tsl_test_core.rs`) mirrors these semantics.
 #include "tsl_core.hpp"
 
 #include <cstddef>
@@ -40,7 +40,9 @@ inline int check_mask_bits(const char *name, typename Vec::mask_type mask,
     return detail::mask_bits_adapter<Vec>::check(name, mask, bits, authored_lanes, lanes);
 }
 
-// Lane-wise equality. For floating point this is an exact bit compare.
+// Lane-wise value equality. Floating-point values compare by representation except that any NaN
+// matches any NaN; operations whose source contract promises representation preservation use the
+// explicit bitwise helpers below.
 template <class T>
 inline bool lane_eq(T actual, T expected) {
     if constexpr (std::is_floating_point_v<T>) {
@@ -55,6 +57,21 @@ inline bool lane_eq(T actual, T expected) {
     } else {
         return actual == expected;
     }
+}
+
+template <class T>
+inline bool lane_bitwise_eq(T actual, T expected) {
+    if constexpr (std::is_floating_point_v<T>) {
+        using Bits = std::conditional_t<sizeof(T) == 4, std::uint32_t, std::uint64_t>;
+        return ::tsl::bit_cast<Bits>(actual) == ::tsl::bit_cast<Bits>(expected);
+    } else {
+        return actual == expected;
+    }
+}
+
+template <class T>
+inline bool lane_matches(T actual, T expected, bool bitwise) {
+    return bitwise ? lane_bitwise_eq<T>(actual, expected) : lane_eq<T>(actual, expected);
 }
 
 // One lane's value rendered for a failure message (signed/unsigned/float as a 64-bit-ish form).
@@ -72,12 +89,12 @@ inline void print_lane(const T &value) {
 // Compare `n` lanes of `actual` (anything with operator[], e.g. an array_type) against the
 // `expected` C array. Returns the number of mismatching lanes and reports each.
 template <class T, class Actual>
-inline int check_lanes(const char *name, const Actual &actual, const T *expected,
-                       std::size_t n) {
+inline int check_lanes_impl(const char *name, const Actual &actual, const T *expected,
+                            std::size_t n, bool bitwise) {
     int failures = 0;
     for (std::size_t i = 0; i < n; ++i) {
         const T got = static_cast<T>(actual[i]);
-        if (!lane_eq<T>(got, expected[i])) {
+        if (!lane_matches<T>(got, expected[i], bitwise)) {
             std::fprintf(stderr, "FAIL %s lane %zu: expected ", name, i);
             print_lane<T>(expected[i]);
             std::fprintf(stderr, ", got ");
@@ -87,6 +104,18 @@ inline int check_lanes(const char *name, const Actual &actual, const T *expected
         }
     }
     return failures;
+}
+
+template <class T, class Actual>
+inline int check_lanes(const char *name, const Actual &actual, const T *expected,
+                       std::size_t n) {
+    return check_lanes_impl<T>(name, actual, expected, n, false);
+}
+
+template <class T, class Actual>
+inline int check_lanes_bitwise(const char *name, const Actual &actual, const T *expected,
+                               std::size_t n) {
+    return check_lanes_impl<T>(name, actual, expected, n, true);
 }
 
 // Scalar-result check (a reduction's single value): compare one lane value to the expectation.
@@ -103,15 +132,29 @@ inline int check_scalar(const char *name, T actual, T expected) {
     return 1;
 }
 
+template <class T>
+inline int check_scalar_bitwise(const char *name, T actual, T expected) {
+    if (lane_bitwise_eq<T>(actual, expected)) {
+        return 0;
+    }
+    std::fprintf(stderr, "FAIL %s: expected ", name);
+    print_lane<T>(expected);
+    std::fprintf(stderr, ", got ");
+    print_lane<T>(actual);
+    std::fprintf(stderr, "\n");
+    return 1;
+}
+
 // Differential check: compare two computed lane containers (the hardware result vs the generic
 // software reference) for the same inputs. `T` is the lane type; both are indexable.
 template <class T, class A, class B>
-inline int check_match(const char *name, const A &actual, const B &reference, std::size_t n) {
+inline int check_match_impl(const char *name, const A &actual, const B &reference,
+                            std::size_t n, bool bitwise) {
     int failures = 0;
     for (std::size_t i = 0; i < n; ++i) {
         const T got = static_cast<T>(actual[i]);
         const T ref = static_cast<T>(reference[i]);
-        if (!lane_eq<T>(got, ref)) {
+        if (!lane_matches<T>(got, ref, bitwise)) {
             std::fprintf(stderr, "FAIL %s lane %zu: reference ", name, i);
             print_lane<T>(ref);
             std::fprintf(stderr, ", hardware ");
@@ -121,6 +164,19 @@ inline int check_match(const char *name, const A &actual, const B &reference, st
         }
     }
     return failures;
+}
+
+
+template <class T, class A, class B>
+inline int check_match(const char *name, const A &actual, const B &reference,
+                       std::size_t n) {
+    return check_match_impl<T>(name, actual, reference, n, false);
+}
+
+template <class T, class A, class B>
+inline int check_match_bitwise(const char *name, const A &actual, const B &reference,
+                               std::size_t n) {
+    return check_match_impl<T>(name, actual, reference, n, true);
 }
 
 // Differential mask check: compare two integer-bitset masks (the hardware mask normalized via

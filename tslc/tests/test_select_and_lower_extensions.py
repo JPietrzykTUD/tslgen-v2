@@ -169,6 +169,22 @@ def test_clang_overlay_has_authored_coverage_for_every_supported_corpus_slot(
     assert declaration_gaps == []
 
 
+def test_neg_selects_only_signed_and_floating_lane_types(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles["avx2"],
+        "neg",
+        _ALL_ARITH_TYPES,
+        backend_id="cpp",
+    )
+    selected_types = {slot.type_tag for slot in selection.selected}
+
+    assert selected_types == {"si8", "si16", "si32", "si64", "f32", "f64"}
+
+
 def test_requirement_scoped_implementations_are_not_dead(catalog: Catalog) -> None:
     dead: list[str] = []
     for primitive in catalog.primitives:

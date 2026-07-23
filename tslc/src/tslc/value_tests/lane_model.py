@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from tslc.catalog.model import TestComparison
 from tslc.value_tests.lane_math import runtime_tile_index
 from tslc.value_tests.literals import cpp_literal_list, token_truthy
 from tslc.value_tests.model import ValueTestCasePlan
@@ -102,12 +103,17 @@ class _FixedLaneModel(LaneModel):
             )
         else:
             expected = cpp_literal_list(case.expectation.values, case.type_tag)
+            check = (
+                "check_lanes_bitwise"
+                if case.expectation.comparison is TestComparison.BITWISE
+                else "check_lanes"
+            )
             lines.append(f"  typename Vec::register_type result = {call};")
             lines.append(
                 f"  static const {case.base_spelling} expected[{case.lanes}] = {{{expected}}};"
             )
             lines.append(
-                f'  return tsl::test::check_lanes<{case.base_spelling}>('
+                f"  return tsl::test::{check}<{case.base_spelling}>("
                 f'"{case.case_name}", result, expected, {case.lanes});'
             )
 
@@ -165,6 +171,11 @@ class _ScalableLaneModel(LaneModel):
         if scalable is None or scalable.store_name is None:
             raise ValueError("scalable value result requires a store fact")
         expected = cpp_literal_list(case.expectation.values, case.type_tag)
+        check = (
+            "check_lanes_bitwise"
+            if case.expectation.comparison is TestComparison.BITWISE
+            else "check_lanes"
+        )
         lines.extend(
             [
                 f"  static const {case.base_spelling} authored_expected[{case.lanes}] = "
@@ -175,7 +186,7 @@ class _ScalableLaneModel(LaneModel):
                 f"authored_expected[{runtime_tile_index('i', case.lanes)}];",
                 f"  typename Vec::register_type result = {call};",
                 f"  tsl::{scalable.store_name}<Vec, false>(actual.data(), result);",
-                f'  return tsl::test::check_lanes<{case.base_spelling}>('
+                f"  return tsl::test::{check}<{case.base_spelling}>("
                 f'"{case.case_name}", actual.data(), expected.data(), lanes);',
             ]
         )

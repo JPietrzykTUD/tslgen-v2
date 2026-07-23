@@ -55,6 +55,13 @@ TestCaseRole = Literal[
 ]
 
 
+class TestComparison(StrEnum):
+    """How authored expected lane values are compared to generated results."""
+
+    VALUE = "value"
+    BITWISE = "bitwise"
+
+
 class TestFailureReason(StrEnum):
     """Closed language-neutral reasons authored failure cases may expect."""
 
@@ -389,7 +396,9 @@ class TestCase:
     test vector when it differs from the result vector base), ``scale``/``alignment`` and
     ``offset``/``src_offset``/``dst_offset`` (gather/scatter and load/store buffer placement),
     ``attrs`` (the ``aligned``/``packed`` axes). Runtime and compile failure
-    roles carry a typed ``failure`` reason instead of an expected value.
+    roles carry a typed ``failure`` reason instead of an expected value. ``comparison`` defaults
+    to NaN-aware value comparison; ``bitwise`` requests exact lane representations, including
+    floating-point NaN sign and payload bits.
     """
 
     name: str
@@ -397,6 +406,7 @@ class TestCase:
     tags: tuple[str, ...]
     inputs: tuple[TestArg, ...]
     expected: tuple[str, ...]
+    comparison: TestComparison = TestComparison.VALUE
     role: TestCaseRole = "value"
     failure: TestFailureReason | None = None
     lanes: int | None = None

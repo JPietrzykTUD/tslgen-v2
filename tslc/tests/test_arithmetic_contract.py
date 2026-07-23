@@ -119,6 +119,7 @@ def test_combined_arithmetic_contract_promotes_explicit_operations_and_binding()
         if guarantee
         not in {
             ArithmeticGuarantee.INTEGER_WRAPPING,
+            ArithmeticGuarantee.FLOATING_SIGN_BIT_TOGGLE,
             ArithmeticGuarantee.INACTIVE_LANES_DO_NOT_PARTICIPATE,
         }
     )

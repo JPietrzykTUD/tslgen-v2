@@ -14,6 +14,7 @@ class ArithmeticOperation(StrEnum):
     ADDITION = "addition"
     DIVISION = "division"
     MULTIPLICATION = "multiplication"
+    NEGATION = "negation"
     REMAINDER = "remainder"
     SUBTRACTION = "subtraction"
 
@@ -32,6 +33,7 @@ class ArithmeticGuarantee(StrEnum):
     SIGNED_MIN_DIV_NEG_ONE_RETURNS_MIN = "signed_min_div_neg_one_returns_min"
     SIGNED_MIN_REM_NEG_ONE_RETURNS_ZERO = "signed_min_rem_neg_one_returns_zero"
     FLOATING_DIVISION_IEEE754_VALUES = "floating_division_ieee754_values"
+    FLOATING_SIGN_BIT_TOGGLE = "floating_sign_bit_toggle"
     FLOATING_REMAINDER_TRUNCATING = "floating_remainder_truncating"
     INACTIVE_LANES_DO_NOT_PARTICIPATE = "inactive_lanes_do_not_participate"
 
@@ -55,6 +57,7 @@ class ArithmeticConflictGroup(StrEnum):
     SIGNED_DIVISION_OVERFLOW = "signed_division_overflow"
     SIGNED_REMAINDER_OVERFLOW = "signed_remainder_overflow"
     FLOATING_DIVISION = "floating_division"
+    FLOATING_NEGATION = "floating_negation"
     FLOATING_REMAINDER = "floating_remainder"
     MASKED_PARTICIPATION = "masked_participation"
 
@@ -144,6 +147,7 @@ ARITHMETIC_OPERATION_DESCRIPTIONS: Mapping[ArithmeticOperation, str] = MappingPr
         ArithmeticOperation.ADDITION: "Produces the lane-wise sum of two values.",
         ArithmeticOperation.DIVISION: "Produces a quotient from a dividend and divisor.",
         ArithmeticOperation.MULTIPLICATION: "Produces the lane-wise product of two values.",
+        ArithmeticOperation.NEGATION: "Negates each lane of one value.",
         ArithmeticOperation.REMAINDER: (
             "Produces the remainder associated with a dividend and divisor."
         ),
@@ -203,6 +207,7 @@ def _spec(
 
 _DIVISION = frozenset({ArithmeticOperation.DIVISION})
 _REMAINDER = frozenset({ArithmeticOperation.REMAINDER})
+_NEGATION = frozenset({ArithmeticOperation.NEGATION})
 _DIVISION_OR_REMAINDER = frozenset(
     {ArithmeticOperation.DIVISION, ArithmeticOperation.REMAINDER}
 )
@@ -211,6 +216,7 @@ _WRAPPING_OPERATIONS = frozenset(
     {
         ArithmeticOperation.ADDITION,
         ArithmeticOperation.MULTIPLICATION,
+        ArithmeticOperation.NEGATION,
         ArithmeticOperation.SUBTRACTION,
     }
 )
@@ -224,9 +230,7 @@ ARITHMETIC_GUARANTEE_SPECS: Mapping[
             "Integer results wrap modulo the lane width.",
             any_operations=_WRAPPING_OPERATIONS,
             domain=ArithmeticNumericDomain.INTEGER,
-            roles=frozenset(
-                {ArithmeticOperandRole.PRIMARY, ArithmeticOperandRole.SECONDARY}
-            ),
+            roles=frozenset({ArithmeticOperandRole.PRIMARY}),
             conflict=ArithmeticConflictGroup.INTEGER_OVERFLOW,
         ),
         ArithmeticGuarantee.INTEGER_QUOTIENT_TOWARD_ZERO: _spec(
@@ -276,6 +280,14 @@ ARITHMETIC_GUARANTEE_SPECS: Mapping[
             domain=ArithmeticNumericDomain.FLOATING,
             roles=_DIVISOR,
             conflict=ArithmeticConflictGroup.FLOATING_DIVISION,
+        ),
+        ArithmeticGuarantee.FLOATING_SIGN_BIT_TOGGLE: _spec(
+            ArithmeticGuarantee.FLOATING_SIGN_BIT_TOGGLE,
+            "Floating results differ only by the sign bit, preserving all other bits.",
+            all_operations=_NEGATION,
+            domain=ArithmeticNumericDomain.FLOATING,
+            roles=frozenset({ArithmeticOperandRole.PRIMARY}),
+            conflict=ArithmeticConflictGroup.FLOATING_NEGATION,
         ),
         ArithmeticGuarantee.FLOATING_REMAINDER_TRUNCATING: _spec(
             ArithmeticGuarantee.FLOATING_REMAINDER_TRUNCATING,

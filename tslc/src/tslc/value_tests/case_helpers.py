@@ -104,6 +104,7 @@ def plan_case(
         expectation=ValueTestExpectation(
             values=case.expected if expected is None else expected,
             text=text_expected,
+            comparison=case.comparison,
         ),
         invocation=ValueTestInvocation(
             result_kind=specs[0].result_kind if result_kind is None else result_kind,

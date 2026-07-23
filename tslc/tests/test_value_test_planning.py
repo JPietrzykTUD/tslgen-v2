@@ -17,6 +17,7 @@ from tslc.catalog.model import (
     ExtensionMetadata,
     ParamTypeRule,
     Primitive,
+    TestComparison as CaseComparison,
     TestFailureReason as FailureReason,
     TestArg as TslTestArg,
     TestCase as TslTestCase,
@@ -128,6 +129,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
         expectation=ValueTestExpectation(
             values=values.pop("expected", ()),
             text=values.pop("text_expected", None),
+            comparison=values.pop("comparison", CaseComparison.VALUE),
         ),
         invocation=ValueTestInvocation(
             result_kind=values.pop("result_kind", None),
@@ -1524,6 +1526,27 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
     )
     assert "tsl::plus<Vec>(v0, v1)" in cpp_source
 
+    cpp_bitwise_case = ValueTestCasePlan(
+        kind="generic_golden",
+        function_name="test_neg_bits",
+        case_name="float-bits",
+        call_name="neg",
+        type_tag="f32",
+        base_spelling="float",
+        lanes=2,
+        vector_inputs=(("NAN", "-NAN"),),
+        expected=("-NAN", "NAN"),
+        comparison=CaseComparison.BITWISE,
+        result_kind="v",
+        param_kinds=("v",),
+    )
+    cpp_bitwise_source = render_cpp_values_runner(
+        ValueTestProfilePlan("cpp", "unit-profile", (cpp_bitwise_case,)),
+        render_assets,
+    )
+    assert "check_lanes_bitwise<float>" in cpp_bitwise_source
+    assert "{-NAN, NAN}" in cpp_bitwise_source
+
     cpp_permute_case = ValueTestCasePlan(
         kind="generic_golden",
         function_name="test_permute_lanes",
@@ -1679,6 +1702,17 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         render_assets,
     )
     assert "r#mod::<Vec>(a0, a1)" in rust_source
+
+    rust_bitwise_case = replace(
+        cpp_bitwise_case,
+        base_spelling="f32",
+    )
+    rust_bitwise_source = render_rust_values_file(
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_bitwise_case,)),),
+        render_assets,
+    )
+    assert ".lane_bitwise_eq(expected[i])" in rust_bitwise_source
+    assert "[-f32::NAN, f32::NAN]" in rust_bitwise_source
 
     rust_permute_case = ValueTestCasePlan(
         kind="generic_golden",

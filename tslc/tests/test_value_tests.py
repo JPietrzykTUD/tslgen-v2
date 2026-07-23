@@ -15,6 +15,7 @@ import pytest
 
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.catalog.builder import CatalogBuilder
+from tslc.catalog.model import TestComparison as CaseComparison
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import has_errors
 from tslc.sources import SourceLoader
@@ -75,6 +76,46 @@ def test_golden_value_tests_build_and_pass(
 
     report = verify_project(tmp_path, result.rendered.verify, run_value_tests=True)
     _assert_value_tests_ran(report, backends=("cpp",))
+
+
+def test_neg_bit_exact_value_tests_build_and_pass(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    sde = Path("/opt/intel-sde/sde64")
+    assert sde.exists(), "x86 value-test gate needs /opt/intel-sde/sde64"
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["neg"],
+        profiles=["avx2"],
+        backends=("cpp", "rust"),
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    exact_cases = [
+        case
+        for profile in result.rendered.value_tests.profiles
+        for case in profile.cases
+        if case.call_name == "neg"
+        and case.type_tag in {"f32", "f64"}
+        and case.expectation.comparison is CaseComparison.BITWISE
+    ]
+    assert exact_cases
+    assert {case.kind for case in exact_cases} == {"generic_golden", "differential"}
+
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        runner_paths={"sde": str(sde)},
+        run_value_tests=True,
+    )
+    _assert_value_tests_ran(report, backends=("cpp", "rust"))
 
 
 def test_rust_valid_placeholder_paths_build_and_pass(

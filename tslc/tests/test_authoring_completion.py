@@ -292,7 +292,8 @@ def test_inline_test_map_completion_uses_map_fields_and_closed_values(
     baseline = (
         "prim<v:=v> probe(value):\n"
         "  tests:\n"
-        "    - {tags [basic], type si32, role value, case {inputs [], expected []}}\n"
+        "    - {tags [basic], type si32, role value, comparison value, "
+        "case {inputs [], expected []}}\n"
     )
     field_edit = baseline.split("role value", 1)[0] + "ro"
     fields = _labels(catalog, baseline, field_edit)
@@ -304,6 +305,11 @@ def test_inline_test_map_completion_uses_map_fields_and_closed_values(
     roles = _labels(catalog, baseline, value_edit)
 
     assert roles == {"value"}
+
+    comparison_edit = baseline.split("comparison value", 1)[0] + "comparison bit"
+    comparisons = _labels(catalog, baseline, comparison_edit)
+
+    assert comparisons == {"bitwise"}
 
 
 def test_representation_target_axis_and_where_are_contextual(

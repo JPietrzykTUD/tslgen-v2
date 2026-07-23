@@ -147,7 +147,9 @@ def build_arithmetic_contract(
     roles = frozenset(binding.role for binding in bindings)
     required_roles: set[ArithmeticOperandRole] = set()
     for operation in operations:
-        if operation in {
+        if operation is ArithmeticOperation.NEGATION:
+            required_roles.add(ArithmeticOperandRole.PRIMARY)
+        elif operation in {
             ArithmeticOperation.ADDITION,
             ArithmeticOperation.MULTIPLICATION,
             ArithmeticOperation.SUBTRACTION,

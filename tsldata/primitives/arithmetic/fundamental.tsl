@@ -966,6 +966,148 @@ prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
               )
             );
           """
+prim<v:=v> neg(data):
+  arithmetic:
+    operations [negation]
+    operand_roles:
+      primary data
+    guarantees [integer_wrapping, floating_sign_bit_toggle]
+  brief_description "Negates signed-integer and floating-point lanes without changing any other floating bits."
+  detailed_description """
+    Negates each signed-integer lane modulo its lane width, so the minimum signed
+    value maps to itself. Floating-point lanes are negated by toggling only their
+    sign bit; this preserves signed zero, infinities, and every NaN payload bit.
+    Unsigned lane types are not supported.
+    """
+  semantics """
+    input: register data
+    for each lane i:
+      if the lane type is signed integer:
+        bits = unsigned_bit_pattern(data[i])
+        result[i] = signed_bit_pattern(0 - bits modulo the lane width)
+      else:
+        result[i] = data[i] with only its sign bit toggled
+    return result
+    """
+  tests:
+    - {tags [basic], type "si8", case {inputs [[0, 1, -1, -128, 127, 2, -2, 64, -64, 3, -3, 100, -100, 126, -127, 42]], expected [0, -1, 1, -128, -127, -2, 2, -64, 64, -3, 3, -100, 100, -126, 127, -42]}}
+    - {tags [basic], type "si16", case {inputs [[0, 1, -1, -32768, 32767, 2, -2, 12345]], expected [0, -1, 1, -32768, -32767, -2, 2, -12345]}}
+    - {tags [signed_min, wrapping], type "si32", case {inputs [[0, 1, -1, -2147483648, 2147483647, 2, -2, 123456789]], expected [0, -1, 1, -2147483648, -2147483647, -2, 2, -123456789]}}
+    - {tags [signed_min, wrapping], type "si64", case {inputs [[0, -9223372036854775808, 9223372036854775807, -7]], expected [0, -9223372036854775808, -9223372036854775807, 7]}}
+    - {tags [float, sign_bits], type "f32", comparison bitwise, case {inputs [[0.0, -0.0, 1.5, -2.25, INFINITY, "-INFINITY", NAN, "-NAN"]], expected [-0.0, 0.0, -1.5, 2.25, "-INFINITY", INFINITY, "-NAN", NAN]}}
+    - {tags [float, sign_bits], type "f64", comparison bitwise, case {inputs [[0.0, -0.0, NAN, "-NAN"]], expected [-0.0, 0.0, "-NAN", NAN]}}
+  impls:
+    scalar:
+      si?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            var<const_infer>(bits, cast<bitcast>(UBase, data));
+            var<const_typed>(UBase, zero, 0);
+            complete(cast<bitcast>(
+              base::in,
+              cast<static>(UBase, op<sub>(zero, bits))
+            ));
+          """
+      f?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(SBase, base::signed_of(base::in));
+            var<const_infer>(bits, cast<bitcast>(UBase, data));
+            var<const_infer>(all_bits, cast<bitcast>(UBase, cast<static>(SBase, -1)));
+            var<const_infer>(sign_bit, all_bits ^ (all_bits >> 1));
+            complete(cast<bitcast>(base::in, bits ^ sign_bit));
+          """
+    [generic, oneapi_fpga, oneapi_fpga_rtl]:
+      [si?, f?]:
+        requires:
+          generic []
+          oneapi_fpga []
+          oneapi_fpga_rtl []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(data[i]);
+            }
+            complete(result);
+          """
+    [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+      si?:
+        requires:
+          clang_v128 []
+          avx512:
+            [si8, si16] [avx512f, avx512bw]
+            [si32, si64] [avx512f]
+          avx2_vl:
+            [si8, si16] [avx2, avx512f, avx512vl, avx512bw]
+            [si32, si64] [avx2, avx512f, avx512vl]
+          sse_vl:
+            [si8, si16] [sse2, avx512f, avx512vl, avx512bw]
+            [si32, si64] [sse2, avx512f, avx512vl]
+          avx2 [avx, avx2]
+          sse [sse2]
+          neon [neon]
+          sve [sve]
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
+            var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
+            var<const_infer>(negated, call<primitive=sub[UVec]>(
+              call<primitive=set_zero[UVec]>(),
+              bits
+            ));
+            complete(call<primitive=reinterpret[UVec, Vec]>(negated));
+          """
+      f?:
+        requires:
+          clang_v128 []
+          avx512 [avx512f]
+          avx2_vl [avx, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx]
+          sse:
+            f32 [sse]
+            f64 [sse2]
+          neon [neon]
+          sve [sve]
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(SBase, base::signed_of(base::in));
+            var<const_infer>(all_bits, cast<bitcast>(UBase, cast<static>(SBase, -1)));
+            var<const_infer>(sign_bit, all_bits ^ (all_bits >> 1));
+            var<const_infer>(sign_mask, call<primitive=set1[Vec]>(
+              cast<bitcast>(base::in, sign_bit)
+            ));
+            complete(call<primitive=binary_xor[Vec]>(data, sign_mask));
+          """
 prim<v:=(v)> abs(data):
   brief_description "Returns the lane-wise absolute value while preserving signed-minimum bit patterns."
   detailed_description """

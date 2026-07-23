@@ -53,6 +53,7 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
         "test_scalar_mask_comparison_family_builds": _COMPARISON_FAMILY,
         "test_simd_comparison_family_builds": _COMPARISON_FAMILY,
         "test_select_native_builds": ("select",),
+        "test_neg_builds": ("neg",),
         "test_to_from_array_roundtrip_builds": ("to_array", "from_array"),
         "test_select_composition_builds": ("mul", "select", "mov", "min", "max"),
         "test_generic_masks_build": _COMPARISON_FAMILY,

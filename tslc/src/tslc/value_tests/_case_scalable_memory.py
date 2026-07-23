@@ -83,7 +83,10 @@ def scalable_mask_store_cases(
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
                 inputs=ValueTestInputs(masks=mask_inputs),
-                expectation=ValueTestExpectation(values=case.expected),
+                expectation=ValueTestExpectation(
+                    values=case.expected,
+                    comparison=case.comparison,
+                ),
                 invocation=ValueTestInvocation(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,

@@ -87,7 +87,10 @@ def extension_result_case(
         base_spelling=match.base_type_spelling,
         lanes=case.lanes,
         inputs=ValueTestInputs(vectors=vector_inputs),
-        expectation=ValueTestExpectation(values=case.expected),
+        expectation=ValueTestExpectation(
+            values=case.expected,
+            comparison=case.comparison,
+        ),
         invocation=ValueTestInvocation(
             result_kind=match.result_kind,
             param_kinds=match.param_kinds,
@@ -132,7 +135,10 @@ def load_convert_case(
         base_spelling=match.base_type_spelling,
         lanes=source_lanes,
         inputs=ValueTestInputs(vectors=vector_inputs),
-        expectation=ValueTestExpectation(values=case.expected),
+        expectation=ValueTestExpectation(
+            values=case.expected,
+            comparison=case.comparison,
+        ),
         invocation=ValueTestInvocation(
             result_kind=match.result_kind,
             param_kinds=match.param_kinds,
@@ -181,7 +187,10 @@ def convert_case(
         base_spelling=match.base_type_spelling,
         lanes=case.lanes or 0,
         inputs=ValueTestInputs(vectors=vector_inputs),
-        expectation=ValueTestExpectation(values=case.expected),
+        expectation=ValueTestExpectation(
+            values=case.expected,
+            comparison=case.comparison,
+        ),
         target=ValueTestTarget(
             type_tag=case.to_type,
             base_spelling=match.target.base_spelling,
@@ -221,7 +230,10 @@ def repr_cast_case(
         base_spelling=match.base_type_spelling,
         lanes=case.lanes,
         inputs=ValueTestInputs(vectors=vector_inputs),
-        expectation=ValueTestExpectation(values=case.expected),
+        expectation=ValueTestExpectation(
+            values=case.expected,
+            comparison=case.comparison,
+        ),
         target=ValueTestTarget(
             type_tag=case.to_type,
             base_spelling=match.target.base_spelling,
@@ -273,7 +285,10 @@ def extension_repr_case(
         base_spelling=match.base_type_spelling,
         lanes=lanes,
         inputs=ValueTestInputs(vectors=vector_inputs),
-        expectation=ValueTestExpectation(values=case.expected),
+        expectation=ValueTestExpectation(
+            values=case.expected,
+            comparison=case.comparison,
+        ),
         index=ValueTestIndex(value=imm_inputs[0]),
         representation=ValueTestRepresentation(
             source_extension=case.extension or match.extension_name,
@@ -347,7 +362,10 @@ def target_imask_case(
         base_spelling=match.base_type_spelling,
         lanes=source_lanes,
         inputs=ValueTestInputs(masks=mask_inputs, scalars=scalar_inputs),
-        expectation=ValueTestExpectation(values=case.expected),
+        expectation=ValueTestExpectation(
+            values=case.expected,
+            comparison=case.comparison,
+        ),
         invocation=ValueTestInvocation(
             result_kind=match.result_kind,
             param_kinds=match.param_kinds,
@@ -553,6 +571,7 @@ def differential_cases(
                 base_spelling=base_spelling,
                 lanes=case.lanes,
                 inputs=ValueTestInputs(vectors=vector_inputs, masks=mask_inputs),
+                expectation=ValueTestExpectation(comparison=case.comparison),
                 invocation=ValueTestInvocation(
                     result_kind=specs[0].result_kind,
                     param_kinds=specs[0].param_kinds,

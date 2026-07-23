@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.catalog.model import TestComparison
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.value_tests._render_rust_helpers import (
     append_call_args,
@@ -450,8 +451,13 @@ def _status_pointer(case: ValueTestCasePlan) -> str:
 
 
 def _lane_assert(case: ValueTestCasePlan, lanes: int, result_name: str) -> str:
+    comparison = (
+        "lane_bitwise_eq"
+        if case.expectation.comparison is TestComparison.BITWISE
+        else "lane_eq"
+    )
     return (
-        f"        for i in 0..{lanes} {{ assert!({result_name}[i].lane_eq(expected[i]), "
+        f"        for i in 0..{lanes} {{ assert!({result_name}[i].{comparison}(expected[i]), "
         f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
         f"i, expected[i], {result_name}[i]); }}"
     )

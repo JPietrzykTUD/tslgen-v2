@@ -77,7 +77,10 @@ def scalable_mask_result_cases(
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
                 inputs=ValueTestInputs(vectors=vector_inputs),
-                expectation=ValueTestExpectation(values=case.expected),
+                expectation=ValueTestExpectation(
+                    values=case.expected,
+                    comparison=case.comparison,
+                ),
                 invocation=ValueTestInvocation(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,
@@ -142,7 +145,10 @@ def scalable_masked_mask_result_cases(
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
                 inputs=ValueTestInputs(vectors=vector_inputs, masks=mask_inputs),
-                expectation=ValueTestExpectation(values=case.expected),
+                expectation=ValueTestExpectation(
+                    values=case.expected,
+                    comparison=case.comparison,
+                ),
                 invocation=ValueTestInvocation(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,
@@ -202,7 +208,10 @@ def scalable_mask_logic_cases(
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
                 inputs=ValueTestInputs(masks=mask_inputs),
-                expectation=ValueTestExpectation(values=case.expected),
+                expectation=ValueTestExpectation(
+                    values=case.expected,
+                    comparison=case.comparison,
+                ),
                 invocation=ValueTestInvocation(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,
@@ -257,7 +266,10 @@ def scalable_mask_constant_cases(
                 type_tag=case.type_tag,
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
-                expectation=ValueTestExpectation(values=case.expected),
+                expectation=ValueTestExpectation(
+                    values=case.expected,
+                    comparison=case.comparison,
+                ),
                 invocation=ValueTestInvocation(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,
@@ -318,7 +330,10 @@ def scalable_mask_conversion_cases(
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
                 inputs=ValueTestInputs(masks=mask_inputs),
-                expectation=ValueTestExpectation(values=case.expected),
+                expectation=ValueTestExpectation(
+                    values=case.expected,
+                    comparison=case.comparison,
+                ),
                 invocation=ValueTestInvocation(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,

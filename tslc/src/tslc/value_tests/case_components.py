@@ -7,7 +7,7 @@ from enum import Enum, auto
 from typing import Literal
 
 from tslc.catalog.arithmetic import ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER
-from tslc.catalog.model import TestFailureReason
+from tslc.catalog.model import TestComparison, TestFailureReason
 
 ExpectedArity = Literal["optional", "non_empty", "one", "lanes", "target_lanes"]
 InputArity = Literal["optional", "non_empty", "one"]
@@ -82,6 +82,7 @@ class ValueTestExpectation:
 
     values: tuple[str, ...] = ()
     text: str | None = None
+    comparison: TestComparison = TestComparison.VALUE
 
 
 @dataclass(frozen=True, slots=True)
