@@ -30,6 +30,15 @@ mod private {
         fn mask_xor(left: Self::Mask, right: Self::Mask) -> Self::Mask;
         fn mask_not(value: Self::Mask) -> Self::Mask;
     }
+
+    pub trait ConvertTo<U, const N: usize>: Representation<N>
+    where
+        U: Representation<N>,
+    {
+        fn convert(
+            value: Self::Vector,
+        ) -> <U as Representation<N>>::Vector;
+    }
 }
 
 /// An element type admitted by the generated fixed-width SIMD surface.
@@ -95,6 +104,8 @@ pub type NativeMask<T> = <T as SimdElement>::NativeMask;
 @{representation_impls}
 
 @{facade_impls}
+
+@{conversion_pair_impls}
 
 @{element_impls}
 
@@ -218,6 +229,8 @@ where
         // SAFETY: upheld by this function's caller contract.
         unsafe { <T as private::FacadeOps<N>>::store(destination, self.value) }
     }
+
+@{conversion_methods}
 }
 
 impl<T, const N: usize> From<[T; N]> for Simd<T, N>
@@ -527,3 +540,9 @@ where
         !*self
     }
 }
+
+@{curated_impls}
+
+@{operator_impls}
+
+@{bit_conversion_impls}

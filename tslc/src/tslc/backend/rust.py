@@ -30,6 +30,7 @@ from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.benchmark.model import SpecializationKey
+from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.lower.lowerer import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -519,6 +520,34 @@ class RustBackend:
                 f"    }}\n"
                 f"}}"
             )
+            shift = spec.primitive_semantics.shift
+            if shift is not None and spec.param_kinds[vi] == "s":
+                forwarded_args = ", ".join(name for name, _kind in fixed)
+                for count_tag in shift.scalar_count_types:
+                    count_type = SCALAR_TYPE_INFOS[
+                        count_tag
+                    ].documentation_short_label
+                    if count_type == self_ty:
+                        continue
+                    call = (
+                        f"<{self_ty} as {arg_trait}{trait_args}>::apply("
+                        f"self as {self_ty}"
+                        + (f", {forwarded_args}" if forwarded_args else "")
+                        + ")"
+                    )
+                    if caller_unsafe:
+                        call = f"unsafe {{ {call} }}"
+                    impls.append(
+                        f"{impl_prefix} {arg_trait}{trait_args} for {count_type} {{\n"
+                        "    const IMPLEMENTATION_STATE: ImplementationState = "
+                        f"<{self_ty} as {arg_trait}{trait_args}>::"
+                        "IMPLEMENTATION_STATE;\n"
+                        f"    {_unsafe_prefix(caller_unsafe)}fn apply("
+                        f"self{fixed_impl}) -> {ret_impl} {{\n"
+                        f"        {call}\n"
+                        "    }\n"
+                        "}"
+                    )
 
         return "\n\n".join([trait, *impls]) if impls else ""
 

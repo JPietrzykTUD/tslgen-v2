@@ -468,6 +468,109 @@ def test_rust_path_dependency_consumer_builds(
                 assert_eq!(mask.cast::<f32>().to_bitmask(), 0b1101);
                 assert_eq!((mask & !Mask::splat(false)).to_bitmask(), 0b1101);
 
+                let left = Simd::<i32, 4>::from_array([1, -2, i32::MAX, i32::MIN]);
+                let right = Simd::<i32, 4>::from_array([2, 3, 1, -1]);
+                assert_eq!((left + right).to_array(), [3, 1, i32::MIN, i32::MAX]);
+                assert_eq!((&left + right).to_array(), [3, 1, i32::MIN, i32::MAX]);
+                assert_eq!((left + &right).to_array(), [3, 1, i32::MIN, i32::MAX]);
+                assert_eq!((&left + &right).to_array(), [3, 1, i32::MIN, i32::MAX]);
+                assert_eq!((left - right).to_array(), [-1, -5, i32::MAX - 1, i32::MIN + 1]);
+                assert_eq!((left * right).to_array(), [2, -6, i32::MAX, i32::MIN]);
+                assert_eq!((-left).to_array(), [-1, 2, i32::MIN + 1, i32::MIN]);
+                assert_eq!((-&left).to_array(), [-1, 2, i32::MIN + 1, i32::MIN]);
+
+                let mut assigned = left;
+                assigned += &right;
+                assigned -= right;
+                assigned *= Simd::splat(2);
+                assert_eq!(assigned.to_array(), [2, -4, -2, 0]);
+
+                let dividend = Simd::<i32, 4>::from_array([7, -7, i32::MIN, 9]);
+                let divisor = Simd::<i32, 4>::from_array([3, 3, -1, 2]);
+                assert_eq!((dividend / divisor).to_array(), [2, -2, i32::MIN, 4]);
+                assert_eq!((dividend % divisor).to_array(), [1, -1, 0, 1]);
+                assert!(std::panic::catch_unwind(|| {
+                    let _ = dividend / Simd::from_array([1, 0, 1, 1]);
+                })
+                .is_err());
+                assert!(std::panic::catch_unwind(|| {
+                    let _ = dividend % Simd::from_array([1, 0, 1, 1]);
+                })
+                .is_err());
+
+                assert_eq!((left & right).to_array(), [0, 2, 1, i32::MIN]);
+                assert_eq!((left | right).to_array(), [3, -1, i32::MAX, -1]);
+                assert_eq!((left ^ right).to_array(), [3, -3, i32::MAX - 1, i32::MAX]);
+                assert_eq!((!left).to_array(), [-2, 1, i32::MIN, i32::MAX]);
+
+                assert_eq!(left.simd_eq(left).to_array(), [true; 4]);
+                assert_eq!(left.simd_ne(right).to_array(), [true; 4]);
+                assert_eq!(left.simd_lt(right).to_array(), [true, true, false, true]);
+                assert_eq!(left.simd_le(right).to_array(), [true, true, false, true]);
+                assert_eq!(left.simd_gt(right).to_array(), [false, false, true, false]);
+                assert_eq!(left.simd_ge(right).to_array(), [false, false, true, false]);
+                assert_eq!(left, left);
+                assert_ne!(left, right);
+                assert_eq!(
+                    Mask::<i32, 4>::from_array([true, false, false, true])
+                        .select(left, right)
+                        .to_array(),
+                    [1, 3, 1, i32::MIN],
+                );
+
+                assert_eq!(
+                    Simd::<i32, 4>::from_array([-2, 0, 3, i32::MAX])
+                        .cast::<f32>()
+                        .to_array(),
+                    [-2.0, 0.0, 3.0, 2_147_483_648.0],
+                );
+                assert_eq!(
+                    Simd::<f32, 4>::from_array([
+                        f32::NEG_INFINITY,
+                        -1.9,
+                        f32::INFINITY,
+                        f32::NAN,
+                    ])
+                    .cast::<i32>()
+                    .to_array(),
+                    [i32::MIN, -1, i32::MAX, 0],
+                );
+                let floating_bits = Simd::<u32, 4>::from_array([
+                    0x8000_0000,
+                    0x7fc0_1234,
+                    0x3f80_0000,
+                    0,
+                ]);
+                let floating = Simd::<f32, 4>::from_bits(floating_bits);
+                assert_eq!(floating.to_bits(), floating_bits);
+                assert_eq!(
+                    (-floating).to_bits().to_array(),
+                    [0, 0xffc0_1234, 0xbf80_0000, 0x8000_0000],
+                );
+                let floating_dividend =
+                    Simd::<f32, 4>::from_array([0.0, -0.0, 1.0, f32::NAN]);
+                let floating_divisor =
+                    Simd::<f32, 4>::from_array([1.0, 1.0, 0.0, 1.0]);
+                let floating_quotient = floating_dividend / floating_divisor;
+                assert_eq!(floating_quotient.to_bits().to_array()[..2], [0, 0x8000_0000]);
+                assert!(floating_quotient.to_array()[2].is_infinite());
+                assert!(floating_quotient.to_array()[3].is_nan());
+                assert_ne!(floating_dividend, floating_dividend);
+
+                assert_eq!((Simd::<i32, 4>::splat(1) << 33_u64).to_array(), [2; 4]);
+                assert_eq!((Simd::<i32, 4>::splat(1) << -1_i8).to_array(), [i32::MIN; 4]);
+                assert_eq!((Simd::<i32, 4>::splat(-8) >> 34_u16).to_array(), [-2; 4]);
+                assert_eq!(
+                    (Simd::<i32, 4>::splat(1)
+                        << Simd::<i32, 4>::from_array([0, 1, 31, -1]))
+                    .to_array(),
+                    [1, 2, i32::MIN, i32::MIN],
+                );
+                let mut shifted = Simd::<i32, 4>::splat(1);
+                shifted <<= &33_u32;
+                shifted >>= 1_i16;
+                assert_eq!(shifted.to_array(), [1; 4]);
+
                 assert!(std::panic::catch_unwind(|| {
                     let _ = Simd::<i32, 4>::from_slice(&source[..3]);
                 })

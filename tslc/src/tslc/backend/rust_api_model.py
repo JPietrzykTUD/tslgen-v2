@@ -239,7 +239,17 @@ class RustCuratedMethod:
     operation: PrimitiveOperation
     source_primitive_name: str
     type_tags: tuple[str, ...]
+    target_type_tags: tuple[str, ...]
+    shape_keys: tuple[tuple[str, int], ...]
     caller_unsafe: bool
+    delegates: tuple[RustFacadeDelegate, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RustFacadeBitConversion:
+    float_type_tag: str
+    bits_type_tag: str
+    source_primitive_name: str
     delegates: tuple[RustFacadeDelegate, ...]
 
 
@@ -253,6 +263,7 @@ class RustCuratedTraitImplementation:
     type_tags: tuple[str, ...]
     rhs_kind: RustFacadeTraitRhsKind | None
     rhs_type_tags: tuple[str, ...]
+    shape_keys: tuple[tuple[str, int], ...]
     delegates: tuple[RustFacadeDelegate, ...]
 
 
@@ -320,6 +331,7 @@ class RustFacadePlan:
     core_delegates: tuple[RustFacadeCoreDelegate, ...]
     comprehensive_methods: tuple[RustComprehensiveMethod, ...]
     curated_methods: tuple[RustCuratedMethod, ...]
+    bit_conversions: tuple[RustFacadeBitConversion, ...]
     trait_implementations: tuple[RustCuratedTraitImplementation, ...]
     native_aliases: tuple[RustNativeAlias, ...]
     operation_values: tuple[RustOperationValue, ...]
@@ -375,6 +387,7 @@ __all__ = (
     "RustCuratedTraitImplementation",
     "RustFacadeCoverageEntry",
     "RustFacadeCoverageStatus",
+    "RustFacadeBitConversion",
     "RustFacadeConstParameter",
     "RustFacadeConstParameterSource",
     "RustFacadeDelegate",

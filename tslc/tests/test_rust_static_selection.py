@@ -134,7 +134,9 @@ def test_generated_rust_selects_profiles_by_cfg_not_cargo_features(
     assert 'target_feature = "avx2"' in lib
     assert 'target_feature = "rdrand"' in lib
     assert "pub use crate::tsl_target_fallback as profile;" in lib
-    assert '#![cfg(not(any(all(target_arch = "x86_64"' in fallback
+    assert "#![cfg(" not in fallback
+    assert "#[doc(hidden)]\npub mod tsl_target_fallback;" in lib
+    assert '#[cfg(all(not(doc), not(any(all(target_arch = "x86_64"' in lib
     assert "impl<const LANES: usize> AddImpl for Simd<i32, Generic<LANES>>" in fallback
 
 

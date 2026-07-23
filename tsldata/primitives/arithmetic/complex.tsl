@@ -949,6 +949,53 @@ prim<v:=(v,v)> div(dividend, divisor):
             }
             complete(result);
           """
+    [avx512, avx2_vl, sse_vl, avx2, sse]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512f, avx512bw]
+          avx2_vl:
+            idqword [avx2, avx512f, avx512vl]
+            bword   [avx2, avx512f, avx512vl, avx512bw]
+          sse_vl:
+            idqword [sse2, avx512f, avx512vl]
+            bword   [sse2, avx512f, avx512vl, avx512bw]
+          avx2 [avx, avx2]
+          sse  [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(ScalarVec, vector::as_extension(scalar));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(dividend));
+              var<const_infer>(lane_divisor, call<primitive=extract_value[Vec, i]>(divisor));
+              var<const_infer>(quotient, call<primitive=@self[ScalarVec]>(
+                lane_dividend,
+                lane_divisor
+              ));
+              result = call<primitive=insert_value[Vec, i]>(result, quotient);
+            }
+            complete(result);
+          """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, vector::as_extension(generic));
+              var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(dividend)
+              ));
+              var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(
+                call<primitive=to_array[Vec]>(divisor)
+              ));
+              complete(call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+              ));
+            """
     avx512:
       f?:
         requires [avx512f]

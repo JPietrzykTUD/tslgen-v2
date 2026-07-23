@@ -567,8 +567,16 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
         machine_profiles_path=machine_profiles_path,
         primitives=[
             "add",
+            "div",
             "equal",
+            "nequal",
+            "less_than",
+            "less_than_or_equal",
+            "greater_than",
+            "greater_than_or_equal",
             "select",
+            "convert_lanes",
+            "reinterpret",
             "shift_left_wrapping",
             "shift_right_wrapping",
         ],
@@ -588,6 +596,39 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
         for trait in plan.trait_implementations
     )
     assert any(method.public_name == "simd_eq" for method in plan.curated_methods)
+    assert {
+        method.public_name
+        for method in plan.curated_methods
+        if method.receiver_kind is RustFacadeReceiverKind.VECTOR
+    } >= {
+        "simd_eq",
+        "simd_ne",
+        "simd_lt",
+        "simd_le",
+        "simd_gt",
+        "simd_ge",
+        "cast",
+    }
+    cast = next(
+        method for method in plan.curated_methods if method.public_name == "cast"
+    )
+    assert set(cast.target_type_tags) == {
+        "f32",
+        "f64",
+        "si8",
+        "si16",
+        "si32",
+        "si64",
+        "ui8",
+        "ui16",
+        "ui32",
+        "ui64",
+    }
+    assert ("si32", 4) in cast.shape_keys
+    assert {
+        (conversion.float_type_tag, conversion.bits_type_tag)
+        for conversion in plan.bit_conversions
+    } == {("f32", "ui32"), ("f64", "ui64")}
     assert any(
         method.public_name == "select"
         and method.receiver_kind is RustFacadeReceiverKind.MASK
@@ -601,7 +642,7 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
         shape.type_tag == "si32"
         and shape.lanes == 8
         and {item.profile_name for item in shape.representations}
-        == {None, "sse2", "avx2"}
+        == {None, "avx2"}
         for shape in plan.shapes
     )
     expected_native_profiles = {None} | {
@@ -620,6 +661,11 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
         RustFacadeTraitRhsKind.SAME_TYPE,
         RustFacadeTraitRhsKind.SCALAR,
     }
+    assert any(
+        trait.trait_path == "core::ops::Div"
+        and ("si32", 4) in trait.shape_keys
+        for trait in plan.trait_implementations
+    )
     assert {
         delegate.role
         for delegate in plan.core_delegates

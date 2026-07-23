@@ -220,13 +220,14 @@ def rust_artifacts(
         static_selection = static_selection_plan.profile(
             emitted_profile.profile.name
         )
+        module_cfg = (
+            rust_static_profile_cfg(static_selection)
+            if static_selection is not None
+            else "any()"
+        )
         content = assets.fill(
             "rust_profile_module.rs.tmpl",
-            module_cfg=(
-                rust_static_profile_cfg(static_selection)
-                if static_selection is not None
-                else "any()"
-            ),
+            module_cfg_attr=f"#![cfg({module_cfg})]",
             arch_use=arch_use,
             profile_metadata=assets.fill(
                 "rust_profile_metadata.rs.tmpl",
@@ -290,7 +291,7 @@ def rust_artifacts(
     )
     fallback_content = assets.fill(
         "rust_profile_module.rs.tmpl",
-        module_cfg=rust_static_fallback_cfg(static_selection_plan),
+        module_cfg_attr="",
         arch_use=_rust_arch_use(
             used_extensions(fallback_by_primitive), fallback_extensions
         ),
@@ -496,6 +497,7 @@ def _rust_lib(
         assets.fill(
             "rust_lib_profile.rs.tmpl",
             profile_slug=profile_slug,
+            module_cfg_attr=f"#[cfg({rust_static_profile_cfg(selection)})]",
             selected_profile_cfg=rust_static_profile_cfg(selection),
         ).rstrip()
         for profile_slug, selection in zip(
@@ -506,6 +508,7 @@ def _rust_lib(
     fallback_module = assets.fill(
         "rust_lib_profile.rs.tmpl",
         profile_slug="target_fallback",
+        module_cfg_attr="",
         selected_profile_cfg=fallback_cfg,
     ).rstrip()
     profile_modules = "\n\n".join(

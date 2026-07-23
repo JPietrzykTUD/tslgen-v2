@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_api_model import (
     RustComprehensiveMethod,
     RustCuratedMethod,
     RustCuratedTraitImplementation,
+    RustFacadeBitConversion,
     RustFacadeCoverageEntry,
     RustFacadeCoverageStatus,
     RustFacadeConstParameter,
@@ -220,13 +221,10 @@ def _plan_rust_facade(
 
     curated_methods = _curated_methods(methods, candidates)
     traits = _curated_traits(methods, candidates)
-    diagnostics.extend(_method_collision_diagnostics(methods, curated_methods))
-    diagnostics.extend(_trait_collision_diagnostics(traits, candidates))
     ordered_diagnostics = sort_diagnostics(diagnostics)
     if ordered_diagnostics:
         return None, ordered_diagnostics
 
-    operation_values = _operation_values(traits)
     operation_bindings = _operation_bindings(candidates, baseline_keys)
     facade_type_tags = _core_facade_type_tags(operation_bindings)
     if facade_type_tags is None:
@@ -238,6 +236,13 @@ def _plan_rust_facade(
             for spec in specs
         }
     shapes = _logical_shapes(static_selection, facade_type_tags)
+    curated_methods = _finalize_curated_shapes(curated_methods, shapes)
+    traits = _finalize_trait_shapes(traits, shapes)
+    diagnostics.extend(_method_collision_diagnostics(methods, curated_methods))
+    diagnostics.extend(_trait_collision_diagnostics(traits, candidates))
+    if diagnostics:
+        return None, sort_diagnostics(diagnostics)
+    operation_values = _operation_values(traits)
     core_delegates, core_diagnostics = _core_delegates(
         shapes,
         operation_bindings,
@@ -252,6 +257,7 @@ def _plan_rust_facade(
             core_delegates=core_delegates,
             comprehensive_methods=tuple(sorted(methods, key=_method_sort_key)),
             curated_methods=tuple(sorted(curated_methods, key=_curated_method_sort_key)),
+            bit_conversions=_bit_conversions(candidates),
             trait_implementations=tuple(sorted(traits, key=_trait_sort_key)),
             native_aliases=_native_aliases(
                 profiles, static_selection, facade_type_tags
@@ -281,7 +287,18 @@ def _candidates(
         for _name, specs in sorted(profile.specializations("rust").items())
         for spec in sorted(specs, key=_specialization_sort_key)
     )
-    seen: set[tuple[str | None, _CandidateKey, str, str, str, bool]] = set()
+    seen: set[
+        tuple[
+            str | None,
+            _CandidateKey,
+            str,
+            str,
+            str,
+            tuple[tuple[str, str | None], ...],
+            tuple[str, str] | None,
+            bool,
+        ]
+    ] = set()
     for profile_name, spec in inputs:
         key = _candidate_key(spec)
         identity = (
@@ -290,6 +307,12 @@ def _candidates(
             spec.primitive_name,
             spec.extension_name,
             spec.type_tag,
+            tuple((param.name, param.base_type_binding) for param in spec.type_params),
+            (
+                (spec.target.extension_isa, spec.target.base_tag)
+                if spec.target is not None
+                else None
+            ),
             spec.safety.caller_unsafe,
         )
         if identity in seen:
@@ -558,6 +581,8 @@ def _curated_methods(
                         operation,
                         candidate.key.source_name,
                         method.type_tags,
+                        (),
+                        (),
                         False,
                         method.delegates,
                     )
@@ -577,11 +602,81 @@ def _curated_methods(
                         operation,
                         candidate.key.source_name,
                         method.type_tags,
+                        (),
+                        (),
+                        False,
+                        method.delegates,
+                    )
+                )
+        conversion = candidate.representative.primitive_semantics.conversion
+        if (
+            operation is PrimitiveOperation.CONVERT
+            and conversion is not None
+            and conversion.kind is ConversionKind.NUMERIC
+            and conversion.lane_count is LaneCountRelation.PRESERVE_LANE_COUNT
+            and candidate.key.result_vector_param is not None
+            and candidate.key.result_kind == "v"
+            and candidate.key.param_kinds == ("v",)
+        ):
+            method = _method_for_candidate(methods, candidate)
+            if method is not None and not method.caller_unsafe:
+                planned.append(
+                    RustCuratedMethod(
+                        "cast",
+                        RustFacadeReceiverKind.VECTOR,
+                        operation,
+                        candidate.key.source_name,
+                        method.type_tags,
+                        candidate.result_type_tags,
+                        (),
                         False,
                         method.delegates,
                     )
                 )
     return _deduplicate_curated_methods(planned)
+
+
+def _bit_conversions(
+    candidates: dict[_CandidateKey, _Candidate],
+) -> tuple[RustFacadeBitConversion, ...]:
+    conversions: list[RustFacadeBitConversion] = []
+    for candidate in candidates.values():
+        conversion = candidate.representative.primitive_semantics.conversion
+        if (
+            candidate.key.operation is not PrimitiveOperation.REINTERPRET
+            or conversion is None
+            or conversion.kind is not ConversionKind.BIT_PATTERN
+            or conversion.lane_count is not LaneCountRelation.PRESERVE_REGISTER_WIDTH
+            or candidate.key.result_kind != "v"
+            or candidate.key.param_kinds != ("v",)
+        ):
+            continue
+        safety_values = {
+            spec.safety.caller_unsafe for _profile, spec in candidate.specs
+        }
+        if safety_values != {False}:
+            continue
+        fallback_pairs = {
+            (spec.type_tag, spec.target.base_tag)
+            for profile_name, spec in candidate.specs
+            if profile_name is None and spec.target is not None
+        }
+        for float_tag, bits_tag in (("f32", "ui32"), ("f64", "ui64")):
+            if {
+                (float_tag, bits_tag),
+                (bits_tag, float_tag),
+            } <= fallback_pairs:
+                conversions.append(
+                    RustFacadeBitConversion(
+                        float_tag,
+                        bits_tag,
+                        candidate.key.source_name,
+                        _delegates(candidate),
+                    )
+                )
+    return tuple(
+        sorted(conversions, key=lambda item: (item.float_type_tag, item.bits_type_tag))
+    )
 
 
 def _curated_traits(
@@ -615,6 +710,7 @@ def _curated_traits(
                         type_tags,
                         rhs_kind,
                         rhs_types,
+                        (),
                         method.delegates,
                     )
                 )
@@ -829,7 +925,7 @@ def _logical_shapes(
                 ),
                 None,
             )
-            if mapping is not None:
+            if mapping is not None and mapping.uses_hardware:
                 representations.append(
                     RustFacadeRepresentation(
                         profile_name,
@@ -1211,6 +1307,75 @@ def _core_facade_type_tags(
             return None
         supported_by_role.append(type_tags)
     return set.intersection(*supported_by_role)
+
+
+def _finalize_curated_shapes(
+    methods: list[RustCuratedMethod],
+    shapes: tuple[RustFacadeShape, ...],
+) -> list[RustCuratedMethod]:
+    return [
+        replace(method, shape_keys=shape_keys)
+        for method in methods
+        if (
+            shape_keys := _surface_shape_keys(
+                method.delegates, method.type_tags, shapes
+            )
+        )
+    ]
+
+
+def _finalize_trait_shapes(
+    traits: list[RustCuratedTraitImplementation],
+    shapes: tuple[RustFacadeShape, ...],
+) -> list[RustCuratedTraitImplementation]:
+    return [
+        replace(trait, shape_keys=shape_keys)
+        for trait in traits
+        if (
+            shape_keys := _surface_shape_keys(
+                trait.delegates, trait.type_tags, shapes
+            )
+        )
+    ]
+
+
+def _surface_shape_keys(
+    delegates: tuple[RustFacadeDelegate, ...],
+    type_tags: tuple[str, ...],
+    shapes: tuple[RustFacadeShape, ...],
+) -> tuple[tuple[str, int], ...]:
+    return tuple(
+        (shape.type_tag, shape.lanes)
+        for shape in shapes
+        if shape.type_tag in type_tags
+        and all(
+            _has_surface_delegate(delegates, shape, representation)
+            for representation in shape.representations
+        )
+    )
+
+
+def _has_surface_delegate(
+    delegates: tuple[RustFacadeDelegate, ...],
+    shape: RustFacadeShape,
+    representation: RustFacadeRepresentation,
+) -> bool:
+    expected_extension = (
+        representation.mapping.extension_name
+        or ("scalar" if shape.lanes == 1 else "generic")
+    )
+    return (
+        sum(
+            delegate.profile_name == representation.profile_name
+            and any(
+                vector.extension_name == expected_extension
+                and vector.type_tag == shape.type_tag
+                for vector in delegate.vectors
+            )
+            for delegate in delegates
+        )
+        == 1
+    )
 
 
 def _method_for_candidate(
