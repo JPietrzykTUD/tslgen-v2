@@ -64,6 +64,7 @@ from tslc.lower.region_handlers import (
 from tslc.lower.implementation_state import (
     ImplementationState,
 )
+from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
 from tslc.target_text import (
     LoweredBody,
@@ -149,6 +150,12 @@ class LoweredSpecialization:
     param_names: tuple[str, ...]
     param_kinds: tuple[str, ...]
     body: LoweredBody
+    # Finalized language-neutral declaration facts. This record crosses the
+    # catalog/lowering boundary so backends never need to reopen the catalog or
+    # infer semantics from names, signatures, documentation, or target text.
+    primitive_semantics: LoweredPrimitiveSemantics = field(
+        default_factory=LoweredPrimitiveSemantics
+    )
     # Support-policy-owned overload identity for each parameter. Carrying these tokens through
     # lowering keeps backend grouping independent from the process-wide default policy.
     param_identity_tokens: tuple[str, ...] = ()
@@ -576,6 +583,13 @@ class Lowerer:
             param_names=parameters,
             param_kinds=shape.param_kinds,
             body=body,
+            primitive_semantics=LoweredPrimitiveSemantics(
+                overload=catalog.resolve_primitive_overload(selected.primitive),
+                arithmetic=selected.primitive.arithmetic,
+                operation=selected.primitive.operation,
+                memory=selected.primitive.memory,
+                conversion=selected.primitive.conversion,
+            ),
             param_identity_tokens=tuple(
                 self._support.overload_identity_token(
                     kind,

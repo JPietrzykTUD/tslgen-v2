@@ -263,7 +263,7 @@ class Primitive:
     memory: PrimitiveMemoryContract | None = None
     conversion: PrimitiveConversionContract | None = None
     # Source-authored semantic-overload identity. Cross-declaration validation resolves
-    # the family primary value; selection/lowering intentionally do not consume it yet.
+    # the family primary value; lowering carries only that resolved declaration fact.
     overload: PrimitiveOverload | None = None
     # Corpus-declared cross-lane fact: True iff an output lane reads more than its own input
     # lane (a reduction, shuffle, compress, conflict, iota, gather …). It gates every *scalable*

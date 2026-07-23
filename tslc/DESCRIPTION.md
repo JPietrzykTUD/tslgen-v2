@@ -223,9 +223,10 @@ prim<v:=(v,v)> add(left, right):
   The catalog promotes these into immutable registry and primitive values,
   validates complete same-name families, resolves the primary value once, and
   structurally identifies the distinguishing operand without interpreting
-  parameter names or implementation text. This fact currently ends at the
-  catalog and editor projection: `LoweredSpecialization`, backend/API naming,
-  generated artifacts, tests, and benchmarks do not carry or consume it yet.
+  parameter names or implementation text. Lowering carries the resolved
+  declaration fact—not the registry—inside `LoweredSpecialization`, making it
+  available to backend/API, documentation, test, and benchmark projections
+  without reopening the catalog. Those consumers do not apply facade policy yet.
 - **Arithmetic contracts**: a primitive may declare an explicit nonempty set of
   `operations`, parameter-bound `operand_roles`, and atomic `guarantees` in an
   `arithmetic:` block. The catalog promotes this into the frozen enum-backed
@@ -249,10 +250,11 @@ prim<v:=(v,v)> add(left, right):
   [catalog/conversion.py](src/tslc/catalog/conversion.py); it validates signature
   kinds, required roles, same-name families, and domain compatibility while
   retaining source spans. Catalog inspection and editor completion, tokens,
-  navigation, references, and hover consume those same enums. These facts
-  currently stop at the catalog/editor boundary: selection, lowering, and
-  backends neither carry nor reconstruct them, and source data contains no
-  Rust-specific spelling policy.
+  navigation, references, and hover consume those same enums. Lowering carries
+  the promoted contracts unchanged inside `LoweredSpecialization`; backend and
+  downstream projections therefore receive typed facts without reconstructing
+  them. Source data contains no Rust-specific spelling policy, and this stage
+  does not apply one.
 - **Fixed-width SVE**: `sve128`/`sve256`/`sve512` inherit scalable `sve` bodies
   but supersede `sve` in their fixed profiles, so one profile emits one SVE
   model. The fixed width is a compile mode (`sve_vector_bits_N`) plus C++ flags
