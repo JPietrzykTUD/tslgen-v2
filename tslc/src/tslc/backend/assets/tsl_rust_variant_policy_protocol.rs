@@ -98,10 +98,6 @@ pub(crate) struct ExpectedCandidate {
 #[derive(Debug)]
 pub(crate) struct ExpectedScenario {
     pub(crate) id: String,
-    pub(crate) family: String,
-    pub(crate) kind: String,
-    pub(crate) seed: u64,
-    pub(crate) batch_size: u64,
     pub(crate) rounds: u64,
     pub(crate) minimum_sample_ns: u64,
 }
@@ -255,12 +251,12 @@ fn parse_expected_scenario(value: &JsonValue) -> Result<ExpectedScenario, String
         ],
         "descriptor scenario",
     )?;
+    required_string(value, "family", "descriptor scenario")?;
+    required_string(value, "kind", "descriptor scenario")?;
+    required_u64(value, "seed", "descriptor scenario")?;
+    required_u64(value, "batch_size", "descriptor scenario")?;
     Ok(ExpectedScenario {
         id: required_string(value, "id", "descriptor scenario")?,
-        family: required_string(value, "family", "descriptor scenario")?,
-        kind: required_string(value, "kind", "descriptor scenario")?,
-        seed: required_u64(value, "seed", "descriptor scenario")?,
-        batch_size: required_u64(value, "batch_size", "descriptor scenario")?,
         rounds: required_u64(value, "rounds", "descriptor scenario")?,
         minimum_sample_ns: required_u64(value, "minimum_sample_ns", "descriptor scenario")?,
     })

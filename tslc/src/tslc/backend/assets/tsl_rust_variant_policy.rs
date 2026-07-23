@@ -12,6 +12,9 @@ use crate::tsl_rust_variant_policy_validation::{
     validate_descriptor, validate_native_context, validate_policy,
 };
 
+// These declarations are the generated build-script interface. An empty policy
+// inventory intentionally leaves the mapping-specific declarations unused.
+#[allow(unused_imports)]
 pub use crate::tsl_rust_variant_policy_protocol::{
     BuildContext, GeneratedMapping, GeneratedProfile, GeneratedTargetRequirement,
 };

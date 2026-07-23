@@ -150,8 +150,8 @@ def test_representative_project_shape_is_byte_stable(
         "cpp/tests/smoke_scalar.cpp": "b8d0793aa19282d85dab6db70c43f41fb0a029daad3799377eab7a4a3bd8c7bf",
         "rust/Cargo.toml": "c3c713fa53b4e90190c8d46e0eac79d6e5409a62afe5993b9b6b6f04c6d61fc1",
         "rust/src/lib.rs": "0f6bdc2377e7fafa130a9729d607a05cda620a8aa1acfd7963002dfd5a0d5021",
-        "rust/src/tsl_documentation.rs": "61d5fe51a8e119c92d17d953f304fbb6f49a334f300f326f21f3fdac214608bc",
-        "rust/src/tsl_scalar.rs": "4d49633e26c4a1eb2ef017260bf3f549e4b2c476caab29ba8e146566054fd6ef",
+        "rust/src/tsl_documentation.rs": "f1147450534daf390bca8d5a7de39b2453b9485ff56d407849b5e09b0357930d",
+        "rust/src/tsl_scalar.rs": "f5633ce182a08ef8df7f71d87b8782d49872b330b55adb80b1552d81e032a223",
         "rust/tests/smoke.rs": "a4d108f502689e7f29ba5259e22779e8ef0afa36ab83c239022e2772d68d6b44",
     }
     actual = {

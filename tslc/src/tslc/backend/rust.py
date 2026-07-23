@@ -513,6 +513,7 @@ class RustBackend:
                 + f"{impl_prefix} {arg_trait}{trait_args} for {self_ty} {{\n"
                 f"    const IMPLEMENTATION_STATE: ImplementationState = "
                 f"{_rust_implementation_state(_spec_implementation_state(spec, variant_name))};\n"
+                f"{_indent(_implementation_lint_allowance(spec), 4)}\n"
                 f"    {_unsafe_prefix(caller_unsafe)}fn apply(self{fixed_impl}) -> {ret_impl} {{\n"
                 f"{_indent(method_body, 8)}\n"
                 f"    }}\n"
@@ -701,6 +702,7 @@ class RustBackend:
             f"{_index_where(spec, impl_register=impl_register, base_dispatch='concrete')} {{\n"
             f"    const IMPLEMENTATION_STATE: ImplementationState = "
             f"{_rust_implementation_state(_spec_implementation_state(spec, variant_name))};\n"
+            f"{_indent(_implementation_lint_allowance(spec), 4)}\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret} {{\n"
             f"{preconditions}"
             f"{_indent(body, 8)}\n"
@@ -1119,6 +1121,30 @@ def _indent(text: str, spaces: int) -> str:
 
 def _any_caller_unsafe(specs: tuple[LoweredSpecialization, ...]) -> bool:
     return any(spec.safety.caller_unsafe for spec in specs)
+
+
+def _implementation_lint_allowance(spec: LoweredSpecialization) -> str:
+    if not spec.required_features:
+        return (
+            "// Raw implementation text may intentionally ignore signature parameters.\n"
+            "#[allow(unused_variables)]"
+        )
+    return (
+        "// Static TSIL specialization can make shared expression grouping,\n"
+        "// conservative unsafe framing, and unrolled formulas lint-trivial.\n"
+        "// Keep these allowances on the internal implementation boundary.\n"
+        "#[allow(\n"
+        "    unused_assignments,\n"
+        "    unused_comparisons,\n"
+        "    unused_mut,\n"
+        "    unused_parens,\n"
+        "    unused_unsafe,\n"
+        "    unused_variables,\n"
+        "    clippy::absurd_extreme_comparisons,\n"
+        "    clippy::eq_op,\n"
+        "    clippy::erasing_op,\n"
+        ")]"
+    )
 
 
 def _unsafe_prefix(enabled: bool) -> str:

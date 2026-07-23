@@ -477,7 +477,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "e653dd91823dfd49407655b3c9992ae1ab0c1da814d6a4bca3d51412c001c5a1"
+        "e10362901d15b19f6e4b3c621c5a2f9495e03558880ebfe61bf51b3d5f6733fd"
     )
 
     assert 'name = "tsl"' in cargo
@@ -886,12 +886,12 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "impl<const SCALE: u32> SelectedLoad<Simd<i32, super::Avx2>, SCALE> for Profile" in avx2
     assert (
         "super::detail::primitives::Gather_narrowImpl<Simd<usize, Generic<8>>, "
-        "<usize as BaseTypeDispatch>::Key, 4, 1>"
+        "<usize as crate::tsl_core::BaseTypeDispatch>::Key, 4, 1>"
         in avx2
     )
     assert (
         "super::detail::primitives::Gather_narrowImpl<Simd<usize, Generic<8>>, "
-        "<usize as BaseTypeDispatch>::Key, SCALE, 1>"
+        "<usize as crate::tsl_core::BaseTypeDispatch>::Key, SCALE, 1>"
         in avx2
     )
     assert (
@@ -1165,12 +1165,12 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "/// # Semantics" in avx2
     assert "/// # API" in avx2
     assert "/// - Type parameters: S selects the SIMD vector type" in avx2
-    assert "/// - Returns: SIMD register (S::RegisterType)" in avx2
+    assert "/// - Returns: SIMD register (`S::RegisterType`)" in avx2
     assert "/// - Parameters: left: SIMD register; right: SIMD register" in avx2
     assert "/// # Specialization" in avx2
     assert "/// - Extension: avx2" in avx2
-    assert "/// - Element type: i32" in avx2
-    assert "/// - Register type: core::arch::x86_64::__m256i" in avx2
+    assert "/// - Element type: `i32`" in avx2
+    assert "/// - Register type: `core::arch::x86_64::__m256i`" in avx2
     assert "/// - Context:" not in avx2
     assert "/// - Result kind:" not in avx2
     assert "/// - Parameter kinds:" not in avx2

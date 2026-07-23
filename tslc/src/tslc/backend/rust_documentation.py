@@ -42,16 +42,16 @@ def _doc_block(
         )
     facts = [
         ("Extension", spec.extension_name),
-        ("Element type", spec.base_type_spelling),
-        ("Register type", spec.register_spelling),
+        ("Element type", _inline_code(spec.base_type_spelling)),
+        ("Register type", _inline_code(spec.register_spelling)),
         ("Returns", _result_summary(spec, concrete=True)),
         ("Parameters", runtime_parameter_summary(spec)),
     ]
     if spec.target is not None:
         facts.extend(
             [
-                ("Target vector", spec.target.vector_spelling),
-                ("Target register", spec.target.register_spelling),
+                ("Target vector", _inline_code(spec.target.vector_spelling)),
+                ("Target register", _inline_code(spec.target.register_spelling)),
             ]
         )
     if spec.axis:
@@ -59,7 +59,12 @@ def _doc_block(
             ("Attributes", ", ".join(f"{key}={value}" for key, value in spec.axis))
         )
     if spec.immediate is not None:
-        facts.append(("Immediate", f"{spec.immediate[0]}: {spec.immediate[1]}"))
+        facts.append(
+            (
+                "Immediate",
+                f"{spec.immediate[0]}: {_inline_code(spec.immediate[1])}",
+            )
+        )
     facts.append(
         (
             "Required target features",
@@ -100,18 +105,20 @@ def _result_summary(spec: LoweredSpecialization, *, concrete: bool) -> str:
     ):
         return result_summary(
             spec.result_kind,
-            rust_free_type(spec.result_kind, spec.base_type_spelling),
+            _inline_code(rust_free_type(spec.result_kind, spec.base_type_spelling)),
         )
     if concrete:
-        return result_summary(spec.result_kind, _concrete_result(spec))
+        return result_summary(spec.result_kind, _inline_code(_concrete_result(spec)))
     if spec.target is not None:
         return result_summary(
             spec.result_kind,
-            RUST_SIGNATURE_TYPES.owner_type(spec.result_kind, owner="T"),
+            _inline_code(
+                RUST_SIGNATURE_TYPES.owner_type(spec.result_kind, owner="T")
+            ),
         )
     return result_summary(
         spec.result_kind,
-        RUST_SIGNATURE_TYPES.owner_type(spec.result_kind, owner="S"),
+        _inline_code(RUST_SIGNATURE_TYPES.owner_type(spec.result_kind, owner="S")),
     )
 
 
@@ -127,3 +134,9 @@ def _concrete_result(spec: LoweredSpecialization) -> str:
         register=spec.register_spelling,
         array=f"array_type<{spec.base_type_spelling}, {spec.lane_parameter}>",
     )
+
+
+def _inline_code(value: str) -> str:
+    """Protect generated Rust type spellings from Markdown HTML parsing."""
+
+    return f"`{value}`"

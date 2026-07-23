@@ -634,7 +634,7 @@ pub mod detail {
     #[target_feature(enable = "rdrand")]
     pub unsafe fn random_step_u64(out: *mut u64) -> usize {
         let mut value = 0u64;
-        let status = unsafe { core::arch::x86_64::_rdrand64_step(&mut value) };
+        let status = core::arch::x86_64::_rdrand64_step(&mut value);
         if status != 0 {
             unsafe { *out = value };
         }

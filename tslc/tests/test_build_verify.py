@@ -92,9 +92,10 @@ def test_generated_profiles_build(
     write_report = write_artifacts(result.artifacts, tmp_path)
     assert not has_errors(write_report.diagnostics), write_report.diagnostics
 
-    report = verify_project(tmp_path, result.rendered.verify)
+    report = verify_project(tmp_path, result.rendered.verify, run_quality_checks=True)
     assert report.diagnostics == (), report.diagnostics
-    # configure+build for 4 C++ profiles (8) + cargo test for 4 Rust profiles (4).
+    # Each selected Rust profile also passes strict compiler, rustdoc, and
+    # selected Clippy gates before its generated tests compile.
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 

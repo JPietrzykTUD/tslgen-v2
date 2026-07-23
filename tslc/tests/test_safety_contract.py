@@ -616,6 +616,9 @@ def test_rust_backend_emits_target_features_on_impl_body() -> None:
     assert "return <Simd<i32, Scalar> as SimdVector>::lane_count() as i32;" in rendered
     assert "return Self::lane_count() as i32;" not in rendered
     assert "unsafe { __tsl_target_feature_body(data) }" in rendered
+    assert "    unused_unsafe," in rendered
+    assert "    clippy::erasing_op," in rendered
+    assert "#![allow" not in rendered
 
 
 def test_rust_target_features_preserve_raw_self_text() -> None:
