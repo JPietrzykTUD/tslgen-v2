@@ -39,10 +39,15 @@ _InnerV = TypeVar("_InnerV")
 # emitted API gains a bool axis parameter so both variants coexist as distinct callables.
 BOOLEAN_WILDCARD_ATTRIBUTES = frozenset({"aligned", "packed"})
 
-# The two dimensions a `return_type` can replace on a representation-change primitive (the
-# `Primitive.result_target` dim): the element type, or the extension/register width.
+# The dimensions a `return_type` can select on a representation-change primitive. Base and
+# extension are concrete selector axes. Vector names a caller-supplied `simd_type` generic and
+# therefore carries both dimensions without introducing another implementation selector level.
 RESULT_DIM_BASE = "base"
 RESULT_DIM_EXTENSION = "extension"
+RESULT_DIM_VECTOR = "vector"
+RESULT_DIMENSIONS = frozenset(
+    {RESULT_DIM_BASE, RESULT_DIM_EXTENSION, RESULT_DIM_VECTOR}
+)
 
 # Closed catalog vocabularies. Schema validators derive their allowed-value sets
 # from these aliases (`typing.get_args`), so the model owns each vocabulary once.
@@ -242,11 +247,10 @@ class Primitive:
     # generics — unlike a wildcard axis they are NOT baked into variants (the caller picks),
     # so the body may reference them symbolically (`if<compile>(!PreserveSign)`).
     generic_params: tuple["GenericParam", ...] = ()
-    # A representation-change primitive declares `return_type: <dim>: <Target>` (`dim` is
-    # "base" or "extension"): its result is the source vector with that one dimension replaced
-    # by a caller-supplied target. `(dim, target_name)`, e.g. `("base", "ToBase")` (reinterpret)
-    # or `("extension", "ToExtension")` (extract). The target is a *second type axis* — its
-    # values come from each impl's `to_target_group`. None for ordinary primitives.
+    # A representation-change primitive declares `return_type: <dim>: <Target>`. Base and
+    # extension replace one source-vector dimension through a concrete second selector axis.
+    # Vector refers to a caller-supplied `kind simd_type` generic and owns the complete result
+    # vector. None for ordinary primitives.
     result_target: tuple[str, str] | None = None
     # Value-correctness cases authored in the `tests:` block. Consumed by the test-generation
     # render stage (golden anchor against the generic software reference); empty when none.

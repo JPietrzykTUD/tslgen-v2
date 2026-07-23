@@ -16,12 +16,13 @@ from tslc.catalog.arithmetic import (
 from tslc.catalog.conversion import (
     CONVERSION_KIND_DESCRIPTIONS,
     LANE_COUNT_RELATION_DESCRIPTIONS,
+    NUMERIC_CONVERSION_MODE_DESCRIPTIONS,
 )
 from tslc.catalog.memory import (
     MEMORY_ACCESS_DESCRIPTIONS,
     MEMORY_ADDRESSING_DESCRIPTIONS,
 )
-from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.model import Catalog, Primitive, RESULT_DIM_VECTOR
 from tslc.catalog.semantics import (
     OPERAND_ROLE_DESCRIPTIONS,
     PRIMITIVE_OPERATION_DESCRIPTIONS,
@@ -75,6 +76,7 @@ SymbolKind = Literal[
     "memory-addressing",
     "conversion-kind",
     "lane-count-relation",
+    "numeric-conversion-mode",
     "shift-count-rule",
     "shift-lane-rule",
 ]
@@ -90,6 +92,7 @@ _ENUM_SYMBOL_KINDS: frozenset[SymbolKind] = frozenset(
         "memory-addressing",
         "conversion-kind",
         "lane-count-relation",
+        "numeric-conversion-mode",
         "shift-count-rule",
         "shift-lane-rule",
     }
@@ -361,6 +364,7 @@ def build_catalog_index(
         "memory-addressing": {},
         "conversion-kind": {},
         "lane-count-relation": {},
+        "numeric-conversion-mode": {},
         "shift-count-rule": {},
         "shift-lane-rule": {},
     }
@@ -383,6 +387,7 @@ def build_catalog_index(
         "memory-addressing": {},
         "conversion-kind": {},
         "lane-count-relation": {},
+        "numeric-conversion-mode": {},
         "shift-count-rule": {},
         "shift-lane-rule": {},
     }
@@ -514,6 +519,7 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         "memory-addressing": {},
         "conversion-kind": {},
         "lane-count-relation": {},
+        "numeric-conversion-mode": {},
         "shift-count-rule": {},
         "shift-lane-rule": {},
     }
@@ -536,6 +542,7 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         "memory-addressing": {},
         "conversion-kind": {},
         "lane-count-relation": {},
+        "numeric-conversion-mode": {},
         "shift-count-rule": {},
         "shift-lane-rule": {},
     }
@@ -653,7 +660,11 @@ def _index_document(
             references,
             target_axis_references,
             occurrences,
-            result_target=result_target,
+            result_target=(
+                result_target
+                if result_target is None or result_target[0] != RESULT_DIM_VECTOR
+                else None
+            ),
             scope=scope,
         )
         for envelope in primitive.body_envelopes:
@@ -870,6 +881,7 @@ def _index_primitive_semantics(
             (
                 ("kind", "conversion-kind"),
                 ("lane_count", "lane-count-relation"),
+                ("numeric_mode", "numeric-conversion-mode"),
             ),
         ),
         (
@@ -1240,6 +1252,11 @@ def _hover_text(
             "lane-count-relation",
             "Lane-count relation",
             LANE_COUNT_RELATION_DESCRIPTIONS.items(),
+        ),
+        (
+            "numeric-conversion-mode",
+            "Numeric conversion mode",
+            NUMERIC_CONVERSION_MODE_DESCRIPTIONS.items(),
         ),
         (
             "shift-count-rule",

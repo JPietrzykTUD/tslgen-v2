@@ -10,6 +10,8 @@ from _select_lower_core_support import (
     Selector,
     _by_key,
 )
+from tslc.backend.cpp_documentation import cpp_doc
+from tslc.backend.rust_documentation import rust_doc
 
 
 @pytest.mark.parametrize("extension", ["generic", "oneapi_fpga"])
@@ -155,6 +157,56 @@ def test_scalar_width_conversions_are_direct_scalar_casts(
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
         assert "for " not in lowered.body_text
+
+
+def test_lane_preserving_conversion_keeps_explicit_target_vector_typed(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slots = tuple(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["avx2"],
+            "convert_lanes",
+            ("si32",),
+        )
+        .selected
+        if selected.extension.name == "avx2"
+    )
+
+    assert {
+        binding.base_tag
+        for selected in slots
+        for binding in selected.simd_type_base_bindings
+        if binding.param_name == "ToVec"
+    } == {"si8", "si16", "si32", "si64", "ui8", "ui16", "ui32", "ui64", "f32", "f64"}
+
+    selected = next(
+        item
+        for item in slots
+        if item.simd_type_base_bindings[0].base_tag == "f64"
+    )
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            selected,
+            catalog,
+            create_backend_dialect(catalog, backend_id),
+        ).specialization
+
+        assert lowered is not None
+        assert lowered.result_vector_param == "ToVec"
+        target = next(param for param in lowered.type_params if param.name == "ToVec")
+        assert target.base_type_binding == "f64"
+        assert "require_same_lanes" in lowered.body_text
+        assert "scalar_as_cast" in lowered.body_text
+        rendered_doc = (
+            cpp_doc(lowered, context="implementation")
+            if backend_id == "cpp"
+            else rust_doc(lowered, context="implementation")
+        )
+        assert "ToVec" in rendered_doc.split("Returns", 1)[1].splitlines()[0]
 
 
 def test_scalar_lzc_and_cast_are_direct_scalar_operations(

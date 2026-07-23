@@ -171,6 +171,30 @@ def repr_cast_match(
     )
 
 
+def lane_convert_match(
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> LoweredSpecialization | None:
+    if case.to_type is None or case.lanes is None:
+        return None
+    return next(
+        (
+            spec
+            for spec in specs
+            if spec.type_tag == case.type_tag
+            and spec.result_vector_param is not None
+            and spec.param_kinds == ("v",)
+            and (case.extension is None or spec.extension_name == case.extension)
+            and any(
+                param.name == spec.result_vector_param
+                and param.base_type_binding == case.to_type
+                for param in spec.type_params
+            )
+        ),
+        None,
+    )
+
+
 def load_convert_match(
     case: TestCase,
     specs: tuple[LoweredSpecialization, ...],
@@ -358,6 +382,7 @@ __all__ = (
     "immediate_value",
     "inferred_mask_lanes",
     "load_convert_match",
+    "lane_convert_match",
     "mask_inputs",
     "maskish_inputs",
     "plan_case",

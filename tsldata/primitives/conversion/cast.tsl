@@ -2254,3 +2254,87 @@ prim<v:=v>[cast=convert] cast(data):
                   }
                   complete(result);
                 """
+
+prim<v:=v> convert_lanes(data):
+  operation convert
+  operand_roles:
+    primary data
+  conversion:
+    kind numeric
+    lane_count preserve_lane_count
+    numeric_mode scalar_as
+  return_type:
+    vector ToVec
+  generic_params:
+    ToVec:
+      kind simd_type
+      specialize_base true
+      constraints:
+        base_types [arith]
+  brief_description "Numerically converts every lane to an equal-lane-count target vector."
+  detailed_description """
+    Converts every source lane to the target vector's scalar type while preserving
+    the logical lane count. Source and target vectors must have equal lane counts.
+    Integer narrowing and signedness changes wrap modulo the target width. Integer
+    and floating conversions use ordinary scalar rounding. Floating-to-integer
+    conversion truncates toward zero, saturates to the target range, and maps NaN
+    to zero.
+    """
+  semantics """
+    input: source register data, explicit target SIMD type ToVec
+    precondition: lane_count(data) == lane_count(ToVec)
+    for each lane i:
+      integer to integer: wrap modulo 2^target_width, then interpret target signedness
+      integer to float: round to the target floating format
+      float to float: round to the target floating format
+      float to integer: NaN becomes 0; otherwise truncate toward zero and saturate
+      result[i] = the conversion above applied to data[i]
+    return result as ToVec
+    """
+  tests:
+    - {tags [integer_narrow_signedness], type "si16", to_type "ui8", case {inputs [[-1, 0, 255, 256, -257, 32767, -32768, 42, 1, 2, 3, 4, 5, 6, 7, 8]], expected [255, 0, 255, 0, 255, 255, 0, 42, 1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [integer_signed_wrap], type "ui16", to_type "si8", case {inputs [[0, 127, 128, 255, 256, 32768, 65535, 42, 1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 127, -128, -1, 0, 0, -1, 42, 1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [integer_widen], type "si8", to_type "si64", case {inputs [[-128, -1, 0, 1, 42, 100, 126, 127, -64, -32, -16, -8, 8, 16, 32, 64]], expected [-128, -1, 0, 1, 42, 100, 126, 127, -64, -32, -16, -8, 8, 16, 32, 64]}}
+    - {tags [integer_float_rounding], type "si32", to_type "f32", case {inputs [[16777215, 16777216, 16777217, -16777217]], expected [16777215.0, 16777216.0, 16777216.0, -16777216.0]}}
+    - {tags [float_integer_truncate], type "f32", to_type "si32", case {inputs [[1.9, -1.9, 0.0, -0.0]], expected [1, -1, 0, 0]}}
+    - {tags [float_integer_special], type "f32", to_type "si32", case {inputs [[NAN, INFINITY, "-INFINITY", 2147483648.0]], expected [0, 2147483647, -2147483648, 2147483647]}}
+    - {tags [float_unsigned_special], type "f64", to_type "ui64", case {inputs [[NAN, -1.0, INFINITY, "-INFINITY"]], expected [0, 0, 18446744073709551615, 0]}}
+    - {tags [float_rounding], type "f64", to_type "f32", case {inputs [[1.0, 1.0000000596046448, -1.0000000596046448, 0.0]], expected [1.0, 1.0, -1.0, 0.0]}}
+    - {tags [generic_equivalence], type "si32", to_type "f64", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8]], expected [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0]}}
+    - {tags [hardware], extension "avx2", type "si32", to_type "f64", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8]], expected [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0]}}
+  impls:
+    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+      arith:
+        requires:
+          scalar []
+          generic []
+          clang_v128 []
+          oneapi_fpga []
+          oneapi_fpga_rtl []
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx]
+          sse [sse]
+          neon [neon]
+          sve [sve]
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            helper<require_same_lanes>(
+              value(vector::length), value(generic::length(ToVec))
+            );
+            let<type>(OutBase, base::generic(ToVec));
+            var<const_infer>(source, call<primitive=to_array[Vec]>(data));
+            var<infer>(result, call<primitive=to_array[ToVec]>(
+              call<primitive=set_zero[ToVec]>()
+            ));
+            loop<backend>(i, 0, value(vector::length), 1) {
+              result[i] = cast<scalar_as>(OutBase, source[i]);
+            }
+            complete(call<primitive=from_array[ToVec]>(result));
+          """

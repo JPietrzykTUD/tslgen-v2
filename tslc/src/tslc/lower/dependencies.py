@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tslc.catalog.model import RESULT_DIM_VECTOR
 from tslc.ir.region_syntax import ParsedCallSelector
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import QueryEvaluator, TypeValue
@@ -192,6 +193,7 @@ def _lowered_callee_has_target_axis(
 ) -> bool:
     return any(
         primitive.result_target is not None
+        and primitive.result_target[0] != RESULT_DIM_VECTOR
         for primitive in context.env.catalog.primitives_named(callee, unmasked=False)
     )
 

@@ -13,7 +13,11 @@ from tslc.catalog.arithmetic import (
     ArithmeticOperandRole,
     ArithmeticOperation,
 )
-from tslc.catalog.conversion import ConversionKind, LaneCountRelation
+from tslc.catalog.conversion import (
+    ConversionKind,
+    LaneCountRelation,
+    NumericConversionMode,
+)
 from tslc.catalog.memory import MemoryAccess, MemoryAddressing
 from tslc.catalog.model import Catalog
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
@@ -100,6 +104,7 @@ def test_current_corpus_promotes_curated_operation_domains(catalog: Catalog) -> 
     select = catalog.primitive("select", unmasked=False)
     load = catalog.primitive("load")
     reinterpret = catalog.primitive("reinterpret")
+    convert_lanes = catalog.primitive("convert_lanes")
     add = catalog.primitive("add")
     neg = catalog.primitive("neg")
     shift_left_wrapping = catalog.primitive("shift_left_wrapping")
@@ -124,6 +129,21 @@ def test_current_corpus_promotes_curated_operation_domains(catalog: Catalog) -> 
         ConversionKind.BIT_PATTERN,
         LaneCountRelation.PRESERVE_REGISTER_WIDTH,
     )
+    assert convert_lanes is not None and convert_lanes.conversion is not None
+    assert (
+        convert_lanes.result_target,
+        convert_lanes.conversion.kind,
+        convert_lanes.conversion.lane_count,
+        convert_lanes.conversion.numeric_mode,
+    ) == (
+        ("vector", "ToVec"),
+        ConversionKind.NUMERIC,
+        LaneCountRelation.PRESERVE_LANE_COUNT,
+        NumericConversionMode.SCALAR_AS,
+    )
+    assert next(
+        param for param in convert_lanes.generic_params if param.name == "ToVec"
+    ).kind == "simd_type"
     assert add is not None and add.arithmetic is not None
     assert add.arithmetic.operations == frozenset({ArithmeticOperation.ADDITION})
     assert ArithmeticGuarantee.INTEGER_WRAPPING in add.arithmetic.guarantees
@@ -193,6 +213,7 @@ def test_current_corpus_promotes_curated_operation_domains(catalog: Catalog) -> 
         ("store", PrimitiveOperation.STORE),
         ("reinterpret", PrimitiveOperation.REINTERPRET),
         ("cast", PrimitiveOperation.CONVERT),
+        ("convert_lanes", PrimitiveOperation.CONVERT),
     ),
 )
 def test_every_current_curated_family_variant_has_an_explicit_operation(
@@ -358,6 +379,18 @@ def test_unannotated_ordinary_primitive_has_no_curated_operation() -> None:
             "    kind numeric\n"
             "    lane_count preserve_lane_count\n",
             "TSL-CATALOG-CONVERSION-MISSING-TARGET",
+        ),
+        (
+            "prim<v:=v> wrong_lane_target(data):\n"
+            "  operation convert\n"
+            "  operand_roles:\n"
+            "    primary data\n"
+            "  conversion:\n"
+            "    kind numeric\n"
+            "    lane_count preserve_lane_count\n"
+            "  return_type:\n"
+            "    base ToBase\n",
+            "TSL-CATALOG-CONVERSION-LANE-TARGET",
         ),
         (
             _wrapping_shift_source().split("  shift:\n", 1)[0],
@@ -595,7 +628,8 @@ def test_memory_and_conversion_completions_use_closed_typed_values() -> None:
         "    base: ToBase\n"
         "  conversion:\n"
         "    kind numeric\n"
-        "    lane_count preserve_lane_count\n"
+        "    lane_count preserve_register_width\n"
+        "    numeric_mode scalar_as\n"
     )
     parsed, catalog, diagnostics = _build(source)
     assert diagnostics == ()
@@ -606,11 +640,13 @@ def test_memory_and_conversion_completions_use_closed_typed_values() -> None:
     assert _completion_labels(catalog, source, addressing_edit) == {"contiguous"}
     kind_edit = source.split("kind numeric", 1)[0] + "kind n"
     assert _completion_labels(catalog, source, kind_edit) == {"numeric"}
-    lane_edit = source.split("preserve_lane_count", 1)[0] + "preserve_"
+    lane_edit = source.split("preserve_register_width", 1)[0] + "preserve_"
     assert _completion_labels(catalog, source, lane_edit) == {
         "preserve_lane_count",
         "preserve_register_width",
     }
+    mode_edit = source.split("scalar_as", 1)[0] + "scalar_"
+    assert _completion_labels(catalog, source, mode_edit) == {"scalar_as"}
 
     index = build_catalog_index(catalog, parsed)
     occurrences = index.occurrences_by_path[_PATH]
@@ -618,10 +654,15 @@ def test_memory_and_conversion_completions_use_closed_typed_values() -> None:
     conversion_kind = next(
         item for item in occurrences if item.kind == "conversion-kind"
     )
+    conversion_mode = next(
+        item for item in occurrences if item.kind == "numeric-conversion-mode"
+    )
     assert "Memory access" in (index.hover(memory_access) or "")
     assert "Conversion kind" in (index.hover(conversion_kind) or "")
+    assert "Numeric conversion mode" in (index.hover(conversion_mode) or "")
     assert len(index.references(memory_access)) == 1
     assert len(index.references(conversion_kind)) == 1
+    assert len(index.references(conversion_mode)) == 1
     token_text = {
         (
             token.kind,
@@ -633,6 +674,7 @@ def test_memory_and_conversion_completions_use_closed_typed_values() -> None:
     }
     assert ("enumMember", "read") in token_text
     assert ("enumMember", "numeric") in token_text
+    assert ("enumMember", "scalar_as") in token_text
 
 
 def _completion_labels(catalog: Catalog, baseline: str, edited: str) -> set[str]:

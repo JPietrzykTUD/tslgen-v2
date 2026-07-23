@@ -33,6 +33,7 @@ from tslc.value_tests._render_cpp_conversion import (
     _extension_insert,
     _extension_result,
     _load_convert,
+    _lane_convert,
     _repr_cast,
     _target_imask,
 )
@@ -88,6 +89,7 @@ CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "lane_list": _lane_list,
         "load": _load,
         "load_convert": _load_convert,
+        "lane_convert": _lane_convert,
         "mask_logic": render_mask_case,
         "mask_pointer_load": _mask_pointer_load,
         "mask_result": render_mask_case,

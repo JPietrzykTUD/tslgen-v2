@@ -143,6 +143,11 @@ def _result_summary(spec: LoweredSpecialization, *, concrete: bool) -> str:
                 )
             )
             if spec.target is not None
+            else CPP_SIGNATURE_TYPES.member_type(
+                spec.result_kind,
+                vector=spec.result_vector_param,
+            )
+            if spec.result_vector_param is not None
             else cpp_register_doc(spec)
             if spec.result_kind == "v"
             else CPP_SIGNATURE_TYPES.result_type(spec.result_kind)
@@ -152,6 +157,14 @@ def _result_summary(spec: LoweredSpecialization, *, concrete: bool) -> str:
         return result_summary(
             spec.result_kind,
             CPP_SIGNATURE_TYPES.member_type(spec.result_kind, vector="ToVec"),
+        )
+    if spec.result_vector_param is not None:
+        return result_summary(
+            spec.result_kind,
+            CPP_SIGNATURE_TYPES.member_type(
+                spec.result_kind,
+                vector=spec.result_vector_param,
+            ),
         )
     return result_summary(spec.result_kind, CPP_SIGNATURE_TYPES.result_type(spec.result_kind))
 

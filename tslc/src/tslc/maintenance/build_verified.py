@@ -80,6 +80,7 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
         "test_reductions_build": ("hadd", "hmax", "hmin"),
         "test_load_store_builds": ("load", "store"),
         "test_convert_builds": ("convert_up", "convert_down", "load_convert_up"),
+        "test_convert_lanes_builds": ("convert_lanes",),
         "test_cast_reinterpret_builds": ("cast", "reinterpret"),
         "test_sequence_builds": ("sequence",),
         "test_extract_value_builds": ("extract_value",),

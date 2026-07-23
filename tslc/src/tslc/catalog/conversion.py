@@ -20,6 +20,10 @@ class LaneCountRelation(StrEnum):
     PRESERVE_REGISTER_WIDTH = "preserve_register_width"
 
 
+class NumericConversionMode(StrEnum):
+    SCALAR_AS = "scalar_as"
+
+
 CONVERSION_KIND_DESCRIPTIONS: Mapping[ConversionKind, str] = MappingProxyType(
     {
         ConversionKind.BIT_PATTERN: "Preserves bits while changing their interpreted type.",
@@ -34,15 +38,27 @@ LANE_COUNT_RELATION_DESCRIPTIONS: Mapping[LaneCountRelation, str] = MappingProxy
         ),
     }
 )
+NUMERIC_CONVERSION_MODE_DESCRIPTIONS: Mapping[NumericConversionMode, str] = (
+    MappingProxyType(
+        {
+            NumericConversionMode.SCALAR_AS: (
+                "Uses wrapping integer casts, ordinary integer/float rounding, and "
+                "truncating saturating float-to-integer conversion with NaN mapped to zero."
+            )
+        }
+    )
+)
 
 
 @dataclass(frozen=True, slots=True)
 class PrimitiveConversionContract:
     kind: ConversionKind
     lane_count: LaneCountRelation
+    numeric_mode: NumericConversionMode | None = None
     source: SourceSpan | None = None
     kind_source: SourceSpan | None = None
     lane_count_source: SourceSpan | None = None
+    numeric_mode_source: SourceSpan | None = None
 
 
 def conversion_kind_values() -> tuple[str, ...]:
@@ -53,12 +69,19 @@ def lane_count_relation_values() -> tuple[str, ...]:
     return tuple(sorted(value.value for value in LaneCountRelation))
 
 
+def numeric_conversion_mode_values() -> tuple[str, ...]:
+    return tuple(sorted(value.value for value in NumericConversionMode))
+
+
 __all__ = (
     "CONVERSION_KIND_DESCRIPTIONS",
     "LANE_COUNT_RELATION_DESCRIPTIONS",
+    "NUMERIC_CONVERSION_MODE_DESCRIPTIONS",
     "ConversionKind",
     "LaneCountRelation",
+    "NumericConversionMode",
     "PrimitiveConversionContract",
     "conversion_kind_values",
     "lane_count_relation_values",
+    "numeric_conversion_mode_values",
 )

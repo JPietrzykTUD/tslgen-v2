@@ -34,6 +34,7 @@ from tslc.catalog.model import (
     ImmediateParam,
     ImplementationSafety,
     Primitive,
+    RESULT_DIM_VECTOR,
 )
 from tslc.catalog.param_types import parse_param_type_expression
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS, scalar_bit_width_or_default
@@ -187,6 +188,9 @@ class LoweredSpecialization:
     # representation-change `ToVec`. The bound names are the primitives the body calls on the param
     # (`to_array[IndicesType]` -> `to_array`); the Rust backend maps each to its `…Impl` trait.
     type_params: tuple[LoweredTypeParam, ...] = ()
+    # A `return_type: vector: Name` result projects through this `kind simd_type`
+    # parameter. Unlike `target`, this is not a concrete representation selector axis.
+    result_vector_param: str | None = None
     # True when register_type == base_type for this extension (scalar/generic). Lets the
     # backend dedup overload `apply`s that collapse to the same type (a `v` and an `s`
     # parameter are distinct on SIMD but identical here).
@@ -656,6 +660,12 @@ class Lowerer:
                 for gp in selected.primitive.generic_params
                 if gp.kind == "simd_type"
             ),
+            result_vector_param=(
+                selected.primitive.result_target[1]
+                if selected.primitive.result_target is not None
+                and selected.primitive.result_target[0] == RESULT_DIM_VECTOR
+                else None
+            ),
             # True only when the extension declares its register type as the base type.
             # Other zero-width/sized vectors may still use array-backed registers, so this is
             # a source capability, not a vector_bits shortcut.
@@ -895,7 +905,12 @@ def _primitive_type_param_bounds(
 
     direct: dict[tuple[str, str, int], set[str]] = {}
     for primitive in catalog.primitives:
-        extra_offset = 1 if primitive.result_target is not None else 0
+        extra_offset = (
+            1
+            if primitive.result_target is not None
+            and primitive.result_target[0] != RESULT_DIM_VECTOR
+            else 0
+        )
         type_params = tuple(
             param for param in primitive.generic_params if param.kind == "simd_type"
         )

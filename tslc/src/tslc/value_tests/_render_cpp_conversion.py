@@ -64,6 +64,54 @@ def _repr_cast(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 
+def _lane_convert(case: ValueTestCasePlan) -> str:
+    target_plan = case.target
+    assert target_plan is not None
+    assert target_plan.base_spelling is not None and target_plan.type_tag is not None
+    assert target_plan.lanes == case.lanes
+    target = target_plan.base_spelling
+    literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = cpp_literal_list(case.expectation.values, target_plan.type_tag)
+    representation = case.representation
+    source_extension = (
+        f"tsl::{representation.source_extension}"
+        if representation is not None
+        else f"tsl::generic<{case.lanes}>"
+    )
+    lines = [
+        f"int {case.function_name}() {{",
+        f"  using Vec = tsl::simd<{case.base_spelling}, {source_extension}>;",
+        f"  using ToVec = tsl::simd<{target}, tsl::generic<{case.lanes}>>;",
+        f"  static const {case.base_spelling} in0[{case.lanes}] = {{{literals}}};",
+    ]
+    if representation is None:
+        lines.extend(
+            [
+                "  typename Vec::register_type source{};",
+                f"  for (std::size_t i = 0; i < {case.lanes}; ++i) source[i] = in0[i];",
+            ]
+        )
+    else:
+        assert representation.from_array_name is not None
+        lines.extend(
+            [
+                "  typename tsl::array_for<Vec>::type source_array{};",
+                f"  for (std::size_t i = 0; i < {case.lanes}; ++i) source_array[i] = in0[i];",
+                f"  auto source = tsl::{representation.from_array_name}<Vec>(source_array);",
+            ]
+        )
+    lines.extend(
+        [
+            f"  auto result = tsl::{case.call_name}<Vec, ToVec>(source);",
+            f"  static const {target} expected[{case.lanes}] = {{{expected}}};",
+            f'  return tsl::test::check_lanes<{target}>('
+            f'"{case.case_name}", result, expected, {case.lanes});',
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _target_imask(case: ValueTestCasePlan) -> str:
     target = case.target
     representation = case.representation
@@ -560,6 +608,7 @@ def _differential_fuzz(case: ValueTestCasePlan) -> str:
 __all__ = (
     "_convert",
     "_repr_cast",
+    "_lane_convert",
     "_target_imask",
     "_fixed_extension_repr_cast",
     "_extension_extract",

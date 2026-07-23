@@ -71,6 +71,56 @@ def _repr_cast(case: ValueTestCasePlan) -> str:
     )
 
 
+def _lane_convert(case: ValueTestCasePlan) -> str:
+    target_plan = case.target
+    assert target_plan is not None
+    assert target_plan.base_spelling is not None and target_plan.type_tag is not None
+    assert target_plan.lanes == case.lanes
+    target = target_plan.base_spelling
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, target_plan.type_tag)
+    representation = case.representation
+    source_extension = (
+        rust_extension_tag(representation.source_extension)
+        if representation is not None
+        else f"Generic<{case.lanes}>"
+    )
+    lines = [
+        "    #[test]",
+        f"    fn {case.function_name}() {{",
+        f"        type Vec = Simd<{case.base_spelling}, {source_extension}>;",
+        f"        type ToVec = Simd<{target}, Generic<{case.lanes}>>;",
+        f"        let in0: [{case.base_spelling}; {case.lanes}] = [{literals}];",
+    ]
+    if representation is None:
+        lines.extend(
+            [
+                "        let mut source: <Vec as SimdVector>::RegisterType = Default::default();",
+                f"        for i in 0..{case.lanes} {{ source[i] = in0[i]; }}",
+            ]
+        )
+    else:
+        from_array = _required_name(representation.from_array_name, "from_array_name")
+        lines.extend(
+            [
+                "        let mut source_array: <Vec as SimdVector>::Array = Default::default();",
+                f"        for i in 0..{case.lanes} {{ source_array[i] = in0[i]; }}",
+                f"        let source = {from_array}::<Vec>(&source_array);",
+            ]
+        )
+    lines.extend(
+        [
+            f"        let result = {rust_raw_identifier(case.call_name)}::<Vec, ToVec>(source);",
+            f"        let expected: [{target}; {case.lanes}] = [{expected}];",
+            f"        for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), "
+            f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
+            "i, expected[i], result[i]); }",
+            "    }",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _target_imask(case: ValueTestCasePlan) -> str:
     target = case.target
     representation = case.representation
@@ -461,5 +511,6 @@ __all__ = (
     "_fixed_extension_repr_cast",
     "_load_convert",
     "_repr_cast",
+    "_lane_convert",
     "_target_imask",
 )

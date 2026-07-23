@@ -15,8 +15,10 @@ from tslc.catalog.arithmetic import (
 from tslc.catalog.conversion import (
     conversion_kind_values,
     lane_count_relation_values,
+    numeric_conversion_mode_values,
 )
 from tslc.catalog.memory import memory_access_values, memory_addressing_values
+from tslc.catalog.model import RESULT_DIM_VECTOR
 from tslc.catalog.semantics import primitive_operation_values
 from tslc.catalog.shift import shift_count_rule_values, shift_lane_rule_values
 from tslc.catalog.validation._schema_benchmarks import KNOWN_OPERAND_DOMAINS
@@ -136,7 +138,14 @@ def build_document_authoring_index(
                     "function", _name_in_source(declaration.header_source, declaration.name)
                 )
             )
-            _index_implementation_tokens(declaration.impl_entries, tokens, _result_target(declaration))
+            result_target = _result_target(declaration)
+            _index_implementation_tokens(
+                declaration.impl_entries,
+                tokens,
+                result_target
+                if result_target is None or result_target[0] != RESULT_DIM_VECTOR
+                else None,
+            )
             for envelope in declaration.body_envelopes:
                 source = _source_span(envelope.payload_source)
                 for region in _regions(scan(envelope.payload_text, source=source)):
@@ -421,6 +430,7 @@ def _primitive_semantic_tokens(
                     {
                         "kind": conversion_kind_values(),
                         "lane_count": lane_count_relation_values(),
+                        "numeric_mode": numeric_conversion_mode_values(),
                     },
                 )
             )

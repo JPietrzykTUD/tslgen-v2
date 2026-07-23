@@ -79,7 +79,7 @@ projections of the latest successful catalog/index. Hierarchical document
 symbols and registry-backed semantic token facts are built separately in
 [catalog_authoring_index.py](src/tslc/catalog_authoring_index.py); the core
 index retains resolvable catalog occurrences, including individual list
-selector elements, primitive-scoped result target axes, and source-defined
+selector elements, primitive-scoped result targets, and source-defined
 semantic-overload axes and values. Overload completion, hover, navigation,
 references, symbols, tokens, and diagnostics all project the same typed
 registry and validated primitive-family facts; the parsed cursor contributes
@@ -243,7 +243,8 @@ prim<v:=(v,v)> add(left, right):
   closed language-neutral `operation` plus explicit parameter-bound
   `operand_roles`, including runtime lane indices where applicable. Focused
   `memory`, `conversion`, and `shift` blocks add only
-  contiguous access direction, conversion/lane-count relations, or wrapping
+  contiguous access direction, conversion/lane-count relations and numeric
+  modes, or wrapping
   count/lane rules and admitted scalar count types that are not already owned
   by attributes, result targets, and semantic overloads. The catalog
   promotes these through the frozen records in
@@ -258,6 +259,13 @@ prim<v:=(v,v)> add(left, right):
   downstream projections therefore receive typed facts without reconstructing
   them. Source data contains no Rust-specific spelling policy, and this stage
   does not apply one.
+- **Explicit result vectors**: `return_type: vector: Name` refers to a declared
+  `kind simd_type` generic and makes that complete caller-supplied vector the
+  result owner without adding an implementation-selector axis. Lane-preserving
+  numeric conversions use this result form and may declare the language-neutral
+  `scalar_as` mode; the lower-level primitive checks equal logical lane counts,
+  while facades can make the relation structural by preserving their lane-count
+  parameter.
 - **Fixed-width SVE**: `sve128`/`sve256`/`sve512` inherit scalable `sve` bodies
   but supersede `sve` in their fixed profiles, so one profile emits one SVE
   model. The fixed width is a compile mode (`sve_vector_bits_N`) plus C++ flags

@@ -16,11 +16,12 @@ from tslc.catalog.arithmetic_promotion import KNOWN_ARITHMETIC_FIELDS
 from tslc.catalog.conversion import (
     conversion_kind_values,
     lane_count_relation_values,
+    numeric_conversion_mode_values,
 )
 from tslc.catalog.conversion_promotion import KNOWN_CONVERSION_FIELDS
 from tslc.catalog.memory import memory_access_values, memory_addressing_values
 from tslc.catalog.memory_promotion import KNOWN_MEMORY_FIELDS
-from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.model import Catalog, Primitive, RESULT_DIM_VECTOR
 from tslc.catalog.semantics import operand_role_values, primitive_operation_values
 from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
 from tslc.catalog.shift import shift_count_rule_values, shift_lane_rule_values
@@ -340,8 +341,18 @@ def _query_scope_symbols(
         symbols.append(
             QueryScopeSymbol(
                 name,
-                frozenset({"type"}) if dimension == "base" else frozenset({"text"}),
-                f"primitive {dimension} selector axis",
+                (
+                    frozenset({"type"})
+                    if dimension == "base"
+                    else frozenset({"simd_type"})
+                    if dimension == RESULT_DIM_VECTOR
+                    else frozenset({"text"})
+                ),
+                (
+                    "primitive result vector type parameter"
+                    if dimension == RESULT_DIM_VECTOR
+                    else f"primitive {dimension} selector axis"
+                ),
             )
         )
     for name, extension in catalog.extensions.items():
@@ -869,7 +880,13 @@ def _implementation_fields(
     if "variants" in path and path[-2] == "variants":
         return KNOWN_VARIANT_FIELDS, "field", "implementation variant field"
     primitive = _primitive(catalog, context.declaration_name)
-    target_axis = primitive.result_target[1] if primitive and primitive.result_target else None
+    target_axis = (
+        primitive.result_target[1]
+        if primitive
+        and primitive.result_target
+        and primitive.result_target[0] != RESULT_DIM_VECTOR
+        else None
+    )
     selector_tail = tail[2:]
     if not selector_tail:
         values: set[str] = set(KNOWN_SELECTOR_METADATA_FIELDS)
@@ -993,6 +1010,9 @@ def _value_completions(
     elif field == "lane_count" and context.block_path == ("primitive", "conversion"):
         values = lane_count_relation_values()
         detail = "conversion lane-count relation"
+    elif field == "numeric_mode" and context.block_path == ("primitive", "conversion"):
+        values = numeric_conversion_mode_values()
+        detail = "numeric conversion mode"
     elif field == "count_rule" and context.block_path == ("primitive", "shift"):
         values = shift_count_rule_values()
         detail = "shift count rule"

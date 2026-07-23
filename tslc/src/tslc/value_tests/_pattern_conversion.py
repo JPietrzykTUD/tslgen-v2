@@ -11,6 +11,7 @@ from tslc.value_tests._case_conversion import (
     extension_harness_available,
     extension_repr_case,
     extension_result_case,
+    lane_convert_case,
     load_convert_case,
     repr_cast_case,
     target_imask_case,
@@ -80,6 +81,33 @@ class _ReprCastPattern(_BasePattern):
             context.harness,
         )
         return (plan,) if plan is not None else ()
+
+
+class _LaneConvertPattern(_BasePattern):
+    def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
+        return any(
+            spec.result_kind == "v"
+            and spec.result_vector_param is not None
+            and spec.param_kinds == ("v",)
+            for spec in specs
+        )
+
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        plan = lane_convert_case(
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
+            context.harness,
+        )
+        return (plan,) if plan is not None else ()
+
+    def unplanned_reason(self, context: ValueTestCaseContext) -> str | None:
+        del context
+        return (
+            "lane-preserving conversion tests require one vector input, an equal-length "
+            "expected result, a target scalar type, and an admitted target SIMD base binding"
+        )
 
 
 class _TargetImaskPattern(_BasePattern):
@@ -198,6 +226,7 @@ __all__ = (
     "_LoadConvertPattern",
     "_ConvertPattern",
     "_ReprCastPattern",
+    "_LaneConvertPattern",
     "_TargetImaskPattern",
     "_ExtensionResultPattern",
     "_ExtensionReprPattern",

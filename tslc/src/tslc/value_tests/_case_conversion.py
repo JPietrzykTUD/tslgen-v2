@@ -14,6 +14,7 @@ from tslc.value_tests.case_helpers import (
     function_name as _function_name,
     immediate_value as _immediate_value,
     load_convert_match as _load_convert_match,
+    lane_convert_match as _lane_convert_match,
     mask_inputs as _mask_inputs,
     repr_cast_match as _repr_cast_match,
     sanitize as _sanitize,
@@ -245,6 +246,69 @@ def repr_cast_case(
                 target_extension=match.target.extension_isa,
                 from_array_name=harness.from_array if harness else None,
                 to_array_name=harness.to_array if harness else None,
+            )
+            if case.extension is not None
+            else None
+        ),
+    )
+
+
+def lane_convert_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+    harness: HarnessPrimitiveNames,
+) -> ValueTestCasePlan | None:
+    if case.expected_rule is not None or case.lanes is None:
+        return None
+    match = _lane_convert_match(case, specs)
+    if match is None or match.result_vector_param is None:
+        return None
+    target_param = next(
+        (
+            param
+            for param in match.type_params
+            if param.name == match.result_vector_param
+            and param.base_type_binding == case.to_type
+        ),
+        None,
+    )
+    if target_param is None or target_param.base_type_binding_spelling is None:
+        return None
+    if case.extension is not None and not harness.round_trip_ready:
+        return None
+    vector_inputs = _vector_inputs(case)
+    if (
+        len(vector_inputs) != 1
+        or len(vector_inputs[0]) != case.lanes
+        or len(case.expected) != case.lanes
+    ):
+        return None
+    return ValueTestCasePlan(
+        kind="lane_convert",
+        function_name=_function_name(name, index, case),
+        case_name=case.name,
+        call_name=name,
+        type_tag=case.type_tag,
+        base_spelling=match.base_type_spelling,
+        lanes=case.lanes,
+        inputs=ValueTestInputs(vectors=vector_inputs),
+        expectation=ValueTestExpectation(
+            values=case.expected,
+            comparison=case.comparison,
+        ),
+        target=ValueTestTarget(
+            type_tag=case.to_type,
+            base_spelling=target_param.base_type_binding_spelling,
+            lanes=case.lanes,
+        ),
+        representation=(
+            ValueTestRepresentation(
+                source_extension=match.extension_name,
+                target_extension="generic",
+                from_array_name=harness.from_array,
+                to_array_name=harness.to_array,
             )
             if case.extension is not None
             else None
@@ -610,6 +674,7 @@ def extension_harness_available(
 __all__ = (
     "load_convert_case",
     "convert_case",
+    "lane_convert_case",
     "repr_cast_case",
     "extension_repr_case",
     "differential_cases",

@@ -10,17 +10,20 @@ from tslc.catalog._semantic_promotion_common import (
 from tslc.catalog.conversion import (
     ConversionKind,
     LaneCountRelation,
+    NumericConversionMode,
     PrimitiveConversionContract,
     conversion_kind_values,
     lane_count_relation_values,
+    numeric_conversion_mode_values,
 )
 from tslc.catalog.semantics import PrimitiveOperation, PrimitiveSemanticContract
+from tslc.catalog.model import RESULT_DIM_VECTOR
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.access import source_span
 from tslc.syntax.ast import ParsedPrimitiveDeclaration
 
 
-KNOWN_CONVERSION_FIELDS = frozenset({"kind", "lane_count"})
+KNOWN_CONVERSION_FIELDS = frozenset({"kind", "lane_count", "numeric_mode"})
 
 
 def build_conversion_contract(
@@ -57,6 +60,7 @@ def build_conversion_contract(
         KNOWN_CONVERSION_FIELDS,
         "conversion",
         diagnostics,
+        required=frozenset({"kind", "lane_count"}),
     )
     kind = enum_member(
         declaration,
@@ -76,7 +80,29 @@ def build_conversion_contract(
         "TSL-CATALOG-CONVERSION-LANE-COUNT",
         diagnostics,
     )
+    numeric_mode = enum_member(
+        declaration,
+        members.get("numeric_mode"),
+        NumericConversionMode,
+        numeric_conversion_mode_values(),
+        "numeric conversion mode",
+        "TSL-CATALOG-CONVERSION-NUMERIC-MODE",
+        diagnostics,
+    )
     if kind is None or lane_count is None:
+        return None
+    if numeric_mode is not None and kind is not ConversionKind.NUMERIC:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-CONVERSION-NUMERIC-MODE-KIND",
+                message=(
+                    f"numeric_mode on primitive {declaration.name!r} requires "
+                    "conversion kind 'numeric'"
+                ),
+                source=member_value_source(members.get("numeric_mode")),
+            )
+        )
         return None
     expected = {
         ConversionKind.NUMERIC: PrimitiveOperation.CONVERT,
@@ -111,12 +137,30 @@ def build_conversion_contract(
             )
         )
         return None
+    if (
+        lane_count is LaneCountRelation.PRESERVE_LANE_COUNT
+        and result_target[0] != RESULT_DIM_VECTOR
+    ):
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-CONVERSION-LANE-TARGET",
+                message=(
+                    f"lane-preserving conversion on primitive {declaration.name!r} "
+                    "requires an explicit target SIMD type"
+                ),
+                source=member_value_source(members.get("lane_count")),
+            )
+        )
+        return None
     return PrimitiveConversionContract(
         kind=kind,
         lane_count=lane_count,
+        numeric_mode=numeric_mode,
         source=source_span(field.source),
         kind_source=member_value_source(members.get("kind")),
         lane_count_source=member_value_source(members.get("lane_count")),
+        numeric_mode_source=member_value_source(members.get("numeric_mode")),
     )
 
 

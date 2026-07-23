@@ -25,6 +25,8 @@ def closed_members(
     known: Collection[str],
     label: str,
     diagnostics: list[Diagnostic],
+    *,
+    required: Collection[str] | None = None,
 ) -> dict[str, ParsedTslField]:
     members = children(field)
     duplicate_members(
@@ -48,15 +50,15 @@ def closed_members(
                 )
             )
     by_name = {member.key.text: member for member in members}
-    for required in sorted(known):
-        if required not in by_name:
+    for required_name in sorted(known if required is None else required):
+        if required_name not in by_name:
             diagnostics.append(
                 diagnostic_at(
                     severity="error",
                     code=f"TSL-CATALOG-MISSING-{label.upper()}-FIELD",
                     message=(
                         f"primitive {declaration.name!r} {label} contract must "
-                        f"declare {required!r}"
+                        f"declare {required_name!r}"
                     ),
                     source=source_span(field.source),
                 )

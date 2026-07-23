@@ -20,6 +20,8 @@ from tslc.catalog.model import (
     ImmediateParam,
     ParamTypeRule,
     Primitive,
+    RESULT_DIMENSIONS,
+    RESULT_DIM_VECTOR,
 )
 from tslc.catalog.param_types import (
     parse_base_width_constraint,
@@ -56,7 +58,11 @@ def _build_primitives(
     # A representation-change primitive (`return_type: base|extension: Target`) carries a
     # second type axis; its selector nests a `<Target>:` level the impl-walk must split out.
     result_target = _result_target(declaration)
-    target_name = result_target[1] if result_target is not None else None
+    target_name = (
+        result_target[1]
+        if result_target is not None and result_target[0] != RESULT_DIM_VECTOR
+        else None
+    )
     # Walk the selector-entry tree so each body keeps its entry's `requires` flags.
     implementations = tuple(
         _implementations_from_entries(
@@ -256,14 +262,14 @@ def _result_target(
     declaration: ParsedPrimitiveDeclaration,
 ) -> tuple[str, str] | None:
     """A `return_type: <dim>: <Target>` block -> `(dim, target_name)` where `dim` is
-    "base" (reinterpret/cast/convert_up) or "extension" (extract/insert). The result is the
-    source vector with `dim` replaced by the caller-supplied target. None when absent."""
+    "base" (reinterpret/cast/convert_up), "extension" (extract/insert), or "vector"
+    (a caller-supplied SIMD type). None when absent."""
 
     fields = declaration.fields_by_name("return_type")
     if not fields:
         return None
     for child in _children(fields[0].field):
-        if child.key.text in ("base", "extension"):
+        if child.key.text in RESULT_DIMENSIONS:
             name = _field_text(child)
             if name:
                 return (child.key.text, name)

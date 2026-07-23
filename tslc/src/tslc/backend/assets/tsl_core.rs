@@ -473,7 +473,7 @@ pub enum BaseUi64 {}
 pub enum BaseF32 {}
 pub enum BaseF64 {}
 
-pub trait BaseTypeDispatch {
+pub trait BaseTypeDispatch: Copy + 'static {
     type Key;
 }
 
@@ -630,6 +630,14 @@ pub mod detail {
     pub mod helpers {
     use super::super::*;
 
+    pub fn require_same_lanes(source_lanes: usize, target_lanes: usize) {
+        assert_eq!(
+            source_lanes,
+            target_lanes,
+            "lane-preserving conversion requires equal source and target lane counts"
+        );
+    }
+
     #[cfg(target_arch = "x86_64")]
     #[target_feature(enable = "rdrand")]
     pub unsafe fn random_step_u64(out: *mut u64) -> usize {
@@ -721,6 +729,93 @@ pub mod detail {
     // runs in the matching branch (so sizes always agree). Counterpart to C++ `tsl::saturating_cast`.
     fn type_is_same<T: 'static, U: 'static>() -> bool {
         core::any::TypeId::of::<T>() == core::any::TypeId::of::<U>()
+    }
+    macro_rules! scalar_as_target {
+        ($value:expr) => {{
+            if type_is_same::<U, i8>() {
+                let result = $value as i8;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, u8>() {
+                let result = $value as u8;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, i16>() {
+                let result = $value as i16;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, u16>() {
+                let result = $value as u16;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, i32>() {
+                let result = $value as i32;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, u32>() {
+                let result = $value as u32;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, i64>() {
+                let result = $value as i64;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, u64>() {
+                let result = $value as u64;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, f32>() {
+                let result = $value as f32;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, f64>() {
+                let result = $value as f64;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+        }};
+    }
+    pub fn scalar_as_cast_value<T: Copy + 'static, U: Copy + 'static>(value: T) -> U {
+        if type_is_same::<T, i8>() {
+            let source = unsafe { core::mem::transmute_copy::<T, i8>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, u8>() {
+            let source = unsafe { core::mem::transmute_copy::<T, u8>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, i16>() {
+            let source = unsafe { core::mem::transmute_copy::<T, i16>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, u16>() {
+            let source = unsafe { core::mem::transmute_copy::<T, u16>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, i32>() {
+            let source = unsafe { core::mem::transmute_copy::<T, i32>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, u32>() {
+            let source = unsafe { core::mem::transmute_copy::<T, u32>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, i64>() {
+            let source = unsafe { core::mem::transmute_copy::<T, i64>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, u64>() {
+            let source = unsafe { core::mem::transmute_copy::<T, u64>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, f32>() {
+            let source = unsafe { core::mem::transmute_copy::<T, f32>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, f64>() {
+            let source = unsafe { core::mem::transmute_copy::<T, f64>(&value) };
+            scalar_as_target!(source);
+        }
+        panic!("unsupported scalar-as cast")
     }
     fn saturating_from_i128<U: Copy + 'static>(v: i128) -> U {
         if type_is_same::<U, i8>() {

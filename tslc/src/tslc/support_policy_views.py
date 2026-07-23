@@ -11,6 +11,7 @@ from __future__ import annotations
 from tslc.catalog.model import (
     RESULT_DIM_BASE,
     RESULT_DIM_EXTENSION,
+    RESULT_DIM_VECTOR,
     Catalog,
     Primitive,
 )
@@ -104,6 +105,8 @@ def concrete_target_candidates(
     if primitive.result_target is None:
         return (None,)
     dim = primitive.result_target[0]
+    if dim == RESULT_DIM_VECTOR:
+        return (None,)
     chain = catalog.extension_chain(extension_name)
     # If this extension has no target-bearing body of its own for the source type — only a
     # target-generic catch-all (a body with no `ToBase`/`ToExtension` level, which spells the

@@ -110,6 +110,56 @@ inline To saturating_cast(From value) {
     return static_cast<To>(value);
 }
 
+// Language-neutral scalar numeric conversion used by lane-preserving conversion. Its
+// contract matches Rust scalar `as`: integer narrowing wraps, integer widening preserves
+// signed value where representable, and float-to-integer truncates then saturates with NaN
+// mapped to zero.
+template <class To, class From>
+inline To scalar_as_cast(From value) {
+    static_assert(std::is_arithmetic_v<To> && std::is_arithmetic_v<From>);
+    if constexpr (std::is_integral_v<From> && std::is_integral_v<To>) {
+        if constexpr (std::is_unsigned_v<To>) {
+            return static_cast<To>(value);
+        } else if constexpr (
+            (std::is_signed_v<From> && std::numeric_limits<To>::digits >=
+                std::numeric_limits<From>::digits) ||
+            (std::is_unsigned_v<From> && std::numeric_limits<To>::digits >=
+                std::numeric_limits<From>::digits)) {
+            return static_cast<To>(value);
+        } else {
+            using UnsignedTo = std::make_unsigned_t<To>;
+            const auto bits = static_cast<UnsignedTo>(value);
+            return ::tsl::bit_cast<To>(bits);
+        }
+    } else if constexpr (std::is_floating_point_v<From> && std::is_integral_v<To>) {
+        if (std::isnan(value)) {
+            return To{0};
+        }
+        const long double converted = static_cast<long double>(value);
+        const long double upper_exclusive = std::ldexp(
+            1.0L, std::numeric_limits<To>::digits
+        );
+        if constexpr (std::is_unsigned_v<To>) {
+            if (converted <= 0.0L) {
+                return To{0};
+            }
+            if (converted >= upper_exclusive) {
+                return std::numeric_limits<To>::max();
+            }
+        } else {
+            if (converted <= -upper_exclusive) {
+                return std::numeric_limits<To>::lowest();
+            }
+            if (converted >= upper_exclusive) {
+                return std::numeric_limits<To>::max();
+            }
+        }
+        return static_cast<To>(value);
+    } else {
+        return static_cast<To>(value);
+    }
+}
+
 // Mask lane values (`mask<lane_true>()` / `mask<lane_false>()`): the all-bits-set / all-bits-clear
 // value of a lane, broadcast by `set1` to build an all-true / all-false lane-bitmask mask.
 // Uniform for integer and float via the object representation — all-ones bytes are an int's
@@ -324,6 +374,14 @@ struct reg_param<simd<T, generic<LANES>>> {
 // Scalar-core helpers used by emulated (loop) bodies. Grows one function at a time as the
 // primitives that call `helper<...>` land; `arith_add` is the reductions' accumulate step.
 namespace detail::helpers {
+
+inline void require_same_lanes(std::size_t source_lanes, std::size_t target_lanes) {
+    if (source_lanes != target_lanes) {
+        throw std::invalid_argument(
+            "lane-preserving conversion requires equal source and target lane counts"
+        );
+    }
+}
 #if defined(__x86_64__) || defined(_M_X64)
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((target("rdrnd")))

@@ -123,6 +123,12 @@ _CASE_REQUIREMENTS = {
         vector_inputs="one",
         required_facts=_CONVERSION_TARGET_FACTS,
     ),
+    "lane_convert": ValueTestCaseRequirements(
+        expected="target_lanes",
+        vector_inputs="one",
+        vector_inputs_match_lanes=True,
+        required_facts=_CONVERSION_TARGET_FACTS,
+    ),
     "mask_logic": ValueTestCaseRequirements(expected="one", mask_inputs="non_empty"),
     "mask_pointer_load": ValueTestCaseRequirements(
         expected="one",

@@ -1123,6 +1123,129 @@ def test_convert_builds(data_root: Path, machine_profiles_path: Path, tmp_path: 
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_convert_lanes_builds(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_convert_lanes_builds"),
+        profiles=["scalar", "avx2"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+    if shutil.which("c++") is not None:
+        cpp_source = tmp_path / "convert-lanes-mismatch.cpp"
+        cpp_source.write_text(
+            textwrap.dedent(
+                """
+                #include <cstdint>
+                #include <stdexcept>
+                #include <string>
+                #include <tsl.hpp>
+
+                int main() {
+                  using Source = tsl::simd<std::int32_t, tsl::generic<4>>;
+                  using Target = tsl::simd<std::int32_t, tsl::generic<8>>;
+                  Source::register_type source{};
+                  try {
+                    (void)tsl::convert_lanes<Source, Target>(source);
+                  } catch (const std::invalid_argument& error) {
+                    return std::string(error.what()) ==
+                               "lane-preserving conversion requires equal source and target lane counts"
+                             ? 0
+                             : 2;
+                  }
+                  return 1;
+                }
+                """
+            ).lstrip(),
+            encoding="utf-8",
+        )
+        cpp_binary = tmp_path / "convert-lanes-mismatch"
+        compiled = subprocess.run(
+            (
+                "c++",
+                "-std=c++17",
+                "-DTSL_PROFILE_SCALAR",
+                f"-I{tmp_path / 'cpp' / 'include'}",
+                str(cpp_source),
+                "-o",
+                str(cpp_binary),
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert compiled.returncode == 0, compiled.stderr + compiled.stdout
+        rejected = subprocess.run(
+            (str(cpp_binary),),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert rejected.returncode == 0, rejected.stderr + rejected.stdout
+
+    if shutil.which("cargo") is not None:
+        consumer = tmp_path / "convert-lanes-mismatch-rust"
+        (consumer / "src").mkdir(parents=True)
+        (consumer / "Cargo.toml").write_text(
+            textwrap.dedent(
+                f"""
+                [package]
+                name = "convert-lanes-mismatch"
+                version = "0.0.0"
+                edition = "2021"
+
+                [dependencies]
+                tsl = {{ path = "{(tmp_path / 'rust').as_posix()}" }}
+                """
+            ).lstrip(),
+            encoding="utf-8",
+        )
+        (consumer / "src" / "main.rs").write_text(
+            textwrap.dedent(
+                """
+                use tsl::tsl_core::{Generic, Simd, SimdVector};
+
+                fn main() {
+                    type Source = Simd<i32, Generic<4>>;
+                    type Target = Simd<i32, Generic<8>>;
+                    let source: <Source as SimdVector>::RegisterType = Default::default();
+                    let rejected = std::panic::catch_unwind(|| {
+                        let _ = tsl::profile::convert_lanes::<Source, Target>(source);
+                    });
+                    assert!(rejected.is_err());
+                }
+                """
+            ).lstrip(),
+            encoding="utf-8",
+        )
+        rejected = subprocess.run(
+            (
+                "cargo",
+                "run",
+                "--quiet",
+                "--manifest-path",
+                str(consumer / "Cargo.toml"),
+                "--target-dir",
+                str(tmp_path / "convert-lanes-mismatch-rust-target"),
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert rejected.returncode == 0, rejected.stderr + rejected.stdout
+
+
 def test_cast_reinterpret_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:

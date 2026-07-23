@@ -13,6 +13,7 @@ from tslc.value_tests._render_rust_conversion import (
     _extension_insert,
     _extension_result,
     _load_convert,
+    _lane_convert,
     _repr_cast,
     _target_imask,
 )
@@ -121,6 +122,7 @@ RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "lane_list": _lane_list,
         "load": _load,
         "load_convert": _load_convert,
+        "lane_convert": _lane_convert,
         "mask_logic": _mask_logic,
         "mask_pointer_load": _mask_pointer_load,
         "mask_result": _mask_result,
