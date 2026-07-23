@@ -671,10 +671,10 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         implementation:
           tsil """
               var<const_infer>(mem_vec, call<primitive=load[Vec], attrs[aligned=value(primitive::attribute(aligned))]>(ptr));
-              var<const_infer>(blend_vec, call<primitive=blend>(mask, mem_vec, data));
+              var<const_infer>(selected_vec, call<primitive=select>(mask, data, mem_vec));
               call<primitive=store, attrs[aligned=primitive::attribute(aligned)]>(
                 ptr,
-                blend_vec
+                selected_vec
               );
             """
     sve:

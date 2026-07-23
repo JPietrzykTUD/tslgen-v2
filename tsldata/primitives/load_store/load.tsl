@@ -507,12 +507,12 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         implementation:
           tsil """
             complete(
-              call<primitive=blend, attrs[mask=pass_through]>(
+              call<primitive=select, attrs[mask=pass_through]>(
                 mask,
-                data,
                 call<primitive=load, attrs[aligned=primitive::attribute(aligned)]>(
                   ptr
-                )
+                ),
+                data
               )
             );
           """
@@ -526,12 +526,12 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         implementation:
           tsil """
             complete(
-              call<primitive=blend, attrs[mask=pass_through]>(
+              call<primitive=select, attrs[mask=pass_through]>(
                 mask,
-                data,
                 call<primitive=load, attrs[aligned=primitive::attribute(aligned)]>(
                   ptr
-                )
+                ),
+                data
               )
             );
           """

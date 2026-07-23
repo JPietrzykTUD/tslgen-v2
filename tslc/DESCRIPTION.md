@@ -9,7 +9,7 @@ the design decisions that matter.
 
 `tslc` is a **compiler that generates a SIMD wrapper library**. It reads a
 declarative data language (`.tsl` files under `tsldata/`) describing abstract
-SIMD *primitives* (`add`, `sub`, `load`, `gather`, `blend`, …) and emits
+SIMD *primitives* (`add`, `sub`, `load`, `gather`, `select`, …) and emits
 deterministic, compilable **C++ and Rust** source implementing each primitive
 across a matrix of:
 

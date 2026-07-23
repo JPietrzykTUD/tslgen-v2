@@ -1460,25 +1460,25 @@ prim<s:=(m,v)> hmax(mask, vec):
             var<const_infer>(m2, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar >> (2 * quarter_lanes))));
             var<const_infer>(m3, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar >> (3 * quarter_lanes))));
             var<const_infer>(sentinel_vec, call<primitive=set1[QuarterVec]>(sentinel));
-            var<infer>(folded, call<primitive=blend[QuarterVec]>(
+            var<infer>(folded, call<primitive=select[QuarterVec]>(
               m0,
-              sentinel_vec,
-              call<primitive=extract[Vec, sse, 0]>(vec)
+              call<primitive=extract[Vec, sse, 0]>(vec),
+              sentinel_vec
             ));
-            folded = call<primitive=max[QuarterVec]>(folded, call<primitive=blend[QuarterVec]>(
+            folded = call<primitive=max[QuarterVec]>(folded, call<primitive=select[QuarterVec]>(
               m1,
-              sentinel_vec,
-              call<primitive=extract[Vec, sse, 1]>(vec)
+              call<primitive=extract[Vec, sse, 1]>(vec),
+              sentinel_vec
             ));
-            folded = call<primitive=max[QuarterVec]>(folded, call<primitive=blend[QuarterVec]>(
+            folded = call<primitive=max[QuarterVec]>(folded, call<primitive=select[QuarterVec]>(
               m2,
-              sentinel_vec,
-              call<primitive=extract[Vec, sse, 2]>(vec)
+              call<primitive=extract[Vec, sse, 2]>(vec),
+              sentinel_vec
             ));
-            folded = call<primitive=max[QuarterVec]>(folded, call<primitive=blend[QuarterVec]>(
+            folded = call<primitive=max[QuarterVec]>(folded, call<primitive=select[QuarterVec]>(
               m3,
-              sentinel_vec,
-              call<primitive=extract[Vec, sse, 3]>(vec)
+              call<primitive=extract[Vec, sse, 3]>(vec),
+              sentinel_vec
             ));
             complete(call<primitive=hmax[QuarterVec]>(folded));
           """
@@ -1719,16 +1719,16 @@ prim<s:=(m,v)> hmax(mask, vec):
                 base::in,
                 (cast<static>(UBase, 1)) << (value(type::size_bits(base::in)) - 1)
               ));
-              complete(call<primitive=hmax[Vec]>(call<primitive=blend[Vec]>(
+              complete(call<primitive=hmax[Vec]>(call<primitive=select[Vec]>(
                 mask,
-                call<primitive=set1[Vec]>(sentinel),
-                vec
+                vec,
+                call<primitive=set1[Vec]>(sentinel)
               )));
             } else<generation> {
-              complete(call<primitive=hmax[Vec]>(call<primitive=blend[Vec]>(
+              complete(call<primitive=hmax[Vec]>(call<primitive=select[Vec]>(
                 mask,
-                call<primitive=set_zero[Vec]>(),
-                vec
+                vec,
+                call<primitive=set_zero[Vec]>()
               )));
             }
           """
@@ -1928,25 +1928,25 @@ prim<s:=(m,v)> hmin(mask, vec):
             var<const_infer>(m2, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar >> (2 * quarter_lanes))));
             var<const_infer>(m3, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar >> (3 * quarter_lanes))));
             var<const_infer>(sentinel_vec, call<primitive=set1[QuarterVec]>(sentinel));
-            var<infer>(folded, call<primitive=blend[QuarterVec]>(
+            var<infer>(folded, call<primitive=select[QuarterVec]>(
               m0,
-              sentinel_vec,
-              call<primitive=extract[Vec, sse, 0]>(vec)
+              call<primitive=extract[Vec, sse, 0]>(vec),
+              sentinel_vec
             ));
-            folded = call<primitive=min[QuarterVec]>(folded, call<primitive=blend[QuarterVec]>(
+            folded = call<primitive=min[QuarterVec]>(folded, call<primitive=select[QuarterVec]>(
               m1,
-              sentinel_vec,
-              call<primitive=extract[Vec, sse, 1]>(vec)
+              call<primitive=extract[Vec, sse, 1]>(vec),
+              sentinel_vec
             ));
-            folded = call<primitive=min[QuarterVec]>(folded, call<primitive=blend[QuarterVec]>(
+            folded = call<primitive=min[QuarterVec]>(folded, call<primitive=select[QuarterVec]>(
               m2,
-              sentinel_vec,
-              call<primitive=extract[Vec, sse, 2]>(vec)
+              call<primitive=extract[Vec, sse, 2]>(vec),
+              sentinel_vec
             ));
-            folded = call<primitive=min[QuarterVec]>(folded, call<primitive=blend[QuarterVec]>(
+            folded = call<primitive=min[QuarterVec]>(folded, call<primitive=select[QuarterVec]>(
               m3,
-              sentinel_vec,
-              call<primitive=extract[Vec, sse, 3]>(vec)
+              call<primitive=extract[Vec, sse, 3]>(vec),
+              sentinel_vec
             ));
             complete(call<primitive=hmin[QuarterVec]>(folded));
           """
@@ -2187,16 +2187,16 @@ prim<s:=(m,v)> hmin(mask, vec):
                 base::in,
                 ((cast<static>(UBase, 1)) << (value(type::size_bits(base::in)) - 1)) - cast<static>(UBase, 1)
               ));
-              complete(call<primitive=hmin[Vec]>(call<primitive=blend[Vec]>(
+              complete(call<primitive=hmin[Vec]>(call<primitive=select[Vec]>(
                 mask,
-                call<primitive=set1[Vec]>(sentinel),
-                vec
+                vec,
+                call<primitive=set1[Vec]>(sentinel)
               )));
             } else<generation> {
-              complete(call<primitive=hmin[Vec]>(call<primitive=blend[Vec]>(
+              complete(call<primitive=hmin[Vec]>(call<primitive=select[Vec]>(
                 mask,
-                call<primitive=set1[Vec]>(mask<lane_true>()),
-                vec
+                vec,
+                call<primitive=set1[Vec]>(mask<lane_true>())
               )));
             }
           """

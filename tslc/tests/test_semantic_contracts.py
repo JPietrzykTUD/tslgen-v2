@@ -76,19 +76,19 @@ def _projection(catalog: Catalog) -> tuple[object, ...]:
 
 
 def test_current_corpus_promotes_curated_operation_domains(catalog: Catalog) -> None:
-    blend = catalog.primitive("blend", unmasked=False)
+    select = catalog.primitive("select", unmasked=False)
     load = catalog.primitive("load")
     reinterpret = catalog.primitive("reinterpret")
     add = catalog.primitive("add")
-    assert blend is not None and blend.operation is not None
-    assert blend.operation.kind is PrimitiveOperation.SELECT
+    assert select is not None and select.operation is not None
+    assert select.operation.kind is PrimitiveOperation.SELECT
     assert {
         binding.role: binding.parameter_name
-        for binding in blend.operation.operand_bindings
+        for binding in select.operation.operand_bindings
     } == {
         OperandRole.CONTROL_MASK: "mask",
-        OperandRole.PASS_THROUGH: "left",
-        OperandRole.PRIMARY: "right",
+        OperandRole.PASS_THROUGH: "false_values",
+        OperandRole.PRIMARY: "true_values",
     }
     assert load is not None and load.memory is not None
     assert (load.memory.access, load.memory.addressing) == (
@@ -126,7 +126,7 @@ def test_current_corpus_promotes_curated_operation_domains(catalog: Catalog) -> 
         ("mask_binary_xor", PrimitiveOperation.MASK_XOR),
         ("mask_binary_not", PrimitiveOperation.MASK_NOT),
         ("mask_population_count", PrimitiveOperation.MASK_POPULATION_COUNT),
-        ("blend", PrimitiveOperation.SELECT),
+        ("select", PrimitiveOperation.SELECT),
         ("shift_left", PrimitiveOperation.SHIFT_LEFT),
         ("shift_right", PrimitiveOperation.SHIFT_RIGHT),
         ("extract_value", PrimitiveOperation.EXTRACT_LANE),

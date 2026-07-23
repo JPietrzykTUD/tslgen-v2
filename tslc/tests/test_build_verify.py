@@ -166,7 +166,7 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
               Vec::register_type compared_right = {1, 0, 3, 0};
               auto equal = tsl::equal<Vec>(left, compared_right);
               auto odd = tsl::to_mask<Vec>(static_cast<Vec::imask_type>(0b1010));
-              auto blended = tsl::blend<Vec>(odd, left, compared_right);
+              auto blended = tsl::select<Vec>(odd, compared_right, left);
               auto all = tsl::mask_true<Vec>();
               auto none = tsl::mask_false<Vec>();
               auto both = tsl::mask_binary_and<Vec>(equal, odd);
@@ -192,7 +192,7 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
               auto bool_either = tsl::mask_binary_or<BoolVec>(bool_equal, bool_odd);
               auto bool_different = tsl::mask_binary_xor<BoolVec>(bool_equal, bool_odd);
               auto bool_inverted = tsl::mask_binary_not<BoolVec>(bool_equal);
-              auto bool_blended = tsl::blend<BoolVec>(bool_odd, bool_left, bool_right);
+              auto bool_blended = tsl::select<BoolVec>(bool_odd, bool_right, bool_left);
 #endif
               return sum[0] == 5 && sum[3] == 5 &&
                              magnitude[0] == 1 && magnitude[1] == INT32_MIN &&
@@ -854,15 +854,16 @@ def test_simd_comparison_family_builds(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
-def test_blend_native_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
-    # `blend` is the first mask-CONSUMING primitive (mask is a parameter). Its native
-    # body `intrin<mask_blend, build>(mask, left, right)` -> `_mm512_mask_blend_*`
+def test_select_native_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `select` is the first mask-CONSUMING primitive (mask is a parameter). Its native
+    # body `intrin<mask_blend, build>(mask, false_values, true_values)`
+    # -> `_mm512_mask_blend_*`
     # build-verifies on skylake (native __mmaskN across sse/avx2/avx512) in C++ and
-    # Rust. Scalar/generic blend (runtime if + raw return / loops) skip cleanly.
+    # Rust. Scalar/generic select (runtime if + raw return / loops) skip cleanly.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=_build_verified("test_blend_native_builds"),
+        primitives=_build_verified("test_select_native_builds"),
         profiles=["skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -899,18 +900,18 @@ def test_to_from_array_roundtrip_builds(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
-def test_blend_select_builds(
+def test_select_composition_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
-    # Mask consumers + cross-extension delegation. `blend`/`mov` select on a mask (native
-    # blendv/mask_blend, or the generic mask<test> loop); `min`/`max` are blend(less_than(...)),
+    # Mask consumers + cross-extension delegation. `select`/`mov` choose on a mask (native
+    # blendv/mask_blend, or the generic mask<test> loop); `min`/`max` use select(less_than(...)),
     # so this is the first build of x86 min/max. `mul`'s si64 fallback delegates through the
     # generic vector via vector::as_extension(generic) -> simd<i64, generic<4>> (the lane count
     # is generation-time known), round-tripping to_array -> @self -> from_array.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=_build_verified("test_blend_select_builds"),
+        primitives=_build_verified("test_select_composition_builds"),
         profiles=["scalar", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1132,10 +1133,10 @@ def test_extract_value_builds(
 
 
 def test_max_min_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
-    # `max`/`min` (`v:=(v,v)`) delegate to `blend(less_than(a,b), …)`. `blend` is a single-form
+    # `max`/`min` (`v:=(v,v)`) delegate to `select(less_than(a,b), …)`. `select` is a single-form
     # masked primitive (`[mask=pass_through]`) emitted *bare*, so the prune must match a bare
-    # `blend` caller against the lone `pass_through` spec (single-form names normalize their policy
-    # to None; only split `_mask`/`_maskz` names stay policy-aware). The scalar `blend` body uses
+    # `select` caller against the lone `pass_through` spec (single-form names normalize their policy
+    # to None; only split `_mask`/`_maskz` names stay policy-aware). The scalar `select` body uses
     # the `complete` form (not a raw `return`). Builds in C++ and Rust.
     result = generate_project(
         [data_root],
@@ -1249,7 +1250,7 @@ def test_masked_value_ops_build(
     # Masked-variant generation (value-masking category): a dual name now emits its masked
     # variants alongside the unmasked one, split to `<name>_mask` (pass_through/merge) /
     # `<name>_maskz` (zero) — distinct names (Rust can't overload; the two policies share a
-    # signature so C++ can't either). SIMD bodies delegate to the unmasked op + `blend`/`mov`
+    # signature so C++ can't either). SIMD bodies delegate to the unmasked op + `select`/`mov`
     # (which stay bare, masked-only; `mov` itself emits both `mov_mask`/`mov_maskz`); scalar uses
     # if/set_zero. Pruning is policy-aware, so float masked specs whose `mov_maskz` float delegate
     # is absent prune cleanly. Representative spread (`binary_and`, `add`, `inv`, `shift_left`,
@@ -1299,7 +1300,7 @@ def test_masked_load_store_build(
     # Masked category C (memory): `load` emits `load_maskz` (zero) + `load_mask` (pass_through);
     # `store` emits `store_mask` — each carrying the `aligned` const-generic (mask × aligned
     # compose orthogonally). avx512(_vl) uses native masked load/store (`maskz_loadu`/`mask_loadu`/
-    # `mask_storeu`); avx2/sse fall back to `load`+`mov`/`blend`(+`store`) — the fallback forwards
+    # `mask_storeu`); avx2/sse fall back to `load`+`mov`/`select`(+`store`) — the fallback forwards
     # the caller's `aligned` via `attrs[aligned=value(primitive::attribute(aligned))]`,
     # which the call lowerer now resolves. `void` store result types in both backends. scalar +
     # sse2 + avx2 + skylake. (gather/scatter masked are deferred on the `vidx` kind.)

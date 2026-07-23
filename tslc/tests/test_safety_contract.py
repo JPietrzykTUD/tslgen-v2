@@ -435,8 +435,8 @@ def test_pruned_variant_dependency_keeps_variant_origin() -> None:
 
 
 def test_pruning_chooses_first_unresolved_dependency_deterministically() -> None:
-    blend = CallDependency(
-        primitive="blend",
+    select = CallDependency(
+        primitive="select",
         mask_policy=None,
         source=VectorIdentity("si16", "avx512"),
     )
@@ -445,14 +445,14 @@ def test_pruning_chooses_first_unresolved_dependency_deterministically() -> None
         mask_policy=None,
         source=VectorIdentity("si16", "avx512"),
     )
-    caller = _slot("caller", callees=frozenset({less_than, blend}))
+    caller = _slot("caller", callees=frozenset({less_than, select}))
 
     grouped, pruned = _prune_unresolved([caller], frozenset())
 
     assert grouped == {}
     assert pruned == [caller]
     assert caller.unresolved_callee is not None
-    assert caller.unresolved_callee.dependency == blend
+    assert caller.unresolved_callee.dependency == less_than
 
 
 def test_pruning_one_overload_keeps_live_sibling() -> None:

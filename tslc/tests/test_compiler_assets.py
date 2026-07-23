@@ -17,6 +17,7 @@ from tslc.compiler_assets import (
 )
 from tslc.render.rust_project import rust_artifacts
 from tslc.sources import SourceDocument
+from tslc.syntax.ast import ParsedTslScalarValue
 from tslc.syntax.parser import TslParser
 
 
@@ -51,6 +52,25 @@ def test_parser_consumes_injected_grammar() -> None:
 
     assert parsed.diagnostics == ()
     assert parsed.documents[0].primitives[0].name == "id"
+
+
+def test_boolean_tokens_do_not_capture_identifier_prefixes() -> None:
+    document = SourceDocument(
+        Path("boolean_identifier_prefix.tsl"),
+        "prim<v:=(v,v)> select(true_values, false_values):\n"
+        "  enabled true\n",
+        "d",
+        "tsl",
+    )
+
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+
+    assert parsed.diagnostics == ()
+    primitive = parsed.documents[0].primitives[0]
+    assert primitive.parameters == ("true_values", "false_values")
+    enabled = primitive.fields_by_name("enabled")[0].field.value
+    assert isinstance(enabled, ParsedTslScalarValue)
+    assert enabled.text == "true"
 
 
 def test_rust_project_renderer_consumes_injected_assets() -> None:

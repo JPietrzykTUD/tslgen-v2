@@ -453,10 +453,10 @@ prim<v:=m> to_vector(mask):
         implementation:
           tsil """
             complete(
-              call<primitive=blend[Vec]>(
+              call<primitive=select[Vec]>(
                 mask,
-                call<primitive=set_zero[Vec]>(),
-                call<primitive=set1[Vec]>(mask<lane_true>())
+                call<primitive=set1[Vec]>(mask<lane_true>()),
+                call<primitive=set_zero[Vec]>()
               )
             );
           """

@@ -143,15 +143,15 @@ def test_representative_project_shape_is_byte_stable(
     )
     expected = {
         "cpp/CMakeLists.txt": "afd9ccd8ea6feffdfe0fa38e44e5027b3e49b8206938b23415c59bf35c510b87",
-        "cpp/docs/input/tsl_api_docs.hpp": "e8550c8f23c29e97012248af4d0bbec2922a81d213f3128132f39ff9e96a1d54",
+        "cpp/docs/input/tsl_api_docs.hpp": "25c8a21fafad064c394b933b6c5d27b6dc07aaf4a509150d9da7e87ff9f8027d",
         "cpp/include/tsl.hpp": "298cd47b4e1509cd59eb4100f7a0d82bcdbc6e5d9f4eedccb0a68ba0bf667e03",
-        "cpp/include/tsl_primitives.hpp": "49a74d084e4b375d6e0832beb57c54ebfcf85edb25394f9c84d8776520ea0bb8",
-        "cpp/include/tsl_scalar.hpp": "4522211f30de0682e1d29d04b8cb322e45c71bb947aa0bd44e05e53e4d10b416",
-        "cpp/tests/smoke_scalar.cpp": "b8d0793aa19282d85dab6db70c43f41fb0a029daad3799377eab7a4a3bd8c7bf",
+        "cpp/include/tsl_primitives.hpp": "f1b98a21c8d349dc049eb9bf0d1d651a32156196bad5aa7de1c409ef5cbf496c",
+        "cpp/include/tsl_scalar.hpp": "a3d1b9f8fd299e4710f39f7e887380668a9c666311440d0d6eae281e2ba5cef5",
+        "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
         "rust/Cargo.toml": "c3c713fa53b4e90190c8d46e0eac79d6e5409a62afe5993b9b6b6f04c6d61fc1",
-        "rust/src/lib.rs": "0f6bdc2377e7fafa130a9729d607a05cda620a8aa1acfd7963002dfd5a0d5021",
-        "rust/src/tsl_documentation.rs": "f1147450534daf390bca8d5a7de39b2453b9485ff56d407849b5e09b0357930d",
-        "rust/src/tsl_scalar.rs": "f5633ce182a08ef8df7f71d87b8782d49872b330b55adb80b1552d81e032a223",
+        "rust/src/lib.rs": "a816b81e76757ab0c733476339e5383779b09981acf981704c90d4b04839bbd1",
+        "rust/src/tsl_documentation.rs": "d95830ad38c0b6723b7f256174f29e0fbbc00796b10981ad060ba7e94d40a037",
+        "rust/src/tsl_scalar.rs": "2d74509be462fd75bcb44227ab4b3ebb369dc5fb39bebbb3075b3c5a27bca0e8",
         "rust/tests/smoke.rs": "a4d108f502689e7f29ba5259e22779e8ef0afa36ab83c239022e2772d68d6b44",
     }
     actual = {

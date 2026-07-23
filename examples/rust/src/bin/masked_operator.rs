@@ -23,7 +23,7 @@ where
 {
     fn apply(&mut self, active: V::MaskType, value: V::RegisterType) -> V::RegisterType {
         let squared = profile::mul::<V>(value, value);
-        profile::blend::<V>(active, value, squared)
+        profile::select::<V>(active, squared, value)
     }
 }
 
@@ -43,7 +43,7 @@ where
         right: V::RegisterType,
     ) -> V::RegisterType {
         let sum = profile::add::<V>(left, right);
-        profile::blend::<V>(active, left, sum)
+        profile::select::<V>(active, sum, left)
     }
 }
 

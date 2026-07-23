@@ -115,7 +115,7 @@ class CallLowerer:
         )
 
         # A `attrs[mask=…]` call to a policy-split name targets its `_mask`/`_maskz` split (the
-        # render rename); single-form callees (`blend`) aren't in the set and stay bare.
+        # render rename); single-form callees (`select`) aren't in the set and stay bare.
         call_name = name
         if attrs.get("mask") and name in context.env.policy_split_names:
             call_name = f"{name}{context.env.support.mask_suffix(attrs['mask'])}"

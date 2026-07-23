@@ -111,7 +111,7 @@ def test_avx2_i64_to_f64_cast_composes_semantic_operations(
             "binary_xor",
             "reinterpret",
             "to_mask",
-            "blend",
+            "select",
             "sub",
             "add",
         ):
@@ -149,7 +149,7 @@ def test_sse_i64_to_f64_cast_is_pure_primitive_composition(
             "binary_or" if source_type == "ui64" else "set_zero",
             "reinterpret",
             "to_mask",
-            "blend",
+            "select",
             "sub",
             "add",
         ):

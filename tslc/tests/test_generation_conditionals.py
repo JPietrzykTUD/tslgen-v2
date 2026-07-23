@@ -703,16 +703,19 @@ def test_mask_test_imask_lowers_integral_mask_bit_test(
     assert rust.body_text == "return (((mask) as u64 >> 0) & 1u64) != 0;"
 
 
-# --- masked-variant selection: native blend (first mask-consuming primitive) --
+# --- masked-variant selection: native select (first mask-consuming primitive) --
 
 
 def test_masked_only_primitive_is_selectable(catalog: Catalog, machine_profiles) -> None:
-    # `blend` exists only as `[mask=pass_through]`; it must still resolve by name and
+    # `select` exists only as `[mask=pass_through]`; it must still resolve by name and
     # lower its native body, consuming the mask as a parameter (kind `m`).
-    spec = _spec(catalog, machine_profiles, "skylake", "blend", "avx512", "si32")
+    spec = _spec(catalog, machine_profiles, "skylake", "select", "avx512", "si32")
     assert spec is not None
     assert spec.result_kind == "v" and spec.param_kinds == ("m", "v", "v")
-    assert "_mm512_mask_blend_epi32(mask, left, right)" in spec.body_text
+    assert (
+        "_mm512_mask_blend_epi32(mask, false_values, true_values)"
+        in spec.body_text
+    )
 
 
 # --- ptr / void kinds: scalar load/store (leaf of the array/reduction chain) ---
@@ -739,8 +742,8 @@ def test_scalar_load_store_rust_is_unsafe(catalog: Catalog, machine_profiles) ->
 
 
 def test_runtime_if_uses_backend_condition_syntax(catalog: Catalog, machine_profiles) -> None:
-    cpp = _spec(catalog, machine_profiles, "scalar", "blend", "scalar", "si32")
-    rust = _spec(catalog, machine_profiles, "scalar", "blend", "scalar", "si32", backend="rust")
+    cpp = _spec(catalog, machine_profiles, "scalar", "select", "scalar", "si32")
+    rust = _spec(catalog, machine_profiles, "scalar", "select", "scalar", "si32", backend="rust")
 
     assert cpp is not None and "if (mask) {" in cpp.body_text
     assert rust is not None and "if mask {" in rust.body_text

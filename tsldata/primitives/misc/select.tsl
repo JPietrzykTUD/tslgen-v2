@@ -1,45 +1,46 @@
-prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
+prim<v:=(m,v,v)>[mask=pass_through] select(mask, true_values, false_values):
   operation select
   operand_roles:
     control_mask mask
-    pass_through left
-    primary right
-  brief_description "Selects right lanes where the mask is active and left lanes where the mask is inactive."
+    pass_through false_values
+    primary true_values
+  brief_description "Selects from the true-value input on active mask lanes and the false-value input otherwise."
   detailed_description """
     Selects lanes from two input vectors according to a mask. Active mask lanes
-    take the corresponding lane from `right`; inactive mask lanes take the
-    corresponding lane from `left`.
+    take the corresponding lane from `true_values`; inactive mask lanes take the
+    corresponding lane from `false_values`.
     """
   semantics """
-    input: mask mask, register left, register right
+    input: mask mask, register true_values, register false_values
     for each lane i:
       if mask[i] is active:
-        result[i] = right[i]
+        result[i] = true_values[i]
       else:
-        result[i] = left[i]
+        result[i] = false_values[i]
     return result
     """
   tests:
-    - {tags [basic], type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [1, 102, 3, 104, 5, 106, 7, 108, 9, 110, 11, 112, 13, 114, 15, 116]}}
-    - {tags [edge], type "ui8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]}}
-    - {tags [basic], type "si8", case {inputs [43690, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-1, 2, -3, 4, -5, 6, -7, 8, -9, 10, -11, 12, -13, 14, -15, 16]}}
-    - {tags [edge], type "si8", case {inputs [65535, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {tags [basic], type "ui16", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [1, 102, 3, 104, 5, 106, 7, 108]}}
-    - {tags [edge], type "ui16", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
-    - {tags [basic], type "si16", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, 2, -3, 4, -5, 6, -7, 8]}}
-    - {tags [edge], type "si16", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {tags [basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [1, 102, 3, 104, 5, 106, 7, 108]}}
-    - {tags [edge], type "ui32", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
-    - {tags [basic], type "si32", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, 2, -3, 4, -5, 6, -7, 8]}}
-    - {tags [edge], type "si32", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {tags [basic], type "ui64", case {inputs [10, [1, 2, 3, 4], [101, 102, 103, 104]], expected [1, 102, 3, 104]}}
-    - {tags [edge], type "ui64", case {inputs [15, [1, 2, 3, 4], [101, 102, 103, 104]], expected [101, 102, 103, 104]}}
-    - {tags [basic], type "si64", case {inputs [10, [-1, -2, -3, -4], [1, 2, 3, 4]], expected [-1, 2, -3, 4]}}
-    - {tags [edge], type "si64", case {inputs [15, [-1, -2, -3, -4], [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
-    - {tags [basic], type "f32", case {inputs [10, [1.0, 2.0, 3.0, 4.0], [10.0, 20.0, 30.0, 40.0]], expected [1.0, 20.0, 3.0, 40.0]}}
-    - {tags [edge], type "f32", case {inputs [15, [1.0, 2.0, 3.0, 4.0], [10.0, 20.0, 30.0, 40.0]], expected [10.0, 20.0, 30.0, 40.0]}}
-    - {tags [basic], type "f64", case {inputs [2, [1.0, 2.0], [10.0, 20.0]], expected [1.0, 20.0]}}
-    - {tags [edge], type "f64", case {inputs [3, [1.0, 2.0], [10.0, 20.0]], expected [10.0, 20.0]}}
+    - {tags [basic], type "ui8", case {inputs [43690, [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 102, 3, 104, 5, 106, 7, 108, 9, 110, 11, 112, 13, 114, 15, 116]}}
+    - {tags [edge], type "ui8", case {inputs [65535, [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]}}
+    - {tags [basic], type "si8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]], expected [-1, 2, -3, 4, -5, 6, -7, 8, -9, 10, -11, 12, -13, 14, -15, 16]}}
+    - {tags [edge], type "si8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [basic], type "ui16", case {inputs [170, [101, 102, 103, 104, 105, 106, 107, 108], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 102, 3, 104, 5, 106, 7, 108]}}
+    - {tags [edge], type "ui16", case {inputs [255, [101, 102, 103, 104, 105, 106, 107, 108], [1, 2, 3, 4, 5, 6, 7, 8]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
+    - {tags [basic], type "si16", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-1, 2, -3, 4, -5, 6, -7, 8]}}
+    - {tags [edge], type "si16", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [-1, -2, -3, -4, -5, -6, -7, -8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [basic], type "ui32", case {inputs [170, [101, 102, 103, 104, 105, 106, 107, 108], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 102, 3, 104, 5, 106, 7, 108]}}
+    - {tags [edge], type "ui32", case {inputs [255, [101, 102, 103, 104, 105, 106, 107, 108], [1, 2, 3, 4, 5, 6, 7, 8]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
+    - {tags [edge, all_false], type "ui32", case {inputs [0, [101, 102, 103, 104, 105, 106, 107, 108], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [basic], type "si32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-1, 2, -3, 4, -5, 6, -7, 8]}}
+    - {tags [edge], type "si32", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [-1, -2, -3, -4, -5, -6, -7, -8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [basic], type "ui64", case {inputs [10, [101, 102, 103, 104], [1, 2, 3, 4]], expected [1, 102, 3, 104]}}
+    - {tags [edge], type "ui64", case {inputs [15, [101, 102, 103, 104], [1, 2, 3, 4]], expected [101, 102, 103, 104]}}
+    - {tags [basic], type "si64", case {inputs [10, [1, 2, 3, 4], [-1, -2, -3, -4]], expected [-1, 2, -3, 4]}}
+    - {tags [edge], type "si64", case {inputs [15, [1, 2, 3, 4], [-1, -2, -3, -4]], expected [1, 2, 3, 4]}}
+    - {tags [basic], type "f32", case {inputs [10, [10.0, 20.0, 30.0, 40.0], [1.0, 2.0, 3.0, 4.0]], expected [1.0, 20.0, 3.0, 40.0]}}
+    - {tags [edge], type "f32", case {inputs [15, [10.0, 20.0, 30.0, 40.0], [1.0, 2.0, 3.0, 4.0]], expected [10.0, 20.0, 30.0, 40.0]}}
+    - {tags [basic], type "f64", case {inputs [2, [10.0, 20.0], [1.0, 2.0]], expected [1.0, 20.0]}}
+    - {tags [edge], type "f64", case {inputs [3, [10.0, 20.0], [1.0, 2.0]], expected [10.0, 20.0]}}
   impls:
     scalar:
       arith:
@@ -51,9 +52,9 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
         implementation:
           tsil """
               if (mask) {
-                complete(right);
+                complete(true_values);
               } else {
-                complete(left);
+                complete(false_values);
               }
             """
     clang_v128:
@@ -64,7 +65,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask ? right : left);"
+          tsil "complete(mask ? true_values : false_values);"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -76,10 +77,10 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           reasons []
         implementation:
           tsil """
-              var<infer>(result, left);
+              var<infer>(result, false_values);
               loop<backend, unroll>(i, 0, value(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
-                  result[i] = right[i];
+                  result[i] = true_values[i];
                 }
               }
               complete(result);
@@ -98,7 +99,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           tsil """
               complete(
                 intrin<mask_blend, build>(
-                  mask, left, right
+                  mask, false_values, true_values
                 )
               );
             """
@@ -121,7 +122,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           tsil """
               complete(
                 intrin<mask_blend, build[suffix=base::signed_of(base::in)]>(
-                  mask, left, right
+                  mask, false_values, true_values
                 )
               );
             """
@@ -140,8 +141,8 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           tsil """
               complete(
                 intrin<blendv, build>(
-                  left,
-                  right,
+                  false_values,
+                  true_values,
                   call<primitive=to_vector>(mask)
                 )
               );
@@ -158,8 +159,8 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           tsil """
               complete(
                 intrin<blendv, build[suffix=epi8]>(
-                  left,
-                  right,
+                  false_values,
+                  true_values,
                   call<primitive=to_vector>(mask)
                 )
               );
@@ -175,8 +176,8 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           tsil """
               let<type>(FloatVec, vector::as_base(f32));
               var<const_infer>(mask_bits, call<primitive=reinterpret[Vec, FloatVec]>(call<primitive=to_vector>(mask)));
-              var<const_infer>(left_bits, call<primitive=reinterpret[Vec, FloatVec]>(left));
-              var<const_infer>(right_bits, call<primitive=reinterpret[Vec, FloatVec]>(right));
+              var<const_infer>(left_bits, call<primitive=reinterpret[Vec, FloatVec]>(false_values));
+              var<const_infer>(right_bits, call<primitive=reinterpret[Vec, FloatVec]>(true_values));
               var<const_infer>(selected_bits,
                 call<primitive=binary_or[FloatVec]>(
                   call<primitive=binary_andnot[FloatVec]>(mask_bits, left_bits),
@@ -202,11 +203,11 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
                 call<primitive=binary_or>(
                   call<primitive=binary_andnot>(
                     call<primitive=to_vector>(mask),
-                    left
+                    false_values
                   ),
                   call<primitive=binary_and>(
                     call<primitive=to_vector>(mask),
-                    right
+                    true_values
                   )
                 )
               );
@@ -222,8 +223,8 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           tsil """
               complete(
                 intrin<v128_bitselect, build[suffix=""]>(
-                  right,
-                  left,
+                  true_values,
+                  false_values,
                   call<primitive=to_vector>(mask)
                 )
               );
@@ -240,7 +241,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
               let<type>(UnsignedT, base::unsigned_of(base::in));
               var<const_infer>(mask_v, call<primitive=to_vector>(mask));
               var<const_infer>(mask_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(mask_v));
-              complete(intrin<vbslq, build[suffix=base::in]>(mask_u, right, left));
+              complete(intrin<vbslq, build[suffix=base::in]>(mask_u, true_values, false_values));
             """
     sve:
       arith:
@@ -253,7 +254,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           tsil """
             complete(
               intrin<svsel, build>(
-                  mask, right, left
+                  mask, true_values, false_values
                 )
             );
           """
@@ -372,10 +373,10 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
         implementation:
           tsil """
               complete(
-                call<primitive=blend, attrs[mask=pass_through]>(
+                call<primitive=select, attrs[mask=pass_through]>(
                   mask,
-                  call<primitive=set_zero[Vec]>(),
-                  src
+                  src,
+                  call<primitive=set_zero[Vec]>()
                 )
               );
             """
@@ -496,10 +497,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
         implementation:
           tsil """
               complete(
-                call<primitive=blend, attrs[mask=pass_through]>(
+                call<primitive=select, attrs[mask=pass_through]>(
                   mask,
-                  src,
-                  data
+                  data,
+                  src
                 )
               );
             """

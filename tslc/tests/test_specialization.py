@@ -172,7 +172,7 @@ def test_dataparallel_primitive_facade_descriptor_classifies_shared_policy_shape
 
     assert (
         classify_dataparallel_primitive_facade(
-            "blend", (_facade_spec("blend", "v", ("m", "v", "v")),)
+            "select", (_facade_spec("select", "v", ("m", "v", "v")),)
         )
         is None
     )
@@ -477,7 +477,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "e10362901d15b19f6e4b3c621c5a2f9495e03558880ebfe61bf51b3d5f6733fd"
+        "fce32e42c27fb5984877442c9a4acaec3c64fb557e9459d15df5975f199d1248"
     )
 
     assert 'name = "tsl"' in cargo

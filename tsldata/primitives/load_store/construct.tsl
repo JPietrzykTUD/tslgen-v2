@@ -238,10 +238,10 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
         implementation:
           tsil """
                complete(
-                 call<primitive=blend, attrs[mask=pass_through]>(
+                 call<primitive=select, attrs[mask=pass_through]>(
                    mask,
-                   data,
-                   call<primitive=set1[Vec]>(scalar)
+                   call<primitive=set1[Vec]>(scalar),
+                   data
                  )
                );
             """

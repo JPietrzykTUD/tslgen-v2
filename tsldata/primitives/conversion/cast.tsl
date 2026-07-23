@@ -795,10 +795,10 @@ prim<v:=v>[cast=convert] cast(data):
                      var<const_infer>(magic_i_hi32, call<primitive=set1[Vec]>(0x4530000080000000));
                      var<const_infer>(magic_i_all, call<primitive=set1[Vec]>(0x4530000080100000));
                      var<const_infer>(magic_d_all, call<primitive=reinterpret[Vec, FloatVec]>(magic_i_all));
-                     var<const_infer>(v_lo_words, call<primitive=blend[DwordVec]>(
+                     var<const_infer>(v_lo_words, call<primitive=select[DwordVec]>(
                        low_lane_mask,
-                       call<primitive=reinterpret[Vec, DwordVec]>(magic_i_lo),
-                       call<primitive=reinterpret[Vec, DwordVec]>(data)
+                       call<primitive=reinterpret[Vec, DwordVec]>(data),
+                       call<primitive=reinterpret[Vec, DwordVec]>(magic_i_lo)
                      ));
                      var<const_infer>(v_lo, call<primitive=reinterpret[DwordVec, Vec]>(v_lo_words));
                      var<infer>(v_hi, call<primitive=shift_right[Vec, false]>(data, 32));
@@ -819,10 +819,10 @@ prim<v:=v>[cast=convert] cast(data):
                      var<const_infer>(magic_i_hi32, call<primitive=set1[Vec]>(0x4530000000000000));
                      var<const_infer>(magic_i_all, call<primitive=set1[Vec]>(0x4530000000100000));
                      var<const_infer>(magic_d_all, call<primitive=reinterpret[Vec, FloatVec]>(magic_i_all));
-                     var<const_infer>(v_lo_words, call<primitive=blend[DwordVec]>(
+                     var<const_infer>(v_lo_words, call<primitive=select[DwordVec]>(
                        low_lane_mask,
-                       call<primitive=reinterpret[Vec, DwordVec]>(magic_i_lo),
-                       call<primitive=reinterpret[Vec, DwordVec]>(data)
+                       call<primitive=reinterpret[Vec, DwordVec]>(data),
+                       call<primitive=reinterpret[Vec, DwordVec]>(magic_i_lo)
                      ));
                      var<const_infer>(v_lo, call<primitive=reinterpret[DwordVec, Vec]>(v_lo_words));
                      var<infer>(v_hi, call<primitive=shift_right[Vec, false]>(data, 32));
@@ -1134,12 +1134,12 @@ prim<v:=v>[cast=convert] cast(data):
                      let<type>(FloatVec, vector::as_base(f64));
                      var<const_infer>(bits, call<primitive=reinterpret[Vec, BitVec]>(data));
                      var<const_infer>(words, call<primitive=reinterpret[Vec, WordVec]>(data));
-                     var<const_infer>(x_h_halfwords, call<primitive=blend[HalfwordVec]>(
+                     var<const_infer>(x_h_halfwords, call<primitive=select[HalfwordVec]>(
                        call<primitive=to_mask[HalfwordVec]>(0x33),
+                       call<primitive=set_zero[HalfwordVec]>(),
                        call<primitive=reinterpret[WordVec, HalfwordVec]>(
                          call<primitive=shift_right[WordVec, true]>(words, 16)
-                       ),
-                       call<primitive=set_zero[HalfwordVec]>()
+                       )
                      ));
                      var<const_infer>(x_h, call<primitive=add[BitVec]>(
                        call<primitive=reinterpret[HalfwordVec, BitVec]>(x_h_halfwords),
@@ -1147,12 +1147,12 @@ prim<v:=v>[cast=convert] cast(data):
                          call<primitive=set1[FloatVec]>(442721857769029238784.)
                        )
                      ));
-                     var<const_infer>(x_l_halfwords, call<primitive=blend[HalfwordVec]>(
+                     var<const_infer>(x_l_halfwords, call<primitive=select[HalfwordVec]>(
                        call<primitive=to_mask[HalfwordVec]>(0x88),
-                       call<primitive=reinterpret[BitVec, HalfwordVec]>(bits),
                        call<primitive=reinterpret[BitVec, HalfwordVec]>(
                          call<primitive=set1[BitVec]>(cast<static>(ui64, 0x0010000000000000))
-                       )
+                       ),
+                       call<primitive=reinterpret[BitVec, HalfwordVec]>(bits)
                      ));
                      var<const_infer>(x_l, call<primitive=reinterpret[HalfwordVec, BitVec]>(x_l_halfwords));
                      var<const_infer>(f, call<primitive=sub[FloatVec]>(
@@ -1177,12 +1177,12 @@ prim<v:=v>[cast=convert] cast(data):
                        )
                      ));
                      let<type>(HalfwordVec, vector::as_base(ui16));
-                     var<const_infer>(x_l_halfwords, call<primitive=blend[HalfwordVec]>(
+                     var<const_infer>(x_l_halfwords, call<primitive=select[HalfwordVec]>(
                        call<primitive=to_mask[HalfwordVec]>(0xcc),
-                       call<primitive=reinterpret[BitVec, HalfwordVec]>(bits),
                        call<primitive=reinterpret[BitVec, HalfwordVec]>(
                          call<primitive=set1[BitVec]>(cast<static>(ui64, 0x0010000000000000))
-                       )
+                       ),
+                       call<primitive=reinterpret[BitVec, HalfwordVec]>(bits)
                      ));
                      var<const_infer>(x_l, call<primitive=reinterpret[HalfwordVec, BitVec]>(x_l_halfwords));
                      var<const_infer>(f, call<primitive=sub[FloatVec]>(

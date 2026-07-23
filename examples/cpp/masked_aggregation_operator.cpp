@@ -22,7 +22,7 @@ struct masked_sum_op {
         typename Vec::mask_type active,
         typename tsl::reg_param<Vec>::type value) {
         const auto zero = tsl::set1<Vec>(static_cast<typename Vec::base_type>(0));
-        const auto selected = tsl::blend<Vec>(active, zero, value);
+        const auto selected = tsl::select<Vec>(active, value, zero);
         total += static_cast<std::int64_t>(tsl::hadd<Vec>(selected));
     }
 
@@ -41,7 +41,7 @@ struct masked_pair_sum_op {
         typename tsl::reg_param<Vec>::type right) {
         const auto zero = tsl::set1<Vec>(static_cast<typename Vec::base_type>(0));
         const auto sum = tsl::add<Vec>(left, right);
-        const auto selected = tsl::blend<Vec>(active, zero, sum);
+        const auto selected = tsl::select<Vec>(active, sum, zero);
         total += static_cast<std::int64_t>(tsl::hadd<Vec>(selected));
     }
 

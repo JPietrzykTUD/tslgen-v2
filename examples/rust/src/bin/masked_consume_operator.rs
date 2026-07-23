@@ -25,7 +25,7 @@ where
 {
     fn consume(&mut self, active: V::MaskType, value: V::RegisterType) {
         let zero = profile::set1::<V>(0);
-        let selected = profile::blend::<V>(active, zero, value);
+        let selected = profile::select::<V>(active, value, zero);
         self.total += i64::from(profile::hadd::<V>(selected));
     }
 }
@@ -45,7 +45,7 @@ where
     fn consume(&mut self, active: V::MaskType, left: V::RegisterType, right: V::RegisterType) {
         let zero = profile::set1::<V>(0);
         let sum = profile::add::<V>(left, right);
-        let selected = profile::blend::<V>(active, zero, sum);
+        let selected = profile::select::<V>(active, sum, zero);
         self.total += i64::from(profile::hadd::<V>(selected));
     }
 }

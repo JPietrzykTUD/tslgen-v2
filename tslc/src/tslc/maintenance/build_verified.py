@@ -33,7 +33,7 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
         "test_clang_vector_overlay_builds_and_runs_through_opt_in_target": (
             "abs",
             "add",
-            "blend",
+            "select",
             "equal",
             "hadd",
             "mask_binary_and",
@@ -52,9 +52,9 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
         "test_cpp_auto_profile_configures": ("add",),
         "test_scalar_mask_comparison_family_builds": _COMPARISON_FAMILY,
         "test_simd_comparison_family_builds": _COMPARISON_FAMILY,
-        "test_blend_native_builds": ("blend",),
+        "test_select_native_builds": ("select",),
         "test_to_from_array_roundtrip_builds": ("to_array", "from_array"),
-        "test_blend_select_builds": ("mul", "blend", "mov", "min", "max"),
+        "test_select_composition_builds": ("mul", "select", "mov", "min", "max"),
         "test_generic_masks_build": _COMPARISON_FAMILY,
         "test_generic_extension_builds": ("add", "sub"),
         "test_elementwise_bitwise_builds": (

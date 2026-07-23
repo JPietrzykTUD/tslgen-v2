@@ -21,7 +21,7 @@ enum class TslPartitionMode { LESS_THAN, EQUAL_TO };
 // the evolving key state, so the columns cannot be held resident in lockstep for
 // a runtime column count. Instead the keys are sorted once while the per-
 // comparator exchange mask is recorded; each payload column then replays those
-// recorded masks with one blend pair per comparator. This decouples the column
+// recorded masks with one select pair per comparator. This decouples the column
 // count from register pressure -- only the keys and one column are resident at a
 // time -- so the number of columns can come from a std::vector at runtime.
 //
@@ -98,8 +98,8 @@ class TslCoSortNetwork {
           auto const partner = wire ^ stride;
           if (partner > wire) {
             auto const exchange = recorded[comparator++];
-            auto const pay_wire = tsl::blend<DataSimdStyle>(exchange, pay[wire], pay[partner]);
-            auto const pay_partner = tsl::blend<DataSimdStyle>(exchange, pay[partner], pay[wire]);
+            auto const pay_wire = tsl::select<DataSimdStyle>(exchange, pay[partner], pay[wire]);
+            auto const pay_partner = tsl::select<DataSimdStyle>(exchange, pay[wire], pay[partner]);
             pay[wire] = pay_wire;
             pay[partner] = pay_partner;
           }

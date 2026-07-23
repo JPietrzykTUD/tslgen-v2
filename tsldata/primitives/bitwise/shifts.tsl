@@ -461,7 +461,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
-              complete(call<primitive=blend>(mask, data, shifted));
+              complete(call<primitive=select>(mask, shifted, data));
             """
     [generic, oneapi_fpga]:
       arith:
@@ -494,7 +494,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
-              complete(call<primitive=blend>(mask, data, shifted));
+              complete(call<primitive=select>(mask, shifted, data));
             """
     avx2:
       arith:
@@ -506,7 +506,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
-              complete(call<primitive=blend>(mask, data, shifted));
+              complete(call<primitive=select>(mask, shifted, data));
             """
     sse:
       arith:
@@ -518,7 +518,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
-              complete(call<primitive=blend>(mask, data, shifted));
+              complete(call<primitive=select>(mask, shifted, data));
             """
     neon:
       arith:
@@ -530,7 +530,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
-              complete(call<primitive=blend>(mask, data, shifted));
+              complete(call<primitive=select>(mask, shifted, data));
             """
     sve:
       arith:
@@ -542,7 +542,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
-              complete(call<primitive=blend>(mask, data, shifted));
+              complete(call<primitive=select>(mask, shifted, data));
             """
     wasm128:
       arith:
@@ -554,7 +554,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
-              complete(call<primitive=blend>(mask, data, shifted));
+              complete(call<primitive=select>(mask, shifted, data));
             """
 prim<v:=(v,s)> shift_left(data, shift):
   operation shift_left

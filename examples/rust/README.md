@@ -11,7 +11,7 @@ generated crate under `tslctmp/examples/generated/rust`:
 
 ```bash
 ./dev.sh generate \
-  --primitives add,blend,hadd,less_than,mul,set1 \
+  --primitives add,select,hadd,less_than,mul,set1 \
   --profiles scalar \
   --backends rust \
   --types si32 \
@@ -326,12 +326,12 @@ where
 {
     fn apply(&mut self, active: V::MaskType, value: V::RegisterType) -> V::RegisterType {
         let squared = profile::mul::<V>(value, value);
-        profile::blend::<V>(active, value, squared)
+        profile::select::<V>(active, squared, value)
     }
 }
 ```
 
-The binary masked operation uses `profile::add::<V>` and `profile::blend::<V>` to write
+The binary masked operation uses `profile::add::<V>` and `profile::select::<V>` to write
 `left + right` for active rows and the original left value for inactive rows.
 The example initializes output buffers with sentinel values and verifies no
 sentinel survives, proving inactive rows are explicitly written rather than
@@ -404,13 +404,13 @@ where
 {
     fn consume(&mut self, active: V::MaskType, value: V::RegisterType) {
         let zero = profile::set1::<V>(0);
-        let selected = profile::blend::<V>(active, zero, value);
+        let selected = profile::select::<V>(active, value, zero);
         self.total += i64::from(profile::hadd::<V>(selected));
     }
 }
 ```
 
-The binary sink uses `profile::add::<V>`, `profile::blend::<V>`, and `profile::hadd::<V>`
+The binary sink uses `profile::add::<V>`, `profile::select::<V>`, and `profile::hadd::<V>`
 to accumulate `left + right` only for active rows. The example verifies native,
 fixed scalar, and explicit generic policies.
 
@@ -483,7 +483,7 @@ where
 
     fn accumulate(&mut self, active: V::MaskType, value: V::RegisterType) {
         let zero = profile::set1::<V>(0);
-        let selected = profile::blend::<V>(active, zero, value);
+        let selected = profile::select::<V>(active, value, zero);
         self.total += i64::from(profile::hadd::<V>(selected));
     }
 
@@ -493,7 +493,7 @@ where
 }
 ```
 
-The binary aggregate uses `profile::add::<V>`, `profile::blend::<V>`, and
+The binary aggregate uses `profile::add::<V>`, `profile::select::<V>`, and
 `profile::hadd::<V>` to accumulate `left + right` only for active rows. The example
 verifies native, fixed scalar, and explicit generic policies.
 

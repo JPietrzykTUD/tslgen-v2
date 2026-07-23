@@ -21,7 +21,7 @@
 // vectors and take-max masks) once instead of rebuilding it every call, and
 // co-sorts a runtime number of payload columns via record-and-replay: the key
 // sort records each comparator's exchange mask, and every payload column replays
-// those masks (permute + blend). Shorter inputs are padded with the type max.
+// those masks (permute + select). Shorter inputs are padded with the type max.
 //
 // `rows` is fixed so the resident key bank stays within the register file; the
 // capacity therefore scales with the chosen extension's lane count -- e.g. u32:
@@ -157,7 +157,7 @@ class TslCoSortBitonicLeaf {
         auto const partner = tsl::permute_lanes<Vec, Vec>(value, intra_perms()[op.perm_id]);
         auto const minimum = tsl::min<Vec>(value, partner);
         auto const maximum = tsl::max<Vec>(value, partner);
-        auto const result = tsl::blend<Vec>(op.take_max, minimum, maximum);
+        auto const result = tsl::select<Vec>(op.take_max, maximum, minimum);
         exchange[op_index++] = tsl::nequal<Vec>(result, value);
         bank[op.row] = result;
       } else {
@@ -186,13 +186,13 @@ class TslCoSortBitonicLeaf {
         if (op.intra) {
           auto const value = pay_bank[op.row];
           auto const partner = tsl::permute_lanes<Vec, Vec>(value, intra_perms()[op.perm_id]);
-          pay_bank[op.row] = tsl::blend<Vec>(exchange[replay++], value, partner);
+          pay_bank[op.row] = tsl::select<Vec>(exchange[replay++], partner, value);
         } else {
           auto const a = pay_bank[op.row];
           auto const b = pay_bank[op.partner];
           auto const mask = exchange[replay++];
-          pay_bank[op.row] = tsl::blend<Vec>(mask, a, b);
-          pay_bank[op.partner] = tsl::blend<Vec>(mask, b, a);
+          pay_bank[op.row] = tsl::select<Vec>(mask, b, a);
+          pay_bank[op.partner] = tsl::select<Vec>(mask, a, b);
         }
       }
       store_block(payload.data(), pay_bank);

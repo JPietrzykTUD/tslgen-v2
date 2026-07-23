@@ -141,7 +141,7 @@ def test_x86_masked_integer_extrema_avoid_array_fallback(
         if profile == "knl" and type_tag in {"si32", "ui64"}:
             assert "mask_reduce" in lowered.body_text
         else:
-            assert "blend" in lowered.body_text
+            assert "select" in lowered.body_text
 
 @pytest.mark.parametrize("primitive", ["hmax", "hmin"])
 @pytest.mark.parametrize("profile", ["sse2", "avx2"])

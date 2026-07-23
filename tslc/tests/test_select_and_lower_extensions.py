@@ -538,7 +538,7 @@ def test_integer_minmax_prefers_exact_isa_intrinsic(
     assert cpp is not None
     assert intrinsic in cpp.body_text
     assert "::tsl::less_than" not in cpp.body_text
-    assert "::tsl::blend" not in cpp.body_text
+    assert "::tsl::select" not in cpp.body_text
 
 
 @pytest.mark.parametrize("primitive", ["max", "min"])
@@ -560,7 +560,7 @@ def test_float_minmax_keeps_contract_preserving_compare_blend(
 
     assert cpp is not None
     assert "::tsl::less_than<Vec>" in cpp.body_text
-    assert "::tsl::blend<Vec>" in cpp.body_text
+    assert "::tsl::select<Vec>" in cpp.body_text
 
 
 @pytest.mark.parametrize(

@@ -455,7 +455,7 @@ def test_generic_like_scatters_read_native_value_register_directly(
 
 
 @pytest.mark.parametrize("extension", ["generic", "oneapi_fpga"])
-@pytest.mark.parametrize("primitive", ["blend", "compress", "expand", "conflict"])
+@pytest.mark.parametrize("primitive", ["select", "compress", "expand", "conflict"])
 def test_generic_like_misc_fallbacks_mutate_native_array_registers_directly(
     catalog: Catalog,
     machine_profiles,
@@ -849,7 +849,7 @@ def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridg
         bool_to_vector_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert bool_to_vector is not None
-    assert "::tsl::blend<Vec>" in bool_to_vector.body_text
+    assert "::tsl::select<Vec>" in bool_to_vector.body_text
     assert "::tsl::set_zero<Vec>()" in bool_to_vector.body_text
     assert "::tsl::set1<Vec>" in bool_to_vector.body_text
     assert "::tsl::bit_cast" not in bool_to_vector.body_text

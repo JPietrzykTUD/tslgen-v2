@@ -19,7 +19,7 @@ struct square_or_original_op {
         typename Vec::mask_type active,
         typename tsl::reg_param<Vec>::type value) const {
         const auto squared = tsl::mul<Vec>(value, value);
-        return tsl::blend<Vec>(active, value, squared);
+        return tsl::select<Vec>(active, squared, value);
     }
 };
 
@@ -30,7 +30,7 @@ struct add_or_left_op {
         typename tsl::reg_param<Vec>::type left,
         typename tsl::reg_param<Vec>::type right) const {
         const auto sum = tsl::add<Vec>(left, right);
-        return tsl::blend<Vec>(active, left, sum);
+        return tsl::select<Vec>(active, sum, left);
     }
 };
 
