@@ -9,7 +9,10 @@ from typing import TypeGuard
 from tslc.backend.emitted_profile import used_vector_type_specs
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
-from tslc.backend.rust_facades import rust_algorithm_primitive_facades
+from tslc.backend.rust_facades import (
+    rust_algorithm_primitive_facades,
+    rust_algorithm_primitive_facades_require_rebind,
+)
 from tslc.backend.rust_vectors import RustVectorRegistration, rust_vector_registrations
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.catalog.model import Extension
@@ -30,6 +33,15 @@ def rust_algorithm_module(
 
     registrations = rust_vector_registrations(by_primitive, extensions)
     impl_targets = _rust_algorithm_impl_targets(registrations, extensions)
+    mappings = _rust_algorithm_vector_mappings(by_primitive, extensions)
+    rebind_imports = (
+        ", RebindBase, ReboundBase"
+        if rust_algorithm_primitive_facades_require_rebind(
+            by_primitive,
+            reserved_names=RUST_ALGORITHM_RESERVED_NAMES,
+        )
+        else ""
+    )
     parts = [
         "pub mod algo {\n"
         "    pub use crate::tsl_algorithm::{\n"
@@ -42,7 +54,7 @@ def rust_algorithm_module(
         "    };\n\n"
         "    use crate::tsl_algorithm::{\n"
         "        CompressStore, IntegralMask, LoadStore, MaskFromIntegral, MaskedStore,\n"
-        "        MaskPopulationCount, RebindBase, ReboundBase, SelectedLoad, VectorFor,\n"
+        f"        MaskPopulationCount, SelectedLoad, VectorFor{rebind_imports},\n"
         "    };\n"
         "    use crate::dataparallel;\n"
         "    use crate::tsl_core::{\n"
@@ -78,7 +90,6 @@ def rust_algorithm_module(
     )
     if mask_from_integral_impls:
         parts.append(mask_from_integral_impls)
-    mappings = _rust_algorithm_vector_mappings(by_primitive, extensions)
     if mappings:
         parts.append(mappings)
     algorithm_wrappers = assets.text(_RUST_ALGORITHM_WRAPPER_ASSET).rstrip()

@@ -65,6 +65,7 @@ from tslc.render.rust_policy_consumption import (
     RustPolicyConsumptionRenderProfile,
 )
 from tslc.render.rust_static_selection import (
+    rust_cfg_all,
     rust_static_fallback_cfg,
     rust_static_profile_cfg,
 )
@@ -567,7 +568,7 @@ def _rust_lib(
         "rust_lib_profile.rs.tmpl",
         profile_slug="target_fallback",
         module_cfg_attr="",
-        selected_profile_cfg=fallback_cfg,
+        selected_profile_cfg=rust_cfg_all("not(doc)", fallback_cfg),
         runtime_private_module="",
     ).rstrip()
     profile_modules = "\n\n".join(
@@ -581,13 +582,16 @@ def _rust_lib(
         assets.fill(
             "rust_lib_benchmark_profile.rs.tmpl",
             profile_slug=slug(profile.profile.name),
-            selected_profile_cfg=(
-                rust_static_profile_cfg(selection)
-                if (
-                    selection := selections_by_name.get(profile.profile.name)
-                )
-                is not None
-                else fallback_cfg
+            selected_profile_cfg=rust_cfg_all(
+                "tsl_variant_benchmarks",
+                (
+                    rust_static_profile_cfg(selection)
+                    if (
+                        selection := selections_by_name.get(profile.profile.name)
+                    )
+                    is not None
+                    else fallback_cfg
+                ),
             ),
         ).rstrip()
         for profile in profiles
@@ -632,7 +636,7 @@ def _rust_lib_profile_module(
         "rust_lib_profile.rs.tmpl",
         profile_slug=profile_slug,
         module_cfg_attr=f"#[cfg({selected_cfg})]",
-        selected_profile_cfg=selected_cfg,
+        selected_profile_cfg=rust_cfg_all("not(doc)", selected_cfg),
         runtime_private_module=runtime_private_module,
     ).rstrip()
 

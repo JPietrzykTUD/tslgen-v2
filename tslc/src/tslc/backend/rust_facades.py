@@ -75,6 +75,28 @@ def rust_algorithm_primitive_facades(
     return "\n\n".join(parts)
 
 
+def rust_algorithm_primitive_facades_require_rebind(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    *,
+    reserved_names: frozenset[str],
+) -> bool:
+    """Whether the selected algorithm facades include a base-type conversion."""
+
+    for primitive_name in sorted(by_primitive):
+        if rust_raw_identifier(primitive_name) in reserved_names:
+            continue
+        facade = classify_dataparallel_primitive_facade(
+            primitive_name, by_primitive[primitive_name]
+        )
+        if (
+            facade is not None
+            and facade.kind is not DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY
+            and facade.shape.target is not None
+        ):
+            return True
+    return False
+
+
 def _rust_algorithm_memory_facade(
     function_name: str,
     facade: DataparallelPrimitiveFacade,
@@ -136,5 +158,6 @@ def _rust_facade_param_type(param_kind: str, vec: str, target_vec: str | None) -
 
 __all__ = (
     "rust_algorithm_primitive_facades",
+    "rust_algorithm_primitive_facades_require_rebind",
     "rust_primitive_tag_name",
 )

@@ -1,7 +1,7 @@
 @{module_cfg_attr}
 #[doc(hidden)]
 pub mod tsl_@{profile_slug};
-#[cfg(all(not(doc), @{selected_profile_cfg}))]
+#[cfg(@{selected_profile_cfg})]
 #[doc = "API and vector types for the selected generated machine profile."]
 #[doc(inline)]
 pub use crate::tsl_@{profile_slug} as profile;

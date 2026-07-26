@@ -50,7 +50,19 @@ def rust_static_fallback_cfg(plan: RustStaticSelectionPlan) -> str:
     return f"not(any({hardware}))"
 
 
+def rust_cfg_all(*terms: str) -> str:
+    """Join cfg predicates without emitting redundant ``all()`` children."""
+
+    effective = tuple(term for term in terms if term != "all()")
+    if not effective:
+        return "all()"
+    if len(effective) == 1:
+        return effective[0]
+    return f"all({', '.join(effective)})"
+
+
 __all__ = (
+    "rust_cfg_all",
     "rust_static_fallback_cfg",
     "rust_static_profile_cfg",
     "rust_target_selection_cfg",

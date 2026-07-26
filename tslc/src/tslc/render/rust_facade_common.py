@@ -70,34 +70,65 @@ def representations_can_coexist(
     left: RustFacadeRepresentation,
     right: RustFacadeRepresentation,
 ) -> bool:
-    requirements = tuple(
-        item
-        for item in (left.requirement, right.requirement)
-        if item is not None
+    profile_requirements = tuple(
+        requirement
+        for requirement in (left.requirement, right.requirement)
+        if requirement is not None
     )
-    if not requirements:
+    if not profile_requirements:
         return True
-    arches = {item.target_arch for item in requirements}
+    arches = {item.target_arch for item in profile_requirements}
     if len(arches) != 1:
         return False
-    effective = RustTargetRequirement(
-        requirements[0].target_arch,
-        tuple(
-            sorted(
-                {
-                    feature
-                    for requirement in requirements
-                    for feature in requirement.target_features
-                }
-            )
-        ),
+    target_arch = profile_requirements[0].target_arch
+    target_features = frozenset(
+        feature
+        for requirement in profile_requirements
+        for feature in requirement.target_features
     )
-    return not any(
-        _requirement_implies(effective, exclusion)
-        for exclusion in (
-            *left.stronger_requirements,
-            *right.stronger_requirements,
+    return all(
+        _representation_is_active(representation, target_arch, target_features)
+        for representation in (left, right)
+    )
+
+
+def _representation_is_active(
+    representation: RustFacadeRepresentation,
+    target_arch: str,
+    target_features: frozenset[str],
+) -> bool:
+    if representation.requirement is None:
+        return not any(
+            _target_selection_is_active(
+                exclusion.requirement,
+                exclusion.stronger_requirements,
+                target_arch,
+                target_features,
+            )
+            for exclusion in representation.fallback_exclusions
         )
+    return _target_selection_is_active(
+        representation.requirement,
+        representation.stronger_requirements,
+        target_arch,
+        target_features,
+    )
+
+
+def _target_selection_is_active(
+    requirement: RustTargetRequirement,
+    stronger_requirements: tuple[RustTargetRequirement, ...],
+    target_arch: str,
+    target_features: frozenset[str],
+) -> bool:
+    if requirement.target_arch != target_arch or not set(
+        requirement.target_features
+    ) <= target_features:
+        return False
+    return not any(
+        stronger.target_arch == target_arch
+        and set(stronger.target_features) <= target_features
+        for stronger in stronger_requirements
     )
 
 
@@ -126,7 +157,7 @@ def private_vector_descriptor(representation: RustFacadeRepresentation) -> str:
 
 def selection_cfg(representation: RustFacadeRepresentation) -> str:
     if representation.requirement is None:
-        return fallback_cfg(representation.stronger_requirements)
+        return fallback_selection_cfg(representation)
     return rust_target_selection_cfg(
         representation.requirement, representation.stronger_requirements
     )
@@ -150,24 +181,28 @@ def fallback_cfg(requirements: tuple[RustTargetRequirement, ...]) -> str:
     return f"not(any({rendered}))"
 
 
+def fallback_selection_cfg(representation: RustFacadeRepresentation) -> str:
+    if not representation.fallback_exclusions:
+        return "all()"
+    rendered = ", ".join(
+        rust_target_selection_cfg(
+            exclusion.requirement,
+            exclusion.stronger_requirements,
+        )
+        for exclusion in representation.fallback_exclusions
+    )
+    return f"not(any({rendered}))"
+
+
 def cfg_attribute(cfg: str) -> str:
     return "" if cfg == "all()" else f"#[cfg({cfg})]"
-
-
-def _requirement_implies(
-    available: RustTargetRequirement,
-    required: RustTargetRequirement,
-) -> bool:
-    return (
-        available.target_arch == required.target_arch
-        and set(required.target_features) <= set(available.target_features)
-    )
 
 
 __all__ = (
     "cfg_attribute",
     "combined_selection_cfg",
     "fallback_cfg",
+    "fallback_selection_cfg",
     "lower_module",
     "native_selection_cfg",
     "private_vector_descriptor",

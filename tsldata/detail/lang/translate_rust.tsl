@@ -88,7 +88,7 @@ translation rust:
   mask_clear_lane_bitmask "{name} &= !(1u64 << {index})"
   mask_set_to_lane_bitmask "{name} = ({name} & !(1u64 << {index})) | (((({value}) as u64) & 1u64) << {index})"
   mask_test_lane_bitmask "((({mask} >> {index}) & 1u64) != 0)"
-  mask_test_imask "(((({mask}) as u64 >> {index}) & 1u64) != 0)"
+  mask_test_imask "((({mask}) as u64 >> {index}) & 1u64) != 0"
   mask_test_lane_register "{owner}::mask_lane_test({mask}, {index})"
   mask_none_native_predicate_by_lanes "0"
   mask_all_native_predicate_by_lanes "(u64::MAX >> (64 - {owner}::lane_count())) as _"

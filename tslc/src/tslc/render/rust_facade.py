@@ -192,17 +192,15 @@ def _facade_impl(
             "",
             "    #[inline]",
             "    fn mask_from_bitmask(bits: u64) -> Self::Mask {",
-            (
-                f"        {call('mask_from_integral')}::<{descriptor}>"
-                f"(bits as {representation.mapping.imask_spelling})"
-            ),
+            f"        {call('mask_from_integral')}::<{descriptor}>"
+            f"({_mask_integer_argument('bits', representation)})",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_to_bitmask(value: Self::Mask) -> u64 {",
-            (
-                f"        {call('mask_to_integral')}::<{descriptor}>(value)"
-                " as u64"
+            _mask_integer_result(
+                f"{call('mask_to_integral')}::<{descriptor}>(value)",
+                representation,
             ),
             "    }",
             "",
@@ -248,6 +246,22 @@ def _facade_impl(
             "}",
         )
     )
+
+
+def _mask_integer_argument(
+    value: str,
+    representation: RustFacadeRepresentation,
+) -> str:
+    imask = representation.mapping.imask_spelling
+    return value if imask == "u64" else f"{value} as {imask}"
+
+
+def _mask_integer_result(
+    call: str,
+    representation: RustFacadeRepresentation,
+) -> str:
+    suffix = "" if representation.mapping.imask_spelling == "u64" else " as u64"
+    return f"        {call}{suffix}"
 
 
 def _core_delegate(

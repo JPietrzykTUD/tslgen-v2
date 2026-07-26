@@ -283,7 +283,7 @@ def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
     ) in lib
     for profile_slug in ("scalar", "avx2"):
         assert (
-            "#[cfg(all(tsl_variant_benchmarks, all()))]\n"
+            "#[cfg(tsl_variant_benchmarks)]\n"
             "#[doc(hidden)]\n"
             f"pub mod tsl_variant_bench_{profile_slug};"
         ) in lib

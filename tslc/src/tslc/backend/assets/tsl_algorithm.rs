@@ -88,11 +88,21 @@ where
 }
 
 pub trait LoadStore<V: StaticSimdVector> {
+    /// # Safety
+    ///
+    /// `ptr` must be valid to read one unaligned vector of initialized lanes.
     unsafe fn load_unaligned(ptr: *const V::BaseType) -> V::RegisterType;
+    /// # Safety
+    ///
+    /// `ptr` must be valid to write one unaligned vector of lanes.
     unsafe fn store_unaligned(ptr: *mut V::BaseType, value: V::RegisterType);
 }
 
 pub trait SelectedLoad<V: StaticSimdVector, const SCALE: u32> {
+    /// # Safety
+    ///
+    /// `input` and `indices` must be valid for every lane read by the
+    /// implementation, including the byte scale selected by `SCALE`.
     unsafe fn load_selected(input: *const V::BaseType, indices: *const usize) -> V::RegisterType;
 }
 
@@ -186,14 +196,26 @@ where
     const ROW_ORIENTED: bool;
 
     fn storage_count(count: usize, lanes: usize) -> usize;
+    /// # Safety
+    ///
+    /// `masks` must be valid for every storage element implied by `count`.
     unsafe fn clear_for_predicate(masks: *mut Self::Storage, count: usize);
+    /// # Safety
+    ///
+    /// `masks` must be valid for the selected chunk and element.
     unsafe fn store_mask(
         masks: *mut Self::Storage,
         chunk: usize,
         element: usize,
         mask: V::MaskType,
     );
+    /// # Safety
+    ///
+    /// `masks` must be valid for the selected chunk.
     unsafe fn store_integral_mask(masks: *mut Self::Storage, chunk: usize, mask: V::ImaskType);
+    /// # Safety
+    ///
+    /// `masks` must be valid for the selected chunk, element, and lane.
     unsafe fn store_tail_lane(
         masks: *mut Self::Storage,
         chunk: usize,
@@ -201,7 +223,13 @@ where
         lane: usize,
         active: bool,
     );
+    /// # Safety
+    ///
+    /// `masks` must be valid for the selected chunk and element.
     unsafe fn load_mask(masks: *const Self::Storage, chunk: usize, element: usize) -> V::MaskType;
+    /// # Safety
+    ///
+    /// `masks` must be valid for the selected chunk, element, and lane.
     unsafe fn lane_active(
         masks: *const Self::Storage,
         chunk: usize,
@@ -509,6 +537,9 @@ where
 }
 
 pub trait MaskedStore<V: StaticSimdVector> {
+    /// # Safety
+    ///
+    /// `ptr` must be valid for every lane written by `mask`.
     unsafe fn store_mask_unaligned(
         mask: V::MaskType,
         ptr: *mut V::BaseType,
@@ -517,6 +548,9 @@ pub trait MaskedStore<V: StaticSimdVector> {
 }
 
 pub trait CompressStore<V: StaticSimdVector> {
+    /// # Safety
+    ///
+    /// `ptr` must be valid for the number of active lanes in `mask`.
     unsafe fn compress_store(mask: V::MaskType, ptr: *mut V::BaseType, value: V::RegisterType);
 }
 
@@ -608,6 +642,10 @@ pub trait MaskedBinaryAggregateKernel<V: StaticSimdVector> {
 }
 
 pub trait ChunkKernel<V: StaticSimdVector> {
+    /// # Safety
+    ///
+    /// `ptr.add(offset)` must be valid for the lanes the implementation reads,
+    /// bounded by `count`.
     unsafe fn apply(&mut self, ptr: *const V::BaseType, offset: usize, count: usize);
 }
 
@@ -630,7 +668,7 @@ where
 }
 
 fn chunk_count_for_lanes(count: usize, lanes: usize) -> usize {
-    (count / lanes) + if count % lanes == 0 { 0 } else { 1 }
+    count.div_ceil(lanes)
 }
 
 pub(crate) fn selected_row_scale<T, const SCALE: u32>() -> usize {
@@ -793,6 +831,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn for_each_chunk_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -869,6 +912,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn predicate_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -984,6 +1032,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn predicate_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -1111,6 +1164,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn predicate_unary_mask_layout_raw<Profile, Policy, Layout, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -1262,6 +1320,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn predicate_binary_mask_layout_raw<Profile, Policy, Layout, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -1402,6 +1465,11 @@ where
     unsafe { count_unary_raw::<Profile, Policy, Op, T>(policy, op, input.as_ptr(), input.len()) }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn count_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -1490,6 +1558,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn count_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -1593,6 +1666,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn count_masked_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -1706,6 +1784,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn count_masked_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -1833,6 +1916,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn count_masked_unary_mask_layout_raw<Profile, Policy, Layout, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -1960,6 +2048,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn count_masked_binary_mask_layout_raw<Profile, Policy, Layout, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -2081,6 +2174,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn count_selected_unary_raw<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
@@ -2112,6 +2210,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn count_selected_unary_scaled_raw<Profile, const SCALE: u32, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -2209,6 +2312,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn count_selected_binary_raw<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
@@ -2242,6 +2350,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn count_selected_binary_scaled_raw<Profile, const SCALE: u32, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -2356,6 +2469,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -2473,6 +2591,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -2607,6 +2730,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_masked_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -2759,6 +2887,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_masked_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -2924,6 +3057,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_masked_unary_mask_layout_raw<Profile, Policy, Layout, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -3085,6 +3223,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_masked_binary_mask_layout_raw<Profile, Policy, Layout, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -3232,6 +3375,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_indices_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -3332,6 +3480,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_indices_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -3447,6 +3600,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_masked_indices_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -3578,6 +3736,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_masked_indices_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -3723,6 +3886,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_masked_indices_unary_mask_layout_raw<Profile, Policy, Layout, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -3868,6 +4036,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_masked_indices_binary_mask_layout_raw<Profile, Policy, Layout, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -4011,6 +4184,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_selected_indices_unary_raw<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
@@ -4044,6 +4222,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_selected_indices_unary_scaled_raw<Profile, const SCALE: u32, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -4166,6 +4349,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_selected_indices_binary_raw<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
@@ -4201,6 +4389,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn select_selected_indices_binary_scaled_raw<Profile, const SCALE: u32, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -4325,6 +4518,11 @@ pub fn transform_selected_unary<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_selected_unary_raw<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
@@ -4354,6 +4552,11 @@ pub unsafe fn transform_selected_unary_raw<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_selected_unary_scaled_raw<Profile, const SCALE: u32, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -4450,6 +4653,11 @@ pub fn transform_selected_binary<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_selected_binary_raw<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
@@ -4481,6 +4689,11 @@ pub unsafe fn transform_selected_binary_raw<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_selected_binary_scaled_raw<Profile, const SCALE: u32, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -4580,6 +4793,11 @@ pub fn consume_selected_unary<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn consume_selected_unary_raw<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
@@ -4606,6 +4824,11 @@ pub unsafe fn consume_selected_unary_raw<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn consume_selected_unary_scaled_raw<Profile, const SCALE: u32, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -4684,6 +4907,11 @@ pub fn consume_selected_binary<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn consume_selected_binary_raw<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
@@ -4712,6 +4940,11 @@ pub unsafe fn consume_selected_binary_raw<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn consume_selected_binary_scaled_raw<Profile, const SCALE: u32, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -4801,6 +5034,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn aggregate_selected_unary_raw<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
@@ -4828,6 +5066,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn aggregate_selected_unary_scaled_raw<Profile, const SCALE: u32, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -4910,6 +5153,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn aggregate_selected_binary_raw<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
@@ -4939,6 +5187,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn aggregate_selected_binary_scaled_raw<Profile, const SCALE: u32, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -5050,6 +5303,11 @@ pub fn transform_where_unary<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_where_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -5177,6 +5435,11 @@ pub fn transform_where_binary<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_where_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -5312,6 +5575,11 @@ pub fn transform_masked_unary<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_masked_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -5432,6 +5700,11 @@ pub fn transform_masked_binary<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_masked_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -5568,6 +5841,11 @@ pub fn transform_where_unary_mask_layout<Profile, Policy, Layout, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_where_unary_mask_layout_raw<Profile, Policy, Layout, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -5703,6 +5981,11 @@ pub fn transform_where_binary_mask_layout<Profile, Policy, Layout, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_where_binary_mask_layout_raw<Profile, Policy, Layout, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -5845,6 +6128,11 @@ pub fn transform_masked_unary_mask_layout<Profile, Policy, Layout, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_masked_unary_mask_layout_raw<Profile, Policy, Layout, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -5968,6 +6256,11 @@ pub fn transform_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_masked_binary_mask_layout_raw<Profile, Policy, Layout, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -6080,6 +6373,11 @@ pub fn transform_unary<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -6162,6 +6460,11 @@ pub fn transform_binary<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn transform_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -6235,6 +6538,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn consume_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -6298,6 +6606,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn consume_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -6385,6 +6698,11 @@ pub fn consume_masked_unary<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn consume_masked_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -6485,6 +6803,11 @@ pub fn consume_masked_binary<Profile, Policy, Op, T>(
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn consume_masked_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -6576,6 +6899,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn aggregate_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -6647,6 +6975,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn aggregate_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -6738,6 +7071,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn aggregate_masked_unary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,
@@ -6842,6 +7180,11 @@ where
     }
 }
 
+/// # Safety
+///
+/// Every raw pointer must be properly aligned and valid for every read or write
+/// implied by the length arguments and selected policy. Writable regions must not
+/// alias any region read during the call.
 pub unsafe fn aggregate_masked_binary_raw<Profile, Policy, Op, T>(
     _policy: Policy,
     op: &mut Op,

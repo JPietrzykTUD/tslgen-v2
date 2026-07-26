@@ -27,6 +27,7 @@ from tslc.backend.rust_api_model import (
     RustFacadeReceiverKind,
     RustFacadeRepresentation,
     RustFacadeShape,
+    RustFacadeTargetSelection,
     RustFacadeTraitRhsKind,
     RustFacadeTypeParameter,
     RustFacadeTypeParameterRole,
@@ -1131,16 +1132,28 @@ def _logical_shapes(
         fallback_exclusions = tuple(
             sorted(
                 {
-                    representation.requirement
+                    RustFacadeTargetSelection(
+                        representation.requirement,
+                        representation.stronger_requirements,
+                    )
                     for representation in representations
                     if representation.requirement is not None
                 },
-                key=lambda item: (item.target_arch, item.target_features),
+                key=lambda item: (
+                    item.requirement.target_arch,
+                    item.requirement.target_features,
+                ),
             )
         )
         representations.insert(
             0,
-            RustFacadeRepresentation(None, None, fallback_exclusions, fallback),
+            RustFacadeRepresentation(
+                None,
+                None,
+                (),
+                fallback,
+                fallback_exclusions,
+            ),
         )
         shapes.append(
             RustFacadeShape(
@@ -1167,8 +1180,10 @@ def _native_aliases(
     for mapping in plan.fallback_mappings:
         if (
             mapping.type_tag in admitted_type_tags
-            and mapping.lanes > 1
-            and mapping.total_bits in _FACADE_FIXED_WIDTHS
+            and (
+                mapping.lanes == 1
+                or mapping.total_bits in _FACADE_FIXED_WIDTHS
+            )
         ):
             fallback_by_type[mapping.type_tag].append(mapping)
     fallback_lanes: dict[str, int] = {}
@@ -1179,7 +1194,11 @@ def _native_aliases(
         if representation.profile_name is not None
     }
     for type_tag, mappings in fallback_by_type.items():
-        best_fallback = min(mappings, key=lambda item: (item.total_bits, item.lanes))
+        fixed_mappings = tuple(mapping for mapping in mappings if mapping.lanes > 1)
+        best_fallback = min(
+            fixed_mappings or tuple(mappings),
+            key=lambda item: (item.total_bits, item.lanes),
+        )
         fallback_lanes[type_tag] = best_fallback.lanes
         aliases[type_tag].append(
             RustNativeAliasSelection(None, None, (), best_fallback.lanes)

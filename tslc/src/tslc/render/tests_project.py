@@ -106,6 +106,15 @@ def rust_test_artifacts(
                     )
                     for profile in plan.profiles_for("rust")
                 },
+                profile_modules={
+                    profile.profile_name: (
+                        f"tsl_{slug(profile.profile_name)}"
+                        if static_selection_plan.profile(profile.profile_name)
+                        is not None
+                        else "tsl_target_fallback"
+                    )
+                    for profile in plan.profiles_for("rust")
+                },
             ),
             media_type=media_type,
         ),

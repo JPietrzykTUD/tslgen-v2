@@ -535,6 +535,10 @@ impl_tsl_byte_count!(i8, i16, i32, i64, u8, u16, u32, u64, f32, f64);
 /// `std::memcpy` counterpart: copy `count` bytes from `src` to `dst`. Byte-addressed
 /// (`*const u8`/`*mut u8`), so a `void`-cast source/dest plus a base-typed byte count lower
 /// identically to the C++ `mem_copy` translate template.
+///
+/// # Safety
+///
+/// `src` and `dst` must be valid for `count` bytes and must not overlap.
 #[inline]
 pub unsafe fn mem_copy<C: TslByteCount>(dst: *mut u8, src: *const u8, count: C) {
     core::ptr::copy_nonoverlapping(src, dst, count.tsl_byte_count());
@@ -553,6 +557,11 @@ extern "C" {
 
 /// `std::malloc` counterpart for the `allocate` free function: a `count_bytes` block as an
 /// untyped pointer (null on failure, per the C contract).
+///
+/// # Safety
+///
+/// The returned pointer must be released exactly once with [`mem_free`] and
+/// must not be dereferenced beyond the allocated byte count.
 #[inline]
 pub unsafe fn mem_alloc(count_bytes: usize) -> *mut core::ffi::c_void {
     malloc(count_bytes)
@@ -561,6 +570,11 @@ pub unsafe fn mem_alloc(count_bytes: usize) -> *mut core::ffi::c_void {
 /// `std::aligned_alloc` counterpart for `allocate_aligned`. Argument order mirrors the
 /// translate template (`alignment` then `count_bytes`); `aligned_alloc` requires the size be a
 /// multiple of the alignment.
+///
+/// # Safety
+///
+/// `alignment` must satisfy the C `aligned_alloc` contract. The returned
+/// pointer must be released exactly once with [`mem_free`].
 #[inline]
 pub unsafe fn mem_alloc_aligned(alignment: usize, count_bytes: usize) -> *mut core::ffi::c_void {
     aligned_alloc(alignment, count_bytes)
@@ -569,6 +583,11 @@ pub unsafe fn mem_alloc_aligned(alignment: usize, count_bytes: usize) -> *mut co
 /// `std::free` counterpart for `deallocate`: frees a malloc/aligned_alloc block by pointer
 /// alone, so no `Layout` reconstruction is needed. (`free` reclaims `aligned_alloc` memory on
 /// conforming platforms.)
+///
+/// # Safety
+///
+/// `ptr` must be null or a live pointer returned by [`mem_alloc`] or
+/// [`mem_alloc_aligned`], and it must not be used after this call.
 #[inline]
 pub unsafe fn mem_free(ptr: *mut core::ffi::c_void) {
     free(ptr);
@@ -648,6 +667,9 @@ pub mod detail {
 
     #[cfg(target_arch = "x86_64")]
     #[target_feature(enable = "rdrand")]
+    /// # Safety
+    ///
+    /// `out` must be non-null, properly aligned, and valid to write one `u64`.
     pub unsafe fn random_step_u64(out: *mut u64) -> usize {
         let mut value = 0u64;
         let status = core::arch::x86_64::_rdrand64_step(&mut value);

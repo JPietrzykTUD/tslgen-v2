@@ -47,6 +47,23 @@ class RustFacadeCoverageStatus(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class RustFacadeTargetSelection:
+    """One exact profile-selection predicate used by a facade representation."""
+
+    requirement: RustTargetRequirement
+    stronger_requirements: tuple[RustTargetRequirement, ...]
+
+    def __post_init__(self) -> None:
+        if any(
+            not item.strictly_contains(self.requirement)
+            for item in self.stronger_requirements
+        ):
+            raise ValueError(
+                "Rust facade target-selection exclusions must be stronger targets"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class RustFacadeRepresentation:
     """One cfg-selected private representation of a logical shape."""
 
@@ -54,6 +71,7 @@ class RustFacadeRepresentation:
     requirement: RustTargetRequirement | None
     stronger_requirements: tuple[RustTargetRequirement, ...]
     mapping: RustStaticVectorMapping
+    fallback_exclusions: tuple[RustFacadeTargetSelection, ...] = ()
 
     def __post_init__(self) -> None:
         if (self.profile_name is None) != (self.requirement is None):
@@ -62,6 +80,14 @@ class RustFacadeRepresentation:
             )
         if self.requirement is None and self.mapping.uses_hardware:
             raise ValueError("Rust facade fallback representations cannot use hardware")
+        if self.requirement is None and self.stronger_requirements:
+            raise ValueError(
+                "Rust facade fallback exclusions must retain exact selection predicates"
+            )
+        if self.requirement is not None and self.fallback_exclusions:
+            raise ValueError(
+                "Rust facade profile representations cannot have fallback exclusions"
+            )
         if self.requirement is not None and any(
             not item.strictly_contains(self.requirement)
             for item in self.stronger_requirements

@@ -84,6 +84,7 @@ def _private_trait(method: RustComprehensiveMethod) -> str:
     return_type = _raw_type(
         method.result_kind, owner="Self", target_owner=target_owner
     )
+    return_suffix = "" if method.result_kind == "void" else f" -> {return_type}"
     unsafe_prefix = "unsafe " if method.caller_unsafe else ""
     return "\n".join(
         (
@@ -92,7 +93,7 @@ def _private_trait(method: RustComprehensiveMethod) -> str:
             "{",
             (
                 f"    {unsafe_prefix}fn call{const_generics}"
-                f"({parameters}) -> {return_type};"
+                f"({parameters}){return_suffix};"
             ),
             "}",
         )
@@ -250,6 +251,7 @@ def _private_impl(
         target_shape.base_spelling if target_shape else "Self",
         source_shape.lanes,
     )
+    return_suffix = "" if method.result_kind == "void" else f" -> {return_type}"
     call_representation = active_representation or source_representation
     generic_arguments = [private_vector_descriptor(source_representation)]
     if target_representation is not None:
@@ -284,7 +286,7 @@ def _private_impl(
             ),
             (
                 f"    {unsafe_prefix}fn call{const_generics}"
-                f"({parameters}) -> {return_type} {{"
+                f"({parameters}){return_suffix} {{"
             ),
             *body_lines,
             "    }",
@@ -572,6 +574,11 @@ def _public_attributes(
         "    #[inline]",
         *(("    #[must_use]",) if method.must_use else ()),
         *(("    #[track_caller]",) if method.panic_conditions else ()),
+        *(
+            ("    #[allow(clippy::should_implement_trait)]",)
+            if method.public_name in _STANDARD_TRAIT_METHOD_NAMES
+            else ()
+        ),
         *(("    #[allow(private_bounds)]",) if has_private_bound else ()),
     )
 
@@ -670,7 +677,11 @@ def _lower_call_arguments(
     for parameter in _runtime_parameters(method):
         name = _identifier(parameter.public_name)
         if parameter.kind in {"im", "imt"}:
-            arguments.append(f"{name} as {representation.mapping.imask_spelling}")
+            arguments.append(
+                name
+                if representation.mapping.imask_spelling == "u64"
+                else f"{name} as {representation.mapping.imask_spelling}"
+            )
         else:
             arguments.append(name)
     return tuple(arguments)
@@ -693,8 +704,11 @@ def _adapt_lower_result(
     representation: RustFacadeRepresentation,
 ) -> str:
     if kind in {"im", "imt"}:
-        return f"{call} as u64"
-    del representation
+        return (
+            call
+            if representation.mapping.imask_spelling == "u64"
+            else f"{call} as u64"
+        )
     return call
 
 
@@ -723,6 +737,24 @@ def _raw_type(kind: str, *, owner: str, target_owner: str) -> str:
         "ptr": f"*mut {owner}",
         "cptr": f"*const {owner}",
     }[kind]
+
+
+_STANDARD_TRAIT_METHOD_NAMES = frozenset(
+    {
+        "add",
+        "bitand",
+        "bitor",
+        "bitxor",
+        "div",
+        "mul",
+        "neg",
+        "not",
+        "rem",
+        "shl",
+        "shr",
+        "sub",
+    }
+)
 
 
 def _impl_raw_type(kind: str, owner: str, lanes: int) -> str:

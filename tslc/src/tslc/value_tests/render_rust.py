@@ -63,8 +63,10 @@ def render_rust_values_file(
     assets: RenderAssets,
     *,
     profile_cfgs: Mapping[str, str] | None = None,
+    profile_modules: Mapping[str, str] | None = None,
 ) -> str:
     profile_cfgs = profile_cfgs or {}
+    profile_modules = profile_modules or {}
     modules = []
     for profile in profiles:
         if not profile.runner_cases:
@@ -75,14 +77,17 @@ def render_rust_values_file(
             assets.fill(
                 "rust_value_tests_profile.rs.tmpl",
                 profile_slug=profile_slug,
+                profile_module=profile_modules.get(
+                    profile.profile_name, f"tsl_{profile_slug}"
+                ),
                 target_cfg=profile_cfgs.get(profile.profile_name, "all()"),
                 body=body,
             ).rstrip()
         )
-    profile_modules = "\n\n" + "\n\n".join(modules) if modules else "\n"
+    rendered_profile_modules = "\n\n" + "\n\n".join(modules) if modules else "\n"
     source = assets.fill(
         "rust_value_tests.rs.tmpl",
-        profile_modules=profile_modules,
+        profile_modules=rendered_profile_modules,
     )
     return "\n".join(line.rstrip() for line in source.splitlines()) + "\n"
 

@@ -13,7 +13,9 @@ from tslc.backend.rust_api_model import (
     RustFacadeCoverageStatus,
     RustFacadeConstParameterSource,
     RustFacadeParameterPlacement,
+    RustFacadeRepresentation,
     RustFacadeReceiverKind,
+    RustFacadeTargetSelection,
     RustFacadeTraitRhsKind,
 )
 from tslc.backend.rust_api_planner import (
@@ -25,6 +27,7 @@ from tslc.backend.rust_static_selection import (
     RustStaticFallbackModule,
     RustStaticSelectionPlan,
     RustStaticVectorMapping,
+    RustTargetRequirement,
     plan_rust_static_selection,
 )
 from tslc.catalog.arithmetic import (
@@ -53,6 +56,11 @@ from tslc.diagnostics import has_errors
 from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam
 from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
 from tslc.lower.target_vectors import TargetVector
+from tslc.render.rust_facade_comprehensive import render_comprehensive_facade
+from tslc.render.rust_facade_common import (
+    representations_can_coexist,
+    selection_cfg,
+)
 from tslc.target_text import LoweredBody
 
 
@@ -159,6 +167,58 @@ def _plan(
             (),
         ),
     )
+
+
+def test_generic_fallback_excludes_exact_profile_arms_without_width_holes() -> None:
+    avx2 = RustTargetRequirement("x86_64", ("avx2",))
+    avx512 = RustTargetRequirement("x86_64", ("avx2", "avx512f"))
+    fallback = RustFacadeRepresentation(
+        None,
+        None,
+        (),
+        RustStaticVectorMapping(
+            "si32", "i32", 4, 128, "Simd<i32, Generic<4>>", "u64"
+        ),
+        (RustFacadeTargetSelection(avx2, (avx512,)),),
+    )
+    avx2_representation = RustFacadeRepresentation(
+        "avx2",
+        avx2,
+        (avx512,),
+        RustStaticVectorMapping(
+            "si32",
+            "i32",
+            4,
+            128,
+            "Simd<i32, Sse>",
+            "u8",
+            "sse",
+            "Sse",
+        ),
+    )
+    avx512_representation = RustFacadeRepresentation(
+        "avx512",
+        avx512,
+        (),
+        RustStaticVectorMapping(
+            "si32",
+            "i32",
+            16,
+            512,
+            "Simd<i32, Avx512>",
+            "u16",
+            "avx512",
+            "Avx512",
+        ),
+    )
+
+    rendered = selection_cfg(fallback)
+
+    assert 'target_feature = "avx2"' in rendered
+    assert 'target_feature = "avx512f"' in rendered
+    assert rendered.startswith("not(any(all(")
+    assert not representations_can_coexist(fallback, avx2_representation)
+    assert representations_can_coexist(fallback, avx512_representation)
 
 
 @pytest.mark.parametrize(
@@ -829,3 +889,103 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
     assert "pub fn convert_lanes<U>(self)" in facade
     assert "pub unsafe fn store<T, const N: usize, const ALIGNED: bool>" in facade
     assert "load_masked, load_masked_zero" in library
+
+
+def test_scalar_only_native_aliases_use_the_scalar_lane(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add"],
+        profiles=["scalar"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    static = plan_rust_static_selection(result.emitted_profiles)
+
+    plan = plan_rust_facade(result.emitted_profiles, static)
+
+    assert {alias.type_tag for alias in plan.native_aliases} == {
+        "f32",
+        "f64",
+        "si8",
+        "si16",
+        "si32",
+        "si64",
+        "ui8",
+        "ui16",
+        "ui32",
+        "ui64",
+    }
+    assert all(
+        tuple(
+            (selection.profile_name, selection.lanes)
+            for selection in alias.selections
+        )
+        == ((None, 1),)
+        for alias in plan.native_aliases
+    )
+
+
+def test_facade_owner_equivalence_and_wrapper_audit(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add", "shift_left_wrapping", "store"],
+        profiles=["scalar", "sse2", "avx2"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    static = plan_rust_static_selection(result.emitted_profiles)
+    plan = plan_rust_facade(result.emitted_profiles, static)
+    rendered = render_comprehensive_facade(plan)
+    lowered_sources = {
+        spec.source_primitive_name
+        for profile in result.emitted_profiles
+        for specs in profile.specializations("rust").values()
+        for spec in specs
+    } | {
+        spec.source_primitive_name
+        for _name, specs in static.fallback_module.primitive_specializations
+        for spec in specs
+    }
+    lowered_names = {
+        spec.primitive_name
+        for profile in result.emitted_profiles
+        for specs in profile.specializations("rust").values()
+        for spec in specs
+    } | {
+        spec.primitive_name
+        for _name, specs in static.fallback_module.primitive_specializations
+        for spec in specs
+    }
+
+    assert plan.comprehensive_methods
+    for method in plan.comprehensive_methods:
+        assert method.source_primitive_name in lowered_sources
+        assert all(delegate.primitive_name in lowered_names for delegate in method.delegates)
+        assert f"fn {method.public_name}" in rendered.public_items
+
+    delegate_lines = tuple(
+        line
+        for line in rendered.private_impls.splitlines()
+        if "crate::tsl_" in line and "::<" in line
+    )
+    assert rendered.private_impls.count("fn call") == len(delegate_lines)
+    assert rendered.public_items.count("pub fn ") + rendered.public_items.count(
+        "pub unsafe fn "
+    ) == rendered.public_items.count("::call")
+    for forbidden in (
+        "\n        for ",
+        "\n        while ",
+        "core::arch",
+        "std::arch",
+        "rem_euclid",
+    ):
+        assert forbidden not in rendered.private_impls
+        assert forbidden not in rendered.public_items

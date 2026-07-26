@@ -10,6 +10,7 @@ from pathlib import Path
 import shutil
 import shlex
 import subprocess
+import tarfile
 import textwrap
 
 import pytest
@@ -767,6 +768,87 @@ def test_rust_path_dependency_consumer_builds(
     assert "[build-dependencies]" not in manifest_text
     assert 'rust-version = "1.89"' in manifest_text
 
+    package = subprocess.run(
+        (
+            "cargo",
+            "package",
+            "--manifest-path",
+            str(generated_manifest),
+            "--allow-dirty",
+            "--no-verify",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert package.returncode == 0, package.stderr + package.stdout
+    package_archives = tuple(
+        (generated / "rust" / "target" / "package").glob("tsl-*.crate")
+    )
+    assert len(package_archives) == 1
+    package_root = tmp_path / "packaged-source"
+    with tarfile.open(package_archives[0], "r:gz") as archive:
+        archive.extractall(package_root, filter="data")
+    packaged_crates = tuple(package_root.glob("tsl-*"))
+    assert len(packaged_crates) == 1
+
+    packaged_consumer = tmp_path / "packaged-consumer"
+    (packaged_consumer / "src").mkdir(parents=True)
+    (packaged_consumer / "Cargo.toml").write_text(
+        textwrap.dedent(
+            f"""
+            [package]
+            name = "tsl-packaged-consumer"
+            version = "0.0.0"
+            edition = "2021"
+
+            [dependencies]
+            tsl = {{ path = "{packaged_crates[0].as_posix()}", default-features = false, features = ["runtime-dispatch"] }}
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (packaged_consumer / "src" / "main.rs").write_text(
+        textwrap.dedent(
+            """
+            use tsl::{ops, Dispatcher, Simd};
+
+            fn main() {
+                let vector = Simd::<i32, 4>::splat(2) + Simd::splat(3);
+                assert_eq!(vector.to_array(), [5; 4]);
+
+                let left = [1_i32, 2, 3, 4];
+                let right = [4_i32, 3, 2, 1];
+                let mut output = [0_i32; 4];
+                Dispatcher::new().transform_binary(
+                    ops::Add,
+                    &left,
+                    &right,
+                    &mut output,
+                );
+                assert_eq!(output, [5; 4]);
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    packaged_run = subprocess.run(
+        (
+            "cargo",
+            "run",
+            "--quiet",
+            "--offline",
+            "--manifest-path",
+            str(packaged_consumer / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "packaged-consumer-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert packaged_run.returncode == 0, packaged_run.stderr + packaged_run.stdout
+
     documented = subprocess.run(
         (
             "cargo",
@@ -774,6 +856,8 @@ def test_rust_path_dependency_consumer_builds(
             "--manifest-path",
             str(generated_manifest),
             "--no-default-features",
+            "--features",
+            "runtime-dispatch",
             "--no-deps",
             "--target-dir",
             str(tmp_path / "rust-doc-target"),
@@ -789,6 +873,38 @@ def test_rust_path_dependency_consumer_builds(
     ).read_text(encoding="utf-8")
     assert "avx2" not in root_docs.lower()
     assert "sse2" not in root_docs.lower()
+    simd_docs = (
+        tmp_path / "rust-doc-target" / "doc" / "tsl" / "struct.Simd.html"
+    ).read_text(encoding="utf-8")
+    assert 'id="method.add"' in simd_docs
+    assert 'id="method.from_ptr"' in simd_docs
+    assert ">Safety</h5>" in simd_docs
+    dispatcher_docs = (
+        tmp_path / "rust-doc-target" / "doc" / "tsl" / "struct.Dispatcher.html"
+    ).read_text(encoding="utf-8")
+    assert 'id="method.transform_binary"' in dispatcher_docs
+
+    def compile_failure(source: str) -> str:
+        (consumer / "src" / "main.rs").write_text(
+            textwrap.dedent(source).lstrip(),
+            encoding="utf-8",
+        )
+        completed = subprocess.run(
+            (
+                "cargo",
+                "check",
+                "--manifest-path",
+                str(consumer / "Cargo.toml"),
+                "--target-dir",
+                str(tmp_path / "rust-consumer-target"),
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        output = completed.stderr + completed.stdout
+        assert completed.returncode != 0, output
+        return output
 
     (consumer / "src" / "main.rs").write_text(
         textwrap.dedent(
@@ -911,6 +1027,220 @@ def test_rust_path_dependency_consumer_builds(
     assert arbitrary_bit_cast.returncode != 0
     assert "function `bit_cast` is private" in arbitrary_output
 
+    mismatched_mask = compile_failure(
+        """
+        use tsl::{Mask, Simd};
+
+        fn main() {
+            let mask = Mask::<i32, 4>::splat(true);
+            let values = Simd::<i32, 8>::splat(1);
+            let _ = mask.select(values, values);
+        }
+        """
+    )
+    assert "expected `4`, found `8`" in mismatched_mask
+    assert "expected struct `tsl::Simd<_, 4>`" in mismatched_mask
+    assert "found struct `tsl::Simd<_, 8>`" in mismatched_mask
+
+    invalid_bits = compile_failure(
+        """
+        use tsl::Simd;
+
+        fn main() {
+            let bits = Simd::<u64, 4>::splat(0);
+            let _ = Simd::<f32, 4>::from_bits(bits);
+        }
+        """
+    )
+    assert "Simd<u32, 4>" in invalid_bits
+    assert "Simd<u64, 4>" in invalid_bits
+
+    unsafe_without_block = compile_failure(
+        """
+        use tsl::Simd;
+
+        fn main() {
+            let _ = Simd::<i32, 4>::from_ptr(core::ptr::null());
+        }
+        """
+    )
+    assert "requires unsafe" in unsafe_without_block
+
+    hardware_only_method = compile_failure(
+        """
+        use tsl::Simd;
+
+        fn main() {
+            let value = Simd::<i32, 4>::splat(1);
+            let _ = value.concat(value);
+        }
+        """
+    )
+    assert "no method named `concat`" in hardware_only_method
+
+
+def test_rust_scalar_only_release_matrix(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    if any(
+        shutil.which(tool) is None
+        for tool in ("cargo", "rustc", "cargo-clippy")
+    ):
+        pytest.skip("cargo, rustc, and cargo-clippy are required")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_rust_scalar_only_release_matrix"),
+        profiles=["scalar"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    manifest = generated / "rust" / "Cargo.toml"
+    target_dir = tmp_path / "rust-release-target"
+    commands = (
+        (
+            "check-no-default",
+            (
+                "cargo",
+                "check",
+                "--quiet",
+                "--manifest-path",
+                str(manifest),
+                "--no-default-features",
+                "--target-dir",
+                str(target_dir),
+            ),
+            None,
+        ),
+        (
+            "check-std",
+            (
+                "cargo",
+                "check",
+                "--quiet",
+                "--manifest-path",
+                str(manifest),
+                "--no-default-features",
+                "--features",
+                "std",
+                "--target-dir",
+                str(target_dir),
+            ),
+            None,
+        ),
+        (
+            "runtime-dispatch",
+            (
+                "cargo",
+                "test",
+                "--quiet",
+                "--manifest-path",
+                str(manifest),
+                "--no-default-features",
+                "--features",
+                "runtime-dispatch",
+                "--lib",
+                "--test",
+                "runtime_dispatch",
+                "--target-dir",
+                str(target_dir),
+            ),
+            None,
+        ),
+        (
+            "clippy",
+            (
+                "cargo",
+                "clippy",
+                "--quiet",
+                "--manifest-path",
+                str(manifest),
+                "--no-default-features",
+                "--target-dir",
+                str(target_dir),
+                "--",
+                "-D",
+                "warnings",
+            ),
+            None,
+        ),
+        (
+            "rustdoc",
+            (
+                "cargo",
+                "doc",
+                "--quiet",
+                "--manifest-path",
+                str(manifest),
+                "--no-default-features",
+                "--no-deps",
+                "--target-dir",
+                str(target_dir),
+            ),
+            {**os.environ, "RUSTDOCFLAGS": "-D warnings"},
+        ),
+    )
+    for name, command, env in commands:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert completed.returncode == 0, (
+            f"{name} failed:\n{completed.stderr}{completed.stdout}"
+        )
+
+
+def test_rust_neon_compile_target_builds(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cargo") is None or shutil.which("rustc") is None:
+        pytest.skip("cargo and rustc are required")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_rust_neon_compile_target_builds"),
+        profiles=["neon"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    report = verify_project(
+        generated,
+        result.rendered.verify,
+        run_quality_checks=True,
+    )
+    assert report.diagnostics == (), report.diagnostics
+    target_commands = tuple(
+        command
+        for command in report.commands
+        if "aarch64-unknown-linux-musl" in command.command.argv
+    )
+    if target_commands:
+        assert all("--target" in command.command.argv for command in target_commands)
+    else:
+        assert any(
+            "neon" in skip
+            and any(reason in skip for reason in ("target", "linker", "compiler"))
+            for skip in report.skipped
+        ), report.skipped
+
 
 def test_rust_compile_target_selects_static_mapping(
     data_root: Path,
@@ -957,9 +1287,9 @@ def test_rust_compile_target_selects_static_mapping(
         if backend.backend_id == "rust"
     )
     profile = rust_backend.profiles[0]
-    examples = generated / "rust" / "examples"
-    examples.mkdir(exist_ok=True)
-    (examples / "avx2_mapping.rs").write_text(
+    bins = generated / "rust" / "src" / "bin"
+    bins.mkdir(exist_ok=True)
+    (bins / "avx2_mapping.rs").write_text(
         "use tsl::profile::Avx2;\n"
         "use tsl::tsl_core::Simd;\n"
         "type Vector = Simd<i32, Avx2>;\n"
@@ -976,7 +1306,7 @@ def test_rust_compile_target_selects_static_mapping(
             "--manifest-path",
             str(manifest),
             "--no-default-features",
-            "--example",
+            "--bin",
             "avx2_mapping",
             "--target-dir",
             str(target_dir),
@@ -999,7 +1329,7 @@ def test_rust_compile_target_selects_static_mapping(
             "--manifest-path",
             str(manifest),
             "--no-default-features",
-            "--example",
+            "--bin",
             "avx2_mapping",
             "--target-dir",
             str(target_dir),
@@ -1123,6 +1453,27 @@ def test_rust_unsealed_representation_consumer_is_reported(
             }
 
             fn main() {}
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    verify_manifest = crate / "verify" / "unsealed_consumer"
+    verify_manifest.mkdir(parents=True)
+    (verify_manifest / "Cargo.toml").write_text(
+        textwrap.dedent(
+            """
+            [package]
+            name = "unsealed-consumer"
+            version = "0.0.0"
+            edition = "2021"
+            publish = false
+
+            [dependencies]
+            tsl-representation-gate = { path = "../.." }
+
+            [[bin]]
+            name = "unsealed_consumer"
+            path = "../../examples/unsealed_consumer.rs"
             """
         ).lstrip(),
         encoding="utf-8",
