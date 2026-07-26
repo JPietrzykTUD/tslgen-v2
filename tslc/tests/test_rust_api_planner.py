@@ -11,6 +11,7 @@ from tslc.api import generate_project
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_api_model import (
     RustFacadeCoverageStatus,
+    RustFacadeConstParameterSource,
     RustFacadeParameterPlacement,
     RustFacadeReceiverKind,
     RustFacadeTraitRhsKind,
@@ -305,6 +306,128 @@ def test_attribute_and_generic_const_parameters_are_finalized() -> None:
     assert method.const_parameters[1].source_default == "true"
 
 
+def test_immediate_is_a_finalized_const_parameter() -> None:
+    spec = _spec(
+        "configured_immediate",
+        param_names=("data", "shift"),
+        param_kinds=("v", "sImm"),
+        roles=(
+            (OperandRole.PRIMARY, 0, "v"),
+            (OperandRole.COUNT, 1, "sImm"),
+        ),
+        immediate=("shift", "u32"),
+    )
+
+    method = plan_rust_facade((), _plan(spec)).comprehensive_methods[0]
+
+    assert tuple(
+        (item.public_name, item.type_spelling, item.source)
+        for item in method.const_parameters
+    ) == (("SHIFT", "u32", RustFacadeConstParameterSource.IMMEDIATE),)
+
+
+def test_no_receiver_projects_as_a_free_function() -> None:
+    method = plan_rust_facade(
+        (),
+        _plan(
+            _spec(
+                "broadcast_source",
+                param_names=("value",),
+                param_kinds=("s",),
+                operation=PrimitiveOperation.VECTOR_SPLAT,
+                roles=((OperandRole.VALUE, 0, "s"),),
+            )
+        ),
+    ).comprehensive_methods[0]
+
+    assert method.receiver_kind is RustFacadeReceiverKind.FREE
+    assert method.parameters[0].placement is RustFacadeParameterPlacement.ARGUMENT
+    assert method.shape_keys == (("si32", 4),)
+
+
+def test_vector_value_role_is_a_coherent_receiver() -> None:
+    method = plan_rust_facade(
+        (),
+        _plan(
+            _spec(
+                "write_value",
+                result_kind="void",
+                param_names=("mask", "destination", "value"),
+                param_kinds=("m", "ptr", "v"),
+                operation=PrimitiveOperation.STORE,
+                roles=(
+                    (OperandRole.CONTROL_MASK, 0, "m"),
+                    (OperandRole.MEMORY_DESTINATION, 1, "ptr"),
+                    (OperandRole.VALUE, 2, "v"),
+                ),
+                mask_policy="pass_through",
+            )
+        ),
+    ).comprehensive_methods[0]
+
+    assert method.receiver_kind is RustFacadeReceiverKind.VECTOR
+    assert method.parameters[2].placement is RustFacadeParameterPlacement.RECEIVER
+
+
+def test_curated_unmasked_memory_shapes_are_not_duplicated() -> None:
+    vector_store = _spec(
+        "source_store",
+        result_kind="void",
+        param_names=("destination", "value"),
+        param_kinds=("ptr", "v"),
+        operation=PrimitiveOperation.STORE,
+        roles=(
+            (OperandRole.MEMORY_DESTINATION, 0, "ptr"),
+            (OperandRole.VALUE, 1, "v"),
+        ),
+        overload=ResolvedPrimitiveOverload("payload_extent", "vector", True),
+    )
+    scalar_store = replace(
+        vector_store,
+        param_names=("destination", "value"),
+        param_kinds=("ptr", "s"),
+        primitive_semantics=replace(
+            vector_store.primitive_semantics,
+            overload=ResolvedPrimitiveOverload(
+                "payload_extent", "scalar", False
+            ),
+            operation=_operation(
+                PrimitiveOperation.STORE,
+                (
+                    (OperandRole.MEMORY_DESTINATION, 0, "ptr"),
+                    (OperandRole.VALUE, 1, "s"),
+                ),
+                ("destination", "value"),
+            ),
+        ),
+    )
+
+    plan = plan_rust_facade((), _plan(vector_store, scalar_store))
+
+    assert len(plan.comprehensive_methods) == 1
+    assert plan.comprehensive_methods[0].receiver_kind is RustFacadeReceiverKind.FREE
+    assert any(
+        entry.reason
+        == "unmasked vector store is exposed by the curated memory boundary"
+        for entry in plan.coverage
+    )
+
+
+def test_attribute_combinations_remain_delegate_owned() -> None:
+    base = _spec("configured_axis")
+    false_spec = replace(base, axis=(("aligned", "false"),))
+    true_spec = replace(base, axis=(("aligned", "true"),))
+
+    method = plan_rust_facade(
+        (), _plan(false_spec, true_spec)
+    ).comprehensive_methods[0]
+
+    assert method.delegates[0].vectors[0].attribute_combinations == (
+        (("aligned", "false"),),
+        (("aligned", "true"),),
+    )
+
+
 def test_caller_safety_is_preserved_and_mismatches_are_rejected() -> None:
     unsafe_spec = _spec(
         "unsafe_op",
@@ -585,6 +708,10 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     static = plan_rust_static_selection(result.emitted_profiles)
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in result.artifacts.artifacts
+    }
 
     assert validate_rust_facade(result.emitted_profiles, static) == ()
     plan = plan_rust_facade(result.emitted_profiles, static)
@@ -681,3 +808,11 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
         "mask_from_integral",
         "mask_to_integral",
     }
+    facade = artifacts["rust/src/tsl_facade.rs"]
+    library = artifacts["rust/src/lib.rs"]
+    assert "pub fn add(self, right: Simd<i32, 4>)" in facade
+    assert "pub fn add_masked(" in facade
+    assert "pub fn add_masked_zero(" in facade
+    assert "pub fn convert_lanes<U>(self)" in facade
+    assert "pub unsafe fn store<T, const N: usize, const ALIGNED: bool>" in facade
+    assert "load_masked, load_masked_zero" in library

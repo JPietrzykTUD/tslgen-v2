@@ -15,6 +15,7 @@ mod tsl_facade;
 pub use tsl_facade::{
     Mask, NativeMask, NativeSimd, Simd, SimdElement, SupportedSimd,
 };
+@{facade_function_exports}
 
 #[cfg(any(feature = "std", tsl_variant_benchmarks))]
 extern crate std;

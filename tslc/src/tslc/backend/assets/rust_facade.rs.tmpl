@@ -39,6 +39,8 @@ mod private {
             value: Self::Vector,
         ) -> <U as Representation<N>>::Vector;
     }
+
+@{comprehensive_private_traits}
 }
 
 /// An element type admitted by the generated fixed-width SIMD surface.
@@ -106,6 +108,8 @@ pub type NativeMask<T> = <T as SimdElement>::NativeMask;
 @{facade_impls}
 
 @{conversion_pair_impls}
+
+@{comprehensive_private_impls}
 
 @{element_impls}
 
@@ -546,3 +550,5 @@ where
 @{operator_impls}
 
 @{bit_conversion_impls}
+
+@{comprehensive_items}

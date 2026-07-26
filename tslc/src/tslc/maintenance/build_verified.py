@@ -63,6 +63,7 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "select",
             "convert_lanes",
             "reinterpret",
+            "shift_left",
             "shift_left_wrapping",
             "shift_right_wrapping",
             "binary_and",

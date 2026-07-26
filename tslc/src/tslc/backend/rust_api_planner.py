@@ -50,7 +50,7 @@ from tslc.catalog.model import Catalog
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, diagnostic_at, sort_diagnostics
-from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +85,7 @@ class _CandidateKey:
 class _Candidate:
     key: _CandidateKey
     specs: list[tuple[str | None, LoweredSpecialization]]
+    overload_positions: dict[tuple[str | None, str], tuple[int, ...]]
 
     @property
     def representative(self) -> LoweredSpecialization:
@@ -236,6 +237,8 @@ def _plan_rust_facade(
             for spec in specs
         }
     shapes = _logical_shapes(static_selection, facade_type_tags)
+    methods = _finalize_comprehensive_shapes(methods, shapes)
+    coverage = _finalize_comprehensive_coverage(coverage, methods)
     curated_methods = _finalize_curated_shapes(curated_methods, shapes)
     traits = _finalize_trait_shapes(traits, shapes)
     diagnostics.extend(_method_collision_diagnostics(methods, curated_methods))
@@ -296,6 +299,7 @@ def _candidates(
             str,
             tuple[tuple[str, str | None], ...],
             tuple[str, str] | None,
+            tuple[tuple[str, str], ...],
             bool,
         ]
     ] = set()
@@ -313,13 +317,25 @@ def _candidates(
                 if spec.target is not None
                 else None
             ),
+            spec.axis,
             spec.safety.caller_unsafe,
         )
         if identity in seen:
             continue
         seen.add(identity)
-        candidate = grouped.setdefault(key, _Candidate(key, []))
+        candidate = grouped.setdefault(key, _Candidate(key, [], {}))
         candidate.specs.append((profile_name, spec))
+    by_delegate: dict[
+        tuple[str | None, str], list[LoweredSpecialization]
+    ] = defaultdict(list)
+    for profile_name, spec in inputs:
+        by_delegate[(profile_name, spec.primitive_name)].append(spec)
+    overload_positions = {
+        key: varying_positions(tuple(specs))
+        for key, specs in by_delegate.items()
+    }
+    for candidate in grouped.values():
+        candidate.overload_positions.update(overload_positions)
     return grouped
 
 
@@ -412,11 +428,24 @@ def _comprehensive_method(
         kind not in _REPRESENTABLE_KINDS for kind in key.param_kinds
     ):
         return None, "signature kind is not facade-representable", ()
+    curated_memory_reason = _curated_memory_exclusion(key)
+    if curated_memory_reason is not None:
+        return None, curated_memory_reason, ()
     role_diagnostic = _role_signature_diagnostic(candidate)
     if role_diagnostic is not None:
         return None, None, (role_diagnostic,)
 
     primary_indices = _primary_indices(key)
+    if not primary_indices:
+        primary_indices = tuple(
+            sorted(
+                {
+                    index
+                    for role, index, kind in key.operation_roles
+                    if role is OperandRole.VALUE and kind in {"v", "m"}
+                }
+            )
+        )
     if len(primary_indices) > 1:
         return None, None, (
             _diagnostic(
@@ -425,14 +454,13 @@ def _comprehensive_method(
                 "has contradictory primary operand bindings",
             ),
         )
-    if not primary_indices:
-        return None, "no source-authored primary receiver", ()
-    primary_index = primary_indices[0]
-    if primary_index >= len(key.param_kinds) or key.param_kinds[primary_index] not in {
-        "v",
-        "m",
-    }:
-        return None, "source-authored primary has no coherent vector or mask receiver", ()
+    primary_index = primary_indices[0] if primary_indices else None
+    receiver_kind = RustFacadeReceiverKind.FREE
+    if primary_index is not None and primary_index < len(key.param_kinds):
+        if key.param_kinds[primary_index] == "v":
+            receiver_kind = RustFacadeReceiverKind.VECTOR
+        elif key.param_kinds[primary_index] == "m":
+            receiver_kind = RustFacadeReceiverKind.MASK
 
     public_name, name_diagnostic = _public_name(candidate)
     if name_diagnostic is not None:
@@ -447,7 +475,8 @@ def _comprehensive_method(
             index,
             (
                 RustFacadeParameterPlacement.RECEIVER
-                if index == primary_index
+                if receiver_kind is not RustFacadeReceiverKind.FREE
+                and index == primary_index
                 else RustFacadeParameterPlacement.CONST_GENERIC
                 if kind == "sImm"
                 else RustFacadeParameterPlacement.ARGUMENT
@@ -464,6 +493,17 @@ def _comprehensive_method(
             RustFacadeConstParameterSource.ATTRIBUTE,
         )
         for name in key.axis_names
+    ) + (
+        (
+            RustFacadeConstParameter(
+                key.immediate[0],
+                _rust_const_name(key.immediate[0]),
+                key.immediate[1],
+                RustFacadeConstParameterSource.IMMEDIATE,
+            ),
+        )
+        if key.immediate is not None
+        else ()
     ) + tuple(
         RustFacadeConstParameter(
             name,
@@ -490,17 +530,19 @@ def _comprehensive_method(
         RustComprehensiveMethod(
             public_name=public_name,
             source_primitive_name=key.source_name,
-            receiver_kind=(
-                RustFacadeReceiverKind.VECTOR
-                if key.param_kinds[primary_index] == "v"
-                else RustFacadeReceiverKind.MASK
-            ),
+            signature=key.signature,
+            mask_policy=key.mask_policy,
+            receiver_kind=receiver_kind,
             parameters=parameters,
             const_parameters=const_parameters,
             type_parameters=type_parameters,
             result_kind=key.result_kind,
             type_tags=candidate.type_tags,
+            shape_keys=(),
             caller_unsafe=next(iter(safety_values)),
+            safety_requirements=_safety_requirements(candidate),
+            panic_conditions=_panic_conditions(candidate),
+            bounds_checked_parameters=_bounds_checked_parameters(candidate),
             must_use=key.result_kind != "void",
             documentation=representative.documentation,
             delegates=_delegates(candidate),
@@ -508,6 +550,25 @@ def _comprehensive_method(
         None,
         (),
     )
+
+
+def _curated_memory_exclusion(key: _CandidateKey) -> str | None:
+    if (
+        key.operation is PrimitiveOperation.LOAD
+        and key.result_kind == "v"
+        and key.param_kinds == ("cptr",)
+        and key.mask_policy is None
+    ):
+        return "unmasked vector load is exposed by the curated memory boundary"
+    if (
+        key.operation is PrimitiveOperation.STORE
+        and key.result_kind == "void"
+        and key.param_kinds == ("ptr", "v")
+        and key.mask_policy is None
+        and key.overload == ("payload_extent", "vector", True)
+    ):
+        return "unmasked vector store is exposed by the curated memory boundary"
+    return None
 
 
 def _public_name(
@@ -1121,29 +1182,122 @@ def _roles_by_index(
     return roles
 
 
+def _bounds_checked_parameters(candidate: _Candidate) -> tuple[str, ...]:
+    if candidate.key.operation not in {
+        PrimitiveOperation.EXTRACT_LANE,
+        PrimitiveOperation.INSERT_LANE,
+        PrimitiveOperation.INTEGRAL_MASK_TEST,
+        PrimitiveOperation.MASK_SET_LANE,
+    }:
+        return ()
+    return tuple(
+        candidate.key.param_names[index]
+        for role, index, _kind in candidate.key.operation_roles
+        if role is OperandRole.INDEX and 0 <= index < len(candidate.key.param_names)
+    )
+
+
+def _safety_requirements(candidate: _Candidate) -> tuple[str, ...]:
+    if not candidate.representative.safety.caller_unsafe:
+        return ()
+    reasons = frozenset(
+        reason
+        for _profile_name, spec in candidate.specs
+        for reason in spec.safety.reasons
+    )
+    requirements: list[str] = []
+    if "raw_pointer" in reasons:
+        requirements.append(
+            "Every raw pointer argument must satisfy the source primitive's "
+            "validity, initialization, aliasing, extent, and applicable alignment "
+            "requirements for the duration of the call."
+        )
+    elif "raw_memory" in reasons:
+        requirements.append(
+            "Every memory argument must satisfy the source primitive's validity, "
+            "initialization, aliasing, and extent requirements."
+        )
+    requirements.append(
+        "The caller must uphold every remaining source-declared safety precondition "
+        "for this primitive."
+    )
+    return tuple(requirements)
+
+
+def _panic_conditions(candidate: _Candidate) -> tuple[str, ...]:
+    conditions = [
+        f"Panics when `{name}` is not less than `N`."
+        for name in _bounds_checked_parameters(candidate)
+    ]
+    arithmetic = candidate.representative.primitive_semantics.arithmetic
+    divisor = (
+        arithmetic.binding(ArithmeticOperandRole.DIVISOR)
+        if arithmetic is not None
+        else None
+    )
+    if (
+        arithmetic is not None
+        and arithmetic.has_guarantee(
+            ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS
+        )
+        and divisor is not None
+        and divisor.parameter_kind != "sImm"
+        and any(
+            type_tag in SCALAR_TYPE_INFOS
+            and not SCALAR_TYPE_INFOS[type_tag].floating
+            for type_tag in candidate.type_tags
+        )
+    ):
+        conditions.append(
+            "For integer element types, panics when an active divisor lane is zero."
+        )
+    return tuple(conditions)
+
+
 def _delegates(candidate: _Candidate) -> tuple[RustFacadeDelegate, ...]:
     by_profile: dict[
-        str | None, dict[str, set[RustFacadeDelegateVector]]
-    ] = defaultdict(lambda: defaultdict(set))
+        str | None,
+        dict[
+            str,
+            dict[tuple[str, str], set[tuple[tuple[str, str], ...]]],
+        ],
+    ] = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
     for profile_name, spec in candidate.specs:
-        by_profile[profile_name][spec.primitive_name].add(
-            RustFacadeDelegateVector(spec.extension_name, spec.type_tag)
-        )
+        by_profile[profile_name][spec.primitive_name][
+            (spec.extension_name, spec.type_tag)
+        ].add(spec.axis)
     return tuple(
         RustFacadeDelegate(
             profile_name,
-            next(iter(by_name)),
+            primitive_name,
             tuple(
                 sorted(
-                    next(iter(by_name.values())),
+                    (
+                        RustFacadeDelegateVector(
+                            extension_name,
+                            type_tag,
+                            tuple(sorted(attribute_combinations)),
+                        )
+                        for (
+                            extension_name,
+                            type_tag,
+                        ), attribute_combinations in by_name[
+                            primitive_name
+                        ].items()
+                    ),
                     key=lambda item: (item.extension_name, item.type_tag),
                 )
+            ),
+            candidate.overload_positions.get(
+                (profile_name, primitive_name),
+                (),
             ),
         )
         for profile_name, by_name in sorted(
             by_profile.items(), key=lambda item: (item[0] is not None, item[0] or "")
         )
         if len(by_name) == 1
+        for primitive_name in by_name
     )
 
 
@@ -1321,6 +1475,56 @@ def _finalize_curated_shapes(
                 method.delegates, method.type_tags, shapes
             )
         )
+    ]
+
+
+def _finalize_comprehensive_shapes(
+    methods: list[RustComprehensiveMethod],
+    shapes: tuple[RustFacadeShape, ...],
+) -> list[RustComprehensiveMethod]:
+    return [
+        replace(method, shape_keys=shape_keys)
+        for method in methods
+        if (
+            shape_keys := _surface_shape_keys(
+                method.delegates, method.type_tags, shapes
+            )
+        )
+    ]
+
+
+def _finalize_comprehensive_coverage(
+    coverage: list[RustFacadeCoverageEntry],
+    methods: list[RustComprehensiveMethod],
+) -> list[RustFacadeCoverageEntry]:
+    admitted = {
+        (
+            method.source_primitive_name,
+            method.signature,
+            method.mask_policy,
+            method.public_name,
+        )
+        for method in methods
+    }
+    return [
+        (
+            entry
+            if entry.status is RustFacadeCoverageStatus.EXCLUDED
+            or (
+                entry.source_primitive_name,
+                entry.signature,
+                entry.mask_policy,
+                entry.public_name,
+            )
+            in admitted
+            else replace(
+                entry,
+                status=RustFacadeCoverageStatus.EXCLUDED,
+                public_name=None,
+                reason="no admitted logical shape",
+            )
+        )
+        for entry in coverage
     ]
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from tslc.backend.rust import RustBackend
-from tslc.backend.rust_api_model import RustFacadePlan
+from tslc.backend.rust_api_model import RustFacadePlan, RustFacadeReceiverKind
 from tslc.backend.rust_api_planner import (
     plan_rust_facade,
     validate_rust_facade_plan,
@@ -32,6 +32,7 @@ from tslc.backend.emitted_profile import (
     used_extensions,
 )
 from tslc.backend.rust_names import rust_primitive_tag_name
+from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.target_capability import rust_arch_module
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
@@ -319,7 +320,7 @@ def rust_artifacts(
     artifacts.append(
         text(
             "rust/src/lib.rs",
-            _rust_lib(profiles, static_selection_plan, assets),
+            _rust_lib(profiles, static_selection_plan, facade_plan, assets),
             media_type=media_type,
         )
     )
@@ -484,6 +485,7 @@ def _verify_runner(profile: MachineProfile) -> VerifyRunner | None:
 def _rust_lib(
     profiles: tuple[EmittedProfile, ...],
     static_selection_plan: RustStaticSelectionPlan,
+    facade_plan: RustFacadePlan,
     assets: RenderAssets,
 ) -> str:
     # `non_upper_case_globals` is allowed so an `sImm` immediate can keep its corpus name
@@ -535,10 +537,25 @@ def _rust_lib(
     )
     return assets.fill(
         "rust_lib.rs.tmpl",
+        facade_function_exports=_rust_facade_function_exports(facade_plan),
         primitive_tags=(f"{primitive_tags}\n\n" if primitive_tags else ""),
         profile_modules=profile_modules,
         benchmark_modules=benchmark_modules,
     )
+
+
+def _rust_facade_function_exports(plan: RustFacadePlan) -> str:
+    names = tuple(
+        sorted(
+            method.public_name
+            for method in plan.comprehensive_methods
+            if method.receiver_kind is RustFacadeReceiverKind.FREE
+        )
+    )
+    if not names:
+        return ""
+    rendered = ", ".join(rust_raw_identifier(name) for name in names)
+    return f"pub use tsl_facade::{{{rendered}}};"
 
 
 def _rust_documentation_module(

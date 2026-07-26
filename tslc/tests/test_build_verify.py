@@ -470,6 +470,23 @@ def test_rust_path_dependency_consumer_builds(
 
                 let left = Simd::<i32, 4>::from_array([1, -2, i32::MAX, i32::MIN]);
                 let right = Simd::<i32, 4>::from_array([2, 3, 1, -1]);
+                assert_eq!(left.add(right).to_array(), [3, 1, i32::MIN, i32::MAX]);
+                assert_eq!(
+                    left.add_masked(
+                        Mask::from_array([true, false, true, false]),
+                        right,
+                    )
+                    .to_array(),
+                    [3, -2, i32::MIN, i32::MIN],
+                );
+                assert_eq!(
+                    left.add_masked_zero(
+                        Mask::from_array([true, false, true, false]),
+                        right,
+                    )
+                    .to_array(),
+                    [3, 0, i32::MIN, 0],
+                );
                 assert_eq!((left + right).to_array(), [3, 1, i32::MIN, i32::MAX]);
                 assert_eq!((&left + right).to_array(), [3, 1, i32::MIN, i32::MAX]);
                 assert_eq!((left + &right).to_array(), [3, 1, i32::MIN, i32::MAX]);
@@ -525,6 +542,12 @@ def test_rust_path_dependency_consumer_builds(
                     [-2.0, 0.0, 3.0, 2_147_483_648.0],
                 );
                 assert_eq!(
+                    Simd::<i32, 4>::from_array([-2, 0, 3, i32::MAX])
+                        .convert_lanes::<f32>()
+                        .to_array(),
+                    [-2.0, 0.0, 3.0, 2_147_483_648.0],
+                );
+                assert_eq!(
                     Simd::<f32, 4>::from_array([
                         f32::NEG_INFINITY,
                         -1.9,
@@ -570,6 +593,61 @@ def test_rust_path_dependency_consumer_builds(
                 shifted <<= &33_u32;
                 shifted >>= 1_i16;
                 assert_eq!(shifted.to_array(), [1; 4]);
+
+                assert_eq!(tsl::set1::<i32, 4>(7).to_array(), [7; 4]);
+                assert_eq!(
+                    Simd::<i32, 4>::splat(1).shift_left(33_i32).to_array(),
+                    [0; 4],
+                );
+                assert_eq!(
+                    Simd::<i32, 4>::splat(1)
+                        .shift_left_each(Simd::from_array([0, 1, 31, 32]))
+                        .to_array(),
+                    [1, 2, i32::MIN, 0],
+                );
+                assert_eq!(
+                    Simd::<i32, 4>::splat(1).shift_left_imm::<2>().to_array(),
+                    [4; 4],
+                );
+                assert_eq!(
+                    Simd::<i32, 4>::splat(1)
+                        .shift_left_imm_masked::<2>(
+                            Mask::from_array([true, false, true, false]),
+                        )
+                        .to_array(),
+                    [4, 1, 4, 1],
+                );
+
+                let mut comprehensive_memory = [0_i32; 4];
+                let memory_mask =
+                    Mask::from_array([true, false, true, false]);
+                unsafe {
+                    left.store_masked::<false>(
+                        memory_mask,
+                        comprehensive_memory.as_mut_ptr(),
+                    );
+                }
+                assert_eq!(
+                    comprehensive_memory,
+                    [1, 0, i32::MAX, 0],
+                );
+                let masked_load = unsafe {
+                    tsl::load_masked_zero::<i32, 4, false>(
+                        memory_mask,
+                        comprehensive_memory.as_ptr(),
+                    )
+                };
+                assert_eq!(
+                    masked_load.to_array(),
+                    [1, 0, i32::MAX, 0],
+                );
+                unsafe {
+                    tsl::store::<i32, 4, false>(
+                        comprehensive_memory.as_mut_ptr().add(2),
+                        123,
+                    );
+                }
+                assert_eq!(comprehensive_memory[2], 123);
 
                 assert!(std::panic::catch_unwind(|| {
                     let _ = Simd::<i32, 4>::from_slice(&source[..3]);

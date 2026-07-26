@@ -17,6 +17,7 @@ from tslc.documentation import PrimitiveDocumentation
 class RustFacadeReceiverKind(StrEnum):
     VECTOR = "vector"
     MASK = "mask"
+    FREE = "free"
 
 
 class RustFacadeTraitRhsKind(StrEnum):
@@ -36,6 +37,7 @@ class RustFacadeTypeParameterRole(StrEnum):
 
 class RustFacadeConstParameterSource(StrEnum):
     ATTRIBUTE = "attribute"
+    IMMEDIATE = "immediate"
     GENERIC = "generic"
 
 
@@ -135,10 +137,15 @@ class RustFacadeTypeParameter:
 class RustFacadeDelegateVector:
     extension_name: str
     type_tag: str
+    attribute_combinations: tuple[tuple[tuple[str, str], ...], ...] = ()
 
     def __post_init__(self) -> None:
         if not self.extension_name or not self.type_tag:
             raise ValueError("Rust facade delegate vectors require complete source keys")
+        if len(set(self.attribute_combinations)) != len(
+            self.attribute_combinations
+        ):
+            raise ValueError("Rust facade vector attributes must be unique")
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,12 +155,15 @@ class RustFacadeDelegate:
     profile_name: str | None
     primitive_name: str
     vectors: tuple[RustFacadeDelegateVector, ...]
+    overload_parameter_positions: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.primitive_name or not self.vectors:
             raise ValueError("Rust facade delegates require an entry point and vectors")
         if len(set(self.vectors)) != len(self.vectors):
             raise ValueError("Rust facade delegate vectors must be unique")
+        if any(position < 0 for position in self.overload_parameter_positions):
+            raise ValueError("Rust facade overload positions cannot be negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,13 +230,19 @@ class RustFacadeCoreDelegate:
 class RustComprehensiveMethod:
     public_name: str
     source_primitive_name: str
+    signature: str
+    mask_policy: str | None
     receiver_kind: RustFacadeReceiverKind
     parameters: tuple[RustFacadeParameter, ...]
     const_parameters: tuple[RustFacadeConstParameter, ...]
     type_parameters: tuple[RustFacadeTypeParameter, ...]
     result_kind: str
     type_tags: tuple[str, ...]
+    shape_keys: tuple[tuple[str, int], ...]
     caller_unsafe: bool
+    safety_requirements: tuple[str, ...]
+    panic_conditions: tuple[str, ...]
+    bounds_checked_parameters: tuple[str, ...]
     must_use: bool
     documentation: PrimitiveDocumentation
     delegates: tuple[RustFacadeDelegate, ...]
