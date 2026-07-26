@@ -113,6 +113,76 @@ class RustFacadeRepresentation:
             )
 
 
+def rust_facade_representations_can_coexist(
+    left: RustFacadeRepresentation,
+    right: RustFacadeRepresentation,
+) -> bool:
+    """Return whether two finalized representations can be active together."""
+
+    profile_requirements = tuple(
+        requirement
+        for requirement in (left.requirement, right.requirement)
+        if requirement is not None
+    )
+    if not profile_requirements:
+        return True
+    arches = {item.target_arch for item in profile_requirements}
+    if len(arches) != 1:
+        return False
+    target_arch = profile_requirements[0].target_arch
+    target_features = frozenset(
+        feature
+        for requirement in profile_requirements
+        for feature in requirement.target_features
+    )
+    return all(
+        _rust_facade_representation_is_active(
+            representation, target_arch, target_features
+        )
+        for representation in (left, right)
+    )
+
+
+def _rust_facade_representation_is_active(
+    representation: RustFacadeRepresentation,
+    target_arch: str,
+    target_features: frozenset[str],
+) -> bool:
+    if representation.requirement is None:
+        return not any(
+            _rust_facade_target_selection_is_active(
+                exclusion.requirement,
+                exclusion.stronger_requirements,
+                target_arch,
+                target_features,
+            )
+            for exclusion in representation.fallback_exclusions
+        )
+    return _rust_facade_target_selection_is_active(
+        representation.requirement,
+        representation.stronger_requirements,
+        target_arch,
+        target_features,
+    )
+
+
+def _rust_facade_target_selection_is_active(
+    requirement: RustTargetRequirement,
+    stronger_requirements: tuple[RustTargetRequirement, ...],
+    target_arch: str,
+    target_features: frozenset[str],
+) -> bool:
+    if requirement.target_arch != target_arch or not set(
+        requirement.target_features
+    ) <= target_features:
+        return False
+    return not any(
+        stronger.target_arch == target_arch
+        and set(stronger.target_features) <= target_features
+        for stronger in stronger_requirements
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class RustFacadeShape:
     type_tag: str
@@ -182,6 +252,7 @@ class RustFacadeDelegateVector:
     attribute_combinations: tuple[tuple[tuple[str, str], ...], ...] = ()
     uses_sized_vector: bool = False
     implementation_fallback: bool = False
+    unconditional_implementation_fallback: bool = False
     vector_bits_kind: VectorBitsKind = "fixed"
     vector_bits: int = 0
 
@@ -192,6 +263,13 @@ class RustFacadeDelegateVector:
             self.attribute_combinations
         ):
             raise ValueError("Rust facade vector attributes must be unique")
+        if (
+            self.unconditional_implementation_fallback
+            and not self.implementation_fallback
+        ):
+            raise ValueError(
+                "An unconditional Rust facade fallback must be an implementation fallback"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,6 +309,37 @@ class RustFacadeDelegate:
         )
         if len(set(owner_keys)) != len(owner_keys):
             raise ValueError("Rust facade delegate owners must be unique by shape")
+
+
+@dataclass(frozen=True, slots=True)
+class RustFacadeConversionPair:
+    """One exact source-to-target type edge and its lower delegate inventory."""
+
+    source_type_tag: str
+    target_type_tag: str
+    shape_keys: tuple[tuple[str, int], ...]
+    delegates: tuple[RustFacadeDelegate, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not self.source_type_tag
+            or not self.target_type_tag
+            or not self.delegates
+        ):
+            raise ValueError("Rust facade conversion pairs require exact delegate facts")
+        if all(delegate.profile_name is not None for delegate in self.delegates):
+            raise ValueError(
+                "Rust facade conversion pairs require a generic baseline delegate"
+            )
+        if any(
+            type_tag != self.source_type_tag
+            for type_tag, _lanes in self.shape_keys
+        ):
+            raise ValueError(
+                "Rust facade conversion pair shapes must use the source type"
+            )
+        if len(set(self.shape_keys)) != len(self.shape_keys):
+            raise ValueError("Rust facade conversion pair shapes must be unique")
 
 
 @dataclass(frozen=True, slots=True)
@@ -323,6 +432,7 @@ class RustComprehensiveMethod:
     bounds_checked_parameters: tuple[str, ...]
     must_use: bool
     documentation: PrimitiveDocumentation
+    conversion_pairs: tuple[RustFacadeConversionPair, ...]
     delegates: tuple[RustFacadeDelegate, ...]
 
 
@@ -333,10 +443,10 @@ class RustCuratedMethod:
     operation: PrimitiveOperation
     source_primitive_name: str
     type_tags: tuple[str, ...]
-    target_type_tags: tuple[str, ...]
     shape_keys: tuple[tuple[str, int], ...]
     caller_unsafe: bool
     invocation: RustFacadeInvocation
+    conversion_pairs: tuple[RustFacadeConversionPair, ...]
     delegates: tuple[RustFacadeDelegate, ...]
 
 
@@ -347,7 +457,8 @@ class RustFacadeBitConversion:
     source_primitive_name: str
     shape_keys: tuple[tuple[str, int], ...]
     invocation: RustFacadeInvocation
-    delegates: tuple[RustFacadeDelegate, ...]
+    to_bits: RustFacadeConversionPair
+    from_bits: RustFacadeConversionPair
 
 
 @dataclass(frozen=True, slots=True)
@@ -447,6 +558,51 @@ class RustFacadePlan:
         shape_keys = tuple((item.type_tag, item.lanes) for item in self.shapes)
         if len(set(shape_keys)) != len(shape_keys):
             raise ValueError("Rust facade logical shapes must be unique")
+        shape_key_set = set(shape_keys)
+        method_pair_keys = tuple(
+            tuple(
+                (pair.source_type_tag, pair.target_type_tag)
+                for pair in method.conversion_pairs
+            )
+            for method in self.comprehensive_methods
+        ) + tuple(
+            tuple(
+                (pair.source_type_tag, pair.target_type_tag)
+                for pair in method.conversion_pairs
+            )
+            for method in self.curated_methods
+        )
+        for pair_keys in method_pair_keys:
+            if len(set(pair_keys)) != len(pair_keys):
+                raise ValueError(
+                    "Rust facade conversion pairs must be unique per method"
+                )
+        conversion_pairs = tuple(
+            pair
+            for method in self.comprehensive_methods
+            for pair in method.conversion_pairs
+        ) + tuple(
+            pair
+            for method in self.curated_methods
+            for pair in method.conversion_pairs
+        ) + tuple(
+            pair
+            for conversion in self.bit_conversions
+            for pair in (conversion.to_bits, conversion.from_bits)
+        )
+        if any(not pair.shape_keys for pair in conversion_pairs):
+            raise ValueError(
+                "Final Rust facade conversion pairs require admitted logical shapes"
+            )
+        if any(
+            source_key not in shape_key_set
+            or (pair.target_type_tag, source_key[1]) not in shape_key_set
+            for pair in conversion_pairs
+            for source_key in pair.shape_keys
+        ):
+            raise ValueError(
+                "Rust facade conversion pairs must reference admitted source and target shapes"
+            )
         operation_keys = tuple(
             (
                 item.operation,
@@ -468,7 +624,6 @@ class RustFacadePlan:
         )
         if len(set(core_delegate_keys)) != len(core_delegate_keys):
             raise ValueError("Rust facade core delegates must be unique")
-        shape_key_set = set(shape_keys)
         if any(
             (alias.type_tag, selection.lanes) not in shape_key_set
             for alias in self.native_aliases
@@ -490,6 +645,7 @@ __all__ = (
     "RustFacadeBitConversion",
     "RustFacadeConstParameter",
     "RustFacadeConstParameterSource",
+    "RustFacadeConversionPair",
     "RustFacadeDelegate",
     "RustFacadeDelegateOwner",
     "RustFacadeDelegateVector",
@@ -508,4 +664,5 @@ __all__ = (
     "RustNativeAlias",
     "RustNativeAliasSelection",
     "RustOperationValue",
+    "rust_facade_representations_can_coexist",
 )

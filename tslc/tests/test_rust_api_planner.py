@@ -30,6 +30,7 @@ from tslc.backend.rust_api_planner import (
 )
 from tslc.backend.rust_static_selection import (
     RustStaticFallbackModule,
+    RustStaticProfileSelection,
     RustStaticSelectionPlan,
     RustStaticVectorMapping,
     RustTargetRequirement,
@@ -63,7 +64,9 @@ from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam
 from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
 from tslc.lower.target_vectors import TargetVector
 from tslc.render.rust_facade import (
+    _bit_conversion_impls,
     _canonical_operator_impl,
+    _conversion_pair_impls,
     _curated_method_impl,
     _facade_impl,
 )
@@ -737,7 +740,14 @@ def test_missing_generic_baseline_is_a_typed_exclusion() -> None:
     plan = plan_rust_facade(
         (emitted,),
         RustStaticSelectionPlan(
-            (),
+            (
+                RustStaticProfileSelection(
+                    "hardware",
+                    RustTargetRequirement("x86_64", ()),
+                    (),
+                    (),
+                ),
+            ),
             (),
             RustStaticFallbackModule((), ()),
         ),
@@ -808,8 +818,31 @@ def test_target_vector_admission_is_explicit_and_lane_preserving() -> None:
         ),
         result_vector_param="ToVec",
     )
+    mappings = (
+        RustStaticVectorMapping(
+            "si32",
+            "i32",
+            4,
+            128,
+            "Simd<i32, Generic<4>>",
+            "u64",
+            uses_sized_vector=True,
+        ),
+        RustStaticVectorMapping(
+            "f64",
+            "f64",
+            4,
+            256,
+            "Simd<f64, Generic<4>>",
+            "u64",
+            uses_sized_vector=True,
+        ),
+    )
 
-    method = plan_rust_facade((), _plan(result_vector)).comprehensive_methods[0]
+    method = plan_rust_facade(
+        (),
+        _plan(result_vector, fallback_mappings=mappings),
+    ).comprehensive_methods[0]
 
     assert method.type_parameters[0].source_name == "ToVec"
     assert method.type_parameters[0].public_name == "U"
@@ -817,11 +850,391 @@ def test_target_vector_admission_is_explicit_and_lane_preserving() -> None:
 
     concrete_target = replace(
         _spec("reinterpret_target"),
-        target=TargetVector("Vector", "Register", "avx2", "f64", "f64"),
+        target=TargetVector("Vector", "Register", "generic", "f64", "f64"),
     )
-    exclusion = plan_rust_facade((), _plan(concrete_target)).coverage[0]
+    exclusion = plan_rust_facade(
+        (),
+        _plan(concrete_target, fallback_mappings=mappings),
+    ).coverage[0]
     assert exclusion.status is RustFacadeCoverageStatus.EXCLUDED
     assert exclusion.reason == "concrete target-vector shape is lower-level only"
+
+
+def test_sparse_numeric_conversion_pairs_do_not_expand_cartesian_products() -> None:
+    conversion = PrimitiveConversionContract(
+        ConversionKind.NUMERIC,
+        LaneCountRelation.PRESERVE_LANE_COUNT,
+        NumericConversionMode.SCALAR_AS,
+    )
+    spellings = {
+        "si32": "i32",
+        "ui32": "u32",
+        "f32": "f32",
+        "f64": "f64",
+    }
+
+    def conversion_spec(
+        source_type_tag: str,
+        target_type_tag: str,
+        emitted_name: str,
+    ) -> LoweredSpecialization:
+        source_spelling = spellings[source_type_tag]
+        target_spelling = spellings[target_type_tag]
+        return replace(
+            _spec(
+                "sparse_convert",
+                result_kind="v",
+                param_names=("data",),
+                param_kinds=("v",),
+                operation=PrimitiveOperation.CONVERT,
+                roles=((OperandRole.PRIMARY, 0, "v"),),
+                conversion=conversion,
+                emitted_name=emitted_name,
+            ),
+            type_tag=source_type_tag,
+            base_type_spelling=source_spelling,
+            register_spelling=f"array_type<{source_spelling}, LANES>",
+            type_params=(
+                LoweredTypeParam(
+                    "ToVec",
+                    base_type_binding=target_type_tag,
+                    base_type_binding_spelling=target_spelling,
+                ),
+            ),
+            result_vector_param="ToVec",
+        )
+
+    specs = (
+        conversion_spec("si32", "f32", "convert_i32_to_f32"),
+        conversion_spec("ui32", "f64", "convert_u32_to_f64"),
+    )
+    mappings = tuple(
+        RustStaticVectorMapping(
+            type_tag,
+            spelling,
+            lanes,
+            lanes * (64 if type_tag == "f64" else 32),
+            f"Simd<{spelling}, Generic<{lanes}>>",
+            "u64",
+            uses_sized_vector=True,
+        )
+        for type_tag, spelling in spellings.items()
+        for lanes in (4, 8)
+    )
+
+    plan = plan_rust_facade(
+        (),
+        _plan(*specs, fallback_mappings=mappings),
+    )
+    permuted = plan_rust_facade(
+        (),
+        _plan(*reversed(specs), fallback_mappings=tuple(reversed(mappings))),
+    )
+    method = next(
+        item
+        for item in plan.comprehensive_methods
+        if item.source_primitive_name == "sparse_convert"
+    )
+    cast = next(item for item in plan.curated_methods if item.public_name == "cast")
+    exact_pairs = {
+        (pair.source_type_tag, pair.target_type_tag): (
+            pair.shape_keys,
+            tuple(delegate.primitive_name for delegate in pair.delegates),
+        )
+        for pair in method.conversion_pairs
+    }
+
+    assert exact_pairs == {
+        ("si32", "f32"): (
+            (("si32", 4), ("si32", 8)),
+            ("convert_i32_to_f32",),
+        ),
+        ("ui32", "f64"): (
+            (("ui32", 4), ("ui32", 8)),
+            ("convert_u32_to_f64",),
+        ),
+    }
+    assert cast.conversion_pairs == method.conversion_pairs
+    rendered = _conversion_pair_impls(plan)
+    assert rendered.count("impl private::ConvertTo<") == 4
+    assert "impl private::ConvertTo<f32, 4> for i32" in rendered
+    assert "impl private::ConvertTo<f64, 8> for u32" in rendered
+    assert "impl private::ConvertTo<f64, 4> for i32" not in rendered
+    assert "impl private::ConvertTo<f32, 8> for u32" not in rendered
+    assert permuted == plan
+    assert _conversion_pair_impls(permuted) == rendered
+
+
+def test_ambiguous_delegate_for_one_exact_conversion_pair_is_rejected() -> None:
+    conversion = PrimitiveConversionContract(
+        ConversionKind.NUMERIC,
+        LaneCountRelation.PRESERVE_LANE_COUNT,
+        NumericConversionMode.SCALAR_AS,
+    )
+    base = replace(
+        _spec(
+            "ambiguous_convert",
+            result_kind="v",
+            param_names=("data",),
+            param_kinds=("v",),
+            operation=PrimitiveOperation.CONVERT,
+            roles=((OperandRole.PRIMARY, 0, "v"),),
+            conversion=conversion,
+            emitted_name="first_convert",
+        ),
+        type_params=(
+            LoweredTypeParam(
+                "ToVec",
+                base_type_binding="f32",
+                base_type_binding_spelling="f32",
+            ),
+        ),
+        result_vector_param="ToVec",
+    )
+    mappings = (
+        RustStaticVectorMapping(
+            "si32",
+            "i32",
+            4,
+            128,
+            "Simd<i32, Generic<4>>",
+            "u64",
+            uses_sized_vector=True,
+        ),
+        RustStaticVectorMapping(
+            "f32",
+            "f32",
+            4,
+            128,
+            "Simd<f32, Generic<4>>",
+            "u64",
+            uses_sized_vector=True,
+        ),
+    )
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade(
+            (),
+            _plan(
+                base,
+                replace(base, primitive_name="second_convert"),
+                fallback_mappings=mappings,
+            ),
+        )
+
+    assert {diagnostic.code for diagnostic in error.value.diagnostics} == {
+        "TSL-BACKEND-RUST-FACADE-DELEGATE-MISMATCH"
+    }
+
+
+def test_unresolved_conversion_target_binding_is_rejected() -> None:
+    conversion = PrimitiveConversionContract(
+        ConversionKind.NUMERIC,
+        LaneCountRelation.PRESERVE_LANE_COUNT,
+        NumericConversionMode.SCALAR_AS,
+    )
+    specialization = replace(
+        _spec(
+            "unresolved_convert",
+            result_kind="v",
+            param_names=("data",),
+            param_kinds=("v",),
+            operation=PrimitiveOperation.CONVERT,
+            roles=((OperandRole.PRIMARY, 0, "v"),),
+            conversion=conversion,
+        ),
+        type_params=(LoweredTypeParam("ToVec"),),
+        result_vector_param="ToVec",
+    )
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade((), _plan(specialization))
+
+    assert {diagnostic.code for diagnostic in error.value.diagnostics} == {
+        "TSL-BACKEND-RUST-FACADE-TARGET-BINDING-MISMATCH"
+    }
+
+
+def test_scalar_conversion_target_mapping_uses_the_target_element_width() -> None:
+    scalar_extension = _fallback_extension("portable_scalar", sized=False)
+    conversion = PrimitiveConversionContract(
+        ConversionKind.NUMERIC,
+        LaneCountRelation.PRESERVE_LANE_COUNT,
+        NumericConversionMode.SCALAR_AS,
+    )
+    specialization = replace(
+        _spec(
+            "scalar_convert",
+            result_kind="v",
+            param_names=("data",),
+            param_kinds=("v",),
+            operation=PrimitiveOperation.CONVERT,
+            roles=((OperandRole.PRIMARY, 0, "v"),),
+            conversion=conversion,
+        ),
+        extension_name=scalar_extension.name,
+        uses_sized_vector=False,
+        lane_parameter=None,
+        register_is_base=True,
+        register_spelling="i32",
+        type_params=(
+            LoweredTypeParam(
+                "ToVec",
+                base_type_binding="f64",
+                base_type_binding_spelling="f64",
+            ),
+        ),
+        result_vector_param="ToVec",
+    )
+    mappings = (
+        RustStaticVectorMapping("si32", "i32", 1, 32, "i32", "u64"),
+        RustStaticVectorMapping("f64", "f64", 1, 64, "f64", "u64"),
+    )
+
+    plan = plan_rust_facade(
+        (),
+        _plan(
+            specialization,
+            fallback_extensions=(scalar_extension,),
+            fallback_mappings=mappings,
+        ),
+    )
+
+    assert plan.comprehensive_methods[0].conversion_pairs[0].shape_keys == (
+        ("si32", 1),
+    )
+
+
+def test_bit_conversion_directions_retain_their_exact_delegates() -> None:
+    conversion = PrimitiveConversionContract(
+        ConversionKind.BIT_PATTERN,
+        LaneCountRelation.PRESERVE_REGISTER_WIDTH,
+    )
+    to_bits = replace(
+        _spec(
+            "reinterpret_sparse",
+            result_kind="v",
+            param_names=("data",),
+            param_kinds=("v",),
+            operation=PrimitiveOperation.REINTERPRET,
+            roles=((OperandRole.PRIMARY, 0, "v"),),
+            conversion=conversion,
+            emitted_name="float_to_bits",
+        ),
+        type_tag="f32",
+        base_type_spelling="f32",
+        register_spelling="array_type<f32, LANES>",
+        target=TargetVector("Vector", "Register", "generic", "ui32", "u32"),
+    )
+    from_bits = replace(
+        to_bits,
+        primitive_name="bits_to_float",
+        type_tag="ui32",
+        base_type_spelling="u32",
+        register_spelling="array_type<u32, LANES>",
+        target=TargetVector("Vector", "Register", "generic", "f32", "f32"),
+    )
+    mappings = (
+        RustStaticVectorMapping(
+            "f32",
+            "f32",
+            4,
+            128,
+            "Simd<f32, Generic<4>>",
+            "u64",
+            uses_sized_vector=True,
+        ),
+        RustStaticVectorMapping(
+            "ui32",
+            "u32",
+            4,
+            128,
+            "Simd<u32, Generic<4>>",
+            "u64",
+            uses_sized_vector=True,
+        ),
+    )
+
+    plan = plan_rust_facade(
+        (),
+        _plan(to_bits, from_bits, fallback_mappings=mappings),
+    )
+    planned = plan.bit_conversions[0]
+
+    assert tuple(
+        delegate.primitive_name for delegate in planned.to_bits.delegates
+    ) == ("float_to_bits",)
+    assert tuple(
+        delegate.primitive_name for delegate in planned.from_bits.delegates
+    ) == ("bits_to_float",)
+    rendered = _bit_conversion_impls(plan)
+    assert "float_to_bits::<" in rendered
+    assert "bits_to_float::<" in rendered
+
+
+def test_ambiguous_exact_bit_conversion_delegate_is_diagnosed() -> None:
+    conversion = PrimitiveConversionContract(
+        ConversionKind.BIT_PATTERN,
+        LaneCountRelation.PRESERVE_REGISTER_WIDTH,
+    )
+    to_bits = replace(
+        _spec(
+            "ambiguous_reinterpret",
+            result_kind="v",
+            param_names=("data",),
+            param_kinds=("v",),
+            operation=PrimitiveOperation.REINTERPRET,
+            roles=((OperandRole.PRIMARY, 0, "v"),),
+            conversion=conversion,
+            emitted_name="first_to_bits",
+        ),
+        type_tag="f32",
+        base_type_spelling="f32",
+        target=TargetVector("Vector", "Register", "generic", "ui32", "u32"),
+    )
+    second_to_bits = replace(to_bits, primitive_name="second_to_bits")
+    from_bits = replace(
+        to_bits,
+        primitive_name="from_bits",
+        type_tag="ui32",
+        base_type_spelling="u32",
+        target=TargetVector("Vector", "Register", "generic", "f32", "f32"),
+    )
+    mappings = (
+        RustStaticVectorMapping(
+            "f32",
+            "f32",
+            4,
+            128,
+            "Simd<f32, Generic<4>>",
+            "u64",
+            uses_sized_vector=True,
+        ),
+        RustStaticVectorMapping(
+            "ui32",
+            "u32",
+            4,
+            128,
+            "Simd<u32, Generic<4>>",
+            "u64",
+            uses_sized_vector=True,
+        ),
+    )
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade(
+            (),
+            _plan(
+                to_bits,
+                second_to_bits,
+                from_bits,
+                fallback_mappings=mappings,
+            ),
+        )
+
+    assert {diagnostic.code for diagnostic in error.value.diagnostics} == {
+        "TSL-BACKEND-RUST-FACADE-DELEGATE-MISMATCH"
+    }
 
 
 def test_semantic_rename_keeps_curated_trait_and_operation_value() -> None:
@@ -1260,7 +1673,7 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
     cast = next(
         method for method in plan.curated_methods if method.public_name == "cast"
     )
-    assert set(cast.target_type_tags) == {
+    assert {pair.target_type_tag for pair in cast.conversion_pairs} == {
         "f32",
         "f64",
         "si8",
@@ -1277,6 +1690,29 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
         (conversion.float_type_tag, conversion.bits_type_tag)
         for conversion in plan.bit_conversions
     } == {("f32", "ui32"), ("f64", "ui64")}
+    assert all(
+        conversion.to_bits.source_type_tag == conversion.float_type_tag
+        and conversion.to_bits.target_type_tag == conversion.bits_type_tag
+        and conversion.from_bits.source_type_tag == conversion.bits_type_tag
+        and conversion.from_bits.target_type_tag == conversion.float_type_tag
+        and all(
+            vector.type_tag == conversion.to_bits.source_type_tag
+            for delegate in conversion.to_bits.delegates
+            for vector in delegate.vectors
+        )
+        and all(
+            vector.type_tag == conversion.from_bits.source_type_tag
+            for delegate in conversion.from_bits.delegates
+            for vector in delegate.vectors
+        )
+        for conversion in plan.bit_conversions
+    )
+    assert any(
+        pair.shape_keys
+        and {delegate.profile_name for delegate in pair.delegates}
+        > {None}
+        for pair in cast.conversion_pairs
+    )
     assert any(
         method.public_name == "select"
         and method.receiver_kind is RustFacadeReceiverKind.MASK

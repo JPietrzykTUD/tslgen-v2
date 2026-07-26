@@ -337,6 +337,11 @@ def test_oneapi_sized_vector_is_distinct_from_generic(
     assert "pub struct OneapiFpga<const LANES: usize>;" in rust
     assert "impl<const LANES: usize> AddImpl for Simd<i32, Generic<LANES>>" in rust
     assert "impl<const LANES: usize> AddImpl for Simd<i32, OneapiFpga<LANES>>" in rust
+    rust_fallback = by["rust/src/tsl_target_fallback.rs"]
+    assert "OneapiFpga" not in rust_fallback
+    assert "impl<const LANES: usize> AddImpl for Simd<i32, Generic<LANES>>" in (
+        rust_fallback
+    )
 
 
 def test_feature_flag_spelling(data_root: Path, machine_profiles_path: Path) -> None:

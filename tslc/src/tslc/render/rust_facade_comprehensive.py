@@ -122,12 +122,23 @@ def _private_impls(
                     )
                 )
             continue
-        target_tags = method.type_parameters[0].type_tags
-        for target_shape in plan.shapes:
+        for pair in method.conversion_pairs:
             if (
-                target_shape.type_tag not in target_tags
-                or target_shape.lanes != source_shape.lanes
+                pair.source_type_tag != source_shape.type_tag
+                or (source_shape.type_tag, source_shape.lanes)
+                not in pair.shape_keys
             ):
+                continue
+            target_shape = next(
+                (
+                    shape
+                    for shape in plan.shapes
+                    if shape.type_tag == pair.target_type_tag
+                    and shape.lanes == source_shape.lanes
+                ),
+                None,
+            )
+            if target_shape is None:
                 continue
             for source_representation in source_shape.representations:
                 for target_representation in target_shape.representations:
@@ -141,7 +152,7 @@ def _private_impls(
                         else target_representation
                     )
                     delegate = surface_delegate_for_profile(
-                        method.delegates,
+                        pair.delegates,
                         source_shape,
                         source_representation,
                         active_representation.profile_name,

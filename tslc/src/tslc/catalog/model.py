@@ -703,6 +703,16 @@ class Extension:
 
         return self.backend_supported.get(backend_id, False)
 
+    @property
+    def is_unconditional_implementation_fallback(self) -> bool:
+        """Whether this extension is usable without profile activation facts."""
+
+        return (
+            self.family_capability.implementation_fallback
+            and not self.active_when.target_features
+            and not self.active_when.compile_modes
+        )
+
     def direct_vector_register_type(
         self, backend_id: str, type_tag_or_group: str
     ) -> str | None:

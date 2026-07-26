@@ -358,14 +358,12 @@ def _conversion_pair_impls(plan: RustFacadePlan) -> str:
     if method is None:
         return ""
     blocks: list[str] = []
-    for source in plan.shapes:
-        if (source.type_tag, source.lanes) not in method.shape_keys:
-            continue
-        for target in plan.shapes:
-            if (
-                target.type_tag not in method.target_type_tags
-                or target.lanes != source.lanes
-            ):
+    shapes = {(shape.type_tag, shape.lanes): shape for shape in plan.shapes}
+    for pair in method.conversion_pairs:
+        for source_key in pair.shape_keys:
+            source = shapes[source_key]
+            target = shapes.get((pair.target_type_tag, source.lanes))
+            if target is None:
                 continue
             for source_representation in source.representations:
                 for target_representation in target.representations:
@@ -379,7 +377,7 @@ def _conversion_pair_impls(plan: RustFacadePlan) -> str:
                         else target_representation
                     )
                     delegate = _surface_delegate_for_profile(
-                        method.delegates,
+                        pair.delegates,
                         source,
                         source_representation,
                         active_representation.profile_name,
@@ -831,7 +829,7 @@ def _bit_conversion_impls(plan: RustFacadePlan) -> str:
                         else bits_representation
                     )
                     delegate = _surface_delegate_for_profile(
-                        conversion.delegates,
+                        conversion.to_bits.delegates,
                         float_shape,
                         float_representation,
                         active_representation.profile_name,
@@ -859,7 +857,7 @@ def _bit_conversion_impls(plan: RustFacadePlan) -> str:
                         else float_representation
                     )
                     delegate = _surface_delegate_for_profile(
-                        conversion.delegates,
+                        conversion.from_bits.delegates,
                         bits_shape,
                         bits_representation,
                         active_representation.profile_name,

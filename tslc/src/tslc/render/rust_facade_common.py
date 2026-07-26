@@ -7,6 +7,7 @@ from tslc.backend.rust_api_model import (
     RustFacadeRepresentation,
     RustFacadeShape,
     RustNativeAliasSelection,
+    rust_facade_representations_can_coexist,
 )
 from tslc.backend.rust_static_selection import RustTargetRequirement
 from tslc.render._common import slug
@@ -100,66 +101,7 @@ def representations_can_coexist(
     left: RustFacadeRepresentation,
     right: RustFacadeRepresentation,
 ) -> bool:
-    profile_requirements = tuple(
-        requirement
-        for requirement in (left.requirement, right.requirement)
-        if requirement is not None
-    )
-    if not profile_requirements:
-        return True
-    arches = {item.target_arch for item in profile_requirements}
-    if len(arches) != 1:
-        return False
-    target_arch = profile_requirements[0].target_arch
-    target_features = frozenset(
-        feature
-        for requirement in profile_requirements
-        for feature in requirement.target_features
-    )
-    return all(
-        _representation_is_active(representation, target_arch, target_features)
-        for representation in (left, right)
-    )
-
-
-def _representation_is_active(
-    representation: RustFacadeRepresentation,
-    target_arch: str,
-    target_features: frozenset[str],
-) -> bool:
-    if representation.requirement is None:
-        return not any(
-            _target_selection_is_active(
-                exclusion.requirement,
-                exclusion.stronger_requirements,
-                target_arch,
-                target_features,
-            )
-            for exclusion in representation.fallback_exclusions
-        )
-    return _target_selection_is_active(
-        representation.requirement,
-        representation.stronger_requirements,
-        target_arch,
-        target_features,
-    )
-
-
-def _target_selection_is_active(
-    requirement: RustTargetRequirement,
-    stronger_requirements: tuple[RustTargetRequirement, ...],
-    target_arch: str,
-    target_features: frozenset[str],
-) -> bool:
-    if requirement.target_arch != target_arch or not set(
-        requirement.target_features
-    ) <= target_features:
-        return False
-    return not any(
-        stronger.target_arch == target_arch
-        and set(stronger.target_features) <= target_features
-        for stronger in stronger_requirements
-    )
+    return rust_facade_representations_can_coexist(left, right)
 
 
 def lower_module(representation: RustFacadeRepresentation) -> str:

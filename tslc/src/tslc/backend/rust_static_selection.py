@@ -122,10 +122,12 @@ class RustStaticFallbackModule:
         if any(not specs for _name, specs in self.primitive_specializations):
             raise ValueError("Rust static fallback primitive groups cannot be empty")
         if any(
-            not extension.family_capability.implementation_fallback
+            not extension.is_unconditional_implementation_fallback
             for _name, extension in self.extensions
         ):
-            raise ValueError("Rust static fallback extensions must be source fallbacks")
+            raise ValueError(
+                "Rust static fallback extensions must be unconditional source fallbacks"
+            )
 
     def specializations_by_primitive(
         self,
@@ -403,7 +405,7 @@ def _fallback_module(
     diagnostics: list[Diagnostic] = []
     for emitted_profile in sorted(profiles, key=lambda item: item.profile.name):
         for name, extension in emitted_profile.extensions.items():
-            if not extension.family_capability.implementation_fallback:
+            if not extension.is_unconditional_implementation_fallback:
                 continue
             previous = extensions.setdefault(name, extension)
             if previous != extension:
@@ -435,10 +437,10 @@ def _fallback_module(
                 )
                 if (
                     fallback_extension is None
-                    or not fallback_extension.family_capability.implementation_fallback
+                    or not fallback_extension.is_unconditional_implementation_fallback
                     or (
                         target_extension is not None
-                        and not target_extension.family_capability.implementation_fallback
+                        and not target_extension.is_unconditional_implementation_fallback
                     )
                 ):
                     continue
