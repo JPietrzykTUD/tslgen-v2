@@ -55,7 +55,8 @@ from tslc.render.rust_benchmark_layout import (
 )
 from tslc.render.rust_facade import rust_facade_module
 from tslc.render.rust_dispatch import (
-    rust_dispatch_prototype_module,
+    rust_dispatch_external_test,
+    rust_dispatch_module,
     rust_runtime_profile_cfg,
 )
 from tslc.render.rust_policy_consumption import (
@@ -193,12 +194,19 @@ def rust_artifacts(
         # generated crate is self-contained.
         text("rust/rustfmt.toml", assets.text("rustfmt.toml"), media_type=media_type),
     ]
-    dispatch_prototype = rust_dispatch_prototype_module(dispatch_plan, assets)
-    if dispatch_prototype:
+    dispatch = rust_dispatch_module(dispatch_plan, assets)
+    if dispatch:
         artifacts.append(
             text(
-                "rust/src/tsl_dispatch_prototype.rs",
-                dispatch_prototype,
+                "rust/src/tsl_dispatch.rs",
+                dispatch,
+                media_type=media_type,
+            )
+        )
+        artifacts.append(
+            text(
+                "rust/tests/runtime_dispatch.rs",
+                rust_dispatch_external_test(dispatch_plan, assets),
                 media_type=media_type,
             )
         )
@@ -593,8 +601,11 @@ def _rust_lib(
         runtime_dispatch_module=(
             '#[cfg(feature = "runtime-dispatch")]\n'
             "#[doc(hidden)]\n"
-            "mod tsl_dispatch_prototype;"
-            if dispatch_plan.prototype_slots is not None
+            "mod tsl_dispatch;\n"
+            '#[cfg(feature = "runtime-dispatch")]\n'
+            "#[doc(inline)]\n"
+            "pub use tsl_dispatch::{algorithms, ops, Dispatcher};"
+            if dispatch_plan.slots
             else ""
         ),
     )

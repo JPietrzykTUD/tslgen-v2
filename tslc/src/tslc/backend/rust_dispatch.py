@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from tslc.backend.emitted_profile import EmittedProfile
@@ -20,7 +20,6 @@ from tslc.backend.rust_static_selection import (
     RustTargetRequirement,
 )
 from tslc.catalog.arithmetic import ArithmeticOperation
-from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 
 
 class RustDispatchAlgorithm(StrEnum):
@@ -120,6 +119,20 @@ class RustDispatchEntryPoint:
 
 
 @dataclass(frozen=True, slots=True)
+class RustDispatchSkip:
+    """One source/profile combination excluded from runtime dispatch."""
+
+    algorithm: RustDispatchAlgorithm
+    type_tag: str
+    profile_name: str | None
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.type_tag or not self.reason:
+            raise ValueError("Rust dispatch skips require a type and reason")
+
+
+@dataclass(frozen=True, slots=True)
 class RustDispatchSlot:
     """One operation/type slot with mandatory generic coverage."""
 
@@ -139,11 +152,16 @@ class RustDispatchSlot:
         if self.generic_baseline.requirement is not None:
             raise ValueError("Rust dispatch slots require an unconditional baseline")
         indices = tuple(
-            entry.entry_index
+            (
+                entry.requirement.target_arch if entry.requirement is not None else None,
+                entry.entry_index,
+            )
             for entry in (*self.ordered_candidates, self.generic_baseline)
         )
         if len(set(indices)) != len(indices):
-            raise ValueError("Rust dispatch entry indices must be unique")
+            raise ValueError(
+                "Rust dispatch entry indices must be unique within each architecture"
+            )
         if any(entry.requirement is None for entry in self.ordered_candidates):
             raise ValueError("Rust dispatch candidates must be hardware-guarded")
         if any(
@@ -159,6 +177,7 @@ class RustDispatchPlan:
     """Frozen whole-algorithm dispatch facts consumed by Rust rendering."""
 
     slots: tuple[RustDispatchSlot, ...]
+    skips: tuple[RustDispatchSkip, ...] = ()
 
     def __post_init__(self) -> None:
         keys = tuple(
@@ -172,13 +191,26 @@ class RustDispatchPlan:
         )
         if len(set(keys)) != len(keys):
             raise ValueError("Rust dispatch slots must be unique")
+        skip_keys = tuple(
+            (skip.algorithm, skip.type_tag, skip.profile_name) for skip in self.skips
+        )
+        if len(set(skip_keys)) != len(skip_keys):
+            raise ValueError("Rust dispatch skips must be unique")
 
     @property
-    def prototype_slots(self) -> tuple[RustDispatchSlot, RustDispatchSlot] | None:
+    def representative_slots(
+        self,
+    ) -> tuple[RustDispatchSlot, RustDispatchSlot] | None:
         builtins = tuple(
-            slot
-            for slot in self.slots
-            if slot.operation.kind is RustDispatchOperationKind.BUILTIN_ZST
+            sorted(
+                (
+                    slot
+                    for slot in self.slots
+                    if slot.operation.kind
+                    is RustDispatchOperationKind.BUILTIN_ZST
+                ),
+                key=lambda slot: (slot.type_tag != "si32", slot.type_tag),
+            )
         )
         stateful = tuple(
             slot
@@ -218,39 +250,25 @@ def plan_rust_dispatch(
     static_selection: RustStaticSelectionPlan,
     facade: RustFacadePlan,
 ) -> RustDispatchPlan:
-    """Plan the minimal binary/stateful prototype from finalized typed facts."""
+    """Plan complete binary dispatch slots from finalized typed facts."""
 
     addition = _addition_trait(facade)
     if addition is None or not _fallback_supports_algorithms(static_selection):
         return EMPTY_RUST_DISPATCH_PLAN
-    candidate = _prototype_candidate(
-        profiles,
-        static_selection,
-        facade,
-        addition,
-    )
-    if candidate is None:
-        return EMPTY_RUST_DISPATCH_PLAN
-    type_tag, base_spelling, baseline, hardware = candidate
-    signature = RustDispatchPublicSignature(
-        RustDispatchAlgorithm.TRANSFORM_BINARY.value,
-        ("Op",),
+    operation_value = next(
         (
-            RustDispatchPublicParameter("operation", "Op"),
-            RustDispatchPublicParameter("left", f"&[{base_spelling}]"),
-            RustDispatchPublicParameter("right", f"&[{base_spelling}]"),
-            RustDispatchPublicParameter("output", f"&mut [{base_spelling}]"),
-        ),
-        "()",
-    )
-    builtin = RustDispatchOperationRequirement(
-        RustDispatchOperationKind.BUILTIN_ZST,
-        RustDispatchKernel.BINARY,
-        next(
-            value.public_name
+            value
             for value in facade.operation_values
             if value.operation is ArithmeticOperation.ADDITION
         ),
+        None,
+    )
+    if operation_value is None:
+        return EMPTY_RUST_DISPATCH_PLAN
+    builtin = RustDispatchOperationRequirement(
+        RustDispatchOperationKind.BUILTIN_ZST,
+        RustDispatchKernel.BINARY,
+        operation_value.public_name,
         ArithmeticOperation.ADDITION,
         addition.source_primitive_name,
     )
@@ -261,19 +279,106 @@ def plan_rust_dispatch(
         None,
         None,
     )
-    slot_args = (
-        RustDispatchAlgorithm.TRANSFORM_BINARY,
-        type_tag,
-        base_spelling,
-        signature,
-        (hardware,),
-        baseline,
-    )
-    return RustDispatchPlan(
-        (
-            RustDispatchSlot(slot_args[0], builtin, *slot_args[1:]),
-            RustDispatchSlot(slot_args[0], stateful, *slot_args[1:]),
+    profiles_by_name = {profile.profile.name: profile for profile in profiles}
+    aliases = {alias.type_tag: alias for alias in facade.native_aliases}
+    slots: list[RustDispatchSlot] = []
+    skips: list[RustDispatchSkip] = []
+    for type_tag in sorted(addition.type_tags):
+        alias = aliases.get(type_tag)
+        if alias is None:
+            skips.append(
+                RustDispatchSkip(
+                    RustDispatchAlgorithm.TRANSFORM_BINARY,
+                    type_tag,
+                    None,
+                    "no admitted native alias",
+                )
+            )
+            continue
+        baseline = _baseline_entry(static_selection, addition, alias)
+        if baseline is None:
+            skips.append(
+                RustDispatchSkip(
+                    RustDispatchAlgorithm.TRANSFORM_BINARY,
+                    type_tag,
+                    None,
+                    "no complete generic baseline",
+                )
+            )
+            continue
+        candidates: list[RustDispatchEntryPoint] = []
+        for selection in alias.selections:
+            if selection.profile_name is None or selection.requirement is None:
+                continue
+            candidate, reason = _hardware_candidate(
+                profiles_by_name,
+                static_selection,
+                addition,
+                type_tag,
+                selection.profile_name,
+                selection.requirement,
+                selection.lanes,
+            )
+            if candidate is None:
+                skips.append(
+                    RustDispatchSkip(
+                        RustDispatchAlgorithm.TRANSFORM_BINARY,
+                        type_tag,
+                        selection.profile_name,
+                        reason or "incomplete hardware candidate",
+                    )
+                )
+            else:
+                candidates.append(candidate)
+        signature = RustDispatchPublicSignature(
+            RustDispatchAlgorithm.TRANSFORM_BINARY.value,
+            ("Op",),
+            (
+                RustDispatchPublicParameter("operation", "Op"),
+                RustDispatchPublicParameter("left", f"&[{alias.base_spelling}]"),
+                RustDispatchPublicParameter("right", f"&[{alias.base_spelling}]"),
+                RustDispatchPublicParameter(
+                    "output", f"&mut [{alias.base_spelling}]"
+                ),
+            ),
+            "()",
         )
+        slot_args = (
+            RustDispatchAlgorithm.TRANSFORM_BINARY,
+            type_tag,
+            alias.base_spelling,
+            signature,
+            _order_hardware_candidates(candidates),
+            baseline,
+        )
+        slots.extend(
+            (
+                RustDispatchSlot(slot_args[0], builtin, *slot_args[1:]),
+                RustDispatchSlot(slot_args[0], stateful, *slot_args[1:]),
+            )
+        )
+    return RustDispatchPlan(
+        tuple(
+            sorted(
+                slots,
+                key=lambda slot: (
+                    slot.algorithm,
+                    slot.type_tag,
+                    slot.operation.kind,
+                ),
+            )
+        ),
+        tuple(
+            sorted(
+                skips,
+                key=lambda skip: (
+                    skip.algorithm,
+                    skip.type_tag,
+                    skip.profile_name is not None,
+                    skip.profile_name or "",
+                ),
+            )
+        ),
     )
 
 
@@ -323,101 +428,83 @@ def _fallback_supports_algorithms(
     )
 
 
-def _prototype_candidate(
-    profiles: tuple[EmittedProfile, ...],
+def _hardware_candidate(
+    profiles_by_name: dict[str, EmittedProfile],
     static_selection: RustStaticSelectionPlan,
-    facade: RustFacadePlan,
     addition: RustCuratedTraitImplementation,
-) -> tuple[
-    str,
-    str,
-    RustDispatchEntryPoint,
-    RustDispatchEntryPoint,
-] | None:
-    profiles_by_name = {profile.profile.name: profile for profile in profiles}
-    aliases = {alias.type_tag: alias for alias in facade.native_aliases}
-    choices: list[
-        tuple[
-            tuple[int, str, int, int, str],
-            str,
-            str,
-            RustDispatchEntryPoint,
-            RustDispatchEntryPoint,
-        ]
-    ] = []
-    for type_tag in addition.type_tags:
-        alias = aliases.get(type_tag)
-        if alias is None:
-            continue
-        baseline = _baseline_entry(static_selection, addition, alias)
-        if baseline is None:
-            continue
-        for selection in alias.selections:
-            if selection.profile_name is None or selection.requirement is None:
-                continue
-            emitted = profiles_by_name.get(selection.profile_name)
-            static_profile = static_selection.profile(selection.profile_name)
-            delegate = _delegate_for(
-                addition.delegates,
-                selection.profile_name,
-                type_tag,
-            )
-            if (
-                emitted is None
-                or static_profile is None
-                or delegate is None
-                or not RUST_HELPER_MANIFEST.supports(
-                    "algorithm", emitted.specializations("rust")
-                )
-                or not _runtime_detectable(selection.requirement)
-            ):
-                continue
-            mapping = next(
-                (
-                    item
-                    for item in static_profile.mappings
-                    if item.type_tag == type_tag
-                    and item.lanes == selection.lanes
-                    and item.uses_hardware
-                ),
-                None,
-            )
-            if mapping is None:
-                continue
-            info = SCALAR_TYPE_INFOS.get(type_tag)
-            type_preference = (
-                0
-                if info is not None
-                and info.bit_width == 32
-                and info.signed
-                and not info.floating
-                else 1
-            )
-            choices.append(
-                (
-                    (
-                        type_preference,
-                        selection.requirement.target_arch,
-                        -len(selection.requirement.target_features),
-                        -selection.lanes,
-                        selection.profile_name,
-                    ),
-                    type_tag,
-                    alias.base_spelling,
-                    baseline,
-                    RustDispatchEntryPoint(
-                        1,
-                        selection.profile_name,
-                        selection.requirement,
-                        mapping,
-                        delegate.primitive_name,
-                    ),
-                )
-            )
-    if not choices:
-        return None
-    _preference, type_tag, base_spelling, baseline, hardware = min(choices)
-    return type_tag, base_spelling, baseline, hardware
+    type_tag: str,
+    profile_name: str,
+    requirement: RustTargetRequirement,
+    lanes: int,
+) -> tuple[RustDispatchEntryPoint | None, str | None]:
+    emitted = profiles_by_name.get(profile_name)
+    if emitted is None:
+        return None, "profile was not emitted"
+    static_profile = static_selection.profile(profile_name)
+    if static_profile is None:
+        return None, "profile has no compile-target selection"
+    if not RUST_HELPER_MANIFEST.supports(
+        "algorithm", emitted.specializations("rust")
+    ):
+        return None, "profile lacks the algorithm helper requirements"
+    if not _runtime_detectable(requirement):
+        return None, "profile requirement has no supported runtime detector"
+    mapping = next(
+        (
+            item
+            for item in static_profile.mappings
+            if item.type_tag == type_tag
+            and item.lanes == lanes
+            and item.uses_hardware
+        ),
+        None,
+    )
+    if mapping is None:
+        return None, "profile has no admitted hardware mapping"
+    delegate = _delegate_for(
+        addition.delegates,
+        profile_name,
+        type_tag,
+        mapping.extension_name,
+    )
+    if delegate is None:
+        return None, "profile has no addition kernel delegate"
+    return (
+        RustDispatchEntryPoint(
+            1,
+            profile_name,
+            requirement,
+            mapping,
+            delegate.primitive_name,
+        ),
+        None,
+    )
+
+
+def _order_hardware_candidates(
+    candidates: list[RustDispatchEntryPoint],
+) -> tuple[RustDispatchEntryPoint, ...]:
+    ordered: list[RustDispatchEntryPoint] = []
+    by_arch: dict[str, list[RustDispatchEntryPoint]] = {}
+    for candidate in candidates:
+        assert candidate.requirement is not None
+        by_arch.setdefault(candidate.requirement.target_arch, []).append(candidate)
+    for _target_arch, entries in sorted(by_arch.items()):
+        ranked = sorted(
+            entries,
+            key=lambda entry: (
+                -len(entry.requirement.target_features)
+                if entry.requirement is not None
+                else 0,
+                -entry.mapping.lanes,
+                entry.profile_name or "",
+            ),
+        )
+        ordered.extend(
+            replace(entry, entry_index=index)
+            for index, entry in enumerate(ranked, start=1)
+        )
+    return tuple(ordered)
 
 
 def _baseline_entry(
@@ -455,13 +542,21 @@ def _delegate_for(
     delegates: tuple[RustFacadeDelegate, ...],
     profile_name: str | None,
     type_tag: str,
+    extension_name: str | None = None,
 ) -> RustFacadeDelegate | None:
     return next(
         (
             delegate
             for delegate in delegates
             if delegate.profile_name == profile_name
-            and any(vector.type_tag == type_tag for vector in delegate.vectors)
+            and any(
+                vector.type_tag == type_tag
+                and (
+                    extension_name is None
+                    or vector.extension_name == extension_name
+                )
+                for vector in delegate.vectors
+            )
         ),
         None,
     )
@@ -552,6 +647,7 @@ __all__ = (
     "RustDispatchPlan",
     "RustDispatchPublicParameter",
     "RustDispatchPublicSignature",
+    "RustDispatchSkip",
     "RustDispatchSlot",
     "plan_rust_dispatch",
     "validate_rust_dispatch_plan",

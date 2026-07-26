@@ -1,0 +1,200 @@
+//! Optional whole-algorithm runtime dispatch.
+
+use crate::tsl_algorithm::BinaryKernel;
+use crate::tsl_core::{Generic, Scalar, Simd};
+
+/// Generated zero-sized operation values accepted by dispatched algorithms.
+pub mod ops {
+@{operation_values}
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CpuFacts {
+@{cpu_fact_fields}
+}
+
+trait Detector {
+    fn detect(&mut self) -> CpuFacts;
+}
+
+#[derive(Debug, Default)]
+struct StdDetector;
+
+impl Detector for StdDetector {
+    fn detect(&mut self) -> CpuFacts {
+@{production_detection}
+        CpuFacts {
+@{production_fact_values}
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct SelectionTable {
+@{selection_fields}
+}
+
+fn select_table(cpu: &CpuFacts) -> SelectionTable {
+    let _ = cpu;
+    #[cfg(test)]
+    SELECTION_CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+@{selection_values}
+    SelectionTable {
+@{selection_field_values}
+    }
+}
+
+/// A CPU-selected table of whole-algorithm entry points.
+#[derive(Clone, Copy, Debug)]
+pub struct Dispatcher {
+    table: SelectionTable,
+}
+
+impl Dispatcher {
+    /// Detects the current CPU once and selects every emitted dispatch slot.
+    #[must_use]
+    pub fn new() -> Self {
+        let mut detector = StdDetector;
+        Self::from_detector(&mut detector)
+    }
+
+    fn from_detector(detector: &mut impl Detector) -> Self {
+        let facts = detector.detect();
+        Self {
+            table: select_table(&facts),
+        }
+    }
+
+    /// Applies a binary vector operation to two equally sized slices.
+    ///
+    /// The selected whole-loop entry is invoked once. A stateful operation can
+    /// be passed as `&mut operation`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the input and output slice lengths differ.
+    #[track_caller]
+    #[allow(private_bounds)]
+    pub fn transform_binary<Element, Operation>(
+        &self,
+        operation: Operation,
+        left: &[Element],
+        right: &[Element],
+        output: &mut [Element],
+    )
+    where
+        Element: private::DispatchBinary<Operation>,
+    {
+        assert_eq!(
+            left.len(),
+            right.len(),
+            "runtime transform_binary requires equally sized inputs",
+        );
+        assert_eq!(
+            left.len(),
+            output.len(),
+            "runtime transform_binary requires equally sized input and output",
+        );
+        <Element as private::DispatchBinary<Operation>>::dispatch(
+            &self.table,
+            operation,
+            left,
+            right,
+            output,
+        );
+    }
+}
+
+impl Default for Dispatcher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Convenience algorithms backed by one process-global dispatcher.
+pub mod algorithms {
+    use super::{private, Dispatcher};
+
+    static DISPATCHER: std::sync::OnceLock<Dispatcher> = std::sync::OnceLock::new();
+
+    fn dispatcher() -> &'static Dispatcher {
+        DISPATCHER.get_or_init(Dispatcher::new)
+    }
+
+    /// Applies a binary vector operation using the process-global dispatcher.
+    #[track_caller]
+    #[allow(private_bounds)]
+    pub fn transform_binary<Element, Operation>(
+        operation: Operation,
+        left: &[Element],
+        right: &[Element],
+        output: &mut [Element],
+    )
+    where
+        Element: private::DispatchBinary<Operation>,
+    {
+        dispatcher().transform_binary(operation, left, right, output);
+    }
+}
+
+type BinaryEntry<Operation, Element> =
+    unsafe fn(Operation, &[Element], &[Element], &mut [Element]);
+
+mod private {
+    use super::SelectionTable;
+
+    pub(crate) trait DispatchBinary<Operation>: Sized {
+        fn dispatch(
+            table: &SelectionTable,
+            operation: Operation,
+            left: &[Self],
+            right: &[Self],
+            output: &mut [Self],
+        );
+    }
+}
+
+@{vector_and_operation_impls}
+
+@{entry_points}
+
+@{dispatch_impls}
+
+#[cfg(test)]
+static ENTRY_CALLS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+#[cfg(test)]
+static HARDWARE_ENTRY_CALLS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+#[cfg(test)]
+static SELECTION_CALLS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[derive(Debug)]
+    struct FakeDetector {
+        detect_calls: usize,
+        facts: CpuFacts,
+    }
+
+    impl Detector for FakeDetector {
+        fn detect(&mut self) -> CpuFacts {
+            self.detect_calls += 1;
+            self.facts
+        }
+    }
+
+    fn reset_counts() {
+        ENTRY_CALLS.store(0, Ordering::SeqCst);
+        HARDWARE_ENTRY_CALLS.store(0, Ordering::SeqCst);
+        SELECTION_CALLS.store(0, Ordering::SeqCst);
+    }
+
+@{unit_tests}
+}
