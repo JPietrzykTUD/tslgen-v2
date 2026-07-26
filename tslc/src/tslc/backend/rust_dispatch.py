@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from tslc.backend.emitted_profile import EmittedProfile
-from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
+from tslc.backend.primitive_facade import contiguous_memory_primitive_facades
 from tslc.backend.rust_api_model import (
     RustCuratedTraitImplementation,
     RustFacadeDelegate,
@@ -422,9 +422,11 @@ def _addition_trait(
 def _fallback_supports_algorithms(
     static_selection: RustStaticSelectionPlan,
 ) -> bool:
-    return RUST_HELPER_MANIFEST.supports(
-        "algorithm",
-        static_selection.fallback_module.specializations_by_primitive(),
+    return (
+        contiguous_memory_primitive_facades(
+            static_selection.fallback_module.specializations_by_primitive()
+        )
+        is not None
     )
 
 
@@ -443,9 +445,9 @@ def _hardware_candidate(
     static_profile = static_selection.profile(profile_name)
     if static_profile is None:
         return None, "profile has no compile-target selection"
-    if not RUST_HELPER_MANIFEST.supports(
-        "algorithm", emitted.specializations("rust")
-    ):
+    if contiguous_memory_primitive_facades(
+        emitted.specializations("rust")
+    ) is None:
         return None, "profile lacks the algorithm helper requirements"
     if not _runtime_detectable(requirement):
         return None, "profile requirement has no supported runtime detector"

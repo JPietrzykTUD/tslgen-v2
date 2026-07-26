@@ -7,6 +7,10 @@ from collections import defaultdict
 from dataclasses import dataclass, replace
 
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.primitive_facade import (
+    DataparallelPrimitiveFacadeKind,
+    plan_dataparallel_primitive_facade,
+)
 from tslc.backend.rust_api_model import (
     RustComprehensiveMethod,
     RustCuratedMethod,
@@ -53,6 +57,7 @@ from tslc.catalog.conversion import (
     LaneCountRelation,
     NumericConversionMode,
 )
+from tslc.catalog.memory import MemoryAccess, MemoryAddressing, MemoryAlignment
 from tslc.catalog.model import Catalog, Extension, VectorBitsKind
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS, scalar_bit_width
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
@@ -80,6 +85,7 @@ class _CandidateKey:
     conversion: tuple[
         ConversionKind, LaneCountRelation, NumericConversionMode | None
     ] | None
+    memory: tuple[MemoryAccess, MemoryAddressing] | None
     has_concrete_target: bool
     mask_policy: str | None
     overload: tuple[str, str, bool] | None
@@ -169,6 +175,26 @@ def rust_facade_closure_seed_primitives(catalog: Catalog) -> tuple[str, ...]:
         and any(
             primitive.operation.kind is requirement.operation
             and shape.result_kind == requirement.result_kind
+            and (
+                (
+                    primitive.memory.access,
+                    primitive.memory.addressing,
+                )
+                if primitive.memory is not None
+                else None
+            )
+            == (
+                (
+                    requirement.memory_access,
+                    requirement.memory_addressing,
+                )
+                if requirement.memory_access is not None
+                else None
+            )
+            and all(
+                axis_name in primitive.attributes
+                for axis_name in requirement.axis_names
+            )
             and _invocation_from_roles(
                 shape.param_kinds,
                 tuple(
@@ -527,6 +553,7 @@ def _candidate_key(spec: LoweredSpecialization) -> _CandidateKey:
     arithmetic = semantics.arithmetic
     overload = semantics.overload
     conversion = semantics.conversion
+    memory = semantics.memory
     return _CandidateKey(
         source_name=spec.source_primitive_name,
         result_kind=spec.result_kind,
@@ -540,6 +567,11 @@ def _candidate_key(spec: LoweredSpecialization) -> _CandidateKey:
         conversion=(
             (conversion.kind, conversion.lane_count, conversion.numeric_mode)
             if conversion is not None
+            else None
+        ),
+        memory=(
+            (memory.access, memory.addressing)
+            if memory is not None
             else None
         ),
         has_concrete_target=spec.target is not None,
@@ -673,9 +705,33 @@ def _comprehensive_method(
     role_diagnostic = _role_signature_diagnostic(candidate)
     if role_diagnostic is not None:
         return None, None, (role_diagnostic,)
-    curated_memory_reason = _curated_memory_exclusion(key)
-    if curated_memory_reason is not None:
-        return None, curated_memory_reason, ()
+    memory_decision = plan_dataparallel_primitive_facade(
+        key.source_name,
+        tuple(spec for _profile_name, spec in candidate.specs),
+    )
+    if memory_decision.diagnostic_reason is not None:
+        return None, None, (
+            _diagnostic(
+                candidate,
+                "TSL-BACKEND-RUST-FACADE-MEMORY-CONTRACT",
+                memory_decision.diagnostic_reason,
+            ),
+        )
+    if (
+        memory_decision.facade is not None
+        and memory_decision.facade.kind
+        is DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY
+    ):
+        memory_noun = (
+            "load"
+            if memory_decision.facade.memory_access is MemoryAccess.READ
+            else "store"
+        )
+        return (
+            None,
+            f"unmasked vector {memory_noun} is exposed by the curated memory boundary",
+            (),
+        )
 
     primary_indices = _primary_indices(key)
     if not primary_indices:
@@ -800,25 +856,6 @@ def _comprehensive_method(
         None,
         (),
     )
-
-
-def _curated_memory_exclusion(key: _CandidateKey) -> str | None:
-    if (
-        key.operation is PrimitiveOperation.LOAD
-        and key.result_kind == "v"
-        and key.param_kinds == ("cptr",)
-        and key.mask_policy is None
-    ):
-        return "unmasked vector load is exposed by the curated memory boundary"
-    if (
-        key.operation is PrimitiveOperation.STORE
-        and key.result_kind == "void"
-        and sorted(key.param_kinds) == ["ptr", "v"]
-        and key.mask_policy is None
-        and key.overload == ("payload_extent", "vector", True)
-    ):
-        return "unmasked vector store is exposed by the curated memory boundary"
-    return None
 
 
 def _public_name(
@@ -2216,6 +2253,46 @@ def _operation_bindings(
         }
         if len(safety_values) != 1 or _delegate_diagnostic(candidate) is not None:
             continue
+        memory_alignment_axis_name: str | None = None
+        memory_alignment_modes: tuple[MemoryAlignment, ...] = ()
+        if key.memory is not None:
+            memory_decision = plan_dataparallel_primitive_facade(
+                key.source_name,
+                tuple(spec for _profile_name, spec in candidate.specs),
+            )
+            if memory_decision.diagnostic_reason is not None:
+                continue
+            alignments = tuple(
+                spec.primitive_semantics.memory_alignment
+                for _profile_name, spec in candidate.specs
+            )
+            if any(alignment is None for alignment in alignments):
+                continue
+            alignment_axis_names = {
+                alignment.axis_name
+                for alignment in alignments
+                if alignment is not None
+            }
+            if len(alignment_axis_names) != 1:
+                diagnostics.append(
+                    _diagnostic(
+                        candidate,
+                        "TSL-BACKEND-RUST-FACADE-MEMORY-CONTRACT",
+                        "has inconsistent resolved memory alignment axes",
+                    )
+                )
+                continue
+            memory_alignment_axis_name = next(iter(alignment_axis_names))
+            memory_alignment_modes = tuple(
+                sorted(
+                    {
+                        alignment.mode
+                        for alignment in alignments
+                        if alignment is not None
+                    },
+                    key=lambda item: item.value,
+                )
+            )
         core_requirements = tuple(
             requirement
             for requirement in RUST_FACADE_CORE_OPERATION_REQUIREMENTS
@@ -2223,6 +2300,16 @@ def _operation_bindings(
             and key.result_kind == requirement.result_kind
             and sorted(key.param_kinds) == sorted(requirement.parameter_kinds)
             and key.axis_names == requirement.axis_names
+            and key.memory
+            == (
+                (
+                    requirement.memory_access,
+                    requirement.memory_addressing,
+                )
+                if requirement.memory_access is not None
+                else None
+            )
+            and memory_alignment_modes == requirement.memory_alignment_modes
             and key.mask_policy is None
             and key.overload == requirement.overload
             and next(iter(safety_values))
@@ -2250,6 +2337,12 @@ def _operation_bindings(
                 parameter_kinds=key.param_kinds,
                 operand_roles=key.operation_roles,
                 axis_names=key.axis_names,
+                memory_access=key.memory[0] if key.memory is not None else None,
+                memory_addressing=(
+                    key.memory[1] if key.memory is not None else None
+                ),
+                memory_alignment_axis_name=memory_alignment_axis_name,
+                memory_alignment_modes=memory_alignment_modes,
                 mask_policy=key.mask_policy,
                 overload=key.overload,
                 type_tags=candidate.type_tags,
@@ -2334,8 +2427,7 @@ def _matching_core_delegates(
     return tuple(
         _CoreDelegateMatch(delegate, owner_candidates[0], invocation)
         for binding in bindings
-        if binding.operation is requirement.operation
-        and binding.result_kind == requirement.result_kind
+        if _operation_binding_matches_requirement(binding, requirement)
         and (
             invocation := _invocation_from_roles(
                 binding.parameter_kinds,
@@ -2344,9 +2436,6 @@ def _matching_core_delegates(
             )
         )
         is not None
-        and binding.axis_names == requirement.axis_names
-        and binding.mask_policy is None
-        and binding.overload == requirement.overload
         and type_tag in binding.type_tags
         and binding.caller_unsafe
         == (requirement.operation in {PrimitiveOperation.LOAD, PrimitiveOperation.STORE})
@@ -2372,17 +2461,13 @@ def _core_facade_type_tags(
         type_tags = {
             type_tag
             for binding in bindings
-            if binding.operation is requirement.operation
-            and binding.result_kind == requirement.result_kind
+            if _operation_binding_matches_requirement(binding, requirement)
             and _invocation_from_roles(
                 binding.parameter_kinds,
                 binding.operand_roles,
                 tuple(zip(requirement.public_roles, requirement.parameter_kinds)),
             )
             is not None
-            and binding.axis_names == requirement.axis_names
-            and binding.mask_policy is None
-            and binding.overload == requirement.overload
             and binding.caller_unsafe
             == (
                 requirement.operation
@@ -2395,6 +2480,22 @@ def _core_facade_type_tags(
             return None
         supported_by_role.append(type_tags)
     return set.intersection(*supported_by_role)
+
+
+def _operation_binding_matches_requirement(
+    binding: RustFacadeOperationBinding,
+    requirement: RustFacadeCoreOperationRequirement,
+) -> bool:
+    return (
+        binding.operation is requirement.operation
+        and binding.result_kind == requirement.result_kind
+        and binding.axis_names == requirement.axis_names
+        and binding.memory_access is requirement.memory_access
+        and binding.memory_addressing is requirement.memory_addressing
+        and binding.memory_alignment_modes == requirement.memory_alignment_modes
+        and binding.mask_policy is None
+        and binding.overload == requirement.overload
+    )
 
 
 def _finalize_curated_shapes(
@@ -2824,6 +2925,12 @@ RUST_FACADE_CORE_OPERATION_REQUIREMENTS = (
         ("cptr",),
         (OperandRole.MEMORY_SOURCE,),
         axis_names=("aligned",),
+        memory_access=MemoryAccess.READ,
+        memory_addressing=MemoryAddressing.CONTIGUOUS,
+        memory_alignment_modes=(
+            MemoryAlignment.ALIGNED,
+            MemoryAlignment.UNALIGNED,
+        ),
     ),
     RustFacadeCoreOperationRequirement(
         "store",
@@ -2832,6 +2939,12 @@ RUST_FACADE_CORE_OPERATION_REQUIREMENTS = (
         ("ptr", "v"),
         (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
         axis_names=("aligned",),
+        memory_access=MemoryAccess.WRITE,
+        memory_addressing=MemoryAddressing.CONTIGUOUS,
+        memory_alignment_modes=(
+            MemoryAlignment.ALIGNED,
+            MemoryAlignment.UNALIGNED,
+        ),
         overload=("payload_extent", "vector", True),
     ),
     RustFacadeCoreOperationRequirement(

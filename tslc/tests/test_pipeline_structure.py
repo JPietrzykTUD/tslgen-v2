@@ -27,6 +27,11 @@ from tslc.catalog.semantics import (
     PrimitiveOperation,
     PrimitiveSemanticContract,
 )
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    PrimitiveMemoryContract,
+)
 from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import RenderAssets, load_default_render_assets
 from tslc.lower.lowerer import (
@@ -170,6 +175,10 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
                             ),
                         ),
                     ),
+                    PrimitiveMemoryContract(
+                        MemoryAccess.READ,
+                        MemoryAddressing.CONTIGUOUS,
+                    ),
                 ),
                 "store": (
                     "void:=(ptr,v)",
@@ -185,6 +194,47 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
                             OperandBinding(OperandRole.VALUE, "value", 1, "v"),
                         ),
                     ),
+                    PrimitiveMemoryContract(
+                        MemoryAccess.WRITE,
+                        MemoryAddressing.CONTIGUOUS,
+                    ),
+                ),
+                "read_contiguous": (
+                    "v:=cptr",
+                    PrimitiveSemanticContract(
+                        PrimitiveOperation.LOAD,
+                        (
+                            OperandBinding(
+                                OperandRole.MEMORY_SOURCE,
+                                "source",
+                                0,
+                                "cptr",
+                            ),
+                        ),
+                    ),
+                    PrimitiveMemoryContract(
+                        MemoryAccess.READ,
+                        MemoryAddressing.CONTIGUOUS,
+                    ),
+                ),
+                "write_contiguous": (
+                    "void:=(ptr,v)",
+                    PrimitiveSemanticContract(
+                        PrimitiveOperation.STORE,
+                        (
+                            OperandBinding(
+                                OperandRole.MEMORY_DESTINATION,
+                                "destination",
+                                0,
+                                "ptr",
+                            ),
+                            OperandBinding(OperandRole.VALUE, "value", 1, "v"),
+                        ),
+                    ),
+                    PrimitiveMemoryContract(
+                        MemoryAccess.WRITE,
+                        MemoryAddressing.CONTIGUOUS,
+                    ),
                 ),
                 "to_array": (
                     "s[]:=v",
@@ -199,6 +249,7 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
                             ),
                         ),
                     ),
+                    None,
                 ),
             }
             self.primitives = tuple(
@@ -206,6 +257,12 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
                     name=name,
                     signature=semantic_primitives[name][0],
                     operation=semantic_primitives[name][1],
+                    memory=semantic_primitives[name][2],
+                    attributes=(
+                        {"aligned": "false"}
+                        if semantic_primitives[name][2] is not None
+                        else {}
+                    ),
                 )
                 for name in sorted(names)
                 if name in semantic_primitives
@@ -233,9 +290,17 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
     assert RUST_BACKEND.helper_manifest is RUST_HELPER_MANIFEST
     assert CPP_BACKEND.closure_seed_primitives(catalog) == ("load", "store")
     assert RUST_BACKEND.closure_seed_primitives(catalog) == (
-        "load",
         "store",
         "to_array",
+        "load",
+    )
+    renamed_catalog = FakeCatalog(
+        {"read_contiguous", "write_contiguous", "to_array"}
+    )
+    assert RUST_BACKEND.closure_seed_primitives(renamed_catalog) == (
+        "to_array",
+        "read_contiguous",
+        "write_contiguous",
     )
 
 

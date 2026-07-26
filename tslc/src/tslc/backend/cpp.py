@@ -516,7 +516,9 @@ def _dataparallel_memory_facade_wrapper(
     shape = facade.shape
     primitive_name = facade.primitive_name
     vec = "::tsl::dataparallel::simd_for_t<Policy, T>"
-    axis_name = _axis_name(shape.axis[0][0])
+    if facade.alignment_axis_name is None:
+        raise ValueError("contiguous-memory facade has no alignment axis")
+    axis_name = _axis_name(facade.alignment_axis_name)
     result_type = _dataparallel_facade_result_type(shape.result_kind, vec)
     params = ", ".join(
         f"{_dataparallel_facade_param_type(kind, vec, None)} {name}"

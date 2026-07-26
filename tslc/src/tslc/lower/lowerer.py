@@ -28,6 +28,7 @@ from tslc.catalog.arithmetic import (
     ArithmeticGuarantee,
     ArithmeticOperandRole,
 )
+from tslc.catalog.memory import resolve_memory_alignment
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     Catalog,
@@ -65,7 +66,10 @@ from tslc.lower.region_handlers import (
 from tslc.lower.implementation_state import (
     ImplementationState,
 )
-from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
+from tslc.lower.primitive_semantics import (
+    LoweredMemoryAlignment,
+    LoweredPrimitiveSemantics,
+)
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
 from tslc.target_text import (
     LoweredBody,
@@ -592,6 +596,9 @@ class Lowerer:
                 arithmetic=selected.primitive.arithmetic,
                 operation=selected.primitive.operation,
                 memory=selected.primitive.memory,
+                memory_alignment=_lowered_memory_alignment(
+                    selected.primitive
+                ),
                 conversion=selected.primitive.conversion,
                 shift=selected.primitive.shift,
             ),
@@ -1050,6 +1057,19 @@ def varying_positions(specs: tuple[LoweredSpecialization, ...]) -> tuple[int, ..
     arity = len(specs[0].param_kinds)
     return tuple(
         i for i in range(arity) if len({spec.param_kinds[i] for spec in specs}) > 1
+    )
+
+
+def _lowered_memory_alignment(
+    primitive: Primitive,
+) -> LoweredMemoryAlignment | None:
+    if primitive.memory is None:
+        return None
+    resolved = resolve_memory_alignment(primitive.attributes)
+    return (
+        None
+        if resolved is None
+        else LoweredMemoryAlignment(axis_name=resolved[0], mode=resolved[1])
     )
 
 

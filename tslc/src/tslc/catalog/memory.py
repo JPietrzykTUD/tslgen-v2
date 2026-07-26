@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
+from tslc.catalog.semantics import PrimitiveOperation
 from tslc.diagnostics import SourceSpan
 
 
@@ -17,6 +18,35 @@ class MemoryAccess(StrEnum):
 
 class MemoryAddressing(StrEnum):
     CONTIGUOUS = "contiguous"
+
+
+class MemoryAlignment(StrEnum):
+    ALIGNED = "aligned"
+    UNALIGNED = "unaligned"
+
+
+_MEMORY_ALIGNMENT_AXIS = "aligned"
+
+
+def resolve_memory_alignment(
+    attributes: Mapping[str, str],
+) -> tuple[str, MemoryAlignment] | None:
+    """Resolve one concrete specialization of the catalog alignment axis."""
+
+    mode = {
+        "false": MemoryAlignment.UNALIGNED,
+        "true": MemoryAlignment.ALIGNED,
+    }.get(attributes.get(_MEMORY_ALIGNMENT_AXIS, ""))
+    return None if mode is None else (_MEMORY_ALIGNMENT_AXIS, mode)
+
+
+def memory_operation(access: MemoryAccess) -> PrimitiveOperation:
+    """Return the semantic operation required by one memory access."""
+
+    return {
+        MemoryAccess.READ: PrimitiveOperation.LOAD,
+        MemoryAccess.WRITE: PrimitiveOperation.STORE,
+    }[access]
 
 
 MEMORY_ACCESS_DESCRIPTIONS: Mapping[MemoryAccess, str] = MappingProxyType(
@@ -52,7 +82,10 @@ __all__ = (
     "MEMORY_ADDRESSING_DESCRIPTIONS",
     "MemoryAccess",
     "MemoryAddressing",
+    "MemoryAlignment",
     "PrimitiveMemoryContract",
     "memory_access_values",
     "memory_addressing_values",
+    "memory_operation",
+    "resolve_memory_alignment",
 )

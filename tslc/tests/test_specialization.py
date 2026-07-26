@@ -13,10 +13,35 @@ from tslc.api import generate_project
 from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacadeKind,
     classify_dataparallel_primitive_facade,
+    contiguous_memory_primitive_facades,
 )
+from tslc.backend.cpp import CppBackend
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_algorithm import (
+    _RustAlgorithmImplTarget,
+    _rust_algorithm_load_store_impl,
+    _rust_algorithm_scalar_selected_load_impl,
+)
+from tslc.backend.rust_facades import rust_algorithm_primitive_facades
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryAlignment,
+    PrimitiveMemoryContract,
+)
+from tslc.catalog.overloads import ResolvedPrimitiveOverload
+from tslc.catalog.semantics import (
+    OperandBinding,
+    OperandRole,
+    PrimitiveOperation,
+    PrimitiveSemanticContract,
+)
 from tslc.diagnostics import has_errors
 from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam
+from tslc.lower.primitive_semantics import (
+    LoweredMemoryAlignment,
+    LoweredPrimitiveSemantics,
+)
 from tslc.lower.target_vectors import TargetVector
 from tslc.target_text import LoweredBody
 
@@ -66,6 +91,7 @@ def _facade_spec(
     extension_name: str = "avx2",
     axis: tuple[tuple[str, str], ...] = (),
     target: TargetVector | None = None,
+    semantics: LoweredPrimitiveSemantics = LoweredPrimitiveSemantics(),
 ) -> LoweredSpecialization:
     return LoweredSpecialization(
         backend_id="cpp",
@@ -81,6 +107,36 @@ def _facade_spec(
         body=LoweredBody.from_text(""),
         axis=axis,
         target=target,
+        primitive_semantics=semantics,
+    )
+
+
+def _memory_semantics(
+    operation: PrimitiveOperation,
+    access: MemoryAccess,
+    roles: tuple[OperandRole, ...],
+    parameter_kinds: tuple[str, ...],
+    *,
+    alignment: MemoryAlignment,
+    overload: ResolvedPrimitiveOverload | None = None,
+) -> LoweredPrimitiveSemantics:
+    parameter_names = tuple(f"p{index}" for index in range(len(parameter_kinds)))
+    return LoweredPrimitiveSemantics(
+        overload=overload,
+        operation=PrimitiveSemanticContract(
+            operation,
+            tuple(
+                OperandBinding(role, parameter_names[index], index, kind)
+                for index, (role, kind) in enumerate(
+                    zip(roles, parameter_kinds)
+                )
+            ),
+        ),
+        memory=PrimitiveMemoryContract(
+            access,
+            MemoryAddressing.CONTIGUOUS,
+        ),
+        memory_alignment=LoweredMemoryAlignment("aligned", alignment),
     )
 
 
@@ -138,10 +194,52 @@ def test_dataparallel_primitive_facade_descriptor_classifies_shared_policy_shape
         "store",
         (
             _facade_spec(
-                "store", "void", ("ptr", "s"), axis=(("aligned", "false"),)
+                "store",
+                "void",
+                ("ptr", "s"),
+                axis=(("aligned", "false"),),
+                semantics=_memory_semantics(
+                    PrimitiveOperation.STORE,
+                    MemoryAccess.WRITE,
+                    (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
+                    ("ptr", "s"),
+                    alignment=MemoryAlignment.UNALIGNED,
+                    overload=ResolvedPrimitiveOverload(
+                        "payload_extent", "scalar", False
+                    ),
+                ),
             ),
             _facade_spec(
-                "store", "void", ("ptr", "v"), axis=(("aligned", "true"),)
+                "store",
+                "void",
+                ("ptr", "v"),
+                axis=(("aligned", "false"),),
+                semantics=_memory_semantics(
+                    PrimitiveOperation.STORE,
+                    MemoryAccess.WRITE,
+                    (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
+                    ("ptr", "v"),
+                    alignment=MemoryAlignment.UNALIGNED,
+                    overload=ResolvedPrimitiveOverload(
+                        "payload_extent", "vector", True
+                    ),
+                ),
+            ),
+            _facade_spec(
+                "store",
+                "void",
+                ("ptr", "v"),
+                axis=(("aligned", "true"),),
+                semantics=_memory_semantics(
+                    PrimitiveOperation.STORE,
+                    MemoryAccess.WRITE,
+                    (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
+                    ("ptr", "v"),
+                    alignment=MemoryAlignment.ALIGNED,
+                    overload=ResolvedPrimitiveOverload(
+                        "payload_extent", "vector", True
+                    ),
+                ),
             ),
         ),
     )
@@ -176,6 +274,113 @@ def test_dataparallel_primitive_facade_descriptor_classifies_shared_policy_shape
         )
         is None
     )
+
+
+def test_semantically_renamed_memory_primitives_retain_shared_facades() -> None:
+    read_specs = tuple(
+        _facade_spec(
+            "read_contiguous",
+            "v",
+            ("cptr",),
+            axis=(("aligned", literal),),
+            semantics=_memory_semantics(
+                PrimitiveOperation.LOAD,
+                MemoryAccess.READ,
+                (OperandRole.MEMORY_SOURCE,),
+                ("cptr",),
+                alignment=alignment,
+            ),
+        )
+        for literal, alignment in (
+            ("false", MemoryAlignment.UNALIGNED),
+            ("true", MemoryAlignment.ALIGNED),
+        )
+    )
+    scalar_write = _facade_spec(
+        "write_contiguous",
+        "void",
+        ("ptr", "s"),
+        axis=(("aligned", "false"),),
+        semantics=_memory_semantics(
+            PrimitiveOperation.STORE,
+            MemoryAccess.WRITE,
+            (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
+            ("ptr", "s"),
+            alignment=MemoryAlignment.UNALIGNED,
+            overload=ResolvedPrimitiveOverload(
+                "payload_extent", "scalar", False
+            ),
+        ),
+    )
+    vector_write_specs = tuple(
+        _facade_spec(
+            "write_contiguous",
+            "void",
+            ("ptr", "v"),
+            axis=(("aligned", literal),),
+            semantics=_memory_semantics(
+                PrimitiveOperation.STORE,
+                MemoryAccess.WRITE,
+                (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
+                ("ptr", "v"),
+                alignment=alignment,
+                overload=ResolvedPrimitiveOverload(
+                    "payload_extent", "vector", True
+                ),
+            ),
+        )
+        for literal, alignment in (
+            ("false", MemoryAlignment.UNALIGNED),
+            ("true", MemoryAlignment.ALIGNED),
+        )
+    )
+    write_specs = (scalar_write, *vector_write_specs)
+    read_facade = classify_dataparallel_primitive_facade(
+        "read_contiguous",
+        read_specs,
+    )
+    write_facade = classify_dataparallel_primitive_facade(
+        "write_contiguous",
+        write_specs,
+    )
+    assert read_facade is not None
+    assert write_facade is not None
+    assert contiguous_memory_primitive_facades(
+        {
+            "read_contiguous": read_specs,
+            "write_contiguous": write_specs,
+        }
+    ) == (read_facade, write_facade)
+    rust = rust_algorithm_primitive_facades(
+        {
+            "read_contiguous": read_specs,
+            "write_contiguous": write_specs,
+        },
+        reserved_names=frozenset(),
+    )
+    assert "pub unsafe fn read_contiguous<" in rust
+    assert "Read_contiguousImpl<ALIGNED>" in rust
+    assert "super::read_contiguous::<" in rust
+    assert "pub unsafe fn write_contiguous<" in rust
+    assert "Write_contiguousImplArg<" in rust
+    assert "super::write_contiguous::<" in rust
+
+    load_store = _rust_algorithm_load_store_impl(
+        _RustAlgorithmImplTarget("T", "Simd<T, Scalar>"),
+        read_facade,
+        write_facade,
+    )
+    assert "Read_contiguousImpl<false>" in load_store
+    assert "super::read_contiguous::<Simd<T, Scalar>, false>" in load_store
+    assert "Write_contiguousImplArg<Simd<T, Scalar>, false>" in load_store
+    assert "super::write_contiguous::<Simd<T, Scalar>, false, _>" in load_store
+    selected_load = _rust_algorithm_scalar_selected_load_impl(read_facade)
+    assert "Read_contiguousImpl<false>" in selected_load
+    assert "super::read_contiguous::<Simd<T, Scalar>, false>" in selected_load
+
+    cpp = CppBackend().render_primitive("read_contiguous", read_specs)
+    assert "read_contiguous(" in cpp
+    assert "::tsl::read_contiguous<" in cpp
 
 
 def test_artifact_layout(specialization_result) -> None:

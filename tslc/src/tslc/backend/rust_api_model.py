@@ -10,6 +10,7 @@ from tslc.backend.rust_static_selection import (
     RustTargetRequirement,
 )
 from tslc.catalog.arithmetic import ArithmeticOperandRole, ArithmeticOperation
+from tslc.catalog.memory import MemoryAccess, MemoryAddressing, MemoryAlignment
 from tslc.catalog.model import VectorBitsKind
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.documentation import PrimitiveDocumentation
@@ -352,6 +353,10 @@ class RustFacadeOperationBinding:
     parameter_kinds: tuple[str, ...]
     operand_roles: tuple[tuple[OperandRole, int, str], ...]
     axis_names: tuple[str, ...]
+    memory_access: MemoryAccess | None
+    memory_addressing: MemoryAddressing | None
+    memory_alignment_axis_name: str | None
+    memory_alignment_modes: tuple[MemoryAlignment, ...]
     mask_policy: str | None
     overload: tuple[str, str, bool] | None
     type_tags: tuple[str, ...]
@@ -361,6 +366,34 @@ class RustFacadeOperationBinding:
     def __post_init__(self) -> None:
         if not self.source_primitive_name or not self.result_kind or not self.type_tags:
             raise ValueError("Rust facade operation bindings require complete source facts")
+        has_memory = (
+            self.memory_access is not None
+            and self.memory_addressing is not None
+        )
+        if has_memory != (
+            self.memory_alignment_axis_name is not None
+            and bool(self.memory_alignment_modes)
+        ):
+            raise ValueError(
+                "Rust facade memory bindings require complete typed memory facts"
+            )
+        if (
+            self.memory_alignment_axis_name is not None
+            and self.memory_alignment_axis_name not in self.axis_names
+        ):
+            raise ValueError(
+                "Rust facade memory alignment must name a retained specialization axis"
+            )
+        if (self.memory_access is None) != (self.memory_addressing is None):
+            raise ValueError(
+                "Rust facade operation bindings cannot retain a partial memory contract"
+            )
+        if len(set(self.memory_alignment_modes)) != len(
+            self.memory_alignment_modes
+        ):
+            raise ValueError(
+                "Rust facade operation alignment modes must be unique"
+            )
         if not self.delegates or all(
             delegate.profile_name is not None for delegate in self.delegates
         ):
@@ -377,6 +410,9 @@ class RustFacadeCoreOperationRequirement:
     parameter_kinds: tuple[str, ...]
     public_roles: tuple[OperandRole, ...]
     axis_names: tuple[str, ...] = ()
+    memory_access: MemoryAccess | None = None
+    memory_addressing: MemoryAddressing | None = None
+    memory_alignment_modes: tuple[MemoryAlignment, ...] = ()
     overload: tuple[str, str, bool] | None = None
 
     def __post_init__(self) -> None:
@@ -388,6 +424,26 @@ class RustFacadeCoreOperationRequirement:
             )
         if len(set(self.public_roles)) != len(self.public_roles):
             raise ValueError("Rust facade core requirement roles must be unique")
+        if (self.memory_access is None) != (self.memory_addressing is None):
+            raise ValueError(
+                "Rust facade core requirements cannot state a partial memory contract"
+            )
+        if (self.memory_access is not None) != bool(
+            self.memory_alignment_modes
+        ):
+            raise ValueError(
+                "Rust facade core memory requirements require alignment modes"
+            )
+        if self.memory_access is not None and len(self.axis_names) != 1:
+            raise ValueError(
+                "Rust facade core memory requirements require one alignment axis"
+            )
+        if len(set(self.memory_alignment_modes)) != len(
+            self.memory_alignment_modes
+        ):
+            raise ValueError(
+                "Rust facade core alignment modes must be unique"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -611,6 +667,10 @@ class RustFacadePlan:
                 item.parameter_kinds,
                 item.operand_roles,
                 item.axis_names,
+                item.memory_access,
+                item.memory_addressing,
+                item.memory_alignment_axis_name,
+                item.memory_alignment_modes,
                 item.mask_policy,
                 item.overload,
             )

@@ -50,6 +50,12 @@ from tslc.catalog.conversion import (
     PrimitiveConversionContract,
 )
 from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryAlignment,
+    PrimitiveMemoryContract,
+)
 from tslc.catalog.model import Extension, ImplementationSafety
 from tslc.catalog.overloads import ResolvedPrimitiveOverload
 from tslc.catalog.semantics import (
@@ -61,7 +67,10 @@ from tslc.catalog.semantics import (
 from tslc.catalog.target_families import ExtensionFamilyCapability
 from tslc.diagnostics import has_errors
 from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam
-from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
+from tslc.lower.primitive_semantics import (
+    LoweredMemoryAlignment,
+    LoweredPrimitiveSemantics,
+)
 from tslc.lower.target_vectors import TargetVector
 from tslc.render.rust_facade import (
     _bit_conversion_impls,
@@ -110,6 +119,8 @@ def _spec(
     safety: ImplementationSafety = ImplementationSafety(),
     arithmetic: ArithmeticContract | None = None,
     conversion: PrimitiveConversionContract | None = None,
+    memory: PrimitiveMemoryContract | None = None,
+    memory_alignment: LoweredMemoryAlignment | None = None,
     emitted_name: str | None = None,
 ) -> LoweredSpecialization:
     return LoweredSpecialization(
@@ -128,6 +139,8 @@ def _spec(
             overload=overload,
             arithmetic=arithmetic,
             operation=_operation(operation, roles, param_names),
+            memory=memory,
+            memory_alignment=memory_alignment,
             conversion=conversion,
         ),
         uses_sized_vector=True,
@@ -136,6 +149,50 @@ def _spec(
         mask_policy=mask_policy,
         safety=safety,
     )
+
+
+def _aligned_memory_specs(
+    name: str,
+    *,
+    operation: PrimitiveOperation,
+    access: MemoryAccess,
+    result_kind: str,
+    param_names: tuple[str, ...],
+    param_kinds: tuple[str, ...],
+    roles: tuple[tuple[OperandRole, int, str], ...],
+    overload: ResolvedPrimitiveOverload | None = None,
+) -> tuple[LoweredSpecialization, LoweredSpecialization]:
+    unaligned = _spec(
+        name,
+        result_kind=result_kind,
+        param_names=param_names,
+        param_kinds=param_kinds,
+        operation=operation,
+        roles=roles,
+        overload=overload,
+        safety=ImplementationSafety(caller_unsafe=True),
+        memory=PrimitiveMemoryContract(
+            access,
+            MemoryAddressing.CONTIGUOUS,
+        ),
+        memory_alignment=LoweredMemoryAlignment(
+            "aligned",
+            MemoryAlignment.UNALIGNED,
+        ),
+    )
+    unaligned = replace(unaligned, axis=(("aligned", "false"),))
+    aligned = replace(
+        unaligned,
+        axis=(("aligned", "true"),),
+        primitive_semantics=replace(
+            unaligned.primitive_semantics,
+            memory_alignment=LoweredMemoryAlignment(
+                "aligned",
+                MemoryAlignment.ALIGNED,
+            ),
+        ),
+    )
+    return unaligned, aligned
 
 
 def _arithmetic_spec(
@@ -514,6 +571,10 @@ def test_vector_value_role_is_a_coherent_receiver() -> None:
                     (OperandRole.MEMORY_DESTINATION, 1, "ptr"),
                     (OperandRole.VALUE, 2, "v"),
                 ),
+                memory=PrimitiveMemoryContract(
+                    MemoryAccess.WRITE,
+                    MemoryAddressing.CONTIGUOUS,
+                ),
                 mask_policy="pass_through",
             )
         ),
@@ -535,6 +596,30 @@ def test_curated_unmasked_memory_shapes_are_not_duplicated() -> None:
             (OperandRole.VALUE, 1, "v"),
         ),
         overload=ResolvedPrimitiveOverload("payload_extent", "vector", True),
+        memory=PrimitiveMemoryContract(
+            MemoryAccess.WRITE,
+            MemoryAddressing.CONTIGUOUS,
+        ),
+    )
+    vector_store = replace(
+        vector_store,
+        axis=(("aligned", "false"),),
+        primitive_semantics=replace(
+            vector_store.primitive_semantics,
+            memory_alignment=LoweredMemoryAlignment(
+                "aligned", MemoryAlignment.UNALIGNED
+            ),
+        ),
+    )
+    aligned_vector_store = replace(
+        vector_store,
+        axis=(("aligned", "true"),),
+        primitive_semantics=replace(
+            vector_store.primitive_semantics,
+            memory_alignment=LoweredMemoryAlignment(
+                "aligned", MemoryAlignment.ALIGNED
+            ),
+        ),
     )
     scalar_store = replace(
         vector_store,
@@ -553,10 +638,31 @@ def test_curated_unmasked_memory_shapes_are_not_duplicated() -> None:
                 ),
                 ("destination", "value"),
             ),
+            memory_alignment=LoweredMemoryAlignment(
+                "aligned", MemoryAlignment.UNALIGNED
+            ),
+        ),
+    )
+    aligned_scalar_store = replace(
+        scalar_store,
+        axis=(("aligned", "true"),),
+        primitive_semantics=replace(
+            scalar_store.primitive_semantics,
+            memory_alignment=LoweredMemoryAlignment(
+                "aligned", MemoryAlignment.ALIGNED
+            ),
         ),
     )
 
-    plan = plan_rust_facade((), _plan(vector_store, scalar_store))
+    plan = plan_rust_facade(
+        (),
+        _plan(
+            vector_store,
+            aligned_vector_store,
+            scalar_store,
+            aligned_scalar_store,
+        ),
+    )
 
     assert len(plan.comprehensive_methods) == 1
     assert plan.comprehensive_methods[0].receiver_kind is RustFacadeReceiverKind.FREE
@@ -565,6 +671,105 @@ def test_curated_unmasked_memory_shapes_are_not_duplicated() -> None:
         == "unmasked vector store is exposed by the curated memory boundary"
         for entry in plan.coverage
     )
+
+
+def test_semantically_renamed_memory_primitives_feed_the_curated_core() -> None:
+    read_specs = _aligned_memory_specs(
+        "read_contiguous",
+        operation=PrimitiveOperation.LOAD,
+        access=MemoryAccess.READ,
+        result_kind="v",
+        param_names=("source",),
+        param_kinds=("cptr",),
+        roles=((OperandRole.MEMORY_SOURCE, 0, "cptr"),),
+    )
+    write_specs = _aligned_memory_specs(
+        "write_contiguous",
+        operation=PrimitiveOperation.STORE,
+        access=MemoryAccess.WRITE,
+        result_kind="void",
+        param_names=("destination", "value"),
+        param_kinds=("ptr", "v"),
+        roles=(
+            (OperandRole.MEMORY_DESTINATION, 0, "ptr"),
+            (OperandRole.VALUE, 1, "v"),
+        ),
+        overload=ResolvedPrimitiveOverload(
+            "payload_extent",
+            "vector",
+            True,
+        ),
+    )
+
+    plan = plan_rust_facade((), _plan(*read_specs, *write_specs))
+
+    memory_bindings = {
+        binding.operation: binding
+        for binding in plan.operation_bindings
+        if binding.memory_access is not None
+    }
+    assert memory_bindings[PrimitiveOperation.LOAD].source_primitive_name == (
+        "read_contiguous"
+    )
+    assert memory_bindings[PrimitiveOperation.LOAD].memory_access is (
+        MemoryAccess.READ
+    )
+    assert memory_bindings[PrimitiveOperation.STORE].source_primitive_name == (
+        "write_contiguous"
+    )
+    assert memory_bindings[PrimitiveOperation.STORE].memory_addressing is (
+        MemoryAddressing.CONTIGUOUS
+    )
+    assert {
+        (delegate.role, delegate.source_primitive_name)
+        for delegate in plan.core_delegates
+        if delegate.role in {"load", "store"}
+    } == {
+        ("load", "read_contiguous"),
+        ("store", "write_contiguous"),
+    }
+
+
+def test_memory_operation_without_a_memory_contract_is_diagnostic() -> None:
+    missing = _spec(
+        "read_without_contract",
+        result_kind="v",
+        param_names=("source",),
+        param_kinds=("cptr",),
+        operation=PrimitiveOperation.LOAD,
+        roles=((OperandRole.MEMORY_SOURCE, 0, "cptr"),),
+        safety=ImplementationSafety(caller_unsafe=True),
+    )
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade((), _plan(missing))
+
+    assert {diagnostic.code for diagnostic in error.value.diagnostics} == {
+        "TSL-BACKEND-RUST-FACADE-MEMORY-CONTRACT"
+    }
+
+
+def test_memory_access_must_agree_with_the_typed_operation() -> None:
+    inconsistent = _spec(
+        "misclassified_memory",
+        result_kind="v",
+        param_names=("source",),
+        param_kinds=("cptr",),
+        operation=PrimitiveOperation.LOAD,
+        roles=((OperandRole.MEMORY_SOURCE, 0, "cptr"),),
+        safety=ImplementationSafety(caller_unsafe=True),
+        memory=PrimitiveMemoryContract(
+            MemoryAccess.WRITE,
+            MemoryAddressing.CONTIGUOUS,
+        ),
+    )
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade((), _plan(inconsistent))
+
+    assert {diagnostic.code for diagnostic in error.value.diagnostics} == {
+        "TSL-BACKEND-RUST-FACADE-MEMORY-CONTRACT"
+    }
 
 
 def test_attribute_combinations_remain_delegate_owned() -> None:
@@ -1556,7 +1761,7 @@ def test_invalid_curated_invocation_roles_are_rejected_during_planning(
     assert {item.code for item in error.value.diagnostics} == {diagnostic_code}
 
 
-def test_incomplete_core_invocation_is_rejected_before_rendering() -> None:
+def test_inconsistent_core_memory_roles_are_rejected_before_rendering() -> None:
     spec = _spec(
         "incomplete_store",
         result_kind="void",
@@ -1566,14 +1771,31 @@ def test_incomplete_core_invocation_is_rejected_before_rendering() -> None:
         roles=((OperandRole.VALUE, 0, "v"),),
         overload=ResolvedPrimitiveOverload("payload_extent", "vector", True),
         safety=ImplementationSafety(caller_unsafe=True),
+        memory=PrimitiveMemoryContract(
+            MemoryAccess.WRITE,
+            MemoryAddressing.CONTIGUOUS,
+        ),
+        memory_alignment=LoweredMemoryAlignment(
+            "aligned", MemoryAlignment.UNALIGNED
+        ),
     )
     spec = replace(spec, axis=(("aligned", "false"),))
+    aligned_spec = replace(
+        spec,
+        axis=(("aligned", "true"),),
+        primitive_semantics=replace(
+            spec.primitive_semantics,
+            memory_alignment=LoweredMemoryAlignment(
+                "aligned", MemoryAlignment.ALIGNED
+            ),
+        ),
+    )
 
     with pytest.raises(RustFacadePlanningError) as error:
-        plan_rust_facade((), _plan(spec))
+        plan_rust_facade((), _plan(spec, aligned_spec))
 
     assert {item.code for item in error.value.diagnostics} == {
-        "TSL-BACKEND-RUST-FACADE-INVOCATION-MISMATCH"
+        "TSL-BACKEND-RUST-FACADE-MEMORY-CONTRACT"
     }
 
 

@@ -9,9 +9,11 @@ import pytest
 
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.memory import MemoryAlignment
 from tslc.catalog.model import Catalog, ImplementationVariant
 from tslc.catalog.overloads import ResolvedPrimitiveOverload
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
+from tslc.lower.primitive_semantics import LoweredMemoryAlignment
 from tslc.select.selector import SelectedImplementation, Selector
 
 
@@ -167,6 +169,40 @@ def test_lowering_carries_promoted_contract_objects(
 
     assert getattr(spec.primitive_semantics, field) is getattr(slot.primitive, field)
     assert spec.primitive_semantics.operation is slot.primitive.operation
+
+
+@pytest.mark.parametrize(
+    ("primitive_name", "alignment_value", "expected"),
+    (
+        ("load", "false", MemoryAlignment.UNALIGNED),
+        ("load", "true", MemoryAlignment.ALIGNED),
+        ("store", "false", MemoryAlignment.UNALIGNED),
+        ("store", "true", MemoryAlignment.ALIGNED),
+    ),
+)
+def test_lowering_resolves_memory_alignment_once(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+    primitive_name: str,
+    alignment_value: str,
+    expected: MemoryAlignment,
+) -> None:
+    signature = "v:=cptr" if primitive_name == "load" else "void:=(ptr,v)"
+    spec = _lower(
+        catalog,
+        _selected_slot(
+            catalog,
+            machine_profiles,
+            primitive_name,
+            signature,
+            attributes={"aligned": alignment_value},
+        ),
+    )
+
+    assert spec.primitive_semantics.memory_alignment == LoweredMemoryAlignment(
+        "aligned",
+        expected,
+    )
 
 
 def test_lowered_semantics_do_not_depend_on_target_body_text(

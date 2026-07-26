@@ -13,6 +13,7 @@ from tslc.catalog.memory import (
     PrimitiveMemoryContract,
     memory_access_values,
     memory_addressing_values,
+    memory_operation,
 )
 from tslc.catalog.semantics import PrimitiveOperation, PrimitiveSemanticContract
 from tslc.diagnostics import Diagnostic, diagnostic_at
@@ -76,10 +77,7 @@ def build_memory_contract(
     )
     if access is None or addressing is None:
         return None
-    expected_operation = {
-        MemoryAccess.READ: PrimitiveOperation.LOAD,
-        MemoryAccess.WRITE: PrimitiveOperation.STORE,
-    }[access]
+    expected_operation = memory_operation(access)
     if semantic is None or semantic.kind is not expected_operation:
         diagnostics.append(
             diagnostic_at(

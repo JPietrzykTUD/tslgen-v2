@@ -132,13 +132,6 @@ RUST_HELPER_MANIFEST = BackendHelperManifest(
     "rust",
     (
         HelperFeature(
-            "algorithm",
-            (
-                PrimitiveRequirement("load"),
-                PrimitiveRequirement("store"),
-            ),
-        ),
-        HelperFeature(
             "masked_store",
             (PrimitiveRequirement("store", "pass_through"),),
         ),
