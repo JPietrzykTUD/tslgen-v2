@@ -47,6 +47,21 @@ class RustFacadeCoverageStatus(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class RustFacadeInvocation:
+    """Maps canonical public operands to the authored lower-call order."""
+
+    public_argument_index_by_source_index: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        if tuple(
+            sorted(self.public_argument_index_by_source_index)
+        ) != tuple(range(len(self.public_argument_index_by_source_index))):
+            raise ValueError(
+                "Rust facade invocation arguments must form an exact permutation"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class RustFacadeTargetSelection:
     """One exact profile-selection predicate used by a facade representation."""
 
@@ -200,6 +215,7 @@ class RustFacadeOperationBinding:
     source_primitive_name: str
     result_kind: str
     parameter_kinds: tuple[str, ...]
+    operand_roles: tuple[tuple[OperandRole, int, str], ...]
     axis_names: tuple[str, ...]
     mask_policy: str | None
     overload: tuple[str, str, bool] | None
@@ -224,12 +240,19 @@ class RustFacadeCoreOperationRequirement:
     operation: PrimitiveOperation
     result_kind: str
     parameter_kinds: tuple[str, ...]
+    public_roles: tuple[OperandRole, ...]
     axis_names: tuple[str, ...] = ()
     overload: tuple[str, str, bool] | None = None
 
     def __post_init__(self) -> None:
         if not self.role or not self.result_kind:
             raise ValueError("Rust facade core requirements require complete roles")
+        if len(self.public_roles) != len(self.parameter_kinds):
+            raise ValueError(
+                "Rust facade core requirements must classify every public argument"
+            )
+        if len(set(self.public_roles)) != len(self.public_roles):
+            raise ValueError("Rust facade core requirement roles must be unique")
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,6 +264,7 @@ class RustFacadeCoreDelegate:
     lanes: int
     profile_name: str | None
     source_primitive_name: str
+    invocation: RustFacadeInvocation
 
     def __post_init__(self) -> None:
         if (
@@ -284,6 +308,7 @@ class RustCuratedMethod:
     target_type_tags: tuple[str, ...]
     shape_keys: tuple[tuple[str, int], ...]
     caller_unsafe: bool
+    invocation: RustFacadeInvocation
     delegates: tuple[RustFacadeDelegate, ...]
 
 
@@ -293,6 +318,7 @@ class RustFacadeBitConversion:
     bits_type_tag: str
     source_primitive_name: str
     shape_keys: tuple[tuple[str, int], ...]
+    invocation: RustFacadeInvocation
     delegates: tuple[RustFacadeDelegate, ...]
 
 
@@ -307,6 +333,7 @@ class RustCuratedTraitImplementation:
     rhs_kind: RustFacadeTraitRhsKind | None
     rhs_type_tags: tuple[str, ...]
     shape_keys: tuple[tuple[str, int], ...]
+    invocation: RustFacadeInvocation
     delegates: tuple[RustFacadeDelegate, ...]
 
 
@@ -398,6 +425,7 @@ class RustFacadePlan:
                 item.source_primitive_name,
                 item.result_kind,
                 item.parameter_kinds,
+                item.operand_roles,
                 item.axis_names,
                 item.mask_policy,
                 item.overload,
@@ -430,6 +458,7 @@ __all__ = (
     "RustCuratedTraitImplementation",
     "RustFacadeCoverageEntry",
     "RustFacadeCoverageStatus",
+    "RustFacadeInvocation",
     "RustFacadeBitConversion",
     "RustFacadeConstParameter",
     "RustFacadeConstParameterSource",

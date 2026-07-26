@@ -20,6 +20,7 @@ from tslc.backend.rust_api_model import (
     RustFacadeCoreOperationRequirement,
     RustFacadeDelegate,
     RustFacadeDelegateVector,
+    RustFacadeInvocation,
     RustFacadeOperationBinding,
     RustFacadeParameter,
     RustFacadeParameterPlacement,
@@ -52,6 +53,11 @@ from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, diagnostic_at, sort_diagnostics
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
+
+
+_FacadeOperandRole = OperandRole | ArithmeticOperandRole
+_PublicOperand = tuple[_FacadeOperandRole, str]
+_RoleBinding = tuple[_FacadeOperandRole, int, str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +120,12 @@ class _Candidate:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class _CoreDelegateMatch:
+    delegate: RustFacadeDelegate
+    invocation: RustFacadeInvocation
+
+
 class RustFacadePlanningError(ValueError):
     def __init__(self, diagnostics: tuple[Diagnostic, ...]) -> None:
         self.diagnostics = diagnostics
@@ -159,25 +171,29 @@ def rust_facade_closure_seed_primitives(catalog: Catalog) -> tuple[str, ...]:
     names remain outputs of this projection, never its classifier.
     """
 
-    required_shapes = {
-        (
-            requirement.operation,
-            requirement.result_kind,
-            requirement.parameter_kinds,
-        )
-        for requirement in RUST_FACADE_CORE_OPERATION_REQUIREMENTS
-    }
     names = {
         primitive.name
         for primitive in catalog.primitives
         if primitive.operation is not None
         and (shape := parse_signature(primitive.signature)) is not None
-        and (
-            primitive.operation.kind,
-            shape.result_kind,
-            shape.param_kinds,
+        and any(
+            primitive.operation.kind is requirement.operation
+            and shape.result_kind == requirement.result_kind
+            and _invocation_from_roles(
+                shape.param_kinds,
+                tuple(
+                    (
+                        binding.role,
+                        binding.parameter_index,
+                        binding.parameter_kind,
+                    )
+                    for binding in primitive.operation.operand_bindings
+                ),
+                tuple(zip(requirement.public_roles, requirement.parameter_kinds)),
+            )
+            is not None
+            for requirement in RUST_FACADE_CORE_OPERATION_REQUIREMENTS
         )
-        in required_shapes
     }
     return tuple(sorted(names))
 
@@ -221,13 +237,20 @@ def _plan_rust_facade(
             )
         )
 
-    curated_methods = _curated_methods(methods, candidates)
-    traits = _curated_traits(methods, candidates)
+    curated_methods, curated_diagnostics = _curated_methods(methods, candidates)
+    traits, trait_diagnostics = _curated_traits(methods, candidates)
+    bit_conversions, bit_conversion_diagnostics = _bit_conversions(candidates)
+    operation_bindings, operation_binding_diagnostics = _operation_bindings(
+        candidates, baseline_keys
+    )
+    diagnostics.extend(curated_diagnostics)
+    diagnostics.extend(trait_diagnostics)
+    diagnostics.extend(bit_conversion_diagnostics)
+    diagnostics.extend(operation_binding_diagnostics)
     ordered_diagnostics = sort_diagnostics(diagnostics)
     if ordered_diagnostics:
         return None, ordered_diagnostics
 
-    operation_bindings = _operation_bindings(candidates, baseline_keys)
     facade_type_tags = _core_facade_type_tags(operation_bindings)
     has_core_inventory = facade_type_tags is not None
     if facade_type_tags is None:
@@ -266,10 +289,7 @@ def _plan_rust_facade(
             core_delegates=core_delegates,
             comprehensive_methods=tuple(sorted(methods, key=_method_sort_key)),
             curated_methods=tuple(sorted(curated_methods, key=_curated_method_sort_key)),
-            bit_conversions=_finalize_bit_conversions(
-                _bit_conversions(candidates),
-                shapes,
-            ),
+            bit_conversions=_finalize_bit_conversions(bit_conversions, shapes),
             trait_implementations=tuple(sorted(traits, key=_trait_sort_key)),
             native_aliases=_native_aliases(
                 profiles,
@@ -440,12 +460,12 @@ def _comprehensive_method(
         kind not in _REPRESENTABLE_KINDS for kind in key.param_kinds
     ):
         return None, "signature kind is not facade-representable", ()
-    curated_memory_reason = _curated_memory_exclusion(key)
-    if curated_memory_reason is not None:
-        return None, curated_memory_reason, ()
     role_diagnostic = _role_signature_diagnostic(candidate)
     if role_diagnostic is not None:
         return None, None, (role_diagnostic,)
+    curated_memory_reason = _curated_memory_exclusion(key)
+    if curated_memory_reason is not None:
+        return None, curated_memory_reason, ()
 
     primary_indices = _primary_indices(key)
     if not primary_indices:
@@ -575,7 +595,7 @@ def _curated_memory_exclusion(key: _CandidateKey) -> str | None:
     if (
         key.operation is PrimitiveOperation.STORE
         and key.result_kind == "void"
-        and key.param_kinds == ("ptr", "v")
+        and sorted(key.param_kinds) == ["ptr", "v"]
         and key.mask_policy is None
         and key.overload == ("payload_extent", "vector", True)
     ):
@@ -627,8 +647,9 @@ def _public_name(
 def _curated_methods(
     methods: list[RustComprehensiveMethod],
     candidates: dict[_CandidateKey, _Candidate],
-) -> list[RustCuratedMethod]:
+) -> tuple[list[RustCuratedMethod], tuple[Diagnostic, ...]]:
     planned: list[RustCuratedMethod] = []
+    diagnostics: list[Diagnostic] = []
     names = {
         PrimitiveOperation.COMPARE_EQUAL: "simd_eq",
         PrimitiveOperation.COMPARE_NOT_EQUAL: "simd_ne",
@@ -643,42 +664,65 @@ def _curated_methods(
             operation is PrimitiveOperation.SELECT
             and candidate.key.mask_policy in {None, "pass_through"}
             and candidate.key.result_kind == "v"
-            and candidate.key.param_kinds == ("m", "v", "v")
+            and sorted(candidate.key.param_kinds) == ["m", "v", "v"]
         ):
             method = _method_for_candidate(methods, candidate)
             if method is not None and not method.caller_unsafe:
+                invocation = _candidate_invocation(
+                    candidate,
+                    (
+                        (OperandRole.CONTROL_MASK, "m"),
+                        (OperandRole.PRIMARY, "v"),
+                        (OperandRole.PASS_THROUGH, "v"),
+                    ),
+                )
+                if invocation is None:
+                    diagnostics.append(_invocation_diagnostic(candidate))
+                    continue
                 planned.append(
                     RustCuratedMethod(
-                        "select",
-                        RustFacadeReceiverKind.MASK,
-                        operation,
-                        candidate.key.source_name,
-                        method.type_tags,
-                        (),
-                        (),
-                        False,
-                        method.delegates,
+                        public_name="select",
+                        receiver_kind=RustFacadeReceiverKind.MASK,
+                        operation=operation,
+                        source_primitive_name=candidate.key.source_name,
+                        type_tags=method.type_tags,
+                        target_type_tags=(),
+                        shape_keys=(),
+                        caller_unsafe=False,
+                        invocation=invocation,
+                        delegates=method.delegates,
                     )
                 )
         if (
             operation in names
             and candidate.key.mask_policy is None
             and candidate.key.result_kind == "m"
-            and candidate.key.param_kinds == ("v", "v")
+            and sorted(candidate.key.param_kinds) == ["v", "v"]
         ):
             method = _method_for_candidate(methods, candidate)
             if method is not None and not method.caller_unsafe:
+                invocation = _candidate_invocation(
+                    candidate,
+                    (
+                        (OperandRole.PRIMARY, "v"),
+                        (OperandRole.SECONDARY, "v"),
+                    ),
+                )
+                if invocation is None:
+                    diagnostics.append(_invocation_diagnostic(candidate))
+                    continue
                 planned.append(
                     RustCuratedMethod(
-                        names[operation],
-                        RustFacadeReceiverKind.VECTOR,
-                        operation,
-                        candidate.key.source_name,
-                        method.type_tags,
-                        (),
-                        (),
-                        False,
-                        method.delegates,
+                        public_name=names[operation],
+                        receiver_kind=RustFacadeReceiverKind.VECTOR,
+                        operation=operation,
+                        source_primitive_name=candidate.key.source_name,
+                        type_tags=method.type_tags,
+                        target_type_tags=(),
+                        shape_keys=(),
+                        caller_unsafe=False,
+                        invocation=invocation,
+                        delegates=method.delegates,
                     )
                 )
         conversion = candidate.representative.primitive_semantics.conversion
@@ -689,30 +733,39 @@ def _curated_methods(
             and conversion.lane_count is LaneCountRelation.PRESERVE_LANE_COUNT
             and candidate.key.result_vector_param is not None
             and candidate.key.result_kind == "v"
-            and candidate.key.param_kinds == ("v",)
+            and sorted(candidate.key.param_kinds) == ["v"]
         ):
             method = _method_for_candidate(methods, candidate)
             if method is not None and not method.caller_unsafe:
+                invocation = _candidate_invocation(
+                    candidate,
+                    ((OperandRole.PRIMARY, "v"),),
+                )
+                if invocation is None:
+                    diagnostics.append(_invocation_diagnostic(candidate))
+                    continue
                 planned.append(
                     RustCuratedMethod(
-                        "cast",
-                        RustFacadeReceiverKind.VECTOR,
-                        operation,
-                        candidate.key.source_name,
-                        method.type_tags,
-                        candidate.result_type_tags,
-                        (),
-                        False,
-                        method.delegates,
+                        public_name="cast",
+                        receiver_kind=RustFacadeReceiverKind.VECTOR,
+                        operation=operation,
+                        source_primitive_name=candidate.key.source_name,
+                        type_tags=method.type_tags,
+                        target_type_tags=candidate.result_type_tags,
+                        shape_keys=(),
+                        caller_unsafe=False,
+                        invocation=invocation,
+                        delegates=method.delegates,
                     )
                 )
-    return _deduplicate_curated_methods(planned)
+    return _deduplicate_curated_methods(planned), tuple(diagnostics)
 
 
 def _bit_conversions(
     candidates: dict[_CandidateKey, _Candidate],
-) -> tuple[RustFacadeBitConversion, ...]:
+) -> tuple[tuple[RustFacadeBitConversion, ...], tuple[Diagnostic, ...]]:
     conversions: list[RustFacadeBitConversion] = []
+    diagnostics: list[Diagnostic] = []
     for candidate in candidates.values():
         conversion = candidate.representative.primitive_semantics.conversion
         if (
@@ -739,17 +792,31 @@ def _bit_conversions(
                 (float_tag, bits_tag),
                 (bits_tag, float_tag),
             } <= fallback_pairs:
+                invocation = _candidate_invocation(
+                    candidate,
+                    ((OperandRole.PRIMARY, "v"),),
+                )
+                if invocation is None:
+                    diagnostics.append(_invocation_diagnostic(candidate))
+                    break
                 conversions.append(
                     RustFacadeBitConversion(
-                        float_tag,
-                        bits_tag,
-                        candidate.key.source_name,
-                        (),
-                        _delegates(candidate),
+                        float_type_tag=float_tag,
+                        bits_type_tag=bits_tag,
+                        source_primitive_name=candidate.key.source_name,
+                        shape_keys=(),
+                        invocation=invocation,
+                        delegates=_delegates(candidate),
                     )
                 )
-    return tuple(
-        sorted(conversions, key=lambda item: (item.float_type_tag, item.bits_type_tag))
+    return (
+        tuple(
+            sorted(
+                conversions,
+                key=lambda item: (item.float_type_tag, item.bits_type_tag),
+            )
+        ),
+        tuple(diagnostics),
     )
 
 
@@ -864,8 +931,9 @@ def _has_active_surface_delegate(
 def _curated_traits(
     methods: list[RustComprehensiveMethod],
     candidates: dict[_CandidateKey, _Candidate],
-) -> list[RustCuratedTraitImplementation]:
+) -> tuple[list[RustCuratedTraitImplementation], tuple[Diagnostic, ...]]:
     traits: list[RustCuratedTraitImplementation] = []
+    diagnostics: list[Diagnostic] = []
     for candidate in candidates.values():
         if candidate.key.mask_policy is not None:
             continue
@@ -880,23 +948,29 @@ def _curated_traits(
             type_tags,
             rhs_kind,
             rhs_types,
+            public_operands,
         ) in trait_facts:
             if type_tags:
+                invocation = _candidate_invocation(candidate, public_operands)
+                if invocation is None:
+                    diagnostics.append(_invocation_diagnostic(candidate))
+                    continue
                 traits.append(
                     RustCuratedTraitImplementation(
-                        trait_path,
-                        method_name,
-                        method.receiver_kind,
-                        operation,
-                        candidate.key.source_name,
-                        type_tags,
-                        rhs_kind,
-                        rhs_types,
-                        (),
-                        method.delegates,
+                        trait_path=trait_path,
+                        method_name=method_name,
+                        receiver_kind=method.receiver_kind,
+                        operation=operation,
+                        source_primitive_name=candidate.key.source_name,
+                        type_tags=type_tags,
+                        rhs_kind=rhs_kind,
+                        rhs_type_tags=rhs_types,
+                        shape_keys=(),
+                        invocation=invocation,
+                        delegates=method.delegates,
                     )
                 )
-    return _deduplicate_traits(traits)
+    return _deduplicate_traits(traits), tuple(diagnostics)
 
 
 def _trait_facts(
@@ -909,6 +983,7 @@ def _trait_facts(
         tuple[str, ...],
         RustFacadeTraitRhsKind | None,
         tuple[str, ...],
+        tuple[_PublicOperand, ...],
     ],
     ...,
 ]:
@@ -922,6 +997,7 @@ def _trait_facts(
             tuple[str, ...],
             RustFacadeTraitRhsKind | None,
             tuple[str, ...],
+            tuple[_PublicOperand, ...],
         ]
     ] = []
     if arithmetic is not None:
@@ -955,7 +1031,16 @@ def _trait_facts(
                     if type_tag in SCALAR_TYPE_INFOS
                     and SCALAR_TYPE_INFOS[type_tag].signed
                 )
-            facts.append((*spelling, operation, type_tags, rhs_kind, ()))
+            facts.append(
+                (
+                    *spelling,
+                    operation,
+                    type_tags,
+                    rhs_kind,
+                    (),
+                    _arithmetic_public_operands(operation),
+                )
+            )
     primitive_operation = candidate.key.operation
     integer_tags = tuple(
         tag
@@ -997,7 +1082,14 @@ def _trait_facts(
             else ()
         )
         facts.append(
-            (*spelling, primitive_operation, type_tags, rhs_kind, rhs_types)
+            (
+                *spelling,
+                primitive_operation,
+                type_tags,
+                rhs_kind,
+                rhs_types,
+                _primitive_public_operands(primitive_operation, rhs_kind),
+            )
         )
     return tuple(facts)
 
@@ -1008,9 +1100,53 @@ def _arithmetic_rhs_kind(
 ) -> RustFacadeTraitRhsKind | None:
     if operation is ArithmeticOperation.NEGATION:
         return None
-    if candidate.key.result_kind != "v" or candidate.key.param_kinds != ("v", "v"):
+    if (
+        candidate.key.result_kind != "v"
+        or sorted(candidate.key.param_kinds) != ["v", "v"]
+    ):
         return None
     return RustFacadeTraitRhsKind.SAME_TYPE
+
+
+def _arithmetic_public_operands(
+    operation: ArithmeticOperation,
+) -> tuple[_PublicOperand, ...]:
+    if operation is ArithmeticOperation.NEGATION:
+        return ((ArithmeticOperandRole.PRIMARY, "v"),)
+    rhs_role = (
+        ArithmeticOperandRole.DIVISOR
+        if operation in {ArithmeticOperation.DIVISION, ArithmeticOperation.REMAINDER}
+        else ArithmeticOperandRole.SECONDARY
+    )
+    return (
+        (ArithmeticOperandRole.PRIMARY, "v"),
+        (rhs_role, "v"),
+    )
+
+
+def _primitive_public_operands(
+    operation: PrimitiveOperation,
+    rhs_kind: RustFacadeTraitRhsKind | None,
+) -> tuple[_PublicOperand, ...]:
+    if operation in {PrimitiveOperation.BIT_NOT, PrimitiveOperation.MASK_NOT}:
+        kind = "m" if operation is PrimitiveOperation.MASK_NOT else "v"
+        return ((OperandRole.PRIMARY, kind),)
+    if operation in {
+        PrimitiveOperation.SHIFT_LEFT_WRAPPING,
+        PrimitiveOperation.SHIFT_RIGHT_WRAPPING,
+    }:
+        return (
+            (OperandRole.PRIMARY, "v"),
+            (
+                OperandRole.COUNT,
+                "s" if rhs_kind is RustFacadeTraitRhsKind.SCALAR else "v",
+            ),
+        )
+    kind = "m" if operation in _MASK_OPERATIONS else "v"
+    return (
+        (OperandRole.PRIMARY, kind),
+        (OperandRole.SECONDARY, kind),
+    )
 
 
 def _primitive_trait_shape(
@@ -1040,20 +1176,22 @@ def _primitive_trait_shape(
         expected = ("m",) if operation is PrimitiveOperation.MASK_NOT else ("v",)
         expected_result = "m" if operation is PrimitiveOperation.MASK_NOT else "v"
         return (key.param_kinds == expected and key.result_kind == expected_result, None)
-    if operation in binary_vectors and key.result_kind == "v" and key.param_kinds == (
-        "v",
-        "v",
+    if (
+        operation in binary_vectors
+        and key.result_kind == "v"
+        and sorted(key.param_kinds) == ["v", "v"]
     ):
         return True, RustFacadeTraitRhsKind.SAME_TYPE
-    if operation in binary_masks and key.result_kind == "m" and key.param_kinds == (
-        "m",
-        "m",
+    if (
+        operation in binary_masks
+        and key.result_kind == "m"
+        and sorted(key.param_kinds) == ["m", "m"]
     ):
         return True, RustFacadeTraitRhsKind.SAME_TYPE
     if operation in shifts and key.result_kind == "v":
-        if key.param_kinds == ("v", "v"):
+        if sorted(key.param_kinds) == ["v", "v"]:
             return True, RustFacadeTraitRhsKind.SAME_TYPE
-        if key.param_kinds == ("v", "s"):
+        if sorted(key.param_kinds) == ["s", "v"]:
             return True, RustFacadeTraitRhsKind.SCALAR
     return False, None
 
@@ -1335,6 +1473,67 @@ def _role_signature_diagnostic(candidate: _Candidate) -> Diagnostic | None:
     return None
 
 
+def _candidate_invocation(
+    candidate: _Candidate,
+    public_operands: tuple[_PublicOperand, ...],
+) -> RustFacadeInvocation | None:
+    bindings: tuple[_RoleBinding, ...]
+    if public_operands and isinstance(
+        public_operands[0][0], ArithmeticOperandRole
+    ):
+        bindings = candidate.key.arithmetic_roles
+    else:
+        bindings = candidate.key.operation_roles
+    return _invocation_from_roles(
+        candidate.key.param_kinds,
+        bindings,
+        public_operands,
+    )
+
+
+def _invocation_from_roles(
+    parameter_kinds: tuple[str, ...],
+    role_bindings: tuple[_RoleBinding, ...],
+    public_operands: tuple[_PublicOperand, ...],
+) -> RustFacadeInvocation | None:
+    if len(parameter_kinds) != len(public_operands):
+        return None
+    public_roles = tuple(role for role, _kind in public_operands)
+    if len(set(public_roles)) != len(public_roles):
+        return None
+    if len(role_bindings) != len(parameter_kinds):
+        return None
+    if {role for role, _index, _kind in role_bindings} != set(public_roles):
+        return None
+    source_indices = tuple(index for _role, index, _kind in role_bindings)
+    if tuple(sorted(source_indices)) != tuple(range(len(parameter_kinds))):
+        return None
+
+    public_index_by_role = {
+        role: public_index
+        for public_index, (role, _kind) in enumerate(public_operands)
+    }
+    public_kind_by_role = dict(public_operands)
+    public_index_by_source_index = [-1] * len(parameter_kinds)
+    for role, source_index, declared_kind in role_bindings:
+        if (
+            parameter_kinds[source_index] != declared_kind
+            or public_kind_by_role[role] != declared_kind
+        ):
+            return None
+        public_index_by_source_index[source_index] = public_index_by_role[role]
+    return RustFacadeInvocation(tuple(public_index_by_source_index))
+
+
+def _invocation_diagnostic(candidate: _Candidate) -> Diagnostic:
+    return _diagnostic(
+        candidate,
+        "TSL-BACKEND-RUST-FACADE-INVOCATION-MISMATCH",
+        "does not provide one complete, kind-compatible source index for every "
+        "public operand role",
+    )
+
+
 def _roles_by_index(
     key: _CandidateKey,
 ) -> dict[int, OperandRole | ArithmeticOperandRole]:
@@ -1492,8 +1691,9 @@ def _delegate_diagnostic(candidate: _Candidate) -> Diagnostic | None:
 def _operation_bindings(
     candidates: dict[_CandidateKey, _Candidate],
     baseline_keys: set[_CandidateKey],
-) -> tuple[RustFacadeOperationBinding, ...]:
+) -> tuple[tuple[RustFacadeOperationBinding, ...], tuple[Diagnostic, ...]]:
     bindings: list[RustFacadeOperationBinding] = []
+    diagnostics: list[Diagnostic] = []
     for candidate in candidates.values():
         key = candidate.key
         if key not in baseline_keys or key.operation is None:
@@ -1503,12 +1703,39 @@ def _operation_bindings(
         }
         if len(safety_values) != 1 or _delegate_diagnostic(candidate) is not None:
             continue
+        core_requirements = tuple(
+            requirement
+            for requirement in RUST_FACADE_CORE_OPERATION_REQUIREMENTS
+            if key.operation is requirement.operation
+            and key.result_kind == requirement.result_kind
+            and sorted(key.param_kinds) == sorted(requirement.parameter_kinds)
+            and key.axis_names == requirement.axis_names
+            and key.mask_policy is None
+            and key.overload == requirement.overload
+            and next(iter(safety_values))
+            == (
+                requirement.operation
+                in {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
+            )
+        )
+        if any(
+            _invocation_from_roles(
+                key.param_kinds,
+                key.operation_roles,
+                tuple(zip(requirement.public_roles, requirement.parameter_kinds)),
+            )
+            is None
+            for requirement in core_requirements
+        ):
+            diagnostics.append(_invocation_diagnostic(candidate))
+            continue
         bindings.append(
             RustFacadeOperationBinding(
                 operation=key.operation,
                 source_primitive_name=key.source_name,
                 result_kind=key.result_kind,
                 parameter_kinds=key.param_kinds,
+                operand_roles=key.operation_roles,
                 axis_names=key.axis_names,
                 mask_policy=key.mask_policy,
                 overload=key.overload,
@@ -1517,7 +1744,10 @@ def _operation_bindings(
                 delegates=_delegates(candidate),
             )
         )
-    return tuple(sorted(bindings, key=_operation_binding_sort_key))
+    return (
+        tuple(sorted(bindings, key=_operation_binding_sort_key)),
+        tuple(diagnostics),
+    )
 
 
 def _core_delegates(
@@ -1559,7 +1789,8 @@ def _core_delegates(
                         type_tag=shape.type_tag,
                         lanes=shape.lanes,
                         profile_name=representation.profile_name,
-                        source_primitive_name=candidates[0].primitive_name,
+                        source_primitive_name=candidates[0].delegate.primitive_name,
+                        invocation=candidates[0].invocation,
                     )
                 )
     return (
@@ -1585,16 +1816,23 @@ def _matching_core_delegates(
     representation: RustFacadeRepresentation,
     requirement: RustFacadeCoreOperationRequirement,
     bindings: tuple[RustFacadeOperationBinding, ...],
-) -> tuple[RustFacadeDelegate, ...]:
+) -> tuple[_CoreDelegateMatch, ...]:
     expected_extension = representation.mapping.extension_name or (
         "scalar" if lanes == 1 else "generic"
     )
     return tuple(
-        delegate
+        _CoreDelegateMatch(delegate, invocation)
         for binding in bindings
         if binding.operation is requirement.operation
         and binding.result_kind == requirement.result_kind
-        and binding.parameter_kinds == requirement.parameter_kinds
+        and (
+            invocation := _invocation_from_roles(
+                binding.parameter_kinds,
+                binding.operand_roles,
+                tuple(zip(requirement.public_roles, requirement.parameter_kinds)),
+            )
+        )
+        is not None
         and binding.axis_names == requirement.axis_names
         and binding.mask_policy is None
         and binding.overload == requirement.overload
@@ -1621,7 +1859,12 @@ def _core_facade_type_tags(
             for binding in bindings
             if binding.operation is requirement.operation
             and binding.result_kind == requirement.result_kind
-            and binding.parameter_kinds == requirement.parameter_kinds
+            and _invocation_from_roles(
+                binding.parameter_kinds,
+                binding.operand_roles,
+                tuple(zip(requirement.public_roles, requirement.parameter_kinds)),
+            )
+            is not None
             and binding.axis_names == requirement.axis_names
             and binding.mask_policy is None
             and binding.overload == requirement.overload
@@ -1927,20 +2170,16 @@ def _curated_method_sort_key(method: RustCuratedMethod) -> tuple[str, str, str]:
 
 def _operation_binding_sort_key(
     binding: RustFacadeOperationBinding,
-) -> tuple[
-    str,
-    str,
-    str,
-    tuple[str, ...],
-    tuple[str, ...],
-    str,
-    tuple[str, str, bool],
-]:
+) -> tuple[object, ...]:
     return (
         binding.operation.value,
         binding.source_primitive_name,
         binding.result_kind,
         binding.parameter_kinds,
+        tuple(
+            (role.value, index, kind)
+            for role, index, kind in binding.operand_roles
+        ),
         binding.axis_names,
         binding.mask_policy or "",
         binding.overload or ("", "", False),
@@ -1971,34 +2210,49 @@ def _coverage_sort_key(
 
 RUST_FACADE_CORE_OPERATION_REQUIREMENTS = (
     RustFacadeCoreOperationRequirement(
-        "vector_splat", PrimitiveOperation.VECTOR_SPLAT, "v", ("s",)
+        "vector_splat",
+        PrimitiveOperation.VECTOR_SPLAT,
+        "v",
+        ("s",),
+        (OperandRole.VALUE,),
     ),
     RustFacadeCoreOperationRequirement(
-        "vector_from_array", PrimitiveOperation.VECTOR_FROM_ARRAY, "v", ("s[]",)
+        "vector_from_array",
+        PrimitiveOperation.VECTOR_FROM_ARRAY,
+        "v",
+        ("s[]",),
+        (OperandRole.VALUE,),
     ),
     RustFacadeCoreOperationRequirement(
-        "vector_to_array", PrimitiveOperation.VECTOR_TO_ARRAY, "s[]", ("v",)
+        "vector_to_array",
+        PrimitiveOperation.VECTOR_TO_ARRAY,
+        "s[]",
+        ("v",),
+        (OperandRole.PRIMARY,),
     ),
     RustFacadeCoreOperationRequirement(
-        "vector_zero", PrimitiveOperation.VECTOR_ZERO, "v", ()
+        "vector_zero", PrimitiveOperation.VECTOR_ZERO, "v", (), ()
     ),
     RustFacadeCoreOperationRequirement(
         "extract_lane",
         PrimitiveOperation.EXTRACT_LANE,
         "s",
         ("v", "usize"),
+        (OperandRole.PRIMARY, OperandRole.INDEX),
     ),
     RustFacadeCoreOperationRequirement(
         "insert_lane",
         PrimitiveOperation.INSERT_LANE,
         "v",
         ("v", "usize", "s"),
+        (OperandRole.PRIMARY, OperandRole.INDEX, OperandRole.VALUE),
     ),
     RustFacadeCoreOperationRequirement(
         "load",
         PrimitiveOperation.LOAD,
         "v",
         ("cptr",),
+        (OperandRole.MEMORY_SOURCE,),
         axis_names=("aligned",),
     ),
     RustFacadeCoreOperationRequirement(
@@ -2006,50 +2260,78 @@ RUST_FACADE_CORE_OPERATION_REQUIREMENTS = (
         PrimitiveOperation.STORE,
         "void",
         ("ptr", "v"),
+        (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
         axis_names=("aligned",),
         overload=("payload_extent", "vector", True),
     ),
     RustFacadeCoreOperationRequirement(
-        "mask_false", PrimitiveOperation.MASK_ALL_FALSE, "m", ()
+        "mask_false", PrimitiveOperation.MASK_ALL_FALSE, "m", (), ()
     ),
     RustFacadeCoreOperationRequirement(
-        "mask_true", PrimitiveOperation.MASK_ALL_TRUE, "m", ()
+        "mask_true", PrimitiveOperation.MASK_ALL_TRUE, "m", (), ()
     ),
     RustFacadeCoreOperationRequirement(
-        "mask_to_integral", PrimitiveOperation.MASK_TO_INTEGRAL, "im", ("m",)
+        "mask_to_integral",
+        PrimitiveOperation.MASK_TO_INTEGRAL,
+        "im",
+        ("m",),
+        (OperandRole.PRIMARY,),
     ),
     RustFacadeCoreOperationRequirement(
-        "mask_from_integral", PrimitiveOperation.MASK_FROM_INTEGRAL, "m", ("im",)
+        "mask_from_integral",
+        PrimitiveOperation.MASK_FROM_INTEGRAL,
+        "m",
+        ("im",),
+        (OperandRole.VALUE,),
     ),
     RustFacadeCoreOperationRequirement(
         "integral_mask_test",
         PrimitiveOperation.INTEGRAL_MASK_TEST,
         "im",
         ("im", "usize"),
+        (OperandRole.PRIMARY, OperandRole.INDEX),
     ),
     RustFacadeCoreOperationRequirement(
         "mask_set_lane",
         PrimitiveOperation.MASK_SET_LANE,
         "m",
         ("m", "usize", "im"),
+        (OperandRole.PRIMARY, OperandRole.INDEX, OperandRole.VALUE),
     ),
     RustFacadeCoreOperationRequirement(
         "mask_population_count",
         PrimitiveOperation.MASK_POPULATION_COUNT,
         "usize",
         ("m",),
+        (OperandRole.PRIMARY,),
     ),
     RustFacadeCoreOperationRequirement(
-        "mask_and", PrimitiveOperation.MASK_AND, "m", ("m", "m")
+        "mask_and",
+        PrimitiveOperation.MASK_AND,
+        "m",
+        ("m", "m"),
+        (OperandRole.PRIMARY, OperandRole.SECONDARY),
     ),
     RustFacadeCoreOperationRequirement(
-        "mask_or", PrimitiveOperation.MASK_OR, "m", ("m", "m")
+        "mask_or",
+        PrimitiveOperation.MASK_OR,
+        "m",
+        ("m", "m"),
+        (OperandRole.PRIMARY, OperandRole.SECONDARY),
     ),
     RustFacadeCoreOperationRequirement(
-        "mask_xor", PrimitiveOperation.MASK_XOR, "m", ("m", "m")
+        "mask_xor",
+        PrimitiveOperation.MASK_XOR,
+        "m",
+        ("m", "m"),
+        (OperandRole.PRIMARY, OperandRole.SECONDARY),
     ),
     RustFacadeCoreOperationRequirement(
-        "mask_not", PrimitiveOperation.MASK_NOT, "m", ("m",)
+        "mask_not",
+        PrimitiveOperation.MASK_NOT,
+        "m",
+        ("m",),
+        (OperandRole.PRIMARY,),
     ),
 )
 

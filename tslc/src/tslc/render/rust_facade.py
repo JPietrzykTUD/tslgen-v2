@@ -8,6 +8,7 @@ from tslc.backend.rust_api_model import (
     RustFacadeBitConversion,
     RustFacadeCoreDelegate,
     RustFacadeDelegate,
+    RustFacadeInvocation,
     RustFacadePlan,
     RustFacadeRepresentation,
     RustFacadeReceiverKind,
@@ -115,6 +116,22 @@ def _facade_impls(plan: RustFacadePlan) -> str:
     return "\n\n".join(blocks)
 
 
+def _invocation_arguments(
+    invocation: RustFacadeInvocation,
+    public_arguments: tuple[str, ...],
+) -> tuple[str, ...]:
+    if len(public_arguments) != len(
+        invocation.public_argument_index_by_source_index
+    ):
+        raise ValueError(
+            "Rust facade renderer received an incomplete public argument inventory"
+        )
+    return tuple(
+        public_arguments[public_index]
+        for public_index in invocation.public_argument_index_by_source_index
+    )
+
+
 def _facade_impl(
     plan: RustFacadePlan,
     shape: RustFacadeShape,
@@ -127,8 +144,18 @@ def _facade_impl(
         for requirement in RUST_FACADE_CORE_OPERATION_REQUIREMENTS
     }
 
-    def call(name: str) -> str:
-        return f"{module}::{delegates[name].source_primitive_name}"
+    def invoke(
+        name: str,
+        public_arguments: tuple[str, ...] = (),
+        extra_generics: tuple[str, ...] = (),
+    ) -> str:
+        delegate = delegates[name]
+        arguments = _invocation_arguments(delegate.invocation, public_arguments)
+        generics = ", ".join((descriptor, *extra_generics))
+        return (
+            f"{module}::{delegate.source_primitive_name}::<{generics}>"
+            f"({', '.join(arguments)})"
+        )
 
     return "\n".join(
         (
@@ -136,28 +163,28 @@ def _facade_impl(
             f"impl private::FacadeOps<{shape.lanes}> for {shape.base_spelling} {{",
             "    #[inline]",
             "    fn vector_splat(value: Self) -> Self::Vector {",
-            f"        {call('vector_splat')}::<{descriptor}>(value)",
+            f"        {invoke('vector_splat', ('value',))}",
             "    }",
             "",
             "    #[inline]",
             f"    fn vector_from_array(values: [Self; {shape.lanes}]) -> Self::Vector {{",
             "        let values = crate::tsl_core::ArrayStorage::from_array(values);",
-            f"        {call('vector_from_array')}::<{descriptor}>(&values)",
+            f"        {invoke('vector_from_array', ('&values',))}",
             "    }",
             "",
             "    #[inline]",
             f"    fn vector_to_array(value: Self::Vector) -> [Self; {shape.lanes}] {{",
-            f"        {call('vector_to_array')}::<{descriptor}>(value).into_array()",
+            f"        {invoke('vector_to_array', ('value',))}.into_array()",
             "    }",
             "",
             "    #[inline]",
             "    fn vector_zero() -> Self::Vector {",
-            f"        {call('vector_zero')}::<{descriptor}>()",
+            f"        {invoke('vector_zero')}",
             "    }",
             "",
             "    #[inline]",
             "    fn extract_lane(value: Self::Vector, index: usize) -> Self {",
-            f"        {call('extract_lane')}::<{descriptor}>(value, index)",
+            f"        {invoke('extract_lane', ('value', 'index'))}",
             "    }",
             "",
             "    #[inline]",
@@ -165,83 +192,94 @@ def _facade_impl(
                 "    fn insert_lane(value: Self::Vector, index: usize, "
                 "lane: Self) -> Self::Vector {"
             ),
-            f"        {call('insert_lane')}::<{descriptor}>(value, index, lane)",
+            f"        {invoke('insert_lane', ('value', 'index', 'lane'))}",
             "    }",
             "",
             "    #[inline]",
             "    unsafe fn load(source: *const Self) -> Self::Vector {",
             "        // SAFETY: forwarded from the private facade boundary.",
-            f"        unsafe {{ {call('load')}::<{descriptor}, false>(source) }}",
+            f"        unsafe {{ {invoke('load', ('source',), ('false',))} }}",
             "    }",
             "",
             "    #[inline]",
             "    unsafe fn store(destination: *mut Self, value: Self::Vector) {",
             "        // SAFETY: forwarded from the private facade boundary.",
-            f"        unsafe {{ {call('store')}::<{descriptor}, false, _>(destination, value) }}",
+            (
+                "        unsafe { "
+                f"{invoke('store', ('destination', 'value'), ('false', '_'))}"
+                " }"
+            ),
             "    }",
             "",
             "    #[inline]",
             "    fn mask_false() -> Self::Mask {",
-            f"        {call('mask_false')}::<{descriptor}>()",
+            f"        {invoke('mask_false')}",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_true() -> Self::Mask {",
-            f"        {call('mask_true')}::<{descriptor}>()",
+            f"        {invoke('mask_true')}",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_from_bitmask(bits: u64) -> Self::Mask {",
-            f"        {call('mask_from_integral')}::<{descriptor}>"
-            f"({_mask_integer_argument('bits', representation)})",
+            (
+                "        "
+                + invoke(
+                    "mask_from_integral",
+                    (_mask_integer_argument("bits", representation),),
+                )
+            ),
             "    }",
             "",
             "    #[inline]",
             "    fn mask_to_bitmask(value: Self::Mask) -> u64 {",
             _mask_integer_result(
-                f"{call('mask_to_integral')}::<{descriptor}>(value)",
+                invoke("mask_to_integral", ("value",)),
                 representation,
             ),
             "    }",
             "",
             "    #[inline]",
             "    fn mask_test(value: Self::Mask, index: usize) -> bool {",
-            f"        let bits = {call('mask_to_integral')}::<{descriptor}>(value);",
-            f"        {call('integral_mask_test')}::<{descriptor}>(bits, index) != 0",
+            f"        let bits = {invoke('mask_to_integral', ('value',))};",
+            f"        {invoke('integral_mask_test', ('bits', 'index'))} != 0",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_set(value: Self::Mask, index: usize, active: bool) -> Self::Mask {",
-            f"        {call('mask_set_lane')}::<{descriptor}>(",
-            "            value,",
-            "            index,",
-            "            if active { 1 } else { 0 },",
-            "        )",
+            (
+                "        "
+                + invoke(
+                    "mask_set_lane",
+                    ("value", "index", "if active { 1 } else { 0 }"),
+                )
+            ),
             "    }",
             "",
             "    #[inline]",
             "    fn mask_count(value: Self::Mask) -> usize {",
-            f"        {call('mask_population_count')}::<{descriptor}>(value)",
+            f"        {invoke('mask_population_count', ('value',))}",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_and(left: Self::Mask, right: Self::Mask) -> Self::Mask {",
-            f"        {call('mask_and')}::<{descriptor}>(left, right)",
+            f"        {invoke('mask_and', ('left', 'right'))}",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_or(left: Self::Mask, right: Self::Mask) -> Self::Mask {",
-            f"        {call('mask_or')}::<{descriptor}>(left, right)",
+            f"        {invoke('mask_or', ('left', 'right'))}",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_xor(left: Self::Mask, right: Self::Mask) -> Self::Mask {",
-            f"        {call('mask_xor')}::<{descriptor}>(left, right)",
+            f"        {invoke('mask_xor', ('left', 'right'))}",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_not(value: Self::Mask) -> Self::Mask {",
-            f"        {call('mask_not')}::<{descriptor}>(value)",
+            f"        {invoke('mask_not', ('value',))}",
             "    }",
             "}",
         )
@@ -353,6 +391,9 @@ def _conversion_pair_impls(plan: RustFacadePlan) -> str:
                         target_representation
                     )
                     module = _lower_module(active_representation)
+                    arguments = ", ".join(
+                        _invocation_arguments(method.invocation, ("value",))
+                    )
                     blocks.append(
                         "\n".join(
                             (
@@ -375,7 +416,8 @@ def _conversion_pair_impls(plan: RustFacadePlan) -> str:
                                 (
                                     f"        {module}::"
                                     f"{rust_raw_identifier(delegate.primitive_name)}::<"
-                                    f"{source_descriptor}, {target_descriptor}>(value)"
+                                    f"{source_descriptor}, {target_descriptor}>"
+                                    f"({arguments})"
                                 ),
                                 "    }",
                                 "}",
@@ -435,6 +477,12 @@ def _curated_method_impl(
     vector = f"Simd<{shape.base_spelling}, {shape.lanes}>"
     mask = f"Mask<{shape.base_spelling}, {shape.lanes}>"
     if method.receiver_kind is RustFacadeReceiverKind.MASK:
+        call_arguments = ", ".join(
+            _invocation_arguments(
+                method.invocation,
+                ("self.value", "true_values.value", "false_values.value"),
+            )
+        )
         return "\n".join(
             (
                 _cfg_attribute(cfg),
@@ -449,13 +497,19 @@ def _curated_method_impl(
                 f"        Simd::<{shape.base_spelling}, {shape.lanes}> {{",
                 (
                     f"            value: {module}::{rust_raw_identifier(delegate.primitive_name)}::<"
-                    f"{descriptor}>(self.value, true_values.value, false_values.value),"
+                    f"{descriptor}>({call_arguments}),"
                 ),
                 "        }",
                 "    }",
                 "}",
             )
         )
+    call_arguments = ", ".join(
+        _invocation_arguments(
+            method.invocation,
+            ("self.value", "other.value"),
+        )
+    )
     return "\n".join(
         (
             _cfg_attribute(cfg),
@@ -469,7 +523,7 @@ def _curated_method_impl(
             f"        Mask::<{shape.base_spelling}, {shape.lanes}> {{",
             (
                 f"            value: {module}::{rust_raw_identifier(delegate.primitive_name)}::<"
-                f"{descriptor}>(self.value, other.value),"
+                f"{descriptor}>({call_arguments}),"
             ),
             "        }",
             "    }",
@@ -530,9 +584,12 @@ def _canonical_operator_impl(
         else ()
     )
     if rhs_type is None:
+        arguments = ", ".join(
+            _invocation_arguments(trait.invocation, ("self.value",))
+        )
         call = (
             f"{module}::{rust_raw_identifier(delegate.primitive_name)}::<"
-            f"{descriptor}>(self.value)"
+            f"{descriptor}>({arguments})"
         )
         signature = f"    fn {trait.method_name}(self) -> Self::Output {{"
     else:
@@ -548,10 +605,16 @@ def _canonical_operator_impl(
         rhs_value = (
             "rhs" if trait.rhs_kind is RustFacadeTraitRhsKind.SCALAR else "rhs.value"
         )
+        arguments = ", ".join(
+            _invocation_arguments(
+                trait.invocation,
+                ("self.value", rhs_value),
+            )
+        )
         call = (
             f"{module}::{rust_raw_identifier(delegate.primitive_name)}::<"
             f"{descriptor}{extra_generic}>"
-            f"(self.value, {rhs_value})"
+            f"({arguments})"
         )
         signature = (
             f"    fn {trait.method_name}(self, rhs: {rhs_type}) -> Self::Output {{"
@@ -825,7 +888,6 @@ def _bit_method_impl(
     *,
     to_bits: bool,
 ) -> str:
-    del conversion
     float_vector = f"Simd<{float_shape.base_spelling}, {float_shape.lanes}>"
     bits_vector = f"Simd<{bits_shape.base_spelling}, {bits_shape.lanes}>"
     active_representation = (
@@ -843,6 +905,9 @@ def _bit_method_impl(
     else:
         signature = f"    pub fn from_bits(bits: {bits_vector}) -> Self {{"
         argument = "bits.value"
+    arguments = ", ".join(
+        _invocation_arguments(conversion.invocation, (argument,))
+    )
     return "\n".join(
         (
             _cfg_attribute(cfg),
@@ -858,7 +923,7 @@ def _bit_method_impl(
             ),
             (
                 f"            value: {module}::{rust_raw_identifier(delegate.primitive_name)}::<"
-                f"{source_descriptor}, {target_descriptor}>({argument}),"
+                f"{source_descriptor}, {target_descriptor}>({arguments}),"
             ),
             "        }",
             "    }",

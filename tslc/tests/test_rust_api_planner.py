@@ -10,15 +10,20 @@ import pytest
 from tslc.api import generate_project
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_api_model import (
+    RustFacadeCoreDelegate,
     RustFacadeCoverageStatus,
     RustFacadeConstParameterSource,
+    RustFacadeInvocation,
     RustFacadeParameterPlacement,
+    RustFacadePlan,
     RustFacadeRepresentation,
     RustFacadeReceiverKind,
+    RustFacadeShape,
     RustFacadeTargetSelection,
     RustFacadeTraitRhsKind,
 )
 from tslc.backend.rust_api_planner import (
+    RUST_FACADE_CORE_OPERATION_REQUIREMENTS,
     RustFacadePlanningError,
     plan_rust_facade,
     validate_rust_facade,
@@ -56,6 +61,11 @@ from tslc.diagnostics import has_errors
 from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam
 from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
 from tslc.lower.target_vectors import TargetVector
+from tslc.render.rust_facade import (
+    _canonical_operator_impl,
+    _curated_method_impl,
+    _facade_impl,
+)
 from tslc.render.rust_facade_comprehensive import render_comprehensive_facade
 from tslc.render.rust_facade_common import (
     representations_can_coexist,
@@ -123,19 +133,55 @@ def _spec(
     )
 
 
-def _arithmetic_spec(name: str = "sum") -> LoweredSpecialization:
-    names = ("left", "right")
+def _arithmetic_spec(
+    name: str = "sum",
+    *,
+    operation: ArithmeticOperation = ArithmeticOperation.ADDITION,
+    reordered: bool = False,
+) -> LoweredSpecialization:
+    names = ("right", "left") if reordered else ("left", "right")
+    rhs_role = (
+        ArithmeticOperandRole.DIVISOR
+        if operation in {ArithmeticOperation.DIVISION, ArithmeticOperation.REMAINDER}
+        else ArithmeticOperandRole.SECONDARY
+    )
+    primary_index = 1 if reordered else 0
+    rhs_index = 0 if reordered else 1
+    guarantees = {
+        ArithmeticOperation.ADDITION: frozenset(
+            {ArithmeticGuarantee.INTEGER_WRAPPING}
+        ),
+        ArithmeticOperation.SUBTRACTION: frozenset(
+            {ArithmeticGuarantee.INTEGER_WRAPPING}
+        ),
+        ArithmeticOperation.DIVISION: frozenset(
+            {
+                ArithmeticGuarantee.INTEGER_QUOTIENT_TOWARD_ZERO,
+                ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS,
+                ArithmeticGuarantee.SIGNED_MIN_DIV_NEG_ONE_RETURNS_MIN,
+                ArithmeticGuarantee.FLOATING_DIVISION_IEEE754_VALUES,
+            }
+        ),
+    }[operation]
     arithmetic = ArithmeticContract(
-        frozenset({ArithmeticOperation.ADDITION}),
+        frozenset({operation}),
         (
             ArithmeticOperandBinding(
-                ArithmeticOperandRole.PRIMARY, "left", 0, 0, "v"
+                ArithmeticOperandRole.PRIMARY,
+                "left",
+                primary_index,
+                primary_index,
+                "v",
             ),
             ArithmeticOperandBinding(
-                ArithmeticOperandRole.SECONDARY, "right", 1, 1, "v"
+                rhs_role,
+                "right",
+                rhs_index,
+                rhs_index,
+                "v",
             ),
         ),
-        frozenset({ArithmeticGuarantee.INTEGER_WRAPPING}),
+        guarantees,
     )
     return _spec(
         name,
@@ -698,7 +744,7 @@ def test_selection_curated_method_uses_the_control_mask_receiver() -> None:
         roles=(
             (OperandRole.CONTROL_MASK, 0, "m"),
             (OperandRole.PRIMARY, 1, "v"),
-            (OperandRole.SECONDARY, 2, "v"),
+            (OperandRole.PASS_THROUGH, 2, "v"),
         ),
     )
 
@@ -708,6 +754,233 @@ def test_selection_curated_method_uses_the_control_mask_receiver() -> None:
     assert plan.comprehensive_methods[0].public_name == "arbitrary_selection_name_masked"
     assert plan.curated_methods[0].public_name == "select"
     assert plan.curated_methods[0].receiver_kind is RustFacadeReceiverKind.MASK
+
+
+def test_reordered_selection_preserves_the_authored_lower_call_order() -> None:
+    spec = _spec(
+        "reordered_selection",
+        param_names=("false_values", "mask", "true_values"),
+        param_kinds=("v", "m", "v"),
+        operation=PrimitiveOperation.SELECT,
+        roles=(
+            (OperandRole.PASS_THROUGH, 0, "v"),
+            (OperandRole.CONTROL_MASK, 1, "m"),
+            (OperandRole.PRIMARY, 2, "v"),
+        ),
+    )
+
+    plan = plan_rust_facade((), _plan(spec))
+    method = plan.curated_methods[0]
+    shape = plan.shapes[0]
+    rendered = _curated_method_impl(
+        method,
+        shape,
+        shape.representations[0],
+        method.delegates[0],
+    )
+
+    assert method.invocation.public_argument_index_by_source_index == (2, 0, 1)
+    assert "pub fn select(self, true_values:" in rendered
+    assert "(false_values.value, self.value, true_values.value)" in rendered
+
+
+def test_reordered_comparison_preserves_the_authored_lower_call_order() -> None:
+    spec = _spec(
+        "reordered_less",
+        result_kind="m",
+        param_names=("right", "left"),
+        param_kinds=("v", "v"),
+        operation=PrimitiveOperation.COMPARE_LESS,
+        roles=(
+            (OperandRole.SECONDARY, 0, "v"),
+            (OperandRole.PRIMARY, 1, "v"),
+        ),
+    )
+
+    plan = plan_rust_facade((), _plan(spec))
+    method = plan.curated_methods[0]
+    shape = plan.shapes[0]
+    rendered = _curated_method_impl(
+        method,
+        shape,
+        shape.representations[0],
+        method.delegates[0],
+    )
+
+    assert method.public_name == "simd_lt"
+    assert method.invocation.public_argument_index_by_source_index == (1, 0)
+    assert "(other.value, self.value)" in rendered
+
+
+@pytest.mark.parametrize(
+    ("operation", "trait_path"),
+    (
+        (ArithmeticOperation.SUBTRACTION, "core::ops::Sub"),
+        (ArithmeticOperation.DIVISION, "core::ops::Div"),
+    ),
+)
+def test_reordered_noncommutative_operator_preserves_the_lower_call_order(
+    operation: ArithmeticOperation,
+    trait_path: str,
+) -> None:
+    spec = _arithmetic_spec(
+        f"reordered_{operation.value}",
+        operation=operation,
+        reordered=True,
+    )
+
+    plan = plan_rust_facade((), _plan(spec))
+    trait = plan.trait_implementations[0]
+    shape = plan.shapes[0]
+    rendered = _canonical_operator_impl(
+        trait,
+        shape,
+        shape.representations[0],
+        trait.delegates[0],
+        f"Simd<{shape.base_spelling}, {shape.lanes}>",
+    )
+
+    assert trait.trait_path == trait_path
+    assert trait.invocation.public_argument_index_by_source_index == (1, 0)
+    assert "(rhs.value, self.value)" in rendered
+
+
+def test_core_store_and_lane_insertion_render_from_finalized_invocations() -> None:
+    representation = RustFacadeRepresentation(
+        None,
+        None,
+        (),
+        RustStaticVectorMapping(
+            "si32", "i32", 4, 128, "Simd<i32, Generic<4>>", "u64"
+        ),
+    )
+    shape = RustFacadeShape("si32", "i32", 4, 128, (representation,))
+    delegates = tuple(
+        RustFacadeCoreDelegate(
+            role=requirement.role,
+            type_tag="si32",
+            lanes=4,
+            profile_name=None,
+            source_primitive_name=f"test_{requirement.role}",
+            invocation=RustFacadeInvocation(
+                (
+                    (1, 0)
+                    if requirement.role == "store"
+                    else (2, 0, 1)
+                    if requirement.role == "insert_lane"
+                    else tuple(range(len(requirement.parameter_kinds)))
+                )
+            ),
+        )
+        for requirement in RUST_FACADE_CORE_OPERATION_REQUIREMENTS
+    )
+    plan = RustFacadePlan(
+        shapes=(shape,),
+        operation_bindings=(),
+        core_delegates=delegates,
+        comprehensive_methods=(),
+        curated_methods=(),
+        bit_conversions=(),
+        trait_implementations=(),
+        native_aliases=(),
+        operation_values=(),
+        coverage=(),
+    )
+
+    rendered = _facade_impl(plan, shape, representation)
+
+    assert "test_store::<" in rendered
+    assert ">(value, destination)" in rendered
+    assert "test_insert_lane::<" in rendered
+    assert ">(lane, value, index)" in rendered
+
+
+@pytest.mark.parametrize(
+    "indices",
+    (
+        (0, 0),
+        (1,),
+        (0, 2),
+    ),
+)
+def test_invocation_requires_an_exact_argument_permutation(
+    indices: tuple[int, ...],
+) -> None:
+    with pytest.raises(ValueError, match="exact permutation"):
+        RustFacadeInvocation(indices)
+
+
+@pytest.mark.parametrize(
+    ("bindings", "diagnostic_code"),
+    (
+        (
+            (OperandBinding(OperandRole.PRIMARY, "left", 0, "v"),),
+            "TSL-BACKEND-RUST-FACADE-INVOCATION-MISMATCH",
+        ),
+        (
+            (
+                OperandBinding(OperandRole.PRIMARY, "left", 0, "v"),
+                OperandBinding(OperandRole.SECONDARY, "right", 0, "v"),
+            ),
+            "TSL-BACKEND-RUST-FACADE-INVOCATION-MISMATCH",
+        ),
+        (
+            (
+                OperandBinding(OperandRole.PRIMARY, "left", 2, "v"),
+                OperandBinding(OperandRole.SECONDARY, "right", 1, "v"),
+            ),
+            "TSL-BACKEND-RUST-FACADE-ROLE-MISMATCH",
+        ),
+    ),
+)
+def test_invalid_curated_invocation_roles_are_rejected_during_planning(
+    bindings: tuple[OperandBinding, ...],
+    diagnostic_code: str,
+) -> None:
+    spec = _spec(
+        "invalid_comparison_roles",
+        result_kind="m",
+        param_names=("left", "right"),
+        param_kinds=("v", "v"),
+        operation=PrimitiveOperation.COMPARE_LESS,
+        roles=(),
+    )
+    spec = replace(
+        spec,
+        primitive_semantics=replace(
+            spec.primitive_semantics,
+            operation=PrimitiveSemanticContract(
+                PrimitiveOperation.COMPARE_LESS,
+                bindings,
+            ),
+        ),
+    )
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade((), _plan(spec))
+
+    assert {item.code for item in error.value.diagnostics} == {diagnostic_code}
+
+
+def test_incomplete_core_invocation_is_rejected_before_rendering() -> None:
+    spec = _spec(
+        "incomplete_store",
+        result_kind="void",
+        param_names=("value", "destination"),
+        param_kinds=("v", "ptr"),
+        operation=PrimitiveOperation.STORE,
+        roles=((OperandRole.VALUE, 0, "v"),),
+        overload=ResolvedPrimitiveOverload("payload_extent", "vector", True),
+        safety=ImplementationSafety(caller_unsafe=True),
+    )
+    spec = replace(spec, axis=(("aligned", "false"),))
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade((), _plan(spec))
+
+    assert {item.code for item in error.value.diagnostics} == {
+        "TSL-BACKEND-RUST-FACADE-INVOCATION-MISMATCH"
+    }
 
 
 def test_unknown_overload_is_rejected_before_rendering() -> None:

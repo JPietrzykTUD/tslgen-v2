@@ -674,7 +674,9 @@ def _lower_call_arguments(
     representation: RustFacadeRepresentation,
 ) -> tuple[str, ...]:
     arguments: list[str] = []
-    for parameter in _runtime_parameters(method):
+    for parameter in sorted(
+        _runtime_parameters(method), key=lambda item: item.source_index
+    ):
         name = _identifier(parameter.public_name)
         if parameter.kind in {"im", "imt"}:
             arguments.append(
