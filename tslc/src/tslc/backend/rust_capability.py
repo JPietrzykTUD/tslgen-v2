@@ -41,7 +41,7 @@ from tslc.render.documentation_formatters import RUST_DOCUMENTATION_FORMATTER
 from tslc.render.rust_benchmark_layout import plan_rust_benchmark_layout
 from tslc.render.rust_policy_consumption import plan_rust_policy_consumption_render
 from tslc.render.rust_project import (
-    rust_artifacts,
+    _rust_artifacts,
     rust_verify_profile,
     rust_verify_profiles,
 )
@@ -136,7 +136,7 @@ def rust_backend_artifacts(
         tuple(profile.profile.name for profile in profiles)
     )
     return [
-        *rust_artifacts(
+        *_rust_artifacts(
             profiles,
             assets,
             media_type=media_type,

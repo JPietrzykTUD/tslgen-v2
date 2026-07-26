@@ -6,6 +6,7 @@ import tomllib
 
 import pytest
 
+from rust_project_test_support import render_rust_artifacts_for_test
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_package import RustPackageConfig
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
@@ -17,7 +18,6 @@ from tslc.compiler_assets import (
     load_default_render_assets,
     load_default_tsl_grammar,
 )
-from tslc.render.rust_project import rust_artifacts
 from tslc.sources import SourceDocument
 from tslc.syntax.ast import ParsedTslScalarValue
 from tslc.syntax.parser import TslParser
@@ -119,7 +119,7 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
 
     rendered = {
         artifact.logical_path: artifact.content
-        for artifact in rust_artifacts(
+        for artifact in render_rust_artifacts_for_test(
             (),
             assets,
             media_type="text/rust",
@@ -169,7 +169,7 @@ def test_rust_project_renderer_uses_typed_release_metadata() -> None:
     )
     rendered = {
         artifact.logical_path: artifact.content
-        for artifact in rust_artifacts(
+        for artifact in render_rust_artifacts_for_test(
             (),
             load_default_render_assets(),
             media_type="text/rust",
@@ -249,7 +249,7 @@ def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
 
     rendered = {
         artifact.logical_path: artifact.content
-        for artifact in rust_artifacts(
+        for artifact in render_rust_artifacts_for_test(
             profiles,
             load_default_render_assets(),
             media_type="text/rust",

@@ -6,15 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from tslc.backend.rust import RustBackend
 from tslc.backend.rust_api_model import RustFacadePlan, RustFacadeReceiverKind
-from tslc.backend.rust_api_planner import (
-    plan_rust_facade,
-    validate_rust_facade_plan,
-)
-from tslc.backend.rust_dispatch import (
-    RustDispatchPlan,
-    plan_rust_dispatch,
-    validate_rust_dispatch_plan,
-)
+from tslc.backend.rust_dispatch import RustDispatchPlan
 from tslc.backend.rust_benchmark_context import (
     RUST_BENCHMARK_CODEGEN_CONTRACT,
     RUST_BENCHMARK_POLICY_SCHEMA_VERSION,
@@ -22,7 +14,6 @@ from tslc.backend.rust_benchmark_context import (
 )
 from tslc.backend.rust_policy_selection import (
     RustPolicySelectionPlan,
-    validate_rust_policy_selection_plan,
 )
 from tslc.backend.rust_package import (
     DEFAULT_RUST_PACKAGE_CONFIG,
@@ -31,7 +22,6 @@ from tslc.backend.rust_package import (
 from tslc.backend.rust_static_selection import (
     RustStaticProfileSelection,
     RustStaticSelectionPlan,
-    validate_rust_static_selection_plan,
 )
 from tslc.backend.emitted_profile import (
     EmittedProfile,
@@ -51,7 +41,6 @@ from tslc.output.verify_model import VerifyProfile, VerifyRunner
 from tslc.render._common import slug, text
 from tslc.render.rust_benchmark_layout import (
     RustBenchmarkLayoutPlan,
-    plan_rust_benchmark_layout,
 )
 from tslc.render.rust_facade import rust_facade_module
 from tslc.render.rust_dispatch import (
@@ -60,7 +49,6 @@ from tslc.render.rust_dispatch import (
     rust_runtime_profile_cfg,
 )
 from tslc.render.rust_policy_consumption import (
-    EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN,
     RustPolicyConsumptionRenderPlan,
     RustPolicyConsumptionRenderProfile,
 )
@@ -73,38 +61,21 @@ from tslc.backend.rust_algorithm import rust_algorithm_module
 from tslc.backend.rust_vectors import rust_registrations, rust_vector_registrations
 
 
-def rust_artifacts(
+def _rust_artifacts(
     profiles: tuple[EmittedProfile, ...],
     assets: RenderAssets,
     *,
     media_type: str,
     selection_plan: RustPolicySelectionPlan,
     static_selection_plan: RustStaticSelectionPlan,
-    facade_plan: RustFacadePlan | None = None,
-    dispatch_plan: RustDispatchPlan | None = None,
-    consumption_plan: RustPolicyConsumptionRenderPlan = (
-        EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN
-    ),
-    benchmark_layout_plan: RustBenchmarkLayoutPlan | None = None,
+    facade_plan: RustFacadePlan,
+    dispatch_plan: RustDispatchPlan,
+    consumption_plan: RustPolicyConsumptionRenderPlan,
+    benchmark_layout_plan: RustBenchmarkLayoutPlan,
     package_config: RustPackageConfig = DEFAULT_RUST_PACKAGE_CONFIG,
 ) -> list[Artifact]:
-    validate_rust_policy_selection_plan(profiles, selection_plan)
-    validate_rust_static_selection_plan(profiles, static_selection_plan)
-    if facade_plan is None:
-        facade_plan = plan_rust_facade(profiles, static_selection_plan)
-    validate_rust_facade_plan(profiles, static_selection_plan, facade_plan)
-    if dispatch_plan is None:
-        dispatch_plan = plan_rust_dispatch(
-            profiles,
-            static_selection_plan,
-            facade_plan,
-        )
-    validate_rust_dispatch_plan(
-        profiles,
-        static_selection_plan,
-        facade_plan,
-        dispatch_plan,
-    )
+    """Render compiler-owned plans that were finalized for this artifact pass."""
+
     emitted_names = {profile.profile.name for profile in profiles}
     if any(
         entry.profile.profile_name not in emitted_names
@@ -112,10 +83,6 @@ def rust_artifacts(
     ):
         raise ValueError("Rust policy consumption plan is foreign to the project")
     policy_profiles = consumption_plan.profiles
-    if benchmark_layout_plan is None:
-        benchmark_layout_plan = plan_rust_benchmark_layout(
-            tuple(profile.profile.name for profile in profiles)
-        )
     if tuple(
         profile.profile_name for profile in benchmark_layout_plan.profiles
     ) != tuple(profile.profile.name for profile in profiles):

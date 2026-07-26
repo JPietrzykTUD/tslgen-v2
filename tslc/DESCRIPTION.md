@@ -442,6 +442,12 @@ diagnostics. It does not inspect implementation text, infer semantics from a
 primitive name, reopen `tsldata`, or render Rust. Backend validation constructs
 the plan at the post-lowering boundary, exposing one compiler-owned input for
 Rust source, rustdoc, fixture, benchmark, and dispatch projections.
+For artifact production,
+[backend/rust_capability.py](src/tslc/backend/rust_capability.py) constructs the
+static-selection, facade, dispatch, policy-consumption, and benchmark-layout
+plans once. The private project boundary in
+[render/rust_project.py](src/tslc/render/rust_project.py) trusts and formats
+those frozen plans; it does not replan or recompute-and-compare them.
 
 The focused renderer in
 [render/rust_facade.py](src/tslc/render/rust_facade.py) turns those finalized

@@ -13,12 +13,14 @@ import textwrap
 
 import pytest
 
+from rust_project_test_support import render_rust_artifacts_for_test
 from tslc.api import generate_project, write_artifacts
 from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
 from tslc.backend.rust_policy_selection import (
     RustPolicySelection,
     RustPolicySelectionPlan,
     plan_rust_policy_selection,
+    validate_rust_policy_selection_plan,
 )
 from tslc.backend.rust_static_selection import plan_rust_static_selection
 from tslc.benchmark.model import SpecializationKey
@@ -26,7 +28,6 @@ from tslc.compiler_assets import RenderAssets
 from tslc.diagnostics import has_errors
 from tslc.output.artifacts import Artifact, ArtifactSet
 from tslc.render.licensing import add_generated_license_notice
-from tslc.render.rust_project import rust_artifacts
 from tslc.render.rust_policy_consumption import (
     plan_rust_policy_consumption_render,
 )
@@ -138,21 +139,21 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
         rust_policy_result.emitted_profiles
     )
 
-    default_first = rust_artifacts(
+    default_first = render_rust_artifacts_for_test(
         rust_policy_result.emitted_profiles,
         render_assets,
         media_type="text/rust",
         selection_plan=plan,
         static_selection_plan=static_selection,
     )
-    default_second = rust_artifacts(
+    default_second = render_rust_artifacts_for_test(
         rust_policy_result.emitted_profiles,
         render_assets,
         media_type="text/rust",
         selection_plan=plan,
         static_selection_plan=static_selection,
     )
-    consumable_artifacts = rust_artifacts(
+    consumable_artifacts = render_rust_artifacts_for_test(
         rust_policy_result.emitted_profiles,
         render_assets,
         media_type="text/rust",
@@ -160,7 +161,7 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
         static_selection_plan=static_selection,
         consumption_plan=consumption,
     )
-    forced_artifacts = rust_artifacts(
+    forced_artifacts = render_rust_artifacts_for_test(
         rust_policy_result.emitted_profiles,
         render_assets,
         media_type="text/rust",
@@ -217,12 +218,9 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
     stale_profile = replace(profile, selections=(stale_selection,))
     stale_plan = replace(plan, profiles=(stale_profile,))
     with pytest.raises(ValueError, match="stale or incomplete"):
-        rust_artifacts(
+        validate_rust_policy_selection_plan(
             rust_policy_result.emitted_profiles,
-            render_assets,
-            media_type="text/rust",
-            selection_plan=stale_plan,
-            static_selection_plan=static_selection,
+            stale_plan,
         )
 
 
@@ -295,7 +293,7 @@ def _write_policy_crate(
     render_assets: RenderAssets,
     plan: RustPolicySelectionPlan,
 ) -> Path:
-    project_artifacts = rust_artifacts(
+    project_artifacts = render_rust_artifacts_for_test(
         result.emitted_profiles,
         render_assets,
         media_type="text/rust",
