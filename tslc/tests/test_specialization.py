@@ -474,10 +474,11 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     lib = specialization_artifacts["rust/src/lib.rs"]
     cargo = specialization_artifacts["rust/Cargo.toml"]
     avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
+    facade = specialization_artifacts["rust/src/tsl_facade.rs"]
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "fce32e42c27fb5984877442c9a4acaec3c64fb557e9459d15df5975f199d1248"
+        "d7f5f1afc55c03d61f05531d06b67351e1040ad48f148af720233e8356c949d0"
     )
 
     assert 'name = "tsl"' in cargo
@@ -498,6 +499,8 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert 'target_feature = "avx2"' in lib
     assert "#[doc(inline)]\npub use crate::tsl_avx2 as profile;" in lib
     assert "pub use crate::tsl_avx2 as profile;" in lib
+    assert "pub fn hadd(self)" in facade
+    assert "pub fn hadd_masked(self, mask:" in facade
     assert "pub mod tsl_target_fallback;" in lib
     assert "pub use crate::tsl_target_fallback as profile;" in lib
     documented_functions = re.findall(
@@ -536,6 +539,8 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "pub trait MaskPopulationCount<V: StaticSimdVector>" in helper
     assert "pub trait UnaryKernel<V: StaticSimdVector>" in helper
     assert "pub trait BinaryKernel<V: StaticSimdVector>" in helper
+    assert "impl<V, Kernel> BinaryKernel<V> for &mut Kernel" in helper
+    assert "<Kernel as BinaryKernel<V>>::apply(*self, left, right)" in helper
     assert "pub trait UnaryPredicateKernel<V: StaticSimdVector>" in helper
     assert "pub trait BinaryPredicateKernel<V: StaticSimdVector>" in helper
     assert "pub trait MaskedUnaryKernel<V: StaticSimdVector>" in helper

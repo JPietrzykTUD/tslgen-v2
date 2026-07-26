@@ -10,6 +10,11 @@ from tslc.backend.rust_api_planner import (
     plan_rust_facade,
     validate_rust_facade_plan,
 )
+from tslc.backend.rust_dispatch import (
+    RustDispatchPlan,
+    plan_rust_dispatch,
+    validate_rust_dispatch_plan,
+)
 from tslc.backend.rust_benchmark_context import (
     RUST_BENCHMARK_CODEGEN_CONTRACT,
     RUST_BENCHMARK_POLICY_SCHEMA_VERSION,
@@ -24,6 +29,7 @@ from tslc.backend.rust_package import (
     RustPackageConfig,
 )
 from tslc.backend.rust_static_selection import (
+    RustStaticProfileSelection,
     RustStaticSelectionPlan,
     validate_rust_static_selection_plan,
 )
@@ -48,6 +54,10 @@ from tslc.render.rust_benchmark_layout import (
     plan_rust_benchmark_layout,
 )
 from tslc.render.rust_facade import rust_facade_module
+from tslc.render.rust_dispatch import (
+    rust_dispatch_prototype_module,
+    rust_runtime_profile_cfg,
+)
 from tslc.render.rust_policy_consumption import (
     EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN,
     RustPolicyConsumptionRenderPlan,
@@ -69,6 +79,7 @@ def rust_artifacts(
     selection_plan: RustPolicySelectionPlan,
     static_selection_plan: RustStaticSelectionPlan,
     facade_plan: RustFacadePlan | None = None,
+    dispatch_plan: RustDispatchPlan | None = None,
     consumption_plan: RustPolicyConsumptionRenderPlan = (
         EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN
     ),
@@ -80,6 +91,18 @@ def rust_artifacts(
     if facade_plan is None:
         facade_plan = plan_rust_facade(profiles, static_selection_plan)
     validate_rust_facade_plan(profiles, static_selection_plan, facade_plan)
+    if dispatch_plan is None:
+        dispatch_plan = plan_rust_dispatch(
+            profiles,
+            static_selection_plan,
+            facade_plan,
+        )
+    validate_rust_dispatch_plan(
+        profiles,
+        static_selection_plan,
+        facade_plan,
+        dispatch_plan,
+    )
     emitted_names = {profile.profile.name for profile in profiles}
     if any(
         entry.profile.profile_name not in emitted_names
@@ -170,6 +193,15 @@ def rust_artifacts(
         # generated crate is self-contained.
         text("rust/rustfmt.toml", assets.text("rustfmt.toml"), media_type=media_type),
     ]
+    dispatch_prototype = rust_dispatch_prototype_module(dispatch_plan, assets)
+    if dispatch_prototype:
+        artifacts.append(
+            text(
+                "rust/src/tsl_dispatch_prototype.rs",
+                dispatch_prototype,
+                media_type=media_type,
+            )
+        )
     for emitted_profile in profiles:
         benchmark_layout = benchmark_layout_plan.profile(emitted_profile.profile.name)
         if benchmark_layout is None:
@@ -221,10 +253,19 @@ def rust_artifacts(
         static_selection = static_selection_plan.profile(
             emitted_profile.profile.name
         )
-        module_cfg = (
+        static_module_cfg = (
             rust_static_profile_cfg(static_selection)
             if static_selection is not None
             else "any()"
+        )
+        runtime_module_cfg = rust_runtime_profile_cfg(
+            dispatch_plan,
+            emitted_profile.profile.name,
+        )
+        module_cfg = (
+            static_module_cfg
+            if runtime_module_cfg is None
+            else f"any({static_module_cfg}, {runtime_module_cfg})"
         )
         content = assets.fill(
             "rust_profile_module.rs.tmpl",
@@ -320,7 +361,13 @@ def rust_artifacts(
     artifacts.append(
         text(
             "rust/src/lib.rs",
-            _rust_lib(profiles, static_selection_plan, facade_plan, assets),
+            _rust_lib(
+                profiles,
+                static_selection_plan,
+                facade_plan,
+                dispatch_plan,
+                assets,
+            ),
             media_type=media_type,
         )
     )
@@ -486,6 +533,7 @@ def _rust_lib(
     profiles: tuple[EmittedProfile, ...],
     static_selection_plan: RustStaticSelectionPlan,
     facade_plan: RustFacadePlan,
+    dispatch_plan: RustDispatchPlan,
     assets: RenderAssets,
 ) -> str:
     # `non_upper_case_globals` is allowed so an `sImm` immediate can keep its corpus name
@@ -496,12 +544,12 @@ def _rust_lib(
         for selection in static_selection_plan.profiles
     )
     profile_modules = "\n\n".join(
-        assets.fill(
-            "rust_lib_profile.rs.tmpl",
-            profile_slug=profile_slug,
-            module_cfg_attr=f"#[cfg({rust_static_profile_cfg(selection)})]",
-            selected_profile_cfg=rust_static_profile_cfg(selection),
-        ).rstrip()
+        _rust_lib_profile_module(
+            profile_slug,
+            selection,
+            dispatch_plan,
+            assets,
+        )
         for profile_slug, selection in zip(
             profile_slugs, static_selection_plan.profiles, strict=True
         )
@@ -512,6 +560,7 @@ def _rust_lib(
         profile_slug="target_fallback",
         module_cfg_attr="",
         selected_profile_cfg=fallback_cfg,
+        runtime_private_module="",
     ).rstrip()
     profile_modules = "\n\n".join(
         part for part in (profile_modules, fallback_module) if part
@@ -541,7 +590,40 @@ def _rust_lib(
         primitive_tags=(f"{primitive_tags}\n\n" if primitive_tags else ""),
         profile_modules=profile_modules,
         benchmark_modules=benchmark_modules,
+        runtime_dispatch_module=(
+            '#[cfg(feature = "runtime-dispatch")]\n'
+            "#[doc(hidden)]\n"
+            "mod tsl_dispatch_prototype;"
+            if dispatch_plan.prototype_slots is not None
+            else ""
+        ),
     )
+
+
+def _rust_lib_profile_module(
+    profile_slug: str,
+    selection: RustStaticProfileSelection,
+    dispatch_plan: RustDispatchPlan,
+    assets: RenderAssets,
+) -> str:
+    selected_cfg = rust_static_profile_cfg(selection)
+    runtime_cfg = rust_runtime_profile_cfg(dispatch_plan, selection.profile_name)
+    runtime_private_module = (
+        ""
+        if runtime_cfg is None
+        else (
+            f"#[cfg(all({runtime_cfg}, not({selected_cfg})))]\n"
+            "#[doc(hidden)]\n"
+            f"mod tsl_{profile_slug};"
+        )
+    )
+    return assets.fill(
+        "rust_lib_profile.rs.tmpl",
+        profile_slug=profile_slug,
+        module_cfg_attr=f"#[cfg({selected_cfg})]",
+        selected_profile_cfg=selected_cfg,
+        runtime_private_module=runtime_private_module,
+    ).rstrip()
 
 
 def _rust_facade_function_exports(plan: RustFacadePlan) -> str:

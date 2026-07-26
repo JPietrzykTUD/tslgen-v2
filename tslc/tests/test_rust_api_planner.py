@@ -681,6 +681,13 @@ def test_role_signature_mismatch_is_rejected_before_rendering() -> None:
     }
 
 
+def test_reduced_inventory_validation_does_not_require_facade_core_closure() -> None:
+    spec = _spec("isolated_semantic_primitive")
+    static = _plan(spec)
+
+    assert validate_rust_facade((), static) == ()
+
+
 def test_current_lowered_families_plan_without_reopening_the_catalog(
     data_root: Path,
     machine_profiles_path: Path,
@@ -703,7 +710,7 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
             "shift_left_wrapping",
             "shift_right_wrapping",
         ],
-        profiles=["scalar", "sse2", "avx2"],
+        profiles=["scalar", "sse2", "avx", "avx2"],
         backends=["rust"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -772,6 +779,12 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
         == {None, "avx2"}
         for shape in plan.shapes
     )
+    si32_native = next(alias for alias in plan.native_aliases if alias.type_tag == "si32")
+    assert next(
+        selection.lanes
+        for selection in si32_native.selections
+        if selection.profile_name == "avx"
+    ) == 4
     expected_native_profiles = {None} | {
         profile.profile_name for profile in static.profiles
     }

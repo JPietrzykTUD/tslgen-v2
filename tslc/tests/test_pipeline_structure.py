@@ -6,6 +6,7 @@ import ast
 import json
 from collections.abc import Iterable
 from pathlib import Path
+from types import SimpleNamespace
 
 from tslc import api, pipeline
 from tslc.backend import cpp_profile
@@ -20,6 +21,7 @@ from tslc.backend.rust_capability import RUST_BACKEND
 from tslc.benchmark.model import EMPTY_BENCHMARK_PROJECT_PLAN
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
+from tslc.catalog.semantics import PrimitiveOperation
 from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import RenderAssets, load_default_render_assets
 from tslc.lower.lowerer import (
@@ -149,6 +151,20 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
     class FakeCatalog:
         def __init__(self, names: set[str]) -> None:
             self.names = names
+            semantic_primitives = {
+                "load": ("v:=cptr", PrimitiveOperation.LOAD),
+                "store": ("void:=(ptr,v)", PrimitiveOperation.STORE),
+                "to_array": ("s[]:=v", PrimitiveOperation.VECTOR_TO_ARRAY),
+            }
+            self.primitives = tuple(
+                SimpleNamespace(
+                    name=name,
+                    signature=semantic_primitives[name][0],
+                    operation=SimpleNamespace(kind=semantic_primitives[name][1]),
+                )
+                for name in sorted(names)
+                if name in semantic_primitives
+            )
 
         def primitives_named(self, name: str, *, unmasked: bool) -> tuple[str, ...]:
             del unmasked

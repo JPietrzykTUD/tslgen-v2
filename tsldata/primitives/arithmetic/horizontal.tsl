@@ -1,5 +1,8 @@
 description "Horizontal arithmetic operations"
 prim<s:=v> hadd(vec):
+  operation horizontal_add
+  operand_roles:
+    primary vec
   brief_description "Reduces all lanes of a vector register to their sum."
   detailed_description """
     Adds all lanes of the vector and returns the scalar reduction result.
@@ -397,6 +400,9 @@ prim<s:=v> hadd(vec):
           """
 
 prim<s:=v> hmax(vec):
+  operation horizontal_max
+  operand_roles:
+    primary vec
   brief_description "Reduces all lanes of a vector register to their maximum value."
   detailed_description """
     Compares all lanes of the vector and returns the greatest lane value as a
@@ -742,6 +748,9 @@ prim<s:=v> hmax(vec):
           """
 
 prim<s:=v> hmin(vec):
+  operation horizontal_min
+  operand_roles:
+    primary vec
   brief_description "Reduces all lanes of a vector register to their minimum value."
   detailed_description """
     Compares all lanes of the vector and returns the smallest lane value as a
@@ -1088,6 +1097,10 @@ prim<s:=v> hmin(vec):
           """
 
 prim<s:=(m,v)> hadd(mask, vec):
+  operation horizontal_add
+  operand_roles:
+    control_mask mask
+    primary vec
   brief_description "Reduces active mask lanes of a vector register to their sum."
   detailed_description """
     Adds only the mask-selected vector lanes and returns the scalar reduction
@@ -1336,6 +1349,10 @@ prim<s:=(m,v)> hadd(mask, vec):
           """
 
 prim<s:=(m,v)> hmax(mask, vec):
+  operation horizontal_max
+  operand_roles:
+    control_mask mask
+    primary vec
   brief_description "Reduces active mask lanes of a vector register to their maximum value."
   detailed_description """
     Compares only the mask-selected vector lanes and returns the greatest active
@@ -1804,6 +1821,10 @@ prim<s:=(m,v)> hmax(mask, vec):
           """
 
 prim<s:=(m,v)> hmin(mask, vec):
+  operation horizontal_min
+  operand_roles:
+    control_mask mask
+    primary vec
   brief_description "Reduces active mask lanes of a vector register to their minimum value."
   detailed_description """
     Compares only the mask-selected vector lanes and returns the smallest active

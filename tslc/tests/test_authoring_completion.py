@@ -345,6 +345,27 @@ def test_shift_contract_completion_uses_typed_source_vocabulary(
     assert _labels(catalog, baseline, type_edit) == {"ui8", "ui16", "ui32", "ui64"}
 
 
+def test_operation_completion_projects_horizontal_add_from_typed_vocabulary(
+    catalog: Catalog,
+) -> None:
+    baseline = (
+        "prim<s:=(m,v)> probe(mask, data):\n"
+        "  operation horizontal_add\n"
+        "  operand_roles:\n"
+        "    control_mask mask\n"
+        "    primary data\n"
+    )
+    operation_edit = baseline.split("horizontal_add", 1)[0] + "horizontal"
+
+    assert _labels(catalog, baseline, operation_edit) == {
+        "horizontal_add",
+        "horizontal_bit_and",
+        "horizontal_bit_or",
+        "horizontal_max",
+        "horizontal_min",
+    }
+
+
 def test_representation_target_axis_and_where_are_contextual(
     catalog: Catalog,
 ) -> None:

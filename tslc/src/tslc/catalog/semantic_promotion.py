@@ -83,6 +83,26 @@ _OPERATION_ROLES: dict[
         frozenset({OperandRole.PRIMARY}),
         frozenset({OperandRole.INDEX}),
     ),
+    PrimitiveOperation.HORIZONTAL_ADD: (
+        frozenset({OperandRole.PRIMARY}),
+        frozenset({OperandRole.CONTROL_MASK}),
+    ),
+    PrimitiveOperation.HORIZONTAL_BIT_AND: (
+        frozenset({OperandRole.PRIMARY}),
+        frozenset({OperandRole.CONTROL_MASK}),
+    ),
+    PrimitiveOperation.HORIZONTAL_BIT_OR: (
+        frozenset({OperandRole.PRIMARY}),
+        frozenset({OperandRole.CONTROL_MASK}),
+    ),
+    PrimitiveOperation.HORIZONTAL_MAX: (
+        frozenset({OperandRole.PRIMARY}),
+        frozenset({OperandRole.CONTROL_MASK}),
+    ),
+    PrimitiveOperation.HORIZONTAL_MIN: (
+        frozenset({OperandRole.PRIMARY}),
+        frozenset({OperandRole.CONTROL_MASK}),
+    ),
     PrimitiveOperation.INTEGRAL_MASK_TEST: (
         frozenset({OperandRole.PRIMARY, OperandRole.INDEX}),
         frozenset(),
@@ -180,6 +200,11 @@ _OPERATION_RESULT_KINDS: dict[PrimitiveOperation, frozenset[str]] = {
     PrimitiveOperation.COMPARE_NOT_EQUAL: frozenset({"m"}),
     PrimitiveOperation.CONVERT: frozenset({"v"}),
     PrimitiveOperation.EXTRACT_LANE: frozenset({"s"}),
+    PrimitiveOperation.HORIZONTAL_ADD: frozenset({"s"}),
+    PrimitiveOperation.HORIZONTAL_BIT_AND: frozenset({"s"}),
+    PrimitiveOperation.HORIZONTAL_BIT_OR: frozenset({"s"}),
+    PrimitiveOperation.HORIZONTAL_MAX: frozenset({"s"}),
+    PrimitiveOperation.HORIZONTAL_MIN: frozenset({"s"}),
     PrimitiveOperation.INTEGRAL_MASK_TEST: frozenset({"im"}),
     PrimitiveOperation.INSERT_LANE: frozenset({"v"}),
     PrimitiveOperation.LOAD: frozenset({"v"}),
@@ -233,6 +258,26 @@ _OPERATION_ROLE_KINDS.update(
         PrimitiveOperation.EXTRACT_LANE: {
             OperandRole.PRIMARY: frozenset({"v"}),
             OperandRole.INDEX: frozenset({"usize"}),
+        },
+        PrimitiveOperation.HORIZONTAL_ADD: {
+            OperandRole.PRIMARY: frozenset({"v"}),
+            OperandRole.CONTROL_MASK: frozenset({"m"}),
+        },
+        PrimitiveOperation.HORIZONTAL_BIT_AND: {
+            OperandRole.PRIMARY: frozenset({"v"}),
+            OperandRole.CONTROL_MASK: frozenset({"m"}),
+        },
+        PrimitiveOperation.HORIZONTAL_BIT_OR: {
+            OperandRole.PRIMARY: frozenset({"v"}),
+            OperandRole.CONTROL_MASK: frozenset({"m"}),
+        },
+        PrimitiveOperation.HORIZONTAL_MAX: {
+            OperandRole.PRIMARY: frozenset({"v"}),
+            OperandRole.CONTROL_MASK: frozenset({"m"}),
+        },
+        PrimitiveOperation.HORIZONTAL_MIN: {
+            OperandRole.PRIMARY: frozenset({"v"}),
+            OperandRole.CONTROL_MASK: frozenset({"m"}),
         },
         PrimitiveOperation.INTEGRAL_MASK_TEST: {
             OperandRole.PRIMARY: frozenset({"im"}),

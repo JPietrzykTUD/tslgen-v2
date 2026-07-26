@@ -90,7 +90,12 @@ def test_rust_profile_module_is_compiled_only_for_its_target_contract(
         if artifact.logical_path == "rust/src/tsl_avx2.rs"
     )
 
-    assert '#![cfg(all(target_arch = "x86_64"' in profile
+    assert "#![cfg(any(" in profile
+    assert 'all(target_arch = "x86_64"' in profile
+    assert (
+        'all(feature = "runtime-dispatch", target_arch = "x86_64")'
+        in profile
+    )
     assert 'target_feature = "avx"' in profile
     assert 'target_feature = "avx2"' in profile
     assert 'target_feature = "rdrand"' in profile
@@ -149,9 +154,9 @@ def test_representative_project_shape_is_byte_stable(
         "cpp/include/tsl_scalar.hpp": "a3d1b9f8fd299e4710f39f7e887380668a9c666311440d0d6eae281e2ba5cef5",
         "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
         "rust/Cargo.toml": "ec632691434d5f98f5bb2035539e9df258ec7fb252f84e5b4cb21a0aa2a144cc",
-        "rust/src/lib.rs": "a1dc7b8635ef2c57ef62f62da49437d68f7e32d3ee88f56fb8485af6646424b8",
-        "rust/src/tsl_documentation.rs": "d95830ad38c0b6723b7f256174f29e0fbbc00796b10981ad060ba7e94d40a037",
-        "rust/src/tsl_scalar.rs": "2d74509be462fd75bcb44227ab4b3ebb369dc5fb39bebbb3075b3c5a27bca0e8",
+        "rust/src/lib.rs": "e7fd52cf0c5de5c1e0148b055e9e289a6f48fcdaaeaaba2b6e9bac7f405f51c0",
+        "rust/src/tsl_documentation.rs": "1e198b97a4b08535dc4c58ecfe0fd733da7ec3532a60a495eb9da4c39527fcb8",
+        "rust/src/tsl_scalar.rs": "4e1c9b588ffc49418f25a91e843dc6c954e46cb64fc70caa15bef4bceacb7b02",
         "rust/tests/smoke.rs": "a4d108f502689e7f29ba5259e22779e8ef0afa36ab83c239022e2772d68d6b44",
     }
     actual = {
@@ -581,7 +586,12 @@ def test_neon_profile_registers_native_simd_types(
 
     rust = by_path["rust/src/tsl_neon.rs"]
     rust_lib = by_path["rust/src/lib.rs"]
-    assert '#![cfg(all(target_arch = "aarch64", target_feature = "neon"))]' in rust
+    assert "#![cfg(any(" in rust
+    assert 'all(target_arch = "aarch64", target_feature = "neon")' in rust
+    assert (
+        'all(feature = "runtime-dispatch", target_arch = "aarch64")'
+        in rust
+    )
     assert (
         '#[cfg(all(not(doc), all(target_arch = "aarch64", '
         'target_feature = "neon")))]' in rust_lib

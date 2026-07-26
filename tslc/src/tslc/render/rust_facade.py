@@ -732,7 +732,14 @@ def _bit_conversion_impls(plan: RustFacadePlan) -> str:
             for shape in plan.shapes
             if shape.type_tag == conversion.bits_type_tag
         }
-        for lanes in sorted(float_shapes.keys() & bits_shapes.keys()):
+        admitted_lanes = {
+            lanes
+            for type_tag, lanes in conversion.shape_keys
+            if type_tag == conversion.float_type_tag
+        }
+        for lanes in sorted(
+            float_shapes.keys() & bits_shapes.keys() & admitted_lanes
+        ):
             float_shape = float_shapes[lanes]
             bits_shape = bits_shapes[lanes]
             for float_representation in float_shape.representations:

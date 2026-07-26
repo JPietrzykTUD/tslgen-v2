@@ -18,6 +18,7 @@ from tslc.backend.rust_api_planner import (
     plan_rust_facade,
     rust_facade_closure_seed_primitives,
 )
+from tslc.backend.rust_dispatch import plan_rust_dispatch
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
 from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
@@ -122,6 +123,11 @@ def rust_backend_artifacts(
     selection_plan = plan_rust_policy_selection(profiles)
     static_selection_plan = plan_rust_static_selection(profiles)
     facade_plan = plan_rust_facade(profiles, static_selection_plan)
+    dispatch_plan = plan_rust_dispatch(
+        profiles,
+        static_selection_plan,
+        facade_plan,
+    )
     consumption_plan = plan_rust_policy_consumption_render(
         plan_rust_policy_consumption(benchmarks, selection_plan),
         static_selection_plan,
@@ -137,6 +143,7 @@ def rust_backend_artifacts(
             selection_plan=selection_plan,
             static_selection_plan=static_selection_plan,
             facade_plan=facade_plan,
+            dispatch_plan=dispatch_plan,
             consumption_plan=consumption_plan,
             benchmark_layout_plan=benchmark_layout_plan,
             package_config=config.rust_package,

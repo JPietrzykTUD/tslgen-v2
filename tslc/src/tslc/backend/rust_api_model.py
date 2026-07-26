@@ -266,6 +266,7 @@ class RustFacadeBitConversion:
     float_type_tag: str
     bits_type_tag: str
     source_primitive_name: str
+    shape_keys: tuple[tuple[str, int], ...]
     delegates: tuple[RustFacadeDelegate, ...]
 
 

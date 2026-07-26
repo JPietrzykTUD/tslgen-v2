@@ -532,6 +532,16 @@ pub trait BinaryKernel<V: StaticSimdVector> {
     fn apply(&mut self, left: V::RegisterType, right: V::RegisterType) -> V::RegisterType;
 }
 
+impl<V, Kernel> BinaryKernel<V> for &mut Kernel
+where
+    V: StaticSimdVector,
+    Kernel: BinaryKernel<V> + ?Sized,
+{
+    fn apply(&mut self, left: V::RegisterType, right: V::RegisterType) -> V::RegisterType {
+        <Kernel as BinaryKernel<V>>::apply(*self, left, right)
+    }
+}
+
 pub trait UnaryPredicateKernel<V: StaticSimdVector> {
     fn test(&mut self, value: V::RegisterType) -> V::MaskType;
 }

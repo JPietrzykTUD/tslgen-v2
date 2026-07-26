@@ -24,6 +24,11 @@ class PrimitiveOperation(StrEnum):
     COMPARE_NOT_EQUAL = "compare_not_equal"
     CONVERT = "convert"
     EXTRACT_LANE = "extract_lane"
+    HORIZONTAL_ADD = "horizontal_add"
+    HORIZONTAL_BIT_AND = "horizontal_bit_and"
+    HORIZONTAL_BIT_OR = "horizontal_bit_or"
+    HORIZONTAL_MAX = "horizontal_max"
+    HORIZONTAL_MIN = "horizontal_min"
     INTEGRAL_MASK_TEST = "integral_mask_test"
     INSERT_LANE = "insert_lane"
     LOAD = "load"
@@ -108,6 +113,21 @@ PRIMITIVE_OPERATION_DESCRIPTIONS: Mapping[PrimitiveOperation, str] = MappingProx
         PrimitiveOperation.COMPARE_NOT_EQUAL: "Compares corresponding lanes for inequality.",
         PrimitiveOperation.CONVERT: "Converts lane values to a declared result vector type.",
         PrimitiveOperation.EXTRACT_LANE: "Extracts one lane value from a vector.",
+        PrimitiveOperation.HORIZONTAL_ADD: (
+            "Reduces active vector lanes to their arithmetic sum."
+        ),
+        PrimitiveOperation.HORIZONTAL_BIT_AND: (
+            "Reduces active vector lane bit patterns with bitwise AND."
+        ),
+        PrimitiveOperation.HORIZONTAL_BIT_OR: (
+            "Reduces active vector lane bit patterns with bitwise OR."
+        ),
+        PrimitiveOperation.HORIZONTAL_MAX: (
+            "Reduces active vector lanes to their maximum value."
+        ),
+        PrimitiveOperation.HORIZONTAL_MIN: (
+            "Reduces active vector lanes to their minimum value."
+        ),
         PrimitiveOperation.INTEGRAL_MASK_TEST: (
             "Tests one runtime-indexed bit of an integral mask value."
         ),

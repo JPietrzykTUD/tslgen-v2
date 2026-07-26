@@ -228,6 +228,7 @@ def _plan_rust_facade(
 
     operation_bindings = _operation_bindings(candidates, baseline_keys)
     facade_type_tags = _core_facade_type_tags(operation_bindings)
+    has_core_inventory = facade_type_tags is not None
     if facade_type_tags is None:
         facade_type_tags = {
             spec.type_tag
@@ -236,7 +237,11 @@ def _plan_rust_facade(
             )
             for spec in specs
         }
-    shapes = _logical_shapes(static_selection, facade_type_tags)
+    shapes = _logical_shapes(
+        static_selection,
+        facade_type_tags,
+        operation_bindings,
+    )
     methods = _finalize_comprehensive_shapes(methods, shapes)
     coverage = _finalize_comprehensive_coverage(coverage, methods)
     curated_methods = _finalize_curated_shapes(curated_methods, shapes)
@@ -249,7 +254,7 @@ def _plan_rust_facade(
     core_delegates, core_diagnostics = _core_delegates(
         shapes,
         operation_bindings,
-        require_complete=require_core,
+        require_complete=require_core and has_core_inventory,
     )
     if core_diagnostics:
         return None, sort_diagnostics(core_diagnostics)
@@ -260,10 +265,16 @@ def _plan_rust_facade(
             core_delegates=core_delegates,
             comprehensive_methods=tuple(sorted(methods, key=_method_sort_key)),
             curated_methods=tuple(sorted(curated_methods, key=_curated_method_sort_key)),
-            bit_conversions=_bit_conversions(candidates),
+            bit_conversions=_finalize_bit_conversions(
+                _bit_conversions(candidates),
+                shapes,
+            ),
             trait_implementations=tuple(sorted(traits, key=_trait_sort_key)),
             native_aliases=_native_aliases(
-                profiles, static_selection, facade_type_tags
+                profiles,
+                static_selection,
+                facade_type_tags,
+                shapes,
             ),
             operation_values=operation_values,
             coverage=tuple(sorted(coverage, key=_coverage_sort_key)),
@@ -732,11 +743,120 @@ def _bit_conversions(
                         float_tag,
                         bits_tag,
                         candidate.key.source_name,
+                        (),
                         _delegates(candidate),
                     )
                 )
     return tuple(
         sorted(conversions, key=lambda item: (item.float_type_tag, item.bits_type_tag))
+    )
+
+
+def _finalize_bit_conversions(
+    conversions: tuple[RustFacadeBitConversion, ...],
+    shapes: tuple[RustFacadeShape, ...],
+) -> tuple[RustFacadeBitConversion, ...]:
+    by_key = {(shape.type_tag, shape.lanes): shape for shape in shapes}
+    finalized: list[RustFacadeBitConversion] = []
+    for conversion in conversions:
+        lanes = sorted(
+            {
+                shape.lanes
+                for shape in shapes
+                if shape.type_tag == conversion.float_type_tag
+                and (conversion.bits_type_tag, shape.lanes) in by_key
+            }
+        )
+        shape_keys = tuple(
+            (conversion.float_type_tag, lane_count)
+            for lane_count in lanes
+            if _bit_conversion_shape_is_complete(
+                conversion,
+                by_key[(conversion.float_type_tag, lane_count)],
+                by_key[(conversion.bits_type_tag, lane_count)],
+            )
+        )
+        if shape_keys:
+            finalized.append(replace(conversion, shape_keys=shape_keys))
+    return tuple(finalized)
+
+
+def _bit_conversion_shape_is_complete(
+    conversion: RustFacadeBitConversion,
+    float_shape: RustFacadeShape,
+    bits_shape: RustFacadeShape,
+) -> bool:
+    profile_names = {
+        representation.profile_name
+        for shape in (float_shape, bits_shape)
+        for representation in shape.representations
+    }
+    for profile_name in profile_names:
+        float_representation = _representation_for_profile(
+            float_shape,
+            profile_name,
+        )
+        bits_representation = _representation_for_profile(
+            bits_shape,
+            profile_name,
+        )
+        if not (
+            _has_active_surface_delegate(
+                conversion.delegates,
+                float_shape,
+                float_representation,
+                profile_name,
+            )
+            and _has_active_surface_delegate(
+                conversion.delegates,
+                bits_shape,
+                bits_representation,
+                profile_name,
+            )
+        ):
+            return False
+    return True
+
+
+def _representation_for_profile(
+    shape: RustFacadeShape,
+    profile_name: str | None,
+) -> RustFacadeRepresentation:
+    representation = next(
+        (
+            item
+            for item in shape.representations
+            if item.profile_name == profile_name
+        ),
+        None,
+    )
+    if representation is not None:
+        return representation
+    return next(
+        item for item in shape.representations if item.profile_name is None
+    )
+
+
+def _has_active_surface_delegate(
+    delegates: tuple[RustFacadeDelegate, ...],
+    shape: RustFacadeShape,
+    representation: RustFacadeRepresentation,
+    profile_name: str | None,
+) -> bool:
+    expected_extension = representation.mapping.extension_name or (
+        "scalar" if shape.lanes == 1 else "generic"
+    )
+    return (
+        sum(
+            delegate.profile_name == profile_name
+            and any(
+                vector.extension_name == expected_extension
+                and vector.type_tag == shape.type_tag
+                for vector in delegate.vectors
+            )
+            for delegate in delegates
+        )
+        == 1
     )
 
 
@@ -968,6 +1088,7 @@ def _arithmetic_guarantees_admit(
 def _logical_shapes(
     plan: RustStaticSelectionPlan,
     admitted_type_tags: set[str],
+    bindings: tuple[RustFacadeOperationBinding, ...],
 ) -> tuple[RustFacadeShape, ...]:
     profiles = {profile.profile_name: profile for profile in plan.profiles}
     shapes: list[RustFacadeShape] = []
@@ -987,14 +1108,26 @@ def _logical_shapes(
                 None,
             )
             if mapping is not None and mapping.uses_hardware:
-                representations.append(
-                    RustFacadeRepresentation(
-                        profile_name,
-                        profile.requirement,
-                        profile.stronger_requirements,
-                        mapping,
-                    )
+                representation = RustFacadeRepresentation(
+                    profile_name,
+                    profile.requirement,
+                    profile.stronger_requirements,
+                    mapping,
                 )
+                if all(
+                    len(
+                        _matching_core_delegates(
+                            fallback.type_tag,
+                            fallback.lanes,
+                            representation,
+                            requirement,
+                            bindings,
+                        )
+                    )
+                    == 1
+                    for requirement in RUST_FACADE_CORE_OPERATION_REQUIREMENTS
+                ):
+                    representations.append(representation)
         fallback_exclusions = tuple(
             sorted(
                 {
@@ -1025,6 +1158,7 @@ def _native_aliases(
     emitted_profiles: tuple[EmittedProfile, ...],
     plan: RustStaticSelectionPlan,
     admitted_type_tags: set[str],
+    shapes: tuple[RustFacadeShape, ...],
 ) -> tuple[RustNativeAlias, ...]:
     emitted = {profile.profile.name: profile for profile in emitted_profiles}
     aliases: dict[str, list[RustNativeAliasSelection]] = defaultdict(list)
@@ -1038,6 +1172,12 @@ def _native_aliases(
         ):
             fallback_by_type[mapping.type_tag].append(mapping)
     fallback_lanes: dict[str, int] = {}
+    admitted_hardware_shapes = {
+        (representation.profile_name, shape.type_tag, shape.lanes)
+        for shape in shapes
+        for representation in shape.representations
+        if representation.profile_name is not None
+    }
     for type_tag, mappings in fallback_by_type.items():
         best_fallback = min(mappings, key=lambda item: (item.total_bits, item.lanes))
         fallback_lanes[type_tag] = best_fallback.lanes
@@ -1050,7 +1190,12 @@ def _native_aliases(
             continue
         by_type: dict[str, list] = defaultdict(list)
         for mapping in profile.mappings:
-            if mapping.uses_hardware and mapping.total_bits in _FACADE_FIXED_WIDTHS:
+            if (
+                mapping.uses_hardware
+                and mapping.total_bits in _FACADE_FIXED_WIDTHS
+                and (profile.profile_name, mapping.type_tag, mapping.lanes)
+                in admitted_hardware_shapes
+            ):
                 by_type[mapping.type_tag].append(mapping)
         for type_tag, fallback_lane_count in fallback_lanes.items():
             mappings = by_type.get(type_tag, [])
@@ -1366,33 +1511,13 @@ def _core_delegates(
     diagnostics: list[Diagnostic] = []
     for shape in shapes:
         for representation in shape.representations:
-            expected_extension = (
-                representation.mapping.extension_name
-                or ("scalar" if shape.lanes == 1 else "generic")
-            )
             for requirement in RUST_FACADE_CORE_OPERATION_REQUIREMENTS:
-                candidates = tuple(
-                    delegate
-                    for binding in bindings
-                    if binding.operation is requirement.operation
-                    and binding.result_kind == requirement.result_kind
-                    and binding.parameter_kinds == requirement.parameter_kinds
-                    and binding.axis_names == requirement.axis_names
-                    and binding.mask_policy is None
-                    and binding.overload == requirement.overload
-                    and shape.type_tag in binding.type_tags
-                    and binding.caller_unsafe
-                    == (
-                        requirement.operation
-                        in {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
-                    )
-                    for delegate in binding.delegates
-                    if delegate.profile_name == representation.profile_name
-                    and any(
-                        vector.extension_name == expected_extension
-                        and vector.type_tag == shape.type_tag
-                        for vector in delegate.vectors
-                    )
+                candidates = _matching_core_delegates(
+                    shape.type_tag,
+                    shape.lanes,
+                    representation,
+                    requirement,
+                    bindings,
                 )
                 if len(candidates) != 1:
                     if require_complete:
@@ -1432,6 +1557,38 @@ def _core_delegates(
             )
         ),
         tuple(diagnostics),
+    )
+
+
+def _matching_core_delegates(
+    type_tag: str,
+    lanes: int,
+    representation: RustFacadeRepresentation,
+    requirement: RustFacadeCoreOperationRequirement,
+    bindings: tuple[RustFacadeOperationBinding, ...],
+) -> tuple[RustFacadeDelegate, ...]:
+    expected_extension = representation.mapping.extension_name or (
+        "scalar" if lanes == 1 else "generic"
+    )
+    return tuple(
+        delegate
+        for binding in bindings
+        if binding.operation is requirement.operation
+        and binding.result_kind == requirement.result_kind
+        and binding.parameter_kinds == requirement.parameter_kinds
+        and binding.axis_names == requirement.axis_names
+        and binding.mask_policy is None
+        and binding.overload == requirement.overload
+        and type_tag in binding.type_tags
+        and binding.caller_unsafe
+        == (requirement.operation in {PrimitiveOperation.LOAD, PrimitiveOperation.STORE})
+        for delegate in binding.delegates
+        if delegate.profile_name == representation.profile_name
+        and any(
+            vector.extension_name == expected_extension
+            and vector.type_tag == type_tag
+            for vector in delegate.vectors
+        )
     )
 
 
