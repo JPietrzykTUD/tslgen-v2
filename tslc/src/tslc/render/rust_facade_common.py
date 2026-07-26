@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from tslc.backend.rust_api_model import (
-    RustFacadeDelegate,
-    RustFacadeRepresentation,
-    RustFacadeShape,
-    RustNativeAliasSelection,
-    rust_facade_representations_can_coexist,
+from tslc.backend.rust_api_arms import (
+    RustFacadeArmSelection,
+    RustFacadeLowerCall,
 )
-from tslc.backend.rust_names import rust_profile_module_name
+from tslc.backend.rust_api_model import (
+    RustFacadeRepresentation,
+    RustNativeAliasSelection,
+)
+from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.rust_static_selection import RustTargetRequirement
 from tslc.render.rust_static_selection import (
     rust_target_requirement_cfg,
@@ -17,97 +18,28 @@ from tslc.render.rust_static_selection import (
 )
 
 
-def surface_delegate(
-    delegates: tuple[RustFacadeDelegate, ...],
-    shape: RustFacadeShape,
-    representation: RustFacadeRepresentation,
-) -> RustFacadeDelegate:
-    return surface_delegate_for_profile(
-        delegates, shape, representation, representation.profile_name
-    )
-
-
-def surface_delegate_for_profile(
-    delegates: tuple[RustFacadeDelegate, ...],
-    shape: RustFacadeShape,
-    representation: RustFacadeRepresentation,
-    profile_name: str | None,
-) -> RustFacadeDelegate:
-    matches = tuple(
-        delegate
-        for delegate in delegates
-        if delegate.profile_name == profile_name
-        and _delegate_has_owner(delegate, shape, representation)
-    )
-    if len(matches) != 1:
-        raise ValueError(
-            f"Rust facade surface has {len(matches)} delegates for "
-            f"{shape.type_tag}x{shape.lanes} under "
-            f"{profile_name or 'fallback'}"
-        )
-    return matches[0]
-
-
-def surface_delegate_owner(
-    delegate: RustFacadeDelegate,
-    shape: RustFacadeShape,
-    representation: RustFacadeRepresentation,
+def arm_selection_cfg(
+    selection: RustFacadeArmSelection,
 ) -> str:
-    matches = tuple(
-        owner.extension_name
-        for owner in delegate.owners
-        if owner.type_tag == shape.type_tag
-        and owner.lanes == shape.lanes
-        and owner.representation_profile_name == representation.profile_name
+    cfgs = tuple(selection_cfg(item) for item in selection.representations)
+    return cfgs[0] if len(set(cfgs)) == 1 else f"all({', '.join(cfgs)})"
+
+
+def lower_call_expression(
+    call: RustFacadeLowerCall,
+    *,
+    include_result_suffix: bool = True,
+) -> str:
+    generics = (
+        f"::<{', '.join(call.generic_arguments)}>"
+        if call.generic_arguments
+        else ""
     )
-    if len(matches) != 1:
-        raise ValueError(
-            f"Rust facade delegate {delegate.primitive_name!r} has "
-            f"{len(matches)} implementation owners for "
-            f"{shape.type_tag}x{shape.lanes} under "
-            f"{representation.profile_name or 'fallback'}"
-        )
-    return matches[0]
-
-
-def _delegate_has_owner(
-    delegate: RustFacadeDelegate,
-    shape: RustFacadeShape,
-    representation: RustFacadeRepresentation,
-) -> bool:
+    result_suffix = call.result_suffix if include_result_suffix else ""
     return (
-        sum(
-            owner.type_tag == shape.type_tag
-            and owner.lanes == shape.lanes
-            and owner.representation_profile_name == representation.profile_name
-            for owner in delegate.owners
-        )
-        == 1
+        f"{call.module_spelling}::{rust_raw_identifier(call.primitive_name)}"
+        f"{generics}({', '.join(call.arguments)}){result_suffix}"
     )
-
-
-def combined_selection_cfg(
-    left: RustFacadeRepresentation,
-    right: RustFacadeRepresentation,
-) -> str:
-    left_cfg = selection_cfg(left)
-    right_cfg = selection_cfg(right)
-    if left_cfg == right_cfg:
-        return left_cfg
-    return f"all({left_cfg}, {right_cfg})"
-
-
-def representations_can_coexist(
-    left: RustFacadeRepresentation,
-    right: RustFacadeRepresentation,
-) -> bool:
-    return rust_facade_representations_can_coexist(left, right)
-
-
-def lower_module(representation: RustFacadeRepresentation) -> str:
-    if representation.profile_name is None:
-        return "crate::tsl_target_fallback"
-    return f"crate::{rust_profile_module_name(representation.profile_name)}"
 
 
 def selection_cfg(representation: RustFacadeRepresentation) -> str:
@@ -154,14 +86,11 @@ def cfg_attribute(cfg: str) -> str:
 
 
 __all__ = (
+    "arm_selection_cfg",
     "cfg_attribute",
-    "combined_selection_cfg",
     "fallback_cfg",
     "fallback_selection_cfg",
-    "lower_module",
+    "lower_call_expression",
     "native_selection_cfg",
-    "representations_can_coexist",
     "selection_cfg",
-    "surface_delegate",
-    "surface_delegate_for_profile",
 )

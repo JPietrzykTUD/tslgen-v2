@@ -237,3 +237,26 @@ def test_comprehensive_renderer_has_no_local_signature_kind_tables() -> None:
         / "rust_facade.py"
     ).read_text(encoding="utf-8")
     assert "documentation_short_label" not in curated_source
+
+
+def test_facade_renderers_do_not_import_semantic_planning_owners() -> None:
+    render_root = Path(__file__).parents[1] / "src" / "tslc" / "render"
+    sources = tuple(
+        (render_root / name).read_text(encoding="utf-8")
+        for name in (
+            "rust_facade.py",
+            "rust_facade_common.py",
+            "rust_facade_comprehensive.py",
+        )
+    )
+
+    for source in sources:
+        assert "from tslc.backend.rust_api_planner" not in source
+        assert "from tslc.catalog.arithmetic" not in source
+        assert "from tslc.catalog.scalar_types" not in source
+        assert "from tslc.catalog.semantics" not in source
+        assert "RUST_SIGNATURE_TYPES" not in source
+        assert "surface_delegate" not in source
+        assert "representations_can_coexist" not in source
+        assert "public_name ==" not in source
+        assert "public_name in " not in source

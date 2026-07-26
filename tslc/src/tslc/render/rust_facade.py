@@ -2,37 +2,35 @@
 
 from __future__ import annotations
 
+from tslc.backend.rust_api_arms import (
+    RustCuratedMethodImplementationArm,
+    RustCuratedMethodKind,
+    RustFacadeAssignmentOperatorArm,
+    RustFacadeBitConversionDirection,
+    RustFacadeBitConversionImplementationArm,
+    RustFacadeCanonicalOperatorArm,
+    RustFacadeConversionImplementationArm,
+    RustFacadeCoreImplementationArm,
+    RustFacadeEqualityImplementation,
+    RustFacadeForwardingOperatorArm,
+    RustFacadeOperatorImplementation,
+)
 from tslc.backend.rust_api_model import (
     RustCuratedMethod,
-    RustCuratedTraitImplementation,
-    RustFacadeBitConversion,
-    RustFacadeCoreDelegate,
-    RustFacadeDelegate,
-    RustFacadeInvocation,
     RustFacadePlan,
     RustFacadeRepresentation,
     RustFacadeReceiverKind,
     RustFacadeShape,
-    RustFacadeTraitRhsKind,
     RustNativeAlias,
     RustNativeAliasSelection,
 )
-from tslc.backend.rust_api_planner import RUST_FACADE_CORE_OPERATION_REQUIREMENTS
-from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
-from tslc.backend.rust_translation import rust_raw_identifier
-from tslc.catalog.arithmetic import ArithmeticOperation
-from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
-from tslc.catalog.semantics import PrimitiveOperation
 from tslc.compiler_assets import RenderAssets
 from tslc.render.rust_facade_common import (
+    arm_selection_cfg as _arm_selection_cfg,
     cfg_attribute as _cfg_attribute,
-    combined_selection_cfg as _combined_selection_cfg,
-    lower_module as _lower_module,
+    lower_call_expression as _lower_call_expression,
     native_selection_cfg as _native_selection_cfg,
-    representations_can_coexist as _representations_can_coexist,
     selection_cfg as _selection_cfg,
-    surface_delegate as _surface_delegate,
-    surface_delegate_for_profile as _surface_delegate_for_profile,
 )
 from tslc.render.rust_facade_comprehensive import render_comprehensive_facade
 
@@ -109,72 +107,38 @@ def _element_impl(
 
 
 def _facade_impls(plan: RustFacadePlan) -> str:
-    blocks: list[str] = []
-    for shape in plan.shapes:
-        for representation in shape.representations:
-            blocks.append(_facade_impl(plan, shape, representation))
-    return "\n\n".join(blocks)
-
-
-def _invocation_arguments(
-    invocation: RustFacadeInvocation,
-    public_arguments: tuple[str, ...],
-) -> tuple[str, ...]:
-    if len(public_arguments) != len(
-        invocation.public_argument_index_by_source_index
-    ):
-        raise ValueError(
-            "Rust facade renderer received an incomplete public argument inventory"
-        )
-    return tuple(
-        public_arguments[public_index]
-        for public_index in invocation.public_argument_index_by_source_index
+    return "\n\n".join(
+        _facade_impl(arm) for arm in plan.core_implementation_arms
     )
 
 
 def _facade_impl(
-    plan: RustFacadePlan,
-    shape: RustFacadeShape,
-    representation: RustFacadeRepresentation,
+    arm: RustFacadeCoreImplementationArm,
 ) -> str:
-    descriptor = representation.vector_descriptor
-    module = _lower_module(representation)
-    delegates = {
-        requirement.role: _core_delegate(plan, shape, representation, requirement.role)
-        for requirement in RUST_FACADE_CORE_OPERATION_REQUIREMENTS
-    }
+    shape = arm.shape
+    calls = {item.role: item.call for item in arm.calls}
 
-    def invoke(
-        name: str,
-        public_arguments: tuple[str, ...] = (),
-        extra_generics: tuple[str, ...] = (),
-    ) -> str:
-        delegate = delegates[name]
-        arguments = _invocation_arguments(delegate.invocation, public_arguments)
-        generics = ", ".join((descriptor, *extra_generics))
-        return (
-            f"{module}::{delegate.source_primitive_name}::<{generics}>"
-            f"({', '.join(arguments)})"
-        )
+    def invoke(name: str) -> str:
+        return _lower_call_expression(calls[name])
 
     return "\n".join(
         (
-            _cfg_attribute(_selection_cfg(representation)),
+            _cfg_attribute(_arm_selection_cfg(arm.selection)),
             f"impl private::FacadeOps<{shape.lanes}> for {shape.base_spelling} {{",
             "    #[inline]",
             "    fn vector_splat(value: Self) -> Self::Vector {",
-            f"        {invoke('vector_splat', ('value',))}",
+            f"        {invoke('vector_splat')}",
             "    }",
             "",
             "    #[inline]",
             f"    fn vector_from_array(values: [Self; {shape.lanes}]) -> Self::Vector {{",
             "        let values = crate::tsl_core::ArrayStorage::from_array(values);",
-            f"        {invoke('vector_from_array', ('&values',))}",
+            f"        {invoke('vector_from_array')}",
             "    }",
             "",
             "    #[inline]",
             f"    fn vector_to_array(value: Self::Vector) -> [Self; {shape.lanes}] {{",
-            f"        {invoke('vector_to_array', ('value',))}.into_array()",
+            f"        {invoke('vector_to_array')}.into_array()",
             "    }",
             "",
             "    #[inline]",
@@ -184,7 +148,7 @@ def _facade_impl(
             "",
             "    #[inline]",
             "    fn extract_lane(value: Self::Vector, index: usize) -> Self {",
-            f"        {invoke('extract_lane', ('value', 'index'))}",
+            f"        {invoke('extract_lane')}",
             "    }",
             "",
             "    #[inline]",
@@ -192,13 +156,13 @@ def _facade_impl(
                 "    fn insert_lane(value: Self::Vector, index: usize, "
                 "lane: Self) -> Self::Vector {"
             ),
-            f"        {invoke('insert_lane', ('value', 'index', 'lane'))}",
+            f"        {invoke('insert_lane')}",
             "    }",
             "",
             "    #[inline]",
             "    unsafe fn load(source: *const Self) -> Self::Vector {",
             "        // SAFETY: forwarded from the private facade boundary.",
-            f"        unsafe {{ {invoke('load', ('source',), ('false',))} }}",
+            f"        unsafe {{ {invoke('load')} }}",
             "    }",
             "",
             "    #[inline]",
@@ -206,7 +170,7 @@ def _facade_impl(
             "        // SAFETY: forwarded from the private facade boundary.",
             (
                 "        unsafe { "
-                f"{invoke('store', ('destination', 'value'), ('false', '_'))}"
+                f"{invoke('store')}"
                 " }"
             ),
             "    }",
@@ -223,115 +187,62 @@ def _facade_impl(
             "",
             "    #[inline]",
             "    fn mask_from_bitmask(bits: u64) -> Self::Mask {",
-            (
-                "        "
-                + invoke(
-                    "mask_from_integral",
-                    (_mask_integer_argument("bits", representation),),
-                )
-            ),
+            f"        {invoke('mask_from_bitmask')}",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_to_bitmask(value: Self::Mask) -> u64 {",
-            _mask_integer_result(
-                invoke("mask_to_integral", ("value",)),
-                representation,
-            ),
+            f"        {invoke('mask_to_bitmask')}",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_test(value: Self::Mask, index: usize) -> bool {",
-            f"        let bits = {invoke('mask_to_integral', ('value',))};",
-            f"        {invoke('integral_mask_test', ('bits', 'index'))} != 0",
+            (
+                "        let bits = "
+                f"{invoke('mask_to_integral_for_test')};"
+            ),
+            f"        {invoke('integral_mask_test')} != 0",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_set(value: Self::Mask, index: usize, active: bool) -> Self::Mask {",
-            (
-                "        "
-                + invoke(
-                    "mask_set_lane",
-                    ("value", "index", "if active { 1 } else { 0 }"),
-                )
-            ),
+            f"        {invoke('mask_set_lane')}",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_count(value: Self::Mask) -> usize {",
-            f"        {invoke('mask_population_count', ('value',))}",
+            f"        {invoke('mask_population_count')}",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_and(left: Self::Mask, right: Self::Mask) -> Self::Mask {",
-            f"        {invoke('mask_and', ('left', 'right'))}",
+            f"        {invoke('mask_and')}",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_or(left: Self::Mask, right: Self::Mask) -> Self::Mask {",
-            f"        {invoke('mask_or', ('left', 'right'))}",
+            f"        {invoke('mask_or')}",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_xor(left: Self::Mask, right: Self::Mask) -> Self::Mask {",
-            f"        {invoke('mask_xor', ('left', 'right'))}",
+            f"        {invoke('mask_xor')}",
             "    }",
             "",
             "    #[inline]",
             "    fn mask_not(value: Self::Mask) -> Self::Mask {",
-            f"        {invoke('mask_not', ('value',))}",
+            f"        {invoke('mask_not')}",
             "    }",
             "}",
         )
     )
 
 
-def _mask_integer_argument(
-    value: str,
-    representation: RustFacadeRepresentation,
-) -> str:
-    return RUST_FACADE_SIGNATURE_TYPES.adapt_lower_argument(
-        "im", value, representation.mapping
-    )
-
-
-def _mask_integer_result(
-    call: str,
-    representation: RustFacadeRepresentation,
-) -> str:
-    return (
-        "        "
-        + RUST_FACADE_SIGNATURE_TYPES.adapt_lower_result(
-            "im", call, representation.mapping
-        )
-    )
-
-
-def _core_delegate(
-    plan: RustFacadePlan,
-    shape: RustFacadeShape,
-    representation: RustFacadeRepresentation,
-    role: str,
-) -> RustFacadeCoreDelegate:
-    matches = tuple(
-        delegate
-        for delegate in plan.core_delegates
-        if delegate.role == role
-        and delegate.type_tag == shape.type_tag
-        and delegate.lanes == shape.lanes
-        and delegate.profile_name == representation.profile_name
-    )
-    if len(matches) != 1:
-        raise ValueError(
-            f"Rust facade role {role!r} has {len(matches)} finalized delegates "
-            f"for {shape.type_tag}x{shape.lanes} "
-            f"under {representation.profile_name or 'fallback'}"
-        )
-    return matches[0]
-
-
 def _conversion_methods(plan: RustFacadePlan) -> str:
-    if not any(method.public_name == "cast" for method in plan.curated_methods):
+    if not any(
+        method.kind is RustCuratedMethodKind.NUMERIC_CAST
+        for method in plan.curated_methods
+    ):
         return ""
     return "\n".join(
         (
@@ -356,135 +267,65 @@ def _conversion_methods(plan: RustFacadePlan) -> str:
 
 
 def _conversion_pair_impls(plan: RustFacadePlan) -> str:
-    method = next(
-        (item for item in plan.curated_methods if item.public_name == "cast"),
-        None,
+    return "\n\n".join(
+        _conversion_pair_impl(arm)
+        for method in plan.curated_methods
+        if method.kind is RustCuratedMethodKind.NUMERIC_CAST
+        for arm in method.conversion_implementation_arms
     )
-    if method is None:
-        return ""
-    blocks: list[str] = []
-    shapes = {(shape.type_tag, shape.lanes): shape for shape in plan.shapes}
-    for pair in method.conversion_pairs:
-        for source_key in pair.shape_keys:
-            source = shapes[source_key]
-            target = shapes.get((pair.target_type_tag, source.lanes))
-            if target is None:
-                continue
-            for source_representation in source.representations:
-                for target_representation in target.representations:
-                    if not _representations_can_coexist(
-                        source_representation, target_representation
-                    ):
-                        continue
-                    active_representation = (
-                        source_representation
-                        if source_representation.profile_name is not None
-                        else target_representation
-                    )
-                    delegate = _surface_delegate_for_profile(
-                        pair.delegates,
-                        source,
-                        source_representation,
-                        active_representation.profile_name,
-                    )
-                    source_descriptor = source_representation.vector_descriptor
-                    target_descriptor = target_representation.vector_descriptor
-                    module = _lower_module(active_representation)
-                    arguments = ", ".join(
-                        _invocation_arguments(method.invocation, ("value",))
-                    )
-                    blocks.append(
-                        "\n".join(
-                            (
-                                _cfg_attribute(
-                                    _combined_selection_cfg(
-                                        source_representation,
-                                        target_representation,
-                                    )
-                                ),
-                                (
-                                    f"impl private::ConvertTo<{target.base_spelling}, "
-                                    f"{source.lanes}> for {source.base_spelling} {{"
-                                ),
-                                "    #[inline]",
-                                (
-                                    "    fn convert(value: Self::Vector) -> "
-                                    f"<{target.base_spelling} as "
-                                    f"private::Representation<{source.lanes}>>::Vector {{"
-                                ),
-                                (
-                                    f"        {module}::"
-                                    f"{rust_raw_identifier(delegate.primitive_name)}::<"
-                                    f"{source_descriptor}, {target_descriptor}>"
-                                    f"({arguments})"
-                                ),
-                                "    }",
-                                "}",
-                            )
-                        )
-                    )
-    return "\n\n".join(blocks)
+
+
+def _conversion_pair_impl(
+    arm: RustFacadeConversionImplementationArm,
+) -> str:
+    source = arm.source_shape
+    target = arm.target_shape
+    return "\n".join(
+        (
+            _cfg_attribute(_arm_selection_cfg(arm.selection)),
+            (
+                f"impl private::ConvertTo<{target.base_spelling}, "
+                f"{source.lanes}> for {source.base_spelling} {{"
+            ),
+            "    #[inline]",
+            (
+                "    fn convert(value: Self::Vector) -> "
+                f"<{target.base_spelling} as "
+                f"private::Representation<{source.lanes}>>::Vector {{"
+            ),
+            f"        {_lower_call_expression(arm.call)}",
+            "    }",
+            "}",
+        )
+    )
 
 
 def _curated_impls(plan: RustFacadePlan) -> str:
-    blocks: list[str] = []
-    equality_shapes: set[tuple[str, int]] = set()
-    for method in plan.curated_methods:
-        if method.public_name == "cast":
-            continue
-        for shape in plan.shapes:
-            if (shape.type_tag, shape.lanes) not in method.shape_keys:
-                continue
-            if method.operation is PrimitiveOperation.COMPARE_EQUAL:
-                equality_shapes.add((shape.type_tag, shape.lanes))
-            for representation in shape.representations:
-                delegate = _surface_delegate(method.delegates, shape, representation)
-                blocks.append(_curated_method_impl(method, shape, representation, delegate))
-
-    if any(method.public_name == "simd_eq" for method in plan.curated_methods):
-        for shape in plan.shapes:
-            if (shape.type_tag, shape.lanes) not in equality_shapes:
-                continue
-            vector = f"Simd<{shape.base_spelling}, {shape.lanes}>"
-            blocks.append(
-                "\n".join(
-                    (
-                        f"impl PartialEq for {vector} {{",
-                        "    #[inline]",
-                        "    fn eq(&self, other: &Self) -> bool {",
-                        "        (*self).simd_eq(*other).all()",
-                        "    }",
-                        "}",
-                    )
-                )
-            )
-            info = SCALAR_TYPE_INFOS[shape.type_tag]
-            if not info.floating:
-                blocks.append(f"impl Eq for {vector} {{}}")
+    blocks = [
+        _curated_method_impl(method, arm)
+        for method in plan.curated_methods
+        for arm in method.implementation_arms
+    ]
+    blocks.extend(
+        block
+        for implementation in plan.equality_implementations
+        for block in _equality_impls(implementation)
+    )
     return "\n\n".join(blocks)
 
 
 def _curated_method_impl(
     method: RustCuratedMethod,
-    shape: RustFacadeShape,
-    representation: RustFacadeRepresentation,
-    delegate: RustFacadeDelegate,
+    arm: RustCuratedMethodImplementationArm,
 ) -> str:
-    cfg = _selection_cfg(representation)
-    module = _lower_module(representation)
-    descriptor = representation.vector_descriptor
+    shape = arm.shape
     vector = f"Simd<{shape.base_spelling}, {shape.lanes}>"
     mask = f"Mask<{shape.base_spelling}, {shape.lanes}>"
-    if method.receiver_kind is RustFacadeReceiverKind.MASK:
-        call_arguments = ", ".join(
-            _invocation_arguments(
-                method.invocation,
-                ("self.value", "true_values.value", "false_values.value"),
-            )
-        )
+    call = _lower_call_expression(arm.call)
+    if method.kind is RustCuratedMethodKind.SELECTION:
         return "\n".join(
             (
-                _cfg_attribute(cfg),
+                _cfg_attribute(_arm_selection_cfg(arm.selection)),
                 f"impl {mask} {{",
                 "    /// Selects `true_values` on active lanes.",
                 "    #[inline]",
@@ -494,24 +335,15 @@ def _curated_method_impl(
                     f"false_values: {vector}) -> {vector} {{"
                 ),
                 f"        Simd::<{shape.base_spelling}, {shape.lanes}> {{",
-                (
-                    f"            value: {module}::{rust_raw_identifier(delegate.primitive_name)}::<"
-                    f"{descriptor}>({call_arguments}),"
-                ),
+                f"            value: {call},",
                 "        }",
                 "    }",
                 "}",
             )
         )
-    call_arguments = ", ".join(
-        _invocation_arguments(
-            method.invocation,
-            ("self.value", "other.value"),
-        )
-    )
     return "\n".join(
         (
-            _cfg_attribute(cfg),
+            _cfg_attribute(_arm_selection_cfg(arm.selection)),
             f"impl {vector} {{",
             "    /// Compares corresponding lanes.",
             "    #[inline]",
@@ -520,111 +352,6 @@ def _curated_method_impl(
                 f"    pub fn {method.public_name}(self, other: Self) -> {mask} {{"
             ),
             f"        Mask::<{shape.base_spelling}, {shape.lanes}> {{",
-            (
-                f"            value: {module}::{rust_raw_identifier(delegate.primitive_name)}::<"
-                f"{descriptor}>({call_arguments}),"
-            ),
-            "        }",
-            "    }",
-            "}",
-        )
-    )
-
-
-def _operator_impls(plan: RustFacadePlan) -> str:
-    blocks: list[str] = []
-    for trait in plan.trait_implementations:
-        if trait.receiver_kind is not RustFacadeReceiverKind.VECTOR:
-            continue
-        for shape in plan.shapes:
-            if (shape.type_tag, shape.lanes) not in trait.shape_keys:
-                continue
-            rhs_types: tuple[str | None, ...]
-            if trait.rhs_kind is RustFacadeTraitRhsKind.SCALAR:
-                rhs_types = trait.rhs_type_spellings
-            elif trait.rhs_kind is RustFacadeTraitRhsKind.SAME_TYPE:
-                rhs_types = (f"Simd<{shape.base_spelling}, {shape.lanes}>",)
-            else:
-                rhs_types = (None,)
-            for rhs_type in rhs_types:
-                for representation in shape.representations:
-                    delegate = _surface_delegate(
-                        trait.delegates, shape, representation
-                    )
-                    blocks.append(
-                        _canonical_operator_impl(
-                            trait, shape, representation, delegate, rhs_type
-                        )
-                    )
-                blocks.append(_forwarding_operator_impls(trait, shape, rhs_type))
-    return "\n\n".join(block for block in blocks if block)
-
-
-def _canonical_operator_impl(
-    trait: RustCuratedTraitImplementation,
-    shape: RustFacadeShape,
-    representation: RustFacadeRepresentation,
-    delegate: RustFacadeDelegate,
-    rhs_type: str | None,
-) -> str:
-    vector = f"Simd<{shape.base_spelling}, {shape.lanes}>"
-    trait_use = (
-        trait.trait_path if rhs_type is None else f"{trait.trait_path}<{rhs_type}>"
-    )
-    module = _lower_module(representation)
-    descriptor = representation.vector_descriptor
-    tracking = (
-        ("    #[track_caller]",)
-        if trait.operation
-        in {ArithmeticOperation.DIVISION, ArithmeticOperation.REMAINDER}
-        else ()
-    )
-    if rhs_type is None:
-        arguments = ", ".join(
-            _invocation_arguments(trait.invocation, ("self.value",))
-        )
-        call = (
-            f"{module}::{rust_raw_identifier(delegate.primitive_name)}::<"
-            f"{descriptor}>({arguments})"
-        )
-        signature = f"    fn {trait.method_name}(self) -> Self::Output {{"
-    else:
-        extra_generic = (
-            ", _"
-            if trait.operation
-            in {
-                PrimitiveOperation.SHIFT_LEFT_WRAPPING,
-                PrimitiveOperation.SHIFT_RIGHT_WRAPPING,
-            }
-            else ""
-        )
-        rhs_value = (
-            "rhs" if trait.rhs_kind is RustFacadeTraitRhsKind.SCALAR else "rhs.value"
-        )
-        arguments = ", ".join(
-            _invocation_arguments(
-                trait.invocation,
-                ("self.value", rhs_value),
-            )
-        )
-        call = (
-            f"{module}::{rust_raw_identifier(delegate.primitive_name)}::<"
-            f"{descriptor}{extra_generic}>"
-            f"({arguments})"
-        )
-        signature = (
-            f"    fn {trait.method_name}(self, rhs: {rhs_type}) -> Self::Output {{"
-        )
-    return "\n".join(
-        (
-            _cfg_attribute(_selection_cfg(representation)),
-            f"impl {trait_use} for {vector} {{",
-            "    type Output = Self;",
-            "",
-            "    #[inline]",
-            *tracking,
-            signature,
-            "        Self {",
             f"            value: {call},",
             "        }",
             "    }",
@@ -633,112 +360,152 @@ def _canonical_operator_impl(
     )
 
 
-def _forwarding_operator_impls(
-    trait: RustCuratedTraitImplementation,
-    shape: RustFacadeShape,
-    rhs_type: str | None,
-) -> str:
+def _equality_impls(
+    implementation: RustFacadeEqualityImplementation,
+) -> tuple[str, ...]:
+    shape = implementation.shape
     vector = f"Simd<{shape.base_spelling}, {shape.lanes}>"
+    partial_eq = "\n".join(
+        (
+            f"impl PartialEq for {vector} {{",
+            "    #[inline]",
+            "    fn eq(&self, other: &Self) -> bool {",
+            (
+                f"        (*self).{implementation.method_name}"
+                "(*other).all()"
+            ),
+            "    }",
+            "}",
+        )
+    )
+    return (
+        partial_eq,
+        *((f"impl Eq for {vector} {{}}",) if implementation.implements_eq else ()),
+    )
+
+
+def _operator_impls(plan: RustFacadePlan) -> str:
+    return "\n\n".join(
+        block
+        for trait in plan.trait_implementations
+        for implementation in trait.implementations
+        for block in _operator_implementation_blocks(implementation)
+    )
+
+
+def _operator_implementation_blocks(
+    implementation: RustFacadeOperatorImplementation,
+) -> tuple[str, ...]:
+    return (
+        *(
+            _canonical_operator_impl(implementation, arm)
+            for arm in implementation.canonical_arms
+        ),
+        *(
+            _forwarding_operator_impl(implementation, arm)
+            for arm in implementation.forwarding_arms
+        ),
+        *(
+            _assignment_operator_impl(implementation, arm)
+            for arm in implementation.assignment_arms
+        ),
+    )
+
+
+def _canonical_operator_impl(
+    implementation: RustFacadeOperatorImplementation,
+    arm: RustFacadeCanonicalOperatorArm,
+) -> str:
+    value_type = _operator_value_type(implementation)
+    trait_use = (
+        implementation.trait_path
+        if implementation.rhs_type is None
+        else f"{implementation.trait_path}<{implementation.rhs_type}>"
+    )
     tracking = (
         ("    #[track_caller]",)
-        if trait.operation
-        in {ArithmeticOperation.DIVISION, ArithmeticOperation.REMAINDER}
+        if implementation.track_caller
         else ()
     )
-    if rhs_type is None:
+    if implementation.rhs_type is None:
+        signature = (
+            f"    fn {implementation.method_name}(self) -> Self::Output {{"
+        )
+    else:
+        signature = (
+            f"    fn {implementation.method_name}"
+            f"(self, rhs: {implementation.rhs_type}) -> Self::Output {{"
+        )
+    return "\n".join(
+        (
+            _cfg_attribute(_arm_selection_cfg(arm.selection)),
+            f"impl {trait_use} for {value_type} {{",
+            "    type Output = Self;",
+            "",
+            "    #[inline]",
+            *tracking,
+            signature,
+            "        Self {",
+            f"            value: {_lower_call_expression(arm.call)},",
+            "        }",
+            "    }",
+            "}",
+        )
+    )
+
+
+def _forwarding_operator_impl(
+    implementation: RustFacadeOperatorImplementation,
+    arm: RustFacadeForwardingOperatorArm,
+) -> str:
+    value_type = _operator_value_type(implementation)
+    tracking = (
+        ("    #[track_caller]",)
+        if implementation.track_caller
+        else ()
+    )
+    if arm.rhs_type is None:
         return "\n".join(
             (
-                f"impl {trait.trait_path} for &{vector} {{",
-                f"    type Output = {vector};",
+                f"impl {implementation.trait_path} for {arm.self_type} {{",
+                f"    type Output = {value_type};",
                 "",
                 "    #[inline]",
                 *tracking,
-                f"    fn {trait.method_name}(self) -> Self::Output {{",
                 (
-                    f"        <{vector} as {trait.trait_path}>::"
-                    f"{trait.method_name}(*self)"
+                    f"    fn {implementation.method_name}"
+                    "(self) -> Self::Output {"
+                ),
+                (
+                    f"        <{value_type} as "
+                    f"{implementation.trait_path}>::"
+                    f"{implementation.method_name}({arm.self_value})"
                 ),
                 "    }",
                 "}",
             )
         )
-
-    assign_trait, assign_method = _assignment_trait(trait.trait_path)
-    rhs_value = "*rhs"
-    borrowed_rhs = f"&{rhs_type}"
-    blocks = [
-        _binary_forwarding_impl(
-            trait, vector, rhs_type, f"&{vector}", rhs_value="rhs", tracking=tracking
-        ),
-        _binary_forwarding_impl(
-            trait,
-            vector,
-            borrowed_rhs,
-            vector,
-            rhs_value=rhs_value,
-            tracking=tracking,
-        ),
-        _binary_forwarding_impl(
-            trait,
-            vector,
-            borrowed_rhs,
-            f"&{vector}",
-            rhs_value=rhs_value,
-            tracking=tracking,
-        ),
-    ]
-    if assign_trait is not None and assign_method is not None:
-        blocks.extend(
-            (
-                _assignment_impl(
-                    trait,
-                    vector,
-                    rhs_type,
-                    assign_trait,
-                    assign_method,
-                    "rhs",
-                    tracking,
-                ),
-                _assignment_impl(
-                    trait,
-                    vector,
-                    borrowed_rhs,
-                    assign_trait,
-                    assign_method,
-                    rhs_value,
-                    tracking,
-                ),
-            )
-        )
-    return "\n\n".join(blocks)
-
-
-def _binary_forwarding_impl(
-    trait: RustCuratedTraitImplementation,
-    vector: str,
-    rhs_type: str,
-    self_type: str,
-    *,
-    rhs_value: str,
-    tracking: tuple[str, ...],
-) -> str:
-    owned_rhs = (
-        vector
-        if trait.rhs_kind is RustFacadeTraitRhsKind.SAME_TYPE
-        else rhs_type.removeprefix("&")
-    )
-    self_value = "*self" if self_type.startswith("&") else "self"
+    assert arm.owned_rhs_type is not None
+    assert arm.rhs_value is not None
     return "\n".join(
         (
-            f"impl {trait.trait_path}<{rhs_type}> for {self_type} {{",
-            f"    type Output = {vector};",
+            (
+                f"impl {implementation.trait_path}<{arm.rhs_type}> "
+                f"for {arm.self_type} {{"
+            ),
+            f"    type Output = {value_type};",
             "",
             "    #[inline]",
             *tracking,
-            f"    fn {trait.method_name}(self, rhs: {rhs_type}) -> Self::Output {{",
             (
-                f"        <{vector} as {trait.trait_path}<{owned_rhs}>>::"
-                f"{trait.method_name}({self_value}, {rhs_value})"
+                f"    fn {implementation.method_name}"
+                f"(self, rhs: {arm.rhs_type}) -> Self::Output {{"
+            ),
+            (
+                f"        <{value_type} as "
+                f"{implementation.trait_path}<{arm.owned_rhs_type}>>::"
+                f"{implementation.method_name}"
+                f"({arm.self_value}, {arm.rhs_value})"
             ),
             "    }",
             "}",
@@ -746,29 +513,26 @@ def _binary_forwarding_impl(
     )
 
 
-def _assignment_impl(
-    trait: RustCuratedTraitImplementation,
-    vector: str,
-    rhs_type: str,
-    assign_trait: str,
-    assign_method: str,
-    rhs_value: str,
-    tracking: tuple[str, ...],
+def _assignment_operator_impl(
+    implementation: RustFacadeOperatorImplementation,
+    arm: RustFacadeAssignmentOperatorArm,
 ) -> str:
-    owned_rhs = (
-        vector
-        if trait.rhs_kind is RustFacadeTraitRhsKind.SAME_TYPE
-        else rhs_type.removeprefix("&")
+    value_type = _operator_value_type(implementation)
+    tracking = (
+        ("    #[track_caller]",)
+        if implementation.track_caller
+        else ()
     )
     return "\n".join(
         (
-            f"impl {assign_trait}<{rhs_type}> for {vector} {{",
+            f"impl {arm.trait_path}<{arm.rhs_type}> for {value_type} {{",
             "    #[inline]",
             *tracking,
-            f"    fn {assign_method}(&mut self, rhs: {rhs_type}) {{",
+            f"    fn {arm.method_name}(&mut self, rhs: {arm.rhs_type}) {{",
             (
-                f"        *self = <{vector} as {trait.trait_path}<{owned_rhs}>>::"
-                f"{trait.method_name}(*self, {rhs_value});"
+                f"        *self = <{value_type} as "
+                f"{implementation.trait_path}<{arm.owned_rhs_type}>>::"
+                f"{implementation.method_name}(*self, {arm.rhs_value});"
             ),
             "    }",
             "}",
@@ -776,137 +540,41 @@ def _assignment_impl(
     )
 
 
-def _assignment_trait(trait_path: str) -> tuple[str | None, str | None]:
-    mapping = {
-        "core::ops::Add": ("core::ops::AddAssign", "add_assign"),
-        "core::ops::Sub": ("core::ops::SubAssign", "sub_assign"),
-        "core::ops::Mul": ("core::ops::MulAssign", "mul_assign"),
-        "core::ops::Div": ("core::ops::DivAssign", "div_assign"),
-        "core::ops::Rem": ("core::ops::RemAssign", "rem_assign"),
-        "core::ops::BitAnd": ("core::ops::BitAndAssign", "bitand_assign"),
-        "core::ops::BitOr": ("core::ops::BitOrAssign", "bitor_assign"),
-        "core::ops::BitXor": ("core::ops::BitXorAssign", "bitxor_assign"),
-        "core::ops::Shl": ("core::ops::ShlAssign", "shl_assign"),
-        "core::ops::Shr": ("core::ops::ShrAssign", "shr_assign"),
-    }
-    return mapping.get(trait_path, (None, None))
+def _operator_value_type(
+    implementation: RustFacadeOperatorImplementation,
+) -> str:
+    owner = (
+        "Simd"
+        if implementation.receiver_kind is RustFacadeReceiverKind.VECTOR
+        else "Mask"
+    )
+    shape = implementation.shape
+    return f"{owner}<{shape.base_spelling}, {shape.lanes}>"
 
 
 def _bit_conversion_impls(plan: RustFacadePlan) -> str:
-    blocks: list[str] = []
-    for conversion in plan.bit_conversions:
-        float_shapes = {
-            shape.lanes: shape
-            for shape in plan.shapes
-            if shape.type_tag == conversion.float_type_tag
-        }
-        bits_shapes = {
-            shape.lanes: shape
-            for shape in plan.shapes
-            if shape.type_tag == conversion.bits_type_tag
-        }
-        admitted_lanes = {
-            lanes
-            for type_tag, lanes in conversion.shape_keys
-            if type_tag == conversion.float_type_tag
-        }
-        for lanes in sorted(
-            float_shapes.keys() & bits_shapes.keys() & admitted_lanes
-        ):
-            float_shape = float_shapes[lanes]
-            bits_shape = bits_shapes[lanes]
-            for float_representation in float_shape.representations:
-                for bits_representation in bits_shape.representations:
-                    if not _representations_can_coexist(
-                        float_representation, bits_representation
-                    ):
-                        continue
-                    active_representation = (
-                        float_representation
-                        if float_representation.profile_name is not None
-                        else bits_representation
-                    )
-                    delegate = _surface_delegate_for_profile(
-                        conversion.to_bits.delegates,
-                        float_shape,
-                        float_representation,
-                        active_representation.profile_name,
-                    )
-                    blocks.append(
-                        _bit_method_impl(
-                            conversion,
-                            float_shape,
-                            bits_shape,
-                            float_representation,
-                            bits_representation,
-                            delegate,
-                            to_bits=True,
-                        )
-                    )
-            for bits_representation in bits_shape.representations:
-                for float_representation in float_shape.representations:
-                    if not _representations_can_coexist(
-                        bits_representation, float_representation
-                    ):
-                        continue
-                    active_representation = (
-                        bits_representation
-                        if bits_representation.profile_name is not None
-                        else float_representation
-                    )
-                    delegate = _surface_delegate_for_profile(
-                        conversion.from_bits.delegates,
-                        bits_shape,
-                        bits_representation,
-                        active_representation.profile_name,
-                    )
-                    blocks.append(
-                        _bit_method_impl(
-                            conversion,
-                            float_shape,
-                            bits_shape,
-                            bits_representation,
-                            float_representation,
-                            delegate,
-                            to_bits=False,
-                        )
-                    )
-    return "\n\n".join(blocks)
+    return "\n\n".join(
+        _bit_method_impl(arm)
+        for conversion in plan.bit_conversions
+        for arm in conversion.implementation_arms
+    )
 
 
 def _bit_method_impl(
-    conversion: RustFacadeBitConversion,
-    float_shape: RustFacadeShape,
-    bits_shape: RustFacadeShape,
-    source_representation: RustFacadeRepresentation,
-    target_representation: RustFacadeRepresentation,
-    delegate: RustFacadeDelegate,
-    *,
-    to_bits: bool,
+    arm: RustFacadeBitConversionImplementationArm,
 ) -> str:
+    float_shape = arm.float_shape
+    bits_shape = arm.bits_shape
     float_vector = f"Simd<{float_shape.base_spelling}, {float_shape.lanes}>"
     bits_vector = f"Simd<{bits_shape.base_spelling}, {bits_shape.lanes}>"
-    active_representation = (
-        source_representation
-        if source_representation.profile_name is not None
-        else target_representation
-    )
-    module = _lower_module(active_representation)
-    source_descriptor = source_representation.vector_descriptor
-    target_descriptor = target_representation.vector_descriptor
-    cfg = _combined_selection_cfg(source_representation, target_representation)
+    to_bits = arm.direction is RustFacadeBitConversionDirection.TO_BITS
     if to_bits:
         signature = f"    pub fn to_bits(self) -> {bits_vector} {{"
-        argument = "self.value"
     else:
         signature = f"    pub fn from_bits(bits: {bits_vector}) -> Self {{"
-        argument = "bits.value"
-    arguments = ", ".join(
-        _invocation_arguments(conversion.invocation, (argument,))
-    )
     return "\n".join(
         (
-            _cfg_attribute(cfg),
+            _cfg_attribute(_arm_selection_cfg(arm.conversion.selection)),
             f"impl {float_vector} {{",
             "    /// Reinterprets the same-width lane bit patterns.",
             "    #[inline]",
@@ -917,10 +585,7 @@ def _bit_method_impl(
                 if to_bits
                 else "        Self {"
             ),
-            (
-                f"            value: {module}::{rust_raw_identifier(delegate.primitive_name)}::<"
-                f"{source_descriptor}, {target_descriptor}>({arguments}),"
-            ),
+            f"            value: {_lower_call_expression(arm.conversion.call)},",
             "        }",
             "    }",
             "}",

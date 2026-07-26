@@ -17,7 +17,14 @@ def rust_profile_module_name(profile_name: str) -> str:
     return f"tsl_{identifier_slug(profile_name)}"
 
 
+def rust_lower_module_name(profile_name: str | None) -> str:
+    if profile_name is None:
+        return "crate::tsl_target_fallback"
+    return f"crate::{rust_profile_module_name(profile_name)}"
+
+
 __all__ = [
+    "rust_lower_module_name",
     "rust_primitive_tag_name",
     "rust_primitive_trait_name",
     "rust_profile_module_name",

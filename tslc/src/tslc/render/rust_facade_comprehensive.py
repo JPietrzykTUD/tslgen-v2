@@ -4,16 +4,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tslc.backend.rust_api_arms import (
+    RustComprehensivePrivateImplementationArm,
+)
 from tslc.backend.rust_api_model import (
     RustComprehensiveMethod,
-    RustFacadeDelegate,
     RustFacadeConstParameter,
     RustFacadeConstParameterSource,
     RustFacadeParameter,
     RustFacadeParameterPlacement,
     RustFacadePlan,
     RustFacadeReceiverKind,
-    RustFacadeRepresentation,
     RustFacadeShape,
 )
 from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
@@ -21,14 +22,9 @@ from tslc.backend.rust_names import rust_primitive_tag_name
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.documentation import documentation_block, render_rust_doc
 from tslc.render.rust_facade_common import (
+    arm_selection_cfg,
     cfg_attribute,
-    combined_selection_cfg,
-    lower_module,
-    representations_can_coexist,
-    selection_cfg,
-    surface_delegate,
-    surface_delegate_for_profile,
-    surface_delegate_owner,
+    lower_call_expression,
 )
 
 
@@ -48,7 +44,7 @@ def render_comprehensive_facade(
         private_impls="\n\n".join(
             block
             for method in methods
-            for block in _private_impls(plan, method)
+            for block in _private_impls(method)
         ),
         public_items="\n\n".join(
             block
@@ -110,154 +106,25 @@ def _private_trait(method: RustComprehensiveMethod) -> str:
 
 
 def _private_impls(
-    plan: RustFacadePlan,
     method: RustComprehensiveMethod,
 ) -> tuple[str, ...]:
-    blocks: list[str] = []
-    target_parameter = _target_type_parameter(method)
-    for source_shape in _method_shapes(plan, method):
-        if target_parameter is None:
-            for source_representation in source_shape.representations:
-                delegate = surface_delegate(
-                    method.delegates, source_shape, source_representation
-                )
-                blocks.extend(
-                    _private_impl_variants(
-                        method,
-                        source_shape,
-                        source_representation,
-                        delegate,
-                    )
-                )
-            continue
-        for pair in method.conversion_pairs:
-            if (
-                pair.source_type_tag != source_shape.type_tag
-                or (source_shape.type_tag, source_shape.lanes)
-                not in pair.shape_keys
-            ):
-                continue
-            target_shape = next(
-                (
-                    shape
-                    for shape in plan.shapes
-                    if shape.type_tag == pair.target_type_tag
-                    and shape.lanes == source_shape.lanes
-                ),
-                None,
-            )
-            if target_shape is None:
-                continue
-            for source_representation in source_shape.representations:
-                for target_representation in target_shape.representations:
-                    if not representations_can_coexist(
-                        source_representation, target_representation
-                    ):
-                        continue
-                    active_representation = (
-                        source_representation
-                        if source_representation.profile_name is not None
-                        else target_representation
-                    )
-                    delegate = surface_delegate_for_profile(
-                        pair.delegates,
-                        source_shape,
-                        source_representation,
-                        active_representation.profile_name,
-                    )
-                    blocks.extend(
-                        _private_impl_variants(
-                            method,
-                            source_shape,
-                            source_representation,
-                            delegate,
-                            target_shape=target_shape,
-                            target_representation=target_representation,
-                            cfg=combined_selection_cfg(
-                                source_representation, target_representation
-                            ),
-                            active_representation=active_representation,
-                        )
-                    )
-    return tuple(blocks)
-
-
-def _private_impl_variants(
-    method: RustComprehensiveMethod,
-    source_shape: RustFacadeShape,
-    source_representation: RustFacadeRepresentation,
-    delegate: RustFacadeDelegate,
-    *,
-    target_shape: RustFacadeShape | None = None,
-    target_representation: RustFacadeRepresentation | None = None,
-    cfg: str | None = None,
-    active_representation: RustFacadeRepresentation | None = None,
-) -> tuple[str, ...]:
-    identity_parameters = _identity_const_parameters(method)
-    combinations = _delegate_attribute_combinations(
-        delegate, source_shape, source_representation
-    )
-    if not identity_parameters:
-        combinations = ((),)
     return tuple(
-        _private_impl(
-            method,
-            source_shape,
-            source_representation,
-            delegate,
-            attribute_values=combination,
-            target_shape=target_shape,
-            target_representation=target_representation,
-            cfg=cfg,
-            active_representation=active_representation,
-        )
-        for combination in combinations
-        if tuple(name for name, _value in combination)
-        == tuple(parameter.source_name for parameter in identity_parameters)
+        _private_impl(method, arm)
+        for arm in method.implementation_arms
     )
-
-
-def _delegate_attribute_combinations(
-    delegate: RustFacadeDelegate,
-    shape: RustFacadeShape,
-    representation: RustFacadeRepresentation,
-) -> tuple[tuple[tuple[str, str], ...], ...]:
-    expected_extension = surface_delegate_owner(
-        delegate,
-        shape,
-        representation,
-    )
-    matches = tuple(
-        vector
-        for vector in delegate.vectors
-        if vector.extension_name == expected_extension
-        and vector.type_tag == shape.type_tag
-    )
-    if len(matches) != 1:
-        raise ValueError(
-            "Rust comprehensive delegate has no unique vector attribute inventory "
-            f"for {shape.type_tag}x{shape.lanes}"
-        )
-    return matches[0].attribute_combinations or ((),)
 
 
 def _private_impl(
     method: RustComprehensiveMethod,
-    source_shape: RustFacadeShape,
-    source_representation: RustFacadeRepresentation,
-    delegate: RustFacadeDelegate,
-    *,
-    attribute_values: tuple[tuple[str, str], ...],
-    target_shape: RustFacadeShape | None = None,
-    target_representation: RustFacadeRepresentation | None = None,
-    cfg: str | None = None,
-    active_representation: RustFacadeRepresentation | None = None,
+    arm: RustComprehensivePrivateImplementationArm,
 ) -> str:
+    source_shape = arm.source_shape
+    target_shape = arm.target_shape
     trait_name = _private_trait_name(method)
     trait_argument_parts = [
         *((target_shape.base_spelling,) if target_shape is not None else ()),
         str(source_shape.lanes),
-        *(value for _name, value in attribute_values),
+        *(value for _name, value in arm.attribute_values),
     ]
     trait_arguments = ", ".join(trait_argument_parts)
     runtime_parameters = _runtime_parameters(method)
@@ -277,28 +144,13 @@ def _private_impl(
         lanes=source_shape.lanes,
     )
     return_suffix = "" if method.result_kind == "void" else f" -> {return_type}"
-    call_representation = active_representation or source_representation
-    generic_arguments = [source_representation.vector_descriptor]
-    if target_representation is not None:
-        generic_arguments.append(target_representation.vector_descriptor)
-    generic_arguments.extend(value for _name, value in attribute_values)
-    generic_arguments.extend(
-        parameter.public_name for parameter in _method_const_parameters(method)
-    )
-    generic_arguments.extend("_" for _ in delegate.overload_parameter_positions)
-    call = (
-        f"{lower_module(call_representation)}::"
-        f"{rust_raw_identifier(delegate.primitive_name)}"
-        f"::<{', '.join(generic_arguments)}>"
-        f"({', '.join(_lower_call_arguments(method, source_representation))})"
+    call = lower_call_expression(
+        arm.call,
+        include_result_suffix=False,
     )
     if method.caller_unsafe:
         call = f"unsafe {{ {call} }}"
-    result = RUST_FACADE_SIGNATURE_TYPES.adapt_lower_result(
-        method.result_kind,
-        call,
-        source_representation.mapping,
-    )
+    result = f"{call}{arm.call.result_suffix}"
     unsafe_prefix = "unsafe " if method.caller_unsafe else ""
     body_lines = []
     if method.caller_unsafe:
@@ -308,7 +160,7 @@ def _private_impl(
     body_lines.append(f"        {result}")
     return "\n".join(
         (
-            cfg_attribute(cfg or selection_cfg(source_representation)),
+            cfg_attribute(arm_selection_cfg(arm.selection)),
             (
                 f"impl private::{trait_name}<{trait_arguments}> "
                 f"for {source_shape.base_spelling} {{"
@@ -325,14 +177,14 @@ def _private_impl(
 
 
 def _public_items(
-    plan: RustFacadePlan,
+    _plan: RustFacadePlan,
     method: RustComprehensiveMethod,
 ) -> tuple[str, ...]:
     if method.receiver_kind is RustFacadeReceiverKind.FREE:
         return (_public_free_function(method),)
     return tuple(
         _public_inherent_method(method, shape)
-        for shape in _method_shapes(plan, method)
+        for shape in method.public_shapes
     )
 
 
@@ -623,7 +475,7 @@ def _public_attributes(
         *(("    #[track_caller]",) if method.panic_conditions else ()),
         *(
             ("    #[allow(clippy::should_implement_trait)]",)
-            if method.public_name in _STANDARD_TRAIT_METHOD_NAMES
+            if method.suppress_should_implement_trait_lint
             else ()
         ),
         *(("    #[allow(private_bounds)]",) if has_private_bound else ()),
@@ -716,22 +568,6 @@ def _method_const_parameters(
     )
 
 
-def _lower_call_arguments(
-    method: RustComprehensiveMethod,
-    representation: RustFacadeRepresentation,
-) -> tuple[str, ...]:
-    return tuple(
-        RUST_FACADE_SIGNATURE_TYPES.adapt_lower_argument(
-            parameter.kind,
-            _identifier(parameter.public_name),
-            representation.mapping,
-        )
-        for parameter in sorted(
-            _runtime_parameters(method), key=lambda item: item.source_index
-        )
-    )
-
-
 def _public_call_arguments(method: RustComprehensiveMethod) -> tuple[str, ...]:
     return tuple(
         RUST_FACADE_SIGNATURE_TYPES.adapt_public_argument(
@@ -743,36 +579,6 @@ def _public_call_arguments(method: RustComprehensiveMethod) -> tuple[str, ...]:
             ),
         )
         for parameter in _runtime_parameters(method)
-    )
-
-
-_STANDARD_TRAIT_METHOD_NAMES = frozenset(
-    {
-        "add",
-        "bitand",
-        "bitor",
-        "bitxor",
-        "div",
-        "mul",
-        "neg",
-        "not",
-        "rem",
-        "shl",
-        "shr",
-        "sub",
-    }
-)
-
-
-def _method_shapes(
-    plan: RustFacadePlan,
-    method: RustComprehensiveMethod,
-) -> tuple[RustFacadeShape, ...]:
-    keys = set(method.shape_keys)
-    return tuple(
-        shape
-        for shape in plan.shapes
-        if (shape.type_tag, shape.lanes) in keys
     )
 
 

@@ -11,6 +11,14 @@ from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacadeKind,
     plan_dataparallel_primitive_facade,
 )
+from tslc.backend.rust_api_arm_planner import (
+    core_implementation_arms,
+    equality_implementations,
+    finalize_bit_conversion_implementation_arms,
+    finalize_comprehensive_implementation_arms,
+    finalize_curated_implementation_arms,
+    finalize_operator_implementations,
+)
 from tslc.backend.rust_api_model import (
     RustComprehensiveMethod,
     RustCuratedMethod,
@@ -359,6 +367,7 @@ def _plan_rust_facade(
     coverage = _finalize_comprehensive_coverage(coverage, methods)
     curated_methods = _finalize_curated_shapes(curated_methods, shapes)
     traits = _finalize_trait_shapes(traits, shapes)
+    bit_conversions = _finalize_bit_conversions(bit_conversions, shapes)
     diagnostics.extend(_method_collision_diagnostics(methods, curated_methods))
     diagnostics.extend(_trait_collision_diagnostics(traits, candidates))
     if diagnostics:
@@ -371,14 +380,28 @@ def _plan_rust_facade(
     )
     if core_diagnostics:
         return None, sort_diagnostics(core_diagnostics)
+    methods = finalize_comprehensive_implementation_arms(methods, shapes)
+    curated_methods = finalize_curated_implementation_arms(
+        curated_methods, shapes
+    )
+    bit_conversions = finalize_bit_conversion_implementation_arms(
+        bit_conversions, shapes
+    )
+    traits = finalize_operator_implementations(traits, shapes)
+    equality_arms = equality_implementations(
+        curated_methods, shapes
+    )
+    core_arms = core_implementation_arms(core_delegates, shapes)
     return (
         RustFacadePlan(
             shapes=shapes,
             operation_bindings=operation_bindings,
             core_delegates=core_delegates,
+            core_implementation_arms=core_arms,
             comprehensive_methods=tuple(sorted(methods, key=_method_sort_key)),
             curated_methods=tuple(sorted(curated_methods, key=_curated_method_sort_key)),
-            bit_conversions=_finalize_bit_conversions(bit_conversions, shapes),
+            equality_implementations=equality_arms,
+            bit_conversions=bit_conversions,
             trait_implementations=tuple(sorted(traits, key=_trait_sort_key)),
             native_aliases=_native_aliases(
                 profiles,
@@ -856,6 +879,9 @@ def _comprehensive_method(
             panic_conditions=_panic_conditions(candidate),
             bounds_checked_parameters=_bounds_checked_parameters(candidate),
             must_use=key.result_kind != "void",
+            suppress_should_implement_trait_lint=(
+                public_name in _STANDARD_TRAIT_METHOD_NAMES
+            ),
             documentation=representative.documentation,
             conversion_pairs=conversion_pairs,
             delegates=() if conversion_pairs else _delegates(candidate),
@@ -3060,6 +3086,22 @@ RUST_FACADE_CORE_OPERATION_REQUIREMENTS = (
 )
 
 _FACADE_FIXED_WIDTHS = frozenset({128, 256, 512})
+_STANDARD_TRAIT_METHOD_NAMES = frozenset(
+    {
+        "add",
+        "bitand",
+        "bitor",
+        "bitxor",
+        "div",
+        "mul",
+        "neg",
+        "not",
+        "rem",
+        "shl",
+        "shr",
+        "sub",
+    }
+)
 _MASK_OPERATIONS = frozenset(
     {
         PrimitiveOperation.MASK_AND,
@@ -3068,7 +3110,6 @@ _MASK_OPERATIONS = frozenset(
         PrimitiveOperation.MASK_NOT,
     }
 )
-
 
 __all__ = (
     "RUST_FACADE_CORE_OPERATION_REQUIREMENTS",

@@ -9,18 +9,19 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.rust_api_arm_planner import core_implementation_arms
 from tslc.backend.rust_api_model import (
     RustFacadeCoreDelegate,
     RustFacadeCoverageStatus,
     RustFacadeConstParameterSource,
     RustFacadeInvocation,
     RustFacadeParameterPlacement,
-    RustFacadePlan,
     RustFacadeRepresentation,
     RustFacadeReceiverKind,
     RustFacadeShape,
     RustFacadeTargetSelection,
     RustFacadeTraitRhsKind,
+    rust_facade_representations_can_coexist,
 )
 from tslc.backend.rust_api_planner import (
     RUST_FACADE_CORE_OPERATION_REQUIREMENTS,
@@ -78,12 +79,11 @@ from tslc.render.rust_facade import (
     _conversion_pair_impls,
     _curated_method_impl,
     _facade_impl,
+    _operator_impls,
 )
 from tslc.render.rust_facade_comprehensive import render_comprehensive_facade
 from tslc.render.rust_facade_common import (
-    representations_can_coexist,
     selection_cfg,
-    surface_delegate_owner,
 )
 from tslc.target_text import LoweredBody
 
@@ -368,8 +368,12 @@ def test_generic_fallback_excludes_exact_profile_arms_without_width_holes() -> N
     assert 'target_feature = "avx2"' in rendered
     assert 'target_feature = "avx512f"' in rendered
     assert rendered.startswith("not(any(all(")
-    assert not representations_can_coexist(fallback, avx2_representation)
-    assert representations_can_coexist(fallback, avx512_representation)
+    assert not rust_facade_representations_can_coexist(
+        fallback, avx2_representation
+    )
+    assert rust_facade_representations_can_coexist(
+        fallback, avx512_representation
+    )
 
 
 @pytest.mark.parametrize(
@@ -832,12 +836,7 @@ def test_novel_fallback_ids_survive_shape_and_delegate_planning() -> None:
         ("si32", 4): "portable_fixed_lanes",
     }
     assert {
-        surface_delegate_owner(
-            method.delegates[0],
-            shape,
-            shape.representations[0],
-        )
-        for shape in plan.shapes
+        arm.call.extension_name for arm in method.implementation_arms
     } == {"portable_lane_one", "portable_fixed_lanes"}
     rendered = render_comprehensive_facade(plan)
     assert rendered.private_impls.count("portable_operation::<") == 2
@@ -1538,6 +1537,73 @@ def test_unsupported_runtime_kind_is_excluded_during_planning() -> None:
     assert plan.coverage[0].reason == "signature kind is not facade-representable"
 
 
+def test_final_plan_rejects_missing_or_duplicate_comprehensive_arms() -> None:
+    plan = plan_rust_facade((), _plan(_spec("future_primitive")))
+    method = plan.comprehensive_methods[0]
+
+    with pytest.raises(ValueError, match="require implementation arms"):
+        replace(
+            plan,
+            comprehensive_methods=(
+                replace(method, implementation_arms=()),
+            ),
+        )
+    with pytest.raises(ValueError, match="must be unique"):
+        replace(
+            plan,
+            comprehensive_methods=(
+                replace(
+                    method,
+                    implementation_arms=(
+                        *method.implementation_arms,
+                        method.implementation_arms[0],
+                    ),
+                ),
+            ),
+        )
+    with pytest.raises(ValueError, match="owner must match"):
+        replace(
+            method.implementation_arms[0],
+            call=replace(
+                method.implementation_arms[0].call,
+                extension_name="wrong_owner",
+            ),
+        )
+
+
+def test_mask_operators_are_emitted_only_from_planned_trait_arms() -> None:
+    binary = _spec(
+        "future_mask_and",
+        result_kind="m",
+        param_names=("left", "right"),
+        param_kinds=("m", "m"),
+        operation=PrimitiveOperation.MASK_AND,
+        roles=(
+            (OperandRole.PRIMARY, 0, "m"),
+            (OperandRole.SECONDARY, 1, "m"),
+        ),
+    )
+    unary = _spec(
+        "future_mask_not",
+        result_kind="m",
+        param_names=("value",),
+        param_kinds=("m",),
+        operation=PrimitiveOperation.MASK_NOT,
+        roles=((OperandRole.PRIMARY, 0, "m"),),
+    )
+
+    plan = plan_rust_facade((), _plan(binary, unary))
+    rendered = _operator_impls(plan)
+
+    assert all(
+        implementation.receiver_kind is RustFacadeReceiverKind.MASK
+        for trait in plan.trait_implementations
+        for implementation in trait.implementations
+    )
+    assert "impl core::ops::BitAnd<Mask<i32, 4>> for Mask<i32, 4>" in rendered
+    assert "impl core::ops::Not for Mask<i32, 4>" in rendered
+
+
 def test_selection_curated_method_uses_the_control_mask_receiver() -> None:
     spec = _spec(
         "arbitrary_selection_name",
@@ -1574,12 +1640,9 @@ def test_reordered_selection_preserves_the_authored_lower_call_order() -> None:
 
     plan = plan_rust_facade((), _plan(spec))
     method = plan.curated_methods[0]
-    shape = plan.shapes[0]
     rendered = _curated_method_impl(
         method,
-        shape,
-        shape.representations[0],
-        method.delegates[0],
+        method.implementation_arms[0],
     )
 
     assert method.invocation.public_argument_index_by_source_index == (2, 0, 1)
@@ -1602,12 +1665,9 @@ def test_reordered_comparison_preserves_the_authored_lower_call_order() -> None:
 
     plan = plan_rust_facade((), _plan(spec))
     method = plan.curated_methods[0]
-    shape = plan.shapes[0]
     rendered = _curated_method_impl(
         method,
-        shape,
-        shape.representations[0],
-        method.delegates[0],
+        method.implementation_arms[0],
     )
 
     assert method.public_name == "simd_lt"
@@ -1634,13 +1694,10 @@ def test_reordered_noncommutative_operator_preserves_the_lower_call_order(
 
     plan = plan_rust_facade((), _plan(spec))
     trait = plan.trait_implementations[0]
-    shape = plan.shapes[0]
+    implementation = trait.implementations[0]
     rendered = _canonical_operator_impl(
-        trait,
-        shape,
-        shape.representations[0],
-        trait.delegates[0],
-        f"Simd<{shape.base_spelling}, {shape.lanes}>",
+        implementation,
+        implementation.canonical_arms[0],
     )
 
     assert trait.trait_path == trait_path
@@ -1684,25 +1741,16 @@ def test_core_store_and_lane_insertion_render_from_finalized_invocations() -> No
         )
         for requirement in RUST_FACADE_CORE_OPERATION_REQUIREMENTS
     )
-    plan = RustFacadePlan(
-        shapes=(shape,),
-        operation_bindings=(),
-        core_delegates=delegates,
-        comprehensive_methods=(),
-        curated_methods=(),
-        bit_conversions=(),
-        trait_implementations=(),
-        native_aliases=(),
-        operation_values=(),
-        coverage=(),
-    )
+    arm = core_implementation_arms(delegates, (shape,))[0]
 
-    rendered = _facade_impl(plan, shape, representation)
+    rendered = _facade_impl(arm)
 
     assert "test_store::<" in rendered
     assert ">(value, destination)" in rendered
     assert "test_insert_lane::<" in rendered
     assert ">(lane, value, index)" in rendered
+    with pytest.raises(ValueError, match="complete FacadeOps role inventory"):
+        replace(arm, calls=arm.calls[:-1])
 
 
 @pytest.mark.parametrize(
@@ -1989,6 +2037,81 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
         and ("si32", 4) in trait.shape_keys
         for trait in plan.trait_implementations
     )
+    assert all(
+        method.implementation_arms
+        for method in plan.comprehensive_methods
+    )
+    assert all(
+        method.implementation_arms
+        or method.conversion_implementation_arms
+        for method in plan.curated_methods
+    )
+    assert all(
+        conversion.implementation_arms
+        for conversion in plan.bit_conversions
+    )
+    assert all(
+        trait.implementations
+        and all(
+            implementation.canonical_arms
+            for implementation in trait.implementations
+        )
+        for trait in plan.trait_implementations
+    )
+    assert all(
+        call.call.delegate is not None
+        for arm in plan.core_implementation_arms
+        for call in arm.calls
+    )
+    assert all(
+        arm.call.generic_arguments[
+            -len(arm.call.delegate.overload_parameter_positions) :
+        ]
+        == ("_",) * len(arm.call.delegate.overload_parameter_positions)
+        for trait in plan.trait_implementations
+        for implementation in trait.implementations
+        for arm in implementation.canonical_arms
+        if arm.call.delegate.overload_parameter_positions
+    )
+    comparison = next(
+        method
+        for method in plan.curated_methods
+        if method.public_name == "simd_eq"
+        and any(
+            sum(
+                arm.shape == candidate.shape
+                for candidate in method.implementation_arms
+            )
+            > 1
+            for arm in method.implementation_arms
+        )
+    )
+    removed_arm = next(
+        arm
+        for arm in comparison.implementation_arms
+        if sum(
+            arm.shape == candidate.shape
+            for candidate in comparison.implementation_arms
+        )
+        > 1
+    )
+    with pytest.raises(ValueError, match="cover every representation"):
+        replace(
+            plan,
+            curated_methods=tuple(
+                replace(
+                    method,
+                    implementation_arms=tuple(
+                        arm
+                        for arm in method.implementation_arms
+                        if arm is not removed_arm
+                    ),
+                )
+                if method is comparison
+                else method
+                for method in plan.curated_methods
+            ),
+        )
     assert {
         delegate.role
         for delegate in plan.core_delegates
@@ -2036,6 +2159,7 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
     assert "pub fn convert_lanes<U>(self)" in facade
     assert "pub unsafe fn store<T, const N: usize, const ALIGNED: bool>" in facade
     assert "load_masked, load_masked_zero" in library
+    assert "macro_rules! impl_mask_binary_operator" not in facade
 
 
 def test_scalar_only_native_aliases_use_the_scalar_lane(
@@ -2118,6 +2242,18 @@ def test_facade_owner_equivalence_and_wrapper_audit(
         assert all(delegate.primitive_name in lowered_names for delegate in method.delegates)
         assert f"fn {method.public_name}" in rendered.public_items
 
+    assert rendered.private_impls.count("fn call") == sum(
+        len(method.implementation_arms)
+        for method in plan.comprehensive_methods
+    )
+    assert rendered.public_items.count("pub fn ") + rendered.public_items.count(
+        "pub unsafe fn "
+    ) == sum(
+        1
+        if method.receiver_kind is RustFacadeReceiverKind.FREE
+        else len(method.public_shapes)
+        for method in plan.comprehensive_methods
+    )
     delegate_lines = tuple(
         line
         for line in rendered.private_impls.splitlines()

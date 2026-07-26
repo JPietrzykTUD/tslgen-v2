@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from tslc.backend.rust_names import rust_profile_module_name
 from tslc.backend.rust_static_selection import (
@@ -15,6 +16,18 @@ from tslc.catalog.memory import MemoryAccess, MemoryAddressing, MemoryAlignment
 from tslc.catalog.model import VectorBitsKind
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.documentation import PrimitiveDocumentation
+
+if TYPE_CHECKING:
+    from tslc.backend.rust_api_arms import (
+        RustComprehensivePrivateImplementationArm,
+        RustCuratedMethodImplementationArm,
+        RustCuratedMethodKind,
+        RustFacadeBitConversionImplementationArm,
+        RustFacadeConversionImplementationArm,
+        RustFacadeCoreImplementationArm,
+        RustFacadeEqualityImplementation,
+        RustFacadeOperatorImplementation,
+    )
 
 
 class RustFacadeReceiverKind(StrEnum):
@@ -369,6 +382,53 @@ class RustFacadeConversionPair:
             raise ValueError("Rust facade conversion pair shapes must be unique")
 
 
+_ConversionRepresentationKey = tuple[
+    str,
+    int,
+    str | None,
+    str,
+    str | None,
+]
+
+
+def _expected_conversion_representation_keys(
+    pair: RustFacadeConversionPair,
+    shapes: dict[tuple[str, int], RustFacadeShape],
+) -> frozenset[_ConversionRepresentationKey]:
+    return frozenset(
+        (
+            source_shape.type_tag,
+            source_shape.lanes,
+            source_representation.profile_name,
+            target_shape.type_tag,
+            target_representation.profile_name,
+        )
+        for source_key in pair.shape_keys
+        for source_shape in (shapes[source_key],)
+        for target_shape in (
+            shapes[(pair.target_type_tag, source_shape.lanes)],
+        )
+        for source_representation in source_shape.representations
+        for target_representation in target_shape.representations
+        if rust_facade_representations_can_coexist(
+            source_representation,
+            target_representation,
+        )
+    )
+
+
+def _conversion_arm_representation_key(
+    arm: RustFacadeConversionImplementationArm,
+) -> _ConversionRepresentationKey:
+    return (
+        arm.source_shape.type_tag,
+        arm.source_shape.lanes,
+        arm.source_representation.profile_name,
+        arm.target_shape.type_tag,
+        arm.target_representation.profile_name,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class RustFacadeOperationBinding:
     """One source-owned semantic operation available to facade planning."""
@@ -513,9 +573,14 @@ class RustComprehensiveMethod:
     panic_conditions: tuple[str, ...]
     bounds_checked_parameters: tuple[str, ...]
     must_use: bool
+    suppress_should_implement_trait_lint: bool
     documentation: PrimitiveDocumentation
     conversion_pairs: tuple[RustFacadeConversionPair, ...]
     delegates: tuple[RustFacadeDelegate, ...]
+    public_shapes: tuple[RustFacadeShape, ...] = ()
+    implementation_arms: tuple[
+        RustComprehensivePrivateImplementationArm, ...
+    ] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -530,6 +595,11 @@ class RustCuratedMethod:
     invocation: RustFacadeInvocation
     conversion_pairs: tuple[RustFacadeConversionPair, ...]
     delegates: tuple[RustFacadeDelegate, ...]
+    kind: RustCuratedMethodKind | None = None
+    implementation_arms: tuple[RustCuratedMethodImplementationArm, ...] = ()
+    conversion_implementation_arms: tuple[
+        RustFacadeConversionImplementationArm, ...
+    ] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -541,6 +611,9 @@ class RustFacadeBitConversion:
     invocation: RustFacadeInvocation
     to_bits: RustFacadeConversionPair
     from_bits: RustFacadeConversionPair
+    implementation_arms: tuple[
+        RustFacadeBitConversionImplementationArm, ...
+    ] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -557,6 +630,7 @@ class RustCuratedTraitImplementation:
     shape_keys: tuple[tuple[str, int], ...]
     invocation: RustFacadeInvocation
     delegates: tuple[RustFacadeDelegate, ...]
+    implementations: tuple[RustFacadeOperatorImplementation, ...] = ()
 
     def __post_init__(self) -> None:
         if len(self.rhs_type_spellings) != len(
@@ -629,8 +703,10 @@ class RustFacadePlan:
     shapes: tuple[RustFacadeShape, ...]
     operation_bindings: tuple[RustFacadeOperationBinding, ...]
     core_delegates: tuple[RustFacadeCoreDelegate, ...]
+    core_implementation_arms: tuple[RustFacadeCoreImplementationArm, ...]
     comprehensive_methods: tuple[RustComprehensiveMethod, ...]
     curated_methods: tuple[RustCuratedMethod, ...]
+    equality_implementations: tuple[RustFacadeEqualityImplementation, ...]
     bit_conversions: tuple[RustFacadeBitConversion, ...]
     trait_implementations: tuple[RustCuratedTraitImplementation, ...]
     native_aliases: tuple[RustNativeAlias, ...]
@@ -638,6 +714,11 @@ class RustFacadePlan:
     coverage: tuple[RustFacadeCoverageEntry, ...]
 
     def __post_init__(self) -> None:
+        from tslc.backend.rust_api_arms import (
+            RustCuratedMethodKind,
+            RustFacadeBitConversionDirection,
+        )
+
         method_keys = tuple(
             (item.receiver_kind, item.public_name)
             for item in self.comprehensive_methods
@@ -650,6 +731,382 @@ class RustFacadePlan:
         if len(set(shape_keys)) != len(shape_keys):
             raise ValueError("Rust facade logical shapes must be unique")
         shape_key_set = set(shape_keys)
+        shapes_by_key = {
+            (shape.type_tag, shape.lanes): shape for shape in self.shapes
+        }
+        for comprehensive_method in self.comprehensive_methods:
+            expected_public_shapes = (
+                ()
+                if comprehensive_method.receiver_kind
+                is RustFacadeReceiverKind.FREE
+                else tuple(
+                    shape
+                    for shape in self.shapes
+                    if (shape.type_tag, shape.lanes)
+                    in comprehensive_method.shape_keys
+                )
+            )
+            if comprehensive_method.public_shapes != expected_public_shapes:
+                raise ValueError(
+                    "Final Rust comprehensive methods require exact public shapes"
+                )
+            if not comprehensive_method.implementation_arms:
+                raise ValueError(
+                    "Final Rust comprehensive methods require implementation arms"
+                )
+            if len(set(comprehensive_method.implementation_arms)) != len(
+                comprehensive_method.implementation_arms
+            ):
+                raise ValueError(
+                    "Rust comprehensive implementation arms must be unique"
+                )
+            if {
+                (arm.source_shape.type_tag, arm.source_shape.lanes)
+                for arm in comprehensive_method.implementation_arms
+            } != set(comprehensive_method.shape_keys):
+                raise ValueError(
+                    "Rust comprehensive implementation arms must cover every shape"
+                )
+            if comprehensive_method.type_parameters:
+                expected_conversion_arms = frozenset(
+                    key
+                    for pair in comprehensive_method.conversion_pairs
+                    for key in _expected_conversion_representation_keys(
+                        pair,
+                        shapes_by_key,
+                    )
+                )
+                actual_conversion_arms = frozenset(
+                    (
+                        arm.source_shape.type_tag,
+                        arm.source_shape.lanes,
+                        arm.source_representation.profile_name,
+                        arm.target_shape.type_tag,
+                        arm.target_representation.profile_name,
+                    )
+                    for arm in comprehensive_method.implementation_arms
+                    if arm.target_shape is not None
+                    and arm.target_representation is not None
+                )
+                if actual_conversion_arms != expected_conversion_arms:
+                    raise ValueError(
+                        "Rust comprehensive conversion arms must cover every "
+                        "compatible representation pair"
+                    )
+            else:
+                expected_representations = {
+                    (
+                        shape.type_tag,
+                        shape.lanes,
+                        representation.profile_name,
+                    )
+                    for shape_key in comprehensive_method.shape_keys
+                    for shape in (shapes_by_key[shape_key],)
+                    for representation in shape.representations
+                }
+                actual_representations = {
+                    (
+                        arm.source_shape.type_tag,
+                        arm.source_shape.lanes,
+                        arm.source_representation.profile_name,
+                    )
+                    for arm in comprehensive_method.implementation_arms
+                }
+                if actual_representations != expected_representations:
+                    raise ValueError(
+                        "Rust comprehensive implementation arms must cover "
+                        "every representation"
+                    )
+            runtime_parameter_count = sum(
+                parameter.placement
+                is not RustFacadeParameterPlacement.CONST_GENERIC
+                for parameter in comprehensive_method.parameters
+            )
+            if any(
+                len(arm.call.arguments) != runtime_parameter_count
+                for arm in comprehensive_method.implementation_arms
+            ):
+                raise ValueError(
+                    "Rust comprehensive lower-call arguments must match the "
+                    "runtime signature"
+                )
+        for curated_method in self.curated_methods:
+            if curated_method.kind is None:
+                raise ValueError(
+                    "Final Rust curated methods require a typed item kind"
+                )
+            is_numeric = (
+                curated_method.kind is RustCuratedMethodKind.NUMERIC_CAST
+            )
+            if is_numeric != bool(
+                curated_method.conversion_implementation_arms
+            ):
+                raise ValueError(
+                    "Rust numeric curated methods require conversion arms only"
+                )
+            if is_numeric and curated_method.implementation_arms:
+                raise ValueError(
+                    "Rust numeric curated methods cannot have ordinary method arms"
+                )
+            if not is_numeric and not curated_method.implementation_arms:
+                raise ValueError(
+                    "Final Rust curated methods require implementation arms"
+                )
+            active_arms = (
+                curated_method.conversion_implementation_arms
+                if is_numeric
+                else curated_method.implementation_arms
+            )
+            if len(set(active_arms)) != len(active_arms):
+                raise ValueError(
+                    "Rust curated implementation arms must be unique"
+                )
+            active_shape_keys = (
+                {
+                    (
+                        arm.source_shape.type_tag,
+                        arm.source_shape.lanes,
+                    )
+                    for arm in curated_method.conversion_implementation_arms
+                }
+                if is_numeric
+                else {
+                    (arm.shape.type_tag, arm.shape.lanes)
+                    for arm in curated_method.implementation_arms
+                }
+            )
+            if active_shape_keys != set(curated_method.shape_keys):
+                raise ValueError(
+                    "Rust curated implementation arms must cover every shape"
+                )
+            if is_numeric:
+                expected_curated_arms = frozenset(
+                    key
+                    for pair in curated_method.conversion_pairs
+                    for key in _expected_conversion_representation_keys(
+                        pair,
+                        shapes_by_key,
+                    )
+                )
+                actual_curated_arms = frozenset(
+                    _conversion_arm_representation_key(arm)
+                    for arm in curated_method.conversion_implementation_arms
+                )
+                if actual_curated_arms != expected_curated_arms:
+                    raise ValueError(
+                        "Rust curated conversion arms must cover every "
+                        "compatible representation pair"
+                    )
+            else:
+                expected_curated_representations = {
+                    (
+                        shape.type_tag,
+                        shape.lanes,
+                        representation.profile_name,
+                    )
+                    for shape_key in curated_method.shape_keys
+                    for shape in (shapes_by_key[shape_key],)
+                    for representation in shape.representations
+                }
+                actual_curated_representations = {
+                    (
+                        arm.shape.type_tag,
+                        arm.shape.lanes,
+                        arm.representation.profile_name,
+                    )
+                    for arm in curated_method.implementation_arms
+                }
+                if (
+                    actual_curated_representations
+                    != expected_curated_representations
+                ):
+                    raise ValueError(
+                        "Rust curated implementation arms must cover every "
+                        "representation"
+                    )
+            if any(
+                len(arm.call.arguments)
+                != len(
+                    curated_method.invocation.public_argument_index_by_source_index
+                )
+                for arm in active_arms
+            ):
+                raise ValueError(
+                    "Rust curated lower-call arguments must match its invocation"
+                )
+        for conversion in self.bit_conversions:
+            if not conversion.implementation_arms:
+                raise ValueError(
+                    "Final Rust bit conversions require implementation arms"
+                )
+            if len(set(conversion.implementation_arms)) != len(
+                conversion.implementation_arms
+            ):
+                raise ValueError(
+                    "Rust bit-conversion implementation arms must be unique"
+                )
+            if any(
+                len(arm.conversion.call.arguments)
+                != len(
+                    conversion.invocation.public_argument_index_by_source_index
+                )
+                for arm in conversion.implementation_arms
+            ):
+                raise ValueError(
+                    "Rust bit-conversion lower-call arguments must match "
+                    "its invocation"
+                )
+            expected_bit_arms = {
+                (
+                    RustFacadeBitConversionDirection.TO_BITS,
+                    key,
+                )
+                for key in _expected_conversion_representation_keys(
+                    conversion.to_bits,
+                    shapes_by_key,
+                )
+            } | {
+                (
+                    RustFacadeBitConversionDirection.FROM_BITS,
+                    key,
+                )
+                for key in _expected_conversion_representation_keys(
+                    conversion.from_bits,
+                    shapes_by_key,
+                )
+            }
+            actual_bit_arms = {
+                (
+                    arm.direction,
+                    _conversion_arm_representation_key(arm.conversion),
+                )
+                for arm in conversion.implementation_arms
+            }
+            if actual_bit_arms != expected_bit_arms:
+                raise ValueError(
+                    "Rust bit-conversion arms must cover every compatible "
+                    "representation pair in both directions"
+                )
+        for trait in self.trait_implementations:
+            if not trait.implementations:
+                raise ValueError(
+                    "Final Rust facade traits require operator implementations"
+                )
+            if len(set(trait.implementations)) != len(
+                trait.implementations
+            ):
+                raise ValueError(
+                    "Rust operator implementations must be unique"
+                )
+            if {
+                (
+                    implementation.shape.type_tag,
+                    implementation.shape.lanes,
+                )
+                for implementation in trait.implementations
+            } != set(trait.shape_keys):
+                raise ValueError(
+                    "Rust operator implementations must cover every trait shape"
+                )
+            expected_operator_keys = {
+                (
+                    shape.type_tag,
+                    shape.lanes,
+                    rhs_type,
+                )
+                for shape_key in trait.shape_keys
+                for shape in (shapes_by_key[shape_key],)
+                for rhs_type in (
+                    trait.rhs_type_spellings
+                    if trait.rhs_kind is RustFacadeTraitRhsKind.SCALAR
+                    else (
+                        (
+                            "Simd"
+                            if trait.receiver_kind
+                            is RustFacadeReceiverKind.VECTOR
+                            else "Mask"
+                        )
+                        + f"<{shape.base_spelling}, {shape.lanes}>",
+                    )
+                    if trait.rhs_kind is RustFacadeTraitRhsKind.SAME_TYPE
+                    else (None,)
+                )
+            }
+            actual_operator_keys = {
+                (
+                    implementation.shape.type_tag,
+                    implementation.shape.lanes,
+                    implementation.rhs_type,
+                )
+                for implementation in trait.implementations
+            }
+            if actual_operator_keys != expected_operator_keys:
+                raise ValueError(
+                    "Rust operator implementations must cover every finalized "
+                    "shape and RHS spelling"
+                )
+            if any(
+                len(arm.call.arguments)
+                != len(
+                    trait.invocation.public_argument_index_by_source_index
+                )
+                for implementation in trait.implementations
+                for arm in implementation.canonical_arms
+            ):
+                raise ValueError(
+                    "Rust operator lower-call arguments must match its invocation"
+                )
+        core_arm_keys = tuple(
+            (
+                arm.shape.type_tag,
+                arm.shape.lanes,
+                arm.representation.profile_name,
+            )
+            for arm in self.core_implementation_arms
+        )
+        if len(set(core_arm_keys)) != len(core_arm_keys):
+            raise ValueError(
+                "Rust facade core implementation arms must be unique"
+            )
+        equality_keys = tuple(
+            (
+                implementation.shape.type_tag,
+                implementation.shape.lanes,
+            )
+            for implementation in self.equality_implementations
+        )
+        if len(set(equality_keys)) != len(equality_keys):
+            raise ValueError(
+                "Rust facade equality implementations must be unique"
+            )
+        if any(key not in shape_key_set for key in equality_keys):
+            raise ValueError(
+                "Rust facade equality implementations require admitted shapes"
+            )
+        expected_equality = {
+            (
+                shape_key,
+                method.public_name,
+            )
+            for method in self.curated_methods
+            if method.operation is PrimitiveOperation.COMPARE_EQUAL
+            for shape_key in method.shape_keys
+        }
+        actual_equality = {
+            (
+                (
+                    implementation.shape.type_tag,
+                    implementation.shape.lanes,
+                ),
+                implementation.method_name,
+            )
+            for implementation in self.equality_implementations
+        }
+        if actual_equality != expected_equality:
+            raise ValueError(
+                "Rust facade equality implementations must cover every "
+                "planned equality shape"
+            )
         method_pair_keys = tuple(
             tuple(
                 (pair.source_type_tag, pair.target_type_tag)

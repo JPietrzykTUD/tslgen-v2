@@ -200,16 +200,19 @@ class RustFacadeSignatureTypes:
         call: str,
         mapping: RustStaticVectorMapping,
     ) -> str:
+        return f"{call}{self.lower_result_suffix(kind, mapping)}"
+
+    def lower_result_suffix(
+        self,
+        kind: str,
+        mapping: RustStaticVectorMapping,
+    ) -> str:
         adaptation = self.policy(kind).lower_result
         if adaptation is RustFacadeBoundaryAdaptation.WIDEN_INTEGRAL_MASK:
             self.validate_integral_mask_mapping(mapping)
-            return (
-                call
-                if mapping.imask_spelling == "u64"
-                else f"{call} as u64"
-            )
+            return "" if mapping.imask_spelling == "u64" else " as u64"
         if adaptation is RustFacadeBoundaryAdaptation.IDENTITY:
-            return call
+            return ""
         raise ValueError(
             f"Rust facade lower result cannot apply {adaptation.value}"
         )
