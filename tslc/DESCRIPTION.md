@@ -428,8 +428,12 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   with an asset-consistency test preventing drift.
 
 The ordinary Rust API is finalized before source rendering by the frozen records
-in [backend/rust_api_model.py](src/tslc/backend/rust_api_model.py) and the focused
-planner in [backend/rust_api_planner.py](src/tslc/backend/rust_api_planner.py).
+in [backend/rust_api_model.py](src/tslc/backend/rust_api_model.py) and focused
+candidate, comprehensive, curated, and surface planners under `backend/rust_api_*`.
+The public
+[backend/rust_api_planner.py](src/tslc/backend/rust_api_planner.py)
+orchestrates those projections directly and preserves the compiler-facing
+planning and validation API.
 That projection combines lowered language-neutral operation, operand-role,
 overload, conversion, and safety contracts with static fixed-shape selection.
 It owns Rust receiver placement, const/type-parameter spelling, method suffixes,
