@@ -13,6 +13,7 @@ from tslc.backend.rust_api_arms import (
     RustFacadeCoreImplementationArm,
     RustFacadeEqualityImplementation,
     RustFacadeForwardingOperatorArm,
+    RustFacadeGenericMaskOperatorImplementation,
     RustFacadeOperatorImplementation,
 )
 from tslc.backend.rust_api_model import (
@@ -385,11 +386,167 @@ def _equality_impls(
 
 
 def _operator_impls(plan: RustFacadePlan) -> str:
-    return "\n\n".join(
+    blocks = [
+        block
+        for trait in plan.trait_implementations
+        if trait.generic_mask_implementation is not None
+        for block in _generic_mask_operator_blocks(
+            trait.generic_mask_implementation
+        )
+    ]
+    blocks.extend(
         block
         for trait in plan.trait_implementations
         for implementation in trait.implementations
         for block in _operator_implementation_blocks(implementation)
+    )
+    return "\n\n".join(blocks)
+
+
+def _generic_mask_operator_blocks(
+    implementation: RustFacadeGenericMaskOperatorImplementation,
+) -> tuple[str, ...]:
+    return (
+        _generic_mask_canonical_operator(implementation),
+        *(
+            _generic_mask_forwarding_operator(implementation, arm)
+            for arm in implementation.forwarding_arms
+        ),
+        *(
+            _generic_mask_assignment_operator(implementation, arm)
+            for arm in implementation.assignment_arms
+        ),
+    )
+
+
+def _generic_mask_canonical_operator(
+    implementation: RustFacadeGenericMaskOperatorImplementation,
+) -> str:
+    value_type = "Mask<T, N>"
+    trait_use = (
+        implementation.trait_path
+        if implementation.rhs_type is None
+        else f"{implementation.trait_path}<{implementation.rhs_type}>"
+    )
+    if implementation.rhs_type is None:
+        signature = (
+            f"    fn {implementation.method_name}(self) -> Self::Output {{"
+        )
+        arguments = "self.value"
+    else:
+        signature = (
+            f"    fn {implementation.method_name}"
+            f"(self, rhs: {implementation.rhs_type}) -> Self::Output {{"
+        )
+        arguments = "self.value, rhs.value"
+    return "\n".join(
+        (
+            f"impl<T, const N: usize> {trait_use} for {value_type}",
+            "where",
+            "    T: SupportedSimd<N>,",
+            "{",
+            "    type Output = Self;",
+            "",
+            "    #[inline]",
+            signature,
+            "        Self {",
+            (
+                "            value: <T as private::FacadeOps<N>>::"
+                f"{implementation.facade_method_name}({arguments}),"
+            ),
+            "        }",
+            "    }",
+            "}",
+        )
+    )
+
+
+def _generic_mask_forwarding_operator(
+    implementation: RustFacadeGenericMaskOperatorImplementation,
+    arm: RustFacadeForwardingOperatorArm,
+) -> str:
+    value_type = "Mask<T, N>"
+    if arm.rhs_type is None:
+        return "\n".join(
+            (
+                (
+                    f"impl<T, const N: usize> {implementation.trait_path} "
+                    f"for {arm.self_type}"
+                ),
+                "where",
+                "    T: SupportedSimd<N>,",
+                "{",
+                f"    type Output = {value_type};",
+                "",
+                "    #[inline]",
+                (
+                    f"    fn {implementation.method_name}"
+                    "(self) -> Self::Output {"
+                ),
+                (
+                    f"        <{value_type} as "
+                    f"{implementation.trait_path}>::"
+                    f"{implementation.method_name}({arm.self_value})"
+                ),
+                "    }",
+                "}",
+            )
+        )
+    assert arm.owned_rhs_type is not None
+    assert arm.rhs_value is not None
+    return "\n".join(
+        (
+            (
+                f"impl<T, const N: usize> "
+                f"{implementation.trait_path}<{arm.rhs_type}> "
+                f"for {arm.self_type}"
+            ),
+            "where",
+            "    T: SupportedSimd<N>,",
+            "{",
+            f"    type Output = {value_type};",
+            "",
+            "    #[inline]",
+            (
+                f"    fn {implementation.method_name}"
+                f"(self, rhs: {arm.rhs_type}) -> Self::Output {{"
+            ),
+            (
+                f"        <{value_type} as "
+                f"{implementation.trait_path}<{arm.owned_rhs_type}>>::"
+                f"{implementation.method_name}"
+                f"({arm.self_value}, {arm.rhs_value})"
+            ),
+            "    }",
+            "}",
+        )
+    )
+
+
+def _generic_mask_assignment_operator(
+    implementation: RustFacadeGenericMaskOperatorImplementation,
+    arm: RustFacadeAssignmentOperatorArm,
+) -> str:
+    value_type = "Mask<T, N>"
+    return "\n".join(
+        (
+            (
+                f"impl<T, const N: usize> "
+                f"{arm.trait_path}<{arm.rhs_type}> for {value_type}"
+            ),
+            "where",
+            "    T: SupportedSimd<N>,",
+            "{",
+            "    #[inline]",
+            f"    fn {arm.method_name}(&mut self, rhs: {arm.rhs_type}) {{",
+            (
+                f"        *self = <{value_type} as "
+                f"{implementation.trait_path}<{arm.owned_rhs_type}>>::"
+                f"{implementation.method_name}(*self, {arm.rhs_value});"
+            ),
+            "    }",
+            "}",
+        )
     )
 
 

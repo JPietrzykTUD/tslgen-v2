@@ -11,6 +11,16 @@ import textwrap
 from tslc.api import generate_project
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+_RUST_FACADE_PROBE_PRIMITIVES = (
+    "add",
+    "less_than",
+    "select",
+    "convert_lanes",
+    "reinterpret",
+    "load",
+    "store",
+    "insert_value_at",
+)
 
 # One small-scope generation dumped as the full snapshot-semantics document
 # (diagnostics, coverage, skipped, verification, value tests, benchmarks) plus
@@ -33,7 +43,7 @@ _HASH_SEED_PROBE = textwrap.dedent(
         machine_profiles_path=(
             repo_root / "supplementary" / "buildsystem" / "machine_profiles.json"
         ),
-        primitives=["add", "hadd"],
+        primitives=__RUST_FACADE_PROBE_PRIMITIVES__,
         profiles=["scalar", "avx2"],
         backends=["cpp", "rust"],
     )
@@ -45,6 +55,9 @@ _HASH_SEED_PROBE = textwrap.dedent(
         json.dumps(document, indent=1, sort_keys=True).encode("utf-8")
     )
     """
+).replace(
+    "__RUST_FACADE_PROBE_PRIMITIVES__",
+    repr(list(_RUST_FACADE_PROBE_PRIMITIVES)),
 )
 
 
@@ -52,7 +65,7 @@ def _run(data_root: Path, machine_profiles_path: Path):
     return generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["add", "hadd"],
+        primitives=list(_RUST_FACADE_PROBE_PRIMITIVES),
         profiles=["scalar", "sse2", "avx", "avx2"],
     )
 

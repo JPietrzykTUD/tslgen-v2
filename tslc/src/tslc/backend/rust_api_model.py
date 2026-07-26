@@ -26,6 +26,7 @@ if TYPE_CHECKING:
         RustFacadeConversionImplementationArm,
         RustFacadeCoreImplementationArm,
         RustFacadeEqualityImplementation,
+        RustFacadeGenericMaskOperatorImplementation,
         RustFacadeOperatorImplementation,
     )
 
@@ -631,6 +632,9 @@ class RustCuratedTraitImplementation:
     invocation: RustFacadeInvocation
     delegates: tuple[RustFacadeDelegate, ...]
     implementations: tuple[RustFacadeOperatorImplementation, ...] = ()
+    generic_mask_implementation: (
+        RustFacadeGenericMaskOperatorImplementation | None
+    ) = None
 
     def __post_init__(self) -> None:
         if len(self.rhs_type_spellings) != len(
@@ -988,9 +992,41 @@ class RustFacadePlan:
                     "representation pair in both directions"
                 )
         for trait in self.trait_implementations:
-            if not trait.implementations:
+            is_generic_mask = (
+                trait.receiver_kind is RustFacadeReceiverKind.MASK
+            )
+            if is_generic_mask != (
+                trait.generic_mask_implementation is not None
+            ):
                 raise ValueError(
-                    "Final Rust facade traits require operator implementations"
+                    "Final Rust mask traits require one generic implementation"
+                )
+            if is_generic_mask and trait.implementations:
+                raise ValueError(
+                    "Final Rust mask traits cannot have concrete implementations"
+                )
+            if (
+                is_generic_mask
+                and trait.generic_mask_implementation is not None
+                and (
+                    trait.generic_mask_implementation.trait_path
+                    != trait.trait_path
+                    or trait.generic_mask_implementation.method_name
+                    != trait.method_name
+                    or trait.generic_mask_implementation.operation
+                    != trait.operation
+                    or (
+                        trait.generic_mask_implementation.rhs_type is None
+                    )
+                    != (trait.rhs_kind is None)
+                )
+            ):
+                raise ValueError(
+                    "Rust generic mask implementation must match its trait"
+                )
+            if not is_generic_mask and not trait.implementations:
+                raise ValueError(
+                    "Final Rust vector traits require operator implementations"
                 )
             if len(set(trait.implementations)) != len(
                 trait.implementations
@@ -998,7 +1034,7 @@ class RustFacadePlan:
                 raise ValueError(
                     "Rust operator implementations must be unique"
                 )
-            if {
+            if not is_generic_mask and {
                 (
                     implementation.shape.type_tag,
                     implementation.shape.lanes,
@@ -1040,7 +1076,10 @@ class RustFacadePlan:
                 )
                 for implementation in trait.implementations
             }
-            if actual_operator_keys != expected_operator_keys:
+            if (
+                not is_generic_mask
+                and actual_operator_keys != expected_operator_keys
+            ):
                 raise ValueError(
                     "Rust operator implementations must cover every finalized "
                     "shape and RHS spelling"

@@ -196,10 +196,17 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
         for conversion in plan.bit_conversions
     )
     assert all(
-        trait.implementations
-        and all(
-            implementation.canonical_arms
-            for implementation in trait.implementations
+        (
+            trait.generic_mask_implementation is not None
+            and not trait.implementations
+        )
+        if trait.receiver_kind is RustFacadeReceiverKind.MASK
+        else (
+            bool(trait.implementations)
+            and all(
+                implementation.canonical_arms
+                for implementation in trait.implementations
+            )
         )
         for trait in plan.trait_implementations
     )

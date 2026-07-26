@@ -14,6 +14,7 @@ from tslc.backend.rust_api_model import (
     rust_facade_representations_can_coexist,
 )
 from tslc.backend.rust_names import rust_lower_module_name
+from tslc.catalog.semantics import PrimitiveOperation
 
 RUST_FACADE_CORE_CALL_ROLES = (
     "vector_splat",
@@ -367,6 +368,57 @@ class RustFacadeOperatorImplementation:
             raise ValueError("Rust unary operators cannot have assignment arms")
 
 
+@dataclass(frozen=True, slots=True)
+class RustFacadeGenericMaskOperatorImplementation:
+    trait_path: str
+    method_name: str
+    operation: PrimitiveOperation
+    rhs_type: str | None
+    forwarding_arms: tuple[RustFacadeForwardingOperatorArm, ...]
+    assignment_arms: tuple[RustFacadeAssignmentOperatorArm, ...]
+
+    def __post_init__(self) -> None:
+        if not all(
+            (
+                self.trait_path,
+                self.method_name,
+                self.forwarding_arms,
+            )
+        ):
+            raise ValueError(
+                "Rust generic mask operators require complete trait and facade facts"
+            )
+        if self.operation not in _MASK_FACADE_METHODS:
+            raise ValueError(
+                "Rust generic mask operators require a typed mask operation"
+            )
+        unary = self.operation is PrimitiveOperation.MASK_NOT
+        if unary != (self.rhs_type is None):
+            raise ValueError(
+                "Rust generic mask operator arity must match its operation"
+            )
+        if len(self.forwarding_arms) != (1 if unary else 3):
+            raise ValueError(
+                "Rust generic mask operators require complete forwarding arms"
+            )
+        if len(self.assignment_arms) != (0 if unary else 2):
+            raise ValueError(
+                "Rust generic mask operators require complete assignment arms"
+            )
+
+    @property
+    def facade_method_name(self) -> str:
+        return _MASK_FACADE_METHODS[self.operation]
+
+
+_MASK_FACADE_METHODS = {
+    PrimitiveOperation.MASK_AND: "mask_and",
+    PrimitiveOperation.MASK_OR: "mask_or",
+    PrimitiveOperation.MASK_XOR: "mask_xor",
+    PrimitiveOperation.MASK_NOT: "mask_not",
+}
+
+
 class RustFacadeBitConversionDirection(StrEnum):
     TO_BITS = "to_bits"
     FROM_BITS = "from_bits"
@@ -428,6 +480,7 @@ __all__ = (
     "RustFacadeCoreImplementationArm",
     "RustFacadeEqualityImplementation",
     "RustFacadeForwardingOperatorArm",
+    "RustFacadeGenericMaskOperatorImplementation",
     "RustFacadeLowerCall",
     "RustFacadeNamedCall",
     "RustFacadeOperatorImplementation",

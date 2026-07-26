@@ -499,12 +499,50 @@ def test_mask_operators_are_emitted_only_from_planned_trait_arms() -> None:
     rendered = _operator_impls(plan)
 
     assert all(
-        implementation.receiver_kind is RustFacadeReceiverKind.MASK
+        trait.receiver_kind is RustFacadeReceiverKind.MASK
         for trait in plan.trait_implementations
-        for implementation in trait.implementations
     )
-    assert "impl core::ops::BitAnd<Mask<i32, 4>> for Mask<i32, 4>" in rendered
-    assert "impl core::ops::Not for Mask<i32, 4>" in rendered
+    assert all(
+        trait.generic_mask_implementation is not None
+        and not trait.implementations
+        for trait in plan.trait_implementations
+    )
+    assert (
+        "impl<T, const N: usize> core::ops::BitAnd<Mask<T, N>> "
+        "for Mask<T, N>"
+    ) in rendered
+    assert "impl<T, const N: usize> core::ops::Not for Mask<T, N>" in rendered
+    assert rendered.count(
+        "impl<T, const N: usize> core::ops::BitAnd<Mask<T, N>> "
+        "for Mask<T, N>"
+    ) == 1
+    assert rendered.count(
+        "impl<T, const N: usize> core::ops::Not for Mask<T, N>"
+    ) == 1
+    assert rendered.count("private::FacadeOps<N>>::mask_and") == 1
+    assert rendered.count("private::FacadeOps<N>>::mask_not") == 1
+    assert "impl core::ops::BitAnd<Mask<i32, 4>>" not in rendered
+    generic_binary = next(
+        trait.generic_mask_implementation
+        for trait in plan.trait_implementations
+        if trait.operation is PrimitiveOperation.MASK_AND
+        and trait.generic_mask_implementation is not None
+    )
+    with pytest.raises(ValueError, match="typed mask operation"):
+        replace(
+            generic_binary,
+            operation=PrimitiveOperation.COMPARE_EQUAL,
+        )
+    with pytest.raises(ValueError, match="arity"):
+        replace(generic_binary, rhs_type=None)
+    with pytest.raises(ValueError, match="generic implementation"):
+        replace(
+            plan,
+            trait_implementations=tuple(
+                replace(trait, generic_mask_implementation=None)
+                for trait in plan.trait_implementations
+            ),
+        )
 
 
 def test_selection_curated_method_uses_the_control_mask_receiver() -> None:

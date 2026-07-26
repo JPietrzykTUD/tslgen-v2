@@ -17,6 +17,7 @@ from tslc.backend.rust_api_arms import (
     RustFacadeCoreImplementationArm,
     RustFacadeEqualityImplementation,
     RustFacadeForwardingOperatorArm,
+    RustFacadeGenericMaskOperatorImplementation,
     RustFacadeLowerCall,
     RustFacadeNamedCall,
     RustFacadeOperatorImplementation,
@@ -422,6 +423,17 @@ def finalize_operator_implementations(
     by_key = {(shape.type_tag, shape.lanes): shape for shape in shapes}
     finalized: list[RustCuratedTraitImplementation] = []
     for trait in traits:
+        if trait.receiver_kind is RustFacadeReceiverKind.MASK:
+            finalized.append(
+                replace(
+                    trait,
+                    implementations=(),
+                    generic_mask_implementation=(
+                        _generic_mask_operator_implementation(trait)
+                    ),
+                )
+            )
+            continue
         implementations: list[RustFacadeOperatorImplementation] = []
         for shape_key in trait.shape_keys:
             shape = by_key[shape_key]
@@ -463,6 +475,30 @@ def finalize_operator_implementations(
             replace(trait, implementations=tuple(implementations))
         )
     return finalized
+
+
+def _generic_mask_operator_implementation(
+    trait: RustCuratedTraitImplementation,
+) -> RustFacadeGenericMaskOperatorImplementation:
+    if not isinstance(trait.operation, PrimitiveOperation):
+        raise ValueError(
+            "Rust generic mask operator requires a primitive operation"
+        )
+    value_type = "Mask<T, N>"
+    rhs_type = value_type if trait.rhs_kind is not None else None
+    forwarding, assignment = _operator_forwarding_arms(
+        trait,
+        value_type,
+        rhs_type,
+    )
+    return RustFacadeGenericMaskOperatorImplementation(
+        trait_path=trait.trait_path,
+        method_name=trait.method_name,
+        operation=trait.operation,
+        rhs_type=rhs_type,
+        forwarding_arms=forwarding,
+        assignment_arms=assignment,
+    )
 
 
 def _canonical_operator_arm(
