@@ -57,6 +57,7 @@ class RustStaticVectorMapping:
     imask_spelling: str
     extension_name: str | None = None
     extension_tag_spelling: str | None = None
+    uses_sized_vector: bool = False
 
     def __post_init__(self) -> None:
         if (
@@ -72,6 +73,8 @@ class RustStaticVectorMapping:
             raise ValueError(
                 "Rust hardware mappings require both extension identity and tag spelling"
             )
+        if self.extension_name is not None and self.uses_sized_vector:
+            raise ValueError("Rust hardware mappings cannot use sized fallback vectors")
 
     @property
     def uses_hardware(self) -> bool:
@@ -564,6 +567,7 @@ def _fallback_mappings(
                     total_bits,
                     f"Simd<{base_spelling}, Generic<{lanes}>>",
                     "u64",
+                    uses_sized_vector=True,
                 )
             )
     return tuple(sorted(mappings, key=lambda item: (item.type_tag, item.lanes)))

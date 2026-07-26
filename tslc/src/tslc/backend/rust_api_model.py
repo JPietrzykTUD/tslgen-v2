@@ -10,6 +10,7 @@ from tslc.backend.rust_static_selection import (
     RustTargetRequirement,
 )
 from tslc.catalog.arithmetic import ArithmeticOperandRole, ArithmeticOperation
+from tslc.catalog.model import VectorBitsKind
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.documentation import PrimitiveDocumentation
 
@@ -179,6 +180,10 @@ class RustFacadeDelegateVector:
     extension_name: str
     type_tag: str
     attribute_combinations: tuple[tuple[tuple[str, str], ...], ...] = ()
+    uses_sized_vector: bool = False
+    implementation_fallback: bool = False
+    vector_bits_kind: VectorBitsKind = "fixed"
+    vector_bits: int = 0
 
     def __post_init__(self) -> None:
         if not self.extension_name or not self.type_tag:
@@ -190,6 +195,20 @@ class RustFacadeDelegateVector:
 
 
 @dataclass(frozen=True, slots=True)
+class RustFacadeDelegateOwner:
+    """Exact source extension implementing one logical delegate shape."""
+
+    type_tag: str
+    lanes: int
+    representation_profile_name: str | None
+    extension_name: str
+
+    def __post_init__(self) -> None:
+        if not self.type_tag or self.lanes <= 0 or not self.extension_name:
+            raise ValueError("Rust facade delegate owners require complete shape facts")
+
+
+@dataclass(frozen=True, slots=True)
 class RustFacadeDelegate:
     """Lower-level generated entry point used by one selected profile or fallback."""
 
@@ -197,6 +216,7 @@ class RustFacadeDelegate:
     primitive_name: str
     vectors: tuple[RustFacadeDelegateVector, ...]
     overload_parameter_positions: tuple[int, ...] = ()
+    owners: tuple[RustFacadeDelegateOwner, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.primitive_name or not self.vectors:
@@ -205,6 +225,12 @@ class RustFacadeDelegate:
             raise ValueError("Rust facade delegate vectors must be unique")
         if any(position < 0 for position in self.overload_parameter_positions):
             raise ValueError("Rust facade overload positions cannot be negative")
+        owner_keys = tuple(
+            (item.type_tag, item.lanes, item.representation_profile_name)
+            for item in self.owners
+        )
+        if len(set(owner_keys)) != len(owner_keys):
+            raise ValueError("Rust facade delegate owners must be unique by shape")
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,6 +290,7 @@ class RustFacadeCoreDelegate:
     lanes: int
     profile_name: str | None
     source_primitive_name: str
+    extension_name: str
     invocation: RustFacadeInvocation
 
     def __post_init__(self) -> None:
@@ -272,6 +299,7 @@ class RustFacadeCoreDelegate:
             or not self.type_tag
             or self.lanes <= 0
             or not self.source_primitive_name
+            or not self.extension_name
         ):
             raise ValueError("Rust facade core delegates require complete shape facts")
 
@@ -463,6 +491,7 @@ __all__ = (
     "RustFacadeConstParameter",
     "RustFacadeConstParameterSource",
     "RustFacadeDelegate",
+    "RustFacadeDelegateOwner",
     "RustFacadeDelegateVector",
     "RustFacadeCoreDelegate",
     "RustFacadeCoreOperationRequirement",

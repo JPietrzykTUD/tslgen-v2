@@ -49,7 +49,7 @@ from tslc.catalog.conversion import (
     PrimitiveConversionContract,
 )
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import ImplementationSafety
+from tslc.catalog.model import Extension, ImplementationSafety
 from tslc.catalog.overloads import ResolvedPrimitiveOverload
 from tslc.catalog.semantics import (
     OperandBinding,
@@ -57,6 +57,7 @@ from tslc.catalog.semantics import (
     PrimitiveOperation,
     PrimitiveSemanticContract,
 )
+from tslc.catalog.target_families import ExtensionFamilyCapability
 from tslc.diagnostics import has_errors
 from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam
 from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
@@ -70,6 +71,7 @@ from tslc.render.rust_facade_comprehensive import render_comprehensive_facade
 from tslc.render.rust_facade_common import (
     representations_can_coexist,
     selection_cfg,
+    surface_delegate_owner,
 )
 from tslc.target_text import LoweredBody
 
@@ -192,25 +194,62 @@ def _arithmetic_spec(
     )
 
 
+def _fallback_extension(
+    name: str,
+    *,
+    sized: bool,
+) -> Extension:
+    family = "generic_like" if sized else "scalar"
+    return Extension(
+        name,
+        name,
+        family,
+        {},
+        {},
+        family_capability=ExtensionFamilyCapability(
+            family,
+            implementation_fallback=True,
+        ),
+        vector_bits_kind="sized" if sized else "fixed",
+    )
+
+
 def _plan(
     *specs: LoweredSpecialization,
     profiles: tuple[EmittedProfile, ...] = (),
+    fallback_extensions: tuple[Extension, ...] | None = None,
+    fallback_mappings: tuple[RustStaticVectorMapping, ...] | None = None,
 ) -> RustStaticSelectionPlan:
+    del profiles
     by_name: dict[str, list[LoweredSpecialization]] = {}
     for spec in specs:
         by_name.setdefault(spec.primitive_name, []).append(spec)
     return RustStaticSelectionPlan(
         profiles=(),
-        fallback_mappings=(
+        fallback_mappings=fallback_mappings
+        or (
             RustStaticVectorMapping(
-                "si32", "i32", 4, 128, "Simd<i32, Generic<4>>", "u64"
+                "si32",
+                "i32",
+                4,
+                128,
+                "Simd<i32, Generic<4>>",
+                "u64",
+                uses_sized_vector=True,
             ),
         ),
         fallback_module=RustStaticFallbackModule(
             tuple(
                 (name, tuple(group)) for name, group in sorted(by_name.items())
             ),
-            (),
+            tuple(
+                (extension.name, extension)
+                for extension in (
+                    fallback_extensions
+                    if fallback_extensions is not None
+                    else (_fallback_extension("generic", sized=True),)
+                )
+            ),
         ),
     )
 
@@ -223,7 +262,13 @@ def test_generic_fallback_excludes_exact_profile_arms_without_width_holes() -> N
         None,
         (),
         RustStaticVectorMapping(
-            "si32", "i32", 4, 128, "Simd<i32, Generic<4>>", "u64"
+            "si32",
+            "i32",
+            4,
+            128,
+            "Simd<i32, Generic<4>>",
+            "u64",
+            uses_sized_vector=True,
         ),
         (RustFacadeTargetSelection(avx2, (avx512,)),),
     )
@@ -534,6 +579,135 @@ def test_attribute_combinations_remain_delegate_owned() -> None:
     )
 
 
+def test_novel_fallback_ids_survive_shape_and_delegate_planning() -> None:
+    scalar_extension = _fallback_extension("portable_lane_one", sized=False)
+    sized_extension = _fallback_extension("portable_fixed_lanes", sized=True)
+    base = _spec("portable_operation")
+    scalar = replace(
+        base,
+        extension_name=scalar_extension.name,
+        uses_sized_vector=False,
+        lane_parameter=None,
+        register_is_base=True,
+        register_spelling="i32",
+    )
+    sized = replace(base, extension_name=sized_extension.name)
+    static = _plan(
+        scalar,
+        sized,
+        fallback_extensions=(scalar_extension, sized_extension),
+        fallback_mappings=(
+            RustStaticVectorMapping(
+                "si32", "i32", 1, 32, "Simd<i32, Scalar>", "u64"
+            ),
+            RustStaticVectorMapping(
+                "si32",
+                "i32",
+                4,
+                128,
+                "Simd<i32, Generic<4>>",
+                "u64",
+                uses_sized_vector=True,
+            ),
+        ),
+    )
+
+    plan = plan_rust_facade((), static)
+    method = plan.comprehensive_methods[0]
+    owners = {
+        (owner.type_tag, owner.lanes): owner.extension_name
+        for owner in method.delegates[0].owners
+    }
+
+    assert owners == {
+        ("si32", 1): "portable_lane_one",
+        ("si32", 4): "portable_fixed_lanes",
+    }
+    assert {
+        surface_delegate_owner(
+            method.delegates[0],
+            shape,
+            shape.representations[0],
+        )
+        for shape in plan.shapes
+    } == {"portable_lane_one", "portable_fixed_lanes"}
+    rendered = render_comprehensive_facade(plan)
+    assert rendered.private_impls.count("portable_operation::<") == 2
+
+
+def test_same_lane_count_can_have_different_fallback_owners() -> None:
+    first_extension = _fallback_extension("portable_first", sized=True)
+    second_extension = _fallback_extension("portable_second", sized=True)
+    first = replace(_spec("first_operation"), extension_name=first_extension.name)
+    second = replace(
+        _spec("second_operation"),
+        extension_name=second_extension.name,
+    )
+
+    plan = plan_rust_facade(
+        (),
+        _plan(
+            first,
+            second,
+            fallback_extensions=(first_extension, second_extension),
+        ),
+    )
+
+    owners = {
+        method.public_name: method.delegates[0].owners[0].extension_name
+        for method in plan.comprehensive_methods
+    }
+    assert owners == {
+        "first_operation": "portable_first",
+        "second_operation": "portable_second",
+    }
+
+
+def test_ambiguous_fallback_delegate_owners_are_rejected() -> None:
+    first_extension = _fallback_extension("portable_first", sized=True)
+    second_extension = _fallback_extension("portable_second", sized=True)
+    base = _spec("ambiguous_operation")
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade(
+            (),
+            _plan(
+                replace(base, extension_name=first_extension.name),
+                replace(base, extension_name=second_extension.name),
+                fallback_extensions=(first_extension, second_extension),
+            ),
+        )
+
+    assert {item.code for item in error.value.diagnostics} == {
+        "TSL-BACKEND-RUST-FACADE-AMBIGUOUS-DELEGATE-OWNER"
+    }
+
+
+def test_fallback_mapping_without_an_emitted_owner_is_rejected() -> None:
+    scalar_extension = _fallback_extension("portable_lane_one", sized=False)
+    scalar = replace(
+        _spec("scalar_only"),
+        extension_name=scalar_extension.name,
+        uses_sized_vector=False,
+        lane_parameter=None,
+        register_is_base=True,
+        register_spelling="i32",
+    )
+
+    with pytest.raises(RustFacadePlanningError) as error:
+        plan_rust_facade(
+            (),
+            _plan(
+                scalar,
+                fallback_extensions=(scalar_extension,),
+            ),
+        )
+
+    assert {item.code for item in error.value.diagnostics} == {
+        "TSL-BACKEND-RUST-FACADE-MISSING-FALLBACK-OWNER"
+    }
+
+
 def test_caller_safety_is_preserved_and_mismatches_are_rejected() -> None:
     unsafe_spec = _spec(
         "unsafe_op",
@@ -564,7 +738,7 @@ def test_missing_generic_baseline_is_a_typed_exclusion() -> None:
         (emitted,),
         RustStaticSelectionPlan(
             (),
-            _plan().fallback_mappings,
+            (),
             RustStaticFallbackModule((), ()),
         ),
     )
@@ -851,7 +1025,13 @@ def test_core_store_and_lane_insertion_render_from_finalized_invocations() -> No
         None,
         (),
         RustStaticVectorMapping(
-            "si32", "i32", 4, 128, "Simd<i32, Generic<4>>", "u64"
+            "si32",
+            "i32",
+            4,
+            128,
+            "Simd<i32, Generic<4>>",
+            "u64",
+            uses_sized_vector=True,
         ),
     )
     shape = RustFacadeShape("si32", "i32", 4, 128, (representation,))
@@ -862,6 +1042,7 @@ def test_core_store_and_lane_insertion_render_from_finalized_invocations() -> No
             lanes=4,
             profile_name=None,
             source_primitive_name=f"test_{requirement.role}",
+            extension_name="test_fallback",
             invocation=RustFacadeInvocation(
                 (
                     (1, 0)
@@ -1154,6 +1335,30 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
         "mask_from_integral",
         "mask_to_integral",
     }
+    assert next(
+        delegate.extension_name
+        for delegate in plan.core_delegates
+        if delegate.role == "store"
+        and delegate.type_tag == "si32"
+        and delegate.lanes == 8
+        and delegate.profile_name == "avx2"
+    ) == "avx2"
+    assert next(
+        delegate.extension_name
+        for delegate in plan.core_delegates
+        if delegate.role == "store"
+        and delegate.type_tag == "si32"
+        and delegate.lanes == 8
+        and delegate.profile_name is None
+    ) == "generic"
+    assert next(
+        delegate.extension_name
+        for delegate in plan.core_delegates
+        if delegate.role == "store"
+        and delegate.type_tag == "si32"
+        and delegate.lanes == 1
+        and delegate.profile_name is None
+    ) == "scalar"
     facade = artifacts["rust/src/tsl_facade.rs"]
     library = artifacts["rust/src/lib.rs"]
     assert "pub fn add(self, right: Simd<i32, 4>)" in facade

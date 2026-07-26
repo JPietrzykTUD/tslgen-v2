@@ -19,6 +19,7 @@ from tslc.backend.rust_api_model import (
     RustFacadeCoreDelegate,
     RustFacadeCoreOperationRequirement,
     RustFacadeDelegate,
+    RustFacadeDelegateOwner,
     RustFacadeDelegateVector,
     RustFacadeInvocation,
     RustFacadeOperationBinding,
@@ -36,7 +37,10 @@ from tslc.backend.rust_api_model import (
     RustNativeAliasSelection,
     RustOperationValue,
 )
-from tslc.backend.rust_static_selection import RustStaticSelectionPlan
+from tslc.backend.rust_static_selection import (
+    RustStaticSelectionPlan,
+    RustStaticVectorMapping,
+)
 from tslc.catalog.arithmetic import (
     ArithmeticGuarantee,
     ArithmeticOperandRole,
@@ -47,8 +51,8 @@ from tslc.catalog.conversion import (
     LaneCountRelation,
     NumericConversionMode,
 )
-from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import Catalog, Extension, VectorBitsKind
+from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS, scalar_bit_width
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, diagnostic_at, sort_diagnostics
@@ -93,6 +97,7 @@ class _Candidate:
     key: _CandidateKey
     specs: list[tuple[str | None, LoweredSpecialization]]
     overload_positions: dict[tuple[str | None, str], tuple[int, ...]]
+    extensions_by_profile: dict[str | None, dict[str, Extension]]
 
     @property
     def representative(self) -> LoweredSpecialization:
@@ -123,6 +128,7 @@ class _Candidate:
 @dataclass(frozen=True, slots=True)
 class _CoreDelegateMatch:
     delegate: RustFacadeDelegate
+    extension_name: str
     invocation: RustFacadeInvocation
 
 
@@ -210,7 +216,9 @@ def _plan_rust_facade(
         for _name, specs in static_selection.fallback_module.primitive_specializations
         for spec in specs
     }
-    diagnostics: list[Diagnostic] = []
+    diagnostics: list[Diagnostic] = list(
+        _fallback_mapping_owner_diagnostics(static_selection)
+    )
     methods: list[RustComprehensiveMethod] = []
     coverage: list[RustFacadeCoverageEntry] = []
 
@@ -266,6 +274,47 @@ def _plan_rust_facade(
         facade_type_tags,
         operation_bindings,
     )
+    owner_cache: dict[
+        tuple[RustFacadeDelegate, ...],
+        tuple[tuple[RustFacadeDelegate, ...], tuple[Diagnostic, ...]],
+    ] = {}
+
+    def finalize_owners(
+        delegates: tuple[RustFacadeDelegate, ...],
+    ) -> tuple[RustFacadeDelegate, ...]:
+        cached = owner_cache.get(delegates)
+        if cached is None:
+            cached = _finalize_delegate_owners(delegates, shapes)
+            owner_cache[delegates] = cached
+            diagnostics.extend(cached[1])
+        finalized, _owner_diagnostics = cached
+        return finalized
+
+    operation_bindings = tuple(
+        replace(binding, delegates=finalize_owners(binding.delegates))
+        for binding in operation_bindings
+    )
+    methods = [
+        replace(method, delegates=finalize_owners(method.delegates))
+        for method in methods
+    ]
+    curated_methods = [
+        replace(method, delegates=finalize_owners(method.delegates))
+        for method in curated_methods
+    ]
+    traits = [
+        replace(trait, delegates=finalize_owners(trait.delegates))
+        for trait in traits
+    ]
+    bit_conversions = tuple(
+        replace(conversion, delegates=finalize_owners(conversion.delegates))
+        for conversion in bit_conversions
+    )
+    if diagnostics:
+        unique_diagnostics = {
+            (item.code, item.message): item for item in diagnostics
+        }
+        return None, sort_diagnostics(tuple(unique_diagnostics.values()))
     methods = _finalize_comprehensive_shapes(methods, shapes)
     coverage = _finalize_comprehensive_coverage(coverage, methods)
     curated_methods = _finalize_curated_shapes(curated_methods, shapes)
@@ -309,6 +358,13 @@ def _candidates(
     static_selection: RustStaticSelectionPlan,
 ) -> dict[_CandidateKey, _Candidate]:
     grouped: dict[_CandidateKey, _Candidate] = {}
+    extensions_by_profile: dict[str | None, dict[str, Extension]] = {
+        None: static_selection.fallback_module.extensions_by_name(),
+        **{
+            profile.profile.name: dict(profile.extensions)
+            for profile in profiles
+        },
+    }
     inputs: list[tuple[str | None, LoweredSpecialization]] = [
         (None, spec)
         for _name, specs in sorted(
@@ -355,7 +411,10 @@ def _candidates(
         if identity in seen:
             continue
         seen.add(identity)
-        candidate = grouped.setdefault(key, _Candidate(key, [], {}))
+        candidate = grouped.setdefault(
+            key,
+            _Candidate(key, [], {}, extensions_by_profile),
+        )
         candidate.specs.append((profile_name, spec))
     by_delegate: dict[
         tuple[str | None, str], list[LoweredSpecialization]
@@ -369,6 +428,61 @@ def _candidates(
     for candidate in grouped.values():
         candidate.overload_positions.update(overload_positions)
     return grouped
+
+
+def _fallback_mapping_owner_diagnostics(
+    plan: RustStaticSelectionPlan,
+) -> tuple[Diagnostic, ...]:
+    extensions = plan.fallback_module.extensions_by_name()
+    specializations = tuple(
+        spec
+        for _primitive_name, specs in plan.fallback_module.primitive_specializations
+        for spec in specs
+    )
+    return tuple(
+        Diagnostic(
+            severity="error",
+            code="TSL-BACKEND-RUST-FACADE-MISSING-FALLBACK-OWNER",
+            message=(
+                "Rust facade fallback mapping "
+                f"{mapping.type_tag}x{mapping.lanes} has no matching emitted "
+                "specialization owned by an implementation-fallback extension"
+            ),
+        )
+        for mapping in plan.fallback_mappings
+        if not any(
+            (extension := extensions.get(spec.extension_name)) is not None
+            and extension.family_capability.implementation_fallback
+            and _fallback_specialization_matches_mapping(
+                spec,
+                extension,
+                mapping,
+            )
+            for spec in specializations
+        )
+    )
+
+
+def _fallback_specialization_matches_mapping(
+    specialization: LoweredSpecialization,
+    extension: Extension,
+    mapping: RustStaticVectorMapping,
+) -> bool:
+    if specialization.type_tag != mapping.type_tag:
+        return False
+    if specialization.uses_sized_vector != mapping.uses_sized_vector:
+        return False
+    if mapping.uses_sized_vector:
+        return True
+    if extension.vector_bits_kind != "fixed":
+        return False
+    vector_bits = extension.vector_bits
+    if vector_bits == 0:
+        element_bits = scalar_bit_width(specialization.type_tag)
+        if element_bits is None:
+            return False
+        vector_bits = element_bits
+    return vector_bits == mapping.total_bits
 
 
 def _candidate_key(spec: LoweredSpecialization) -> _CandidateKey:
@@ -905,23 +1019,172 @@ def _representation_for_profile(
     )
 
 
+def _finalize_delegate_owners(
+    delegates: tuple[RustFacadeDelegate, ...],
+    shapes: tuple[RustFacadeShape, ...],
+) -> tuple[tuple[RustFacadeDelegate, ...], tuple[Diagnostic, ...]]:
+    finalized: list[RustFacadeDelegate] = []
+    diagnostics: list[Diagnostic] = []
+    for delegate in delegates:
+        owners: list[RustFacadeDelegateOwner] = []
+        for shape in shapes:
+            for representation in shape.representations:
+                if delegate.profile_name is None:
+                    if representation.profile_name is not None:
+                        continue
+                elif representation.profile_name not in {
+                    None,
+                    delegate.profile_name,
+                }:
+                    continue
+                candidates = _delegate_owner_candidates(
+                    delegate,
+                    shape,
+                    representation,
+                )
+                if len(candidates) > 1:
+                    diagnostics.append(
+                        Diagnostic(
+                            severity="error",
+                            code=(
+                                "TSL-BACKEND-RUST-FACADE-AMBIGUOUS-DELEGATE-OWNER"
+                            ),
+                            message=(
+                                f"Rust facade delegate {delegate.primitive_name!r} "
+                                f"has ambiguous implementation owners for "
+                                f"{shape.type_tag}x{shape.lanes} under "
+                                f"{delegate.profile_name or 'fallback'}: "
+                                + ", ".join(candidates)
+                            ),
+                        )
+                    )
+                    continue
+                if candidates:
+                    owners.append(
+                        RustFacadeDelegateOwner(
+                            type_tag=shape.type_tag,
+                            lanes=shape.lanes,
+                            representation_profile_name=(
+                                representation.profile_name
+                            ),
+                            extension_name=candidates[0],
+                        )
+                    )
+        finalized.append(
+            replace(
+                delegate,
+                owners=tuple(
+                    sorted(
+                        owners,
+                        key=lambda item: (
+                            item.type_tag,
+                            item.lanes,
+                            item.representation_profile_name is not None,
+                            item.representation_profile_name or "",
+                            item.extension_name,
+                        ),
+                    )
+                ),
+            )
+        )
+    return tuple(finalized), tuple(diagnostics)
+
+
+def _delegate_owner_candidates(
+    delegate: RustFacadeDelegate,
+    shape: RustFacadeShape,
+    representation: RustFacadeRepresentation,
+) -> tuple[str, ...]:
+    return _delegate_owner_candidates_for_mapping(
+        delegate,
+        type_tag=shape.type_tag,
+        total_bits=shape.total_bits,
+        representation=representation,
+    )
+
+
+def _delegate_owner_candidates_for_mapping(
+    delegate: RustFacadeDelegate,
+    *,
+    type_tag: str,
+    total_bits: int,
+    representation: RustFacadeRepresentation,
+) -> tuple[str, ...]:
+    vectors = tuple(
+        vector for vector in delegate.vectors if vector.type_tag == type_tag
+    )
+    hardware_extension = representation.mapping.extension_name
+    if hardware_extension is not None:
+        return (
+            (hardware_extension,)
+            if any(
+                vector.extension_name == hardware_extension
+                for vector in vectors
+            )
+            else ()
+        )
+
+    fallback_vectors = tuple(
+        vector
+        for vector in vectors
+        if vector.implementation_fallback
+        and vector.uses_sized_vector
+        == representation.mapping.uses_sized_vector
+    )
+    if not representation.mapping.uses_sized_vector:
+        fallback_vectors = tuple(
+            vector
+            for vector in fallback_vectors
+            if _fallback_vector_has_exact_width(vector, total_bits)
+        )
+    return tuple(
+        sorted(
+            {vector.extension_name for vector in fallback_vectors}
+        )
+    )
+
+
+def _fallback_vector_has_exact_width(
+    vector: RustFacadeDelegateVector,
+    total_bits: int,
+) -> bool:
+    if vector.uses_sized_vector or vector.vector_bits_kind != "fixed":
+        return False
+    vector_bits = vector.vector_bits
+    if vector_bits == 0:
+        element_bits = scalar_bit_width(vector.type_tag)
+        if element_bits is None:
+            return False
+        vector_bits = element_bits
+    return vector_bits == total_bits
+
+
+def _delegate_has_owner(
+    delegate: RustFacadeDelegate,
+    shape: RustFacadeShape,
+    representation: RustFacadeRepresentation,
+) -> bool:
+    return (
+        sum(
+            owner.type_tag == shape.type_tag
+            and owner.lanes == shape.lanes
+            and owner.representation_profile_name == representation.profile_name
+            for owner in delegate.owners
+        )
+        == 1
+    )
+
+
 def _has_active_surface_delegate(
     delegates: tuple[RustFacadeDelegate, ...],
     shape: RustFacadeShape,
     representation: RustFacadeRepresentation,
     profile_name: str | None,
 ) -> bool:
-    expected_extension = representation.mapping.extension_name or (
-        "scalar" if shape.lanes == 1 else "generic"
-    )
     return (
         sum(
             delegate.profile_name == profile_name
-            and any(
-                vector.extension_name == expected_extension
-                and vector.type_tag == shape.type_tag
-                for vector in delegate.vectors
-            )
+            and _delegate_has_owner(delegate, shape, representation)
             for delegate in delegates
         )
         == 1
@@ -1622,12 +1885,28 @@ def _delegates(candidate: _Candidate) -> tuple[RustFacadeDelegate, ...]:
         str | None,
         dict[
             str,
-            dict[tuple[str, str], set[tuple[tuple[str, str], ...]]],
+            dict[
+                tuple[str, str, bool, bool, VectorBitsKind, int],
+                set[tuple[tuple[str, str], ...]],
+            ],
         ],
     ] = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
     for profile_name, spec in candidate.specs:
+        extension = candidate.extensions_by_profile.get(profile_name, {}).get(
+            spec.extension_name
+        )
         by_profile[profile_name][spec.primitive_name][
-            (spec.extension_name, spec.type_tag)
+            (
+                spec.extension_name,
+                spec.type_tag,
+                spec.uses_sized_vector,
+                bool(
+                    extension is not None
+                    and extension.family_capability.implementation_fallback
+                ),
+                extension.vector_bits_kind if extension is not None else "",
+                extension.vector_bits if extension is not None else 0,
+            )
         ].add(spec.axis)
     return tuple(
         RustFacadeDelegate(
@@ -1637,18 +1916,32 @@ def _delegates(candidate: _Candidate) -> tuple[RustFacadeDelegate, ...]:
                 sorted(
                     (
                         RustFacadeDelegateVector(
-                            extension_name,
-                            type_tag,
-                            tuple(sorted(attribute_combinations)),
+                            extension_name=extension_name,
+                            type_tag=type_tag,
+                            attribute_combinations=tuple(
+                                sorted(attribute_combinations)
+                            ),
+                            uses_sized_vector=uses_sized_vector,
+                            implementation_fallback=implementation_fallback,
+                            vector_bits_kind=vector_bits_kind,
+                            vector_bits=vector_bits,
                         )
                         for (
                             extension_name,
                             type_tag,
+                            uses_sized_vector,
+                            implementation_fallback,
+                            vector_bits_kind,
+                            vector_bits,
                         ), attribute_combinations in by_name[
                             primitive_name
                         ].items()
                     ),
-                    key=lambda item: (item.extension_name, item.type_tag),
+                    key=lambda item: (
+                        item.extension_name,
+                        item.type_tag,
+                        item.uses_sized_vector,
+                    ),
                 )
             ),
             candidate.overload_positions.get(
@@ -1790,6 +2083,7 @@ def _core_delegates(
                         lanes=shape.lanes,
                         profile_name=representation.profile_name,
                         source_primitive_name=candidates[0].delegate.primitive_name,
+                        extension_name=candidates[0].extension_name,
                         invocation=candidates[0].invocation,
                     )
                 )
@@ -1817,11 +2111,8 @@ def _matching_core_delegates(
     requirement: RustFacadeCoreOperationRequirement,
     bindings: tuple[RustFacadeOperationBinding, ...],
 ) -> tuple[_CoreDelegateMatch, ...]:
-    expected_extension = representation.mapping.extension_name or (
-        "scalar" if lanes == 1 else "generic"
-    )
     return tuple(
-        _CoreDelegateMatch(delegate, invocation)
+        _CoreDelegateMatch(delegate, owner_candidates[0], invocation)
         for binding in bindings
         if binding.operation is requirement.operation
         and binding.result_kind == requirement.result_kind
@@ -1841,11 +2132,15 @@ def _matching_core_delegates(
         == (requirement.operation in {PrimitiveOperation.LOAD, PrimitiveOperation.STORE})
         for delegate in binding.delegates
         if delegate.profile_name == representation.profile_name
-        and any(
-            vector.extension_name == expected_extension
-            and vector.type_tag == type_tag
-            for vector in delegate.vectors
+        and len(
+            owner_candidates := _delegate_owner_candidates_for_mapping(
+                delegate,
+                type_tag=type_tag,
+                total_bits=representation.mapping.total_bits,
+                representation=representation,
+            )
         )
+        == 1
     )
 
 
@@ -1983,18 +2278,10 @@ def _has_surface_delegate(
     shape: RustFacadeShape,
     representation: RustFacadeRepresentation,
 ) -> bool:
-    expected_extension = (
-        representation.mapping.extension_name
-        or ("scalar" if shape.lanes == 1 else "generic")
-    )
     return (
         sum(
             delegate.profile_name == representation.profile_name
-            and any(
-                vector.extension_name == expected_extension
-                and vector.type_tag == shape.type_tag
-                for vector in delegate.vectors
-            )
+            and _delegate_has_owner(delegate, shape, representation)
             for delegate in delegates
         )
         == 1

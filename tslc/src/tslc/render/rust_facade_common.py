@@ -32,19 +32,11 @@ def surface_delegate_for_profile(
     representation: RustFacadeRepresentation,
     profile_name: str | None,
 ) -> RustFacadeDelegate:
-    expected_extension = (
-        representation.mapping.extension_name
-        or ("scalar" if shape.lanes == 1 else "generic")
-    )
     matches = tuple(
         delegate
         for delegate in delegates
         if delegate.profile_name == profile_name
-        and any(
-            vector.extension_name == expected_extension
-            and vector.type_tag == shape.type_tag
-            for vector in delegate.vectors
-        )
+        and _delegate_has_owner(delegate, shape, representation)
     )
     if len(matches) != 1:
         raise ValueError(
@@ -53,6 +45,44 @@ def surface_delegate_for_profile(
             f"{profile_name or 'fallback'}"
         )
     return matches[0]
+
+
+def surface_delegate_owner(
+    delegate: RustFacadeDelegate,
+    shape: RustFacadeShape,
+    representation: RustFacadeRepresentation,
+) -> str:
+    matches = tuple(
+        owner.extension_name
+        for owner in delegate.owners
+        if owner.type_tag == shape.type_tag
+        and owner.lanes == shape.lanes
+        and owner.representation_profile_name == representation.profile_name
+    )
+    if len(matches) != 1:
+        raise ValueError(
+            f"Rust facade delegate {delegate.primitive_name!r} has "
+            f"{len(matches)} implementation owners for "
+            f"{shape.type_tag}x{shape.lanes} under "
+            f"{representation.profile_name or 'fallback'}"
+        )
+    return matches[0]
+
+
+def _delegate_has_owner(
+    delegate: RustFacadeDelegate,
+    shape: RustFacadeShape,
+    representation: RustFacadeRepresentation,
+) -> bool:
+    return (
+        sum(
+            owner.type_tag == shape.type_tag
+            and owner.lanes == shape.lanes
+            and owner.representation_profile_name == representation.profile_name
+            for owner in delegate.owners
+        )
+        == 1
+    )
 
 
 def combined_selection_cfg(

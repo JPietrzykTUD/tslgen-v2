@@ -97,10 +97,14 @@ def test_static_selection_uses_only_exact_width_available_hardware(
 def test_static_selection_fallback_preserves_supported_lane_counts(
     rust_static_plan: RustStaticSelectionPlan,
 ) -> None:
+    fallback_one = _mapping(rust_static_plan.fallback_mappings, "si32", 1)
     fallback_four = _mapping(rust_static_plan.fallback_mappings, "si32", 4)
     fallback_eight = _mapping(rust_static_plan.fallback_mappings, "si32", 8)
     assert fallback_four.vector_spelling == "Simd<i32, Generic<4>>"
     assert fallback_eight.vector_spelling == "Simd<i32, Generic<8>>"
+    assert fallback_four.uses_sized_vector
+    assert fallback_eight.uses_sized_vector
+    assert not fallback_one.uses_sized_vector
     assert not fallback_four.uses_hardware
     assert not fallback_eight.uses_hardware
     fallback_primitives = dict(

@@ -28,6 +28,7 @@ from tslc.render.rust_facade_common import (
     selection_cfg,
     surface_delegate,
     surface_delegate_for_profile,
+    surface_delegate_owner,
 )
 
 
@@ -202,9 +203,10 @@ def _delegate_attribute_combinations(
     shape: RustFacadeShape,
     representation: RustFacadeRepresentation,
 ) -> tuple[tuple[tuple[str, str], ...], ...]:
-    expected_extension = (
-        representation.mapping.extension_name
-        or ("scalar" if shape.lanes == 1 else "generic")
+    expected_extension = surface_delegate_owner(
+        delegate,
+        shape,
+        representation,
     )
     matches = tuple(
         vector
