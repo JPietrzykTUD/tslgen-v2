@@ -10,6 +10,7 @@ from tslc.backend.emitted_profile import EmittedProfile, used_vector_type_specs
 from tslc.backend.rust_vectors import (
     RustVectorRegistration,
     rust_imask_type,
+    rust_imask_width,
     rust_mask_type,
     rust_vector_registrations,
 )
@@ -58,6 +59,7 @@ class RustStaticVectorMapping:
     extension_name: str | None = None
     extension_tag_spelling: str | None = None
     uses_sized_vector: bool = False
+    imask_bits: int = 0
 
     def __post_init__(self) -> None:
         if (
@@ -75,6 +77,23 @@ class RustStaticVectorMapping:
             )
         if self.extension_name is not None and self.uses_sized_vector:
             raise ValueError("Rust hardware mappings cannot use sized fallback vectors")
+        if self.imask_bits == 0:
+            canonical_width = {
+                "u8": 8,
+                "u16": 16,
+                "u32": 32,
+                "u64": 64,
+            }.get(self.imask_spelling)
+            object.__setattr__(
+                self,
+                "imask_bits",
+                canonical_width or rust_imask_width(self.lanes),
+            )
+        if self.imask_bits not in {8, 16, 32, 64}:
+            raise ValueError(
+                "Rust static vector mappings require an 8-, 16-, 32-, "
+                "or 64-bit integral mask"
+            )
 
     @property
     def uses_hardware(self) -> bool:

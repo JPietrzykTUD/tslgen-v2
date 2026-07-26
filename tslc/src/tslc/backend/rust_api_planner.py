@@ -43,6 +43,7 @@ from tslc.backend.rust_api_model import (
     RustOperationValue,
     rust_facade_representations_can_coexist,
 )
+from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
 from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
     RustStaticVectorMapping,
@@ -256,13 +257,11 @@ def _plan_rust_facade(
         )
 
     curated_methods, curated_diagnostics = _curated_methods(methods, candidates)
-    traits, trait_diagnostics = _curated_traits(methods, candidates)
     bit_conversions, bit_conversion_diagnostics = _bit_conversions(candidates)
     operation_bindings, operation_binding_diagnostics = _operation_bindings(
         candidates, baseline_keys
     )
     diagnostics.extend(curated_diagnostics)
-    diagnostics.extend(trait_diagnostics)
     diagnostics.extend(bit_conversion_diagnostics)
     diagnostics.extend(operation_binding_diagnostics)
     ordered_diagnostics = sort_diagnostics(diagnostics)
@@ -285,6 +284,10 @@ def _plan_rust_facade(
         facade_type_tags,
         operation_bindings,
     )
+    traits, trait_diagnostics = _curated_traits(methods, candidates, shapes)
+    diagnostics.extend(trait_diagnostics)
+    if diagnostics:
+        return None, sort_diagnostics(diagnostics)
     owner_cache: dict[
         tuple[RustFacadeDelegate, ...],
         tuple[tuple[RustFacadeDelegate, ...], tuple[Diagnostic, ...]],
@@ -698,8 +701,12 @@ def _comprehensive_method(
         return None, "result vector is not a closed lane-preserving shape", ()
     if any(item is not None for item in key.param_type_overrides):
         return None, "backend-specific parameter spelling is lower-level only", ()
-    if key.result_kind not in _REPRESENTABLE_KINDS or any(
-        kind not in _REPRESENTABLE_KINDS for kind in key.param_kinds
+    if not RUST_FACADE_SIGNATURE_TYPES.supports_runtime_kind(
+        key.result_kind
+    ) or any(
+        kind != "sImm"
+        and not RUST_FACADE_SIGNATURE_TYPES.supports_runtime_kind(kind)
+        for kind in key.param_kinds
     ):
         return None, "signature kind is not facade-representable", ()
     role_diagnostic = _role_signature_diagnostic(candidate)
@@ -1403,9 +1410,13 @@ def _has_active_surface_delegate(
 def _curated_traits(
     methods: list[RustComprehensiveMethod],
     candidates: dict[_CandidateKey, _Candidate],
+    shapes: tuple[RustFacadeShape, ...],
 ) -> tuple[list[RustCuratedTraitImplementation], tuple[Diagnostic, ...]]:
     traits: list[RustCuratedTraitImplementation] = []
     diagnostics: list[Diagnostic] = []
+    base_spellings_by_type: dict[str, set[str]] = defaultdict(set)
+    for shape in shapes:
+        base_spellings_by_type[shape.type_tag].add(shape.base_spelling)
     for candidate in candidates.values():
         if candidate.key.mask_policy is not None:
             continue
@@ -1427,6 +1438,22 @@ def _curated_traits(
                 if invocation is None:
                     diagnostics.append(_invocation_diagnostic(candidate))
                     continue
+                try:
+                    rhs_type_spellings = tuple(
+                        _unique_facade_base_spelling(
+                            type_tag, base_spellings_by_type
+                        )
+                        for type_tag in rhs_types
+                    )
+                except ValueError as error:
+                    diagnostics.append(
+                        _diagnostic(
+                            candidate,
+                            "TSL-BACKEND-RUST-FACADE-SCALAR-TYPE-MAPPING",
+                            str(error),
+                        )
+                    )
+                    continue
                 traits.append(
                     RustCuratedTraitImplementation(
                         trait_path=trait_path,
@@ -1437,6 +1464,7 @@ def _curated_traits(
                         type_tags=type_tags,
                         rhs_kind=rhs_kind,
                         rhs_type_tags=rhs_types,
+                        rhs_type_spellings=rhs_type_spellings,
                         shape_keys=(),
                         invocation=invocation,
                         delegates=method.delegates,
@@ -2641,6 +2669,19 @@ def _finalize_trait_shapes(
     ]
 
 
+def _unique_facade_base_spelling(
+    type_tag: str,
+    base_spellings_by_type: dict[str, set[str]],
+) -> str:
+    spellings = base_spellings_by_type.get(type_tag, set())
+    if len(spellings) != 1:
+        raise ValueError(
+            "Rust facade type mapping must provide one base spelling for "
+            f"{type_tag!r}"
+        )
+    return next(iter(spellings))
+
+
 def _surface_shape_keys(
     delegates: tuple[RustFacadeDelegate, ...],
     type_tags: tuple[str, ...],
@@ -3018,9 +3059,6 @@ RUST_FACADE_CORE_OPERATION_REQUIREMENTS = (
     ),
 )
 
-_REPRESENTABLE_KINDS = frozenset(
-    {"void", "v", "m", "im", "imt", "s", "sImm", "usize", "ptr", "cptr"}
-)
 _FACADE_FIXED_WIDTHS = frozenset({128, 256, 512})
 _MASK_OPERATIONS = frozenset(
     {

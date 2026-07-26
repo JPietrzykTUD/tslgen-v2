@@ -16,6 +16,7 @@ from tslc.backend.rust_api_model import (
     RustFacadeRepresentation,
     RustFacadeShape,
 )
+from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
 from tslc.backend.rust_names import rust_primitive_tag_name
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.documentation import documentation_block, render_rust_doc
@@ -23,7 +24,6 @@ from tslc.render.rust_facade_common import (
     cfg_attribute,
     combined_selection_cfg,
     lower_module,
-    private_vector_descriptor,
     representations_can_coexist,
     selection_cfg,
     surface_delegate,
@@ -78,12 +78,20 @@ def _private_trait(method: RustComprehensiveMethod) -> str:
     target_owner = "U" if target is not None else "Self"
     parameters = ", ".join(
         f"{_identifier(parameter.public_name)}: "
-        f"{_raw_type(parameter.kind, owner='Self', target_owner='Self')}"
+        + RUST_FACADE_SIGNATURE_TYPES.private_trait_type(
+            parameter.kind,
+            owner="Self",
+            target_owner="Self",
+            lanes="N",
+        )
         for parameter in runtime_parameters
     )
     const_generics = _const_generic_declarations(method)
-    return_type = _raw_type(
-        method.result_kind, owner="Self", target_owner=target_owner
+    return_type = RUST_FACADE_SIGNATURE_TYPES.private_trait_type(
+        method.result_kind,
+        owner="Self",
+        target_owner=target_owner,
+        lanes="N",
     )
     return_suffix = "" if method.result_kind == "void" else f" -> {return_type}"
     unsafe_prefix = "unsafe " if method.caller_unsafe else ""
@@ -255,20 +263,24 @@ def _private_impl(
     runtime_parameters = _runtime_parameters(method)
     parameters = ", ".join(
         f"{_identifier(parameter.public_name)}: "
-        f"{_impl_raw_type(parameter.kind, 'Self', source_shape.lanes)}"
+        + RUST_FACADE_SIGNATURE_TYPES.private_impl_type(
+            parameter.kind,
+            owner="Self",
+            lanes=source_shape.lanes,
+        )
         for parameter in runtime_parameters
     )
     const_generics = _const_generic_declarations(method)
-    return_type = _impl_raw_type(
+    return_type = RUST_FACADE_SIGNATURE_TYPES.private_impl_type(
         method.result_kind,
-        target_shape.base_spelling if target_shape else "Self",
-        source_shape.lanes,
+        owner=target_shape.base_spelling if target_shape else "Self",
+        lanes=source_shape.lanes,
     )
     return_suffix = "" if method.result_kind == "void" else f" -> {return_type}"
     call_representation = active_representation or source_representation
-    generic_arguments = [private_vector_descriptor(source_representation)]
+    generic_arguments = [source_representation.vector_descriptor]
     if target_representation is not None:
-        generic_arguments.append(private_vector_descriptor(target_representation))
+        generic_arguments.append(target_representation.vector_descriptor)
     generic_arguments.extend(value for _name, value in attribute_values)
     generic_arguments.extend(
         parameter.public_name for parameter in _method_const_parameters(method)
@@ -282,7 +294,11 @@ def _private_impl(
     )
     if method.caller_unsafe:
         call = f"unsafe {{ {call} }}"
-    result = _adapt_lower_result(method.result_kind, call, source_representation)
+    result = RUST_FACADE_SIGNATURE_TYPES.adapt_lower_result(
+        method.result_kind,
+        call,
+        source_representation.mapping,
+    )
     unsafe_prefix = "unsafe " if method.caller_unsafe else ""
     body_lines = []
     if method.caller_unsafe:
@@ -336,11 +352,11 @@ def _public_inherent_method(
     )
     parameter_declarations = ", ".join(
         f"{_identifier(parameter.public_name)}: "
-        + _public_type(
+        + RUST_FACADE_SIGNATURE_TYPES.public_type(
             parameter.kind,
-            shape.base_spelling,
-            str(shape.lanes),
-            shape.base_spelling,
+            element=shape.base_spelling,
+            lanes=str(shape.lanes),
+            result_element=shape.base_spelling,
         )
         for parameter in runtime_parameters
     )
@@ -350,11 +366,11 @@ def _public_inherent_method(
     target = _target_type_parameter(method)
     type_generics = [target] if target is not None else []
     generic_declarations = _public_generic_declarations(method, type_generics)
-    return_type = _public_type(
+    return_type = RUST_FACADE_SIGNATURE_TYPES.public_type(
         method.result_kind,
-        shape.base_spelling,
-        str(shape.lanes),
-        "U" if target is not None else shape.base_spelling,
+        element=shape.base_spelling,
+        lanes=str(shape.lanes),
+        result_element="U" if target is not None else shape.base_spelling,
     )
     trait_name = _private_trait_name(method)
     trait_arguments = ", ".join(
@@ -391,7 +407,11 @@ def _public_inherent_method(
         f"call{_const_generic_arguments(method)}({call_args})"
     )
     call = _unsafe_forward(method, call)
-    result = _adapt_public_result(method.result_kind, call, target is not None)
+    result = RUST_FACADE_SIGNATURE_TYPES.adapt_public_result(
+        method.result_kind,
+        call,
+        target_element="U" if target is not None else None,
+    )
     body = [
         *_bounds_checks(method, str(shape.lanes)),
         *((
@@ -427,7 +447,12 @@ def _public_free_function(method: RustComprehensiveMethod) -> str:
     runtime_parameters = _runtime_parameters(method)
     parameter_declarations = ", ".join(
         f"{_identifier(parameter.public_name)}: "
-        f"{_public_type(parameter.kind, 'T', 'N', 'T')}"
+        + RUST_FACADE_SIGNATURE_TYPES.public_type(
+            parameter.kind,
+            element="T",
+            lanes="N",
+            result_element="T",
+        )
         for parameter in runtime_parameters
     )
     target = _target_type_parameter(method)
@@ -435,8 +460,11 @@ def _public_free_function(method: RustComprehensiveMethod) -> str:
     generic_declarations = _public_generic_declarations(
         method, [*type_generics, "const N: usize"]
     )
-    return_type = _public_type(
-        method.result_kind, "T", "N", "U" if target is not None else "T"
+    return_type = RUST_FACADE_SIGNATURE_TYPES.public_type(
+        method.result_kind,
+        element="T",
+        lanes="N",
+        result_element="U" if target is not None else "T",
     )
     trait_name = _private_trait_name(method)
     trait_arguments = ", ".join(
@@ -461,7 +489,11 @@ def _public_free_function(method: RustComprehensiveMethod) -> str:
         f"({', '.join(_public_call_arguments(method))})"
     )
     call = _unsafe_forward(method, call)
-    result = _adapt_public_result(method.result_kind, call, target is not None)
+    result = RUST_FACADE_SIGNATURE_TYPES.adapt_public_result(
+        method.result_kind,
+        call,
+        target_element="U" if target is not None else None,
+    )
     body = [
         *_bounds_checks(method, "N"),
         *((
@@ -510,11 +542,13 @@ def _method_docs(
                     "Rust result",
                     (
                         "`"
-                        + _public_type(
+                        + RUST_FACADE_SIGNATURE_TYPES.public_type(
                             method.result_kind,
-                            element,
-                            lanes,
-                            "U" if method.type_parameters else element,
+                            element=element,
+                            lanes=lanes,
+                            result_element=(
+                                "U" if method.type_parameters else element
+                            ),
                         )
                         + "`"
                     ),
@@ -686,72 +720,30 @@ def _lower_call_arguments(
     method: RustComprehensiveMethod,
     representation: RustFacadeRepresentation,
 ) -> tuple[str, ...]:
-    arguments: list[str] = []
-    for parameter in sorted(
-        _runtime_parameters(method), key=lambda item: item.source_index
-    ):
-        name = _identifier(parameter.public_name)
-        if parameter.kind in {"im", "imt"}:
-            arguments.append(
-                name
-                if representation.mapping.imask_spelling == "u64"
-                else f"{name} as {representation.mapping.imask_spelling}"
-            )
-        else:
-            arguments.append(name)
-    return tuple(arguments)
+    return tuple(
+        RUST_FACADE_SIGNATURE_TYPES.adapt_lower_argument(
+            parameter.kind,
+            _identifier(parameter.public_name),
+            representation.mapping,
+        )
+        for parameter in sorted(
+            _runtime_parameters(method), key=lambda item: item.source_index
+        )
+    )
 
 
 def _public_call_arguments(method: RustComprehensiveMethod) -> tuple[str, ...]:
-    arguments: list[str] = []
-    for parameter in _runtime_parameters(method):
-        if parameter.placement is RustFacadeParameterPlacement.RECEIVER:
-            arguments.append("self.value")
-            continue
-        name = _identifier(parameter.public_name)
-        arguments.append(f"{name}.value" if parameter.kind in {"v", "m"} else name)
-    return tuple(arguments)
-
-
-def _adapt_lower_result(
-    kind: str,
-    call: str,
-    representation: RustFacadeRepresentation,
-) -> str:
-    if kind in {"im", "imt"}:
-        return (
-            call
-            if representation.mapping.imask_spelling == "u64"
-            else f"{call} as u64"
+    return tuple(
+        RUST_FACADE_SIGNATURE_TYPES.adapt_public_argument(
+            parameter.kind,
+            (
+                "self"
+                if parameter.placement is RustFacadeParameterPlacement.RECEIVER
+                else _identifier(parameter.public_name)
+            ),
         )
-    return call
-
-
-def _adapt_public_result(kind: str, call: str, has_target: bool) -> str:
-    if kind == "v":
-        return f"Simd {{ value: {call} }}"
-    if kind == "m":
-        owner = "U" if has_target else "_"
-        return f"Mask::<{owner}, _> {{ value: {call} }}"
-    return call
-
-
-def _raw_type(kind: str, *, owner: str, target_owner: str) -> str:
-    return {
-        "void": "()",
-        "v": f"<{target_owner if target_owner != owner else owner} as Representation<N>>::Vector"
-        if target_owner != owner
-        else f"{owner}::Vector",
-        "m": f"<{target_owner if target_owner != owner else owner} as Representation<N>>::Mask"
-        if target_owner != owner
-        else f"{owner}::Mask",
-        "im": "u64",
-        "imt": "u64",
-        "s": owner,
-        "usize": "usize",
-        "ptr": f"*mut {owner}",
-        "cptr": f"*const {owner}",
-    }[kind]
+        for parameter in _runtime_parameters(method)
+    )
 
 
 _STANDARD_TRAIT_METHOD_NAMES = frozenset(
@@ -770,39 +762,6 @@ _STANDARD_TRAIT_METHOD_NAMES = frozenset(
         "sub",
     }
 )
-
-
-def _impl_raw_type(kind: str, owner: str, lanes: int) -> str:
-    return {
-        "void": "()",
-        "v": f"<{owner} as private::Representation<{lanes}>>::Vector",
-        "m": f"<{owner} as private::Representation<{lanes}>>::Mask",
-        "im": "u64",
-        "imt": "u64",
-        "s": "Self",
-        "usize": "usize",
-        "ptr": "*mut Self",
-        "cptr": "*const Self",
-    }[kind]
-
-
-def _public_type(
-    kind: str,
-    element: str,
-    lanes: str,
-    result_element: str,
-) -> str:
-    return {
-        "void": "()",
-        "v": f"Simd<{result_element}, {lanes}>",
-        "m": f"Mask<{result_element}, {lanes}>",
-        "im": "u64",
-        "imt": "u64",
-        "s": element,
-        "usize": "usize",
-        "ptr": f"*mut {element}",
-        "cptr": f"*const {element}",
-    }[kind]
 
 
 def _method_shapes(

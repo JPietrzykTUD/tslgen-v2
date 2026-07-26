@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
+from tslc.backend.rust_names import rust_profile_module_name
 from tslc.backend.rust_static_selection import (
     RustStaticVectorMapping,
     RustTargetRequirement,
@@ -89,6 +90,7 @@ class RustFacadeRepresentation:
     stronger_requirements: tuple[RustTargetRequirement, ...]
     mapping: RustStaticVectorMapping
     fallback_exclusions: tuple[RustFacadeTargetSelection, ...] = ()
+    vector_descriptor: str = field(init=False)
 
     def __post_init__(self) -> None:
         if (self.profile_name is None) != (self.requirement is None):
@@ -112,6 +114,30 @@ class RustFacadeRepresentation:
             raise ValueError(
                 "Rust facade profile exclusions must be stronger target requirements"
             )
+        object.__setattr__(
+            self,
+            "vector_descriptor",
+            _rust_facade_vector_descriptor(self.mapping, self.profile_name),
+        )
+
+
+def _rust_facade_vector_descriptor(
+    mapping: RustStaticVectorMapping,
+    profile_name: str | None,
+) -> str:
+    if mapping.extension_name is None:
+        extension = "Scalar" if mapping.lanes == 1 else f"Generic<{mapping.lanes}>"
+        extension = f"crate::tsl_core::{extension}"
+    else:
+        if profile_name is None or mapping.extension_tag_spelling is None:
+            raise ValueError(
+                "Rust hardware facade mapping is missing qualified tag facts"
+            )
+        extension = (
+            f"crate::{rust_profile_module_name(profile_name)}::"
+            f"{mapping.extension_tag_spelling}"
+        )
+    return f"crate::tsl_core::Simd<{mapping.base_spelling}, {extension}>"
 
 
 def rust_facade_representations_can_coexist(
@@ -527,9 +553,18 @@ class RustCuratedTraitImplementation:
     type_tags: tuple[str, ...]
     rhs_kind: RustFacadeTraitRhsKind | None
     rhs_type_tags: tuple[str, ...]
+    rhs_type_spellings: tuple[str, ...]
     shape_keys: tuple[tuple[str, int], ...]
     invocation: RustFacadeInvocation
     delegates: tuple[RustFacadeDelegate, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.rhs_type_spellings) != len(
+            self.rhs_type_tags
+        ):
+            raise ValueError(
+                "Rust facade trait RHS spellings must match its type tags"
+            )
 
 
 @dataclass(frozen=True, slots=True)

@@ -9,8 +9,8 @@ from tslc.backend.rust_api_model import (
     RustNativeAliasSelection,
     rust_facade_representations_can_coexist,
 )
+from tslc.backend.rust_names import rust_profile_module_name
 from tslc.backend.rust_static_selection import RustTargetRequirement
-from tslc.render._common import slug
 from tslc.render.rust_static_selection import (
     rust_target_requirement_cfg,
     rust_target_selection_cfg,
@@ -107,24 +107,7 @@ def representations_can_coexist(
 def lower_module(representation: RustFacadeRepresentation) -> str:
     if representation.profile_name is None:
         return "crate::tsl_target_fallback"
-    return f"crate::tsl_{slug(representation.profile_name)}"
-
-
-def private_vector_descriptor(representation: RustFacadeRepresentation) -> str:
-    mapping = representation.mapping
-    if mapping.extension_name is None:
-        extension = "Scalar" if mapping.lanes == 1 else f"Generic<{mapping.lanes}>"
-        return (
-            f"crate::tsl_core::Simd<{mapping.base_spelling}, "
-            f"crate::tsl_core::{extension}>"
-        )
-    if representation.profile_name is None or mapping.extension_tag_spelling is None:
-        raise ValueError("Rust hardware facade mapping is missing qualified tag facts")
-    return (
-        f"crate::tsl_core::Simd<{mapping.base_spelling}, "
-        f"crate::tsl_{slug(representation.profile_name)}::"
-        f"{mapping.extension_tag_spelling}>"
-    )
+    return f"crate::{rust_profile_module_name(representation.profile_name)}"
 
 
 def selection_cfg(representation: RustFacadeRepresentation) -> str:
@@ -177,7 +160,6 @@ __all__ = (
     "fallback_selection_cfg",
     "lower_module",
     "native_selection_cfg",
-    "private_vector_descriptor",
     "representations_can_coexist",
     "selection_cfg",
     "surface_delegate",

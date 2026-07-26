@@ -18,6 +18,7 @@ from tslc.backend.rust_api_model import (
     RustNativeAliasSelection,
 )
 from tslc.backend.rust_api_planner import RUST_FACADE_CORE_OPERATION_REQUIREMENTS
+from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.catalog.arithmetic import ArithmeticOperation
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
@@ -28,7 +29,6 @@ from tslc.render.rust_facade_common import (
     combined_selection_cfg as _combined_selection_cfg,
     lower_module as _lower_module,
     native_selection_cfg as _native_selection_cfg,
-    private_vector_descriptor as _private_vector_descriptor,
     representations_can_coexist as _representations_can_coexist,
     selection_cfg as _selection_cfg,
     surface_delegate as _surface_delegate,
@@ -62,7 +62,7 @@ def _representation_impls(plan: RustFacadePlan) -> str:
     blocks = []
     for shape in plan.shapes:
         for representation in shape.representations:
-            descriptor = _private_vector_descriptor(representation)
+            descriptor = representation.vector_descriptor
             blocks.append(
                 "\n".join(
                     (
@@ -137,7 +137,7 @@ def _facade_impl(
     shape: RustFacadeShape,
     representation: RustFacadeRepresentation,
 ) -> str:
-    descriptor = _private_vector_descriptor(representation)
+    descriptor = representation.vector_descriptor
     module = _lower_module(representation)
     delegates = {
         requirement.role: _core_delegate(plan, shape, representation, requirement.role)
@@ -290,16 +290,21 @@ def _mask_integer_argument(
     value: str,
     representation: RustFacadeRepresentation,
 ) -> str:
-    imask = representation.mapping.imask_spelling
-    return value if imask == "u64" else f"{value} as {imask}"
+    return RUST_FACADE_SIGNATURE_TYPES.adapt_lower_argument(
+        "im", value, representation.mapping
+    )
 
 
 def _mask_integer_result(
     call: str,
     representation: RustFacadeRepresentation,
 ) -> str:
-    suffix = "" if representation.mapping.imask_spelling == "u64" else " as u64"
-    return f"        {call}{suffix}"
+    return (
+        "        "
+        + RUST_FACADE_SIGNATURE_TYPES.adapt_lower_result(
+            "im", call, representation.mapping
+        )
+    )
 
 
 def _core_delegate(
@@ -382,12 +387,8 @@ def _conversion_pair_impls(plan: RustFacadePlan) -> str:
                         source_representation,
                         active_representation.profile_name,
                     )
-                    source_descriptor = _private_vector_descriptor(
-                        source_representation
-                    )
-                    target_descriptor = _private_vector_descriptor(
-                        target_representation
-                    )
+                    source_descriptor = source_representation.vector_descriptor
+                    target_descriptor = target_representation.vector_descriptor
                     module = _lower_module(active_representation)
                     arguments = ", ".join(
                         _invocation_arguments(method.invocation, ("value",))
@@ -471,7 +472,7 @@ def _curated_method_impl(
 ) -> str:
     cfg = _selection_cfg(representation)
     module = _lower_module(representation)
-    descriptor = _private_vector_descriptor(representation)
+    descriptor = representation.vector_descriptor
     vector = f"Simd<{shape.base_spelling}, {shape.lanes}>"
     mask = f"Mask<{shape.base_spelling}, {shape.lanes}>"
     if method.receiver_kind is RustFacadeReceiverKind.MASK:
@@ -540,10 +541,7 @@ def _operator_impls(plan: RustFacadePlan) -> str:
                 continue
             rhs_types: tuple[str | None, ...]
             if trait.rhs_kind is RustFacadeTraitRhsKind.SCALAR:
-                rhs_types = tuple(
-                    SCALAR_TYPE_INFOS[tag].documentation_short_label
-                    for tag in trait.rhs_type_tags
-                )
+                rhs_types = trait.rhs_type_spellings
             elif trait.rhs_kind is RustFacadeTraitRhsKind.SAME_TYPE:
                 rhs_types = (f"Simd<{shape.base_spelling}, {shape.lanes}>",)
             else:
@@ -574,7 +572,7 @@ def _canonical_operator_impl(
         trait.trait_path if rhs_type is None else f"{trait.trait_path}<{rhs_type}>"
     )
     module = _lower_module(representation)
-    descriptor = _private_vector_descriptor(representation)
+    descriptor = representation.vector_descriptor
     tracking = (
         ("    #[track_caller]",)
         if trait.operation
@@ -894,8 +892,8 @@ def _bit_method_impl(
         else target_representation
     )
     module = _lower_module(active_representation)
-    source_descriptor = _private_vector_descriptor(source_representation)
-    target_descriptor = _private_vector_descriptor(target_representation)
+    source_descriptor = source_representation.vector_descriptor
+    target_descriptor = target_representation.vector_descriptor
     cfg = _combined_selection_cfg(source_representation, target_representation)
     if to_bits:
         signature = f"    pub fn to_bits(self) -> {bits_vector} {{"

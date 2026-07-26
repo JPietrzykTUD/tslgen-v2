@@ -225,13 +225,20 @@ def rust_imask_type(
     if kind == "same_as_mask_type":
         return mask
     lanes = vector_bits // type_bits
-    width = 8 if lanes <= 8 else 16 if lanes <= 16 else 32 if lanes <= 32 else 64
+    width = rust_imask_width(lanes)
     return f"u{width}"
+
+
+def rust_imask_width(lanes: int) -> int:
+    if lanes <= 0:
+        raise ValueError("Rust integral masks require a positive lane count")
+    return 8 if lanes <= 8 else 16 if lanes <= 16 else 32 if lanes <= 32 else 64
 
 
 __all__ = (
     "RustVectorRegistration",
     "rust_imask_type",
+    "rust_imask_width",
     "rust_mask_type",
     "rust_registrations",
     "rust_vector_registrations",

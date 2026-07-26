@@ -1527,6 +1527,17 @@ def test_additive_unaliased_primitive_gets_only_a_comprehensive_method() -> None
     assert plan.curated_methods == ()
 
 
+def test_unsupported_runtime_kind_is_excluded_during_planning() -> None:
+    plan = plan_rust_facade(
+        (),
+        _plan(_spec("future_output", result_kind="o")),
+    )
+
+    assert plan.comprehensive_methods == ()
+    assert plan.coverage[0].status is RustFacadeCoverageStatus.EXCLUDED
+    assert plan.coverage[0].reason == "signature kind is not facade-representable"
+
+
 def test_selection_curated_method_uses_the_control_mask_receiver() -> None:
     spec = _spec(
         "arbitrary_selection_name",

@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import re
-
+from tslc.names import identifier_slug
 from tslc.output.artifacts import Artifact
 
 
 def slug(profile_name: str) -> str:
     """A safe C++/Rust/CMake identifier for a profile."""
 
-    return re.sub(r"[^0-9A-Za-z_]", "_", profile_name)
+    return identifier_slug(profile_name)
 
 
 def text(logical_path: str, content: str, *, media_type: str) -> Artifact:
