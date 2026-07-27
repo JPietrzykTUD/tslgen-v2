@@ -377,9 +377,13 @@ namespace detail::helpers {
 
 inline void require_same_lanes(std::size_t source_lanes, std::size_t target_lanes) {
     if (source_lanes != target_lanes) {
+#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)
+        __builtin_trap();
+#else
         throw std::invalid_argument(
             "lane-preserving conversion requires equal source and target lane counts"
         );
+#endif
     }
 }
 #if defined(__x86_64__) || defined(_M_X64)

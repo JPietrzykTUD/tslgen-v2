@@ -423,10 +423,10 @@ def test_differential_renderers_support_runtime_lane_scalar_kinds() -> None:
         "ui32",
         "u32",
         16,
-        mask_inputs=("5", "1"),
-        scalar_inputs=("15",),
+        mask_inputs=("5",),
+        scalar_inputs=("15", "1"),
         result_kind="m",
-        param_kinds=("m", "usize", "im"),
+        param_kinds=("m", "usize", "usize"),
         hardware_extension="avx512",
         from_array_name="from_array",
         to_array_name="to_array",
@@ -448,9 +448,9 @@ def test_differential_renderers_support_runtime_lane_scalar_kinds() -> None:
 
     cpp_mask = CPP_VALUE_TEST_RENDERER.render_case(set_mask)
     rust_mask = RUST_VALUE_TEST_RENDERER.render_case(set_mask)
-    assert "static_cast<typename Hw::imask_type>(1ull)" in cpp_mask
+    assert "static_cast<std::size_t>(1)" in cpp_mask
     assert "to_integral<Hw>(tsl::set_mask_lane<Hw>" in cpp_mask
-    assert "1u64 as <Hw as SimdVector>::ImaskType" in rust_mask
+    assert "1usize" in rust_mask
     assert "to_integral::<Hw>(set_mask_lane::<Hw>" in rust_mask
 
 

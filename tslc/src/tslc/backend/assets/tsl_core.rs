@@ -43,7 +43,7 @@ pub(crate) mod representation_sealed {
 pub trait SimdVector: representation_sealed::SimdVector {
     type BaseType;
     type Extension;
-    type RegisterType;
+    type RegisterType: Copy;
     type MaskType;
     // The integral mask (to_integral's result): the mask packed into an unsigned integer,
     // one bit per lane (the native __mmaskN, or a lane-sized uint on lane-bitmask ISAs).
@@ -92,7 +92,7 @@ pub struct Simd<T, Ext>(PhantomData<(T, Ext)>);
 
 impl<T> representation_sealed::SimdVector for Simd<T, Scalar> {}
 
-impl<T> SimdVector for Simd<T, Scalar> {
+impl<T: Copy> SimdVector for Simd<T, Scalar> {
     type BaseType = T;
     type Extension = Scalar;
     type RegisterType = T;
@@ -110,7 +110,7 @@ impl<T> SimdVector for Simd<T, Scalar> {
 
 impl<T> representation_sealed::StaticSimdVector for Simd<T, Scalar> {}
 
-impl<T> StaticSimdVector for Simd<T, Scalar> {
+impl<T: Copy> StaticSimdVector for Simd<T, Scalar> {
     const ELEMENT_COUNT: usize = 1;
 }
 
@@ -129,7 +129,7 @@ pub struct Generic<const LANES: usize>;
 // 128-bit-multiple lane count. Only a hand-written `Simd<u8, Generic<3>>` would violate it, unchecked.
 impl<T, const LANES: usize> representation_sealed::SimdVector for Simd<T, Generic<LANES>> {}
 
-impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
+impl<T: Copy, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
     type BaseType = T;
     type Extension = Generic<LANES>;
     type RegisterType = array_type<T, LANES>;
@@ -152,7 +152,7 @@ impl<T, const LANES: usize> representation_sealed::StaticSimdVector
 {
 }
 
-impl<T, const LANES: usize> StaticSimdVector for Simd<T, Generic<LANES>> {
+impl<T: Copy, const LANES: usize> StaticSimdVector for Simd<T, Generic<LANES>> {
     const ELEMENT_COUNT: usize = LANES;
 }
 

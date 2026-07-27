@@ -8,8 +8,6 @@ use crate::tsl_rust_variant_policy_protocol::{
     BENCHMARK_PROTOCOL_VERSION, DESCRIPTOR_SCHEMA_VERSION, POLICY_SCHEMA_VERSION,
 };
 
-pub(crate) const BENCHMARK_FEATURE_ENV: &str = "CARGO_FEATURE_VARIANT_BENCHMARKS";
-
 pub(crate) fn validate_descriptor(
     descriptor: &Descriptor,
     profile: &GeneratedProfile,
@@ -423,8 +421,7 @@ fn validate_tune_context(
 
     let policy_features = cargo_feature_set(&tune.build.cargo_features)?;
     let consumer_features = cargo_feature_set(&current.cargo_features)?;
-    let expected_features = HashSet::from([BENCHMARK_FEATURE_ENV.to_string()]);
-    if consumer_features != expected_features || policy_features != expected_features {
+    if consumer_features != policy_features {
         return Err(
             "Rust variant policy producer and consumer Cargo features do not match".to_string(),
         );

@@ -71,6 +71,25 @@ def rust_immediate_benchmark_result(data_root: Path, machine_profiles_path: Path
 
 
 @pytest.fixture(scope="module")
+def rust_immediate_benchmark_build_result(
+    data_root: Path,
+    machine_profiles_path: Path,
+):
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["permute_lanes"],
+        profiles=["sse2"],
+        type_tags=["f32"],
+        backends=["rust"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    return result
+
+
+@pytest.fixture(scope="module")
 def rust_avx2_reduction_benchmark_result(
     data_root: Path,
     machine_profiles_path: Path,
@@ -764,7 +783,7 @@ def _assert_gnu_linux_avx2_reduction_hot_loop(
 
 @pytest.mark.generated_build
 def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
-    rust_immediate_benchmark_result,
+    rust_immediate_benchmark_build_result,
     tmp_path: Path,
 ) -> None:
     if shutil.which("cargo") is None or shutil.which("rustc") is None:
@@ -773,7 +792,10 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
         pytest.skip("the sse2 immediate benchmark requires a native x86-64 host")
 
     generated = tmp_path / "generated"
-    report = write_artifacts(rust_immediate_benchmark_result.artifacts, generated)
+    report = write_artifacts(
+        rust_immediate_benchmark_build_result.artifacts,
+        generated,
+    )
     assert not has_errors(report.diagnostics), report.diagnostics
     crate = generated / "rust"
     common = ("--manifest-path", str(crate / "Cargo.toml"))
@@ -798,7 +820,7 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
         completed = _run(command, cwd=crate, environment=policy_environment)
         assert completed.returncode == 0, completed.stderr
 
-    profile = rust_immediate_benchmark_result.rendered.benchmarks.profile(
+    profile = rust_immediate_benchmark_build_result.rendered.benchmarks.profile(
         "rust", "sse2"
     )
     assert profile is not None
@@ -852,7 +874,9 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
         for row in rows
     ) == expected
     summary = summary_path.read_text()
-    assert summary.count("policy default (report_only)") == 6
+    assert summary.count("policy default (report_only)") == len(
+        profile.candidate_sets
+    )
     rejected_policy = _run(
         (
             "cargo",
@@ -1276,9 +1300,7 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
             and {"sse", "sse2"}
             <= set(row["tune_context"]["target_features"].split(","))
             and row["tune_context"]["required_features"] == "sse,sse2"
-            and "CARGO_FEATURE_SSE2=1" not in row["tune_context"]["cargo_features"]
-            and "CARGO_FEATURE_VARIANT_BENCHMARKS=1"
-            in row["tune_context"]["cargo_features"]
+            and row["tune_context"]["cargo_features"] == ""
             and row["tune_context"]["cargo_profile"] == "release"
             and row["tune_context"]["opt_level"] == "3"
             and row["tune_context"]["debug_assertions"] == "false"
@@ -1415,7 +1437,15 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
         cwd=crate,
         environment={
             **_rust_policy_environment("slice3-encoded-context"),
-            "RUSTFLAGS": "-Ctarget-cpu=native --codegen=target-cpu=x86-64",
+            "RUSTFLAGS": " ".join(
+                (
+                    *RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags_for(
+                        ("sse", "sse2")
+                    ),
+                    "-Ctarget-cpu=native",
+                    "--codegen=target-cpu=x86-64",
+                )
+            ),
         },
     )
     assert encoded_context.returncode == 0, encoded_context.stderr

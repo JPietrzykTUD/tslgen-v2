@@ -197,7 +197,6 @@ fn validate_metadata(metadata: ReportMetadata) -> Result<(), String> {
         context.target,
         context.linker,
         context.target_cpu,
-        context.cargo_features,
         context.cargo_profile,
         context.opt_level,
         context.debug_assertions,

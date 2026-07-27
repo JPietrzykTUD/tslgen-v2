@@ -127,6 +127,17 @@ def resolve_lowered_call_vector(
             if base is not None
             else None
         )
+    if expression in context.env.simd_type_param_names:
+        base = context.env.simd_type_param_base_bindings.get(expression)
+        if base is not None:
+            return VectorIdentity(
+                base,
+                (
+                    relative_to.extension_isa
+                    if relative_to is not None
+                    else context.env.extension.isa_name
+                ),
+            )
 
     vector = context.scope.resolve_vector_alias(expression)
     if vector is not None:

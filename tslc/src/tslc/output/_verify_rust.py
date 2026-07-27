@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
 from collections.abc import Mapping
+from dataclasses import replace
+from pathlib import Path
 
 from tslc.diagnostics import Diagnostic, Severity
 from tslc.output._verify_common import command_failure_diagnostic, missing_executable
@@ -13,6 +14,7 @@ from tslc.output._verify_runners import runner_prefix
 from tslc.output._verify_rust_config import (
     effective_rust_compiler,
     rust_environment,
+    rust_flags_environment_key,
     rust_linker,
     rust_target,
     rust_target_args,
@@ -186,8 +188,54 @@ def _prepare_rust_backend(
         clippy = _rust_clippy_executable(config)
         if missing_executable(clippy) is not None:
             skipped.append(f"rust: optional Clippy component {clippy} not found")
+    needs_host_target = any(
+        profile.target_features and rust_target(profile, config) is None
+        for profile in backend.profiles
+    )
+    host_target: str | None = None
+    if needs_host_target:
+        host_query = BuildCommand(
+            backend_id="rust",
+            profile_name="_toolchain",
+            step="host-target",
+            argv=(compiler, "-vV"),
+            cwd=root,
+        )
+        result = runner(host_query)
+        results.append(result)
+        if result.returncode != 0:
+            skipped.append(_rust_host_target_skip(result))
+            return BackendPreparation(
+                backend=None,
+                commands=tuple(results),
+                skipped=tuple(skipped),
+            )
+        host_target = _rust_host_target(result.stdout)
+        if host_target is None:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-BUILD-VERIFY-RUST-HOST-TARGET",
+                    message=(
+                        "Rust compiler verbose version output did not contain "
+                        "a valid `host: <target>` line"
+                    ),
+                )
+            )
+            return BackendPreparation(
+                backend=None,
+                commands=tuple(results),
+                diagnostics=tuple(diagnostics),
+                skipped=tuple(skipped),
+            )
     target_profiles: list[VerifyProfile] = []
     for profile in backend.profiles:
+        if (
+            host_target is not None
+            and profile.target_features
+            and rust_target(profile, config) is None
+        ):
+            profile = replace(profile, target=host_target)
         target = rust_target(profile, config)
         if target is None:
             target_profiles.append(profile)
@@ -401,15 +449,18 @@ def _rust_environment_with_cfg(
 ) -> tuple[BuildCommandEnvironment, ...]:
     environment = list(rust_environment(profile, config))
     cfg_flag = f"--cfg {cfg}"
+    rustflags_key = rust_flags_environment_key(profile, config)
     for index, item in enumerate(environment):
-        if item.key == "RUSTFLAGS":
+        if item.key == rustflags_key:
             environment[index] = BuildCommandEnvironment(
-                key="RUSTFLAGS",
+                key=rustflags_key,
                 value=f"{item.value} {cfg_flag}",
             )
             break
     else:
-        environment.append(BuildCommandEnvironment(key="RUSTFLAGS", value=cfg_flag))
+        environment.append(
+            BuildCommandEnvironment(key=rustflags_key, value=cfg_flag)
+        )
     return tuple(environment)
 
 
@@ -425,17 +476,24 @@ def _rust_lint_environment(
     flags: tuple[str, ...],
 ) -> tuple[BuildCommandEnvironment, ...]:
     environment = list(rust_environment(profile, config))
+    effective_key = (
+        rust_flags_environment_key(profile, config)
+        if key == "RUSTFLAGS"
+        else key
+    )
     suffix = " ".join(flags)
     for index, item in enumerate(environment):
-        if item.key != key:
+        if item.key != effective_key:
             continue
         environment[index] = BuildCommandEnvironment(
-            key=key,
+            key=effective_key,
             value=f"{item.value} {suffix}",
         )
         break
     else:
-        environment.append(BuildCommandEnvironment(key=key, value=suffix))
+        environment.append(
+            BuildCommandEnvironment(key=effective_key, value=suffix)
+        )
     return tuple(environment)
 
 
@@ -594,6 +652,29 @@ def _rust_preflight_skip(result: BuildCommandResult) -> str:
     suffix = f": {detail}" if detail else ""
     return (
         "rust: Rust compiler preflight failed with exit code "
+        f"{result.returncode}: {command_text}{suffix}"
+    )
+
+
+def _rust_host_target(stdout: str) -> str | None:
+    for line in stdout.splitlines():
+        key, separator, value = line.partition(":")
+        if separator and key.strip() == "host":
+            target = value.strip()
+            if target and all(
+                character.isalnum() or character in {"-", "_", "."}
+                for character in target
+            ):
+                return target
+    return None
+
+
+def _rust_host_target_skip(result: BuildCommandResult) -> str:
+    command_text = " ".join(result.command.argv)
+    detail = result.stderr.strip() or result.stdout.strip()
+    suffix = f": {detail}" if detail else ""
+    return (
+        "rust: Rust host-target query failed with exit code "
         f"{result.returncode}: {command_text}{suffix}"
     )
 

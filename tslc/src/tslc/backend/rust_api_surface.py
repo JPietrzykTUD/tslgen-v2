@@ -931,7 +931,7 @@ RUST_FACADE_CORE_OPERATION_REQUIREMENTS = (
         "mask_set_lane",
         PrimitiveOperation.MASK_SET_LANE,
         "m",
-        ("m", "usize", "im"),
+        ("m", "usize", "usize"),
         (OperandRole.PRIMARY, OperandRole.INDEX, OperandRole.VALUE),
     ),
     RustFacadeCoreOperationRequirement(

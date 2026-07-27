@@ -50,7 +50,7 @@ prim<im:=(im,usize)> test_imask(mask, position):
               complete(cast<static>(vector::imask, mask<test, imask>(mask, position)));
             """
 
-prim<m:=(m,usize,im)> set_mask_lane(mask, index, value):
+prim<m:=(m,usize,usize)> set_mask_lane(mask, index, value):
   operation mask_set_lane
   operand_roles:
     primary mask
@@ -92,7 +92,7 @@ prim<m:=(m,usize,im)> set_mask_lane(mask, index, value):
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
-          avx2 [avx]
+          avx2 [avx2]
           neon [neon]
           sve [sve]
           wasm128 [simd128]
@@ -106,7 +106,7 @@ prim<m:=(m,usize,im)> set_mask_lane(mask, index, value):
               call<primitive=sequence[Vec]>(),
               call<primitive=set1[Vec]>(cast<static>(base::in, index))
             ));
-            if (value != cast<static>(vector::imask, 0)) {
+            if (value != 0) {
               complete(call<primitive=mask_binary_or[Vec]>(mask, lane_mask));
             }
             complete(call<primitive=mask_binary_and[Vec]>(
@@ -130,7 +130,7 @@ prim<m:=(m,usize,im)> set_mask_lane(mask, index, value):
               (cast<static>(vector::imask, 1)) << index
             );
             var<infer>(bits, call<primitive=to_integral[Vec]>(mask));
-            if (value != cast<static>(vector::imask, 0)) {
+            if (value != 0) {
               complete(call<primitive=to_mask[Vec]>(bits | lane_bit));
             }
             complete(call<primitive=to_mask[Vec]>(

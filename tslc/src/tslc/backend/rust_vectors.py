@@ -89,7 +89,7 @@ def _rust_sized_registrations(
             f"for Simd<T, {sized_tag}> {{}}"
         )
         lines.append(
-            f"impl<T, const LANES: usize> SimdVector for Simd<T, {sized_tag}> {{ "
+            f"impl<T: Copy, const LANES: usize> SimdVector for Simd<T, {sized_tag}> {{ "
             "type BaseType = T; "
             f"type Extension = {sized_tag}; "
             "type RegisterType = array_type<T, LANES>; "
@@ -106,7 +106,7 @@ def _rust_sized_registrations(
             f"for Simd<T, {sized_tag}> {{}}"
         )
         lines.append(
-            f"impl<T, const LANES: usize> StaticSimdVector for Simd<T, {sized_tag}> {{ "
+            f"impl<T: Copy, const LANES: usize> StaticSimdVector for Simd<T, {sized_tag}> {{ "
             "const ELEMENT_COUNT: usize = LANES; }"
         )
     return lines

@@ -49,21 +49,32 @@ def test_generated_profile_shards_expose_oneapi_fpga_lane(
         if profile.get("auto_detect_gate") == "oneapi_fpga"
     }
 
-    emitted_profiles = [
-        profile for profiles in shard_profiles.values() for profile in profiles
-    ]
-    oneapi_shard_profiles = {
-        profile
-        for name, profiles in shard_profiles.items()
-        if "-oneapi-fpga-" in name
-        for profile in profiles
-    }
-    assert sorted(emitted_profiles) == sorted(all_profiles)
-    assert len(emitted_profiles) == len(set(emitted_profiles))
-    assert "x86-oneapi-fpga-0" in shard_profiles
-    assert oneapi_shard_profiles == oneapi_profiles
-    assert all(
-        not (set(profiles) & oneapi_profiles)
-        for name, profiles in shard_profiles.items()
-        if "-oneapi-fpga-" not in name
-    )
+    assert {shard["backend"] for shard in shards} == {"cpp", "rust"}
+    for backend in ("cpp", "rust"):
+        backend_shards = {
+            name: profiles
+            for name, profiles in shard_profiles.items()
+            if name.startswith(f"{backend}-")
+        }
+        emitted_profiles = [
+            profile for profiles in backend_shards.values() for profile in profiles
+        ]
+        oneapi_shard_profiles = {
+            profile
+            for name, profiles in backend_shards.items()
+            if "-oneapi-fpga-" in name
+            for profile in profiles
+        }
+        assert sorted(emitted_profiles) == sorted(all_profiles)
+        assert len(emitted_profiles) == len(set(emitted_profiles))
+        assert f"{backend}-x86-oneapi-fpga-0" in backend_shards
+        assert oneapi_shard_profiles == oneapi_profiles
+        assert all(
+            not (set(profiles) & oneapi_profiles)
+            for name, profiles in backend_shards.items()
+            if "-oneapi-fpga-" not in name
+        )
+        if backend == "rust":
+            assert all(len(profiles) == 1 for profiles in backend_shards.values())
+        else:
+            assert all(len(profiles) <= 6 for profiles in backend_shards.values())

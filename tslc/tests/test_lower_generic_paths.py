@@ -12,6 +12,7 @@ from _select_lower_core_support import (
 )
 from tslc.backend.cpp_documentation import cpp_doc
 from tslc.backend.rust_documentation import rust_doc
+from tslc.lower.dependencies import CallDependency, VectorIdentity
 
 
 @pytest.mark.parametrize("extension", ["generic", "oneapi_fpga"])
@@ -199,6 +200,31 @@ def test_lane_preserving_conversion_keeps_explicit_target_vector_typed(
         assert lowered.result_vector_param == "ToVec"
         target = next(param for param in lowered.type_params if param.name == "ToVec")
         assert target.base_type_binding == "f64"
+        assert {
+            origin.dependency
+            for origin in lowered.call_dependency_origins
+        } == {
+            CallDependency(
+                "from_array",
+                None,
+                VectorIdentity("f64", "avx2"),
+            ),
+            CallDependency(
+                "set_zero",
+                None,
+                VectorIdentity("f64", "avx2"),
+            ),
+            CallDependency(
+                "to_array",
+                None,
+                VectorIdentity("si32", "avx2"),
+            ),
+            CallDependency(
+                "to_array",
+                None,
+                VectorIdentity("f64", "avx2"),
+            ),
+        }
         assert "require_same_lanes" in lowered.body_text
         assert "scalar_as_cast" in lowered.body_text
         rendered_doc = (

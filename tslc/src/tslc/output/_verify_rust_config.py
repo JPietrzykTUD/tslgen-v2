@@ -76,7 +76,7 @@ def rust_environment(
         environment.extend(
             (
                 BuildCommandEnvironment(
-                    key="RUSTFLAGS",
+                    key=rust_flags_environment_key(profile, config),
                     value=target_feature_flags,
                 ),
                 BuildCommandEnvironment(
@@ -88,6 +88,16 @@ def rust_environment(
     return tuple(environment)
 
 
+def rust_flags_environment_key(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+) -> str:
+    target = rust_target(profile, config)
+    if target is None:
+        return "RUSTFLAGS"
+    return f"CARGO_TARGET_{cargo_target_env(target)}_RUSTFLAGS"
+
+
 def cargo_target_env(target: str) -> str:
     return target.upper().replace("-", "_")
 
@@ -95,6 +105,7 @@ def cargo_target_env(target: str) -> str:
 __all__ = (
     "effective_rust_compiler",
     "rust_environment",
+    "rust_flags_environment_key",
     "rust_linker",
     "rust_target",
     "rust_target_args",

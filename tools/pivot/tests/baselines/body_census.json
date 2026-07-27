@@ -5,10 +5,10 @@
         "call_and_local": 77,
         "call_only": 2912,
         "local_only": 10,
-        "native_leaf": 4092,
-        "synthetic_fixed": 2758
+        "native_leaf": 4112,
+        "synthetic_fixed": 2970
       },
-      "entries": 9849,
+      "entries": 10081,
       "failures": 0,
       "feature_combinations": [
         {
@@ -95,14 +95,14 @@
           ]
         },
         {
-          "count": 4092,
+          "count": 4112,
           "features": [
             "residual_expression",
             "result_only"
           ]
         },
         {
-          "count": 2608,
+          "count": 2820,
           "features": [
             "residual_expression",
             "result_only",
@@ -124,16 +124,16 @@
         "multi_statement": 2999,
         "multiple_locals": 3,
         "nested_typed_call": 2263,
-        "residual_expression": 9699,
-        "result_only": 9810,
-        "synthetic_fixed": 2758,
-        "typed_call": 5747,
+        "residual_expression": 9931,
+        "result_only": 10042,
+        "synthetic_fixed": 2970,
+        "typed_call": 5959,
         "typed_local": 87
       },
       "multi_statement": 2999,
       "origins": {
-        "fixed_wrapper": 2758,
-        "lowered_source": 7091
+        "fixed_wrapper": 2970,
+        "lowered_source": 7111
       }
     },
     "rust": {
@@ -141,10 +141,10 @@
         "call_and_local": 5,
         "call_only": 1640,
         "local_only": 10,
-        "native_leaf": 2166,
-        "synthetic_fixed": 2734
+        "native_leaf": 2186,
+        "synthetic_fixed": 2954
       },
-      "entries": 6555,
+      "entries": 6795,
       "failures": 0,
       "feature_combinations": [
         {
@@ -223,7 +223,7 @@
           ]
         },
         {
-          "count": 556,
+          "count": 576,
           "features": [
             "residual_expression",
             "result_only"
@@ -238,7 +238,7 @@
           ]
         },
         {
-          "count": 2584,
+          "count": 2804,
           "features": [
             "residual_expression",
             "result_only",
@@ -260,27 +260,27 @@
         "multi_statement": 1655,
         "multiple_locals": 3,
         "nested_typed_call": 1477,
-        "residual_expression": 6405,
-        "result_only": 6540,
+        "residual_expression": 6645,
+        "result_only": 6780,
         "rust_unsafe_frame": 3155,
-        "synthetic_fixed": 2734,
-        "typed_call": 4379,
+        "synthetic_fixed": 2954,
+        "typed_call": 4599,
         "typed_local": 15
       },
       "multi_statement": 1655,
       "origins": {
-        "fixed_wrapper": 2734,
-        "lowered_source": 3821
+        "fixed_wrapper": 2954,
+        "lowered_source": 3841
       }
     }
   },
-  "location_digest": "769f24db008c6177afd042ba73ec741b1d750269a23304cc86424b8da08fdf82",
+  "location_digest": "f28b25f539356a1507ddda4c7ee24a168ebd2b874b24f5ee44c3f294d1051549",
   "schema": "tslc-pivot-body-census-v2",
-  "semantic_digest": "6f4d97ac0216dd2013099fcb11c828be241abcc37556ebd94ab895ce2fe0ebb3",
+  "semantic_digest": "b001e865ccd7aaa49e83878382b21cd86f85a0b6ba98509a6ceadece742928e9",
   "summary": {
-    "entries": 16404,
+    "entries": 16876,
     "failures": 0,
-    "fixed_wrappers": 5492,
+    "fixed_wrappers": 5924,
     "multi_statement": 4654,
     "nominal_collision_entries": 640,
     "nominal_collision_groups": 320

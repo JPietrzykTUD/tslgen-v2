@@ -268,7 +268,7 @@ def test_runtime_lane_operations_bind_typed_index_operands(catalog: Catalog) -> 
     assert extract_index is not None and extract_index.parameter_kind == "usize"
     assert insert_index is not None and insert_index.parameter_kind == "usize"
     assert mask_index is not None and mask_index.parameter_kind == "usize"
-    assert mask_value is not None and mask_value.parameter_kind == "im"
+    assert mask_value is not None and mask_value.parameter_kind == "usize"
 
     compile_extract = catalog.primitive("extract_value")
     compile_insert = catalog.primitive("insert_value")

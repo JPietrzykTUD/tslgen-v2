@@ -599,11 +599,17 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
     assert "--message-format=json" not in build_tests.argv
     env = _env(build_tests)
     assert env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER"] == "rust-lld"
+    assert (
+        env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS"]
+        == "-C target-feature=+neon"
+    )
     assert env["RUSTDOCFLAGS"] == "-C target-feature=+neon"
     warning_gate = next(
         command for command in seen if command.step == "check-warnings"
     )
-    warning_flags = _env(warning_gate)["RUSTFLAGS"]
+    warning_flags = _env(warning_gate)[
+        "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS"
+    ]
     assert warning_flags.startswith("-C target-feature=+neon ")
     assert "-Dwarnings" in warning_flags
 
@@ -1499,7 +1505,7 @@ def test_rust_wasm_value_tests_use_wasmtime_runner(tmp_path: Path) -> None:
     assert "--target" in build_tests.argv
     assert "wasm32-wasip1" in build_tests.argv
     assert "--message-format=json" in build_tests.argv
-    assert _env(build_tests)["RUSTFLAGS"] == (
+    assert _env(build_tests)["CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS"] == (
         "-C target-feature=+simd128 --cfg tsl_value_tests"
     )
     assert seen[-1].argv == (sys.executable, executable)
@@ -1527,6 +1533,12 @@ def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None
 
     def runner(command: BuildCommand) -> BuildCommandResult:
         seen.append(command)
+        if command.step == "host-target":
+            return BuildCommandResult(
+                command=command,
+                returncode=0,
+                stdout="host: x86_64-unknown-linux-gnu\n",
+            )
         if command.step == "build-tests":
             stdout = "\n".join(
                 (
@@ -1556,6 +1568,8 @@ def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None
     assert report.diagnostics == ()
     assert [command.step for command in seen] == [
         "preflight",
+        "host-target",
+        "target-preflight",
         "build-tests",
         "test",
     ]
@@ -1565,6 +1579,11 @@ def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None
     assert "--target-dir" in build_tests.argv
     assert str(tmp_path / "rust" / "target" / "avx2") in build_tests.argv
     assert build_tests.argv[0] == "cargo"
+    assert "--target" in build_tests.argv
+    assert "x86_64-unknown-linux-gnu" in build_tests.argv
+    assert _env(build_tests)[
+        "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS"
+    ] == "-C target-feature=+avx2 --cfg tsl_value_tests"
     assert seen[-1].argv == (sys.executable, "-hsw", "--", executable)
 
 

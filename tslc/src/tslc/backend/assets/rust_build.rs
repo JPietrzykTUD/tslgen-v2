@@ -68,7 +68,13 @@ fn main() {
     emit("TSL_BUILD_HOST", &host);
     emit("TSL_BUILD_TARGET", &target);
 
-    let benchmark_enabled = std::env::var_os("CARGO_FEATURE_VARIANT_BENCHMARKS").is_some();
+    let rustflags = optional("RUSTFLAGS");
+    let encoded_rustflags = optional("CARGO_ENCODED_RUSTFLAGS");
+    let benchmark_enabled = rustflag_cfg_enabled(
+        &rustflags,
+        &encoded_rustflags,
+        "tsl_variant_benchmarks",
+    );
     let policy_input = std::env::var_os(POLICY_ENVIRONMENT);
     if policy_input.is_some() {
         emit("TSL_RUST_VARIANT_POLICY_ACTIVE", "1");
@@ -105,8 +111,6 @@ fn main() {
     let linker = std::env::var("RUSTC_LINKER")
         .or_else(|_| std::env::var(&target_linker_key))
         .unwrap_or_else(|_| "rustc-default".to_string());
-    let rustflags = optional("RUSTFLAGS");
-    let encoded_rustflags = optional("CARGO_ENCODED_RUSTFLAGS");
     let target_features = optional("CARGO_CFG_TARGET_FEATURE");
     let target_cpu = rustflag_value(&rustflags, &encoded_rustflags, "target-cpu")
         .unwrap_or_else(|| "rustc-default".to_string());
@@ -278,6 +282,23 @@ fn rustflag_value(rustflags: &str, encoded: &str, key: &str) -> Option<String> {
         return rustflag_value_from_words(&encoded.split('\u{1f}').collect::<Vec<_>>(), key);
     }
     rustflag_value_from_words(&rustflags.split_whitespace().collect::<Vec<_>>(), key)
+}
+
+fn rustflag_cfg_enabled(rustflags: &str, encoded: &str, cfg: &str) -> bool {
+    if !encoded.is_empty() {
+        return rustflag_cfg_enabled_from_words(
+            &encoded.split('\u{1f}').collect::<Vec<_>>(),
+            cfg,
+        );
+    }
+    rustflag_cfg_enabled_from_words(&rustflags.split_whitespace().collect::<Vec<_>>(), cfg)
+}
+
+fn rustflag_cfg_enabled_from_words(words: &[&str], cfg: &str) -> bool {
+    words.iter().enumerate().any(|(index, word)| {
+        word.strip_prefix("--cfg=") == Some(cfg)
+            || (*word == "--cfg" && words.get(index + 1) == Some(&cfg))
+    })
 }
 
 fn rustflag_value_from_words(words: &[&str], key: &str) -> Option<String> {

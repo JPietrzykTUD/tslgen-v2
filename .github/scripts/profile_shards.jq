@@ -1,6 +1,7 @@
 # Convert machine_profiles.json into a GitHub Actions matrix axis.
 
-def profile_chunk_size: 6;
+def cpp_profile_chunk_size: 6;
+def rust_profile_chunk_size: 1;
 
 def chunks($n):
   . as $items
@@ -9,23 +10,28 @@ def chunks($n):
 def auto_detect_gate:
   .auto_detect_gate // "";
 
-def profile_shards($name; $profiles):
-  ($profiles | map(.name) | chunks(profile_chunk_size)) as $chunks
+def profile_shards($backend; $name; $profiles; $chunk_size):
+  ($profiles | map(.name) | chunks($chunk_size)) as $chunks
   | $chunks
   | to_entries[]
   | {
-      name: ($name + "-" + (.key | tostring)),
+      backend: $backend,
+      name: ($backend + "-" + $name + "-" + (.key | tostring)),
       profiles: (.value | join(","))
     };
+
+def backend_profile_shards($name; $profiles):
+  profile_shards("cpp"; $name; $profiles; cpp_profile_chunk_size),
+  profile_shards("rust"; $name; $profiles; rust_profile_chunk_size);
 
 [
   to_entries[]
   | .key as $family
-  | profile_shards($family; [.value[] | select(auto_detect_gate == "")]),
+  | backend_profile_shards($family; [.value[] | select(auto_detect_gate == "")]),
     (
       [.value[] | select(auto_detect_gate != "")]
       | group_by(auto_detect_gate)[]
       | .[0].auto_detect_gate as $gate
-      | profile_shards($family + "-" + ($gate | gsub("_"; "-")); .)
+      | backend_profile_shards($family + "-" + ($gate | gsub("_"; "-")); .)
     )
 ]

@@ -447,6 +447,12 @@ def test_cpp_zero_divisor_failure_traps_on_non_unwinding_targets(
     core = specialization_artifacts["cpp/include/tsl_core.hpp"]
 
     assert "defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)" in core
+    assert (
+        "if (source_lanes != target_lanes) {\n"
+        "#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)\n"
+        "        __builtin_trap();"
+        in core
+    )
     assert '__builtin_trap();\n#else\n    throw std::domain_error(' in core
 
 
@@ -683,7 +689,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "6287f43d73c266c3efd6c78220d310f09195f1547a19b3ce0ccc4274ae2a7432"
+        "d7035db4a130785bba7e2141a6e26479b9a8796cd645530706e9770c84b9dca8"
     )
 
     assert 'name = "tsl"' in cargo
@@ -1287,6 +1293,7 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "pub struct U32Arg<const VALUE: u32>;" in core
     assert "pub struct I32Arg<const VALUE: i32>;" in core
     assert "pub trait StaticSimdVector: SimdVector" in core
+    assert "type RegisterType: Copy;" in core
     assert "pub(crate) mod representation_sealed" in core
     assert "pub(crate) unsafe trait ValidBitPattern: Copy" in core
     assert "pub(crate) fn bit_cast<From: Copy, To: ValidBitPattern>" in core
@@ -1312,6 +1319,8 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "const ELEMENT_COUNT: usize = LANES;" in core
     assert "const ALIGN: usize;" in core
     assert "const ALIGN: usize = core::mem::align_of::<T>();" in core
+    assert "impl<T: Copy> SimdVector for Simd<T, Scalar>" in core
+    assert "impl<T: Copy, const LANES: usize> SimdVector" in core
     assert (
         "const ALIGN: usize = core::mem::align_of::<array_type<T, LANES>>();"
         in core

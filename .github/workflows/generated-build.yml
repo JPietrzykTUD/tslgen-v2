@@ -111,7 +111,7 @@ jobs:
           bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/generated-build-${{ matrix.profile_shard.name }}/build.log" \
             bash supplementary/ci/run_tslc_ci_container.sh \
-              -e TSLC_BACKENDS="cpp,rust" \
+              -e TSLC_BACKENDS="${{ matrix.profile_shard.backend }}" \
               -e TSLC_PROFILES="${{ matrix.profile_shard.profiles }}" \
               -e TSLC_CI_OUTPUT="./tslctmp/ci-build-${{ matrix.profile_shard.name }}" \
               -- \

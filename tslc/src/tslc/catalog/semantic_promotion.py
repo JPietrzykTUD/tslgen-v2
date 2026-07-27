@@ -36,7 +36,7 @@ _ROLE_KINDS: dict[OperandRole, frozenset[str]] = {
     OperandRole.PASS_THROUGH: frozenset({"v"}),
     OperandRole.PRIMARY: _VECTOR_VALUES,
     OperandRole.SECONDARY: _VECTOR_VALUES,
-    OperandRole.VALUE: frozenset({"s", "s[]", "v", "im"}),
+    OperandRole.VALUE: frozenset({"s", "s[]", "v", "im", "usize"}),
 }
 
 _BINARY_VALUE_ROLES = frozenset({OperandRole.PRIMARY, OperandRole.SECONDARY})
@@ -306,7 +306,7 @@ _OPERATION_ROLE_KINDS.update(
         PrimitiveOperation.MASK_SET_LANE: {
             OperandRole.PRIMARY: frozenset({"m"}),
             OperandRole.INDEX: frozenset({"usize"}),
-            OperandRole.VALUE: frozenset({"im"}),
+            OperandRole.VALUE: frozenset({"usize"}),
         },
         PrimitiveOperation.MASK_TO_INTEGRAL: {
             OperandRole.PRIMARY: frozenset({"m"})
