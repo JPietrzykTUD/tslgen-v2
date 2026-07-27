@@ -5,7 +5,10 @@ Run it with:
     cmake --build build --target benchmark_multicolumn_gbench
     taskset -c 0 ./build/benchmark_multicolumn_gbench \
         --benchmark_format=json --benchmark_out=build/mc_gbench.json
-    streamlit run visualize_multicolumn_bench.py
+    streamlit run visualize_multicolumn_bench.py -- --json build/mc_gbench.json
+
+Omit ``--json`` to start with the default path in the sidebar. The path remains
+editable, and the upload control can still override it.
 
 Design principle: **no hidden aggregation.** Every benchmark dimension
 (algorithm, distribution, direction pattern, data type, SIMD lanes, sort
@@ -17,6 +20,7 @@ corresponding parallel/SIMD dimension is pinned.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 
@@ -356,14 +360,34 @@ PRESETS = {
 # --------------------------------------------------------------------------- #
 # Streamlit UI                                                                 #
 # --------------------------------------------------------------------------- #
-def run_app() -> None:
+def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse arguments forwarded after Streamlit's ``--`` separator."""
+    parser = argparse.ArgumentParser(
+        description="Explore a multi-column co-sort Google Benchmark JSON file.",
+    )
+    parser.add_argument(
+        "--json",
+        dest="json_path",
+        metavar="FILE",
+        help="benchmark JSON file to select initially",
+    )
+    args, _unknown = parser.parse_known_args(argv)
+    return args
+
+
+def run_app(json_path: str | None = None) -> None:
     st.set_page_config(page_title="Multi-column co-sort explorer", layout="wide")
     st.title("Multi-column co-sorting quicksort — benchmark explorer")
 
     here = os.path.dirname(os.path.abspath(__file__))
+    default_path = (
+        os.path.abspath(json_path)
+        if json_path is not None
+        else os.path.join(here, "build", "mc_gbench.json")
+    )
     with st.sidebar:
         st.header("Data")
-        path = st.text_input("Benchmark JSON path", value=os.path.join(here, "build", "mc_gbench.json"))
+        path = st.text_input("Benchmark JSON path", value=default_path)
         upload = st.file_uploader("…or upload a --benchmark_out JSON", type="json")
 
     try:
@@ -478,4 +502,4 @@ def run_app() -> None:
 
 
 if __name__ == "__main__":
-    run_app()
+    run_app(parse_cli_args().json_path)
