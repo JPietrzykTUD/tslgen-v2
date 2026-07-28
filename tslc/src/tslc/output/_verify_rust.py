@@ -188,12 +188,13 @@ def _prepare_rust_backend(
         clippy = _rust_clippy_executable(config)
         if missing_executable(clippy) is not None:
             skipped.append(f"rust: optional Clippy component {clippy} not found")
-    needs_host_target = any(
-        profile.target_features and rust_target(profile, config) is None
+    host_dependent_profiles = tuple(
+        profile
         for profile in backend.profiles
+        if profile.target_features and rust_target(profile, config) is None
     )
     host_target: str | None = None
-    if needs_host_target:
+    if host_dependent_profiles:
         host_query = BuildCommand(
             backend_id="rust",
             profile_name="_toolchain",
@@ -204,37 +205,32 @@ def _prepare_rust_backend(
         result = runner(host_query)
         results.append(result)
         if result.returncode != 0:
-            skipped.append(_rust_host_target_skip(result))
-            return BackendPreparation(
-                backend=None,
-                commands=tuple(results),
-                skipped=tuple(skipped),
+            skipped.extend(
+                _rust_host_target_failure_skip(profile, result)
+                for profile in host_dependent_profiles
             )
-        host_target = _rust_host_target(result.stdout)
-        if host_target is None:
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="TSL-BUILD-VERIFY-RUST-HOST-TARGET",
-                    message=(
-                        "Rust compiler verbose version output did not contain "
-                        "a valid `host: <target>` line"
-                    ),
+        else:
+            host_target = _rust_host_target(result.stdout)
+            if host_target is None:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-BUILD-VERIFY-RUST-HOST-TARGET",
+                        message=(
+                            "Rust compiler verbose version output did not contain "
+                            "a valid `host: <target>` line"
+                        ),
+                    )
                 )
-            )
-            return BackendPreparation(
-                backend=None,
-                commands=tuple(results),
-                diagnostics=tuple(diagnostics),
-                skipped=tuple(skipped),
-            )
+                skipped.extend(
+                    _rust_host_target_malformed_skip(profile)
+                    for profile in host_dependent_profiles
+                )
     target_profiles: list[VerifyProfile] = []
     for profile in backend.profiles:
-        if (
-            host_target is not None
-            and profile.target_features
-            and rust_target(profile, config) is None
-        ):
+        if profile in host_dependent_profiles:
+            if host_target is None:
+                continue
             profile = replace(profile, target=host_target)
         target = rust_target(profile, config)
         if target is None:
@@ -669,13 +665,25 @@ def _rust_host_target(stdout: str) -> str | None:
     return None
 
 
-def _rust_host_target_skip(result: BuildCommandResult) -> str:
+def _rust_host_target_failure_skip(
+    profile: VerifyProfile,
+    result: BuildCommandResult,
+) -> str:
     command_text = " ".join(result.command.argv)
     detail = result.stderr.strip() or result.stdout.strip()
     suffix = f": {detail}" if detail else ""
     return (
-        "rust: Rust host-target query failed with exit code "
+        f"rust: profile {profile.profile_name} requires host-target discovery; "
+        "Rust host-target query failed with exit code "
         f"{result.returncode}: {command_text}{suffix}"
+    )
+
+
+def _rust_host_target_malformed_skip(profile: VerifyProfile) -> str:
+    return (
+        f"rust: profile {profile.profile_name} requires host-target discovery; "
+        "Rust compiler verbose version output did not contain a valid "
+        "`host: <target>` line"
     )
 
 

@@ -208,15 +208,20 @@ def diagnose(
         preflight_diagnostics = list(prep.diagnostics)
         skipped = list(prep.skipped)
         prepared = prep.backend
-        prepared_names = {
-            item.profile_name for item in prepared.profiles
-        } if prepared is not None else set()
+        prepared_profiles = (
+            {item.profile_name: item for item in prepared.profiles}
+            if prepared is not None
+            else {}
+        )
         profile_reports = [
             _profile_report(
                 item,
-                capability.toolchain_commands(item, config),
+                capability.toolchain_commands(
+                    prepared_profiles.get(item.profile_name, item),
+                    config,
+                ),
                 config,
-                prepared=item.profile_name in prepared_names,
+                prepared=item.profile_name in prepared_profiles,
                 missing_backend_tools=missing_tools,
                 skipped=skipped,
             )

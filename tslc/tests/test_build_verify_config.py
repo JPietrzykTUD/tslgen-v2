@@ -40,6 +40,7 @@ def _config(
     *,
     cpp_compiler: str | None = None,
     rust_compiler: str | None = None,
+    rust_target: str | None = None,
     run_value_tests: bool = False,
     sde_path: str | None = None,
     qemu_aarch64_path: str | None = None,
@@ -55,12 +56,21 @@ def _config(
             ("cpp", cpp_compiler),
             ("rust", rust_compiler),
         )
-        if compiler is not None or (backend_id == "cpp" and cpp_linker is not None)
+        if (
+            compiler is not None
+            or (backend_id == "cpp" and cpp_linker is not None)
+            or (backend_id == "rust" and rust_target is not None)
+        )
     }
     if cpp_linker is not None:
         toolchains["cpp"] = BackendToolchain.create(
             compiler=cpp_compiler,
             linker=cpp_linker,
+        )
+    if rust_target is not None:
+        toolchains["rust"] = BackendToolchain.create(
+            compiler=rust_compiler,
+            target=rust_target,
         )
     runner_paths = {
         kind: path
@@ -80,6 +90,25 @@ def _config(
         tool_paths=configured_tools,
         run_value_tests=run_value_tests,
         run_quality_checks=run_quality_checks,
+    )
+
+
+def _mixed_rust_host_discovery_project() -> VerifyProject:
+    return VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(profile_name="scalar", file_stem="scalar"),
+                    VerifyProfile(
+                        profile_name="avx2",
+                        file_stem="avx2",
+                        target_features=("+avx2",),
+                    ),
+                ),
+            ),
+        )
     )
 
 
@@ -665,6 +694,133 @@ def test_rust_target_preflight_failure_skips_only_that_profile(tmp_path: Path) -
     assert [command.profile_name for command in seen if command.step == "test"] == [
         "scalar"
     ]
+
+
+def test_rust_host_target_query_failure_skips_only_dependent_profiles(
+    tmp_path: Path,
+) -> None:
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        if command.step == "host-target":
+            return BuildCommandResult(
+                command=command,
+                returncode=1,
+                stderr="toolchain metadata unavailable",
+            )
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        _mixed_rust_host_discovery_project(),
+        runner,
+        config=_config(rust_compiler=sys.executable),
+    )
+
+    assert report.diagnostics == ()
+    assert report.skipped == (
+        "rust: profile avx2 requires host-target discovery; Rust host-target "
+        f"query failed with exit code 1: {sys.executable} -vV: "
+        "toolchain metadata unavailable",
+    )
+    assert [command.step for command in seen] == [
+        "preflight",
+        "host-target",
+        "test",
+    ]
+    assert seen[-1].profile_name == "scalar"
+
+
+def test_rust_malformed_host_target_skips_only_dependent_profiles(
+    tmp_path: Path,
+) -> None:
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        if command.step == "host-target":
+            return BuildCommandResult(
+                command=command,
+                returncode=0,
+                stdout="rustc 1.89.0\nrelease: 1.89.0\n",
+            )
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        _mixed_rust_host_discovery_project(),
+        runner,
+        config=_config(rust_compiler=sys.executable),
+    )
+
+    assert [diagnostic.code for diagnostic in report.diagnostics] == [
+        "TSL-BUILD-VERIFY-RUST-HOST-TARGET"
+    ]
+    assert report.skipped == (
+        "rust: profile avx2 requires host-target discovery; Rust compiler "
+        "verbose version output did not contain a valid `host: <target>` line",
+    )
+    assert [command.step for command in seen] == [
+        "preflight",
+        "host-target",
+        "test",
+    ]
+    assert seen[-1].profile_name == "scalar"
+
+
+def test_rust_explicit_target_bypasses_host_discovery(tmp_path: Path) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="avx2",
+                        file_stem="avx2",
+                        target_features=("+avx2",),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=_config(
+            rust_compiler=sys.executable,
+            rust_target="x86_64-unknown-linux-gnu",
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert report.skipped == ()
+    assert [command.step for command in seen] == [
+        "preflight",
+        "target-preflight",
+        "build-tests",
+    ]
+    assert all(command.step != "host-target" for command in seen)
+    target_preflight, cargo_build = seen[1:]
+    assert target_preflight.argv[
+        target_preflight.argv.index("--target") + 1
+    ] == "x86_64-unknown-linux-gnu"
+    assert cargo_build.argv[cargo_build.argv.index("--target") + 1] == (
+        "x86_64-unknown-linux-gnu"
+    )
+    environment = _env(cargo_build)
+    assert environment[
+        "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS"
+    ] == "-C target-feature=+avx2"
+    assert "RUSTFLAGS" not in environment
 
 
 def test_rust_verifier_skips_after_failed_preflight(
@@ -1584,6 +1740,7 @@ def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None
     assert _env(build_tests)[
         "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS"
     ] == "-C target-feature=+avx2 --cfg tsl_value_tests"
+    assert "RUSTFLAGS" not in _env(build_tests)
     assert seen[-1].argv == (sys.executable, "-hsw", "--", executable)
 
 
