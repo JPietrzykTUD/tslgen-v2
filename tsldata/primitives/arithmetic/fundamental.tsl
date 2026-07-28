@@ -1,5 +1,11 @@
 description "Fundamental arithmetic operations"
 prim<v:=(v,v)> add(left, right):
+  arithmetic:
+    operations [addition]
+    operand_roles:
+      primary left
+      secondary right
+    guarantees [integer_wrapping]
   brief_description "Adds the corresponding lanes of two vector registers."
   detailed_description """
     Computes lane-wise addition of two vector registers. Each output lane depends
@@ -172,6 +178,12 @@ prim<v:=(v,v)> add(left, right):
         implementation:
           tsil "complete(intrin<svadd, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
 prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
+  arithmetic:
+    operations [addition]
+    operand_roles:
+      primary left
+      secondary right
+    guarantees [integer_wrapping]
   brief_description "Adds the corresponding lanes of two vector registers and writes zero to inactive mask lanes."
   detailed_description """
     Computes lane-wise addition for lanes enabled by the mask. Disabled lanes are
@@ -302,6 +314,12 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
         implementation:
           tsil "complete(intrin<svadd, build[post=z]>(mask, left, right));"
 prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
+  arithmetic:
+    operations [addition]
+    operand_roles:
+      primary left
+      secondary right
+    guarantees [integer_wrapping]
   brief_description "Adds active lanes of two vector registers and keeps the pass-through lane value where the mask is inactive."
   detailed_description """
     Computes lane-wise addition for lanes enabled by the mask. Disabled lanes keep
@@ -435,6 +453,12 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
         implementation:
           tsil "complete(intrin<svadd, build[post=m]>(mask, left, right));"
 prim<v:=(v,v)> sub(left, right):
+  arithmetic:
+    operations [subtraction]
+    operand_roles:
+      primary left
+      secondary right
+    guarantees [integer_wrapping]
   brief_description "Subtracts the corresponding right lane from each left lane."
   detailed_description """
     Computes lane-wise subtraction of two vector registers. Each output lane
@@ -607,6 +631,12 @@ prim<v:=(v,v)> sub(left, right):
         implementation:
           tsil "complete(intrin<svsub, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
 prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
+  arithmetic:
+    operations [subtraction]
+    operand_roles:
+      primary left
+      secondary right
+    guarantees [integer_wrapping]
   brief_description "Subtracts active right lanes from left lanes and writes zero to inactive mask lanes."
   detailed_description """
     Computes lane-wise subtraction for lanes enabled by the mask. Disabled lanes
@@ -737,6 +767,12 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
         implementation:
           tsil "complete(intrin<svsub, build[post=z]>(mask, left, right));"
 prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
+  arithmetic:
+    operations [subtraction]
+    operand_roles:
+      primary left
+      secondary right
+    guarantees [integer_wrapping]
   brief_description "Subtracts active right lanes from left lanes and keeps the pass-through lane value where the mask is inactive."
   detailed_description """
     Computes lane-wise subtraction for lanes enabled by the mask. Disabled lanes
@@ -883,22 +919,22 @@ prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
     return result
     """
   tests:
-    - {tags [blend, add, basic], type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [11, 2, 31, 4, 51, 6, 71, 8, 91, 10, 111, 12, 131, 14, 151, 16]}}
-    - {tags [blend, add, edge], type "ui8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {tags [blend, add, basic], type "si8", case {inputs [43690, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [11, -2, 31, -4, 51, -6, 71, -8, 91, -10, 111, -12, 131, -14, 151, -16]}}
-    - {tags [blend, add, edge], type "si8", case {inputs [65535, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]}}
-    - {tags [blend, add, basic], type "ui16", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [11, 2, 31, 4, 51, 6, 71, 8]}}
-    - {tags [blend, add, edge], type "ui16", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {tags [blend, add, basic], type "si16", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [11, -2, 31, -4, 51, -6, 71, -8]}}
-    - {tags [blend, add, edge], type "si16", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
-    - {tags [blend, add, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [11, 2, 31, 4, 51, 6, 71, 8]}}
-    - {tags [blend, add, edge], type "ui32", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {tags [blend, add, basic], type "si32", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [11, -2, 31, -4, 51, -6, 71, -8]}}
-    - {tags [blend, add, edge], type "si32", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
-    - {tags [blend, add, basic], type "ui64", case {inputs [10, [1, 2, 3, 4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [11, 2, 31, 4]}}
-    - {tags [blend, add, edge], type "ui64", case {inputs [15, [1, 2, 3, 4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [1, 2, 3, 4]}}
-    - {tags [blend, add, basic], type "si64", case {inputs [10, [-1, -2, -3, -4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [11, -2, 31, -4]}}
-    - {tags [blend, add, edge], type "si64", case {inputs [15, [-1, -2, -3, -4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [-1, -2, -3, -4]}}
+    - {tags [select, add, basic], type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [11, 2, 31, 4, 51, 6, 71, 8, 91, 10, 111, 12, 131, 14, 151, 16]}}
+    - {tags [select, add, edge], type "ui8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [select, add, basic], type "si8", case {inputs [43690, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [11, -2, 31, -4, 51, -6, 71, -8, 91, -10, 111, -12, 131, -14, 151, -16]}}
+    - {tags [select, add, edge], type "si8", case {inputs [65535, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]}}
+    - {tags [select, add, basic], type "ui16", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [11, 2, 31, 4, 51, 6, 71, 8]}}
+    - {tags [select, add, edge], type "ui16", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [select, add, basic], type "si16", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [11, -2, 31, -4, 51, -6, 71, -8]}}
+    - {tags [select, add, edge], type "si16", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
+    - {tags [select, add, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [11, 2, 31, 4, 51, 6, 71, 8]}}
+    - {tags [select, add, edge], type "ui32", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [select, add, basic], type "si32", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [11, -2, 31, -4, 51, -6, 71, -8]}}
+    - {tags [select, add, edge], type "si32", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
+    - {tags [select, add, basic], type "ui64", case {inputs [10, [1, 2, 3, 4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [11, 2, 31, 4]}}
+    - {tags [select, add, edge], type "ui64", case {inputs [15, [1, 2, 3, 4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [1, 2, 3, 4]}}
+    - {tags [select, add, basic], type "si64", case {inputs [10, [-1, -2, -3, -4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [11, -2, 31, -4]}}
+    - {tags [select, add, edge], type "si64", case {inputs [15, [-1, -2, -3, -4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [-1, -2, -3, -4]}}
   impls:
     [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
       arith:
@@ -929,6 +965,148 @@ prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
                 left
               )
             );
+          """
+prim<v:=v> neg(data):
+  arithmetic:
+    operations [negation]
+    operand_roles:
+      primary data
+    guarantees [integer_wrapping, floating_sign_bit_toggle]
+  brief_description "Negates signed-integer and floating-point lanes without changing any other floating bits."
+  detailed_description """
+    Negates each signed-integer lane modulo its lane width, so the minimum signed
+    value maps to itself. Floating-point lanes are negated by toggling only their
+    sign bit; this preserves signed zero, infinities, and every NaN payload bit.
+    Unsigned lane types are not supported.
+    """
+  semantics """
+    input: register data
+    for each lane i:
+      if the lane type is signed integer:
+        bits = unsigned_bit_pattern(data[i])
+        result[i] = signed_bit_pattern(0 - bits modulo the lane width)
+      else:
+        result[i] = data[i] with only its sign bit toggled
+    return result
+    """
+  tests:
+    - {tags [basic], type "si8", case {inputs [[0, 1, -1, -128, 127, 2, -2, 64, -64, 3, -3, 100, -100, 126, -127, 42]], expected [0, -1, 1, -128, -127, -2, 2, -64, 64, -3, 3, -100, 100, -126, 127, -42]}}
+    - {tags [basic], type "si16", case {inputs [[0, 1, -1, -32768, 32767, 2, -2, 12345]], expected [0, -1, 1, -32768, -32767, -2, 2, -12345]}}
+    - {tags [signed_min, wrapping], type "si32", case {inputs [[0, 1, -1, -2147483648, 2147483647, 2, -2, 123456789]], expected [0, -1, 1, -2147483648, -2147483647, -2, 2, -123456789]}}
+    - {tags [signed_min, wrapping], type "si64", case {inputs [[0, -9223372036854775808, 9223372036854775807, -7]], expected [0, -9223372036854775808, -9223372036854775807, 7]}}
+    - {tags [float, sign_bits], type "f32", comparison bitwise, case {inputs [[0.0, -0.0, 1.5, -2.25, INFINITY, "-INFINITY", NAN, "-NAN"]], expected [-0.0, 0.0, -1.5, 2.25, "-INFINITY", INFINITY, "-NAN", NAN]}}
+    - {tags [float, sign_bits], type "f64", comparison bitwise, case {inputs [[0.0, -0.0, NAN, "-NAN"]], expected [-0.0, 0.0, "-NAN", NAN]}}
+  impls:
+    scalar:
+      si?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            var<const_infer>(bits, cast<bitcast>(UBase, data));
+            var<const_typed>(UBase, zero, 0);
+            complete(cast<bitcast>(
+              base::in,
+              cast<static>(UBase, op<sub>(zero, bits))
+            ));
+          """
+      f?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(SBase, base::signed_of(base::in));
+            var<const_infer>(bits, cast<bitcast>(UBase, data));
+            var<const_infer>(all_bits, cast<bitcast>(UBase, cast<static>(SBase, -1)));
+            var<const_infer>(sign_bit, all_bits ^ (all_bits >> 1));
+            complete(cast<bitcast>(base::in, bits ^ sign_bit));
+          """
+    [generic, oneapi_fpga, oneapi_fpga_rtl]:
+      [si?, f?]:
+        requires:
+          generic []
+          oneapi_fpga []
+          oneapi_fpga_rtl []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(data[i]);
+            }
+            complete(result);
+          """
+    [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+      si?:
+        requires:
+          clang_v128 []
+          avx512:
+            [si8, si16] [avx512f, avx512bw]
+            [si32, si64] [avx512f]
+          avx2_vl:
+            [si8, si16] [avx2, avx512f, avx512vl, avx512bw]
+            [si32, si64] [avx2, avx512f, avx512vl]
+          sse_vl:
+            [si8, si16] [sse2, avx512f, avx512vl, avx512bw]
+            [si32, si64] [sse2, avx512f, avx512vl]
+          avx2 [avx, avx2]
+          sse [sse2]
+          neon [neon]
+          sve [sve]
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
+            var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
+            var<const_infer>(negated, call<primitive=sub[UVec]>(
+              call<primitive=set_zero[UVec]>(),
+              bits
+            ));
+            complete(call<primitive=reinterpret[UVec, Vec]>(negated));
+          """
+      f?:
+        requires:
+          clang_v128 []
+          avx512 [avx512f]
+          avx2_vl [avx, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx]
+          sse:
+            f32 [sse]
+            f64 [sse2]
+          neon [neon]
+          sve [sve]
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(SBase, base::signed_of(base::in));
+            var<const_infer>(all_bits, cast<bitcast>(UBase, cast<static>(SBase, -1)));
+            var<const_infer>(sign_bit, all_bits ^ (all_bits >> 1));
+            var<const_infer>(sign_mask, call<primitive=set1[Vec]>(
+              cast<bitcast>(base::in, sign_bit)
+            ));
+            complete(call<primitive=binary_xor[Vec]>(data, sign_mask));
           """
 prim<v:=(v)> abs(data):
   brief_description "Returns the lane-wise absolute value while preserving signed-minimum bit patterns."

@@ -442,8 +442,12 @@ def test_rust_sse2_admission_uses_live_profile_context(
         assert profile.candidate_sets
         assert profile.manifest_hash != source_plan.manifest_hash
         assert profile.backend_feature_spellings == tuple(
-            mutated_profile.feature_spelling(feature, "rust")
-            for feature in sorted(mutated_profile.features)
+            sorted(
+                (
+                    mutated_profile.feature_spelling(feature, "rust")
+                    for feature in mutated_profile.features
+                )
+            )
         )
         assert plan.coverage
         assert any(entry.status == "emitted" for entry in plan.coverage)

@@ -57,7 +57,7 @@ KNOWN_PROFILE_FAMILY_FIELDS = frozenset(
     }
 )
 KNOWN_BACKEND_PROFILE_FIELDS = frozenset(
-    {"detection", "feature_flags", "linker", "target"}
+    {"detection", "feature_flags", "linker", "target", "target_arch"}
 )
 
 
@@ -239,6 +239,16 @@ def validate_target_families(
                     feature_flags,
                     f"{owner} feature_flags {value!r}",
                     sorted(KNOWN_BOOLEAN_VALUES),
+                )
+            target_arch = child(backend, "target_arch")
+            if target_arch is not None and not field_text(target_arch):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-TARGET-FAMILIES-MALFORMED-TARGET-ARCH",
+                        message=f"{owner} target_arch must be a non-empty string",
+                        source=source_span(target_arch.source),
+                    )
                 )
 
 

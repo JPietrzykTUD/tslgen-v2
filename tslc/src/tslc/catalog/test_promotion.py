@@ -5,7 +5,13 @@ from __future__ import annotations
 from typing import cast
 
 from tslc.catalog._builder_common import _opt_int
-from tslc.catalog.model import TestArg, TestCase, TestCaseRole, TestFailureReason
+from tslc.catalog.model import (
+    TestArg,
+    TestCase,
+    TestCaseRole,
+    TestComparison,
+    TestFailureReason,
+)
 from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS
 from tslc.catalog.test_cases import derive_test_case_name, infer_test_lane_count
@@ -82,6 +88,7 @@ def build_test_cases(
                 id=case_id,
                 inputs=inputs,
                 expected=expected,
+                comparison=_test_comparison(entries.get("comparison")),
                 # Typing-only narrow: schema validation diagnoses roles outside
                 # TestCaseRole.
                 role=cast(TestCaseRole, _field_text(entries.get("role")) or "value"),
@@ -211,6 +218,17 @@ def _failure_reason(field: ParsedTslField | None) -> TestFailureReason | None:
     except ValueError:
         # Schema validation owns the source-located closed-vocabulary diagnostic.
         return None
+
+
+def _test_comparison(field: ParsedTslField | None) -> TestComparison:
+    text = _field_text(field)
+    if text is None:
+        return TestComparison.VALUE
+    try:
+        return TestComparison(text)
+    except ValueError:
+        # Schema validation owns the source-located closed-vocabulary diagnostic.
+        return TestComparison.VALUE
 
 
 __all__ = ("build_test_cases",)

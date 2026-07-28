@@ -188,8 +188,14 @@ class BenchmarkPlanner:
                     ),
                     profile_family=emitted_profile.profile.family,
                     backend_feature_spellings=tuple(
-                        emitted_profile.profile.feature_spelling(feature, backend_id)
-                        for feature in sorted(emitted_profile.profile.features)
+                        sorted(
+                            (
+                                emitted_profile.profile.feature_spelling(
+                                    feature, backend_id
+                                )
+                                for feature in emitted_profile.profile.features
+                            )
+                        )
                     ),
                 )
             )

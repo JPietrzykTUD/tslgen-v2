@@ -1,5 +1,9 @@
 description "Bit manipulation primitives (partial conversion)."
 prim<v:=(v,v)> binary_and(left, right):
+  operation bit_and
+  operand_roles:
+    primary left
+    secondary right
   brief_description "Computes the lane-wise bitwise AND of two vector registers."
   detailed_description """
     Computes the bitwise AND of the corresponding lane bit patterns from two
@@ -227,6 +231,10 @@ prim<v:=(v,v)> binary_and(left, right):
           """
 
 prim<v:=(v,v)> binary_andnot(left, right):
+  operation bit_and_not
+  operand_roles:
+    primary left
+    secondary right
   brief_description "Computes the lane-wise bitwise AND of the inverted left operand with the right operand."
   detailed_description """
     Computes the bitwise AND of the complement of `left` and the corresponding
@@ -434,6 +442,10 @@ prim<v:=(v,v)> binary_andnot(left, right):
           """
 
 prim<v:=(v,v)> binary_or(left, right):
+  operation bit_or
+  operand_roles:
+    primary left
+    secondary right
   brief_description "Computes the lane-wise bitwise OR of two vector registers."
   detailed_description """
     Computes the bitwise OR of the corresponding lane bit patterns from two
@@ -661,6 +673,10 @@ prim<v:=(v,v)> binary_or(left, right):
           """
 
 prim<v:=(v,v)> binary_xor(left, right):
+  operation bit_xor
+  operand_roles:
+    primary left
+    secondary right
   brief_description "Computes the lane-wise bitwise XOR of two vector registers."
   detailed_description """
     Computes the bitwise exclusive OR of the corresponding lane bit patterns from
@@ -888,6 +904,9 @@ prim<v:=(v,v)> binary_xor(left, right):
           """
 
 prim<v:=v> inv(data):
+  operation bit_not
+  operand_roles:
+    primary data
   brief_description "Computes the lane-wise bitwise inversion of a vector register."
   detailed_description """
     Computes the bitwise complement of each lane bit pattern in a vector
@@ -961,6 +980,11 @@ prim<v:=v> inv(data):
           """
 
 prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
+  operation bit_and
+  operand_roles:
+    control_mask mask
+    primary left
+    secondary right
   brief_description "Computes bitwise AND on active mask lanes and writes zero to inactive lanes."
   detailed_description """
     Computes bitwise AND for lanes enabled by the mask. Disabled lanes are set
@@ -1125,6 +1149,12 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
           """
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
+  operation bit_and
+  operand_roles:
+    control_mask mask
+    pass_through left
+    primary left
+    secondary right
   brief_description "Computes bitwise AND on active mask lanes and keeps the left lane where the mask is inactive."
   detailed_description """
     Computes bitwise AND for lanes enabled by the mask. Disabled lanes keep the
@@ -1291,6 +1321,11 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
           """
 
 prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
+  operation bit_and_not
+  operand_roles:
+    control_mask mask
+    primary left
+    secondary right
   brief_description "Computes bitwise AND-NOT on active mask lanes and writes zero to inactive lanes."
   detailed_description """
     Computes `(~left) & right` for lanes enabled by the mask. Disabled lanes are
@@ -1456,6 +1491,12 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
           """
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
+  operation bit_and_not
+  operand_roles:
+    control_mask mask
+    pass_through left
+    primary left
+    secondary right
   brief_description "Computes bitwise AND-NOT on active mask lanes and keeps the left lane where the mask is inactive."
   detailed_description """
     Computes `(~left) & right` for lanes enabled by the mask. Disabled lanes keep
@@ -1592,6 +1633,11 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
           """
 
 prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
+  operation bit_or
+  operand_roles:
+    control_mask mask
+    primary left
+    secondary right
   brief_description "Computes bitwise OR on active mask lanes and writes zero to inactive lanes."
   detailed_description """
     Computes bitwise OR for lanes enabled by the mask. Disabled lanes are set to
@@ -1756,6 +1802,12 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
           """
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
+  operation bit_or
+  operand_roles:
+    control_mask mask
+    pass_through left
+    primary left
+    secondary right
   brief_description "Computes bitwise OR on active mask lanes and keeps the left lane where the mask is inactive."
   detailed_description """
     Computes bitwise OR for lanes enabled by the mask. Disabled lanes keep the
@@ -1922,6 +1974,11 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
           """
 
 prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
+  operation bit_xor
+  operand_roles:
+    control_mask mask
+    primary left
+    secondary right
   brief_description "Computes bitwise XOR on active mask lanes and writes zero to inactive lanes."
   detailed_description """
     Computes bitwise exclusive OR for lanes enabled by the mask. Disabled lanes
@@ -2086,6 +2143,12 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
           """
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
+  operation bit_xor
+  operand_roles:
+    control_mask mask
+    pass_through left
+    primary left
+    secondary right
   brief_description "Computes bitwise XOR on active mask lanes and keeps the left lane where the mask is inactive."
   detailed_description """
     Computes bitwise exclusive OR for lanes enabled by the mask. Disabled lanes
@@ -2252,6 +2315,10 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
           """
 
 prim<v:=(m,v)>[mask=zero] inv(mask, data):
+  operation bit_not
+  operand_roles:
+    control_mask mask
+    primary data
   brief_description "Computes bitwise inversion on active mask lanes and writes zero to inactive lanes."
   detailed_description """
     Computes the bitwise complement for lanes enabled by the mask. Disabled lanes
@@ -2433,6 +2500,11 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
           """
 
 prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
+  operation bit_not
+  operand_roles:
+    control_mask mask
+    pass_through data
+    primary data
   brief_description "Computes bitwise inversion on active mask lanes and keeps the input lane where the mask is inactive."
   detailed_description """
     Computes the bitwise complement for lanes enabled by the mask. Disabled lanes

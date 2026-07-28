@@ -9,6 +9,7 @@ from pathlib import Path
 
 from tslc._cli_options import merge_toolchains, parse_assignments, split_csv
 from tslc.api import generate_project, verify_project, write_artifacts
+from tslc.backend.rust_package import DEFAULT_RUST_PACKAGE_CONFIG
 from tslc.generation_command import (
     GenerationCommandSettings,
     GenerationPipeline,
@@ -302,6 +303,11 @@ def _generation_command_settings(
         toolchains=toolchains,
         runner_paths=runner_paths,
         tool_paths=tool_paths,
+        rust_package=(
+            project.rust_package
+            if project is not None
+            else DEFAULT_RUST_PACKAGE_CONFIG
+        ),
     )
 
 

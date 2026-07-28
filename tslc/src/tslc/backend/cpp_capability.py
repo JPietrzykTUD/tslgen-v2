@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from tslc.output.verify_drivers import VerifyBackendDriver
     from tslc.output.verify_model import VerifyProfile
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
+    from tslc.project_render import ProjectRenderConfig
     from tslc.benchmark.model import BenchmarkProjectPlan
     from tslc.lower.lowerer import LoweredSpecialization
 
@@ -96,9 +97,11 @@ def cpp_backend_artifacts(
     benchmarks: BenchmarkProjectPlan,
     assets: RenderAssets,
     media_type: str,
+    config: ProjectRenderConfig,
 ) -> list[Artifact]:
     """Render the complete C++ artifact set from one fact snapshot."""
 
+    del config
     return [
         *cpp_project_artifacts(profiles, assets, media_type, value_tests),
         *cpp_value_test_artifacts(value_tests, assets, media_type),

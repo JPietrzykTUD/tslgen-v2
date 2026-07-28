@@ -15,6 +15,10 @@
 
 #include "multicolumn_quicksort.hpp"
 
+// Legacy active-key microbenchmark: `column_count` is the number of passive
+// payload columns. benchmark_multicolumn_gbench.cpp owns the true
+// lexicographic multi-column comparison.
+
 using DataType = std::uint32_t;
 
 namespace {

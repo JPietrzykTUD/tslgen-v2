@@ -31,6 +31,7 @@ from tslc.value_tests._pattern_conversion import (
     _ConvertPattern,
     _ExtensionReprPattern,
     _ExtensionResultPattern,
+    _LaneConvertPattern,
     _LoadConvertPattern,
     _ReprCastPattern,
     _TargetImaskPattern,
@@ -67,6 +68,7 @@ class SimpleValueTestShapeCapability:
     param_kinds: tuple[str, ...]
     allow_axis: bool = False
     allow_generic_params: bool = False
+    differential: bool = False
 
     def pattern(self, support: SupportPolicy) -> _SimpleShapePattern:
         kinds = {self.result_kind, *self.param_kinds}
@@ -82,6 +84,7 @@ class SimpleValueTestShapeCapability:
             self.param_kinds,
             allow_axis=self.allow_axis,
             allow_generic_params=self.allow_generic_params,
+            differential=self.differential,
         )
 
 
@@ -93,6 +96,7 @@ def _simple(
     support: SupportPolicy,
     allow_axis: bool = False,
     allow_generic_params: bool = False,
+    differential: bool = False,
 ) -> _SimpleShapePattern:
     return SimpleValueTestShapeCapability(
         build_case,
@@ -100,6 +104,7 @@ def _simple(
         param_kinds,
         allow_axis=allow_axis,
         allow_generic_params=allow_generic_params,
+        differential=differential,
     ).pattern(support)
 
 
@@ -125,6 +130,13 @@ def default_value_test_patterns(
         _simple(scalar_pointer_load_case, "s", ("cptr",), support=support, allow_axis=True),
         _simple(reduction_case, "s", ("v",), support=support),
         _IndexedScalarPattern(),
+        _simple(
+            scalar_result_case,
+            "s",
+            ("v", "usize"),
+            support=support,
+            differential=True,
+        ),
         _simple(scalar_result_case, "s", ("m",), support=support),
         _simple(scalar_result_case, "s", ("s",), support=support),
         _simple(scalar_result_case, "s", ("v", "s"), support=support),
@@ -168,6 +180,13 @@ def default_value_test_patterns(
         _MaskConstantPattern(),
         _MaskConversionPattern(mask_result_case, "m", ("im",)),
         _simple(mask_result_case, "m", ("m", "v"), support=support),
+        _simple(
+            mask_result_case,
+            "m",
+            ("m", "usize", "im"),
+            support=support,
+            differential=True,
+        ),
         _PointerLayoutShapePattern(mask_pointer_load_case, "m", ("cptr",), allow_axis=True),
         _simple(vector_to_array_case, "s[]", ("v",), support=support),
         _simple(broadcast_case, "v", ("s",), support=support),
@@ -179,6 +198,13 @@ def default_value_test_patterns(
             support=support,
             allow_generic_params=True,
         ),
+        _simple(
+            scalar_vector_case,
+            "v",
+            ("v", "usize", "s"),
+            support=support,
+            differential=True,
+        ),
         _MaskedScalarVectorPattern(),
         _simple(lane_list_case, "v", (support.lane_list_kind,), support=support),
         _ImmediatePattern(support),
@@ -189,6 +215,7 @@ def default_value_test_patterns(
         _PointerLifetimePattern(),
         _simple(stream_case, "o", ("o", "v", "s"), support=support),
         _ConvertPattern(support),
+        _LaneConvertPattern(),
         _ReprCastPattern(),
         _ExtensionResultPattern(),
         _ExtensionReprPattern(support),

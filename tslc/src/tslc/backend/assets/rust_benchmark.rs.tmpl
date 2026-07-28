@@ -64,8 +64,9 @@ fn print_help() {
     println!("TSL Rust variant benchmark for profile {PROFILE}");
     println!();
     println!("Usage:");
+    println!("  RUSTFLAGS='--cfg tsl_variant_benchmarks' \\");
     println!(
-        "  cargo bench --profile bench --bench {BENCHMARK_TARGET} --no-default-features --features {CARGO_FEATURES} -- [OPTIONS]"
+        "  cargo bench --profile bench --bench {BENCHMARK_TARGET} --no-default-features -- [OPTIONS]"
     );
     println!();
     println!("Options:");

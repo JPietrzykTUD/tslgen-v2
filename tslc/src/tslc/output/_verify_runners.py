@@ -30,7 +30,7 @@ def filter_runner_verifiable_profiles(
     config: BuildVerifierConfig,
 ) -> tuple[VerifyBackend, tuple[str, ...]]:
     configured = configured_runner_kinds(config)
-    if not configured or not config.run_value_tests:
+    if not config.run_value_tests:
         return backend, ()
 
     profiles: list[VerifyProfile] = []

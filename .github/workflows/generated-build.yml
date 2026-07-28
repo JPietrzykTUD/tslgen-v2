@@ -111,7 +111,7 @@ jobs:
           bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/generated-build-${{ matrix.profile_shard.name }}/build.log" \
             bash supplementary/ci/run_tslc_ci_container.sh \
-              -e TSLC_BACKENDS="cpp,rust" \
+              -e TSLC_BACKENDS="${{ matrix.profile_shard.backend }}" \
               -e TSLC_PROFILES="${{ matrix.profile_shard.profiles }}" \
               -e TSLC_CI_OUTPUT="./tslctmp/ci-build-${{ matrix.profile_shard.name }}" \
               -- \
@@ -178,7 +178,8 @@ jobs:
                   tslc/tests/test_benchmark_variants.py \
                   tslc/tests/test_rust_benchmark_rendering.py::test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop \
                   tslc/tests/test_rust_benchmark_rendering.py::test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop \
-                  tslc/tests/test_rust_benchmark_rendering.py::test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence
+                  tslc/tests/test_rust_benchmark_rendering.py::test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence \
+                  tslc/tests/test_rust_policy_consumption.py::test_generated_rust_policy_is_applied_fail_closed_and_invalidated
                 do
                   PYTHONPATH=tslc/src python -m pytest -q \
                     --run-generated-builds \

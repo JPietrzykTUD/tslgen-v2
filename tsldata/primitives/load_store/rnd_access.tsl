@@ -1384,7 +1384,7 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
                     type::is_same(base::in, f32)
                   ) {
                     var<const_infer>(loaded, intrin<svld1_gather_index>(mask, base_ptr, index));
-                    complete(call<primitive=blend[Vec]>(mask, source, loaded));
+                    complete(call<primitive=select[Vec]>(mask, loaded, source));
                   }
                 }
                 8 => {
@@ -1394,7 +1394,7 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
                     type::is_same(base::in, f64)
                   ) {
                     var<const_infer>(loaded, intrin<svld1_gather_index>(mask, base_ptr, index));
-                    complete(call<primitive=blend[Vec]>(mask, source, loaded));
+                    complete(call<primitive=select[Vec]>(mask, loaded, source));
                   }
                 }
                 _ => {}
@@ -1407,10 +1407,10 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
             var<runtime_array>(Base, active_array, lanes);
             call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
             call<primitive=store[Vec], attrs[aligned=false]>(result, source);
-            var<const_infer>(active, call<primitive=blend[Vec]>(
+            var<const_infer>(active, call<primitive=select[Vec]>(
               mask,
-              call<primitive=set_zero[Vec]>(),
-              call<primitive=set1[Vec]>(cast<static>(Base, 1))
+              call<primitive=set1[Vec]>(cast<static>(Base, 1)),
+              call<primitive=set_zero[Vec]>()
             ));
             call<primitive=store[Vec], attrs[aligned=false]>(active_array, active);
             loop<backend>(i, 0, lanes, 1) {
@@ -2309,10 +2309,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
             var<runtime_array>(Base, active_array, lanes);
             call<primitive=store[Vec], attrs[aligned=false]>(val_array, a);
             call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
-            var<const_infer>(active, call<primitive=blend[Vec]>(
+            var<const_infer>(active, call<primitive=select[Vec]>(
               mask,
-              call<primitive=set_zero[Vec]>(),
-              call<primitive=set1[Vec]>(cast<static>(Base, 1))
+              call<primitive=set1[Vec]>(cast<static>(Base, 1)),
+              call<primitive=set_zero[Vec]>()
             ));
             call<primitive=store[Vec], attrs[aligned=false]>(active_array, active);
             loop<backend>(i, 0, lanes, 1) {
@@ -2337,10 +2337,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               var<runtime_array>(Base, active_array, lanes);
               call<primitive=store[Vec], attrs[aligned=false]>(val_array, a);
               call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
-              var<const_infer>(active, call<primitive=blend[Vec]>(
+              var<const_infer>(active, call<primitive=select[Vec]>(
                 mask,
-                call<primitive=set_zero[Vec]>(),
-                call<primitive=set1[Vec]>(cast<static>(Base, 1))
+                call<primitive=set1[Vec]>(cast<static>(Base, 1)),
+                call<primitive=set_zero[Vec]>()
               ));
               call<primitive=store[Vec], attrs[aligned=false]>(active_array, active);
               loop<backend>(i, 0, lanes, 1) {

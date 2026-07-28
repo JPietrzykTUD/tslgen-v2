@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Collection
 from typing import get_args
 
-from tslc.catalog.model import GenericParamKind
+from tslc.catalog.model import GenericParamKind, RESULT_DIMENSIONS, RESULT_DIM_VECTOR
 from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.param_types import (
@@ -49,23 +49,27 @@ KNOWN_GENERIC_PARAM_FIELDS = frozenset(
     {"kind", "default", "base_types", "specialize_base", "constraints"}
 )
 KNOWN_IMMEDIATE_PARAM_FIELDS = frozenset({"type", "value_range", "dispatch"})
-KNOWN_RETURN_TYPE_FIELDS = frozenset({"base", "extension"})
+KNOWN_RETURN_TYPE_FIELDS = RESULT_DIMENSIONS
 KNOWN_PRIMITIVE_OVERLOAD_FIELDS = frozenset({"axis", "value", "primary"})
 KNOWN_PRIMITIVE_FIELDS = frozenset(
     {
         "arithmetic",
         "benchmarks",
         "brief_description",
+        "conversion",
         "cross_lane",
         "detailed_description",
         "generic_params",
         "impls",
+        "memory",
         "operation",
+        "operand_roles",
         "overload",
         "param_types",
         "params",
         "return_type",
         "semantics",
+        "shift",
         "sImm_type",
         "tests",
     }
@@ -622,5 +626,28 @@ def _validate_return_type(
                     "declare exactly one return_type base or extension target"
                 ),
                 source=source_span(declaration.signature_source),
+            )
+        )
+    vector_targets = tuple(
+        field for field in target_fields if field.key.text == RESULT_DIM_VECTOR
+    )
+    if not vector_targets:
+        return
+    target_name = field_text(vector_targets[0])
+    generic_kinds = {
+        entry.key.text: field_text(child(entry, "kind"))
+        for generic_field in declaration.fields_by_name("generic_params")
+        for entry in children(generic_field.field)
+    }
+    if target_name is None or generic_kinds.get(target_name) != "simd_type":
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-VECTOR-RESULT-TARGET",
+                message=(
+                    f"primitive {declaration.name!r} vector result target must name "
+                    "a generic parameter with kind 'simd_type'"
+                ),
+                source=source_span(vector_targets[0].source),
             )
         )

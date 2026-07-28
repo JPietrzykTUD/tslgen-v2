@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from tslc.catalog.model import Extension
+from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.lane_count import LaneCount
 from tslc.lower._query_model import (
     QueryValue,
@@ -13,6 +14,7 @@ from tslc.lower._query_model import (
     query_argument,
     query_function,
 )
+from tslc.lower.object_representation import register_object_size
 from tslc.lower.context import (
     LoweringSession,
     SimdTypeParameterValue,
@@ -97,7 +99,22 @@ class RegisterQuery:
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
     ) -> QueryValue | None:
-        return TextValue(context.env.backend.types.register_type_spelling())
+        return TextValue(
+            context.env.backend.types.register_type_spelling(),
+            object_size=register_object_size(
+                context.env.type_tag,
+                context.env.extension,
+                uses_sized_vector=context.env.support.uses_sized_vector(
+                    context.env.extension
+                ),
+                lane_count=(
+                    LaneCount.fixed(context.env.concrete_lanes)
+                    if context.env.concrete_lanes is not None
+                    else LaneCount.symbolic(context.env.lane_symbol())
+                ),
+            ),
+            all_bit_patterns_valid=scalar_bit_width(context.env.type_tag) is not None,
+        )
 
 
 class RegisterGenericQuery:
@@ -144,7 +161,27 @@ class RegisterGenericQuery:
             uses_sized_vector=uses_sized_vector,
             lane_parameter=lane_parameter,
         )
-        return TextValue(spelling) if spelling is not None else None
+        extension = _catalog_extension(isa, context)
+        return (
+            TextValue(
+                spelling,
+                object_size=(
+                    register_object_size(
+                        base_tag,
+                        extension,
+                        uses_sized_vector=uses_sized_vector,
+                        lane_count=lane_count,
+                    )
+                    if extension is not None
+                    else None
+                ),
+                all_bit_patterns_valid=(
+                    extension is not None and scalar_bit_width(base_tag) is not None
+                ),
+            )
+            if spelling is not None
+            else None
+        )
 
 
 class MaskQuery:

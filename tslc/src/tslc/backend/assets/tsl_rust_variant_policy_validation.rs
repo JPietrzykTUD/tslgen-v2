@@ -8,8 +8,6 @@ use crate::tsl_rust_variant_policy_protocol::{
     BENCHMARK_PROTOCOL_VERSION, DESCRIPTOR_SCHEMA_VERSION, POLICY_SCHEMA_VERSION,
 };
 
-pub(crate) const BENCHMARK_FEATURE_ENV: &str = "CARGO_FEATURE_VARIANT_BENCHMARKS";
-
 pub(crate) fn validate_descriptor(
     descriptor: &Descriptor,
     profile: &GeneratedProfile,
@@ -38,6 +36,18 @@ pub(crate) fn validate_descriptor(
         &descriptor.required_features,
         "descriptor required features",
     )?;
+    if descriptor.required_features
+        != profile
+            .target_features
+            .iter()
+            .map(|feature| feature.to_string())
+            .collect::<Vec<_>>()
+    {
+        return Err(
+            "generated Rust policy descriptor does not match its compile target"
+                .to_string(),
+        );
+    }
     if descriptor.required_features.is_empty() || descriptor.decisions.is_empty() {
         return Err("generated Rust policy descriptor requires features and decisions".to_string());
     }
@@ -411,11 +421,7 @@ fn validate_tune_context(
 
     let policy_features = cargo_feature_set(&tune.build.cargo_features)?;
     let consumer_features = cargo_feature_set(&current.cargo_features)?;
-    let expected_features = HashSet::from([
-        profile.feature_environment.to_string(),
-        BENCHMARK_FEATURE_ENV.to_string(),
-    ]);
-    if consumer_features != expected_features || policy_features != expected_features {
+    if consumer_features != policy_features {
         return Err(
             "Rust variant policy producer and consumer Cargo features do not match".to_string(),
         );
@@ -427,9 +433,9 @@ fn validate_tune_context(
     }
     let target_features = comma_set(&current.target_features, "target features")?;
     for feature in &descriptor.required_features {
-        if !target_features.contains(feature.as_str()) || !native_feature_available(feature) {
+        if !target_features.contains(feature.as_str()) {
             return Err(format!(
-                "native consumer does not support required Rust target feature {feature:?}"
+                "consumer compile target lacks required Rust target feature {feature:?}"
             ));
         }
     }
@@ -535,20 +541,6 @@ fn comma_set<'a>(value: &'a str, label: &str) -> Result<HashSet<&'a str>, String
         }
     }
     Ok(values)
-}
-
-#[cfg(target_arch = "x86_64")]
-fn native_feature_available(feature: &str) -> bool {
-    match feature {
-        "sse" => std::arch::is_x86_feature_detected!("sse"),
-        "sse2" => std::arch::is_x86_feature_detected!("sse2"),
-        _ => false,
-    }
-}
-
-#[cfg(not(target_arch = "x86_64"))]
-fn native_feature_available(_feature: &str) -> bool {
-    false
 }
 
 fn validate_sha256(value: &str, label: &str) -> Result<(), String> {

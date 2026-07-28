@@ -9,7 +9,12 @@ from threading import Lock
 from typing import Literal
 
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import Catalog, Implementation, Primitive
+from tslc.catalog.model import (
+    Catalog,
+    Implementation,
+    Primitive,
+    RESULT_DIM_VECTOR,
+)
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS, SCALAR_TYPE_ORDER
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog_index import CatalogIndex
@@ -19,7 +24,7 @@ from tslc.support_policy_views import concrete_target_candidates
 
 ExplorerMode = Literal["authored", "resolved"]
 SlotOrigin = Literal["authored", "broader", "inherited"]
-TargetDimension = Literal["base", "extension"]
+TargetDimension = Literal["base", "extension", "vector"]
 SlotStatus = Literal[
     "authored",
     "selected",
@@ -716,6 +721,8 @@ def _explorer_target(
         typed_dimension: TargetDimension = "base"
     elif dimension == "extension":
         typed_dimension = "extension"
+    elif dimension == RESULT_DIM_VECTOR:
+        typed_dimension = "vector"
     else:
         raise ValueError(f"unsupported representation target dimension {dimension!r}")
     return ExplorerTarget(typed_dimension, name, to_target)
@@ -760,7 +767,7 @@ def _target_sort_key(
     dimension, name = result_target
     value = to_target or ""
     return (
-        1 if dimension == "base" else 2,
+        1 if dimension == "base" else 2 if dimension == "extension" else 3,
         name,
         SCALAR_TYPE_ORDER.get(value, 999) if dimension == "base" else 0,
         value,

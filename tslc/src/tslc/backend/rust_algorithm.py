@@ -8,8 +8,17 @@ from typing import TypeGuard
 
 from tslc.backend.emitted_profile import used_vector_type_specs
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
+from tslc.backend.primitive_facade import (
+    DataparallelPrimitiveFacade,
+    contiguous_memory_primitive_facades,
+)
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
-from tslc.backend.rust_facades import rust_algorithm_primitive_facades
+from tslc.backend.rust_facades import (
+    rust_algorithm_primitive_facades,
+    rust_algorithm_primitive_facades_require_rebind,
+)
+from tslc.backend.rust_names import rust_primitive_trait_name
+from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.rust_vectors import RustVectorRegistration, rust_vector_registrations
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.catalog.model import Extension
@@ -25,11 +34,22 @@ def rust_algorithm_module(
 ) -> str:
     """Profile-local Rust algorithm facade and SIMD policy mappings."""
 
-    if not RUST_HELPER_MANIFEST.supports("algorithm", by_primitive):
+    memory_facades = contiguous_memory_primitive_facades(by_primitive)
+    if memory_facades is None:
         return ""
+    read_facade, write_facade = memory_facades
 
     registrations = rust_vector_registrations(by_primitive, extensions)
     impl_targets = _rust_algorithm_impl_targets(registrations, extensions)
+    mappings = _rust_algorithm_vector_mappings(by_primitive, extensions)
+    rebind_imports = (
+        ", RebindBase, ReboundBase"
+        if rust_algorithm_primitive_facades_require_rebind(
+            by_primitive,
+            reserved_names=RUST_ALGORITHM_RESERVED_NAMES,
+        )
+        else ""
+    )
     parts = [
         "pub mod algo {\n"
         "    pub use crate::tsl_algorithm::{\n"
@@ -42,18 +62,27 @@ def rust_algorithm_module(
         "    };\n\n"
         "    use crate::tsl_algorithm::{\n"
         "        CompressStore, IntegralMask, LoadStore, MaskFromIntegral, MaskedStore,\n"
-        "        MaskPopulationCount, RebindBase, ReboundBase, SelectedLoad, VectorFor,\n"
+        f"        MaskPopulationCount, SelectedLoad, VectorFor{rebind_imports},\n"
         "    };\n"
         "    use crate::dataparallel;\n"
         "    use crate::tsl_core::{\n"
-        "        BaseTypeDispatch, Generic, Scalar, Simd, SimdVector, StaticSimdVector,\n"
+        "        Generic, Scalar, Simd, SimdVector, StaticSimdVector,\n"
         "    };\n"
         "\n"
         "    pub struct Profile;"
     ]
-    parts.append(_rust_algorithm_load_store_impls(impl_targets))
+    parts.append(
+        _rust_algorithm_load_store_impls(
+            impl_targets,
+            read_facade,
+            write_facade,
+        )
+    )
     selected_load_impls = _rust_algorithm_selected_load_impls(
-        by_primitive, registrations, extensions
+        by_primitive,
+        registrations,
+        extensions,
+        read_facade,
     )
     if selected_load_impls:
         parts.append(selected_load_impls)
@@ -78,7 +107,6 @@ def rust_algorithm_module(
     )
     if mask_from_integral_impls:
         parts.append(mask_from_integral_impls)
-    mappings = _rust_algorithm_vector_mappings(by_primitive, extensions)
     if mappings:
         parts.append(mappings)
     algorithm_wrappers = assets.text(_RUST_ALGORITHM_WRAPPER_ASSET).rstrip()
@@ -121,25 +149,52 @@ def _rust_algorithm_impl_targets(
 
 def _rust_algorithm_load_store_impls(
     targets: tuple[_RustAlgorithmImplTarget, ...],
+    read_facade: DataparallelPrimitiveFacade,
+    write_facade: DataparallelPrimitiveFacade,
 ) -> str:
-    return "\n\n".join(_rust_algorithm_load_store_impl(target) for target in targets)
+    return "\n\n".join(
+        _rust_algorithm_load_store_impl(
+            target,
+            read_facade,
+            write_facade,
+        )
+        for target in targets
+    )
 
 
-def _rust_algorithm_load_store_impl(target: _RustAlgorithmImplTarget) -> str:
+def _rust_algorithm_load_store_impl(
+    target: _RustAlgorithmImplTarget,
+    read_facade: DataparallelPrimitiveFacade,
+    write_facade: DataparallelPrimitiveFacade,
+) -> str:
     vector = target.vector
+    read_name = rust_raw_identifier(read_facade.primitive_name)
+    write_name = rust_raw_identifier(write_facade.primitive_name)
+    read_trait = rust_primitive_trait_name(read_facade.primitive_name)
+    write_trait = rust_primitive_trait_name(write_facade.primitive_name)
+    if write_facade.overload_parameter_positions:
+        write_bound = (
+            f"        <{vector} as SimdVector>::RegisterType:\n"
+            f"            super::detail::primitives::{write_trait}Arg<{vector}, false>,\n"
+        )
+        write_generics = f"<{vector}, false, _>"
+    else:
+        write_bound = (
+            f"        {vector}: super::detail::primitives::{write_trait}<false>,\n"
+        )
+        write_generics = f"<{vector}, false>"
     return (
         f"    impl<{target.type_parameters}> LoadStore<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = T>\n"
-        "            + super::detail::primitives::LoadImpl<false>,\n"
-        f"        <{vector} as SimdVector>::RegisterType:\n"
-        f"            super::detail::primitives::StoreImplArg<{vector}, false>,\n"
+        f"            + super::detail::primitives::{read_trait}<false>,\n"
+        f"{write_bound}"
         "    {\n"
         f"        unsafe fn load_unaligned(ptr: *const T) -> <{vector} as SimdVector>::RegisterType {{\n"
-        f"            unsafe {{ super::load::<{vector}, false>(ptr) }}\n"
+        f"            unsafe {{ super::{read_name}::<{vector}, false>(ptr) }}\n"
         "        }\n\n"
         f"        unsafe fn store_unaligned(ptr: *mut T, value: <{vector} as SimdVector>::RegisterType) {{\n"
-        f"            unsafe {{ super::store::<{vector}, false, _>(ptr, value) }}\n"
+        f"            unsafe {{ super::{write_name}::{write_generics}(ptr, value) }}\n"
         "        }\n"
         "    }"
     )
@@ -149,6 +204,7 @@ def _rust_algorithm_selected_load_impls(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     registrations: tuple[RustVectorRegistration, ...],
     extensions: Mapping[str, Extension],
+    read_facade: DataparallelPrimitiveFacade,
 ) -> str:
     if not RUST_HELPER_MANIFEST.supports("selected_load", by_primitive):
         return ""
@@ -157,7 +213,7 @@ def _rust_algorithm_selected_load_impls(
         gather_narrow_vectors | _rust_algorithm_array_selected_load_vectors(by_primitive)
     )
     parts = [
-        _rust_algorithm_scalar_selected_load_impl(),
+        _rust_algorithm_scalar_selected_load_impl(read_facade),
         _rust_algorithm_generic_selected_load_impl(),
     ]
     parts.extend(
@@ -205,13 +261,17 @@ def _rust_algorithm_array_selected_load_vectors(
     return frozenset(set.intersection(*vector_sets)) if vector_sets else frozenset()
 
 
-def _rust_algorithm_scalar_selected_load_impl() -> str:
+def _rust_algorithm_scalar_selected_load_impl(
+    read_facade: DataparallelPrimitiveFacade,
+) -> str:
     vector = "Simd<T, Scalar>"
+    read_name = rust_raw_identifier(read_facade.primitive_name)
+    read_trait = rust_primitive_trait_name(read_facade.primitive_name)
     return (
         f"    impl<T, const SCALE: u32> SelectedLoad<{vector}, SCALE> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = T>\n"
-        "            + super::detail::primitives::LoadImpl<false>,\n"
+        f"            + super::detail::primitives::{read_trait}<false>,\n"
         "    {\n"
         f"        unsafe fn load_selected(input: *const T, indices: *const usize)\n"
         f"            -> <{vector} as SimdVector>::RegisterType {{\n"
@@ -220,7 +280,7 @@ def _rust_algorithm_scalar_selected_load_impl() -> str:
         "                    input,\n"
         "                    indices.read(),\n"
         "                );\n"
-        f"                super::load::<{vector}, false>(ptr)\n"
+        f"                super::{read_name}::<{vector}, false>(ptr)\n"
         "            }\n"
         "        }\n"
         "    }"
@@ -277,9 +337,9 @@ def _rust_algorithm_selected_load_impl(
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = {base}>\n"
         f"            + super::detail::primitives::Gather_narrowImpl<{index_vector}, "
-        f"<usize as BaseTypeDispatch>::Key, {default_scale}, 1>\n"
+        f"<usize as crate::tsl_core::BaseTypeDispatch>::Key, {default_scale}, 1>\n"
         f"            + super::detail::primitives::Gather_narrowImpl<{index_vector}, "
-        f"<usize as BaseTypeDispatch>::Key, SCALE, 1>,\n"
+        f"<usize as crate::tsl_core::BaseTypeDispatch>::Key, SCALE, 1>,\n"
         "    {\n"
         f"        unsafe fn load_selected(input: *const {base}, indices: *const usize)\n"
         f"            -> <{vector} as SimdVector>::RegisterType {{\n"

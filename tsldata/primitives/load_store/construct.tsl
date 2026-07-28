@@ -1,4 +1,7 @@
 prim<v:=s> set1(value):
+  operation vector_splat
+  operand_roles:
+    value value
   brief_description "Broadcasts a scalar value to every lane of a vector register."
   detailed_description """
     Broadcasts one scalar value to every lane of the selected vector type.
@@ -238,10 +241,10 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
         implementation:
           tsil """
                complete(
-                 call<primitive=blend, attrs[mask=pass_through]>(
+                 call<primitive=select, attrs[mask=pass_through]>(
                    mask,
-                   data,
-                   call<primitive=set1[Vec]>(scalar)
+                   call<primitive=set1[Vec]>(scalar),
+                   data
                  )
                );
             """
@@ -298,6 +301,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                }
             """
 prim<v:=()>[value=zero] set_zero():
+  operation vector_zero
   brief_description "Creates a vector register whose lanes are all zero."
   detailed_description """
     Constructs a vector register whose lanes are all zero for the selected base
@@ -470,7 +474,7 @@ prim<v:=()>[value=undef] set_undef():
           reasons []
         implementation:
           tsil """
-              var<typed>(vector::register, result, value(uninit::array));
+              var<const_infer>(result, call<primitive=set1[Vec]>(cast<static>(base::in, 0)));
               complete(result);
             """
     [generic, oneapi_fpga]:
@@ -557,7 +561,7 @@ prim<v:=()>[value=undef] set_undef():
           reasons []
         implementation:
           tsil """
-              var<typed>(vector::register, value, value(uninit::array));
+              var<const_infer>(value, call<primitive=set1[Vec]>(cast<static>(base::in, 0)));
               complete(value);
             """
     sve:

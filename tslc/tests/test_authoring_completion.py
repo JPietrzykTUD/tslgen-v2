@@ -103,6 +103,23 @@ def test_empty_file_and_primitive_header_complete_declarations_and_shapes(
             {"headers", "compile_guards", "dataparallel_inference"},
             {"supported", "active_when"},
         ),
+        (
+            "target_families:\n"
+            "  profile_families:\n"
+            "    x86:\n"
+            "      backends:\n"
+            "        rust:\n"
+            "          feature_flags true\n",
+            "target_families:\n"
+            "  profile_families:\n"
+            "    x86:\n"
+            "      backends:\n"
+            "        rust:\n"
+            "          feature_flags true\n"
+            "          ",
+            {"target_arch", "target", "linker", "detection"},
+            {"feature_flags", "profile_families"},
+        ),
     ),
 )
 def test_parsed_mapping_context_proposes_only_valid_missing_fields(
@@ -275,7 +292,8 @@ def test_inline_test_map_completion_uses_map_fields_and_closed_values(
     baseline = (
         "prim<v:=v> probe(value):\n"
         "  tests:\n"
-        "    - {tags [basic], type si32, role value, case {inputs [], expected []}}\n"
+        "    - {tags [basic], type si32, role value, comparison value, "
+        "case {inputs [], expected []}}\n"
     )
     field_edit = baseline.split("role value", 1)[0] + "ro"
     fields = _labels(catalog, baseline, field_edit)
@@ -287,6 +305,65 @@ def test_inline_test_map_completion_uses_map_fields_and_closed_values(
     roles = _labels(catalog, baseline, value_edit)
 
     assert roles == {"value"}
+
+    comparison_edit = baseline.split("comparison value", 1)[0] + "comparison bit"
+    comparisons = _labels(catalog, baseline, comparison_edit)
+
+    assert comparisons == {"bitwise"}
+
+
+def test_shift_contract_completion_uses_typed_source_vocabulary(
+    catalog: Catalog,
+) -> None:
+    baseline = (
+        "prim<v:=(v,s)> probe(data, count):\n"
+        "  operation shift_left_wrapping\n"
+        "  operand_roles:\n"
+        "    primary data\n"
+        "    count count\n"
+        "  shift:\n"
+        "    count_rule unsigned_bit_pattern_modulo_lane_width\n"
+        "    lane_rule unsigned_bit_pattern_left\n"
+        "    scalar_count_types [si32]\n"
+    )
+    field_edit = baseline.split("    count_rule", 1)[0] + "    count"
+    assert "count_rule" in _labels(catalog, baseline, field_edit)
+
+    count_edit = baseline.split("unsigned_bit_pattern_modulo_lane_width", 1)[0]
+    count_edit += "unsigned_bit"
+    assert _labels(catalog, baseline, count_edit) == {
+        "unsigned_bit_pattern_modulo_lane_width"
+    }
+
+    lane_edit = baseline.split("unsigned_bit_pattern_left", 1)[0]
+    lane_edit += "signed_arithmetic"
+    assert _labels(catalog, baseline, lane_edit) == {
+        "signed_arithmetic_unsigned_logical_right"
+    }
+
+    type_edit = baseline.split("[si32]", 1)[0] + "[ui"
+    assert _labels(catalog, baseline, type_edit) == {"ui8", "ui16", "ui32", "ui64"}
+
+
+def test_operation_completion_projects_horizontal_add_from_typed_vocabulary(
+    catalog: Catalog,
+) -> None:
+    baseline = (
+        "prim<s:=(m,v)> probe(mask, data):\n"
+        "  operation horizontal_add\n"
+        "  operand_roles:\n"
+        "    control_mask mask\n"
+        "    primary data\n"
+    )
+    operation_edit = baseline.split("horizontal_add", 1)[0] + "horizontal"
+
+    assert _labels(catalog, baseline, operation_edit) == {
+        "horizontal_add",
+        "horizontal_bit_and",
+        "horizontal_bit_or",
+        "horizontal_max",
+        "horizontal_min",
+    }
 
 
 def test_representation_target_axis_and_where_are_contextual(

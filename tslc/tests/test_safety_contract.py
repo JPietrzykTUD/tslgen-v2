@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,7 @@ from tslc.diagnostics import Diagnostic
 from tslc.lower.dependencies import (
     CallDependency,
     CallDependencyOrigin,
+    GenericVectorReference,
     VectorIdentity,
 )
 from tslc.lower.implementation_state import ImplementationState
@@ -435,8 +437,8 @@ def test_pruned_variant_dependency_keeps_variant_origin() -> None:
 
 
 def test_pruning_chooses_first_unresolved_dependency_deterministically() -> None:
-    blend = CallDependency(
-        primitive="blend",
+    select = CallDependency(
+        primitive="select",
         mask_policy=None,
         source=VectorIdentity("si16", "avx512"),
     )
@@ -445,14 +447,55 @@ def test_pruning_chooses_first_unresolved_dependency_deterministically() -> None
         mask_policy=None,
         source=VectorIdentity("si16", "avx512"),
     )
-    caller = _slot("caller", callees=frozenset({less_than, blend}))
+    caller = _slot("caller", callees=frozenset({less_than, select}))
 
     grouped, pruned = _prune_unresolved([caller], frozenset())
 
     assert grouped == {}
     assert pruned == [caller]
     assert caller.unresolved_callee is not None
-    assert caller.unresolved_callee.dependency == blend
+    assert caller.unresolved_callee.dependency == less_than
+
+
+def test_symbolic_dependency_is_not_exact_pruned_or_propagated() -> None:
+    dependency = CallDependency(
+        primitive="callee",
+        mask_policy=None,
+        source=GenericVectorReference("Dst", "si32"),
+    )
+    caller = _slot(
+        "caller",
+        callees=frozenset({dependency}),
+        callee_origins=(
+            CallDependencyOrigin(dependency, "implementation"),
+        ),
+    )
+    callee = _slot(
+        "callee",
+        safety=ImplementationSafety(
+            internal_unsafe=True,
+            reasons=frozenset({"intrinsic"}),
+        ),
+        required_features=frozenset({"avx2"}),
+        implementation_state=ImplementationState.NATIVE,
+    )
+    callee.spec = replace(
+        callee.spec,
+        extension_name="avx2",
+        register_is_base=False,
+    )
+
+    grouped, pruned = _prune_unresolved([caller], frozenset())
+
+    assert pruned == []
+    assert grouped["rust"]["caller"] == [caller.spec]
+
+    original = caller.spec
+    _propagate_transitive_call_facts([caller, callee], frozenset())
+    assert caller.spec is original
+    assert caller.spec.required_features == frozenset()
+    assert caller.spec.safety == ImplementationSafety()
+    assert caller.spec.implementation_state is ImplementationState.UNKNOWN
 
 
 def test_pruning_one_overload_keeps_live_sibling() -> None:
@@ -616,6 +659,9 @@ def test_rust_backend_emits_target_features_on_impl_body() -> None:
     assert "return <Simd<i32, Scalar> as SimdVector>::lane_count() as i32;" in rendered
     assert "return Self::lane_count() as i32;" not in rendered
     assert "unsafe { __tsl_target_feature_body(data) }" in rendered
+    assert "    unused_unsafe," in rendered
+    assert "    clippy::erasing_op," in rendered
+    assert "#![allow" not in rendered
 
 
 def test_rust_target_features_preserve_raw_self_text() -> None:
@@ -683,7 +729,9 @@ def test_source_call_to_caller_unsafe_primitive_uses_local_unsafe(
 
     assert lowered is not None
     assert lowered.body.requires_unsafe is False
-    assert "MaybeUninit" in lowered.body_text
+    assert "Default::default()" in lowered.body_text
+    assert "MaybeUninit" not in lowered.body_text
+    assert "assume_init" not in lowered.body_text
     assert "unsafe { store::<Self, false, _>(tmp.data(), a) }" in lowered.body_text
     assert not lowered.body_text.startswith("unsafe {")
 

@@ -2,9 +2,20 @@
 
 from __future__ import annotations
 
+import json
+
+from tslc.backend.rust_package import (
+    DEFAULT_RUST_PACKAGE_CONFIG,
+    RustPackageConfig,
+)
 from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact
+from tslc.backend.rust_static_selection import RustStaticSelectionPlan
 from tslc.render._common import slug, text
+from tslc.render.rust_static_selection import (
+    rust_static_fallback_cfg,
+    rust_static_profile_cfg,
+)
 from tslc.value_tests.model import ValueTestProjectPlan
 from tslc.value_tests.compile_failure import (
     compile_failure_target_name,
@@ -66,6 +77,8 @@ def rust_test_artifacts(
     assets: RenderAssets,
     *,
     media_type: str,
+    static_selection_plan: RustStaticSelectionPlan,
+    package_config: RustPackageConfig = DEFAULT_RUST_PACKAGE_CONFIG,
 ) -> list[Artifact]:
     """Rust value-test sources: shared helper module plus the cfg-gated test file."""
 
@@ -77,20 +90,77 @@ def rust_test_artifacts(
         ),
         text(
             "rust/tests/values.rs",
-            render_rust_values_file(plan.profiles_for("rust"), assets),
+            render_rust_values_file(
+                plan.profiles_for("rust"),
+                assets,
+                profile_cfgs={
+                    profile.profile_name: (
+                        rust_static_profile_cfg(selection)
+                        if (
+                            selection := static_selection_plan.profile(
+                                profile.profile_name
+                            )
+                        )
+                        is not None
+                        else rust_static_fallback_cfg(static_selection_plan)
+                    )
+                    for profile in plan.profiles_for("rust")
+                },
+                profile_modules={
+                    profile.profile_name: (
+                        f"tsl_{slug(profile.profile_name)}"
+                        if static_selection_plan.profile(profile.profile_name)
+                        is not None
+                        else "tsl_target_fallback"
+                    )
+                    for profile in plan.profiles_for("rust")
+                },
+            ),
             media_type=media_type,
         ),
     ]
     for profile in plan.profiles_for("rust"):
-        artifacts.extend(
-            text(
-                f"rust/examples/{compile_failure_target_name(profile, case)}.rs",
-                render_rust_compile_failure(case),
-                media_type=media_type,
+        for case in profile.compile_failure_cases:
+            target = compile_failure_target_name(profile, case)
+            artifacts.append(
+                text(
+                    f"rust/examples/{target}.rs",
+                    render_rust_compile_failure(case),
+                    media_type=media_type,
+                )
             )
-            for case in profile.compile_failure_cases
-        )
+            artifacts.append(
+                text(
+                    f"rust/verify/{target}/Cargo.toml",
+                    _rust_compile_failure_manifest(target, package_config),
+                    media_type="text/toml",
+                )
+            )
     return artifacts
+
+
+def _rust_compile_failure_manifest(
+    target: str,
+    package: RustPackageConfig,
+) -> str:
+    return "\n".join(
+        (
+            "[package]",
+            f'name = {json.dumps(target.replace("_", "-"))}',
+            'version = "0.0.0"',
+            f"edition = {json.dumps(package.edition)}",
+            "publish = false",
+            "",
+            "[dependencies]",
+            "tsl = { package = "
+            f"{json.dumps(package.name)}, path = \"../..\" }}",
+            "",
+            "[[bin]]",
+            f"name = {json.dumps(target)}",
+            f'path = "../../examples/{target}.rs"',
+            "",
+        )
+    )
 
 
 __all__ = ["cpp_test_artifacts", "rust_test_artifacts"]

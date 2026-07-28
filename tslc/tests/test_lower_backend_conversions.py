@@ -391,7 +391,7 @@ def test_sse_cross_signed_dword_narrowing_composes_range_clamp(
         ).specialization
 
         assert lowered is not None
-        for primitive in ("equal", "shift_right", "blend", "set1"):
+        for primitive in ("equal", "shift_right", "select", "set1"):
             assert primitive in lowered.body_text
         if source_type == "si32":
             for primitive in ("greater_than", "to_vector", "binary_andnot", "sub", "binary_xor"):

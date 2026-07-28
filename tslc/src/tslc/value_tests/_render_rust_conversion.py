@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.catalog.model import TestComparison
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.value_tests._render_rust_helpers import rust_extension_tag
 from tslc.value_tests.literals import rust_literal, rust_literal_list
@@ -68,6 +69,56 @@ def _repr_cast(case: ValueTestCasePlan) -> str:
             "    }",
         ]
     )
+
+
+def _lane_convert(case: ValueTestCasePlan) -> str:
+    target_plan = case.target
+    assert target_plan is not None
+    assert target_plan.base_spelling is not None and target_plan.type_tag is not None
+    assert target_plan.lanes == case.lanes
+    target = target_plan.base_spelling
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, target_plan.type_tag)
+    representation = case.representation
+    source_extension = (
+        rust_extension_tag(representation.source_extension)
+        if representation is not None
+        else f"Generic<{case.lanes}>"
+    )
+    lines = [
+        "    #[test]",
+        f"    fn {case.function_name}() {{",
+        f"        type Vec = Simd<{case.base_spelling}, {source_extension}>;",
+        f"        type ToVec = Simd<{target}, Generic<{case.lanes}>>;",
+        f"        let in0: [{case.base_spelling}; {case.lanes}] = [{literals}];",
+    ]
+    if representation is None:
+        lines.extend(
+            [
+                "        let mut source: <Vec as SimdVector>::RegisterType = Default::default();",
+                f"        for i in 0..{case.lanes} {{ source[i] = in0[i]; }}",
+            ]
+        )
+    else:
+        from_array = _required_name(representation.from_array_name, "from_array_name")
+        lines.extend(
+            [
+                "        let mut source_array: <Vec as SimdVector>::Array = Default::default();",
+                f"        for i in 0..{case.lanes} {{ source_array[i] = in0[i]; }}",
+                f"        let source = {from_array}::<Vec>(&source_array);",
+            ]
+        )
+    lines.extend(
+        [
+            f"        let result = {rust_raw_identifier(case.call_name)}::<Vec, ToVec>(source);",
+            f"        let expected: [{target}; {case.lanes}] = [{expected}];",
+            f"        for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), "
+            f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
+            "i, expected[i], result[i]); }",
+            "    }",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _target_imask(case: ValueTestCasePlan) -> str:
@@ -346,7 +397,14 @@ def _differential(case: ValueTestCasePlan) -> str:
             f"hin{position}[i] = in{position}[i]; "
             f"r{position}[i] = in{position}[i]; }}"
         )
-    for position, mask in enumerate(case.inputs.masks):
+    mask_kinds = tuple(
+        kind for kind in case.invocation.param_kinds if kind in {"m", "im"}
+    )
+    for position, (kind, mask) in enumerate(
+        zip(mask_kinds, case.inputs.masks, strict=True)
+    ):
+        if kind != "m":
+            continue
         to_mask = _required_name(differential.to_mask_name, "to_mask_name")
         lines.append(
             f"        let hm{position} = {to_mask}::<Hw>("
@@ -360,6 +418,7 @@ def _differential(case: ValueTestCasePlan) -> str:
     ref_args: list[str] = []
     vector_index = 0
     mask_index = 0
+    scalar_index = 0
     for kind in case.invocation.param_kinds:
         if kind == "v":
             hw_args.append(f"{from_array}::<Hw>(&hin{vector_index})")
@@ -369,6 +428,21 @@ def _differential(case: ValueTestCasePlan) -> str:
             hw_args.append(f"hm{mask_index}")
             ref_args.append(f"rm{mask_index}")
             mask_index += 1
+        elif kind == "im":
+            mask = case.inputs.masks[mask_index]
+            hw_args.append(f"{mask}u64 as <Hw as SimdVector>::ImaskType")
+            ref_args.append(f"{mask}u64 as <Ref as SimdVector>::ImaskType")
+            mask_index += 1
+        elif kind == "s":
+            value = rust_literal(case.inputs.scalars[scalar_index], case.type_tag)
+            hw_args.append(value)
+            ref_args.append(value)
+            scalar_index += 1
+        elif kind == "usize":
+            value = case.inputs.scalars[scalar_index]
+            hw_args.append(f"{value}usize")
+            ref_args.append(f"{value}usize")
+            scalar_index += 1
         elif kind != "sImm":
             raise ValueError(f"unsupported differential argument kind {kind!r}")
     hw_template_args = ["Hw", *case.invocation.generic_defaults]
@@ -398,11 +472,24 @@ def _differential(case: ValueTestCasePlan) -> str:
             "mask_bit(hw as u64, i), mask_bit(reference as u64, i), "
             f'"{case.function_name} lane {{}}", i); }}'
         )
+    elif case.invocation.result_kind == "s":
+        lines.append(f"        let hw: {case.base_spelling} = {hw_call};")
+        lines.append(f"        let reference: {case.base_spelling} = {ref_call};")
+        lines.append(
+            "        assert!(hw.lane_eq(reference), "
+            f'"{case.function_name}: expected {{:?}}, got {{:?}}", '
+            "reference, hw);"
+        )
     else:
         lines.append(f"        let hw = {to_array}::<Hw>({hw_call});")
         lines.append(f"        let reference = {ref_call};")
+        comparison = (
+            "lane_bitwise_eq"
+            if case.expectation.comparison is TestComparison.BITWISE
+            else "lane_eq"
+        )
         lines.append(
-            f"        for i in 0..{case.lanes} {{ assert!(hw[i].lane_eq(reference[i]), "
+            f"        for i in 0..{case.lanes} {{ assert!(hw[i].{comparison}(reference[i]), "
             f'"{case.function_name} lane {{}}: expected {{:?}}, got {{:?}}", '
             "i, reference[i], hw[i]); }"
         )
@@ -424,5 +511,6 @@ __all__ = (
     "_fixed_extension_repr_cast",
     "_load_convert",
     "_repr_cast",
+    "_lane_convert",
     "_target_imask",
 )

@@ -12,8 +12,10 @@ def cpp_literal(token: str, type_tag: str) -> str:
             return "INFINITY"
         if upper == "-INFINITY":
             return "-INFINITY"
-        if upper in ("NAN", "+NAN", "-NAN"):
+        if upper in ("NAN", "+NAN"):
             return "NAN"
+        if upper == "-NAN":
+            return "-NAN"
         if _is_numeric_token(token):
             target = "float" if type_tag == "f32" else "double"
             return f"static_cast<{target}>({token})"
@@ -46,8 +48,10 @@ def rust_literal(token: str, type_tag: str) -> str:
             return f"{ty}::INFINITY"
         if upper == "-INFINITY":
             return f"{ty}::NEG_INFINITY"
-        if upper in ("NAN", "+NAN", "-NAN"):
+        if upper in ("NAN", "+NAN"):
             return f"{ty}::NAN"
+        if upper == "-NAN":
+            return f"-{ty}::NAN"
         if _is_numeric_token(token) and all(ch not in token.lower() for ch in (".", "e")):
             return f"{token}.0"
         return token

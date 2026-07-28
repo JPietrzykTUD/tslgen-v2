@@ -17,6 +17,7 @@ from tslc.catalog.model import (
     ExtensionMetadata,
     ParamTypeRule,
     Primitive,
+    TestComparison as CaseComparison,
     TestFailureReason as FailureReason,
     TestArg as TslTestArg,
     TestCase as TslTestCase,
@@ -128,6 +129,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
         expectation=ValueTestExpectation(
             values=values.pop("expected", ()),
             text=values.pop("text_expected", None),
+            comparison=values.pop("comparison", CaseComparison.VALUE),
         ),
         invocation=ValueTestInvocation(
             result_kind=values.pop("result_kind", None),
@@ -380,6 +382,78 @@ def test_cpp_differential_uses_extension_mask_materialization_template() -> None
     assert "static_cast<typename Ref::imask_type>(10ull)" in source
 
 
+def test_differential_renderers_support_runtime_lane_scalar_kinds() -> None:
+    extract = ValueTestCasePlan(
+        "differential",
+        "test_diff_avx2_extract_value_at",
+        "extract_value_at_si32",
+        "extract_value_at",
+        "si32",
+        "i32",
+        8,
+        vector_inputs=(("1", "2", "3", "4", "5", "6", "7", "8"),),
+        scalar_inputs=("7",),
+        result_kind="s",
+        param_kinds=("v", "usize"),
+        hardware_extension="avx2",
+        from_array_name="from_array",
+        to_array_name="to_array",
+    )
+    insert = ValueTestCasePlan(
+        "differential",
+        "test_diff_avx2_insert_value_at",
+        "insert_value_at_si32",
+        "insert_value_at",
+        "si32",
+        "i32",
+        8,
+        vector_inputs=(("1", "2", "3", "4", "5", "6", "7", "8"),),
+        scalar_inputs=("7", "9"),
+        result_kind="v",
+        param_kinds=("v", "usize", "s"),
+        hardware_extension="avx2",
+        from_array_name="from_array",
+        to_array_name="to_array",
+    )
+    set_mask = ValueTestCasePlan(
+        "differential",
+        "test_diff_avx512_set_mask_lane",
+        "set_mask_lane_ui32",
+        "set_mask_lane",
+        "ui32",
+        "u32",
+        16,
+        mask_inputs=("5",),
+        scalar_inputs=("15", "1"),
+        result_kind="m",
+        param_kinds=("m", "usize", "usize"),
+        hardware_extension="avx512",
+        from_array_name="from_array",
+        to_array_name="to_array",
+        to_integral_name="to_integral",
+        to_mask_name="to_mask",
+    )
+
+    cpp_extract = CPP_VALUE_TEST_RENDERER.render_case(extract)
+    rust_extract = RUST_VALUE_TEST_RENDERER.render_case(extract)
+    assert "extract_value_at<Hw>(tsl::from_array<Hw>(hin0), static_cast<std::size_t>(7))" in cpp_extract
+    assert "check_scalar<i32>" in cpp_extract
+    assert "extract_value_at::<Hw>(from_array::<Hw>(&hin0), 7usize)" in rust_extract
+    assert "hw.lane_eq(reference)" in rust_extract
+
+    cpp_insert = CPP_VALUE_TEST_RENDERER.render_case(insert)
+    rust_insert = RUST_VALUE_TEST_RENDERER.render_case(insert)
+    assert "static_cast<std::size_t>(7), 9" in cpp_insert
+    assert "7usize, 9" in rust_insert
+
+    cpp_mask = CPP_VALUE_TEST_RENDERER.render_case(set_mask)
+    rust_mask = RUST_VALUE_TEST_RENDERER.render_case(set_mask)
+    assert "static_cast<std::size_t>(1)" in cpp_mask
+    assert "to_integral<Hw>(tsl::set_mask_lane<Hw>" in cpp_mask
+    assert "1usize" in rust_mask
+    assert "to_integral::<Hw>(set_mask_lane::<Hw>" in rust_mask
+
+
 def test_masked_immediate_cases_plan_and_render_for_both_backends(
     render_assets: RenderAssets,
 ) -> None:
@@ -578,6 +652,13 @@ def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverag
     )
     assert len(cpp_negative_paths) == 4
     assert len(rust_negative_paths) == 4
+    rust_negative_manifests = sorted(
+        path
+        for path in artifacts
+        if path.startswith("rust/verify/tsl_compile_failure_")
+        and path.endswith("/Cargo.toml")
+    )
+    assert len(rust_negative_manifests) == 4
     assert all(
         path.removeprefix("cpp/tests/").removesuffix(".cpp")
         not in artifacts["cpp/tests/values_avx2.cpp"]
@@ -595,9 +676,14 @@ def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverag
         "rust/src/tsl_avx2.rs"
     ]
     assert "EXCLUDE_FROM_ALL" in artifacts["cpp/CMakeLists.txt"]
-    assert 'required-features = ["tsl_compile_failure_' in artifacts[
-        "rust/Cargo.toml"
-    ]
+    rust_manifest = artifacts["rust/Cargo.toml"]
+    assert "tsl_compile_failures" not in rust_manifest
+    assert "required-features" not in rust_manifest
+    assert 'runtime-dispatch = ["std"]' in rust_manifest
+    assert all(
+        'tsl = { package = "tsl", path = "../.." }' in artifacts[path]
+        for path in rust_negative_manifests
+    )
 
 
 def test_emitted_name_split_preserves_source_primitive_identity() -> None:
@@ -1104,6 +1190,109 @@ def test_planner_emits_fixed_masked_mask_result_cases() -> None:
     assert {entry.status for entry in plan.coverage} == {"emitted"}
 
 
+def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
+    extract = Primitive(
+        "extract_value_at",
+        "s:=(v,usize)",
+        ("data", "index"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="extract_last",
+                type_tag="si32",
+                tags=("last",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("scalar", scalar="3"),
+                ),
+                expected=("4",),
+            ),
+        ),
+    )
+    insert = Primitive(
+        "insert_value_at",
+        "v:=(v,usize,s)",
+        ("data", "index", "value"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="insert_last",
+                type_tag="si32",
+                tags=("last",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("scalar", scalar="3"),
+                    TslTestArg("scalar", scalar="9"),
+                ),
+                expected=("1", "2", "3", "9"),
+            ),
+        ),
+    )
+    set_mask = Primitive(
+        "set_mask_lane",
+        "m:=(m,usize,im)",
+        ("mask", "index", "value"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="set_mask_last",
+                type_tag="si32",
+                tags=("last",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("mask", mask_bits="5"),
+                    TslTestArg("scalar", scalar="3"),
+                    TslTestArg("mask", mask_bits="1"),
+                ),
+                expected=("13",),
+            ),
+        ),
+    )
+    specs = {
+        "extract_value_at": (
+            _spec(
+                "extract_value_at",
+                "extract_value_at",
+                result_kind="s",
+                param_kinds=("v", "usize"),
+            ),
+        ),
+        "insert_value_at": (
+            _spec(
+                "insert_value_at",
+                "insert_value_at",
+                param_kinds=("v", "usize", "s"),
+            ),
+        ),
+        "set_mask_lane": (
+            _spec(
+                "set_mask_lane",
+                "set_mask_lane",
+                result_kind="m",
+                param_kinds=("m", "usize", "im"),
+            ),
+        ),
+    }
+    plan = ValueTestPlanner(
+        _catalog(extract, insert, set_mask, *_harness_primitives()),
+        (CPP_VALUE_TEST_SUPPORT,),
+    ).plan((ValueTestBackendProfileInput("cpp", "unit", specs),))
+
+    assert plan.diagnostics == ()
+    cases = plan.profiles_for("cpp")[0].cases
+    assert [(case.call_name, case.kind) for case in cases] == [
+        ("extract_value_at", "scalar_result"),
+        ("insert_value_at", "scalar_vector"),
+        ("set_mask_lane", "mask_result"),
+    ]
+    assert {entry.status for entry in plan.coverage} == {"emitted"}
+
+
 def test_simple_shape_patterns_are_not_ordered_by_first_overload() -> None:
     primitive = Primitive(
         "store",
@@ -1516,6 +1705,27 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
     )
     assert "tsl::plus<Vec>(v0, v1)" in cpp_source
 
+    cpp_bitwise_case = ValueTestCasePlan(
+        kind="generic_golden",
+        function_name="test_neg_bits",
+        case_name="float-bits",
+        call_name="neg",
+        type_tag="f32",
+        base_spelling="float",
+        lanes=2,
+        vector_inputs=(("NAN", "-NAN"),),
+        expected=("-NAN", "NAN"),
+        comparison=CaseComparison.BITWISE,
+        result_kind="v",
+        param_kinds=("v",),
+    )
+    cpp_bitwise_source = render_cpp_values_runner(
+        ValueTestProfilePlan("cpp", "unit-profile", (cpp_bitwise_case,)),
+        render_assets,
+    )
+    assert "check_lanes_bitwise<float>" in cpp_bitwise_source
+    assert "{-NAN, NAN}" in cpp_bitwise_source
+
     cpp_permute_case = ValueTestCasePlan(
         kind="generic_golden",
         function_name="test_permute_lanes",
@@ -1671,6 +1881,17 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         render_assets,
     )
     assert "r#mod::<Vec>(a0, a1)" in rust_source
+
+    rust_bitwise_case = replace(
+        cpp_bitwise_case,
+        base_spelling="f32",
+    )
+    rust_bitwise_source = render_rust_values_file(
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_bitwise_case,)),),
+        render_assets,
+    )
+    assert ".lane_bitwise_eq(expected[i])" in rust_bitwise_source
+    assert "[-f32::NAN, f32::NAN]" in rust_bitwise_source
 
     rust_permute_case = ValueTestCasePlan(
         kind="generic_golden",
@@ -3274,7 +3495,7 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
     assert "rust_value_tests.rs.tmpl" in render_rust
     assert "rust_value_tests_profile.rs.tmpl" in render_rust
     assert "#![cfg(feature = \"value_tests\")]" not in render_rust
-    assert "#![cfg(feature = \"value_tests\")]" in rust_values_template
+    assert "#![cfg(tsl_value_tests)]" in rust_values_template
     assert "tsl::tsl_core" not in render_rust
     assert "tsl::tsl_core" in rust_profile_template
     assert "Catalog" not in render_rust

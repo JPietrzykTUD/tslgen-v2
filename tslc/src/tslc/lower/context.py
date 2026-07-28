@@ -124,7 +124,7 @@ class LoweringEnv:
     primitive_borrowed_arg_positions: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
     # names with >1 emitted form (unmasked + value-masking mask policies), so a
     # `call<…attrs[mask=…]>` to them is mangled to `<name>_mask`/`<name>_maskz` (matching the
-    # render rename). Single-form callees (`blend`) are absent → keep their bare names.
+    # render rename). Single-form callees (`select`) are absent → keep their bare names.
     policy_split_names: frozenset[str] = frozenset()
     # names whose callable family mixes runtime and compile-time immediate forms. Only these
     # names gain an `_imm` suffix when a caller forwards its own `sImm` as a const/template arg.

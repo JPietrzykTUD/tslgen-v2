@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.catalog.model import TestComparison
 from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 from tslc.value_tests.render_cpp_helpers import render_extension_test_template
@@ -60,6 +61,54 @@ def _repr_cast(case: ValueTestCasePlan) -> str:
         f'"{case.case_name}", result, expected, {target_lanes});',
         "}",
     ]
+    return "\n".join(lines)
+
+
+def _lane_convert(case: ValueTestCasePlan) -> str:
+    target_plan = case.target
+    assert target_plan is not None
+    assert target_plan.base_spelling is not None and target_plan.type_tag is not None
+    assert target_plan.lanes == case.lanes
+    target = target_plan.base_spelling
+    literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = cpp_literal_list(case.expectation.values, target_plan.type_tag)
+    representation = case.representation
+    source_extension = (
+        f"tsl::{representation.source_extension}"
+        if representation is not None
+        else f"tsl::generic<{case.lanes}>"
+    )
+    lines = [
+        f"int {case.function_name}() {{",
+        f"  using Vec = tsl::simd<{case.base_spelling}, {source_extension}>;",
+        f"  using ToVec = tsl::simd<{target}, tsl::generic<{case.lanes}>>;",
+        f"  static const {case.base_spelling} in0[{case.lanes}] = {{{literals}}};",
+    ]
+    if representation is None:
+        lines.extend(
+            [
+                "  typename Vec::register_type source{};",
+                f"  for (std::size_t i = 0; i < {case.lanes}; ++i) source[i] = in0[i];",
+            ]
+        )
+    else:
+        assert representation.from_array_name is not None
+        lines.extend(
+            [
+                "  typename tsl::array_for<Vec>::type source_array{};",
+                f"  for (std::size_t i = 0; i < {case.lanes}; ++i) source_array[i] = in0[i];",
+                f"  auto source = tsl::{representation.from_array_name}<Vec>(source_array);",
+            ]
+        )
+    lines.extend(
+        [
+            f"  auto result = tsl::{case.call_name}<Vec, ToVec>(source);",
+            f"  static const {target} expected[{case.lanes}] = {{{expected}}};",
+            f'  return tsl::test::check_lanes<{target}>('
+            f'"{case.case_name}", result, expected, {case.lanes});',
+            "}",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -306,7 +355,14 @@ def _differential(case: ValueTestCasePlan) -> str:
             f"  for (std::size_t i = 0; i < {case.lanes}; ++i) "
             f"{{ hin{position}[i] = in{position}[i]; r{position}[i] = in{position}[i]; }}"
         )
-    for position, mask in enumerate(case.inputs.masks):
+    mask_kinds = tuple(
+        kind for kind in case.invocation.param_kinds if kind in {"m", "im"}
+    )
+    for position, (kind, mask) in enumerate(
+        zip(mask_kinds, case.inputs.masks, strict=True)
+    ):
+        if kind != "m":
+            continue
         if differential.to_mask_name is None:
             raise ValueError("masked differential case requires to_mask_name")
         hardware_mask = _differential_hardware_mask(case, f"{mask}ull")
@@ -322,6 +378,7 @@ def _differential(case: ValueTestCasePlan) -> str:
     ref_args = []
     vector_index = 0
     mask_index = 0
+    scalar_index = 0
     for kind in case.invocation.param_kinds:
         if kind == "v":
             hw_args.append(
@@ -333,6 +390,27 @@ def _differential(case: ValueTestCasePlan) -> str:
             hw_args.append(f"hm{mask_index}")
             ref_args.append(f"rm{mask_index}")
             mask_index += 1
+        elif kind == "im":
+            mask = case.inputs.masks[mask_index]
+            hw_args.append(
+                "static_cast<typename Hw::imask_type>("
+                f"{mask}ull)"
+            )
+            ref_args.append(
+                "static_cast<typename Ref::imask_type>("
+                f"{mask}ull)"
+            )
+            mask_index += 1
+        elif kind == "s":
+            value = cpp_literal(case.inputs.scalars[scalar_index], case.type_tag)
+            hw_args.append(value)
+            ref_args.append(value)
+            scalar_index += 1
+        elif kind == "usize":
+            value = case.inputs.scalars[scalar_index]
+            hw_args.append(f"static_cast<std::size_t>({value})")
+            ref_args.append(f"static_cast<std::size_t>({value})")
+            scalar_index += 1
         elif kind != "sImm":
             raise ValueError(f"unsupported differential argument kind {kind!r}")
     template_args_hw = ["Hw"]
@@ -355,11 +433,23 @@ def _differential(case: ValueTestCasePlan) -> str:
             f'  return tsl::test::check_mask_match_for<Hw>("{case.function_name}", '
             f"hw, ref, {case.lanes});"
         )
+    elif case.invocation.result_kind == "s":
+        lines.append(f"  {case.base_spelling} hw = {hw_call};")
+        lines.append(f"  {case.base_spelling} ref = {ref_call};")
+        lines.append(
+            f'  return tsl::test::check_scalar<{case.base_spelling}>('
+            f'"{case.function_name}", hw, ref);'
+        )
     else:
         lines.append(f"  typename tsl::array_for<Hw>::type hout = tsl::{differential.to_array_name}<Hw>({hw_call});")
         lines.append(f"  typename Ref::register_type ref = {ref_call};")
+        check = (
+            "check_match_bitwise"
+            if case.expectation.comparison is TestComparison.BITWISE
+            else "check_match"
+        )
         lines.append(
-            f'  return tsl::test::check_match<{case.base_spelling}>('
+            f"  return tsl::test::{check}<{case.base_spelling}>("
             f'"{case.function_name}", hout, ref, {case.lanes});'
         )
     lines.append("}")
@@ -518,6 +608,7 @@ def _differential_fuzz(case: ValueTestCasePlan) -> str:
 __all__ = (
     "_convert",
     "_repr_cast",
+    "_lane_convert",
     "_target_imask",
     "_fixed_extension_repr_cast",
     "_extension_extract",

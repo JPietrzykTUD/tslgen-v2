@@ -101,6 +101,37 @@ def test_baseline_guard_rejects_skip_fact_refresh_without_coverage_growth() -> N
         validate_full_export_baseline_update(previous, candidate)
 
 
+@pytest.mark.parametrize(
+    ("field", "previous_value", "candidate_value"),
+    [
+        ("skip_semantic_inventory_sha256", _HASH_A, _HASH_B),
+        (
+            "artifacts",
+            [{"path": "cpp/demo.yaml", "sha256": _HASH_A}],
+            [{"path": "cpp/demo.yaml", "sha256": _HASH_B}],
+        ),
+        (
+            "diagnostics",
+            [],
+            [{"code": "PIVOT-DEMO", "message": "changed"}],
+        ),
+    ],
+    ids=("semantic-skips", "artifacts", "diagnostics"),
+)
+def test_baseline_guard_rejects_product_fact_changes_with_coverage_growth(
+    field: str,
+    previous_value: object,
+    candidate_value: object,
+) -> None:
+    previous = _manifest(_definition("kept"))
+    previous[field] = previous_value
+    candidate = _manifest(_definition("kept"), _definition("added"))
+    candidate[field] = candidate_value
+
+    with pytest.raises(ValueError, match=rf"product facts changed:.*{field}"):
+        validate_full_export_baseline_update(previous, candidate)
+
+
 def test_baseline_guard_accepts_skip_location_only_refresh() -> None:
     previous = _manifest(_definition("kept"))
     previous["skips"] = [["same", ["demo.tsl", 1, 1, 2, 1]]]
@@ -112,10 +143,21 @@ def test_baseline_guard_accepts_skip_location_only_refresh() -> None:
     validate_full_export_baseline_update(previous, candidate)
 
 
-def test_reviewed_incompatibility_override_is_explicit() -> None:
+def test_reviewed_product_fact_change_with_addition_requires_override() -> None:
+    previous = _manifest(_definition("kept"))
+    previous["skip_semantic_inventory_sha256"] = _HASH_A
+    candidate = _manifest(_definition("kept"), _definition("added"))
+    candidate["skip_semantic_inventory_sha256"] = _HASH_B
+
+    with pytest.raises(
+        ValueError,
+        match="product facts changed: skip_semantic_inventory_sha256",
+    ):
+        validate_full_export_baseline_update(previous, candidate)
+
     validate_full_export_baseline_update(
-        _manifest(_definition("removed")),
-        _manifest(),
+        previous,
+        candidate,
         allow_reviewed_incompatible_baseline=True,
     )
 

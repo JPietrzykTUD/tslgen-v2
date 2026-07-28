@@ -30,6 +30,16 @@ backends = ["cpp", "rust"]
 authoring_profiles = ["scalar", "avx2"]
 output_root = "tslctmp/generated"
 
+[tslc.rust_package]
+name = "tsl"
+version = "0.1.0"
+edition = "2021"
+rust_version = "1.89"
+license = "Apache-2.0"
+repository = "https://github.com/JPietrzykTUD/tslgen-v2"
+documentation = "https://docs.rs/tsl"
+readme = "README.md"
+
 [tslc.toolchains.cpp]
 compiler = "clang++"
 target = "aarch64-linux-gnu"
@@ -39,11 +49,12 @@ linker = "ld.lld"
 qemu-aarch64 = "/usr/bin/qemu-aarch64"
 ```
 
-Toolchain and runner tables are optional. CLI `--compiler`, `--target`,
-`--linker`, and `--runner` assignments override configured values. The
-repository configuration supplies only portable paths and backend defaults;
-keep host-specific overrides in an uncommitted configuration or pass them on
-the command line.
+The Rust package table is optional as a whole; when present, it supplies the
+complete release metadata rendered into the generated Cargo package. Toolchain
+and runner tables are optional. CLI `--compiler`, `--target`, `--linker`, and
+`--runner` assignments override configured values. The repository configuration
+supplies only portable paths and backend defaults; keep host-specific overrides
+in an uncommitted configuration or pass them on the command line.
 
 The original flat generation form remains supported for scripts:
 

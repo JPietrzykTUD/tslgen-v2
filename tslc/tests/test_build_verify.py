@@ -10,6 +10,7 @@ from pathlib import Path
 import shutil
 import shlex
 import subprocess
+import tarfile
 import textwrap
 
 import pytest
@@ -17,6 +18,12 @@ import pytest
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.diagnostics import has_errors
 from tslc.maintenance.build_verified import BUILD_VERIFIED_PRIMITIVE_SETS
+from tslc.output.verify_model import (
+    VerifyBackend,
+    VerifyCompileFailure,
+    VerifyProfile,
+    VerifyProject,
+)
 
 pytestmark = pytest.mark.generated_build
 
@@ -86,9 +93,10 @@ def test_generated_profiles_build(
     write_report = write_artifacts(result.artifacts, tmp_path)
     assert not has_errors(write_report.diagnostics), write_report.diagnostics
 
-    report = verify_project(tmp_path, result.rendered.verify)
+    report = verify_project(tmp_path, result.rendered.verify, run_quality_checks=True)
     assert report.diagnostics == (), report.diagnostics
-    # configure+build for 4 C++ profiles (8) + cargo test for 4 Rust profiles (4).
+    # Each selected Rust profile also passes strict compiler, rustdoc, and
+    # selected Clippy gates before its generated tests compile.
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
@@ -159,7 +167,7 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
               Vec::register_type compared_right = {1, 0, 3, 0};
               auto equal = tsl::equal<Vec>(left, compared_right);
               auto odd = tsl::to_mask<Vec>(static_cast<Vec::imask_type>(0b1010));
-              auto blended = tsl::blend<Vec>(odd, left, compared_right);
+              auto blended = tsl::select<Vec>(odd, compared_right, left);
               auto all = tsl::mask_true<Vec>();
               auto none = tsl::mask_false<Vec>();
               auto both = tsl::mask_binary_and<Vec>(equal, odd);
@@ -185,7 +193,7 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
               auto bool_either = tsl::mask_binary_or<BoolVec>(bool_equal, bool_odd);
               auto bool_different = tsl::mask_binary_xor<BoolVec>(bool_equal, bool_odd);
               auto bool_inverted = tsl::mask_binary_not<BoolVec>(bool_equal);
-              auto bool_blended = tsl::blend<BoolVec>(bool_odd, bool_left, bool_right);
+              auto bool_blended = tsl::select<BoolVec>(bool_odd, bool_right, bool_left);
 #endif
               return sum[0] == 5 && sum[3] == 5 &&
                              magnitude[0] == 1 && magnitude[1] == INT32_MIN &&
@@ -371,6 +379,1133 @@ def test_cpp_fetch_content_consumer_builds(
     assert built.returncode == 0, built.stderr + built.stdout
 
 
+def test_rust_path_dependency_consumer_builds(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cargo") is None:
+        pytest.skip("cargo not available")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_rust_path_dependency_consumer_builds"),
+        profiles=["scalar", "sse2", "avx2"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    consumer = tmp_path / "rust-consumer"
+    (consumer / "src").mkdir(parents=True)
+    (consumer / "Cargo.toml").write_text(
+        textwrap.dedent(
+            f"""
+            [package]
+            name = "tsl-rust-consumer"
+            version = "0.0.0"
+            edition = "2021"
+
+            [dependencies]
+            tsl = {{ path = "{(generated / 'rust').as_posix()}", default-features = false }}
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (consumer / "src" / "main.rs").write_text(
+        textwrap.dedent(
+            """
+            use tsl::{Mask, Simd};
+            use tsl::tsl_core::{Scalar, Simd as LowerSimd};
+
+            fn main() {
+                let sum = tsl::profile::add::<LowerSimd<i32, Scalar>>(1, 2);
+                assert_eq!(sum, 3);
+
+                let source = [1_i32, 2, 3, 4, 99];
+                let mut value = Simd::<i32, 4>::from_slice(&source);
+                assert_eq!(Simd::<i32, 4>::LANES, 4);
+                assert_eq!(value.to_array(), [1, 2, 3, 4]);
+                assert_eq!(value.lane(0), 1);
+                assert_eq!(value.lane(3), 4);
+                value.set_lane(1, 7);
+                assert_eq!(format!("{value:?}"), "[1, 7, 3, 4]");
+
+                let mut destination = [88_i32; 6];
+                value.copy_to_slice(&mut destination);
+                assert_eq!(destination, [1, 7, 3, 4, 88, 88]);
+
+                let mut pointer_destination = [0_i32; 4];
+                let pointer_value =
+                    unsafe { Simd::<i32, 4>::from_ptr(source.as_ptr()) };
+                unsafe {
+                    pointer_value.copy_to_ptr(pointer_destination.as_mut_ptr());
+                }
+                assert_eq!(pointer_destination, [1, 2, 3, 4]);
+
+                let bytes = [
+                    0_u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+                    16, 17,
+                ];
+                let unaligned = Simd::<u8, 16>::from_slice(&bytes[1..]);
+                assert_eq!(
+                    unaligned.to_array(),
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+                );
+
+                let mut mask = Mask::<i32, 4>::from_bitmask(0b1_0101);
+                assert_eq!(Mask::<i32, 4>::LANES, 4);
+                assert_eq!(mask.to_bitmask(), 0b0101);
+                assert_eq!(mask.to_array(), [true, false, true, false]);
+                assert!(mask.test(0));
+                assert_eq!(mask.count_ones(), 2);
+                assert!(mask.any());
+                assert!(!mask.all());
+                mask.set(3, true);
+                assert_eq!(mask.to_bitmask(), 0b1101);
+                assert_eq!(mask.cast::<f32>().to_bitmask(), 0b1101);
+                assert_eq!((mask & !Mask::splat(false)).to_bitmask(), 0b1101);
+
+                let left = Simd::<i32, 4>::from_array([1, -2, i32::MAX, i32::MIN]);
+                let right = Simd::<i32, 4>::from_array([2, 3, 1, -1]);
+                assert_eq!(left.add(right).to_array(), [3, 1, i32::MIN, i32::MAX]);
+                assert_eq!(
+                    left.add_masked(
+                        Mask::from_array([true, false, true, false]),
+                        right,
+                    )
+                    .to_array(),
+                    [3, -2, i32::MIN, i32::MIN],
+                );
+                assert_eq!(
+                    left.add_masked_zero(
+                        Mask::from_array([true, false, true, false]),
+                        right,
+                    )
+                    .to_array(),
+                    [3, 0, i32::MIN, 0],
+                );
+                assert_eq!((left + right).to_array(), [3, 1, i32::MIN, i32::MAX]);
+                assert_eq!((&left + right).to_array(), [3, 1, i32::MIN, i32::MAX]);
+                assert_eq!((left + &right).to_array(), [3, 1, i32::MIN, i32::MAX]);
+                assert_eq!((&left + &right).to_array(), [3, 1, i32::MIN, i32::MAX]);
+                assert_eq!((left - right).to_array(), [-1, -5, i32::MAX - 1, i32::MIN + 1]);
+                assert_eq!((left * right).to_array(), [2, -6, i32::MAX, i32::MIN]);
+                assert_eq!((-left).to_array(), [-1, 2, i32::MIN + 1, i32::MIN]);
+                assert_eq!((-&left).to_array(), [-1, 2, i32::MIN + 1, i32::MIN]);
+
+                let mut assigned = left;
+                assigned += &right;
+                assigned -= right;
+                assigned *= Simd::splat(2);
+                assert_eq!(assigned.to_array(), [2, -4, -2, 0]);
+
+                let dividend = Simd::<i32, 4>::from_array([7, -7, i32::MIN, 9]);
+                let divisor = Simd::<i32, 4>::from_array([3, 3, -1, 2]);
+                assert_eq!((dividend / divisor).to_array(), [2, -2, i32::MIN, 4]);
+                assert_eq!((dividend % divisor).to_array(), [1, -1, 0, 1]);
+                assert!(std::panic::catch_unwind(|| {
+                    let _ = dividend / Simd::from_array([1, 0, 1, 1]);
+                })
+                .is_err());
+                assert!(std::panic::catch_unwind(|| {
+                    let _ = dividend % Simd::from_array([1, 0, 1, 1]);
+                })
+                .is_err());
+
+                assert_eq!((left & right).to_array(), [0, 2, 1, i32::MIN]);
+                assert_eq!((left | right).to_array(), [3, -1, i32::MAX, -1]);
+                assert_eq!((left ^ right).to_array(), [3, -3, i32::MAX - 1, i32::MAX]);
+                assert_eq!((!left).to_array(), [-2, 1, i32::MIN, i32::MAX]);
+
+                assert_eq!(left.simd_eq(left).to_array(), [true; 4]);
+                assert_eq!(left.simd_ne(right).to_array(), [true; 4]);
+                assert_eq!(left.simd_lt(right).to_array(), [true, true, false, true]);
+                assert_eq!(left.simd_le(right).to_array(), [true, true, false, true]);
+                assert_eq!(left.simd_gt(right).to_array(), [false, false, true, false]);
+                assert_eq!(left.simd_ge(right).to_array(), [false, false, true, false]);
+                assert_eq!(left, left);
+                assert_ne!(left, right);
+                assert_eq!(
+                    Mask::<i32, 4>::from_array([true, false, false, true])
+                        .select(left, right)
+                        .to_array(),
+                    [1, 3, 1, i32::MIN],
+                );
+
+                assert_eq!(
+                    Simd::<i32, 4>::from_array([-2, 0, 3, i32::MAX])
+                        .cast::<f32>()
+                        .to_array(),
+                    [-2.0, 0.0, 3.0, 2_147_483_648.0],
+                );
+                assert_eq!(
+                    Simd::<i32, 4>::from_array([-2, 0, 3, i32::MAX])
+                        .convert_lanes::<f32>()
+                        .to_array(),
+                    [-2.0, 0.0, 3.0, 2_147_483_648.0],
+                );
+                assert_eq!(
+                    Simd::<f32, 4>::from_array([
+                        f32::NEG_INFINITY,
+                        -1.9,
+                        f32::INFINITY,
+                        f32::NAN,
+                    ])
+                    .cast::<i32>()
+                    .to_array(),
+                    [i32::MIN, -1, i32::MAX, 0],
+                );
+                let floating_bits = Simd::<u32, 4>::from_array([
+                    0x8000_0000,
+                    0x7fc0_1234,
+                    0x3f80_0000,
+                    0,
+                ]);
+                let floating = Simd::<f32, 4>::from_bits(floating_bits);
+                assert_eq!(floating.to_bits(), floating_bits);
+                assert_eq!(
+                    (-floating).to_bits().to_array(),
+                    [0, 0xffc0_1234, 0xbf80_0000, 0x8000_0000],
+                );
+                let floating_dividend =
+                    Simd::<f32, 4>::from_array([0.0, -0.0, 1.0, f32::NAN]);
+                let floating_divisor =
+                    Simd::<f32, 4>::from_array([1.0, 1.0, 0.0, 1.0]);
+                let floating_quotient = floating_dividend / floating_divisor;
+                assert_eq!(floating_quotient.to_bits().to_array()[..2], [0, 0x8000_0000]);
+                assert!(floating_quotient.to_array()[2].is_infinite());
+                assert!(floating_quotient.to_array()[3].is_nan());
+                assert_ne!(floating_dividend, floating_dividend);
+
+                assert_eq!((Simd::<i32, 4>::splat(1) << 33_u64).to_array(), [2; 4]);
+                assert_eq!((Simd::<i32, 4>::splat(1) << -1_i8).to_array(), [i32::MIN; 4]);
+                assert_eq!((Simd::<i32, 4>::splat(-8) >> 34_u16).to_array(), [-2; 4]);
+                assert_eq!(
+                    (Simd::<i32, 4>::splat(1)
+                        << Simd::<i32, 4>::from_array([0, 1, 31, -1]))
+                    .to_array(),
+                    [1, 2, i32::MIN, i32::MIN],
+                );
+                let mut shifted = Simd::<i32, 4>::splat(1);
+                shifted <<= &33_u32;
+                shifted >>= 1_i16;
+                assert_eq!(shifted.to_array(), [1; 4]);
+
+                assert_eq!(tsl::set1::<i32, 4>(7).to_array(), [7; 4]);
+                assert_eq!(
+                    Simd::<i32, 4>::splat(1).shift_left(33_i32).to_array(),
+                    [0; 4],
+                );
+                assert_eq!(
+                    Simd::<i32, 4>::splat(1)
+                        .shift_left_each(Simd::from_array([0, 1, 31, 32]))
+                        .to_array(),
+                    [1, 2, i32::MIN, 0],
+                );
+                assert_eq!(
+                    Simd::<i32, 4>::splat(1).shift_left_imm::<2>().to_array(),
+                    [4; 4],
+                );
+                assert_eq!(
+                    Simd::<i32, 4>::splat(1)
+                        .shift_left_imm_masked::<2>(
+                            Mask::from_array([true, false, true, false]),
+                        )
+                        .to_array(),
+                    [4, 1, 4, 1],
+                );
+
+                let mut comprehensive_memory = [0_i32; 4];
+                let memory_mask =
+                    Mask::from_array([true, false, true, false]);
+                unsafe {
+                    left.store_masked::<false>(
+                        memory_mask,
+                        comprehensive_memory.as_mut_ptr(),
+                    );
+                }
+                assert_eq!(
+                    comprehensive_memory,
+                    [1, 0, i32::MAX, 0],
+                );
+                let masked_load = unsafe {
+                    tsl::load_masked_zero::<i32, 4, false>(
+                        memory_mask,
+                        comprehensive_memory.as_ptr(),
+                    )
+                };
+                assert_eq!(
+                    masked_load.to_array(),
+                    [1, 0, i32::MAX, 0],
+                );
+                unsafe {
+                    tsl::store::<i32, 4, false>(
+                        comprehensive_memory.as_mut_ptr().add(2),
+                        123,
+                    );
+                }
+                assert_eq!(comprehensive_memory[2], 123);
+
+                assert!(std::panic::catch_unwind(|| {
+                    let _ = Simd::<i32, 4>::from_slice(&source[..3]);
+                })
+                .is_err());
+                assert!(std::panic::catch_unwind(|| value.lane(4)).is_err());
+                assert!(std::panic::catch_unwind(|| mask.test(4)).is_err());
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (consumer / "src" / "lib.rs").write_text(
+        textwrap.dedent(
+            """
+            #![no_std]
+
+            use tsl::{
+                Mask, NativeMask, NativeSimd, Simd, SimdElement, SupportedSimd,
+            };
+
+            fn assert_owned<V: Copy + Clone + Send + Sync + Unpin + 'static>() {}
+
+            pub fn move_vector<T, const N: usize>(value: Simd<T, N>) -> Simd<T, N>
+            where
+                T: SupportedSimd<N>,
+            {
+                assert_owned::<Simd<T, N>>();
+                value
+            }
+
+            pub fn move_mask<T, const N: usize>(value: Mask<T, N>) -> Mask<T, N>
+            where
+                T: SupportedSimd<N>,
+            {
+                assert_owned::<Mask<T, N>>();
+                value
+            }
+
+            pub fn move_native<T: SimdElement>(
+                vector: NativeSimd<T>,
+                mask: NativeMask<T>,
+            ) -> (NativeSimd<T>, NativeMask<T>) {
+                assert_owned::<NativeSimd<T>>();
+                assert_owned::<NativeMask<T>>();
+                (vector, mask)
+            }
+
+            pub fn round_trip<T, const N: usize>(
+                values: [T; N],
+                mask: [bool; N],
+            ) -> ([T; N], [bool; N])
+            where
+                T: SupportedSimd<N>,
+            {
+                (
+                    Simd::<T, N>::from_array(values).to_array(),
+                    Mask::<T, N>::from_array(mask).to_array(),
+                )
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    checked = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(consumer / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "rust-consumer-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert checked.returncode == 0, checked.stderr + checked.stdout
+
+    executed = subprocess.run(
+        (
+            "cargo",
+            "run",
+            "--quiet",
+            "--manifest-path",
+            str(consumer / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "rust-consumer-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert executed.returncode == 0, executed.stderr + executed.stdout
+
+    generated_manifest = generated / "rust" / "Cargo.toml"
+    packaged = subprocess.run(
+        (
+            "cargo",
+            "package",
+            "--manifest-path",
+            str(generated_manifest),
+            "--allow-dirty",
+            "--no-verify",
+            "--list",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert packaged.returncode == 0, packaged.stderr + packaged.stdout
+    packaged_paths = set(packaged.stdout.splitlines())
+    assert {"Cargo.toml", "README.md", "src/lib.rs", "src/tsl_facade.rs"} <= packaged_paths
+    assert not any(path.startswith("tslc/") for path in packaged_paths)
+    manifest_text = generated_manifest.read_text(encoding="utf-8")
+    assert "[build-dependencies]" not in manifest_text
+    assert 'rust-version = "1.89"' in manifest_text
+
+    package = subprocess.run(
+        (
+            "cargo",
+            "package",
+            "--manifest-path",
+            str(generated_manifest),
+            "--allow-dirty",
+            "--no-verify",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert package.returncode == 0, package.stderr + package.stdout
+    package_archives = tuple(
+        (generated / "rust" / "target" / "package").glob("tsl-*.crate")
+    )
+    assert len(package_archives) == 1
+    package_root = tmp_path / "packaged-source"
+    with tarfile.open(package_archives[0], "r:gz") as archive:
+        archive.extractall(package_root, filter="data")
+    packaged_crates = tuple(package_root.glob("tsl-*"))
+    assert len(packaged_crates) == 1
+
+    packaged_consumer = tmp_path / "packaged-consumer"
+    (packaged_consumer / "src").mkdir(parents=True)
+    (packaged_consumer / "Cargo.toml").write_text(
+        textwrap.dedent(
+            f"""
+            [package]
+            name = "tsl-packaged-consumer"
+            version = "0.0.0"
+            edition = "2021"
+
+            [dependencies]
+            tsl = {{ path = "{packaged_crates[0].as_posix()}", default-features = false, features = ["runtime-dispatch"] }}
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (packaged_consumer / "src" / "main.rs").write_text(
+        textwrap.dedent(
+            """
+            use tsl::{ops, Dispatcher, Simd};
+
+            fn main() {
+                let vector = Simd::<i32, 4>::splat(2) + Simd::splat(3);
+                assert_eq!(vector.to_array(), [5; 4]);
+
+                let left = [1_i32, 2, 3, 4];
+                let right = [4_i32, 3, 2, 1];
+                let mut output = [0_i32; 4];
+                Dispatcher::new().transform_binary(
+                    ops::Add,
+                    &left,
+                    &right,
+                    &mut output,
+                );
+                assert_eq!(output, [5; 4]);
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    packaged_run = subprocess.run(
+        (
+            "cargo",
+            "run",
+            "--quiet",
+            "--offline",
+            "--manifest-path",
+            str(packaged_consumer / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "packaged-consumer-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert packaged_run.returncode == 0, packaged_run.stderr + packaged_run.stdout
+
+    documented = subprocess.run(
+        (
+            "cargo",
+            "doc",
+            "--manifest-path",
+            str(generated_manifest),
+            "--no-default-features",
+            "--features",
+            "runtime-dispatch",
+            "--no-deps",
+            "--target-dir",
+            str(tmp_path / "rust-doc-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "RUSTDOCFLAGS": "-D warnings"},
+    )
+    assert documented.returncode == 0, documented.stderr + documented.stdout
+    root_docs = (
+        tmp_path / "rust-doc-target" / "doc" / "tsl" / "index.html"
+    ).read_text(encoding="utf-8")
+    assert "avx2" not in root_docs.lower()
+    assert "sse2" not in root_docs.lower()
+    simd_docs = (
+        tmp_path / "rust-doc-target" / "doc" / "tsl" / "struct.Simd.html"
+    ).read_text(encoding="utf-8")
+    assert 'id="method.add"' in simd_docs
+    assert 'id="method.from_ptr"' in simd_docs
+    assert ">Safety</h5>" in simd_docs
+    dispatcher_docs = (
+        tmp_path / "rust-doc-target" / "doc" / "tsl" / "struct.Dispatcher.html"
+    ).read_text(encoding="utf-8")
+    assert 'id="method.transform_binary"' in dispatcher_docs
+
+    def compile_failure(source: str) -> str:
+        (consumer / "src" / "main.rs").write_text(
+            textwrap.dedent(source).lstrip(),
+            encoding="utf-8",
+        )
+        completed = subprocess.run(
+            (
+                "cargo",
+                "check",
+                "--manifest-path",
+                str(consumer / "Cargo.toml"),
+                "--target-dir",
+                str(tmp_path / "rust-consumer-target"),
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        output = completed.stderr + completed.stdout
+        assert completed.returncode != 0, output
+        return output
+
+    (consumer / "src" / "main.rs").write_text(
+        textwrap.dedent(
+            """
+            use tsl::Simd;
+
+            fn unsupported(_: Simd<i32, 3>) {}
+
+            fn main() {}
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    unsupported_shape = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(consumer / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "rust-consumer-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    unsupported_output = unsupported_shape.stderr + unsupported_shape.stdout
+    assert unsupported_shape.returncode != 0
+    assert "SupportedSimd<3>" in unsupported_output
+
+    (consumer / "src" / "main.rs").write_text(
+        textwrap.dedent(
+            """
+            use tsl::tsl_algorithm::{dataparallel, VectorFor};
+            use tsl::tsl_core::{Scalar, Simd, SimdVector, StaticSimdVector};
+
+            struct ExternalRepresentation;
+            struct ExternalElement;
+
+            impl tsl::SimdElement for ExternalElement {
+                type NativeSimd = ();
+                type NativeMask = ();
+            }
+
+            impl SimdVector for ExternalRepresentation {
+                type BaseType = u8;
+                type Extension = ();
+                type RegisterType = u8;
+                type MaskType = bool;
+                type ImaskType = u8;
+                type Array = [u8; 1];
+                type WithBaseType<ToBase> = ExternalRepresentation;
+                type WithExtension<ToExtension> = ExternalRepresentation;
+                const ALIGN: usize = 1;
+
+                fn lane_count() -> usize { 1 }
+            }
+
+            impl StaticSimdVector for ExternalRepresentation {
+                const ELEMENT_COUNT: usize = 1;
+            }
+
+            struct ExternalPolicy;
+
+            impl VectorFor<tsl::profile::Profile, u8> for ExternalPolicy {
+                type Vec = Simd<u8, Scalar>;
+            }
+
+            fn main() {
+                let _ = dataparallel::native();
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    forged = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(consumer / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "rust-consumer-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    forged_output = forged.stderr + forged.stdout
+    assert forged.returncode != 0
+    assert "representation_sealed::SimdVector" in forged_output
+    assert "representation_sealed::StaticSimdVector" in forged_output
+    assert "representation_sealed::VectorPolicy" in forged_output
+    assert "SealedElement" in forged_output
+
+    (consumer / "src" / "main.rs").write_text(
+        textwrap.dedent(
+            """
+            fn main() {
+                let _: bool = tsl::tsl_core::bit_cast::<u8, bool>(0);
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    arbitrary_bit_cast = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(consumer / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "rust-consumer-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    arbitrary_output = arbitrary_bit_cast.stderr + arbitrary_bit_cast.stdout
+    assert arbitrary_bit_cast.returncode != 0
+    assert "function `bit_cast` is private" in arbitrary_output
+
+    mismatched_mask = compile_failure(
+        """
+        use tsl::{Mask, Simd};
+
+        fn main() {
+            let mask = Mask::<i32, 4>::splat(true);
+            let values = Simd::<i32, 8>::splat(1);
+            let _ = mask.select(values, values);
+        }
+        """
+    )
+    assert "expected `4`, found `8`" in mismatched_mask
+    assert "expected struct `tsl::Simd<_, 4>`" in mismatched_mask
+    assert "found struct `tsl::Simd<_, 8>`" in mismatched_mask
+
+    invalid_bits = compile_failure(
+        """
+        use tsl::Simd;
+
+        fn main() {
+            let bits = Simd::<u64, 4>::splat(0);
+            let _ = Simd::<f32, 4>::from_bits(bits);
+        }
+        """
+    )
+    assert "Simd<u32, 4>" in invalid_bits
+    assert "Simd<u64, 4>" in invalid_bits
+
+    unsafe_without_block = compile_failure(
+        """
+        use tsl::Simd;
+
+        fn main() {
+            let _ = Simd::<i32, 4>::from_ptr(core::ptr::null());
+        }
+        """
+    )
+    assert "requires unsafe" in unsafe_without_block
+
+    hardware_only_method = compile_failure(
+        """
+        use tsl::Simd;
+
+        fn main() {
+            let value = Simd::<i32, 4>::splat(1);
+            let _ = value.concat(value);
+        }
+        """
+    )
+    assert "no method named `concat`" in hardware_only_method
+
+
+def test_rust_scalar_only_release_matrix(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    if any(
+        shutil.which(tool) is None
+        for tool in ("cargo", "rustc", "cargo-clippy")
+    ):
+        pytest.skip("cargo, rustc, and cargo-clippy are required")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_rust_scalar_only_release_matrix"),
+        profiles=["scalar"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    manifest = generated / "rust" / "Cargo.toml"
+    target_dir = tmp_path / "rust-release-target"
+    commands = (
+        (
+            "check-no-default",
+            (
+                "cargo",
+                "check",
+                "--quiet",
+                "--manifest-path",
+                str(manifest),
+                "--no-default-features",
+                "--target-dir",
+                str(target_dir),
+            ),
+            None,
+        ),
+        (
+            "check-std",
+            (
+                "cargo",
+                "check",
+                "--quiet",
+                "--manifest-path",
+                str(manifest),
+                "--no-default-features",
+                "--features",
+                "std",
+                "--target-dir",
+                str(target_dir),
+            ),
+            None,
+        ),
+        (
+            "runtime-dispatch",
+            (
+                "cargo",
+                "test",
+                "--quiet",
+                "--manifest-path",
+                str(manifest),
+                "--no-default-features",
+                "--features",
+                "runtime-dispatch",
+                "--lib",
+                "--test",
+                "runtime_dispatch",
+                "--target-dir",
+                str(target_dir),
+            ),
+            None,
+        ),
+        (
+            "clippy",
+            (
+                "cargo",
+                "clippy",
+                "--quiet",
+                "--manifest-path",
+                str(manifest),
+                "--no-default-features",
+                "--target-dir",
+                str(target_dir),
+                "--",
+                "-D",
+                "warnings",
+            ),
+            None,
+        ),
+        (
+            "rustdoc",
+            (
+                "cargo",
+                "doc",
+                "--quiet",
+                "--manifest-path",
+                str(manifest),
+                "--no-default-features",
+                "--no-deps",
+                "--target-dir",
+                str(target_dir),
+            ),
+            {**os.environ, "RUSTDOCFLAGS": "-D warnings"},
+        ),
+    )
+    for name, command, env in commands:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert completed.returncode == 0, (
+            f"{name} failed:\n{completed.stderr}{completed.stdout}"
+        )
+
+
+def test_rust_neon_compile_target_builds(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cargo") is None or shutil.which("rustc") is None:
+        pytest.skip("cargo and rustc are required")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_rust_neon_compile_target_builds"),
+        profiles=["neon"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    report = verify_project(
+        generated,
+        result.rendered.verify,
+        run_quality_checks=True,
+    )
+    assert report.diagnostics == (), report.diagnostics
+    target_commands = tuple(
+        command
+        for command in report.commands
+        if "aarch64-unknown-linux-musl" in command.command.argv
+    )
+    if target_commands:
+        assert all("--target" in command.command.argv for command in target_commands)
+    else:
+        assert any(
+            "neon" in skip
+            and any(reason in skip for reason in ("target", "linker", "compiler"))
+            for skip in report.skipped
+        ), report.skipped
+
+
+def test_rust_compile_target_selects_static_mapping(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cargo") is None:
+        pytest.skip("cargo not available")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_rust_compile_target_selects_static_mapping"),
+        profiles=["avx2"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    manifest = generated / "rust" / "Cargo.toml"
+    target_dir = tmp_path / "rust-profile-guard-target"
+    fallback = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(manifest),
+            "--no-default-features",
+            "--target-dir",
+            str(target_dir),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert fallback.returncode == 0, fallback.stderr + fallback.stdout
+
+    rust_backend = next(
+        backend
+        for backend in result.rendered.verify.backends
+        if backend.backend_id == "rust"
+    )
+    profile = rust_backend.profiles[0]
+    bins = generated / "rust" / "src" / "bin"
+    bins.mkdir(exist_ok=True)
+    (bins / "avx2_mapping.rs").write_text(
+        "use tsl::profile::Avx2;\n"
+        "use tsl::tsl_core::Simd;\n"
+        "type Vector = Simd<i32, Avx2>;\n"
+        "fn main() { let _: Option<Vector> = None; }\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    assert "+rdrand" in profile.target_features
+    env["RUSTFLAGS"] = "-C target-feature=+avx2"
+    partial = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(manifest),
+            "--no-default-features",
+            "--bin",
+            "avx2_mapping",
+            "--target-dir",
+            str(target_dir),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert partial.returncode != 0
+    assert "no `Avx2` in `tsl_target_fallback`" in (
+        partial.stderr + partial.stdout
+    )
+
+    env["RUSTFLAGS"] = f"-C target-feature={','.join(profile.target_features)}"
+    admitted = subprocess.run(
+        (
+            "cargo",
+            "check",
+            "--manifest-path",
+            str(manifest),
+            "--no-default-features",
+            "--bin",
+            "avx2_mapping",
+            "--target-dir",
+            str(target_dir),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert admitted.returncode == 0, admitted.stderr + admitted.stdout
+
+
+def test_rust_warning_gates_reject_compiler_and_clippy_defects(
+    tmp_path: Path,
+) -> None:
+    if any(shutil.which(tool) is None for tool in ("cargo", "rustc", "cargo-clippy")):
+        pytest.skip("cargo, rustc, and cargo-clippy are required")
+
+    crate = tmp_path / "rust"
+    (crate / "src").mkdir(parents=True)
+    (crate / "Cargo.toml").write_text(
+        textwrap.dedent(
+            """
+            [package]
+            name = "tsl-rust-warning-gate"
+            version = "0.0.0"
+            edition = "2021"
+
+            [features]
+            default = []
+            scalar = []
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (crate / "src" / "lib.rs").write_text(
+        textwrap.dedent(
+            """
+            struct Hidden;
+
+            pub fn exposes_hidden() -> Hidden {
+                Hidden
+            }
+
+            pub fn invalid_bool() -> bool {
+                unsafe { core::mem::MaybeUninit::<bool>::uninit().assume_init() }
+            }
+
+            /// Returns a value documented by a deliberately [`MissingItem`].
+            pub fn broken_rustdoc_link() -> u8 {
+                0
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(VerifyProfile(profile_name="scalar", file_stem="scalar"),),
+            ),
+        )
+    )
+
+    report = verify_project(tmp_path, project, run_quality_checks=True)
+
+    failed_steps = {
+        result.command.step for result in report.commands if result.returncode != 0
+    }
+    assert {"check-warnings", "rustdoc", "clippy"} <= failed_steps
+    details = "\n".join(diagnostic.message for diagnostic in report.diagnostics)
+    assert "-D private-interfaces" in details
+    assert "-D invalid-value" in details
+    assert "clippy::uninit-assumed-init" in details
+    assert "unresolved link to `MissingItem`" in details
+
+
+def test_rust_unsealed_representation_consumer_is_reported(
+    tmp_path: Path,
+) -> None:
+    if any(shutil.which(tool) is None for tool in ("cargo", "rustc")):
+        pytest.skip("cargo and rustc are required")
+
+    crate = tmp_path / "rust"
+    (crate / "src").mkdir(parents=True)
+    (crate / "examples").mkdir()
+    (crate / "Cargo.toml").write_text(
+        textwrap.dedent(
+            """
+            [package]
+            name = "tsl-representation-gate"
+            version = "0.0.0"
+            edition = "2021"
+
+            [features]
+            default = []
+            scalar = []
+            tsl_compile_failures = []
+
+            [[example]]
+            name = "unsealed_consumer"
+            path = "examples/unsealed_consumer.rs"
+            required-features = ["scalar", "tsl_compile_failures"]
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (crate / "src" / "lib.rs").write_text(
+        "pub trait Representation { type Register; }\n",
+        encoding="utf-8",
+    )
+    (crate / "examples" / "unsealed_consumer.rs").write_text(
+        textwrap.dedent(
+            """
+            struct ExternalRepresentation;
+
+            impl tsl_representation_gate::Representation for ExternalRepresentation {
+                type Register = u64;
+            }
+
+            fn main() {}
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    verify_manifest = crate / "verify" / "unsealed_consumer"
+    verify_manifest.mkdir(parents=True)
+    (verify_manifest / "Cargo.toml").write_text(
+        textwrap.dedent(
+            """
+            [package]
+            name = "unsealed-consumer"
+            version = "0.0.0"
+            edition = "2021"
+            publish = false
+
+            [dependencies]
+            tsl-representation-gate = { path = "../.." }
+
+            [[bin]]
+            name = "unsealed_consumer"
+            path = "../../examples/unsealed_consumer.rs"
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    marker = "TSL_RUST_REPRESENTATION_TRAIT_SEALED"
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="scalar",
+                        file_stem="scalar",
+                        compile_failures=(
+                            VerifyCompileFailure("unsealed_consumer", marker),
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+
+    report = verify_project(tmp_path, project)
+
+    assert [diagnostic.code for diagnostic in report.diagnostics] == [
+        "TSL-BUILD-VERIFY-EXPECTED-COMPILE-FAILURE"
+    ]
+    assert "expected compilation to fail" in report.diagnostics[0].message
+    assert marker in report.diagnostics[0].message
+
+
 def test_cpp_auto_profile_configures(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
@@ -453,16 +1588,73 @@ def test_simd_comparison_family_builds(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
-def test_blend_native_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
-    # `blend` is the first mask-CONSUMING primitive (mask is a parameter). Its native
-    # body `intrin<mask_blend, build>(mask, left, right)` -> `_mm512_mask_blend_*`
+def test_select_native_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `select` is the first mask-CONSUMING primitive (mask is a parameter). Its native
+    # body `intrin<mask_blend, build>(mask, false_values, true_values)`
+    # -> `_mm512_mask_blend_*`
     # build-verifies on skylake (native __mmaskN across sse/avx2/avx512) in C++ and
-    # Rust. Scalar/generic blend (runtime if + raw return / loops) skip cleanly.
+    # Rust. Scalar/generic select (runtime if + raw return / loops) skip cleanly.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=_build_verified("test_blend_native_builds"),
+        primitives=_build_verified("test_select_native_builds"),
         profiles=["skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_neg_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_neg_builds"),
+        profiles=["avx2"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_wrapping_shifts_build(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_wrapping_shifts_build"),
+        profiles=["avx2"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_runtime_lane_mutation_builds(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_runtime_lane_mutation_builds"),
+        profiles=["avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -498,18 +1690,18 @@ def test_to_from_array_roundtrip_builds(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
-def test_blend_select_builds(
+def test_select_composition_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
-    # Mask consumers + cross-extension delegation. `blend`/`mov` select on a mask (native
-    # blendv/mask_blend, or the generic mask<test> loop); `min`/`max` are blend(less_than(...)),
+    # Mask consumers + cross-extension delegation. `select`/`mov` choose on a mask (native
+    # blendv/mask_blend, or the generic mask<test> loop); `min`/`max` use select(less_than(...)),
     # so this is the first build of x86 min/max. `mul`'s si64 fallback delegates through the
     # generic vector via vector::as_extension(generic) -> simd<i64, generic<4>> (the lane count
     # is generation-time known), round-tripping to_array -> @self -> from_array.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=_build_verified("test_blend_select_builds"),
+        primitives=_build_verified("test_select_composition_builds"),
         profiles=["scalar", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -665,6 +1857,152 @@ def test_convert_builds(data_root: Path, machine_profiles_path: Path, tmp_path: 
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_convert_lanes_builds(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_convert_lanes_builds"),
+        profiles=["scalar", "avx2"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+    if shutil.which("c++") is not None:
+        cpp_source = tmp_path / "convert-lanes-mismatch.cpp"
+        cpp_source.write_text(
+            textwrap.dedent(
+                """
+                #include <cstdint>
+                #include <stdexcept>
+                #include <string>
+                #include <tsl.hpp>
+
+                int main() {
+                  using Source = tsl::simd<std::int32_t, tsl::generic<4>>;
+                  using Target = tsl::simd<std::int32_t, tsl::generic<8>>;
+                  Source::register_type source{};
+                  try {
+                    (void)tsl::convert_lanes<Source, Target>(source);
+                  } catch (const std::invalid_argument& error) {
+                    return std::string(error.what()) ==
+                               "lane-preserving conversion requires equal source and target lane counts"
+                             ? 0
+                             : 2;
+                  }
+                  return 1;
+                }
+                """
+            ).lstrip(),
+            encoding="utf-8",
+        )
+        cpp_binary = tmp_path / "convert-lanes-mismatch"
+        compiled = subprocess.run(
+            (
+                "c++",
+                "-std=c++17",
+                "-DTSL_PROFILE_SCALAR",
+                f"-I{tmp_path / 'cpp' / 'include'}",
+                str(cpp_source),
+                "-o",
+                str(cpp_binary),
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert compiled.returncode == 0, compiled.stderr + compiled.stdout
+        rejected = subprocess.run(
+            (str(cpp_binary),),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert rejected.returncode == 0, rejected.stderr + rejected.stdout
+
+    if shutil.which("cargo") is not None:
+        consumer = tmp_path / "convert-lanes-mismatch-rust"
+        (consumer / "src").mkdir(parents=True)
+        (consumer / "Cargo.toml").write_text(
+            textwrap.dedent(
+                f"""
+                [package]
+                name = "convert-lanes-mismatch"
+                version = "0.0.0"
+                edition = "2021"
+
+                [dependencies]
+                tsl = {{ path = "{(tmp_path / 'rust').as_posix()}" }}
+                """
+            ).lstrip(),
+            encoding="utf-8",
+        )
+        (consumer / "src" / "main.rs").write_text(
+            textwrap.dedent(
+                """
+                use tsl::tsl_core::{Generic, Simd, SimdVector};
+
+                fn main() {
+                    type Source = Simd<i32, Generic<4>>;
+                    type Target = Simd<i32, Generic<8>>;
+                    let source: <Source as SimdVector>::RegisterType = Default::default();
+                    let rejected = std::panic::catch_unwind(|| {
+                        let _ = tsl::profile::convert_lanes::<Source, Target>(source);
+                    });
+                    assert!(rejected.is_err());
+                }
+                """
+            ).lstrip(),
+            encoding="utf-8",
+        )
+        rejected = subprocess.run(
+            (
+                "cargo",
+                "run",
+                "--quiet",
+                "--manifest-path",
+                str(consumer / "Cargo.toml"),
+                "--target-dir",
+                str(tmp_path / "convert-lanes-mismatch-rust-target"),
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert rejected.returncode == 0, rejected.stderr + rejected.stdout
+
+
+def test_convert_lanes_cpp_sse_smoke_builds(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["convert_lanes"],
+        profiles=["sse"],
+        backends=("cpp",),
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    report = verify_project(tmp_path, result.rendered.verify)
+
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_cast_reinterpret_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
@@ -731,10 +2069,10 @@ def test_extract_value_builds(
 
 
 def test_max_min_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
-    # `max`/`min` (`v:=(v,v)`) delegate to `blend(less_than(a,b), …)`. `blend` is a single-form
+    # `max`/`min` (`v:=(v,v)`) delegate to `select(less_than(a,b), …)`. `select` is a single-form
     # masked primitive (`[mask=pass_through]`) emitted *bare*, so the prune must match a bare
-    # `blend` caller against the lone `pass_through` spec (single-form names normalize their policy
-    # to None; only split `_mask`/`_maskz` names stay policy-aware). The scalar `blend` body uses
+    # `select` caller against the lone `pass_through` spec (single-form names normalize their policy
+    # to None; only split `_mask`/`_maskz` names stay policy-aware). The scalar `select` body uses
     # the `complete` form (not a raw `return`). Builds in C++ and Rust.
     result = generate_project(
         [data_root],
@@ -848,7 +2186,7 @@ def test_masked_value_ops_build(
     # Masked-variant generation (value-masking category): a dual name now emits its masked
     # variants alongside the unmasked one, split to `<name>_mask` (pass_through/merge) /
     # `<name>_maskz` (zero) — distinct names (Rust can't overload; the two policies share a
-    # signature so C++ can't either). SIMD bodies delegate to the unmasked op + `blend`/`mov`
+    # signature so C++ can't either). SIMD bodies delegate to the unmasked op + `select`/`mov`
     # (which stay bare, masked-only; `mov` itself emits both `mov_mask`/`mov_maskz`); scalar uses
     # if/set_zero. Pruning is policy-aware, so float masked specs whose `mov_maskz` float delegate
     # is absent prune cleanly. Representative spread (`binary_and`, `add`, `inv`, `shift_left`,
@@ -898,7 +2236,7 @@ def test_masked_load_store_build(
     # Masked category C (memory): `load` emits `load_maskz` (zero) + `load_mask` (pass_through);
     # `store` emits `store_mask` — each carrying the `aligned` const-generic (mask × aligned
     # compose orthogonally). avx512(_vl) uses native masked load/store (`maskz_loadu`/`mask_loadu`/
-    # `mask_storeu`); avx2/sse fall back to `load`+`mov`/`blend`(+`store`) — the fallback forwards
+    # `mask_storeu`); avx2/sse fall back to `load`+`mov`/`select`(+`store`) — the fallback forwards
     # the caller's `aligned` via `attrs[aligned=value(primitive::attribute(aligned))]`,
     # which the call lowerer now resolves. `void` store result types in both backends. scalar +
     # sse2 + avx2 + skylake. (gather/scatter masked are deferred on the `vidx` kind.)
@@ -1343,7 +2681,7 @@ def test_nullary_constants_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
     # The `v:=()` / `m:=()` nullary constructors: `set_zero` (native `setzero`/`0`),
-    # `set_undef` (native `undefined`/uninit), `mask_false` (`set_zero`-of-mask /
+    # `set_undef` (native `undefined`/valid unspecified value), `mask_false` (`set_zero`-of-mask /
     # scalar `false`). No call closure of their own — they ARE the building blocks other
     # bodies call. Builds in C++ and Rust across scalar + SIMD.
     result = generate_project(
@@ -1595,7 +2933,7 @@ def test_set_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path
 
 def test_to_ostream_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `to_ostream` (`o:=(o,v,s)`) writes a vector's lanes into a text buffer. The `o` (ostream)
-    # kind renders as a string buffer (C++ std::string& / Rust &mut String); the body collapses
+    # kind renders as a string buffer (C++ std::string& / Rust alloc::string::String); the body collapses
     # to_array -> io<format> -> complete(out), where io<format> calls the runtime
     # tsl::ostream_write helper (the per-lane base formatting + a TslBits as_u64 in Rust). No
     # scalar impl in the corpus, so it emits for generic + SIMD; builds in C++ and Rust.

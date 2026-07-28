@@ -13,7 +13,24 @@ from tslc.catalog.arithmetic import (
     ARITHMETIC_OPERAND_ROLE_DESCRIPTIONS,
     ARITHMETIC_OPERATION_DESCRIPTIONS,
 )
-from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.conversion import (
+    CONVERSION_KIND_DESCRIPTIONS,
+    LANE_COUNT_RELATION_DESCRIPTIONS,
+    NUMERIC_CONVERSION_MODE_DESCRIPTIONS,
+)
+from tslc.catalog.memory import (
+    MEMORY_ACCESS_DESCRIPTIONS,
+    MEMORY_ADDRESSING_DESCRIPTIONS,
+)
+from tslc.catalog.model import Catalog, Primitive, RESULT_DIM_VECTOR
+from tslc.catalog.semantics import (
+    OPERAND_ROLE_DESCRIPTIONS,
+    PRIMITIVE_OPERATION_DESCRIPTIONS,
+)
+from tslc.catalog.shift import (
+    SHIFT_COUNT_RULE_DESCRIPTIONS,
+    SHIFT_LANE_RULE_DESCRIPTIONS,
+)
 from tslc.catalog.selector_paths import classify_selector_path
 from tslc.catalog_authoring_index import (
     DocumentSymbolKind,
@@ -52,7 +69,34 @@ SymbolKind = Literal[
     "arithmetic-role",
     "arithmetic-guarantee",
     "arithmetic-operand",
+    "primitive-operation",
+    "operand-role",
+    "semantic-operand",
+    "memory-access",
+    "memory-addressing",
+    "conversion-kind",
+    "lane-count-relation",
+    "numeric-conversion-mode",
+    "shift-count-rule",
+    "shift-lane-rule",
 ]
+
+_ENUM_SYMBOL_KINDS: frozenset[SymbolKind] = frozenset(
+    {
+        "arithmetic-operation",
+        "arithmetic-role",
+        "arithmetic-guarantee",
+        "primitive-operation",
+        "operand-role",
+        "memory-access",
+        "memory-addressing",
+        "conversion-kind",
+        "lane-count-relation",
+        "numeric-conversion-mode",
+        "shift-count-rule",
+        "shift-lane-rule",
+    }
+)
 _TSIL_REGION_GUIDE = (
     "https://github.com/JPietrzykTUD/tslgen-v2/blob/main/docs/tsil-keywords.md"
 )
@@ -99,6 +143,15 @@ class CatalogIndex:
     arithmetic_operand_references: Mapping[
         tuple[str, str], tuple[SourceSpan, ...]
     ] = field(default_factory=dict)
+    semantic_operand_definitions: Mapping[
+        tuple[str, str], tuple[SourceSpan, ...]
+    ] = field(default_factory=dict)
+    semantic_operand_references: Mapping[
+        tuple[str, str], tuple[SourceSpan, ...]
+    ] = field(default_factory=dict)
+    enum_references: Mapping[
+        tuple[SymbolKind, str], tuple[SourceSpan, ...]
+    ] = field(default_factory=dict)
     primitive_calls: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     primitive_callers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     occurrences_by_path: Mapping[Path, tuple[IndexedOccurrence, ...]] = field(default_factory=dict)
@@ -111,6 +164,7 @@ class CatalogIndex:
     hover_text: Mapping[tuple[SymbolKind, str], str] = field(default_factory=dict)
     overload_value_hover: Mapping[tuple[str, str], str] = field(default_factory=dict)
     arithmetic_operand_hover: Mapping[tuple[str, str], str] = field(default_factory=dict)
+    semantic_operand_hover: Mapping[tuple[str, str], str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         for name in (
@@ -128,6 +182,9 @@ class CatalogIndex:
             "overload_value_references",
             "arithmetic_operand_definitions",
             "arithmetic_operand_references",
+            "semantic_operand_definitions",
+            "semantic_operand_references",
+            "enum_references",
             "primitive_calls",
             "primitive_callers",
             "occurrences_by_path",
@@ -136,6 +193,7 @@ class CatalogIndex:
             "hover_text",
             "overload_value_hover",
             "arithmetic_operand_hover",
+            "semantic_operand_hover",
         ):
             values = getattr(self, name)
             object.__setattr__(self, name, MappingProxyType(dict(values)))
@@ -167,6 +225,12 @@ class CatalogIndex:
             return self.arithmetic_operand_definitions.get(
                 (occurrence.scope, occurrence.name), ()
             )
+        if occurrence.kind == "semantic-operand":
+            if occurrence.scope is None:
+                return ()
+            return self.semantic_operand_definitions.get(
+                (occurrence.scope, occurrence.name), ()
+            )
         return _definitions(self, occurrence.kind).get(occurrence.name, ())
 
     def references(
@@ -196,6 +260,18 @@ class CatalogIndex:
                     (occurrence.scope, occurrence.name), ()
                 )
             )
+        elif occurrence.kind == "semantic-operand":
+            referenced = (
+                ()
+                if occurrence.scope is None
+                else self.semantic_operand_references.get(
+                    (occurrence.scope, occurrence.name), ()
+                )
+            )
+        elif occurrence.kind in _ENUM_SYMBOL_KINDS:
+            referenced = self.enum_references.get(
+                (occurrence.kind, occurrence.name), ()
+            )
         else:
             referenced = _references(self, occurrence.kind).get(occurrence.name, ())
         declared = self.definitions(occurrence) if include_declaration else ()
@@ -206,6 +282,8 @@ class CatalogIndex:
             return self.overload_value_hover.get((occurrence.scope, occurrence.name))
         if occurrence.kind == "arithmetic-operand" and occurrence.scope is not None:
             return self.arithmetic_operand_hover.get((occurrence.scope, occurrence.name))
+        if occurrence.kind == "semantic-operand" and occurrence.scope is not None:
+            return self.semantic_operand_hover.get((occurrence.scope, occurrence.name))
         return self.hover_text.get((occurrence.kind, occurrence.name))
 
 
@@ -219,6 +297,8 @@ class _DocumentIndex:
     overload_value_references: Mapping[tuple[str, str], tuple[SourceSpan, ...]]
     arithmetic_operand_definitions: Mapping[tuple[str, str], tuple[SourceSpan, ...]]
     arithmetic_operand_references: Mapping[tuple[str, str], tuple[SourceSpan, ...]]
+    semantic_operand_definitions: Mapping[tuple[str, str], tuple[SourceSpan, ...]]
+    semantic_operand_references: Mapping[tuple[str, str], tuple[SourceSpan, ...]]
     occurrences: tuple[IndexedOccurrence, ...]
     primitive_calls: tuple[tuple[str, str], ...]
     symbols: tuple[IndexedDocumentSymbol, ...]
@@ -277,6 +357,16 @@ def build_catalog_index(
         "arithmetic-role": {},
         "arithmetic-guarantee": {},
         "arithmetic-operand": {},
+        "primitive-operation": {},
+        "operand-role": {},
+        "semantic-operand": {},
+        "memory-access": {},
+        "memory-addressing": {},
+        "conversion-kind": {},
+        "lane-count-relation": {},
+        "numeric-conversion-mode": {},
+        "shift-count-rule": {},
+        "shift-lane-rule": {},
     }
     references: dict[SymbolKind, dict[str, list[SourceSpan]]] = {
         "primitive": {},
@@ -290,6 +380,16 @@ def build_catalog_index(
         "arithmetic-role": {},
         "arithmetic-guarantee": {},
         "arithmetic-operand": {},
+        "primitive-operation": {},
+        "operand-role": {},
+        "semantic-operand": {},
+        "memory-access": {},
+        "memory-addressing": {},
+        "conversion-kind": {},
+        "lane-count-relation": {},
+        "numeric-conversion-mode": {},
+        "shift-count-rule": {},
+        "shift-lane-rule": {},
     }
     target_axis_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
     target_axis_references: dict[tuple[str, str], list[SourceSpan]] = {}
@@ -297,6 +397,8 @@ def build_catalog_index(
     overload_value_references: dict[tuple[str, str], list[SourceSpan]] = {}
     arithmetic_operand_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
     arithmetic_operand_references: dict[tuple[str, str], list[SourceSpan]] = {}
+    semantic_operand_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
+    semantic_operand_references: dict[tuple[str, str], list[SourceSpan]] = {}
     occurrences: list[IndexedOccurrence] = []
     primitive_calls: set[tuple[str, str]] = set()
     symbols_by_path: dict[Path, tuple[IndexedDocumentSymbol, ...]] = {}
@@ -326,6 +428,10 @@ def build_catalog_index(
             arithmetic_operand_definitions.setdefault(key, []).extend(spans)
         for key, spans in fragment.arithmetic_operand_references.items():
             arithmetic_operand_references.setdefault(key, []).extend(spans)
+        for key, spans in fragment.semantic_operand_definitions.items():
+            semantic_operand_definitions.setdefault(key, []).extend(spans)
+        for key, spans in fragment.semantic_operand_references.items():
+            semantic_operand_references.setdefault(key, []).extend(spans)
         occurrences.extend(fragment.occurrences)
         primitive_calls.update(fragment.primitive_calls)
         if fragment.symbols:
@@ -363,6 +469,17 @@ def build_catalog_index(
         arithmetic_operand_references=_freeze_scoped_spans(
             arithmetic_operand_references
         ),
+        semantic_operand_definitions=_freeze_scoped_spans(
+            semantic_operand_definitions
+        ),
+        semantic_operand_references=_freeze_scoped_spans(
+            semantic_operand_references
+        ),
+        enum_references={
+            (kind, name): _sorted_spans(spans)
+            for kind in sorted(_ENUM_SYMBOL_KINDS)
+            for name, spans in sorted(references[kind].items())
+        },
         primitive_calls={
             name: tuple(sorted(values)) for name, values in sorted(calls.items())
         },
@@ -378,6 +495,7 @@ def build_catalog_index(
         hover_text=_hover_text(catalog, definitions),
         overload_value_hover=_overload_value_hover(catalog),
         arithmetic_operand_hover=_arithmetic_operand_hover(catalog),
+        semantic_operand_hover=_semantic_operand_hover(catalog),
     )
 
 
@@ -394,6 +512,16 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         "arithmetic-role": {},
         "arithmetic-guarantee": {},
         "arithmetic-operand": {},
+        "primitive-operation": {},
+        "operand-role": {},
+        "semantic-operand": {},
+        "memory-access": {},
+        "memory-addressing": {},
+        "conversion-kind": {},
+        "lane-count-relation": {},
+        "numeric-conversion-mode": {},
+        "shift-count-rule": {},
+        "shift-lane-rule": {},
     }
     references: dict[SymbolKind, dict[str, list[SourceSpan]]] = {
         "primitive": {},
@@ -407,6 +535,16 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         "arithmetic-role": {},
         "arithmetic-guarantee": {},
         "arithmetic-operand": {},
+        "primitive-operation": {},
+        "operand-role": {},
+        "semantic-operand": {},
+        "memory-access": {},
+        "memory-addressing": {},
+        "conversion-kind": {},
+        "lane-count-relation": {},
+        "numeric-conversion-mode": {},
+        "shift-count-rule": {},
+        "shift-lane-rule": {},
     }
     target_axis_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
     target_axis_references: dict[tuple[str, str], list[SourceSpan]] = {}
@@ -414,6 +552,8 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
     overload_value_references: dict[tuple[str, str], list[SourceSpan]] = {}
     arithmetic_operand_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
     arithmetic_operand_references: dict[tuple[str, str], list[SourceSpan]] = {}
+    semantic_operand_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
+    semantic_operand_references: dict[tuple[str, str], list[SourceSpan]] = {}
     occurrences: list[IndexedOccurrence] = []
     primitive_calls: set[tuple[str, str]] = set()
     _index_document(
@@ -426,6 +566,8 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         overload_value_references,
         arithmetic_operand_definitions,
         arithmetic_operand_references,
+        semantic_operand_definitions,
+        semantic_operand_references,
         occurrences,
         primitive_calls,
     )
@@ -447,6 +589,12 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         arithmetic_operand_references=_freeze_scoped_spans(
             arithmetic_operand_references
         ),
+        semantic_operand_definitions=_freeze_scoped_spans(
+            semantic_operand_definitions
+        ),
+        semantic_operand_references=_freeze_scoped_spans(
+            semantic_operand_references
+        ),
         occurrences=tuple(sorted(occurrences, key=_occurrence_key)),
         primitive_calls=tuple(sorted(primitive_calls)),
         symbols=authoring.symbols,
@@ -464,6 +612,8 @@ def _index_document(
     overload_value_references: dict[tuple[str, str], list[SourceSpan]],
     arithmetic_operand_definitions: dict[tuple[str, str], list[SourceSpan]],
     arithmetic_operand_references: dict[tuple[str, str], list[SourceSpan]],
+    semantic_operand_definitions: dict[tuple[str, str], list[SourceSpan]],
+    semantic_operand_references: dict[tuple[str, str], list[SourceSpan]],
     occurrences: list[IndexedOccurrence],
     primitive_calls: set[tuple[str, str]],
 ) -> None:
@@ -486,6 +636,14 @@ def _index_document(
             occurrences,
             scope,
         )
+        _index_primitive_semantics(
+            primitive,
+            references,
+            semantic_operand_definitions,
+            semantic_operand_references,
+            occurrences,
+            scope,
+        )
         if result_target is not None:
             _, target_name, target_span = result_target
             _record_scoped(
@@ -502,7 +660,11 @@ def _index_document(
             references,
             target_axis_references,
             occurrences,
-            result_target=result_target,
+            result_target=(
+                result_target
+                if result_target is None or result_target[0] != RESULT_DIM_VECTOR
+                else None
+            ),
             scope=scope,
         )
         for envelope in primitive.body_envelopes:
@@ -664,6 +826,96 @@ def _index_primitive_arithmetic(
         )
 
 
+def _index_primitive_semantics(
+    primitive: ParsedPrimitiveDeclaration,
+    references: dict[SymbolKind, dict[str, list[SourceSpan]]],
+    operand_definitions: dict[tuple[str, str], list[SourceSpan]],
+    operand_references: dict[tuple[str, str], list[SourceSpan]],
+    occurrences: list[IndexedOccurrence],
+    scope: str,
+) -> None:
+    bound_names: set[str] = set()
+    for parsed in primitive.fields_by_name("operation"):
+        if isinstance(parsed.field.value, ParsedTslScalarValue):
+            _record_scalar_reference(
+                parsed.field.value,
+                references,
+                occurrences,
+                "primitive-operation",
+            )
+    for parsed in primitive.fields_by_name("operand_roles"):
+        for role in children(parsed.field):
+            _record(
+                references,
+                occurrences,
+                "operand-role",
+                role.key.text,
+                _source_span(role.key.source),
+                False,
+            )
+            if not isinstance(role.value, ParsedTslScalarValue):
+                continue
+            source = role.value.payload_source or role.value.source
+            bound_names.add(role.value.text)
+            _record_scoped(
+                operand_references,
+                occurrences,
+                "semantic-operand",
+                scope,
+                role.value.text,
+                _source_span(source),
+                False,
+            )
+    semantic_members: tuple[
+        tuple[str, tuple[tuple[str, SymbolKind], ...]], ...
+    ] = (
+        (
+            "memory",
+            (
+                ("access", "memory-access"),
+                ("addressing", "memory-addressing"),
+            ),
+        ),
+        (
+            "conversion",
+            (
+                ("kind", "conversion-kind"),
+                ("lane_count", "lane-count-relation"),
+                ("numeric_mode", "numeric-conversion-mode"),
+            ),
+        ),
+        (
+            "shift",
+            (
+                ("count_rule", "shift-count-rule"),
+                ("lane_rule", "shift-lane-rule"),
+            ),
+        ),
+    )
+    for field_name, members in semantic_members:
+        for parsed in primitive.fields_by_name(field_name):
+            for member_name, kind in members:
+                member = child(parsed.field, member_name)
+                if member is not None and isinstance(member.value, ParsedTslScalarValue):
+                    _record_scalar_reference(
+                        member.value,
+                        references,
+                        occurrences,
+                        kind,
+                    )
+    for name, span in _parameter_spans(primitive):
+        if name in bound_names:
+            _record_scoped(
+                operand_definitions,
+                occurrences,
+                "semantic-operand",
+                scope,
+                name,
+                span,
+                True,
+            )
+
+
 def _index_implementation_selectors(
     primitive: ParsedPrimitiveDeclaration,
     references: dict[SymbolKind, dict[str, list[SourceSpan]]],
@@ -758,7 +1010,12 @@ def _primitive_scope(primitive: ParsedPrimitiveDeclaration) -> str:
 def _record_scoped(
     values: dict[tuple[str, str], list[SourceSpan]],
     occurrences: list[IndexedOccurrence],
-    kind: Literal["target-axis", "overload-value", "arithmetic-operand"],
+    kind: Literal[
+        "target-axis",
+        "overload-value",
+        "arithmetic-operand",
+        "semantic-operand",
+    ],
     scope: str,
     name: str,
     span: SourceSpan,
@@ -983,6 +1240,41 @@ def _hover_text(
         if spec.numeric_domain is not None:
             facts.append(f"**Numeric domain:** `{spec.numeric_domain.value}`")
         hover[("arithmetic-guarantee", guarantee.value)] = "\n\n".join(facts)
+    semantic_descriptions: tuple[
+        tuple[SymbolKind, str, Iterable[tuple[object, str]]], ...
+    ] = (
+        ("primitive-operation", "Primitive operation", PRIMITIVE_OPERATION_DESCRIPTIONS.items()),
+        ("operand-role", "Operand role", OPERAND_ROLE_DESCRIPTIONS.items()),
+        ("memory-access", "Memory access", MEMORY_ACCESS_DESCRIPTIONS.items()),
+        ("memory-addressing", "Memory addressing", MEMORY_ADDRESSING_DESCRIPTIONS.items()),
+        ("conversion-kind", "Conversion kind", CONVERSION_KIND_DESCRIPTIONS.items()),
+        (
+            "lane-count-relation",
+            "Lane-count relation",
+            LANE_COUNT_RELATION_DESCRIPTIONS.items(),
+        ),
+        (
+            "numeric-conversion-mode",
+            "Numeric conversion mode",
+            NUMERIC_CONVERSION_MODE_DESCRIPTIONS.items(),
+        ),
+        (
+            "shift-count-rule",
+            "Shift count rule",
+            SHIFT_COUNT_RULE_DESCRIPTIONS.items(),
+        ),
+        (
+            "shift-lane-rule",
+            "Shift lane rule",
+            SHIFT_LANE_RULE_DESCRIPTIONS.items(),
+        ),
+    )
+    for symbol_kind, label, descriptions in semantic_descriptions:
+        for value, description in descriptions:
+            enum_value = str(value)
+            hover[(symbol_kind, enum_value)] = "\n\n".join(
+                (f"**{label}** `{enum_value}`", description)
+            )
     return hover
 
 
@@ -1014,6 +1306,25 @@ def _arithmetic_operand_hover(catalog: Catalog) -> dict[tuple[str, str], str]:
                     f"**Resolved signature kind:** `{binding.parameter_kind}`",
                     f"**Parameter index:** `{binding.parameter_index}`",
                     f"**Non-mask ordinal:** `{binding.non_mask_ordinal}`",
+                )
+            )
+    return hover
+
+
+def _semantic_operand_hover(catalog: Catalog) -> dict[tuple[str, str], str]:
+    hover: dict[tuple[str, str], str] = {}
+    for primitive in catalog.primitives:
+        contract = primitive.operation
+        scope = _catalog_primitive_scope(primitive)
+        if contract is None or scope is None:
+            continue
+        for binding in contract.operand_bindings:
+            hover[(scope, binding.parameter_name)] = "\n\n".join(
+                (
+                    f"**Semantic operand** `{binding.parameter_name}`",
+                    f"**Role:** `{binding.role.value}`",
+                    f"**Resolved signature kind:** `{binding.parameter_kind}`",
+                    f"**Parameter index:** `{binding.parameter_index}`",
                 )
             )
     return hover

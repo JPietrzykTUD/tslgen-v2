@@ -30,7 +30,7 @@ struct add_or_left_op {
         typename tsl::reg_param<Vec>::type left,
         typename tsl::reg_param<Vec>::type right) const {
         const auto sum = tsl::add<Vec>(left, right);
-        return tsl::blend<Vec>(active, left, sum);
+        return tsl::select<Vec>(active, sum, left);
     }
 };
 

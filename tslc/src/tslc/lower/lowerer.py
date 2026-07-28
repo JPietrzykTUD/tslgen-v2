@@ -28,12 +28,14 @@ from tslc.catalog.arithmetic import (
     ArithmeticGuarantee,
     ArithmeticOperandRole,
 )
+from tslc.catalog.memory import resolve_memory_alignment
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     Catalog,
     ImmediateParam,
     ImplementationSafety,
     Primitive,
+    RESULT_DIM_VECTOR,
 )
 from tslc.catalog.param_types import parse_param_type_expression
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS, scalar_bit_width_or_default
@@ -56,13 +58,21 @@ from tslc.lower._diagnostics import (
     lowering_skip_diagnostic,
     primitive_signature_source as _primitive_signature_source,
 )
-from tslc.lower.dependencies import CallDependencyOrigin, origin_sort_key
+from tslc.lower.dependencies import (
+    CallDependencyOrigin,
+    origin_sort_key,
+    symbolic_call_dependency_error,
+)
 from tslc.lower.region_handlers import (
     DEFAULT_REGION_LOWERERS,
     RegionLowerer,
 )
 from tslc.lower.implementation_state import (
     ImplementationState,
+)
+from tslc.lower.primitive_semantics import (
+    LoweredMemoryAlignment,
+    LoweredPrimitiveSemantics,
 )
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
 from tslc.target_text import (
@@ -149,6 +159,12 @@ class LoweredSpecialization:
     param_names: tuple[str, ...]
     param_kinds: tuple[str, ...]
     body: LoweredBody
+    # Finalized language-neutral declaration facts. This record crosses the
+    # catalog/lowering boundary so backends never need to reopen the catalog or
+    # infer semantics from names, signatures, documentation, or target text.
+    primitive_semantics: LoweredPrimitiveSemantics = field(
+        default_factory=LoweredPrimitiveSemantics
+    )
     # Support-policy-owned overload identity for each parameter. Carrying these tokens through
     # lowering keeps backend grouping independent from the process-wide default policy.
     param_identity_tokens: tuple[str, ...] = ()
@@ -180,6 +196,9 @@ class LoweredSpecialization:
     # representation-change `ToVec`. The bound names are the primitives the body calls on the param
     # (`to_array[IndicesType]` -> `to_array`); the Rust backend maps each to its `…Impl` trait.
     type_params: tuple[LoweredTypeParam, ...] = ()
+    # A `return_type: vector: Name` result projects through this `kind simd_type`
+    # parameter. Unlike `target`, this is not a concrete representation selector axis.
+    result_vector_param: str | None = None
     # True when register_type == base_type for this extension (scalar/generic). Lets the
     # backend dedup overload `apply`s that collapse to the same type (a `v` and an `s`
     # parameter are distinct on SIMD but identical here).
@@ -562,6 +581,61 @@ class Lowerer:
             )
 
         type_param_segments = (segments, *(item[1] for item in variant_sources))
+        type_params = tuple(
+            LoweredTypeParam(
+                name=gp.name,
+                bounds=tuple(
+                    sorted(
+                        {
+                            bound
+                            for body in type_param_segments
+                            for bound in _type_param_bounds(
+                                body,
+                                gp.name,
+                                catalog_facts.primitive_type_param_bounds,
+                                selected.extension.name,
+                            )
+                        }
+                    )
+                ),
+                base_type_constraints=gp.base_type_constraints,
+                specialize_base=gp.specialize_base,
+                base_type_binding=context.env.simd_type_param_base_bindings.get(
+                    gp.name
+                ),
+                base_type_binding_spelling=(
+                    backend.types.scalar_spelling(binding)
+                    if (
+                        binding := context.env.simd_type_param_base_bindings.get(
+                            gp.name
+                        )
+                    )
+                    is not None
+                    else None
+                ),
+            )
+            for gp in selected.primitive.generic_params
+            if gp.kind == "simd_type"
+        )
+        type_param_bounds = {
+            type_param.name: type_param.bounds for type_param in type_params
+        }
+        ordered_dependency_origins = tuple(
+            sorted(call_dependency_origins, key=origin_sort_key)
+        )
+        for origin in ordered_dependency_origins:
+            if (
+                message := symbolic_call_dependency_error(
+                    origin.dependency,
+                    type_param_bounds,
+                )
+            ) is not None:
+                return _error(
+                    "TSL-LOWER-INVALID-SYMBOLIC-CALL-DEPENDENCY",
+                    message,
+                    source=_implementation_source(selected),
+                )
+
         specialization = LoweredSpecialization(
             backend_id=backend.backend_id,
             primitive_name=selected.primitive.name,
@@ -576,6 +650,17 @@ class Lowerer:
             param_names=parameters,
             param_kinds=shape.param_kinds,
             body=body,
+            primitive_semantics=LoweredPrimitiveSemantics(
+                overload=catalog.resolve_primitive_overload(selected.primitive),
+                arithmetic=selected.primitive.arithmetic,
+                operation=selected.primitive.operation,
+                memory=selected.primitive.memory,
+                memory_alignment=_lowered_memory_alignment(
+                    selected.primitive
+                ),
+                conversion=selected.primitive.conversion,
+                shift=selected.primitive.shift,
+            ),
             param_identity_tokens=tuple(
                 self._support.overload_identity_token(
                     kind,
@@ -605,41 +690,12 @@ class Lowerer:
                 for gp in selected.primitive.generic_params
                 if gp.kind != "simd_type"
             ),
-            type_params=tuple(
-                LoweredTypeParam(
-                    name=gp.name,
-                    bounds=tuple(
-                        sorted(
-                            {
-                                bound
-                                for body in type_param_segments
-                                for bound in _type_param_bounds(
-                                    body,
-                                    gp.name,
-                                    catalog_facts.primitive_type_param_bounds,
-                                    selected.extension.name,
-                                )
-                            }
-                        )
-                    ),
-                    base_type_constraints=gp.base_type_constraints,
-                    specialize_base=gp.specialize_base,
-                    base_type_binding=context.env.simd_type_param_base_bindings.get(
-                        gp.name
-                    ),
-                    base_type_binding_spelling=(
-                        backend.types.scalar_spelling(binding)
-                        if (
-                            binding := context.env.simd_type_param_base_bindings.get(
-                                gp.name
-                            )
-                        )
-                        is not None
-                        else None
-                    ),
-                )
-                for gp in selected.primitive.generic_params
-                if gp.kind == "simd_type"
+            type_params=type_params,
+            result_vector_param=(
+                selected.primitive.result_target[1]
+                if selected.primitive.result_target is not None
+                and selected.primitive.result_target[0] == RESULT_DIM_VECTOR
+                else None
             ),
             # True only when the extension declares its register type as the base type.
             # Other zero-width/sized vectors may still use array-backed registers, so this is
@@ -649,9 +705,7 @@ class Lowerer:
             mask_policy=selected.primitive.attributes.get("mask"),
             lane_list_params=tuple(context.env.lane_list_params.values()),
             required_features=selected.required_features,
-            call_dependency_origins=tuple(
-                sorted(call_dependency_origins, key=origin_sort_key)
-            ),
+            call_dependency_origins=ordered_dependency_origins,
             implementation_state=default_body.implementation_state,
             safety=effective_safety,
             variant_bodies=tuple(variant_bodies),
@@ -880,7 +934,12 @@ def _primitive_type_param_bounds(
 
     direct: dict[tuple[str, str, int], set[str]] = {}
     for primitive in catalog.primitives:
-        extra_offset = 1 if primitive.result_target is not None else 0
+        extra_offset = (
+            1
+            if primitive.result_target is not None
+            and primitive.result_target[0] != RESULT_DIM_VECTOR
+            else 0
+        )
         type_params = tuple(
             param for param in primitive.generic_params if param.kind == "simd_type"
         )
@@ -1020,6 +1079,19 @@ def varying_positions(specs: tuple[LoweredSpecialization, ...]) -> tuple[int, ..
     arity = len(specs[0].param_kinds)
     return tuple(
         i for i in range(arity) if len({spec.param_kinds[i] for spec in specs}) > 1
+    )
+
+
+def _lowered_memory_alignment(
+    primitive: Primitive,
+) -> LoweredMemoryAlignment | None:
+    if primitive.memory is None:
+        return None
+    resolved = resolve_memory_alignment(primitive.attributes)
+    return (
+        None
+        if resolved is None
+        else LoweredMemoryAlignment(axis_name=resolved[0], mode=resolved[1])
     )
 
 

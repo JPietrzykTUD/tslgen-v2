@@ -72,6 +72,36 @@ def test_backend_selection_is_honored(data_root: Path, machine_profiles_path: Pa
     assert [b.backend_id for b in cpp_only.rendered.verify.backends] == ["cpp"]
 
 
+def test_rust_profile_module_is_compiled_only_for_its_target_contract(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["add"],
+        profiles=["avx2"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    profile = next(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path == "rust/src/tsl_avx2.rs"
+    )
+
+    assert "#![cfg(any(" in profile
+    assert 'all(target_arch = "x86_64"' in profile
+    assert (
+        'all(feature = "runtime-dispatch", target_arch = "x86_64")'
+        in profile
+    )
+    assert 'target_feature = "avx"' in profile
+    assert 'target_feature = "avx2"' in profile
+    assert 'target_feature = "rdrand"' in profile
+    assert "TSL_RUST_PROFILE_TARGET_FEATURE_MISMATCH" not in profile
+
+
 def test_generated_project_carries_apache_license_notices(
     data_root: Path,
     machine_profiles_path: Path,
@@ -118,15 +148,15 @@ def test_representative_project_shape_is_byte_stable(
     )
     expected = {
         "cpp/CMakeLists.txt": "afd9ccd8ea6feffdfe0fa38e44e5027b3e49b8206938b23415c59bf35c510b87",
-        "cpp/docs/input/tsl_api_docs.hpp": "e8550c8f23c29e97012248af4d0bbec2922a81d213f3128132f39ff9e96a1d54",
+        "cpp/docs/input/tsl_api_docs.hpp": "25c8a21fafad064c394b933b6c5d27b6dc07aaf4a509150d9da7e87ff9f8027d",
         "cpp/include/tsl.hpp": "298cd47b4e1509cd59eb4100f7a0d82bcdbc6e5d9f4eedccb0a68ba0bf667e03",
-        "cpp/include/tsl_primitives.hpp": "49a74d084e4b375d6e0832beb57c54ebfcf85edb25394f9c84d8776520ea0bb8",
-        "cpp/include/tsl_scalar.hpp": "4522211f30de0682e1d29d04b8cb322e45c71bb947aa0bd44e05e53e4d10b416",
-        "cpp/tests/smoke_scalar.cpp": "b8d0793aa19282d85dab6db70c43f41fb0a029daad3799377eab7a4a3bd8c7bf",
-        "rust/Cargo.toml": "3d45df17be903c3005c89f7d80c6e55af57eab8b2bfcc2eb45f96fc4d71797f8",
-        "rust/src/lib.rs": "33ebbae21ff20f5664a3514a1722b4d59e1aff3efe3bd167cb3b3d60908a8ee3",
-        "rust/src/tsl_documentation.rs": "61d5fe51a8e119c92d17d953f304fbb6f49a334f300f326f21f3fdac214608bc",
-        "rust/src/tsl_scalar.rs": "b3e82b905ff00757a56f783551557f8f8c596d120817d83d4f79b896d14e07d5",
+        "cpp/include/tsl_primitives.hpp": "f1b98a21c8d349dc049eb9bf0d1d651a32156196bad5aa7de1c409ef5cbf496c",
+        "cpp/include/tsl_scalar.hpp": "a3d1b9f8fd299e4710f39f7e887380668a9c666311440d0d6eae281e2ba5cef5",
+        "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
+        "rust/Cargo.toml": "ec632691434d5f98f5bb2035539e9df258ec7fb252f84e5b4cb21a0aa2a144cc",
+        "rust/src/lib.rs": "a92242407733aa553b68d0770f97b50e5e92bdee6232f1638a8d44f2121b9339",
+        "rust/src/tsl_documentation.rs": "41f2ff6e6cdcfb95751473db764e8d7e32fd2d7785a7fe5212b91d1d1771e07a",
+        "rust/src/tsl_scalar.rs": "bf203ab3fd628764b20a91c6ea83e548992190557490d02d4edc8e5a20dee8fd",
         "rust/tests/smoke.rs": "a4d108f502689e7f29ba5259e22779e8ef0afa36ab83c239022e2772d68d6b44",
     }
     actual = {
@@ -277,7 +307,8 @@ def test_profile_name_sanitized_to_valid_identifiers(
     assert "#if defined(TSL_PROFILE_ICELAKE_ROCKERLAKE_ONEAPI)" in by["cpp/include/tsl.hpp"]
     assert "cpp/include/tsl_icelake_rockerlake_oneapi.hpp" in by
     assert "pub mod tsl_icelake_rockerlake_oneapi;" in by["rust/src/lib.rs"]
-    assert "icelake_rockerlake_oneapi = []" in by["rust/Cargo.toml"]
+    assert "icelake_rockerlake_oneapi = []" not in by["rust/Cargo.toml"]
+    assert "default = []" in by["rust/Cargo.toml"]
 
 
 def test_oneapi_sized_vector_is_distinct_from_generic(
@@ -306,6 +337,11 @@ def test_oneapi_sized_vector_is_distinct_from_generic(
     assert "pub struct OneapiFpga<const LANES: usize>;" in rust
     assert "impl<const LANES: usize> AddImpl for Simd<i32, Generic<LANES>>" in rust
     assert "impl<const LANES: usize> AddImpl for Simd<i32, OneapiFpga<LANES>>" in rust
+    rust_fallback = by["rust/src/tsl_target_fallback.rs"]
+    assert "OneapiFpga" not in rust_fallback
+    assert "impl<const LANES: usize> AddImpl for Simd<i32, Generic<LANES>>" in (
+        rust_fallback
+    )
 
 
 def test_feature_flag_spelling(data_root: Path, machine_profiles_path: Path) -> None:
@@ -554,6 +590,18 @@ def test_neon_profile_registers_native_simd_types(
     assert "return vaddq_s32(left, right);" in cpp
 
     rust = by_path["rust/src/tsl_neon.rs"]
+    rust_lib = by_path["rust/src/lib.rs"]
+    assert "#![cfg(any(" in rust
+    assert 'all(target_arch = "aarch64", target_feature = "neon")' in rust
+    assert (
+        'all(feature = "runtime-dispatch", target_arch = "aarch64")'
+        in rust
+    )
+    assert (
+        '#[cfg(all(not(doc), all(target_arch = "aarch64", '
+        'target_feature = "neon")))]' in rust_lib
+    )
+    assert 'target_arch = "x86_64"' not in rust_lib
     assert 'pub const ACTIVE_PROFILE: &str = "neon";' in rust
     assert 'pub const ACTIVE_PROFILE_FAMILY: &str = "aarch64";' in rust
     assert "use core::arch::aarch64::*;" in rust

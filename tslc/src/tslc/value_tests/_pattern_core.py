@@ -261,6 +261,7 @@ class _SimpleShapePattern(_BasePattern):
     param_kinds: tuple[str, ...]
     allow_axis: bool = False
     allow_generic_params: bool = False
+    differential: bool = False
 
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         return bool(self._matching_specs(specs))
@@ -275,7 +276,24 @@ class _SimpleShapePattern(_BasePattern):
             context.case,
             specs,
         )
-        return (plan,) if plan is not None else ()
+        plans = [plan] if plan is not None else []
+        if (
+            self.differential
+            and context.backend.supports_differential
+            and context.harness.round_trip_ready
+        ):
+            plans.extend(
+                differential_cases(
+                    context.emitted_name,
+                    context.index,
+                    context.case,
+                    specs,
+                    context.catalog,
+                    context.harness,
+                    context.backend.backend_id,
+                )
+            )
+        return tuple(plans)
 
     def _matching_specs(
         self,

@@ -45,6 +45,7 @@ def _contract(
         "  arithmetic:\n"
         f"    operations [{operations}]\n"
         "    operand_roles:\n"
+        "      primary dividend\n"
         f"      divisor {divisor}\n"
         f"    guarantees [{guarantees}]\n"
     )
@@ -115,7 +116,12 @@ def test_combined_arithmetic_contract_promotes_explicit_operations_and_binding()
     assert contract.guarantees == frozenset(
         guarantee
         for guarantee in ArithmeticGuarantee
-        if guarantee is not ArithmeticGuarantee.INACTIVE_LANES_DO_NOT_PARTICIPATE
+        if guarantee
+        not in {
+            ArithmeticGuarantee.INTEGER_WRAPPING,
+            ArithmeticGuarantee.FLOATING_SIGN_BIT_TOGGLE,
+            ArithmeticGuarantee.INACTIVE_LANES_DO_NOT_PARTICIPATE,
+        }
     )
     binding = contract.binding(ArithmeticOperandRole.DIVISOR)
     assert binding is not None
@@ -130,6 +136,12 @@ def test_combined_arithmetic_contract_promotes_explicit_operations_and_binding()
     assert shown == {
         "operations": ["division", "remainder"],
         "operand_roles": {
+            "primary": {
+                "parameter": "dividend",
+                "index": 0,
+                "non_mask_ordinal": 0,
+                "kind": "v",
+            },
             "divisor": {
                 "parameter": "divisor",
                 "index": 1,

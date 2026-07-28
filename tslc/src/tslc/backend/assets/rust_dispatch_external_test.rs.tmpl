@@ -1,0 +1,59 @@
+//! External-consumer checks for the optional runtime-dispatch surface.
+
+#![cfg(feature = "runtime-dispatch")]
+
+use tsl::tsl_algorithm::BinaryKernel;
+use tsl::tsl_core::StaticSimdVector;
+use tsl::{algorithms, ops, Dispatcher};
+
+#[derive(Debug, Default)]
+struct StatefulAdd {
+    applications: usize,
+}
+
+impl<Vector> BinaryKernel<Vector> for StatefulAdd
+where
+    Vector: StaticSimdVector,
+    ops::Add: BinaryKernel<Vector>,
+{
+    fn apply(
+        &mut self,
+        left: <Vector as tsl::tsl_core::SimdVector>::RegisterType,
+        right: <Vector as tsl::tsl_core::SimdVector>::RegisterType,
+    ) -> <Vector as tsl::tsl_core::SimdVector>::RegisterType {
+        self.applications += 1;
+        <ops::Add as BinaryKernel<Vector>>::apply(&mut ops::Add, left, right)
+    }
+}
+
+#[test]
+fn explicit_and_convenience_dispatch_match() {
+    let left = [1_i32, 2, 3, 4, 5, 6, 7, 8];
+    let right = [8_i32, 7, 6, 5, 4, 3, 2, 1];
+    let mut explicit = [0_i32; 8];
+    let mut convenient = [0_i32; 8];
+
+    Dispatcher::new().transform_binary(ops::Add, &left, &right, &mut explicit);
+    algorithms::transform_binary(ops::Add, &left, &right, &mut convenient);
+
+    assert_eq!(explicit, [9_i32; 8]);
+    assert_eq!(convenient, explicit);
+}
+
+#[test]
+fn mutable_user_operation_state_is_preserved() {
+    let left = [1_i32, 2, 3, 4, 5, 6, 7, 8];
+    let right = [8_i32, 7, 6, 5, 4, 3, 2, 1];
+    let mut output = [0_i32; 8];
+    let mut operation = StatefulAdd::default();
+
+    Dispatcher::new().transform_binary(
+        &mut operation,
+        &left,
+        &right,
+        &mut output,
+    );
+
+    assert_eq!(output, [9_i32; 8]);
+    assert!(operation.applications > 0);
+}

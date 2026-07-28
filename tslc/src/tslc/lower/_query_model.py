@@ -17,8 +17,62 @@ class TypeValue:
 
 
 @dataclass(frozen=True, slots=True)
+class ObjectSize:
+    """Compiler-known size of a value-level object representation.
+
+    Fixed-size objects carry ``fixed_bits``. Sized vectors carry an element
+    width and lane-count symbol so equal symbolic layouts can be proven without
+    inspecting a backend spelling.
+    """
+
+    fixed_bits: int | None = None
+    element_bits: int | None = None
+    lanes_symbol: str | None = None
+
+    def __post_init__(self) -> None:
+        has_fixed_size = self.fixed_bits is not None
+        has_symbolic_size = (
+            self.element_bits is not None or self.lanes_symbol is not None
+        )
+        if has_fixed_size == has_symbolic_size:
+            raise ValueError("object size must be exactly one of fixed or symbolic")
+        if has_fixed_size:
+            if self.fixed_bits is None or self.fixed_bits <= 0:
+                raise ValueError("fixed object size must be positive")
+            return
+        if (
+            self.element_bits is None
+            or self.element_bits <= 0
+            or not self.lanes_symbol
+        ):
+            raise ValueError(
+                "symbolic object size requires a positive element width and lane symbol"
+            )
+
+    @classmethod
+    def fixed(cls, bits: int) -> "ObjectSize":
+        return cls(fixed_bits=bits)
+
+    @classmethod
+    def sized(cls, element_bits: int, lanes_symbol: str) -> "ObjectSize":
+        return cls(element_bits=element_bits, lanes_symbol=lanes_symbol)
+
+    def same_size_as(self, other: "ObjectSize") -> bool:
+        if self.fixed_bits is not None:
+            return self.fixed_bits == other.fixed_bits
+        if other.fixed_bits is not None:
+            return False
+        return (
+            self.element_bits == other.element_bits
+            and self.lanes_symbol == other.lanes_symbol
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class TextValue:
     text: RenderField
+    object_size: ObjectSize | None = None
+    all_bit_patterns_valid: bool = False
 
     def as_text(self) -> str:
         return render_text(self.text)

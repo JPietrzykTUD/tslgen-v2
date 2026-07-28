@@ -1,4 +1,7 @@
 prim<im:=m> to_integral(mask):
+  operation mask_to_integral
+  operand_roles:
+    primary mask
   brief_description "Converts a mask value to its integral mask representation."
   detailed_description """
     Converts a mask value to its compact integral mask representation. Each
@@ -453,10 +456,10 @@ prim<v:=m> to_vector(mask):
         implementation:
           tsil """
             complete(
-              call<primitive=blend[Vec]>(
+              call<primitive=select[Vec]>(
                 mask,
-                call<primitive=set_zero[Vec]>(),
-                call<primitive=set1[Vec]>(mask<lane_true>())
+                call<primitive=set1[Vec]>(mask<lane_true>()),
+                call<primitive=set_zero[Vec]>()
               )
             );
           """
@@ -608,6 +611,9 @@ prim<v:=m> to_vector(mask):
                complete(result) ;
             """
 prim<m:=im> to_mask(mask):
+  operation mask_from_integral
+  operand_roles:
+    value mask
   brief_description "Converts an integral mask representation to the backend mask type."
   detailed_description """
     Converts an integral mask representation into the target mask type. A set

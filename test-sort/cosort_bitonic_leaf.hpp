@@ -9,6 +9,8 @@
 
 #include <tsl.hpp>
 
+#include "multicolumn_sort_types.hpp"
+
 
 // -----------------------------------------------------------------------------
 // Co-sorting bitonic leaf (prototype).
@@ -16,12 +18,15 @@
 // A flat sorting network needs register lane permutations; TSL exposes them as
 // tsl::permute_lanes (tsldata misc/swizzle.tsl), so this leaf is TSL-native and
 // works for any element type whose native SIMD width is a power of two (tested
-// for u32 and u64). It sorts up to `capacity` elements ascending with a Batcher
+// for u32 and u64). It sorts up to `capacity` elements with an ascending Batcher
 // bitonic network, precomputing the per-comparator control (permutation index
 // vectors and take-max masks) once instead of rebuilding it every call, and
 // co-sorts a runtime number of payload columns via record-and-replay: the key
 // sort records each comparator's exchange mask, and every payload column replays
 // those masks (permute + blend). Shorter inputs are padded with the type max.
+// Descending output copies the valid key and payload ranges out in reverse
+// order; this avoids both an extra in-place reverse pass and treating an
+// in-band type minimum as distinguishable padding.
 //
 // `rows` is fixed so the resident key bank stays within the register file; the
 // capacity therefore scales with the chosen extension's lane count -- e.g. u32:
@@ -138,6 +143,7 @@ class TslCoSortBitonicLeaf {
   }
 
  public:
+  template <TslSortOrder Order = TslSortOrder::ASCENDING>
   static void sort(DataType * keys, DataType * const * columns, std::size_t column_count, std::size_t count) {
     if (count < 2) return;
 
@@ -173,7 +179,15 @@ class TslCoSortBitonicLeaf {
       }
     }
     store_block(buffer.data(), bank);
-    for (std::size_t index = 0; index < count; ++index) keys[index] = buffer[index];
+    if constexpr (Order == TslSortOrder::DESCENDING) {
+      for (std::size_t index = 0; index < count; ++index) {
+        keys[index] = buffer[count - 1 - index];
+      }
+    } else {
+      for (std::size_t index = 0; index < count; ++index) {
+        keys[index] = buffer[index];
+      }
+    }
 
     for (std::size_t column = 0; column < column_count; ++column) {
       alignas(64) std::array<DataType, capacity> payload;
@@ -196,7 +210,15 @@ class TslCoSortBitonicLeaf {
         }
       }
       store_block(payload.data(), pay_bank);
-      for (std::size_t index = 0; index < count; ++index) columns[column][index] = payload[index];
+      if constexpr (Order == TslSortOrder::DESCENDING) {
+        for (std::size_t index = 0; index < count; ++index) {
+          columns[column][index] = payload[count - 1 - index];
+        }
+      } else {
+        for (std::size_t index = 0; index < count; ++index) {
+          columns[column][index] = payload[index];
+        }
+      }
     }
   }
 };

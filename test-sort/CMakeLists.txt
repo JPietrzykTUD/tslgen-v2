@@ -13,6 +13,7 @@ endif()
 
 include(CTest)
 include(FetchContent)
+find_package(Threads REQUIRED)
 
 set(
   TSL_LOCAL_SOURCE_DIR
@@ -20,7 +21,7 @@ set(
   CACHE PATH
   "Path to a local generated TSL output root, or to its cpp directory"
 )
-set(TSL_RELEASE_VERSION "v0.2.4" CACHE STRING "Generated TSL release tag")
+set(TSL_RELEASE_VERSION "v0.2.5" CACHE STRING "Generated TSL release tag")
 set(
   TSL_RELEASE_ARCHIVE_URL
   # "https://github.com/JPietrzykTUD/tslgen-v2/releases/download/${TSL_RELEASE_VERSION}/tsl-generated-1daeecdd39aa2b02a1bb60697d67fe6ae70b23cc.tar.gz"
@@ -80,14 +81,39 @@ if(ENABLE_VQSORT_BENCHMARK AND (NOT DEFINED CMAKE_C_COMPILER OR CMAKE_C_COMPILER
   endif()
 endif()
 
-set(_tsl_release_hash_args)
-FetchContent_Declare(
-    tsl
-    URL "${TSL_RELEASE_ARCHIVE_URL}"
-    SOURCE_SUBDIR cpp
-    ${_tsl_release_hash_args}
-)
-FetchContent_MakeAvailable(tsl)
+if(TSL_LOCAL_SOURCE_DIR)
+  get_filename_component(
+    _tsl_local_source_dir
+    "${TSL_LOCAL_SOURCE_DIR}"
+    ABSOLUTE
+    BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+  if(EXISTS "${_tsl_local_source_dir}/CMakeLists.txt")
+    set(_tsl_local_cpp_dir "${_tsl_local_source_dir}")
+  elseif(EXISTS "${_tsl_local_source_dir}/cpp/CMakeLists.txt")
+    set(_tsl_local_cpp_dir "${_tsl_local_source_dir}/cpp")
+  else()
+    message(
+      FATAL_ERROR
+      "TSL_LOCAL_SOURCE_DIR must point to a generated TSL root or cpp directory"
+    )
+  endif()
+  message(STATUS "Using local generated TSL from ${_tsl_local_cpp_dir}")
+  add_subdirectory(
+    "${_tsl_local_cpp_dir}"
+    "${CMAKE_CURRENT_BINARY_DIR}/_deps/tsl-local-build"
+    EXCLUDE_FROM_ALL
+  )
+else()
+  set(_tsl_release_hash_args)
+  FetchContent_Declare(
+      tsl
+      URL "${TSL_RELEASE_ARCHIVE_URL}"
+      SOURCE_SUBDIR cpp
+      ${_tsl_release_hash_args}
+  )
+  FetchContent_MakeAvailable(tsl)
+endif()
 
 
 if(ENABLE_VQSORT_BENCHMARK)
@@ -138,6 +164,10 @@ add_executable(test_sort test_quicksort_pairwise_swap.cpp)
 target_compile_features(test_sort PRIVATE cxx_std_17)
 target_link_libraries(test_sort PRIVATE tsl::tsl)
 
+add_executable(test_multicolumn_sort test_multicolumn_sort.cpp)
+target_compile_features(test_multicolumn_sort PRIVATE cxx_std_17)
+target_link_libraries(test_multicolumn_sort PRIVATE tsl::tsl Threads::Threads)
+
 add_executable(benchmark_quicksort_pairwise_swap benchmark_quicksort_pairwise_swap.cpp)
 target_compile_features(benchmark_quicksort_pairwise_swap PRIVATE cxx_std_17)
 target_link_libraries(benchmark_quicksort_pairwise_swap PRIVATE tsl::tsl)
@@ -173,7 +203,11 @@ if(ENABLE_GBENCH)
 
   add_executable(benchmark_multicolumn_gbench benchmark_multicolumn_gbench.cpp)
   target_compile_features(benchmark_multicolumn_gbench PRIVATE cxx_std_17)
-  target_link_libraries(benchmark_multicolumn_gbench PRIVATE tsl::tsl benchmark::benchmark)
+  target_link_libraries(
+    benchmark_multicolumn_gbench
+    PRIVATE tsl::tsl benchmark::benchmark Threads::Threads
+  )
 endif()
 
 add_test(NAME test_sort COMMAND test_sort)
+add_test(NAME test_multicolumn_sort COMMAND test_multicolumn_sort)

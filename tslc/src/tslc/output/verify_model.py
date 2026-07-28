@@ -95,6 +95,7 @@ class BuildVerifierConfig:
     runner_paths: Mapping[str, str] = field(default_factory=dict)
     tool_paths: Mapping[str, str] = field(default_factory=dict)
     run_value_tests: bool = False
+    run_quality_checks: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -121,6 +122,7 @@ class BuildVerifierConfig:
         runner_paths: Mapping[str, str] | None = None,
         tool_paths: Mapping[str, str] | None = None,
         run_value_tests: bool = False,
+        run_quality_checks: bool = False,
     ) -> "BuildVerifierConfig":
         return cls(
             toolchains=toolchains or {},
@@ -135,6 +137,7 @@ class BuildVerifierConfig:
                 if (normalized := _normalize_compiler_executable(path)) is not None
             },
             run_value_tests=run_value_tests,
+            run_quality_checks=run_quality_checks,
         )
 
     def toolchain(self, backend_id: str) -> BackendToolchain:

@@ -14,11 +14,15 @@ from types import MappingProxyType
 from typing import Literal, TypeVar
 
 from tslc.catalog.arithmetic import ArithmeticContract
+from tslc.catalog.conversion import PrimitiveConversionContract
+from tslc.catalog.memory import PrimitiveMemoryContract
 from tslc.catalog.overloads import (
     OverloadRegistry,
     PrimitiveOverload,
     ResolvedPrimitiveOverload,
 )
+from tslc.catalog.semantics import PrimitiveSemanticContract
+from tslc.catalog.shift import PrimitiveShiftContract
 from tslc.catalog.target_families import (
     ExtensionFamilyCapability,
     TargetFamilyCatalog,
@@ -35,10 +39,15 @@ _InnerV = TypeVar("_InnerV")
 # emitted API gains a bool axis parameter so both variants coexist as distinct callables.
 BOOLEAN_WILDCARD_ATTRIBUTES = frozenset({"aligned", "packed"})
 
-# The two dimensions a `return_type` can replace on a representation-change primitive (the
-# `Primitive.result_target` dim): the element type, or the extension/register width.
+# The dimensions a `return_type` can select on a representation-change primitive. Base and
+# extension are concrete selector axes. Vector names a caller-supplied `simd_type` generic and
+# therefore carries both dimensions without introducing another implementation selector level.
 RESULT_DIM_BASE = "base"
 RESULT_DIM_EXTENSION = "extension"
+RESULT_DIM_VECTOR = "vector"
+RESULT_DIMENSIONS = frozenset(
+    {RESULT_DIM_BASE, RESULT_DIM_EXTENSION, RESULT_DIM_VECTOR}
+)
 
 # Closed catalog vocabularies. Schema validators derive their allowed-value sets
 # from these aliases (`typing.get_args`), so the model owns each vocabulary once.
@@ -50,6 +59,13 @@ TestCaseRole = Literal[
     "runtime_failure",
     "compile_failure",
 ]
+
+
+class TestComparison(StrEnum):
+    """How authored expected lane values are compared to generated results."""
+
+    VALUE = "value"
+    BITWISE = "bitwise"
 
 
 class TestFailureReason(StrEnum):
@@ -231,11 +247,10 @@ class Primitive:
     # generics — unlike a wildcard axis they are NOT baked into variants (the caller picks),
     # so the body may reference them symbolically (`if<compile>(!PreserveSign)`).
     generic_params: tuple["GenericParam", ...] = ()
-    # A representation-change primitive declares `return_type: <dim>: <Target>` (`dim` is
-    # "base" or "extension"): its result is the source vector with that one dimension replaced
-    # by a caller-supplied target. `(dim, target_name)`, e.g. `("base", "ToBase")` (reinterpret)
-    # or `("extension", "ToExtension")` (extract). The target is a *second type axis* — its
-    # values come from each impl's `to_target_group`. None for ordinary primitives.
+    # A representation-change primitive declares `return_type: <dim>: <Target>`. Base and
+    # extension replace one source-vector dimension through a concrete second selector axis.
+    # Vector refers to a caller-supplied `kind simd_type` generic and owns the complete result
+    # vector. None for ordinary primitives.
     result_target: tuple[str, str] | None = None
     # Value-correctness cases authored in the `tests:` block. Consumed by the test-generation
     # render stage (golden anchor against the generic software reference); empty when none.
@@ -253,8 +268,15 @@ class Primitive:
     # guarantees. Selection and backend code must not infer these facts from
     # primitive names, signature positions, prose, or implementation text.
     arithmetic: ArithmeticContract | None = None
+    # Explicit language-neutral operation identity and operand bindings. Memory
+    # and conversion add only their domain-specific facts; no target spelling
+    # or facade policy is source data.
+    operation: PrimitiveSemanticContract | None = None
+    memory: PrimitiveMemoryContract | None = None
+    conversion: PrimitiveConversionContract | None = None
+    shift: PrimitiveShiftContract | None = None
     # Source-authored semantic-overload identity. Cross-declaration validation resolves
-    # the family primary value; selection/lowering intentionally do not consume it yet.
+    # the family primary value; lowering carries only that resolved declaration fact.
     overload: PrimitiveOverload | None = None
     # Corpus-declared cross-lane fact: True iff an output lane reads more than its own input
     # lane (a reduction, shuffle, compress, conflict, iota, gather …). It gates every *scalable*
@@ -380,7 +402,9 @@ class TestCase:
     test vector when it differs from the result vector base), ``scale``/``alignment`` and
     ``offset``/``src_offset``/``dst_offset`` (gather/scatter and load/store buffer placement),
     ``attrs`` (the ``aligned``/``packed`` axes). Runtime and compile failure
-    roles carry a typed ``failure`` reason instead of an expected value.
+    roles carry a typed ``failure`` reason instead of an expected value. ``comparison`` defaults
+    to NaN-aware value comparison; ``bitwise`` requests exact lane representations, including
+    floating-point NaN sign and payload bits.
     """
 
     name: str
@@ -388,6 +412,7 @@ class TestCase:
     tags: tuple[str, ...]
     inputs: tuple[TestArg, ...]
     expected: tuple[str, ...]
+    comparison: TestComparison = TestComparison.VALUE
     role: TestCaseRole = "value"
     failure: TestFailureReason | None = None
     lanes: int | None = None
@@ -677,6 +702,16 @@ class Extension:
         capability promotion. Unknown backends are coverage gaps, not implicit support."""
 
         return self.backend_supported.get(backend_id, False)
+
+    @property
+    def is_unconditional_implementation_fallback(self) -> bool:
+        """Whether this extension is usable without profile activation facts."""
+
+        return (
+            self.family_capability.implementation_fallback
+            and not self.active_when.target_features
+            and not self.active_when.compile_modes
+        )
 
     def direct_vector_register_type(
         self, backend_id: str, type_tag_or_group: str

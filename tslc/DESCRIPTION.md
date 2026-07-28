@@ -9,7 +9,7 @@ the design decisions that matter.
 
 `tslc` is a **compiler that generates a SIMD wrapper library**. It reads a
 declarative data language (`.tsl` files under `tsldata/`) describing abstract
-SIMD *primitives* (`add`, `sub`, `load`, `gather`, `blend`, …) and emits
+SIMD *primitives* (`add`, `sub`, `load`, `gather`, `select`, …) and emits
 deterministic, compilable **C++ and Rust** source implementing each primitive
 across a matrix of:
 
@@ -43,7 +43,7 @@ sources + compiler assets → parse → catalog → select → scan body → low
 | **select** | [select/](src/tslc/select/) | For each `(backend, extension, type)` slot, pick the best implementation body |
 | **ir / scan** | [ir/](src/tslc/ir/) | Turn a TSIL body into a recursive `tuple[Segment, ...]` — *not* an AST |
 | **lower** | [lower/](src/tslc/lower/) | Walk segments, resolve queries/intrinsics → `LoweredSpecialization` |
-| **backend** | [backend/](src/tslc/backend/) | Own target type projection, helper manifests, emitted profiles, validation, and C++/Rust function text |
+| **backend** | [backend/](src/tslc/backend/) | Own target type projection, helper manifests, emitted profiles, Rust compile-target selection, validation, and C++/Rust function text |
 | **value tests** | [value_tests/](src/tslc/value_tests/) | Plan executable cases from finalized emitted names |
 | **benchmark** | [benchmark/](src/tslc/benchmark/) | Plan explicit implementation-variant measurements and render optional backend-scoped report/policy tools |
 | **render** | [render/](src/tslc/render/) | Format validated profiles and prebuilt test plans into headers/modules, dispatch, CMake/Cargo, and docs |
@@ -79,7 +79,7 @@ projections of the latest successful catalog/index. Hierarchical document
 symbols and registry-backed semantic token facts are built separately in
 [catalog_authoring_index.py](src/tslc/catalog_authoring_index.py); the core
 index retains resolvable catalog occurrences, including individual list
-selector elements, primitive-scoped result target axes, and source-defined
+selector elements, primitive-scoped result targets, and source-defined
 semantic-overload axes and values. Overload completion, hover, navigation,
 references, symbols, tokens, and diagnostics all project the same typed
 registry and validated primitive-family facts; the parsed cursor contributes
@@ -211,8 +211,9 @@ prim<v:=(v,v)> add(left, right):
   source-named extension families—fallback classification, free-function
   ownership, declared-register requirements, and index-vector support—and for
   profile families, including whether a profile runs natively without an
-  emulator. It also owns documentation family/order labels and the catalog of
-  accepted target features plus their default/backend compiler spellings;
+  emulator and each backend's explicit target architecture/toolchain facts. It
+  also owns documentation family/order labels and the catalog of accepted
+  target features plus their default/backend compiler spellings;
   machine profiles retain only genuine profile-specific overrides. Selection,
   lowering, translation, documentation, and verification consume those typed
   roles instead of recognizing family or feature-name patterns.
@@ -222,9 +223,10 @@ prim<v:=(v,v)> add(left, right):
   The catalog promotes these into immutable registry and primitive values,
   validates complete same-name families, resolves the primary value once, and
   structurally identifies the distinguishing operand without interpreting
-  parameter names or implementation text. This fact currently ends at the
-  catalog and editor projection: `LoweredSpecialization`, backend/API naming,
-  generated artifacts, tests, and benchmarks do not carry or consume it yet.
+  parameter names or implementation text. Lowering carries the resolved
+  declaration fact—not the registry—inside `LoweredSpecialization`, making it
+  available to backend/API, documentation, test, and benchmark projections
+  without reopening the catalog. Those consumers do not apply facade policy yet.
 - **Arithmetic contracts**: a primitive may declare an explicit nonempty set of
   `operations`, parameter-bound `operand_roles`, and atomic `guarantees` in an
   `arithmetic:` block. The catalog promotes this into the frozen enum-backed
@@ -237,6 +239,33 @@ prim<v:=(v,v)> add(left, right):
   editor completion, tokens, navigation, and hover project those same facts.
   Consumers never infer arithmetic semantics from primitive names, parameter
   spellings or positions, prose, or implementation text.
+- **Primitive operation contracts**: curated non-arithmetic families declare a
+  closed language-neutral `operation` plus explicit parameter-bound
+  `operand_roles`, including runtime lane indices where applicable. Focused
+  `memory`, `conversion`, and `shift` blocks add only
+  contiguous access direction, conversion/lane-count relations and numeric
+  modes, or wrapping
+  count/lane rules and admitted scalar count types that are not already owned
+  by attributes, result targets, and semantic overloads. The catalog
+  promotes these through the frozen records in
+  [catalog/semantics.py](src/tslc/catalog/semantics.py),
+  [catalog/memory.py](src/tslc/catalog/memory.py), and
+  [catalog/conversion.py](src/tslc/catalog/conversion.py), and
+  [catalog/shift.py](src/tslc/catalog/shift.py); it validates signature kinds,
+  required roles, same-name families, and domain compatibility while retaining
+  source spans. Catalog inspection and editor completion, tokens, navigation,
+  references, and hover consume those same enums. Lowering carries
+  the promoted contracts unchanged inside `LoweredSpecialization`; backend and
+  downstream projections therefore receive typed facts without reconstructing
+  them. Source data contains no Rust-specific spelling policy, and this stage
+  does not apply one.
+- **Explicit result vectors**: `return_type: vector: Name` refers to a declared
+  `kind simd_type` generic and makes that complete caller-supplied vector the
+  result owner without adding an implementation-selector axis. Lane-preserving
+  numeric conversions use this result form and may declare the language-neutral
+  `scalar_as` mode; the lower-level primitive checks equal logical lane counts,
+  while facades can make the relation structural by preserving their lane-count
+  parameter.
 - **Fixed-width SVE**: `sve128`/`sve256`/`sve512` inherit scalable `sve` bodies
   but supersede `sve` in their fixed profiles, so one profile emits one SVE
   model. The fixed width is a compile mode (`sve_vector_bits_N`) plus C++ flags
@@ -341,9 +370,16 @@ The pipeline then runs a **profile-scoped dependency closure**: from the
 requested primitives it resolves those lowered call facts
 ([lower/dependencies.py](src/tslc/lower/dependencies.py)), lowers callees, and
 **prunes to a fixpoint** any specialization whose callees aren't themselves
-emitted for the same `simd<type,ext>` (else the generated call wouldn't link).
-It also **propagates bottom-up** unsafe-ness, required target features, and
-implementation-state joins through the live call graph
+emitted for the same concrete `simd<type,ext>` (else the generated call
+wouldn't link). A call on a free SIMD type parameter instead retains a symbolic
+reference containing the authored parameter name and its optional selected base
+binding, never the caller's extension. Its compiler-derived trait bounds are
+validated during lowering, and dependency discovery keeps the corresponding
+callee family in the profile scope. Because its concrete representation is
+chosen only by the generic caller, that edge does not participate in exact-slot
+pruning or fact propagation. Concrete edges continue to **propagate bottom-up**
+unsafe-ness, required target features, and implementation-state joins through
+the live call graph
 ([_pipeline_closure.py](src/tslc/_pipeline_closure.py),
 `_propagate_transitive_call_facts`).
 
@@ -389,13 +425,45 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   `core::arch` intrinsic qualification ([backend/rust.py](src/tslc/backend/rust.py)).
   Generated rustdoc uses a `cfg(doc)` profile-neutral facade containing one
   public signature per emitted Rust primitive; concrete profile availability
-  stays in the specialization explorer, while normal builds retain their
-  Cargo-feature-selected `profile` alias. Profile-local algorithm trait impls
+  stays in the specialization explorer, while normal builds select their
+  `profile` alias from compile-target cfgs with an exact generic fallback.
+  Profile-local algorithm trait impls
   share typed Scalar/Generic/concrete render targets in
   [backend/rust_algorithm.py](src/tslc/backend/rust_algorithm.py). Static
   algorithm-wrapper names are reserved by the compiler manifest in
   [backend/rust_algorithm_manifest.py](src/tslc/backend/rust_algorithm_manifest.py),
   with an asset-consistency test preventing drift.
+
+The ordinary Rust API is finalized before source rendering by the frozen records
+in [backend/rust_api_model.py](src/tslc/backend/rust_api_model.py) and focused
+candidate, comprehensive, curated, and surface planners under `backend/rust_api_*`.
+The public
+[backend/rust_api_planner.py](src/tslc/backend/rust_api_planner.py)
+orchestrates those projections directly and preserves the compiler-facing
+planning and validation API.
+That projection combines lowered language-neutral operation, operand-role,
+overload, conversion, and safety contracts with static fixed-shape selection.
+It owns Rust receiver placement, const/type-parameter spelling, method suffixes,
+curated trait admission, native candidates, cfg/delegate identity, and collision
+diagnostics. It does not inspect implementation text, infer semantics from a
+primitive name, reopen `tsldata`, or render Rust. Backend validation constructs
+the plan at the post-lowering boundary, exposing one compiler-owned input for
+Rust source, rustdoc, fixture, benchmark, and dispatch projections.
+For artifact production,
+[backend/rust_capability.py](src/tslc/backend/rust_capability.py) constructs the
+static-selection, facade, dispatch, policy-consumption, and benchmark-layout
+plans once. The private project boundary in
+[render/rust_project.py](src/tslc/render/rust_project.py) trusts and formats
+those frozen plans; it does not replan or recompute-and-compare them.
+
+The focused renderer in
+[render/rust_facade.py](src/tslc/render/rust_facade.py) turns those finalized
+shape records into sealed, opaque `Simd<T, N>` and `Mask<T, N>` values. A
+compile target selects one exact private hardware representation or the
+source-backed generic representation; no profile or extension is a Cargo
+feature. Complete release metadata is carried through the backend-neutral
+`ProjectRenderConfig` into the Rust package renderer, so templates format
+configured Cargo facts rather than owning repository release policy.
 
 A static substrate ships as assets
 ([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),
@@ -417,16 +485,17 @@ standalone native benchmark/policy tool. Rust admits scenario coverage through
 explicit named `profile × scenario-family` pairs while deriving profile family,
 features, spellings, modes, and flags from the live machine profile. It renders
 the `sse2` register and immediate families plus `avx2` one-vector scalar
-reductions as standard-library-only custom Cargo benchmarks. The feature-gated
-hot loop lives inside the library crate, and a thin
-per-profile bench target invokes it only with the explicit
-`variant_benchmarks` and profile features, and ordinary Cargo builds retain the
-authored wrapper choice. Rust candidate calls use backend-owned concrete type,
-trait, const-argument, and unsafe spelling; all authored expectations pass
-before any samples are timed or written. The Rust runtime validates the exact
-sample inventory and applies the conservative paired reducer. Its summary keeps
-the observed candidate and improvement even when compile-time selection is
-unsupported; the separate policy decision remains the authored default.
+reductions as standard-library-only custom Cargo benchmarks. The
+compiler-cfg-gated hot loop lives inside the library crate, and a thin
+per-profile bench target invokes it only with the unpublished
+`tsl_variant_benchmarks` compiler cfg plus the exact compiler-owned codegen and
+target-feature flags. Ordinary Cargo builds retain the authored wrapper choice.
+Rust candidate calls use backend-owned concrete type, trait, const-argument, and
+unsafe spelling; all authored expectations pass before any samples are timed or
+written. The Rust runtime validates the exact sample inventory and applies the
+conservative paired reducer. Its summary keeps the observed candidate and
+improvement even when compile-time selection is unsupported; the separate
+policy decision remains the authored default.
 Profiles without a consumable mapping do not advertise or produce a policy
 file. Policy-capable reports stage raw JSONL, summary, and backend-scoped policy
 files before publishing the policy last. Policy production is native x86 and
@@ -451,15 +520,16 @@ separate native policy-enabled Cargo build may consume the precomputed file
 through `TSL_RUST_VARIANT_POLICY_FILE`. The build script joins it to a
 compiler-rendered descriptor, requires the same compiler, target, generated
 codegen contract, attested context identity, and CPU facts. Policy-producing
-and policy-consuming library builds retain the same internal
-`variant_benchmarks` feature so their generated code context is identical; the
-benchmark target itself independently rejects any policy input. The generated
-per-profile benchmark help prints the exact explicit workflow and codegen
-guard. For the policy-capable `sse2` register profile, its first Cargo invocation
-removes `TSL_RUST_VARIANT_POLICY_FILE`, runs the optimized benchmark, and writes
-samples, summary, and policy below the Cargo target tree. A separate
-policy-enabled Cargo invocation consumes that precomputed file; no convenience
-command hides or cycles the two phases. The
+and policy-consuming library builds retain the same private compiler cfg and
+exact codegen contract so their generated code context is identical; this is
+not a published Cargo feature. The benchmark target itself independently
+rejects any policy input. The generated per-profile benchmark help prints the
+exact explicit workflow and codegen guard. For the policy-capable `sse2`
+register profile, its first Cargo invocation removes
+`TSL_RUST_VARIANT_POLICY_FILE`, runs the optimized benchmark, and writes samples,
+summary, and policy below the Cargo target tree. A separate policy-enabled Cargo
+invocation consumes that precomputed file; no convenience command hides or
+cycles the two phases. The
 generated benchmark Cargo profile is pinned to the compiler-owned settings. A
 frozen semantic consumption plan joins benchmark evidence to the selection
 seam; one render projection derives the Cargo and artifact names shared by
@@ -474,10 +544,13 @@ requested missing, foreign, stale, partial, duplicate, or report-only selection
 fails before library compilation. Unadmitted profile and scenario-family pairs
 remain structured Rust coverage gaps. The benchmark maintenance projection runs one
 backend per invocation: the original C++ issue baseline remains unchanged,
-while separate Rust evidence preserves every raw report gap plus exact profile
-manifest, candidate ID/body hash, policy eligibility, and compiler-rendered
-mapping hashes. Aggregate shape counts are explanatory inventory, not the Rust
-ratchet identity. Value-test tags do not control benchmark admission.
+while the Rust audit generates each selected profile independently and merges
+the resulting typed plans instead of combining unordered compile targets in
+one crate. Separate Rust evidence preserves every raw report gap plus exact
+profile manifest, candidate ID/body hash, policy eligibility, and
+compiler-rendered mapping hashes. Aggregate shape counts are explanatory
+inventory, not the Rust ratchet identity. Value-test tags do not control
+benchmark admission.
 Workload semantics are resolved in
 [benchmark/scenarios.py](src/tslc/benchmark/scenarios.py) before rendering:
 each typed scenario and correctness case validates its own structural and
@@ -514,6 +587,11 @@ components
 [case-kind capabilities](src/tslc/value_tests/case_capabilities.py) validate
 those facts through the focused
 [case plan](src/tslc/value_tests/case_plan.py) before rendering. The
+source-authored `comparison bitwise` mode is deliberately limited to vector
+results with vector operands; it makes C++ and Rust golden and differential
+tests compare exact lane representations, including NaN sign and payload bits.
+The default `comparison value` remains NaN-aware while retaining exact signed
+zero and infinity checks. The
 `status_pointer` case kind validates nondeterministic status-plus-output
 contracts by checking the status domain and failure-path output preservation,
 without inventing vector lanes or a deterministic success value. The

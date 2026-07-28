@@ -12,6 +12,15 @@ from tslc.catalog.arithmetic import (
     arithmetic_guarantee_values,
     arithmetic_operation_values,
 )
+from tslc.catalog.conversion import (
+    conversion_kind_values,
+    lane_count_relation_values,
+    numeric_conversion_mode_values,
+)
+from tslc.catalog.memory import memory_access_values, memory_addressing_values
+from tslc.catalog.model import RESULT_DIM_VECTOR
+from tslc.catalog.semantics import primitive_operation_values
+from tslc.catalog.shift import shift_count_rule_values, shift_lane_rule_values
 from tslc.catalog.validation._schema_benchmarks import KNOWN_OPERAND_DOMAINS
 from tslc.catalog.validation._schema_common import KNOWN_BOOLEAN_VALUES
 from tslc.catalog.validation._schema_implementation import (
@@ -83,6 +92,8 @@ _CLOSED_ENUM_VALUES = frozenset(
         *KNOWN_TEST_ROLES,
         *arithmetic_operation_values(),
         *arithmetic_guarantee_values(),
+        *shift_count_rule_values(),
+        *shift_lane_rule_values(),
         *(value for values in KNOWN_PRIMITIVE_ATTRIBUTES.values() for value in values),
     )
 )
@@ -127,7 +138,14 @@ def build_document_authoring_index(
                     "function", _name_in_source(declaration.header_source, declaration.name)
                 )
             )
-            _index_implementation_tokens(declaration.impl_entries, tokens, _result_target(declaration))
+            result_target = _result_target(declaration)
+            _index_implementation_tokens(
+                declaration.impl_entries,
+                tokens,
+                result_target
+                if result_target is None or result_target[0] != RESULT_DIM_VECTOR
+                else None,
+            )
             for envelope in declaration.body_envelopes:
                 source = _source_span(envelope.payload_source)
                 for region in _regions(scan(envelope.payload_text, source=source)):
@@ -374,9 +392,86 @@ def _primitive_semantic_tokens(
         elif primitive_field.kind == "arithmetic":
             roles = child(field, "operand_roles")
             for role in children(roles):
+                tokens.append(
+                    IndexedSemanticToken("enumMember", _source_span(role.key.source))
+                )
                 if isinstance(role.value, ParsedTslScalarValue):
                     source = role.value.payload_source or role.value.source
                     tokens.append(IndexedSemanticToken("parameter", _source_span(source)))
+        elif primitive_field.kind == "operand_roles":
+            for role in children(field):
+                tokens.append(
+                    IndexedSemanticToken("enumMember", _source_span(role.key.source))
+                )
+                if isinstance(role.value, ParsedTslScalarValue):
+                    source = role.value.payload_source or role.value.source
+                    tokens.append(IndexedSemanticToken("parameter", _source_span(source)))
+        elif primitive_field.kind == "operation":
+            if (
+                isinstance(field.value, ParsedTslScalarValue)
+                and field.value.text in primitive_operation_values()
+            ):
+                source = field.value.payload_source or field.value.source
+                tokens.append(IndexedSemanticToken("enumMember", _source_span(source)))
+        elif primitive_field.kind == "memory":
+            tokens.extend(
+                _closed_contract_value_tokens(
+                    field,
+                    {
+                        "access": memory_access_values(),
+                        "addressing": memory_addressing_values(),
+                    },
+                )
+            )
+        elif primitive_field.kind == "conversion":
+            tokens.extend(
+                _closed_contract_value_tokens(
+                    field,
+                    {
+                        "kind": conversion_kind_values(),
+                        "lane_count": lane_count_relation_values(),
+                        "numeric_mode": numeric_conversion_mode_values(),
+                    },
+                )
+            )
+        elif primitive_field.kind == "shift":
+            tokens.extend(
+                _closed_contract_value_tokens(
+                    field,
+                    {
+                        "count_rule": shift_count_rule_values(),
+                        "lane_rule": shift_lane_rule_values(),
+                    },
+                )
+            )
+            scalar_count_types = child(field, "scalar_count_types")
+            if scalar_count_types is not None and isinstance(
+                scalar_count_types.value,
+                ParsedTslListValue,
+            ):
+                tokens.extend(
+                    IndexedSemanticToken(
+                        "type",
+                        _source_span(item.payload_source or item.source),
+                    )
+                    for item in scalar_count_types.value.items
+                    if isinstance(item, ParsedTslScalarValue)
+                )
+    return tuple(tokens)
+
+
+def _closed_contract_value_tokens(
+    field: ParsedTslField,
+    values_by_field: dict[str, tuple[str, ...]],
+) -> tuple[IndexedSemanticToken, ...]:
+    tokens: list[IndexedSemanticToken] = []
+    for member in children(field):
+        if not isinstance(member.value, ParsedTslScalarValue):
+            continue
+        if member.value.text not in values_by_field.get(member.key.text, ()):
+            continue
+        source = member.value.payload_source or member.value.source
+        tokens.append(IndexedSemanticToken("enumMember", _source_span(source)))
     return tuple(tokens)
 
 

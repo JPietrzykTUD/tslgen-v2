@@ -1,5 +1,8 @@
 description "Bitwise horizontal (reduction) operations"
 prim<s:=v> hand(vec):
+  operation horizontal_bit_and
+  operand_roles:
+    primary vec
   brief_description "Reduces all lanes of a vector register with bitwise AND."
   detailed_description """
     Reduces all vector lanes with a bitwise AND and returns the scalar result.
@@ -352,6 +355,9 @@ prim<s:=v> hand(vec):
           """
 
 prim<s:=v> hor(vec):
+  operation horizontal_bit_or
+  operand_roles:
+    primary vec
   brief_description "Reduces all lanes of a vector register with bitwise OR."
   detailed_description """
     Reduces all vector lanes with a bitwise OR and returns the scalar result.
@@ -702,6 +708,10 @@ prim<s:=v> hor(vec):
           """
 
 prim<s:=(m,v)> hand(mask, vec):
+  operation horizontal_bit_and
+  operand_roles:
+    control_mask mask
+    primary vec
   brief_description "Reduces active mask lanes of a vector register with bitwise AND."
   detailed_description """
     Reduces the mask-selected lanes with a bitwise AND and returns the scalar
@@ -1044,6 +1054,10 @@ prim<s:=(m,v)> hand(mask, vec):
           """
 
 prim<s:=(m,v)> hor(mask, vec):
+  operation horizontal_bit_or
+  operand_roles:
+    control_mask mask
+    primary vec
   brief_description "Reduces active mask lanes of a vector register with bitwise OR."
   detailed_description """
     Reduces the mask-selected lanes with a bitwise OR and returns the scalar

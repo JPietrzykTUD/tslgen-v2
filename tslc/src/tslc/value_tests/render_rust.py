@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from tslc.compiler_assets import RenderAssets
 from tslc.render._common import slug
 from tslc.value_tests._render_rust_conversion import (
@@ -11,6 +13,7 @@ from tslc.value_tests._render_rust_conversion import (
     _extension_insert,
     _extension_result,
     _load_convert,
+    _lane_convert,
     _repr_cast,
     _target_imask,
 )
@@ -56,8 +59,14 @@ from tslc.value_tests.renderer_capability import ValueTestRendererCapability
 
 
 def render_rust_values_file(
-    profiles: tuple[ValueTestProfilePlan, ...], assets: RenderAssets
+    profiles: tuple[ValueTestProfilePlan, ...],
+    assets: RenderAssets,
+    *,
+    profile_cfgs: Mapping[str, str] | None = None,
+    profile_modules: Mapping[str, str] | None = None,
 ) -> str:
+    profile_cfgs = profile_cfgs or {}
+    profile_modules = profile_modules or {}
     modules = []
     for profile in profiles:
         if not profile.runner_cases:
@@ -68,13 +77,17 @@ def render_rust_values_file(
             assets.fill(
                 "rust_value_tests_profile.rs.tmpl",
                 profile_slug=profile_slug,
+                profile_module=profile_modules.get(
+                    profile.profile_name, f"tsl_{profile_slug}"
+                ),
+                target_cfg=profile_cfgs.get(profile.profile_name, "all()"),
                 body=body,
             ).rstrip()
         )
-    profile_modules = "\n\n" + "\n\n".join(modules) if modules else "\n"
+    rendered_profile_modules = "\n\n" + "\n\n".join(modules) if modules else "\n"
     source = assets.fill(
         "rust_value_tests.rs.tmpl",
-        profile_modules=profile_modules,
+        profile_modules=rendered_profile_modules,
     )
     return "\n".join(line.rstrip() for line in source.splitlines()) + "\n"
 
@@ -114,6 +127,7 @@ RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "lane_list": _lane_list,
         "load": _load,
         "load_convert": _load_convert,
+        "lane_convert": _lane_convert,
         "mask_logic": _mask_logic,
         "mask_pointer_load": _mask_pointer_load,
         "mask_result": _mask_result,

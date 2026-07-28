@@ -7,6 +7,7 @@ from tslc.value_tests._case_conversion import (
     differential_cases,
     extension_harness_available,
     extension_repr_case,
+    lane_convert_case,
     load_convert_case,
     repr_cast_case,
 )
@@ -59,6 +60,7 @@ __all__ = (
     "indexed_load_case",
     "indexed_store_case",
     "lane_list_case",
+    "lane_convert_case",
     "load_convert_case",
     "load_case",
     "mask_logic_case",

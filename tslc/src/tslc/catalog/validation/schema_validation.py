@@ -7,6 +7,7 @@ without lengthening one mixed validator file.
 
 from __future__ import annotations
 
+from tslc.catalog.model import RESULT_DIMENSIONS
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.target_families import TargetFamilyCatalog
 from tslc.catalog.validation._schema_common import (
@@ -187,7 +188,7 @@ def _return_type_dimension(
 ) -> str | None:
     for parsed in declaration.fields_by_name("return_type"):
         for field in children(parsed.field):
-            if field.key.text in {"base", "extension"}:
+            if field.key.text in RESULT_DIMENSIONS:
                 return field.key.text
     return None
 

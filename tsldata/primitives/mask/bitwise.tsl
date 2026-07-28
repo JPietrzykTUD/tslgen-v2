@@ -1,4 +1,8 @@
 prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
+  operation mask_and
+  operand_roles:
+    primary mask_a
+    secondary mask_b
   brief_description "Computes the bitwise AND of two masks."
   detailed_description """
     Computes the lane-wise conjunction of two mask values. A lane is active in
@@ -115,6 +119,10 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
               complete((mask_a & mask_b) & valid_lanes);
             """
 prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
+  operation mask_or
+  operand_roles:
+    primary mask_a
+    secondary mask_b
   brief_description "Computes the bitwise OR of two masks."
   detailed_description """
     Computes the lane-wise disjunction of two mask values. A lane is active in
@@ -231,6 +239,10 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
               complete((mask_a | mask_b) & valid_lanes);
             """
 prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
+  operation mask_xor
+  operand_roles:
+    primary mask_a
+    secondary mask_b
   brief_description "Computes the bitwise XOR of two masks."
   detailed_description """
     Computes the lane-wise exclusive-or of two mask values. A lane is active in
@@ -347,6 +359,9 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
               complete((mask_a ^ mask_b) & valid_lanes);
             """
 prim<m:=m> mask_binary_not(mask):
+  operation mask_not
+  operand_roles:
+    primary mask
   brief_description "Computes the bitwise inversion of a mask."
   detailed_description """
     Inverts the active state of each lane in a mask value.
@@ -417,7 +432,9 @@ prim<m:=m> mask_binary_not(mask):
           tsil "complete(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
     sse:
       arith:
-        requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2, sse4_1], ui64 [sse, sse2, sse4_1], f32 [sse, sse2], f64 [sse, sse2, sse4_1]}
+        requires:
+          arith [sse, sse2]
+          f32 [sse]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -466,6 +483,9 @@ prim<m:=m> mask_binary_not(mask):
               complete(op<bit_negate>(mask) & valid_lanes);
             """
 prim<usize:=m> mask_population_count(mask):
+  operation mask_population_count
+  operand_roles:
+    primary mask
   brief_description "Counts active lanes in a mask."
   detailed_description """
     Counts the number of active lanes in a mask value and returns that count as

@@ -25,7 +25,6 @@ from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
 from tslc._pipeline_lowering_cache import _LoweringCache
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.registry import backend_capabilities, registered_backend_ids
-from tslc.benchmark.model import EMPTY_BENCHMARK_PROJECT_PLAN
 from tslc.benchmark.model import BenchmarkProjectPlan
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
@@ -38,7 +37,12 @@ from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
-from tslc.lower.dependencies import dependency_sort_key
+from tslc.lower.dependencies import (
+    CallDependency,
+    VectorIdentity,
+    dependency_sort_key,
+    is_concrete_call_dependency,
+)
 from tslc.lower.lowerer import (
     POLICY_DEFERRED_SIGNATURE_CODE,
     LoweredSpecialization,
@@ -47,6 +51,7 @@ from tslc.lower.lowerer import (
 )
 from tslc.output.artifacts import ArtifactSet
 from tslc.render.project import RenderedProject, render_project
+from tslc.project_render import DEFAULT_PROJECT_RENDER_CONFIG, ProjectRenderConfig
 from tslc.select.selector import (
     SelectedImplementation,
     Selector,
@@ -96,6 +101,7 @@ class GenerationRequest:
     # Explicit concrete-analysis commands may retain the lowered call graph.
     # Ordinary checking/generation discards it after closure and propagation.
     collect_lowering_trace: bool = False
+    render_config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,7 +274,7 @@ class _GenerationSession:
             if self.request.value_test_warnings or diagnostic.severity == "error"
         )
         self.diagnostics.extend(value_test_diagnostics)
-        benchmarks = _merge_benchmark_plans(
+        benchmarks = BenchmarkProjectPlan.merge(
             tuple(
                 plan
                 for capability in self.backends
@@ -298,6 +304,7 @@ class _GenerationSession:
                 value_tests,
                 benchmarks,
                 assets=self.inputs.render_assets,
+                config=self.request.render_config,
             )
             if self.emitted_profiles
             else None
@@ -404,7 +411,13 @@ class _GenerationSession:
                     dependency_backend,
                 ) in discovered_dependencies:
                     dependency_scope = (
-                        (dependency_extension,) if extensions is not None else None
+                        None
+                        if dependency_extension is None
+                        else (
+                            (dependency_extension,)
+                            if extensions is not None
+                            else None
+                        )
                     )
                     if dependency_backend not in processed.get(
                         (dependency_primitive, dependency_type, dependency_scope), set()
@@ -465,10 +478,15 @@ class _GenerationSession:
         selected_extensions: dict[str, Extension],
         backend_ids: frozenset[str],
         extensions: tuple[str, ...] | None,
-    ) -> tuple[list["_LoweredSlot"], tuple[tuple[str, str, str, str], ...]]:
+    ) -> tuple[
+        list["_LoweredSlot"],
+        tuple[tuple[str, str, str | None, str], ...],
+    ]:
         catalog = self.inputs.catalog
         lowered_slots: list[_LoweredSlot] = []
-        discovered_dependencies: set[tuple[str, str, str, str]] = set()
+        discovered_dependencies: set[
+            tuple[str, str, str | None, str]
+        ] = set()
 
         for capability in self.backends:
             backend = capability.backend_id
@@ -519,17 +537,20 @@ class _GenerationSession:
                     )
                 )
                 discovered_dependencies.update(
-                    (
-                        dependency.primitive,
-                        dependency.source.base_tag,
-                        dependency.source.extension_isa,
-                        backend,
+                    _dependency_discovery_requests(
+                        callees,
+                        backend=backend,
+                        catalog=catalog,
+                        fallback_types=self.type_tags,
                     )
-                    for dependency in callees
-                    if catalog.primitives_named(dependency.primitive, unmasked=False)
                 )
 
-        return lowered_slots, tuple(sorted(discovered_dependencies))
+        return lowered_slots, tuple(
+            sorted(
+                discovered_dependencies,
+                key=lambda item: (item[0], item[1], item[2] or "", item[3]),
+            )
+        )
 
     def _record_lowering_diagnostics(
         self,
@@ -599,6 +620,46 @@ class _GenerationSession:
             for slot in lowered_specs
             if slot not in pruned
         )
+
+
+def _dependency_discovery_requests(
+    dependencies: frozenset[CallDependency],
+    *,
+    backend: str,
+    catalog: Catalog,
+    fallback_types: tuple[str, ...],
+) -> tuple[tuple[str, str, str | None, str], ...]:
+    """Project call identities into profile-scoped lowering worklist entries."""
+
+    requests: set[tuple[str, str, str | None, str]] = set()
+    for dependency in dependencies:
+        if not catalog.primitives_named(dependency.primitive, unmasked=False):
+            continue
+        source = dependency.source
+        requested_types = (
+            (source.base_tag,)
+            if source.base_tag is not None
+            else fallback_types
+        )
+        exact_extension = None
+        if is_concrete_call_dependency(dependency):
+            assert isinstance(source, VectorIdentity)
+            exact_extension = source.extension_isa
+        requests.update(
+            (
+                dependency.primitive,
+                type_tag,
+                exact_extension,
+                backend,
+            )
+            for type_tag in requested_types
+        )
+    return tuple(
+        sorted(
+            requests,
+            key=lambda item: (item[0], item[1], item[2] or "", item[3]),
+        )
+    )
 
 
 def _record_render_extensions(
@@ -759,18 +820,6 @@ def _requested_primitives(
     if request.primitives is not None:
         return request.primitives
     return tuple(sorted({primitive.name for primitive in catalog.primitives}))
-
-
-def _merge_benchmark_plans(
-    plans: tuple[BenchmarkProjectPlan, ...],
-) -> BenchmarkProjectPlan:
-    if not plans:
-        return EMPTY_BENCHMARK_PROJECT_PLAN
-    return BenchmarkProjectPlan(
-        profiles=tuple(profile for plan in plans for profile in plan.profiles),
-        diagnostics=tuple(diagnostic for plan in plans for diagnostic in plan.diagnostics),
-        coverage=tuple(entry for plan in plans for entry in plan.coverage),
-    )
 
 
 def _finalize(

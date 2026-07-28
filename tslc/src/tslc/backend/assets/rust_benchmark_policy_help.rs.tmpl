@@ -12,7 +12,7 @@
     println!("    TSL_RUST_BENCHMARK_CONTEXT='{context}' CARGO_INCREMENTAL=0 \\");
     println!("    RUSTFLAGS='{rustflags}' \\");
     println!(
-        "    cargo bench --profile bench --bench {BENCHMARK_TARGET} --no-default-features --features {CARGO_FEATURES} -- \\"
+        "    cargo bench --profile bench --bench {BENCHMARK_TARGET} --no-default-features -- \\"
     );
     println!("      --results \"$artifact_dir/results.jsonl\" \\");
     println!("      --summary \"$artifact_dir/summary.txt\" \\");
@@ -23,5 +23,5 @@
     println!("    RUSTFLAGS='{rustflags}' \\");
     println!("    TSL_RUST_VARIANT_POLICY_FILE=\"$artifact_dir/policy.json\" \\");
     println!(
-        "    cargo build --profile bench --no-default-features --features {CARGO_FEATURES}"
+        "    cargo build --profile bench --no-default-features"
     );

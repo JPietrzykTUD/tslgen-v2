@@ -194,7 +194,7 @@ fn reducer_self_test(options: &Options) -> Result<(), String> {
         rustc_workspace_wrapper: "",
         target_cpu: "self",
         target_features: "sse,sse2",
-        cargo_features: "SSE2;VARIANT_BENCHMARKS",
+        cargo_features: "",
         cargo_profile: "bench",
         opt_level: "3",
         debug_assertions: "false",

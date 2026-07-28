@@ -8,9 +8,11 @@
 
 #include <tsl.hpp>
 
+#include "multicolumn_sort_types.hpp"
+
 
 // Which side of the pivot the partition collects on the left.
-enum class TslPartitionMode { LESS_THAN, EQUAL_TO };
+enum class TslPartitionMode { BEFORE_PIVOT, EQUAL_TO };
 
 
 // -----------------------------------------------------------------------------
@@ -203,16 +205,29 @@ class TslPartitionReplayStep {
     std::size_t good_r_count;
   };
 
-  template <TslPartitionMode Mode>
+  template <
+    TslPartitionMode Mode,
+    TslSortOrder Order = TslSortOrder::ASCENDING
+  >
   static auto plan_from_keys(reg_param key_l, reg_param key_r, reg_param pivot_vec) -> stitch_plan {
     stitch_plan plan{};
-    if constexpr (Mode == TslPartitionMode::LESS_THAN) {
-      // keep < pivot on the left: left lanes >= pivot and right lanes < pivot are ill-placed
-      plan.bad_l_mask = tsl::greater_than_or_equal<DataSimdStyle>(key_l, pivot_vec);
-      plan.bad_r_mask = tsl::less_than<DataSimdStyle>(key_r, pivot_vec);
+    if constexpr (Mode == TslPartitionMode::BEFORE_PIVOT) {
+      if constexpr (Order == TslSortOrder::ASCENDING) {
+        // Keep < pivot on the left.
+        plan.bad_l_mask = tsl::greater_than_or_equal<DataSimdStyle>(key_l, pivot_vec);
+        plan.bad_r_mask = tsl::less_than<DataSimdStyle>(key_r, pivot_vec);
+      } else {
+        // Keep > pivot on the left.
+        plan.bad_l_mask = tsl::less_than_or_equal<DataSimdStyle>(key_l, pivot_vec);
+        plan.bad_r_mask = tsl::greater_than<DataSimdStyle>(key_r, pivot_vec);
+      }
     } else {
-      // keep == pivot on the left: left lanes > pivot and right lanes == pivot are ill-placed
-      plan.bad_l_mask = tsl::greater_than<DataSimdStyle>(key_l, pivot_vec);
+      // Keep == pivot on the left and values after the pivot on the right.
+      if constexpr (Order == TslSortOrder::ASCENDING) {
+        plan.bad_l_mask = tsl::greater_than<DataSimdStyle>(key_l, pivot_vec);
+      } else {
+        plan.bad_l_mask = tsl::less_than<DataSimdStyle>(key_l, pivot_vec);
+      }
       plan.bad_r_mask = tsl::equal<DataSimdStyle>(key_r, pivot_vec);
     }
     plan.good_l_mask = tsl::mask_binary_not<DataSimdStyle>(plan.bad_l_mask);
@@ -255,7 +270,10 @@ class TslPartitionReplayStep {
  public:
   // Produces the left/right writes for the keys and `column_count` payload
   // columns, using masks and counts derived solely from the keys.
-  template <TslPartitionMode Mode = TslPartitionMode::LESS_THAN>
+  template <
+    TslPartitionMode Mode = TslPartitionMode::BEFORE_PIVOT,
+    TslSortOrder Order = TslSortOrder::ASCENDING
+  >
   static void step(
     reg_param key_l,
     reg_param key_r,
@@ -268,7 +286,7 @@ class TslPartitionReplayStep {
     register_type * pay_write_l,
     register_type * pay_write_r
   ) {
-    auto const plan = plan_from_keys<Mode>(key_l, key_r, pivot_vec);
+    auto const plan = plan_from_keys<Mode, Order>(key_l, key_r, pivot_vec);
     apply(plan, key_l, key_r, key_write_l, key_write_r);
     for (std::size_t column = 0; column < column_count; ++column) {
       apply(plan, pay_l[column], pay_r[column], pay_write_l[column], pay_write_r[column]);

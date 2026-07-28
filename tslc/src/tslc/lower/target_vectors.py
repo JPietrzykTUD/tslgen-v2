@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from tslc.backend import translation_common
 from tslc.backend.translation import BackendDialect
-from tslc.catalog.model import RESULT_DIM_BASE, Catalog
+from tslc.catalog.model import RESULT_DIM_BASE, RESULT_DIM_VECTOR, Catalog
 from tslc.diagnostics import Diagnostic
 from tslc.lane_count import LaneCount
 from tslc.lower._diagnostics import (
@@ -58,9 +58,11 @@ def resolve_target_vector(
     expressed by the selected backend/support policy.
     """
 
-    if selected.primitive.result_target is None or selected.to_target is None:
+    if selected.primitive.result_target is None:
         return None
     dim, alias = selected.primitive.result_target
+    if dim == RESULT_DIM_VECTOR or selected.to_target is None:
+        return None
     to_target = selected.to_target
     if support.uses_sized_vector(selected.extension):
         return _resolve_sized_target(

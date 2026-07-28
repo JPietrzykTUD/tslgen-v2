@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
 from collections.abc import Mapping
+from dataclasses import replace
+from pathlib import Path
 
 from tslc.diagnostics import Diagnostic, Severity
 from tslc.output._verify_common import command_failure_diagnostic, missing_executable
@@ -13,6 +14,7 @@ from tslc.output._verify_runners import runner_prefix
 from tslc.output._verify_rust_config import (
     effective_rust_compiler,
     rust_environment,
+    rust_flags_environment_key,
     rust_linker,
     rust_target,
     rust_target_args,
@@ -24,11 +26,28 @@ from tslc.output.verify_drivers import (
 )
 from tslc.output.verify_model import (
     BuildCommand,
+    BuildCommandEnvironment,
     BuildCommandResult,
     BuildCommandRunner,
     BuildVerifierConfig,
     VerifyBackend,
     VerifyProfile,
+)
+_RUST_WARNING_FLAGS = (
+    "-Dwarnings",
+    "-Dinvalid-value",
+    "-Dprivate-interfaces",
+    "-Dprivate-bounds",
+)
+_RUSTDOC_WARNING_FLAGS = (
+    "-Dwarnings",
+    "-Drustdoc::broken-intra-doc-links",
+    "-Drustdoc::bare-urls",
+)
+_CLIPPY_WARNING_FLAGS = (
+    "-Awarnings",
+    "-Dclippy::correctness",
+    "-Dclippy::suspicious",
 )
 
 
@@ -165,8 +184,54 @@ def _prepare_rust_backend(
             commands=tuple(results),
             skipped=tuple(skipped),
         )
+    if config.run_quality_checks:
+        clippy = _rust_clippy_executable(config)
+        if missing_executable(clippy) is not None:
+            skipped.append(f"rust: optional Clippy component {clippy} not found")
+    host_dependent_profiles = tuple(
+        profile
+        for profile in backend.profiles
+        if profile.target_features and rust_target(profile, config) is None
+    )
+    host_target: str | None = None
+    if host_dependent_profiles:
+        host_query = BuildCommand(
+            backend_id="rust",
+            profile_name="_toolchain",
+            step="host-target",
+            argv=(compiler, "-vV"),
+            cwd=root,
+        )
+        result = runner(host_query)
+        results.append(result)
+        if result.returncode != 0:
+            skipped.extend(
+                _rust_host_target_failure_skip(profile, result)
+                for profile in host_dependent_profiles
+            )
+        else:
+            host_target = _rust_host_target(result.stdout)
+            if host_target is None:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-BUILD-VERIFY-RUST-HOST-TARGET",
+                        message=(
+                            "Rust compiler verbose version output did not contain "
+                            "a valid `host: <target>` line"
+                        ),
+                    )
+                )
+                skipped.extend(
+                    _rust_host_target_malformed_skip(profile)
+                    for profile in host_dependent_profiles
+                )
     target_profiles: list[VerifyProfile] = []
     for profile in backend.profiles:
+        if profile in host_dependent_profiles:
+            if host_target is None:
+                continue
+            profile = replace(profile, target=host_target)
         target = rust_target(profile, config)
         if target is None:
             target_profiles.append(profile)
@@ -237,10 +302,73 @@ def _rust_command_groups(
     groups: list[tuple[BuildCommand, ...]] = []
     for profile in backend.profiles:
         target_dir = project_root / "target" / profile.file_stem
+        cargo_profile_args = (
+            "--manifest-path",
+            str(manifest),
+            "--no-default-features",
+            *rust_target_args(profile, config),
+            "--target-dir",
+            str(target_dir),
+        )
+        if config.run_quality_checks:
+            groups.append(
+                (
+                    BuildCommand(
+                        backend_id="rust",
+                        profile_name=profile.profile_name,
+                        step="check-warnings",
+                        argv=("cargo", "check", *cargo_profile_args, "--all-targets"),
+                        cwd=root,
+                        env=_rust_lint_environment(
+                            profile,
+                            config,
+                            key="RUSTFLAGS",
+                            flags=_RUST_WARNING_FLAGS,
+                        ),
+                    ),
+                )
+            )
+            groups.append(
+                (
+                    BuildCommand(
+                        backend_id="rust",
+                        profile_name=profile.profile_name,
+                        step="rustdoc",
+                        argv=("cargo", "doc", *cargo_profile_args, "--no-deps"),
+                        cwd=root,
+                        env=_rust_lint_environment(
+                            profile,
+                            config,
+                            key="RUSTDOCFLAGS",
+                            flags=_RUSTDOC_WARNING_FLAGS,
+                        ),
+                    ),
+                )
+            )
+            clippy = _rust_clippy_executable(config)
+            if missing_executable(clippy) is None:
+                groups.append(
+                    (
+                        BuildCommand(
+                            backend_id="rust",
+                            profile_name=profile.profile_name,
+                            step="clippy",
+                            argv=(
+                                clippy,
+                                "clippy",
+                                *cargo_profile_args,
+                                "--all-targets",
+                                "--",
+                                *_CLIPPY_WARNING_FLAGS,
+                            ),
+                            cwd=root,
+                            env=rust_environment(profile, config),
+                        ),
+                    )
+                )
         # Build verification still uses `cargo test` so generated test targets
         # compile. Cross-target builds cannot execute those binaries natively, so
         # they use --no-run unless value-test mode has a runner follow-up.
-        features = profile.profile_name
         severity: Severity = "error"
         step = "test"
         extra_args: tuple[str, ...] = ()
@@ -248,11 +376,10 @@ def _rust_command_groups(
             step = "build-tests"
             extra_args = ("--no-run",)
         if config.run_value_tests:
-            # Value testing adds the opt-in `value_tests` feature (so `cargo test`
-            # compiles+runs the generated value tests); without it `tests/values.rs`
-            # is cfg'd empty. A value-mode failure is reported as a warning
+            # Value testing adds a verifier-owned cfg (so `cargo test`
+            # compiles+runs the generated value tests); without it
+            # `tests/values.rs` is cfg'd empty. A value-mode failure is reported as a warning
             # (report-then-promote), like the C++ ctest step.
-            features = f"{profile.profile_name},value_tests"
             severity = "warning"
             if runner_prefix(profile, config):
                 step = "build-tests"
@@ -268,15 +395,17 @@ def _rust_command_groups(
                     "--manifest-path",
                     str(manifest),
                     "--no-default-features",
-                    "--features",
-                    features,
                     *rust_target_args(profile, config),
                     "--target-dir",
                     str(target_dir),
                     *extra_args,
                 ),
                 cwd=root,
-                env=rust_environment(profile, config),
+                env=(
+                    _rust_environment_with_cfg(profile, config, "tsl_value_tests")
+                    if config.run_value_tests
+                    else rust_environment(profile, config)
+                ),
                 severity_on_failure=severity,
             )
         ]
@@ -289,12 +418,12 @@ def _rust_command_groups(
                     "cargo",
                     "build",
                     "--manifest-path",
-                    str(manifest),
-                    "--no-default-features",
-                    "--features",
-                    f"{profile.profile_name},{failure.target_name}",
-                    "--example",
-                    failure.target_name,
+                    str(
+                        project_root
+                        / "verify"
+                        / failure.target_name
+                        / "Cargo.toml"
+                    ),
                     *rust_target_args(profile, config),
                     "--target-dir",
                     str(target_dir),
@@ -307,6 +436,61 @@ def _rust_command_groups(
         )
         groups.append(tuple(commands))
     return tuple(groups)
+
+
+def _rust_environment_with_cfg(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+    cfg: str,
+) -> tuple[BuildCommandEnvironment, ...]:
+    environment = list(rust_environment(profile, config))
+    cfg_flag = f"--cfg {cfg}"
+    rustflags_key = rust_flags_environment_key(profile, config)
+    for index, item in enumerate(environment):
+        if item.key == rustflags_key:
+            environment[index] = BuildCommandEnvironment(
+                key=rustflags_key,
+                value=f"{item.value} {cfg_flag}",
+            )
+            break
+    else:
+        environment.append(
+            BuildCommandEnvironment(key=rustflags_key, value=cfg_flag)
+        )
+    return tuple(environment)
+
+
+def _rust_clippy_executable(config: BuildVerifierConfig) -> str:
+    return config.tool_path("rust-clippy") or "cargo-clippy"
+
+
+def _rust_lint_environment(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+    *,
+    key: str,
+    flags: tuple[str, ...],
+) -> tuple[BuildCommandEnvironment, ...]:
+    environment = list(rust_environment(profile, config))
+    effective_key = (
+        rust_flags_environment_key(profile, config)
+        if key == "RUSTFLAGS"
+        else key
+    )
+    suffix = " ".join(flags)
+    for index, item in enumerate(environment):
+        if item.key != effective_key:
+            continue
+        environment[index] = BuildCommandEnvironment(
+            key=effective_key,
+            value=f"{item.value} {suffix}",
+        )
+        break
+    else:
+        environment.append(
+            BuildCommandEnvironment(key=effective_key, value=suffix)
+        )
+    return tuple(environment)
 
 
 def _rust_emulated_test_commands(
@@ -465,6 +649,41 @@ def _rust_preflight_skip(result: BuildCommandResult) -> str:
     return (
         "rust: Rust compiler preflight failed with exit code "
         f"{result.returncode}: {command_text}{suffix}"
+    )
+
+
+def _rust_host_target(stdout: str) -> str | None:
+    for line in stdout.splitlines():
+        key, separator, value = line.partition(":")
+        if separator and key.strip() == "host":
+            target = value.strip()
+            if target and all(
+                character.isalnum() or character in {"-", "_", "."}
+                for character in target
+            ):
+                return target
+    return None
+
+
+def _rust_host_target_failure_skip(
+    profile: VerifyProfile,
+    result: BuildCommandResult,
+) -> str:
+    command_text = " ".join(result.command.argv)
+    detail = result.stderr.strip() or result.stdout.strip()
+    suffix = f": {detail}" if detail else ""
+    return (
+        f"rust: profile {profile.profile_name} requires host-target discovery; "
+        "Rust host-target query failed with exit code "
+        f"{result.returncode}: {command_text}{suffix}"
+    )
+
+
+def _rust_host_target_malformed_skip(profile: VerifyProfile) -> str:
+    return (
+        f"rust: profile {profile.profile_name} requires host-target discovery; "
+        "Rust compiler verbose version output did not contain a valid "
+        "`host: <target>` line"
     )
 
 

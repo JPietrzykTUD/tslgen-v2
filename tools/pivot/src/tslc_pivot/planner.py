@@ -23,7 +23,11 @@ from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER, scalar_bit_width_or_def
 from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
 from tslc.ir.scan import scan
-from tslc.lower.dependencies import CallDependency, VectorIdentity
+from tslc.lower.dependencies import (
+    CallDependency,
+    VectorIdentity,
+    is_concrete_call_dependency,
+)
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc_pivot.body_ir import (
     PivotBodyBuildResult,
@@ -393,6 +397,16 @@ class PivotPlanner:
         source: SourceSpan | None,
         argument_count: int,
     ) -> SelectedImplementation:
+        if not is_concrete_call_dependency(dependency):
+            raise _PivotUnsupported(
+                "PIVOT cannot inline a symbolic SIMD call dependency",
+                source or caller.implementation.body_source,
+            )
+        assert isinstance(dependency.source, VectorIdentity)
+        assert dependency.target is None or isinstance(
+            dependency.target,
+            VectorIdentity,
+        )
         selection_key = (
             profile.family,
             profile.features,

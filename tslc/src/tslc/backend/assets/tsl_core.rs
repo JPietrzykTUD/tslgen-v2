@@ -32,10 +32,18 @@ pub struct U32Arg<const VALUE: u32>;
 pub struct U64Arg<const VALUE: u64>;
 pub struct USizeArg<const VALUE: usize>;
 
-pub trait SimdVector {
+// Public because generated lower-level APIs use these traits as bounds. The
+// private supertraits keep their representation contracts compiler-owned.
+pub(crate) mod representation_sealed {
+    pub trait SimdVector {}
+    pub trait StaticSimdVector {}
+}
+
+#[allow(private_bounds)] // intentional sealed-trait boundary
+pub trait SimdVector: representation_sealed::SimdVector {
     type BaseType;
     type Extension;
-    type RegisterType;
+    type RegisterType: Copy;
     type MaskType;
     // The integral mask (to_integral's result): the mask packed into an unsigned integer,
     // one bit per lane (the native __mmaskN, or a lane-sized uint on lane-bitmask ISAs).
@@ -72,7 +80,8 @@ pub trait SimdVector {
     }
 }
 
-pub trait StaticSimdVector: SimdVector {
+#[allow(private_bounds)] // intentional sealed-trait boundary
+pub trait StaticSimdVector: SimdVector + representation_sealed::StaticSimdVector {
     const ELEMENT_COUNT: usize;
 }
 
@@ -81,7 +90,9 @@ pub struct Scalar;
 
 pub struct Simd<T, Ext>(PhantomData<(T, Ext)>);
 
-impl<T> SimdVector for Simd<T, Scalar> {
+impl<T> representation_sealed::SimdVector for Simd<T, Scalar> {}
+
+impl<T: Copy> SimdVector for Simd<T, Scalar> {
     type BaseType = T;
     type Extension = Scalar;
     type RegisterType = T;
@@ -97,7 +108,9 @@ impl<T> SimdVector for Simd<T, Scalar> {
     }
 }
 
-impl<T> StaticSimdVector for Simd<T, Scalar> {
+impl<T> representation_sealed::StaticSimdVector for Simd<T, Scalar> {}
+
+impl<T: Copy> StaticSimdVector for Simd<T, Scalar> {
     const ELEMENT_COUNT: usize = 1;
 }
 
@@ -114,7 +127,9 @@ pub struct Generic<const LANES: usize>;
 // CONSTRUCTION for everything tslc emits: size-changing bodies are monomorphized over the 128-bit
 // `size_bits` ladder, and the smoke/value harnesses instantiate the `LANES`-parametric bodies at a
 // 128-bit-multiple lane count. Only a hand-written `Simd<u8, Generic<3>>` would violate it, unchecked.
-impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
+impl<T, const LANES: usize> representation_sealed::SimdVector for Simd<T, Generic<LANES>> {}
+
+impl<T: Copy, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
     type BaseType = T;
     type Extension = Generic<LANES>;
     type RegisterType = array_type<T, LANES>;
@@ -132,7 +147,12 @@ impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
     }
 }
 
-impl<T, const LANES: usize> StaticSimdVector for Simd<T, Generic<LANES>> {
+impl<T, const LANES: usize> representation_sealed::StaticSimdVector
+    for Simd<T, Generic<LANES>>
+{
+}
+
+impl<T: Copy, const LANES: usize> StaticSimdVector for Simd<T, Generic<LANES>> {
     const ELEMENT_COUNT: usize = LANES;
 }
 
@@ -150,6 +170,14 @@ pub struct ArrayStorage<T, const N: usize> {
 }
 
 impl<T, const N: usize> ArrayStorage<T, N> {
+    pub(crate) fn from_array(storage: [T; N]) -> Self {
+        Self { storage }
+    }
+
+    pub(crate) fn into_array(self) -> [T; N] {
+        self.storage
+    }
+
     pub fn data(&mut self) -> *mut T {
         self.as_mut_ptr()
     }
@@ -195,11 +223,49 @@ impl<T: Copy + Default, const N: usize> Default for ArrayStorage<T, N> {
 // that call `helper<...>`; `arith_add` is the reductions' accumulate step.
 // Pointer-offset helpers used by the generic vector's element-wise load/store loops. Our
 // pointer kind is `*mut`, so both take it; callers deref inside an `unsafe`-framed body.
-// Type-punning bit reinterpret (`cast<bitcast>` / value `cast<reinterpret>`): reinterpret
-// the object representation as a same-sized type. Counterpart to C++ `tsl::bit_cast`; the
-// `assert_eq!` makes the size precondition a hard error rather than UB.
-pub fn bit_cast<From, To>(value: From) -> To {
+// Implemented only for compiler-known scalar, array, and generated register
+// representations where every bit pattern is a valid value. Concrete register
+// impls are appended from the typed Rust vector-registration plan.
+/// # Safety
+///
+/// Implementors must accept every possible bit pattern of their size as a
+/// valid value.
+pub(crate) unsafe trait ValidBitPattern: Copy {}
+
+macro_rules! valid_scalar_bit_patterns {
+    ($($ty:ty),* $(,)?) => {
+        // SAFETY: the admitted numeric scalar types have no invalid bit patterns.
+        $(unsafe impl ValidBitPattern for $ty {})*
+    };
+}
+
+valid_scalar_bit_patterns!(i8, i16, i32, i64, u8, u16, u32, u64, f32, f64);
+
+// SAFETY: an array is valid for every element representation admitted by its
+// `ValidBitPattern` element bound.
+unsafe impl<T: ValidBitPattern, const N: usize> ValidBitPattern for ArrayStorage<T, N> {}
+
+// Safe only because the destination marker proves that every copied bit
+// pattern is valid. Lowering separately proves the source and destination
+// sizes from typed scalar/register facts; the assertion is a defense in depth.
+pub(crate) fn bit_cast<From: Copy, To: ValidBitPattern>(value: From) -> To {
     assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());
+    // SAFETY: sizes are equal and `To: ValidBitPattern` admits every possible
+    // source representation. `From: Copy` excludes ownership duplication.
+    unsafe { core::mem::transmute_copy(&value) }
+}
+
+// Explicit internal boundary for source-authored value `cast<reinterpret>`.
+// The selected implementation must prove that the concrete destination accepts
+// the source representation; lowering always frames calls in an unsafe block.
+/// # Safety
+///
+/// The selected implementation must provide a source value with exactly the
+/// destination size. `To: ValidBitPattern` supplies the validity proof.
+pub(crate) unsafe fn reinterpret_unchecked<From: Copy, To: ValidBitPattern>(value: From) -> To {
+    assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());
+    // SAFETY: this function's contract requires the compiler-selected pair to
+    // have equal size and a valid destination representation.
     unsafe { core::mem::transmute_copy(&value) }
 }
 
@@ -415,7 +481,7 @@ pub enum BaseUi64 {}
 pub enum BaseF32 {}
 pub enum BaseF64 {}
 
-pub trait BaseTypeDispatch {
+pub trait BaseTypeDispatch: Copy + 'static {
     type Key;
 }
 
@@ -469,6 +535,10 @@ impl_tsl_byte_count!(i8, i16, i32, i64, u8, u16, u32, u64, f32, f64);
 /// `std::memcpy` counterpart: copy `count` bytes from `src` to `dst`. Byte-addressed
 /// (`*const u8`/`*mut u8`), so a `void`-cast source/dest plus a base-typed byte count lower
 /// identically to the C++ `mem_copy` translate template.
+///
+/// # Safety
+///
+/// `src` and `dst` must be valid for `count` bytes and must not overlap.
 #[inline]
 pub unsafe fn mem_copy<C: TslByteCount>(dst: *mut u8, src: *const u8, count: C) {
     core::ptr::copy_nonoverlapping(src, dst, count.tsl_byte_count());
@@ -487,6 +557,11 @@ extern "C" {
 
 /// `std::malloc` counterpart for the `allocate` free function: a `count_bytes` block as an
 /// untyped pointer (null on failure, per the C contract).
+///
+/// # Safety
+///
+/// The returned pointer must be released exactly once with [`mem_free`] and
+/// must not be dereferenced beyond the allocated byte count.
 #[inline]
 pub unsafe fn mem_alloc(count_bytes: usize) -> *mut core::ffi::c_void {
     malloc(count_bytes)
@@ -495,6 +570,11 @@ pub unsafe fn mem_alloc(count_bytes: usize) -> *mut core::ffi::c_void {
 /// `std::aligned_alloc` counterpart for `allocate_aligned`. Argument order mirrors the
 /// translate template (`alignment` then `count_bytes`); `aligned_alloc` requires the size be a
 /// multiple of the alignment.
+///
+/// # Safety
+///
+/// `alignment` must satisfy the C `aligned_alloc` contract. The returned
+/// pointer must be released exactly once with [`mem_free`].
 #[inline]
 pub unsafe fn mem_alloc_aligned(alignment: usize, count_bytes: usize) -> *mut core::ffi::c_void {
     aligned_alloc(alignment, count_bytes)
@@ -503,6 +583,11 @@ pub unsafe fn mem_alloc_aligned(alignment: usize, count_bytes: usize) -> *mut co
 /// `std::free` counterpart for `deallocate`: frees a malloc/aligned_alloc block by pointer
 /// alone, so no `Layout` reconstruction is needed. (`free` reclaims `aligned_alloc` memory on
 /// conforming platforms.)
+///
+/// # Safety
+///
+/// `ptr` must be null or a live pointer returned by [`mem_alloc`] or
+/// [`mem_alloc_aligned`], and it must not be used after this call.
 #[inline]
 pub unsafe fn mem_free(ptr: *mut core::ffi::c_void) {
     free(ptr);
@@ -526,7 +611,7 @@ impl_tsl_bits!(i8, i16, i32, i64, u8, u16, u32, u64, f32, f64);
 /// Format a lane array into a text buffer (the `to_ostream` body). `modifier` selects the base
 /// (0 = binary, 16 = hex, 8 = octal, else decimal); the C++ `tsl::ostream_write` counterpart.
 pub fn ostream_write<T: TslBits, const N: usize>(
-    out: &mut String,
+    out: &mut alloc::string::String,
     arr: &ArrayStorage<T, N>,
     modifier: i32,
 ) {
@@ -572,11 +657,22 @@ pub mod detail {
     pub mod helpers {
     use super::super::*;
 
+    pub fn require_same_lanes(source_lanes: usize, target_lanes: usize) {
+        assert_eq!(
+            source_lanes,
+            target_lanes,
+            "lane-preserving conversion requires equal source and target lane counts"
+        );
+    }
+
     #[cfg(target_arch = "x86_64")]
     #[target_feature(enable = "rdrand")]
+    /// # Safety
+    ///
+    /// `out` must be non-null, properly aligned, and valid to write one `u64`.
     pub unsafe fn random_step_u64(out: *mut u64) -> usize {
         let mut value = 0u64;
-        let status = unsafe { core::arch::x86_64::_rdrand64_step(&mut value) };
+        let status = core::arch::x86_64::_rdrand64_step(&mut value);
         if status != 0 {
             unsafe { *out = value };
         }
@@ -663,6 +759,93 @@ pub mod detail {
     // runs in the matching branch (so sizes always agree). Counterpart to C++ `tsl::saturating_cast`.
     fn type_is_same<T: 'static, U: 'static>() -> bool {
         core::any::TypeId::of::<T>() == core::any::TypeId::of::<U>()
+    }
+    macro_rules! scalar_as_target {
+        ($value:expr) => {{
+            if type_is_same::<U, i8>() {
+                let result = $value as i8;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, u8>() {
+                let result = $value as u8;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, i16>() {
+                let result = $value as i16;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, u16>() {
+                let result = $value as u16;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, i32>() {
+                let result = $value as i32;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, u32>() {
+                let result = $value as u32;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, i64>() {
+                let result = $value as i64;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, u64>() {
+                let result = $value as u64;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, f32>() {
+                let result = $value as f32;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+            if type_is_same::<U, f64>() {
+                let result = $value as f64;
+                return unsafe { core::mem::transmute_copy(&result) };
+            }
+        }};
+    }
+    pub fn scalar_as_cast_value<T: Copy + 'static, U: Copy + 'static>(value: T) -> U {
+        if type_is_same::<T, i8>() {
+            let source = unsafe { core::mem::transmute_copy::<T, i8>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, u8>() {
+            let source = unsafe { core::mem::transmute_copy::<T, u8>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, i16>() {
+            let source = unsafe { core::mem::transmute_copy::<T, i16>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, u16>() {
+            let source = unsafe { core::mem::transmute_copy::<T, u16>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, i32>() {
+            let source = unsafe { core::mem::transmute_copy::<T, i32>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, u32>() {
+            let source = unsafe { core::mem::transmute_copy::<T, u32>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, i64>() {
+            let source = unsafe { core::mem::transmute_copy::<T, i64>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, u64>() {
+            let source = unsafe { core::mem::transmute_copy::<T, u64>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, f32>() {
+            let source = unsafe { core::mem::transmute_copy::<T, f32>(&value) };
+            scalar_as_target!(source);
+        }
+        if type_is_same::<T, f64>() {
+            let source = unsafe { core::mem::transmute_copy::<T, f64>(&value) };
+            scalar_as_target!(source);
+        }
+        panic!("unsupported scalar-as cast")
     }
     fn saturating_from_i128<U: Copy + 'static>(v: i128) -> U {
         if type_is_same::<U, i8>() {

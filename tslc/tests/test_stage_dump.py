@@ -62,6 +62,27 @@ def test_catalog_lists_primitive_and_implementations(
     assert all(p["implementations"] for p in payload["primitives"])
 
 
+def test_catalog_dumps_language_neutral_operation_and_domain_contracts(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    text, payload, errors = _run(
+        "catalog",
+        data_root,
+        machine_profiles_path,
+        primitive="load",
+    )
+
+    assert errors == []
+    assert "operation: load" in text
+    assert "memory: access=read  addressing=contiguous" in text
+    for primitive in payload["primitives"]:
+        assert primitive["operation"]["name"] == "load"
+        assert primitive["memory"] == {
+            "access": "read",
+            "addressing": "contiguous",
+        }
+
+
 def test_catalog_unknown_primitive_errors(
     data_root: Path, machine_profiles_path: Path
 ) -> None:
@@ -138,6 +159,38 @@ def test_lowered_shows_resolved_intrinsic_and_register(
     assert spec["register"] == "typename tsl::simd<int32_t, tsl::avx2>::register_type"
     assert spec["body"] == "return _mm256_add_epi32(left, right);"
     assert "epi32" in text
+
+
+def test_lowered_dumps_carried_primitive_semantics(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    text, payload, errors = _run(
+        "lowered",
+        data_root,
+        machine_profiles_path,
+        profile="avx2",
+        backend="rust",
+        primitive="shift_left",
+        type_tag="si32",
+        extension="avx2",
+    )
+
+    assert errors == []
+    runtime = next(
+        spec
+        for spec in payload["specializations"]
+        if spec["slot"].startswith("shift_left<avx2")
+        and spec["param_kinds"] == ["v", "s"]
+    )
+    semantics = runtime["primitive_semantics"]
+    assert semantics["overload"] == {
+        "axis": "count_distribution",
+        "value": "uniform",
+        "is_primary_value": True,
+    }
+    assert semantics["operation"]["name"] == "shift_left"
+    assert "overload=count_distribution:uniform  primary=true" in text
+    assert "operation=shift_left" in text
 
 
 def test_lowered_rust_backend_differs(data_root: Path, machine_profiles_path: Path) -> None:

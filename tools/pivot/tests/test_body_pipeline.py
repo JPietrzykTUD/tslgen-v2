@@ -13,7 +13,11 @@ from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
 from tslc.diagnostics import SourceSpan
 from tslc.ir.scan import scan
-from tslc.lower.dependencies import CallDependency, VectorIdentity
+from tslc.lower.dependencies import (
+    CallDependency,
+    GenericVectorReference,
+    VectorIdentity,
+)
 from tslc.lower.lowerer import Lowerer
 from tslc.select.selector import SelectedImplementation, Selector
 from tslc.target_text import (
@@ -661,6 +665,57 @@ def test_unresolved_explicit_call_vector_is_rejected_by_pivot_lowering(
     assert tuple(item.code for item in standard.diagnostics) == (
         "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
     )
+    assert tuple(item.code for item in body.diagnostics) == (
+        "TSL-PIVOT-UNSUPPORTED-CALL-TYPEARGS",
+    )
+
+
+def test_symbolic_call_vector_is_rejected_before_pivot_capture(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    slot = next(
+        item
+        for item in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["avx2"],
+            "permute_lanes",
+            ("si32",),
+            backend_id="cpp",
+        )
+        .selected
+        if item.extension.isa_name == "avx2"
+        and any(param.kind == "simd_type" for param in item.primitive.generic_params)
+    )
+    source = scan(
+        "complete(call<primitive=to_array[IndicesType]>(indexes));",
+        source=_SOURCE,
+    )
+    backend = create_backend_dialect(catalog, PivotLanguage.CPP.value)
+
+    standard = Lowerer().lower(slot, catalog, backend, body_segments=source)
+
+    assert standard.specialization is not None, standard.diagnostics
+    symbolic = {
+        origin.dependency.source
+        for origin in standard.specialization.call_dependency_origins
+        if isinstance(
+            origin.dependency.source,
+            GenericVectorReference,
+        )
+    }
+    assert len(symbolic) == 1
+    assert isinstance(next(iter(symbolic)), GenericVectorReference)
+    assert next(iter(symbolic)).parameter_name == "IndicesType"
+
+    body_scope = PivotBodyCaptureScope("test")
+    with body_scope.capture(tuple(slot.primitive.parameters), _SOURCE):
+        body = Lowerer(
+            region_lowerers=pivot_capture_region_lowerers(body_scope)
+        ).lower(slot, catalog, backend, body_segments=source)
+
+    assert body.specialization is None
     assert tuple(item.code for item in body.diagnostics) == (
         "TSL-PIVOT-UNSUPPORTED-CALL-TYPEARGS",
     )

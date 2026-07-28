@@ -11,21 +11,29 @@ from tslc.diagnostics import SourceSpan
 
 
 class ArithmeticOperation(StrEnum):
+    ADDITION = "addition"
     DIVISION = "division"
+    MULTIPLICATION = "multiplication"
+    NEGATION = "negation"
     REMAINDER = "remainder"
+    SUBTRACTION = "subtraction"
 
 
 class ArithmeticOperandRole(StrEnum):
     DIVISOR = "divisor"
+    PRIMARY = "primary"
+    SECONDARY = "secondary"
 
 
 class ArithmeticGuarantee(StrEnum):
+    INTEGER_WRAPPING = "integer_wrapping"
     INTEGER_QUOTIENT_TOWARD_ZERO = "integer_quotient_toward_zero"
     INTEGER_REMAINDER_HAS_DIVIDEND_SIGN = "integer_remainder_has_dividend_sign"
     INTEGER_ZERO_DIVISOR_FAILS = "integer_zero_divisor_fails"
     SIGNED_MIN_DIV_NEG_ONE_RETURNS_MIN = "signed_min_div_neg_one_returns_min"
     SIGNED_MIN_REM_NEG_ONE_RETURNS_ZERO = "signed_min_rem_neg_one_returns_zero"
     FLOATING_DIVISION_IEEE754_VALUES = "floating_division_ieee754_values"
+    FLOATING_SIGN_BIT_TOGGLE = "floating_sign_bit_toggle"
     FLOATING_REMAINDER_TRUNCATING = "floating_remainder_truncating"
     INACTIVE_LANES_DO_NOT_PARTICIPATE = "inactive_lanes_do_not_participate"
 
@@ -42,12 +50,14 @@ class ArithmeticMaskRequirement(StrEnum):
 
 
 class ArithmeticConflictGroup(StrEnum):
+    INTEGER_OVERFLOW = "integer_overflow"
     INTEGER_QUOTIENT_ROUNDING = "integer_quotient_rounding"
     INTEGER_REMAINDER_SIGN = "integer_remainder_sign"
     INTEGER_ZERO_DIVISOR = "integer_zero_divisor"
     SIGNED_DIVISION_OVERFLOW = "signed_division_overflow"
     SIGNED_REMAINDER_OVERFLOW = "signed_remainder_overflow"
     FLOATING_DIVISION = "floating_division"
+    FLOATING_NEGATION = "floating_negation"
     FLOATING_REMAINDER = "floating_remainder"
     MASKED_PARTICIPATION = "masked_participation"
 
@@ -134,10 +144,14 @@ class ArithmeticContract:
 
 ARITHMETIC_OPERATION_DESCRIPTIONS: Mapping[ArithmeticOperation, str] = MappingProxyType(
     {
+        ArithmeticOperation.ADDITION: "Produces the lane-wise sum of two values.",
         ArithmeticOperation.DIVISION: "Produces a quotient from a dividend and divisor.",
+        ArithmeticOperation.MULTIPLICATION: "Produces the lane-wise product of two values.",
+        ArithmeticOperation.NEGATION: "Negates each lane of one value.",
         ArithmeticOperation.REMAINDER: (
             "Produces the remainder associated with a dividend and divisor."
         ),
+        ArithmeticOperation.SUBTRACTION: "Produces the lane-wise difference of two values.",
     }
 )
 
@@ -146,12 +160,25 @@ ARITHMETIC_OPERAND_ROLE_DESCRIPTIONS: Mapping[ArithmeticOperandRole, str] = (
         {
             ArithmeticOperandRole.DIVISOR: (
                 "The declared operand used as the divisor for division or remainder."
-            )
+            ),
+            ArithmeticOperandRole.PRIMARY: (
+                "The primary arithmetic value and natural method receiver."
+            ),
+            ArithmeticOperandRole.SECONDARY: "The second arithmetic value operand.",
         }
     )
 )
 
 ARITHMETIC_DIVISOR_KINDS = frozenset({"v", "s", "sImm"})
+ARITHMETIC_OPERAND_ROLE_KINDS: Mapping[ArithmeticOperandRole, frozenset[str]] = (
+    MappingProxyType(
+        {
+            ArithmeticOperandRole.DIVISOR: ARITHMETIC_DIVISOR_KINDS,
+            ArithmeticOperandRole.PRIMARY: frozenset({"v"}),
+            ArithmeticOperandRole.SECONDARY: frozenset({"v", "s", "sImm"}),
+        }
+    )
+)
 ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER = "TSL_ARITH_INTEGER_IMMEDIATE_ZERO"
 
 
@@ -180,15 +207,32 @@ def _spec(
 
 _DIVISION = frozenset({ArithmeticOperation.DIVISION})
 _REMAINDER = frozenset({ArithmeticOperation.REMAINDER})
+_NEGATION = frozenset({ArithmeticOperation.NEGATION})
 _DIVISION_OR_REMAINDER = frozenset(
     {ArithmeticOperation.DIVISION, ArithmeticOperation.REMAINDER}
 )
 _DIVISOR = frozenset({ArithmeticOperandRole.DIVISOR})
+_WRAPPING_OPERATIONS = frozenset(
+    {
+        ArithmeticOperation.ADDITION,
+        ArithmeticOperation.MULTIPLICATION,
+        ArithmeticOperation.NEGATION,
+        ArithmeticOperation.SUBTRACTION,
+    }
+)
 
 ARITHMETIC_GUARANTEE_SPECS: Mapping[
     ArithmeticGuarantee, ArithmeticGuaranteeSpec
 ] = MappingProxyType(
     {
+        ArithmeticGuarantee.INTEGER_WRAPPING: _spec(
+            ArithmeticGuarantee.INTEGER_WRAPPING,
+            "Integer results wrap modulo the lane width.",
+            any_operations=_WRAPPING_OPERATIONS,
+            domain=ArithmeticNumericDomain.INTEGER,
+            roles=frozenset({ArithmeticOperandRole.PRIMARY}),
+            conflict=ArithmeticConflictGroup.INTEGER_OVERFLOW,
+        ),
         ArithmeticGuarantee.INTEGER_QUOTIENT_TOWARD_ZERO: _spec(
             ArithmeticGuarantee.INTEGER_QUOTIENT_TOWARD_ZERO,
             "Integer quotients discard the fractional part toward zero.",
@@ -237,6 +281,14 @@ ARITHMETIC_GUARANTEE_SPECS: Mapping[
             roles=_DIVISOR,
             conflict=ArithmeticConflictGroup.FLOATING_DIVISION,
         ),
+        ArithmeticGuarantee.FLOATING_SIGN_BIT_TOGGLE: _spec(
+            ArithmeticGuarantee.FLOATING_SIGN_BIT_TOGGLE,
+            "Floating results differ only by the sign bit, preserving all other bits.",
+            all_operations=_NEGATION,
+            domain=ArithmeticNumericDomain.FLOATING,
+            roles=frozenset({ArithmeticOperandRole.PRIMARY}),
+            conflict=ArithmeticConflictGroup.FLOATING_NEGATION,
+        ),
         ArithmeticGuarantee.FLOATING_REMAINDER_TRUNCATING: _spec(
             ArithmeticGuarantee.FLOATING_REMAINDER_TRUNCATING,
             "Floating remainder uses a truncating quotient with fmod-style values.",
@@ -271,6 +323,7 @@ __all__ = (
     "ARITHMETIC_DIVISOR_KINDS",
     "ARITHMETIC_GUARANTEE_SPECS",
     "ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER",
+    "ARITHMETIC_OPERAND_ROLE_KINDS",
     "ARITHMETIC_OPERAND_ROLE_DESCRIPTIONS",
     "ARITHMETIC_OPERATION_DESCRIPTIONS",
     "ArithmeticConflictGroup",

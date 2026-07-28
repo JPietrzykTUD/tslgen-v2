@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import Catalog, TestComparison as CaseComparison
 from tslc.catalog.validation.schema_validation import validate_parsed_documents
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import Diagnostic
@@ -29,6 +29,14 @@ def test_add_tests_are_promoted(catalog: Catalog) -> None:
     assert [a.kind for a in basic.inputs] == ["vector", "vector"]
     assert basic.inputs[0].values == ("1", "2", "3", "4", "5", "6", "7", "8")
     assert basic.expected == ("9", "9", "9", "9", "9", "9", "9", "9")
+
+
+def test_neg_bitwise_comparison_is_promoted(catalog: Catalog) -> None:
+    neg = _first(catalog, "neg", masked=False)
+    exact = next(test for test in neg.tests if test.name == "neg_f32_float_sign_bits")
+
+    assert exact.comparison is CaseComparison.BITWISE
+    assert "-NAN" in exact.expected
 
 
 def test_masked_add_routes_mask_arg(catalog: Catalog) -> None:
@@ -240,6 +248,25 @@ def test_unknown_test_role_is_diagnosed() -> None:
         "case {inputs [[1]], expected [1]}}\n"
     )
     assert "TSL-CATALOG-INVALID-ENUM" in codes
+
+
+def test_unknown_test_comparison_is_diagnosed() -> None:
+    codes = _diagnostics(
+        "  tests:\n"
+        '    - {comparison approximate, tags [basic], type "si32", '
+        "case {inputs [[1]], expected [1]}}\n"
+    )
+    assert "TSL-CATALOG-INVALID-ENUM" in codes
+
+
+def test_bitwise_comparison_rejects_non_vector_only_shape() -> None:
+    codes = _diagnostics_for_source(
+        "prim<s:=v> first(data):\n"
+        "  tests:\n"
+        '    - {comparison bitwise, tags [basic], type "si32", '
+        "case {inputs [[1]], expected 1}}\n"
+    )
+    assert "TSL-CATALOG-TEST-BITWISE-COMPARISON-SHAPE" in codes
 
 
 def test_well_formed_tests_have_no_diagnostics() -> None:

@@ -1,0 +1,73 @@
+# syntax=docker/dockerfile:1
+
+# `dev_base` is supplied through compose.yaml as an additional build context.
+FROM dev_base
+
+ARG USERNAME=developer
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+USER root
+
+# Install GitHub CLI using GitHub's official Debian/Ubuntu repository.
+RUN set -eux; \
+    mkdir -p -m 0755 /etc/apt/keyrings; \
+    curl -fsSL \
+        https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+        -o /etc/apt/keyrings/githubcli-archive-keyring.gpg; \
+    chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg; \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+        > /etc/apt/sources.list.d/github-cli.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends gh; \
+    gh --version; \
+    rm -rf /var/lib/apt/lists/*
+
+# Create a non-root development user matching the host UID/GID.
+RUN set -eux; \
+    if getent group "${USER_GID}" >/dev/null; then \
+        EXISTING_GROUP="$(getent group "${USER_GID}" | cut -d: -f1)"; \
+    else \
+        groupadd --gid "${USER_GID}" "${USERNAME}"; \
+        EXISTING_GROUP="${USERNAME}"; \
+    fi; \
+    useradd \
+        --uid "${USER_UID}" \
+        --gid "${EXISTING_GROUP}" \
+        --create-home \
+        --shell /bin/bash \
+        "${USERNAME}"; \
+    echo "${USERNAME} ALL=(root) NOPASSWD:ALL" \
+        > "/etc/sudoers.d/${USERNAME}"; \
+    chmod 0440 "/etc/sudoers.d/${USERNAME}"
+
+ENV HOME="/home/${USERNAME}"
+
+# Keep the Codex executable and its state in the same persistent volume.
+ENV CODEX_HOME="${HOME}/.codex"
+ENV CODEX_INSTALL_DIR="${CODEX_HOME}/bin"
+
+ENV PATH="${CODEX_INSTALL_DIR}:${HOME}/.local/bin:${PATH}"
+
+# Prepare persistent configuration directories.
+RUN install -d \
+        -o "${USER_UID}" \
+        -g "${USER_GID}" \
+        "${HOME}/.codex" \
+        "${HOME}/.codex/bin" \
+        "${HOME}/.config" \
+        "${HOME}/.config/gh" \
+        /workspace
+
+COPY --chmod=0755 \
+    .devcontainer/start-dev.sh \
+    /usr/local/bin/start-dev
+
+WORKDIR /workspace
+
+USER "${USERNAME}"
+
+ENTRYPOINT ["/usr/local/bin/start-dev"]
+CMD ["sleep", "infinity"]

@@ -104,6 +104,7 @@ def plan_case(
         expectation=ValueTestExpectation(
             values=case.expected if expected is None else expected,
             text=text_expected,
+            comparison=case.comparison,
         ),
         invocation=ValueTestInvocation(
             result_kind=specs[0].result_kind if result_kind is None else result_kind,
@@ -165,6 +166,30 @@ def repr_cast_match(
             and spec.type_tag == case.type_tag
             and spec.target is not None
             and spec.target.base_tag == case.to_type
+        ),
+        None,
+    )
+
+
+def lane_convert_match(
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> LoweredSpecialization | None:
+    if case.to_type is None or case.lanes is None:
+        return None
+    return next(
+        (
+            spec
+            for spec in specs
+            if spec.type_tag == case.type_tag
+            and spec.result_vector_param is not None
+            and spec.param_kinds == ("v",)
+            and (case.extension is None or spec.extension_name == case.extension)
+            and any(
+                param.name == spec.result_vector_param
+                and param.base_type_binding == case.to_type
+                for param in spec.type_params
+            )
         ),
         None,
     )
@@ -357,6 +382,7 @@ __all__ = (
     "immediate_value",
     "inferred_mask_lanes",
     "load_convert_match",
+    "lane_convert_match",
     "mask_inputs",
     "maskish_inputs",
     "plan_case",

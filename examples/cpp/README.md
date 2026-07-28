@@ -12,7 +12,7 @@ its `cpp/` project through `FetchContent`:
 
 ```bash
 ./dev.sh generate \
-  --primitives add,mul,hadd,less_than,set1,blend \
+  --primitives add,mul,hadd,less_than,set1,select \
   --profiles scalar \
   --backends cpp \
   --types si32 \

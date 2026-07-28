@@ -7,8 +7,8 @@ from collections.abc import Iterable
 from difflib import get_close_matches
 
 from tslc.catalog.arithmetic import (
-    ARITHMETIC_DIVISOR_KINDS,
     ARITHMETIC_GUARANTEE_SPECS,
+    ARITHMETIC_OPERAND_ROLE_KINDS,
     ArithmeticConflictGroup,
     ArithmeticContract,
     ArithmeticGuarantee,
@@ -145,6 +145,42 @@ def build_arithmetic_contract(
         diagnostics,
     )
     roles = frozenset(binding.role for binding in bindings)
+    required_roles: set[ArithmeticOperandRole] = set()
+    for operation in operations:
+        if operation is ArithmeticOperation.NEGATION:
+            required_roles.add(ArithmeticOperandRole.PRIMARY)
+        elif operation in {
+            ArithmeticOperation.ADDITION,
+            ArithmeticOperation.MULTIPLICATION,
+            ArithmeticOperation.SUBTRACTION,
+        }:
+            required_roles.update(
+                {ArithmeticOperandRole.PRIMARY, ArithmeticOperandRole.SECONDARY}
+            )
+        elif operation in {
+            ArithmeticOperation.DIVISION,
+            ArithmeticOperation.REMAINDER,
+        }:
+            required_roles.update(
+                {ArithmeticOperandRole.PRIMARY, ArithmeticOperandRole.DIVISOR}
+            )
+    missing_operation_roles = required_roles - roles
+    if missing_operation_roles:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-ARITHMETIC-MISSING-ROLE",
+                message=(
+                    f"primitive {declaration.name!r} arithmetic operand_roles must "
+                    f"bind {_joined(role.value for role in missing_operation_roles)}"
+                ),
+                source=(
+                    source_span(by_name["operand_roles"].source)
+                    if "operand_roles" in by_name
+                    else source_span(arithmetic_field.source)
+                ),
+            )
+        )
     # Applicability checks assume a structurally valid closed contract. Returning
     # here prevents one typo from cascading into several prerequisite errors.
     if len(diagnostics) != start_diagnostics:
@@ -273,20 +309,6 @@ def _operand_bindings(
         diagnostics,
         owner=f"primitive {declaration.name!r} arithmetic operand_roles",
     )
-    present = {item.key.text for item in role_fields}
-    if ArithmeticOperandRole.DIVISOR.value not in present and not role_fields:
-        diagnostics.append(
-            diagnostic_at(
-                severity="error",
-                code="TSL-CATALOG-ARITHMETIC-MISSING-ROLE",
-                message=(
-                    f"primitive {declaration.name!r} arithmetic operand_roles must "
-                    "bind 'divisor'"
-                ),
-                source=source_span(field.source),
-            )
-        )
-
     shape = parse_signature(declaration.signature)
     if shape is None or len(shape.param_kinds) != len(declaration.parameters):
         return ()
@@ -337,19 +359,19 @@ def _operand_bindings(
             continue
         index = matches[0]
         kind = shape.param_kinds[index]
-        if role is ArithmeticOperandRole.DIVISOR and kind not in ARITHMETIC_DIVISOR_KINDS:
+        compatible_kinds = ARITHMETIC_OPERAND_ROLE_KINDS[role]
+        if kind not in compatible_kinds:
             diagnostics.append(
                 diagnostic_at(
                     severity="error",
                     code="TSL-CATALOG-ARITHMETIC-INCOMPATIBLE-PARAMETER",
                     message=(
-                        f"arithmetic divisor role on primitive {declaration.name!r} "
+                        f"arithmetic {role.value} role on primitive {declaration.name!r} "
                         f"cannot bind parameter {value.text!r} of signature kind {kind!r}"
                     ),
                     source=_scalar_source(value),
                     help=(
-                        "compatible divisor kinds: "
-                        + ", ".join(sorted(ARITHMETIC_DIVISOR_KINDS))
+                        "compatible kinds: " + ", ".join(sorted(compatible_kinds))
                     ),
                 )
             )

@@ -169,6 +169,72 @@ def test_clang_overlay_has_authored_coverage_for_every_supported_corpus_slot(
     assert declaration_gaps == []
 
 
+def test_neg_selects_only_signed_and_floating_lane_types(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles["avx2"],
+        "neg",
+        _ALL_ARITH_TYPES,
+        backend_id="cpp",
+    )
+    selected_types = {slot.type_tag for slot in selection.selected}
+
+    assert selected_types == {"si8", "si16", "si32", "si64", "f32", "f64"}
+
+
+@pytest.mark.parametrize(
+    "primitive_name",
+    ("shift_left_wrapping", "shift_right_wrapping"),
+)
+def test_wrapping_shifts_select_only_integer_lane_types(
+    catalog: Catalog,
+    machine_profiles,
+    primitive_name: str,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles["avx2"],
+        primitive_name,
+        _ALL_ARITH_TYPES,
+        backend_id="rust",
+    )
+    selected_types = {slot.type_tag for slot in selection.selected}
+
+    assert selected_types == {
+        "si8",
+        "si16",
+        "si32",
+        "si64",
+        "ui8",
+        "ui16",
+        "ui32",
+        "ui64",
+    }
+
+
+@pytest.mark.parametrize(
+    "primitive_name",
+    ("extract_value_at", "insert_value_at", "set_mask_lane"),
+)
+def test_runtime_lane_mutation_selects_every_arithmetic_lane_type(
+    catalog: Catalog,
+    machine_profiles,
+    primitive_name: str,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles["avx2"],
+        primitive_name,
+        _ALL_ARITH_TYPES,
+        backend_id="rust",
+    )
+
+    assert {slot.type_tag for slot in selection.selected} == set(_ALL_ARITH_TYPES)
+
+
 def test_requirement_scoped_implementations_are_not_dead(catalog: Catalog) -> None:
     dead: list[str] = []
     for primitive in catalog.primitives:
@@ -538,7 +604,7 @@ def test_integer_minmax_prefers_exact_isa_intrinsic(
     assert cpp is not None
     assert intrinsic in cpp.body_text
     assert "::tsl::less_than" not in cpp.body_text
-    assert "::tsl::blend" not in cpp.body_text
+    assert "::tsl::select" not in cpp.body_text
 
 
 @pytest.mark.parametrize("primitive", ["max", "min"])
@@ -560,7 +626,7 @@ def test_float_minmax_keeps_contract_preserving_compare_blend(
 
     assert cpp is not None
     assert "::tsl::less_than<Vec>" in cpp.body_text
-    assert "::tsl::blend<Vec>" in cpp.body_text
+    assert "::tsl::select<Vec>" in cpp.body_text
 
 
 @pytest.mark.parametrize(

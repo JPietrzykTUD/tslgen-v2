@@ -1,8 +1,8 @@
-#[cfg(feature = "@{profile_slug}")]
+#[cfg(@{target_cfg})]
 mod @{profile_slug}_values {
     #![allow(non_snake_case)]
     use tsl::tsl_core::*;
-    use tsl::tsl_@{profile_slug}::*;
+    use tsl::@{profile_module}::*;
     use tsl::tsl_test_core::*;
 
 @{body}

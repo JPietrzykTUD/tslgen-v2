@@ -810,7 +810,7 @@ def test_sse2_less_than_64_compares_high_then_unsigned_low_words(
     assert "::tsl::binary_xor<tsl::simd<int32_t, tsl::sse>>(left_high, sign_bit)" in bodies["ui64"]
 
 
-def test_masked_set1_reuses_blend_and_set1_on_x86(
+def test_masked_set1_reuses_select_and_set1_on_x86(
     catalog: Catalog, machine_profiles
 ) -> None:
     slots = {
@@ -825,18 +825,18 @@ def test_masked_set1_reuses_blend_and_set1_on_x86(
     ).specialization
 
     assert cpp is not None
-    assert "::tsl::blend<Vec>" in cpp.body_text
+    assert "::tsl::select<Vec>" in cpp.body_text
     assert "::tsl::set1<Vec>" in cpp.body_text
     assert "to_array" not in cpp.body_text
 
 
-def test_avx_integer_blend_composes_float_bitwise_intrinsics(
+def test_avx_integer_select_composes_float_bitwise_intrinsics(
     catalog: Catalog, machine_profiles
 ) -> None:
     slot = next(
         s
         for s in Selector()
-        .select_profile(catalog, machine_profiles["avx"], "blend", ("si8",))
+        .select_profile(catalog, machine_profiles["avx"], "select", ("si8",))
         .selected
         if s.extension.name == "avx2" and s.type_tag == "si8"
     )

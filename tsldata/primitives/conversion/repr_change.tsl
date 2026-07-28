@@ -2596,10 +2596,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                     zero
                   ));
                   var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 65535)));
-                  var<const_infer>(clamped, call<primitive=blend[Vec]>(
+                  var<const_infer>(clamped, call<primitive=select[Vec]>(
                     within_range,
-                    limit,
-                    nonnegative
+                    nonnegative,
+                    limit
                   ));
                   var<const_infer>(biased, call<primitive=sub[Vec]>(
                     clamped,
@@ -2639,10 +2639,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                       zero
                     ));
                     var<const_infer>(limit, call<primitive=set1[Vec]>(cast<static>(base::in, 32767)));
-                    clamped = call<primitive=blend[Vec]>(
+                    clamped = call<primitive=select[Vec]>(
                       within_range,
-                      limit,
-                      data
+                      data,
+                      limit
                     );
                   }
                   switch<compile>(index) {

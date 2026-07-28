@@ -6,6 +6,7 @@ import ast
 import json
 from collections.abc import Iterable
 from pathlib import Path
+from types import SimpleNamespace
 
 from tslc import api, pipeline
 from tslc.backend import cpp_profile
@@ -20,6 +21,17 @@ from tslc.backend.rust_capability import RUST_BACKEND
 from tslc.benchmark.model import EMPTY_BENCHMARK_PROJECT_PLAN
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
+from tslc.catalog.semantics import (
+    OperandBinding,
+    OperandRole,
+    PrimitiveOperation,
+    PrimitiveSemanticContract,
+)
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    PrimitiveMemoryContract,
+)
 from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import RenderAssets, load_default_render_assets
 from tslc.lower.lowerer import (
@@ -117,12 +129,14 @@ def test_render_assets_have_one_packaged_source_of_truth() -> None:
         "rust_benchmark_target.toml.tmpl",
         "rust_build.rs",
         "rust_documentation.rs.tmpl",
+        "rust_facade.rs.tmpl",
         "rust_lib.rs.tmpl",
         "rust_lib_benchmark_profile.rs.tmpl",
         "rust_lib_profile.rs.tmpl",
         "rust_primitive_tags.rs.tmpl",
         "rust_profile_module.rs.tmpl",
         "rust_profile_metadata.rs.tmpl",
+        "rust_readme.md.tmpl",
         "rust_smoke.rs",
         "tsl_benchmark_core.rs",
     } <= assets.files.keys()
@@ -147,6 +161,112 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
     class FakeCatalog:
         def __init__(self, names: set[str]) -> None:
             self.names = names
+            semantic_primitives = {
+                "load": (
+                    "v:=cptr",
+                    PrimitiveSemanticContract(
+                        PrimitiveOperation.LOAD,
+                        (
+                            OperandBinding(
+                                OperandRole.MEMORY_SOURCE,
+                                "source",
+                                0,
+                                "cptr",
+                            ),
+                        ),
+                    ),
+                    PrimitiveMemoryContract(
+                        MemoryAccess.READ,
+                        MemoryAddressing.CONTIGUOUS,
+                    ),
+                ),
+                "store": (
+                    "void:=(ptr,v)",
+                    PrimitiveSemanticContract(
+                        PrimitiveOperation.STORE,
+                        (
+                            OperandBinding(
+                                OperandRole.MEMORY_DESTINATION,
+                                "destination",
+                                0,
+                                "ptr",
+                            ),
+                            OperandBinding(OperandRole.VALUE, "value", 1, "v"),
+                        ),
+                    ),
+                    PrimitiveMemoryContract(
+                        MemoryAccess.WRITE,
+                        MemoryAddressing.CONTIGUOUS,
+                    ),
+                ),
+                "read_contiguous": (
+                    "v:=cptr",
+                    PrimitiveSemanticContract(
+                        PrimitiveOperation.LOAD,
+                        (
+                            OperandBinding(
+                                OperandRole.MEMORY_SOURCE,
+                                "source",
+                                0,
+                                "cptr",
+                            ),
+                        ),
+                    ),
+                    PrimitiveMemoryContract(
+                        MemoryAccess.READ,
+                        MemoryAddressing.CONTIGUOUS,
+                    ),
+                ),
+                "write_contiguous": (
+                    "void:=(ptr,v)",
+                    PrimitiveSemanticContract(
+                        PrimitiveOperation.STORE,
+                        (
+                            OperandBinding(
+                                OperandRole.MEMORY_DESTINATION,
+                                "destination",
+                                0,
+                                "ptr",
+                            ),
+                            OperandBinding(OperandRole.VALUE, "value", 1, "v"),
+                        ),
+                    ),
+                    PrimitiveMemoryContract(
+                        MemoryAccess.WRITE,
+                        MemoryAddressing.CONTIGUOUS,
+                    ),
+                ),
+                "to_array": (
+                    "s[]:=v",
+                    PrimitiveSemanticContract(
+                        PrimitiveOperation.VECTOR_TO_ARRAY,
+                        (
+                            OperandBinding(
+                                OperandRole.PRIMARY,
+                                "value",
+                                0,
+                                "v",
+                            ),
+                        ),
+                    ),
+                    None,
+                ),
+            }
+            self.primitives = tuple(
+                SimpleNamespace(
+                    name=name,
+                    signature=semantic_primitives[name][0],
+                    operation=semantic_primitives[name][1],
+                    memory=semantic_primitives[name][2],
+                    attributes=(
+                        {"aligned": "false"}
+                        if semantic_primitives[name][2] is not None
+                        else {}
+                    ),
+                )
+                for name in sorted(names)
+                if name in semantic_primitives
+            )
 
         def primitives_named(self, name: str, *, unmasked: bool) -> tuple[str, ...]:
             del unmasked
@@ -170,9 +290,17 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
     assert RUST_BACKEND.helper_manifest is RUST_HELPER_MANIFEST
     assert CPP_BACKEND.closure_seed_primitives(catalog) == ("load", "store")
     assert RUST_BACKEND.closure_seed_primitives(catalog) == (
-        "load",
         "store",
         "to_array",
+        "load",
+    )
+    renamed_catalog = FakeCatalog(
+        {"read_contiguous", "write_contiguous", "to_array"}
+    )
+    assert RUST_BACKEND.closure_seed_primitives(renamed_catalog) == (
+        "to_array",
+        "read_contiguous",
+        "write_contiguous",
     )
 
 
@@ -237,8 +365,9 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
         benchmarks: object,
         assets: RenderAssets,
         media_type: str,
+        config: object,
     ) -> list[Artifact]:
-        del profiles, value_tests, benchmarks, assets
+        del profiles, value_tests, benchmarks, assets, config
         return [Artifact("fake/lib.fake", "fake\n", media_type)]
 
     fake = BackendCapability(
@@ -673,8 +802,9 @@ def _empty_backend_artifacts(
     benchmarks: object,
     assets: RenderAssets,
     media_type: str,
+    config: object,
 ) -> list[Artifact]:
-    del profiles, value_tests, benchmarks, assets, media_type
+    del profiles, value_tests, benchmarks, assets, media_type, config
     return []
 
 

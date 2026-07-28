@@ -470,6 +470,12 @@ def test_target_families_promoted(catalog: Catalog) -> None:
     assert families.extension_family("generic_like").documented_sort_order == 1
     assert families.extension_family("arm").documented_family == "aarch64"
     assert families.extension_family("arm").documented_sort_order == 20
+    assert families.profile_families["x86"].backend("rust").target_arch == "x86_64"
+    assert (
+        families.profile_families["aarch64"].backend("rust").target_arch
+        == "aarch64"
+    )
+    assert families.profile_families["wasm32"].backend("rust").target_arch == "wasm32"
     sse4_1 = families.target_feature("sse4_1")
     rdrand = families.target_feature("rdrand")
     assert sse4_1 is not None and sse4_1.spelling("cpp") == "sse4.1"
@@ -512,24 +518,33 @@ def test_overload_registry_promoted_from_source(catalog: Catalog) -> None:
 
 
 def test_overload_annotations_preserve_corpus_inventory(catalog: Catalog) -> None:
-    assert len(catalog.primitives) == 172
+    assert len(catalog.primitives) == 181
     authored_sources = {primitive.source for primitive in catalog.primitives}
     assert None not in authored_sources
-    assert len(authored_sources) == 160
+    assert len(authored_sources) == 169
 
     annotated = tuple(
         primitive for primitive in catalog.primitives if primitive.overload is not None
     )
     assert {primitive.name for primitive in annotated} == {
         "shift_left",
+        "shift_left_wrapping",
         "shift_right",
+        "shift_right_wrapping",
         "store",
     }
-    assert len({primitive.source for primitive in annotated}) == 10
+    assert len({primitive.source for primitive in annotated}) == 14
     assert all(
         primitive.overload is not None
         for primitive in catalog.primitives
-        if primitive.name in {"shift_left", "shift_right", "store"}
+        if primitive.name
+        in {
+            "shift_left",
+            "shift_left_wrapping",
+            "shift_right",
+            "shift_right_wrapping",
+            "store",
+        }
     )
 
 

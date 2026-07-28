@@ -427,10 +427,12 @@ def _wrapper_signature(
     selector_args = impl_args + "".join(
         f", {parameter_type}" for parameter_type in selector_parameter_types
     )
-    # The wrapper's result kind projects through the caller-bound `ToVec` param.
+    # The result projects through either the concrete target axis or a source-declared
+    # caller-bound SIMD type parameter.
+    result_owner = "ToVec" if has_target else shape.result_vector_param
     result_type = (
-        CPP_SIGNATURE_TYPES.member_type(shape.result_kind, vector="ToVec")
-        if has_target
+        CPP_SIGNATURE_TYPES.member_type(shape.result_kind, vector=result_owner)
+        if result_owner is not None
         else _result_type(shape.result_kind)
     )
     return _WrapperSignature(
@@ -514,7 +516,9 @@ def _dataparallel_memory_facade_wrapper(
     shape = facade.shape
     primitive_name = facade.primitive_name
     vec = "::tsl::dataparallel::simd_for_t<Policy, T>"
-    axis_name = _axis_name(shape.axis[0][0])
+    if facade.alignment_axis_name is None:
+        raise ValueError("contiguous-memory facade has no alignment axis")
+    axis_name = _axis_name(facade.alignment_axis_name)
     result_type = _dataparallel_facade_result_type(shape.result_kind, vec)
     params = ", ".join(
         f"{_dataparallel_facade_param_type(kind, vec, None)} {name}"
@@ -756,6 +760,11 @@ def _apply_result_type(spec: LoweredSpecialization) -> str:
         return CPP_SIGNATURE_TYPES.member_type(
             spec.result_kind,
             vector=spec.target.vector_spelling,
+        )
+    if spec.result_vector_param is not None:
+        return CPP_SIGNATURE_TYPES.member_type(
+            spec.result_kind,
+            vector=spec.result_vector_param,
         )
     return _result_type(spec.result_kind)
 

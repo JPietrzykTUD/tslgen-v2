@@ -15,6 +15,7 @@ import pytest
 
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.catalog.builder import CatalogBuilder
+from tslc.catalog.model import TestComparison as CaseComparison
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import has_errors
 from tslc.sources import SourceLoader
@@ -43,6 +44,10 @@ def _assert_value_tests_ran(report, *, backends: tuple[str, ...]) -> None:
 def test_golden_value_tests_build_and_pass(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
+    sde = Path("/opt/intel-sde/sde64")
+    if not sde.exists():
+        pytest.skip("x86 value-test gate needs /opt/intel-sde/sde64")
+
     # Golden cases run against the generic software reference: vector results (`add`/`sub`/the
     # cross-lane `conflict`) read back as arrays, a mask result (`equal`) read as the reference's
     # integer-bitset mask.
@@ -73,8 +78,204 @@ def test_golden_value_tests_build_and_pass(
     write_report = write_artifacts(result.artifacts, tmp_path)
     assert not has_errors(write_report.diagnostics), write_report.diagnostics
 
-    report = verify_project(tmp_path, result.rendered.verify, run_value_tests=True)
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        runner_paths={"sde": str(sde)},
+        run_value_tests=True,
+    )
     _assert_value_tests_ran(report, backends=("cpp",))
+
+
+def test_neg_bit_exact_value_tests_build_and_pass(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    sde = Path("/opt/intel-sde/sde64")
+    assert sde.exists(), "x86 value-test gate needs /opt/intel-sde/sde64"
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["neg"],
+        profiles=["avx2"],
+        backends=("cpp", "rust"),
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    exact_cases = [
+        case
+        for profile in result.rendered.value_tests.profiles
+        for case in profile.cases
+        if case.call_name == "neg"
+        and case.type_tag in {"f32", "f64"}
+        and case.expectation.comparison is CaseComparison.BITWISE
+    ]
+    assert exact_cases
+    assert {case.kind for case in exact_cases} == {"generic_golden", "differential"}
+
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        runner_paths={"sde": str(sde)},
+        run_value_tests=True,
+    )
+    _assert_value_tests_ran(report, backends=("cpp", "rust"))
+
+
+def test_wrapping_shift_value_tests_build_and_pass(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    sde = Path("/opt/intel-sde/sde64")
+    assert sde.exists(), "x86 value-test gate needs /opt/intel-sde/sde64"
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_left_wrapping", "shift_right_wrapping"],
+        profiles=["avx2"],
+        backends=("cpp", "rust"),
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    wrapping_cases = [
+        case
+        for profile in result.rendered.value_tests.profiles
+        for case in profile.cases
+        if case.call_name in {"shift_left_wrapping", "shift_right_wrapping"}
+    ]
+    assert wrapping_cases
+    assert {case.kind for case in wrapping_cases} == {
+        "generic_golden",
+        "differential",
+        "scalar_vector",
+    }
+    assert {case.type_tag for case in wrapping_cases} >= {
+        "si8",
+        "si16",
+        "ui8",
+        "ui32",
+        "ui64",
+    }
+
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        runner_paths={"sde": str(sde)},
+        run_value_tests=True,
+    )
+    _assert_value_tests_ran(report, backends=("cpp", "rust"))
+
+
+def test_runtime_lane_mutation_value_tests_build_and_pass(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    sde = Path("/opt/intel-sde/sde64")
+    assert sde.exists(), "x86 value-test gate needs /opt/intel-sde/sde64"
+
+    primitives = ["extract_value_at", "insert_value_at", "set_mask_lane"]
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=primitives,
+        profiles=["avx2", "skylake"],
+        backends=("cpp", "rust"),
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    cases = [
+        case
+        for profile in result.rendered.value_tests.profiles
+        for case in profile.cases
+        if case.call_name in set(primitives)
+    ]
+    assert cases
+    assert {case.call_name for case in cases} == set(primitives)
+    assert {case.kind for case in cases} == {
+        "differential",
+        "mask_result",
+        "scalar_result",
+        "scalar_vector",
+    }
+    assert {
+        case.call_name for case in cases if case.kind == "differential"
+    } == set(primitives)
+    assert {case.type_tag for case in cases if case.call_name != "set_mask_lane"} == {
+        "f32",
+        "f64",
+        "si8",
+        "si16",
+        "si32",
+        "si64",
+        "ui8",
+        "ui16",
+        "ui32",
+        "ui64",
+    }
+
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        runner_paths={"sde": str(sde)},
+        run_value_tests=True,
+    )
+    _assert_value_tests_ran(report, backends=("cpp", "rust"))
+
+
+def test_rust_valid_placeholder_paths_build_and_pass(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    sde = Path("/opt/intel-sde/sde64")
+    if not sde.exists():
+        pytest.skip("x86 value-test gate needs /opt/intel-sde/sde64")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["set_undef", "set_zero", "set1", "from_array", "to_array"],
+        profiles=["scalar", "avx2"],
+        backends=("rust",),
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    rust_sources = "\n".join(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path.startswith("rust/")
+        and artifact.logical_path.endswith(".rs")
+    )
+    assert "MaybeUninit" not in rust_sources
+    assert "assume_init" not in rust_sources
+    assert "invalid_value" not in rust_sources
+    assert "use tsl::tsl_target_fallback::*;" in rust_sources
+    assert "use tsl::tsl_scalar::*;" not in rust_sources
+
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        runner_paths={"sde": str(sde)},
+        run_value_tests=True,
+    )
+    _assert_value_tests_ran(report, backends=("rust",))
 
 
 def test_sse_integer_differential_round_trip_builds_and_passes(
@@ -82,11 +283,15 @@ def test_sse_integer_differential_round_trip_builds_and_passes(
     machine_profiles_path: Path,
     tmp_path: Path,
 ) -> None:
+    sde = Path("/opt/intel-sde/sde64")
+    if not sde.exists():
+        pytest.skip("x86 value-test gate needs /opt/intel-sde/sde64")
+
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["abs"],
-        profiles=["sse"],
+        profiles=["sse2"],
         type_tags=("ui8", "ui16", "ui64"),
         backends=("cpp", "rust"),
         test_harness=True,
@@ -106,7 +311,12 @@ def test_sse_integer_differential_round_trip_builds_and_passes(
 
     write_report = write_artifacts(result.artifacts, tmp_path)
     assert not has_errors(write_report.diagnostics), write_report.diagnostics
-    report = verify_project(tmp_path, result.rendered.verify, run_value_tests=True)
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        runner_paths={"sde": str(sde)},
+        run_value_tests=True,
+    )
     _assert_value_tests_ran(report, backends=("cpp", "rust"))
 
 
@@ -389,15 +599,23 @@ def test_value_full_corpus_avx2_builds(
     (C++). A failure here is a real value regression (a lane mismatch) — or, rarely, a transient
     compiler failure under host load."""
 
+    sde = Path("/opt/intel-sde/sde64")
+    if not sde.exists():
+        pytest.skip("x86 value-test gate needs /opt/intel-sde/sde64")
+
     result = _full_corpus_cpp_avx2(data_root, machine_profiles_path)
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
     write_report = write_artifacts(result.artifacts, tmp_path)
     assert not has_errors(write_report.diagnostics), write_report.diagnostics
 
-    report = verify_project(tmp_path, result.rendered.verify, run_value_tests=True)
-    # Fully green: no compile/configure errors and no value-test (ctest) warnings.
-    assert report.diagnostics == (), report.diagnostics
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        runner_paths={"sde": str(sde)},
+        run_value_tests=True,
+    )
+    _assert_value_tests_ran(report, backends=("cpp",))
 
 
 def test_value_full_corpus_avx2_rust_builds(
@@ -405,14 +623,23 @@ def test_value_full_corpus_avx2_rust_builds(
 ) -> None:
     """Rust runs the same full-corpus AVX2 authored value-test inventory as C++."""
 
+    sde = Path("/opt/intel-sde/sde64")
+    if not sde.exists():
+        pytest.skip("x86 value-test gate needs /opt/intel-sde/sde64")
+
     result = _full_corpus_avx2(data_root, machine_profiles_path, backends=("rust",))
     assert result.diagnostics == (), result.diagnostics
     assert result.rendered is not None
     write_report = write_artifacts(result.artifacts, tmp_path)
     assert not has_errors(write_report.diagnostics), write_report.diagnostics
 
-    report = verify_project(tmp_path, result.rendered.verify, run_value_tests=True)
-    assert report.diagnostics == (), report.diagnostics
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        runner_paths={"sde": str(sde)},
+        run_value_tests=True,
+    )
+    _assert_value_tests_ran(report, backends=("rust",))
 
 
 def _full_corpus_cpp_avx2(data_root: Path, machine_profiles_path: Path):

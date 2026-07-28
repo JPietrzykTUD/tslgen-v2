@@ -59,6 +59,44 @@ def test_uninit_array_still_routes_to_the_array_template(
     assert "int32_t result{};" in lowered.body_text
 
 
+def test_rust_uninit_scalar_lowers_to_a_valid_default_value(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slot = _scalar_slot(catalog, machine_profiles, "set_undef")
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+
+    assert lowered is not None
+    assert "let mut result: i32 = Default::default();" in lowered.body_text
+    assert "MaybeUninit" not in lowered.body_text
+    assert "assume_init" not in lowered.body_text
+
+
+def test_rust_uninit_array_lowers_to_a_valid_default_value(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog, machine_profiles["scalar"], "set_undef", ("si32",)
+        )
+        .selected
+        if selected.extension.name == "generic"
+    )
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+
+    assert lowered is not None
+    assert "Default::default();" in lowered.body_text
+    assert "MaybeUninit" not in lowered.body_text
+    assert "assume_init" not in lowered.body_text
+
+
 def test_ordinary_initializer_containing_uninit_is_preserved(
     catalog: Catalog, machine_profiles
 ) -> None:

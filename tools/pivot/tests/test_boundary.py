@@ -75,7 +75,10 @@ _EXPECTED_COMPILER_IMPORTS = (
         (
             "CallDependency",
             "CallDependencyOrigin",
+            "CallVectorReference",
+            "GenericVectorReference",
             "VectorIdentity",
+            "is_concrete_call_dependency",
             "resolve_lowered_call_dependency",
             "resolve_lowered_call_vector",
         ),

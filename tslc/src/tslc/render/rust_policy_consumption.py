@@ -8,6 +8,10 @@ from tslc.backend.rust_policy_consumption import (
     RustPolicyConsumptionPlan,
     RustPolicyConsumptionProfile,
 )
+from tslc.backend.rust_static_selection import (
+    RustStaticProfileSelection,
+    RustStaticSelectionPlan,
+)
 from tslc.render._common import slug
 
 
@@ -16,7 +20,6 @@ class RustPolicyConsumptionNames:
     """Generated Cargo and artifact names for one consumable profile."""
 
     profile_slug: str
-    feature_environment: str
     descriptor_path: str
     mapping_source_path: str
     materialized_mapping_file: str
@@ -26,7 +29,6 @@ class RustPolicyConsumptionNames:
             not value
             for value in (
                 self.profile_slug,
-                self.feature_environment,
                 self.descriptor_path,
                 self.mapping_source_path,
                 self.materialized_mapping_file,
@@ -40,7 +42,14 @@ class RustPolicyConsumptionRenderProfile:
     """One semantic consumption profile paired with its Cargo layout."""
 
     profile: RustPolicyConsumptionProfile
+    static_selection: RustStaticProfileSelection
     names: RustPolicyConsumptionNames
+
+    def __post_init__(self) -> None:
+        if self.static_selection.profile_name != self.profile.profile_name:
+            raise ValueError(
+                "Rust policy consumption target must match its profile"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,18 +83,24 @@ EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN = RustPolicyConsumptionRenderPlan(
 
 def plan_rust_policy_consumption_render(
     plan: RustPolicyConsumptionPlan,
+    static_selection_plan: RustStaticSelectionPlan,
 ) -> RustPolicyConsumptionRenderPlan:
     """Project semantic consumption facts into deterministic Cargo names once."""
 
     profiles = []
     for profile in plan.profiles:
         profile_slug = slug(profile.profile_name)
+        static_selection = static_selection_plan.profile(profile.profile_name)
+        if static_selection is None:
+            raise ValueError(
+                f"Rust policy profile {profile.profile_name!r} has no compile-target selection"
+            )
         profiles.append(
             RustPolicyConsumptionRenderProfile(
                 profile=profile,
+                static_selection=static_selection,
                 names=RustPolicyConsumptionNames(
                     profile_slug=profile_slug,
-                    feature_environment=f"CARGO_FEATURE_{profile_slug.upper()}",
                     descriptor_path=(
                         f"bench/policy_consumption_{profile_slug}.json"
                     ),

@@ -653,7 +653,7 @@ def validate_full_export_baseline_update(
     *,
     allow_reviewed_incompatible_baseline: bool = False,
 ) -> None:
-    """Reject coverage loss unless a reviewer explicitly accepts incompatibility."""
+    """Reject stable product incompatibility without explicit review."""
 
     candidate_inventory = _manifest_definition_inventory(candidate)
     if allow_reviewed_incompatible_baseline:
@@ -669,9 +669,6 @@ def validate_full_export_baseline_update(
             "--allow-reviewed-incompatible-baseline only after an explicit "
             "product or correctness review."
         )
-    added = candidate_inventory - previous_inventory
-    if added:
-        return
     changed = tuple(
         field
         for field in _STABLE_PRODUCT_FACT_FIELDS
@@ -679,8 +676,8 @@ def validate_full_export_baseline_update(
     )
     if changed:
         raise ValueError(
-            "full-export baseline product facts changed without a coverage "
-            f"addition: {', '.join(changed)}. Pass "
+            "full-export baseline product facts changed: "
+            f"{', '.join(changed)}. Pass "
             "--allow-reviewed-incompatible-baseline only after an explicit "
             "product or correctness review."
         )

@@ -14,6 +14,7 @@ class BackendProfileFamily:
     """One backend's behavior for a machine-profile family."""
 
     feature_flags: bool = True
+    target_arch: str | None = None
     target: str | None = None
     linker: str | None = None
     detection: str | None = None

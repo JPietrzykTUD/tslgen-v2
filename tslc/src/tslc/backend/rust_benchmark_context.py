@@ -43,6 +43,7 @@ class RustBenchmarkCodegenContract:
         """Flags that make hidden Cargo profile overrides ineffective."""
 
         return (
+            "--cfg=tsl_variant_benchmarks",
             f"-Copt-level={self.opt_level}",
             f"-Cdebuginfo={2 if self.debug else 0}",
             f"-Cdebug-assertions={'yes' if self.debug_assertions else 'no'}",
@@ -55,6 +56,22 @@ class RustBenchmarkCodegenContract:
             "-Crpath=no",
             "-Cstrip=none",
         )
+
+    def policy_rustflags_for(
+        self,
+        target_features: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        """Return the guarded codegen flags plus one exact compile-target profile."""
+
+        if len(set(target_features)) != len(target_features):
+            raise ValueError("Rust benchmark target features must be unique")
+        ordered_features = tuple(sorted(target_features))
+        if not ordered_features:
+            return self.policy_rustflags
+        target_feature_flag = "-Ctarget-feature=" + ",".join(
+            f"+{feature}" for feature in ordered_features
+        )
+        return (*self.policy_rustflags, target_feature_flag)
 
     @property
     def policy_incremental_environment(self) -> str:

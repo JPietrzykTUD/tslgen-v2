@@ -75,7 +75,7 @@ jobs:
           echo "profile_shards=${profile_shards}" >> "$GITHUB_OUTPUT"
 
   generated-value-tests:
-    name: Generated value tests (${{ matrix.backend }} / ${{ matrix.profile_shard.name }})
+    name: Generated value tests (${{ matrix.profile_shard.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 120
     needs:
@@ -85,7 +85,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        backend: [cpp, rust]
         profile_shard: ${{ fromJson(needs['profile-shards'].outputs.profile_shards) }}
 
     env:
@@ -105,21 +104,21 @@ jobs:
       - name: Pull CI image
         run: |
           bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/generated-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}/docker-pull.log" \
+            "tslctmp/ci-logs/generated-values-${{ matrix.profile_shard.name }}/docker-pull.log" \
             docker pull "${TSLC_CI_IMAGE}"
 
       - name: Run generated value-test shard
         run: |
-          summary_file="tslctmp/ci-logs/generated-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}/summary.md"
+          summary_file="tslctmp/ci-logs/generated-values-${{ matrix.profile_shard.name }}/summary.md"
           # Intel SDE/Pin needs ptrace when running generated x86 value-test binaries.
           bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/generated-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}/value-tests.log" \
+            "tslctmp/ci-logs/generated-values-${{ matrix.profile_shard.name }}/value-tests.log" \
             bash supplementary/ci/run_tslc_ci_container.sh \
               --cap-add=SYS_PTRACE \
               --security-opt seccomp=unconfined \
-              -e TSLC_BACKENDS="${{ matrix.backend }}" \
+              -e TSLC_BACKENDS="${{ matrix.profile_shard.backend }}" \
               -e TSLC_PROFILES="${{ matrix.profile_shard.profiles }}" \
-              -e TSLC_CI_OUTPUT="./tslctmp/ci-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}" \
+              -e TSLC_CI_OUTPUT="./tslctmp/ci-values-${{ matrix.profile_shard.name }}" \
               -e TSLC_SUMMARY_FILE="./${summary_file}" \
               -e TSLC_SDE="/opt/intel-sde/sde64" \
               -e TSLC_QEMU_AARCH64="/usr/bin/qemu-aarch64" \
@@ -137,14 +136,14 @@ jobs:
       - name: Append generated value-test summary
         if: always()
         run: |
-          summary_file="tslctmp/ci-logs/generated-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}/summary.md"
+          summary_file="tslctmp/ci-logs/generated-values-${{ matrix.profile_shard.name }}/summary.md"
           if [[ -s "$summary_file" ]]; then
             cat "$summary_file" >> "$GITHUB_STEP_SUMMARY"
           else
             {
               echo "### Generated value-test summary"
               echo
-              echo "No summary was produced for ${{ matrix.backend }} / ${{ matrix.profile_shard.name }}. Check the uploaded logs for setup failures."
+              echo "No summary was produced for ${{ matrix.profile_shard.name }}. Check the uploaded logs for setup failures."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
@@ -152,7 +151,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ci-logs-generated-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}
-          path: tslctmp/ci-logs/generated-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}
+          name: ci-logs-generated-values-${{ matrix.profile_shard.name }}
+          path: tslctmp/ci-logs/generated-values-${{ matrix.profile_shard.name }}
           if-no-files-found: ignore
           retention-days: 14

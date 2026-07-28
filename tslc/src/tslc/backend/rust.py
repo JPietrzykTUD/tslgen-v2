@@ -30,6 +30,7 @@ from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.benchmark.model import SpecializationKey
+from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.lower.lowerer import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -513,11 +514,40 @@ class RustBackend:
                 + f"{impl_prefix} {arg_trait}{trait_args} for {self_ty} {{\n"
                 f"    const IMPLEMENTATION_STATE: ImplementationState = "
                 f"{_rust_implementation_state(_spec_implementation_state(spec, variant_name))};\n"
+                f"{_indent(_implementation_lint_allowance(spec), 4)}\n"
                 f"    {_unsafe_prefix(caller_unsafe)}fn apply(self{fixed_impl}) -> {ret_impl} {{\n"
                 f"{_indent(method_body, 8)}\n"
                 f"    }}\n"
                 f"}}"
             )
+            shift = spec.primitive_semantics.shift
+            if shift is not None and spec.param_kinds[vi] == "s":
+                forwarded_args = ", ".join(name for name, _kind in fixed)
+                for count_tag in shift.scalar_count_types:
+                    count_type = SCALAR_TYPE_INFOS[
+                        count_tag
+                    ].documentation_short_label
+                    if count_type == self_ty:
+                        continue
+                    call = (
+                        f"<{self_ty} as {arg_trait}{trait_args}>::apply("
+                        f"self as {self_ty}"
+                        + (f", {forwarded_args}" if forwarded_args else "")
+                        + ")"
+                    )
+                    if caller_unsafe:
+                        call = f"unsafe {{ {call} }}"
+                    impls.append(
+                        f"{impl_prefix} {arg_trait}{trait_args} for {count_type} {{\n"
+                        "    const IMPLEMENTATION_STATE: ImplementationState = "
+                        f"<{self_ty} as {arg_trait}{trait_args}>::"
+                        "IMPLEMENTATION_STATE;\n"
+                        f"    {_unsafe_prefix(caller_unsafe)}fn apply("
+                        f"self{fixed_impl}) -> {ret_impl} {{\n"
+                        f"        {call}\n"
+                        "    }\n"
+                        "}"
+                    )
 
         return "\n\n".join([trait, *impls]) if impls else ""
 
@@ -583,6 +613,8 @@ class RustBackend:
             decls = ["ToVec: StaticSimdVector", *decls]
             ret = _kind_type(shape.result_kind, "ToVec")
             target_owner = "ToVec"
+        elif shape.result_vector_param is not None:
+            ret = _kind_type(shape.result_kind, shape.result_vector_param)
         # Free SIMD type params (gather's `IndicesType`) — a `vidx` param projects through one.
         decls = _type_param_decls(shape) + _type_param_base_key_decls(shape) + decls
         vidx_type = f"{shape.type_params[0].name}::RegisterType" if shape.type_params else None
@@ -632,6 +664,8 @@ class RustBackend:
             targs = [spec.target.vector_spelling, *targs]
             target_owner = f"<{spec.target.vector_spelling} as SimdVector>"
             ret = _kind_type(spec.result_kind, target_owner)
+        elif spec.result_vector_param is not None:
+            ret = _kind_type(spec.result_kind, spec.result_vector_param)
         targs = [
             *_type_param_names(spec),
             *_type_param_base_key_args(spec, mode="concrete"),
@@ -667,10 +701,9 @@ class RustBackend:
                 vidx_type=vidx_type,
             ),
             args=_runtime_names(spec),
-            return_type=(
-                _kind_type(spec.result_kind, target_owner)
-                if target_owner is not None
-                else _kind_type(spec.result_kind, concrete_owner)
+            return_type=_kind_type(
+                spec.result_kind,
+                target_owner or spec.result_vector_param or concrete_owner,
             ),
             generic_decls=impl_parts,
             generic_names=impl_generic_names,
@@ -701,6 +734,7 @@ class RustBackend:
             f"{_index_where(spec, impl_register=impl_register, base_dispatch='concrete')} {{\n"
             f"    const IMPLEMENTATION_STATE: ImplementationState = "
             f"{_rust_implementation_state(_spec_implementation_state(spec, variant_name))};\n"
+            f"{_indent(_implementation_lint_allowance(spec), 4)}\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret} {{\n"
             f"{preconditions}"
             f"{_indent(body, 8)}\n"
@@ -808,6 +842,8 @@ class RustBackend:
                 f"<S as {_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}"
                 f"<{', '.join(targs)}>>::apply({names})"
             )
+            if shape.result_vector_param is not None:
+                ret = _kind_type(shape.result_kind, shape.result_vector_param)
         else:
             vidx_type = None
         params = _params(
@@ -936,6 +972,8 @@ def _documentation_wrapper(
             *declarations,
         ]
         index_type = f"{shape.type_params[0].name}::RegisterType"
+        if shape.result_vector_param is not None:
+            result_type = _kind_type(shape.result_kind, shape.result_vector_param)
     generics = ", ".join(("S: StaticSimdVector", *declarations))
     params = _params(
         shape,
@@ -1119,6 +1157,30 @@ def _indent(text: str, spaces: int) -> str:
 
 def _any_caller_unsafe(specs: tuple[LoweredSpecialization, ...]) -> bool:
     return any(spec.safety.caller_unsafe for spec in specs)
+
+
+def _implementation_lint_allowance(spec: LoweredSpecialization) -> str:
+    if not spec.required_features:
+        return (
+            "// Raw implementation text may intentionally ignore signature parameters.\n"
+            "#[allow(unused_variables)]"
+        )
+    return (
+        "// Static TSIL specialization can make shared expression grouping,\n"
+        "// conservative unsafe framing, and unrolled formulas lint-trivial.\n"
+        "// Keep these allowances on the internal implementation boundary.\n"
+        "#[allow(\n"
+        "    unused_assignments,\n"
+        "    unused_comparisons,\n"
+        "    unused_mut,\n"
+        "    unused_parens,\n"
+        "    unused_unsafe,\n"
+        "    unused_variables,\n"
+        "    clippy::absurd_extreme_comparisons,\n"
+        "    clippy::eq_op,\n"
+        "    clippy::erasing_op,\n"
+        ")]"
+    )
 
 
 def _unsafe_prefix(enabled: bool) -> str:

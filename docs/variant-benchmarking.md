@@ -356,7 +356,7 @@ The audit checks:
 
 The C++ gate retains `coverage/benchmark-baseline.json` and
 `coverage/benchmark-shape-inventory.md`. Its existing issue identities and
-inventory remain unchanged.
+inventory are refreshed independently from Rust evidence.
 
 Rust uses `coverage/benchmark-rust-baseline.json` and
 `coverage/benchmark-rust-shape-inventory.md`. Its baseline records every raw
@@ -366,6 +366,11 @@ candidate ID/body hash, independent policy status, and compiler-rendered
 mapping hash. A report can therefore remain honestly `report_only`; only a
 policy-supported report must have a complete mapping. Explanatory reason text
 is excluded from stable identity for both backends.
+
+The Rust audit generates each selected machine profile as its own valid crate
+input, then merges the typed benchmark, selection, and policy facts for the
+ratchet. This keeps all profiles in the evidence without pretending that
+unordered compile-target requirements can coexist in one generated crate.
 
 Refresh only the intended backend's two evidence files after reviewing a
 deliberate coverage change:
@@ -396,11 +401,11 @@ help prints the profile-specific commands and the compiler-owned flag set:
 
 ```bash
 cd generated/rust
+export RUSTFLAGS='--cfg=tsl_variant_benchmarks -Copt-level=3 -Cdebuginfo=0 -Cdebug-assertions=no -Coverflow-checks=no -Clto=off -Clinker-plugin-lto=no -Cembed-bitcode=no -Ccodegen-units=1 -Cpanic=unwind -Crpath=no -Cstrip=none -Ctarget-feature=+sse,+sse2'
 env -u TSL_RUST_VARIANT_POLICY_FILE \
   cargo bench --profile bench \
     --bench tsl_variant_bench_sse2 \
     --no-default-features \
-    --features variant_benchmarks,sse2 \
     -- --help
 ```
 
@@ -413,13 +418,12 @@ mkdir -p "$artifact_dir"
 
 export TSL_RUST_BENCHMARK_CONTEXT='local-native-sse2-v1'
 export CARGO_INCREMENTAL=0
-export RUSTFLAGS='-Copt-level=3 -Cdebuginfo=0 -Cdebug-assertions=no -Coverflow-checks=no -Clto=off -Clinker-plugin-lto=no -Cembed-bitcode=no -Ccodegen-units=1 -Cpanic=unwind -Crpath=no -Cstrip=none'
+export RUSTFLAGS='--cfg=tsl_variant_benchmarks -Copt-level=3 -Cdebuginfo=0 -Cdebug-assertions=no -Coverflow-checks=no -Clto=off -Clinker-plugin-lto=no -Cembed-bitcode=no -Ccodegen-units=1 -Cpanic=unwind -Crpath=no -Cstrip=none -Ctarget-feature=+sse,+sse2'
 
 env -u CARGO_ENCODED_RUSTFLAGS -u TSL_RUST_VARIANT_POLICY_FILE \
   cargo bench --profile bench \
     --bench tsl_variant_bench_sse2 \
     --no-default-features \
-    --features variant_benchmarks,sse2 \
     -- \
     --results "$artifact_dir/results.jsonl" \
     --summary "$artifact_dir/summary.txt" \
@@ -432,23 +436,23 @@ runner or another build-local input changes, use a new
 `TSL_RUST_BENCHMARK_CONTEXT` identity.
 
 Second, build the consumer separately with the precomputed policy and the same
-profile, feature set, context, and compiler flags:
+profile, context, and compiler flags:
 
 ```bash
 env -u CARGO_ENCODED_RUSTFLAGS \
   TSL_RUST_VARIANT_POLICY_FILE="$artifact_dir/policy.json" \
   cargo build --profile bench \
-    --no-default-features \
-    --features variant_benchmarks,sse2
+    --no-default-features
 ```
 
-The consumer keeps `variant_benchmarks` enabled only so its generated-code
-context exactly matches the producer; the build script validates the policy and
-does not execute timing code. An ordinary build with no policy input still uses
-the authored default. Results and policies belong below the Cargo target tree,
-never below generated `src/`. The artifact expression follows a custom
-`CARGO_TARGET_DIR`; pass an absolute policy path when a downstream build runs
-from a different working directory.
+The compiler-owned `tsl_variant_benchmarks` cfg is carried in `RUSTFLAGS` so
+the consumer's generated-code context exactly matches the producer; it is an
+unpublished verification switch, not a package feature. The build script
+validates the policy and does not execute timing code. An ordinary build with no
+policy input still uses the authored default. Results and policies belong below
+the Cargo target tree, never below generated `src/`. The artifact expression
+follows a custom `CARGO_TARGET_DIR`; pass an absolute policy path when a
+downstream build runs from a different working directory.
 
 Rust policies are native x86-64, CPU-, compiler-, Cargo-, generated-source-, and
 context-bound artifacts. They are not portable across machines, emulators, or

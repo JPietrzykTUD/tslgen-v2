@@ -8,7 +8,6 @@ from tslc.value_tests.case_helpers import sanitize
 from tslc.value_tests.literals import cpp_literal_list, rust_literal_list
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestProfilePlan
 
-
 def compile_failure_target_name(
     profile: ValueTestProfilePlan,
     case: ValueTestCasePlan,

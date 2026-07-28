@@ -287,7 +287,10 @@ def pointer_lifetime_case(
         base_spelling=specs[0].base_type_spelling,
         lanes=case.lanes or 1,
         inputs=ValueTestInputs(scalars=scalar_inputs),
-        expectation=ValueTestExpectation(values=case.expected),
+        expectation=ValueTestExpectation(
+            values=case.expected,
+            comparison=case.comparison,
+        ),
         invocation=ValueTestInvocation(
             result_kind=specs[0].result_kind,
             param_kinds=specs[0].param_kinds,
@@ -314,7 +317,10 @@ def pointer_free_case(
         base_spelling=specs[0].base_type_spelling,
         lanes=case.lanes or 1,
         inputs=ValueTestInputs(scalars=scalar_inputs),
-        expectation=ValueTestExpectation(values=case.expected),
+        expectation=ValueTestExpectation(
+            values=case.expected,
+            comparison=case.comparison,
+        ),
         invocation=ValueTestInvocation(
             result_kind=specs[0].result_kind,
             param_kinds=specs[0].param_kinds,

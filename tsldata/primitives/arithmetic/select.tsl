@@ -167,10 +167,10 @@ prim<v:=(v,v)> max(vec_a, vec_b):
         implementation:
           tsil """
             complete(
-              call<primitive=blend>(
+              call<primitive=select>(
                 call<primitive=less_than>(vec_a, vec_b),
-                vec_a,
-                vec_b
+                vec_b,
+                vec_a
               )
             );
           """
@@ -184,10 +184,10 @@ prim<v:=(v,v)> max(vec_a, vec_b):
         implementation:
           tsil """
             complete(
-              call<primitive=blend>(
+              call<primitive=select>(
                 call<primitive=less_than>(vec_a, vec_b),
-                vec_a,
-                vec_b
+                vec_b,
+                vec_a
               )
             );
           """
@@ -371,10 +371,10 @@ prim<v:=(v,v)> min(vec_a, vec_b):
         implementation:
           tsil """
             complete(
-              call<primitive=blend>(
+              call<primitive=select>(
                 call<primitive=less_than>(vec_a, vec_b),
-                vec_b,
-                vec_a
+                vec_a,
+                vec_b
               )
             );
           """
@@ -388,10 +388,10 @@ prim<v:=(v,v)> min(vec_a, vec_b):
         implementation:
           tsil """
             complete(
-              call<primitive=blend>(
+              call<primitive=select>(
                 call<primitive=less_than>(vec_a, vec_b),
-                vec_b,
-                vec_a
+                vec_a,
+                vec_b
               )
             );
           """

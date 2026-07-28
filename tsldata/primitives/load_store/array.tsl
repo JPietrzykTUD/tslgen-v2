@@ -1,4 +1,7 @@
 prim<s[]:=v> to_array(a):
+  operation vector_to_array
+  operand_roles:
+    primary a
   brief_description "Copies the lanes of a vector register into an array value."
   detailed_description """
     Materializes the lanes of a vector register into an array-like value in
@@ -211,6 +214,9 @@ prim<s[]:=v> to_array(a):
                complete(temp) ;
             """
 prim<v:=s[]> from_array(data):
+  operation vector_from_array
+  operand_roles:
+    value data
   brief_description "Builds a vector register from an array of lane values."
   detailed_description """
     Constructs a vector register from an array-like value in increasing lane
@@ -257,7 +263,7 @@ prim<v:=s[]> from_array(data):
           reasons [compiler_builtin, raw_memory]
         implementation:
           tsil """
-            var<typed>(vector::register, result, value(uninit::array));
+            var<typed>(vector::register, result, call<primitive=set_zero[Vec]>());
             mem<copy>(&result, data.as_ptr(), sizeof(result));
             complete(result);
           """
@@ -281,7 +287,7 @@ prim<v:=s[]> from_array(data):
           reasons [raw_memory]
         implementation:
           tsil """
-            var<typed>(vector::register, result, value(uninit::array));
+            var<typed>(vector::register, result, call<primitive=set_zero[Vec]>());
             mem<copy>(
               cast<reinterpret, type=ptr>(void, &result),
               cast<reinterpret, type=const_ptr>(void, data.as_ptr()),
@@ -315,6 +321,9 @@ prim<v:=s[]> from_array(data):
             complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
           """
 prim<s:=v[idx]> extract_value(a):
+  operation extract_lane
+  operand_roles:
+    primary a
   brief_description "Returns the scalar lane value at the compile-time index."
   detailed_description """
     Extracts one scalar lane from a vector register. The lane index is a
@@ -670,6 +679,10 @@ prim<s:=v[idx]> extract_value(a):
           tsil "complete(a);"
 
 prim<v:=(v,s)> insert_value(a, value):
+  operation insert_lane
+  operand_roles:
+    primary a
+    value value
   brief_description "Replaces the scalar lane at the compile-time index."
   detailed_description """
     Returns a vector equal to `a` except that the lane selected by the
@@ -760,4 +773,131 @@ prim<v:=(v,s)> insert_value(a, value):
                 call<primitive=set1[Vec]>(value)
               )
             );
+          """
+
+prim<s:=(v,usize)> extract_value_at(data, index):
+  operation extract_lane
+  operand_roles:
+    primary data
+    index index
+  brief_description "Returns the scalar lane value at a valid runtime index."
+  detailed_description """
+    Extracts one scalar lane from a vector register at a runtime index. The
+    caller must provide an index less than the selected vector lane count.
+    """
+  semantics """
+    input: register data, runtime size index
+    precondition: index < lane_count(data)
+    return data[index]
+    """
+  tests:
+    - {tags [first, byte], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 255], 0], expected 1}}
+    - {tags [last, byte], type "si8", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8, 9, -10, 11, -12, 13, -14, 15, -128], 15], expected -128}}
+    - {tags [first, word], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 65535], 0], expected 1}}
+    - {tags [last, word], type "si16", case {inputs [[1, -2, 3, -4, 5, -6, 7, -32768], 7], expected -32768}}
+    - {tags [first, dword], type "ui32", case {inputs [[1, 2, 3, 4294967295], 0], expected 1}}
+    - {tags [last, dword], type "si32", case {inputs [[1, -2, 3, -2147483648], 3], expected -2147483648}}
+    - {tags [first, qword], type "ui64", case {inputs [[1, 18446744073709551615], 0], expected 1}}
+    - {tags [last, qword], type "si64", case {inputs [[1, -9223372036854775808], 1], expected -9223372036854775808}}
+    - {tags [last, float], type "f32", case {inputs [[1.0, -2.0, 3.5, "-INFINITY"], 3], expected "-INFINITY"}}
+    - {tags [last, double], type "f64", case {inputs [[1.0, -0.0], 1], expected -0.0}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(data);"
+    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve, wasm128]:
+      arith:
+        requires:
+          generic []
+          clang_v128 []
+          oneapi_fpga []
+          oneapi_fpga_rtl []
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          avx2 [avx]
+          sse_vl [sse2, avx512f, avx512vl]
+          sse [sse]
+          neon [neon]
+          sve [sve]
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
+            complete(lanes[index]);
+          """
+
+prim<v:=(v,usize,s)> insert_value_at(data, index, value):
+  operation insert_lane
+  operand_roles:
+    primary data
+    index index
+    value value
+  brief_description "Returns the vector with one valid runtime-indexed lane replaced."
+  detailed_description """
+    Returns a vector equal to `data` except that the lane at the runtime index
+    contains `value`. The caller must provide an index less than the selected
+    vector lane count.
+    """
+  semantics """
+    input: register data, runtime size index, scalar value
+    precondition: index < lane_count(data)
+    result = data
+    result[index] = value
+    return result
+    """
+  tests:
+    - {tags [first, byte], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 0, 255], expected [255, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [last, byte], type "si8", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8, 9, -10, 11, -12, 13, -14, 15, -16], 15, -128], expected [1, -2, 3, -4, 5, -6, 7, -8, 9, -10, 11, -12, 13, -14, 15, -128]}}
+    - {tags [first, word], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 0, 65535], expected [65535, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [last, word], type "si16", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], 7, -32768], expected [1, -2, 3, -4, 5, -6, 7, -32768]}}
+    - {tags [first, dword], type "ui32", case {inputs [[1, 2, 3, 4], 0, 4294967295], expected [4294967295, 2, 3, 4]}}
+    - {tags [last, dword], type "si32", case {inputs [[1, -2, 3, -4], 3, -2147483648], expected [1, -2, 3, -2147483648]}}
+    - {tags [first, qword], type "ui64", case {inputs [[1, 2], 0, 18446744073709551615], expected [18446744073709551615, 2]}}
+    - {tags [last, qword], type "si64", case {inputs [[1, -2], 1, -9223372036854775808], expected [1, -9223372036854775808]}}
+    - {tags [last, float], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], 3, INFINITY], expected [1.0, -2.0, 3.5, INFINITY]}}
+    - {tags [last, double], type "f64", case {inputs [[1.0, -2.0], 1, -0.0], expected [1.0, -0.0]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(value);"
+    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve, wasm128]:
+      arith:
+        requires:
+          generic []
+          clang_v128 []
+          oneapi_fpga []
+          oneapi_fpga_rtl []
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          avx2 [avx]
+          sse_vl [sse2, avx512f, avx512vl]
+          sse [sse]
+          neon [neon]
+          sve [sve]
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(lanes, call<primitive=to_array[Vec]>(data));
+            array<set>(lanes, index, value);
+            complete(call<primitive=from_array[Vec]>(lanes));
           """

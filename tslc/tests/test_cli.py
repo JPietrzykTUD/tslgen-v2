@@ -90,7 +90,7 @@ def test_cli_test_flag_enables_existing_value_test_paths(
                         backend_id="rust",
                         profile_name="avx2",
                         step="test",
-                        argv=("cargo", "test", "--features", "avx2,value_tests"),
+                        argv=("cargo", "test", "--features", "value_tests"),
                     ),
                     returncode=0,
                     stdout="test result: ok\n",
@@ -136,7 +136,7 @@ def test_cli_test_flag_enables_existing_value_test_paths(
     assert "through sde: /tmp/sde64" in captured.out
     assert "[test-output] cpp avx2: ctest --test-dir build --output-on-failure" in captured.out
     assert "100% tests passed" in captured.out
-    assert "[test-output] rust avx2: cargo test --features avx2,value_tests" in captured.out
+    assert "[test-output] rust avx2: cargo test --features value_tests" in captured.out
     assert "test result: ok" in captured.out
     assert "quiet build output" not in captured.out
     assert "build/test-verified" in captured.out

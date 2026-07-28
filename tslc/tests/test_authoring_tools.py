@@ -206,6 +206,15 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
                 'backends = ["cpp"]',
                 'authoring_profiles = ["scalar"]',
                 'output_root = "out"',
+                "[tslc.rust_package]",
+                'name = "custom-tsl"',
+                'version = "1.2.3"',
+                'edition = "2024"',
+                'rust_version = "1.85"',
+                'license = "Apache-2.0"',
+                'repository = "https://example.test/repository"',
+                'documentation = "https://example.test/documentation"',
+                'readme = "CRATE.md"',
                 "[tslc.toolchains.cpp]",
                 'compiler = "clang++"',
                 "[tslc.runners]",
@@ -228,6 +237,11 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
     assert config.toolchains["cpp"].compiler == ("clang++",)
     assert config.runner_paths == {"sde": "/opt/sde64"}
     assert config.tool_paths == {"oneapi-cpp": "/opt/oneapi/icpx"}
+    assert config.rust_package.name == "custom-tsl"
+    assert config.rust_package.version == "1.2.3"
+    assert config.rust_package.edition == "2024"
+    assert config.rust_package.rust_version == "1.85"
+    assert config.rust_package.readme == "CRATE.md"
 
 
 def test_generate_uses_discovered_backend_defaults_for_formatting(
@@ -312,6 +326,44 @@ def test_doctor_uses_verifier_preflight_for_selected_backend_and_profile(
     assert profile["build_ready"] is True
     assert profile["native_run"] is True
     assert [command.step for command in seen] == ["preflight"]
+
+
+def test_doctor_reports_the_rust_target_attached_during_preparation(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        if command.step == "host-target":
+            return BuildCommandResult(
+                command=command,
+                returncode=0,
+                stdout="host: x86_64-unknown-linux-gnu\n",
+            )
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = diagnose(
+        sources=(data_root,),
+        machine_profiles=machine_profiles_path,
+        backends=("rust",),
+        profiles=("avx2",),
+        work_root=tmp_path / "doctor",
+        runner=runner,
+    )
+
+    assert report["diagnostics"] == []
+    profile = report["backends"][0]["profiles"][0]
+    assert profile["name"] == "avx2"
+    assert profile["build_ready"] is True
+    assert profile["target"] == "x86_64-unknown-linux-gnu"
+    assert [command.step for command in seen] == [
+        "preflight",
+        "host-target",
+        "target-preflight",
+    ]
 
 
 def test_doctor_reports_registered_backend_through_capability_hooks(

@@ -13,8 +13,9 @@ running the rest. Where ``explain`` tells the *narrative* of one slot across all
   --stage selection   the slots a profile selects (primitive × extension × type [× target]) and the
                       chosen body's source. "What does profile X actually emit for primitive Y?"
   --stage lowered     the resolved ``LoweredSpecialization`` — register/type spellings, intrinsic
-                      names in the body, mask policy, required features — before the backend wraps
-                      it. "Did `base::signed_of(base::in)` resolve to the right suffix?"
+                      names in the body, semantic contracts, mask policy, and required features —
+                      before the backend wraps it. "Did `base::signed_of(base::in)` resolve to the
+                      right suffix?"
 
 Run from the repository with ``tslc/src`` on ``PYTHONPATH``:
 
@@ -176,6 +177,24 @@ def _dump_catalog(catalog: Catalog, primitive: str | None) -> tuple[str, object,
         )
         if prim.result_target is not None:
             lines.append(f"    result_target: {prim.result_target}")
+        if prim.operation is not None:
+            roles = ", ".join(
+                f"{binding.role.value}={binding.parameter_name}"
+                for binding in prim.operation.operand_bindings
+            )
+            lines.append(
+                f"    operation: {prim.operation.kind.value}  roles={{{roles}}}"
+            )
+        if prim.memory is not None:
+            lines.append(
+                f"    memory: access={prim.memory.access.value}  "
+                f"addressing={prim.memory.addressing.value}"
+            )
+        if prim.conversion is not None:
+            lines.append(
+                f"    conversion: kind={prim.conversion.kind.value}  "
+                f"lane_count={prim.conversion.lane_count.value}"
+            )
         for impl in prim.implementations:
             lines.append(
                 f"    [{impl.extension} / {impl.type_group}"
@@ -215,6 +234,23 @@ def _primitive_json(prim: Primitive) -> dict:
         "parameters": list(prim.parameters),
         "attributes": dict(prim.attributes),
         "result_target": list(prim.result_target) if prim.result_target else None,
+        "operation": _operation_json(prim),
+        "memory": (
+            {
+                "access": prim.memory.access.value,
+                "addressing": prim.memory.addressing.value,
+            }
+            if prim.memory is not None
+            else None
+        ),
+        "conversion": (
+            {
+                "kind": prim.conversion.kind.value,
+                "lane_count": prim.conversion.lane_count.value,
+            }
+            if prim.conversion is not None
+            else None
+        ),
         "tests": len(prim.tests),
         "implementations": [
             {
@@ -225,6 +261,23 @@ def _primitive_json(prim: Primitive) -> dict:
                 "source": _src(impl.selector_source or impl.source),
             }
             for impl in prim.implementations
+        ],
+    }
+
+
+def _operation_json(prim: Primitive) -> dict | None:
+    if prim.operation is None:
+        return None
+    return {
+        "name": prim.operation.kind.value,
+        "operand_roles": [
+            {
+                "role": binding.role.value,
+                "parameter": binding.parameter_name,
+                "parameter_index": binding.parameter_index,
+                "parameter_kind": binding.parameter_kind,
+            }
+            for binding in prim.operation.operand_bindings
         ],
     }
 
@@ -408,6 +461,30 @@ def _lowered_text(header: str, spec: LoweredSpecialization) -> list[str]:
     lines = [f"  {header}:"]
     lines.append(f"      register={spec.register_spelling}  base={spec.base_type_spelling}")
     lines.append(f"      result={spec.result_kind}  params=({', '.join(spec.param_kinds)})")
+    semantics = spec.primitive_semantics
+    if semantics.overload is not None:
+        lines.append(
+            "      overload="
+            f"{semantics.overload.axis}:{semantics.overload.value}  "
+            f"primary={str(semantics.overload.is_primary_value).lower()}"
+        )
+    if semantics.arithmetic is not None:
+        operations = ", ".join(
+            operation.value for operation in semantics.arithmetic.ordered_operations
+        )
+        lines.append(f"      arithmetic=[{operations}]")
+    if semantics.operation is not None:
+        lines.append(f"      operation={semantics.operation.kind.value}")
+    if semantics.memory is not None:
+        lines.append(
+            f"      memory={semantics.memory.access.value}:"
+            f"{semantics.memory.addressing.value}"
+        )
+    if semantics.conversion is not None:
+        lines.append(
+            f"      conversion={semantics.conversion.kind.value}:"
+            f"{semantics.conversion.lane_count.value}"
+        )
     if spec.mask_policy is not None:
         lines.append(f"      mask_policy={spec.mask_policy}")
     if spec.immediate is not None:
@@ -430,12 +507,86 @@ def _lowered_json(spec: LoweredSpecialization) -> dict:
         "base_type": spec.base_type_spelling,
         "result_kind": spec.result_kind,
         "param_kinds": list(spec.param_kinds),
+        "primitive_semantics": _lowered_semantics_json(spec),
         "mask_policy": spec.mask_policy,
         "immediate": list(spec.immediate) if spec.immediate else None,
         "required_features": sorted(spec.required_features),
         "internal_unsafe": spec.safety.internal_unsafe,
         "caller_unsafe": spec.safety.caller_unsafe,
         "body": spec.body_text.strip(),
+    }
+
+
+def _lowered_semantics_json(spec: LoweredSpecialization) -> dict:
+    semantics = spec.primitive_semantics
+    overload = semantics.overload
+    arithmetic = semantics.arithmetic
+    operation = semantics.operation
+    memory = semantics.memory
+    conversion = semantics.conversion
+    return {
+        "overload": (
+            {
+                "axis": overload.axis,
+                "value": overload.value,
+                "is_primary_value": overload.is_primary_value,
+            }
+            if overload is not None
+            else None
+        ),
+        "arithmetic": (
+            {
+                "operations": [
+                    item.value for item in arithmetic.ordered_operations
+                ],
+                "operand_roles": [
+                    {
+                        "role": binding.role.value,
+                        "parameter": binding.parameter_name,
+                        "parameter_index": binding.parameter_index,
+                        "parameter_kind": binding.parameter_kind,
+                    }
+                    for binding in arithmetic.operand_bindings
+                ],
+                "guarantees": [
+                    item.value for item in arithmetic.ordered_guarantees
+                ],
+            }
+            if arithmetic is not None
+            else None
+        ),
+        "operation": (
+            {
+                "name": operation.kind.value,
+                "operand_roles": [
+                    {
+                        "role": binding.role.value,
+                        "parameter": binding.parameter_name,
+                        "parameter_index": binding.parameter_index,
+                        "parameter_kind": binding.parameter_kind,
+                    }
+                    for binding in operation.operand_bindings
+                ],
+            }
+            if operation is not None
+            else None
+        ),
+        "memory": (
+            {
+                "access": memory.access.value,
+                "addressing": memory.addressing.value,
+            }
+            if memory is not None
+            else None
+        ),
+        "conversion": (
+            {
+                "kind": conversion.kind.value,
+                "lane_count": conversion.lane_count.value,
+            }
+            if conversion is not None
+            else None
+        ),
     }
 
 

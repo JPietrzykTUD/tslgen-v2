@@ -174,7 +174,9 @@ def _render_source(
         required_policy_rustflags="&["
         + ", ".join(
             rust_string_literal(flag)
-            for flag in RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags
+            for flag in RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags_for(
+                profile.backend_feature_spellings
+            )
         )
         + "]",
         required_policy_incremental_environment=rust_string_literal(

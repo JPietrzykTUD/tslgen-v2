@@ -49,6 +49,10 @@ def rust_registrations(
         array = f"array_type<{base}, {lane_count}, {alignment}>"
         tag = rust_extension_tag(extension)
         lines.append(
+            "impl crate::tsl_core::representation_sealed::SimdVector "
+            f"for Simd<{base}, {tag}> {{}}"
+        )
+        lines.append(
             f"impl SimdVector for Simd<{base}, {tag}> {{ "
             f"type BaseType = {base}; type Extension = {tag}; "
             f"type RegisterType = {register}; "
@@ -57,6 +61,10 @@ def rust_registrations(
             f"type WithExtension<ToExtension> = Simd<{base}, ToExtension>; "
             f"const ALIGN: usize = {alignment}; "
             f"fn lane_count() -> usize {{ {lane_count} }} }}"
+        )
+        lines.append(
+            "impl crate::tsl_core::representation_sealed::StaticSimdVector "
+            f"for Simd<{base}, {tag}> {{}}"
         )
         lines.append(
             f"impl StaticSimdVector for Simd<{base}, {tag}> {{ "
@@ -76,7 +84,12 @@ def _rust_sized_registrations(
         sized_tag = f"{tag}<LANES>"
         lines.append(f"pub struct {tag}<const LANES: usize>;")
         lines.append(
-            f"impl<T, const LANES: usize> SimdVector for Simd<T, {sized_tag}> {{ "
+            "impl<T, const LANES: usize> "
+            "crate::tsl_core::representation_sealed::SimdVector "
+            f"for Simd<T, {sized_tag}> {{}}"
+        )
+        lines.append(
+            f"impl<T: Copy, const LANES: usize> SimdVector for Simd<T, {sized_tag}> {{ "
             "type BaseType = T; "
             f"type Extension = {sized_tag}; "
             "type RegisterType = array_type<T, LANES>; "
@@ -88,7 +101,12 @@ def _rust_sized_registrations(
             "fn lane_count() -> usize { LANES } }"
         )
         lines.append(
-            f"impl<T, const LANES: usize> StaticSimdVector for Simd<T, {sized_tag}> {{ "
+            "impl<T, const LANES: usize> "
+            "crate::tsl_core::representation_sealed::StaticSimdVector "
+            f"for Simd<T, {sized_tag}> {{}}"
+        )
+        lines.append(
+            f"impl<T: Copy, const LANES: usize> StaticSimdVector for Simd<T, {sized_tag}> {{ "
             "const ELEMENT_COUNT: usize = LANES; }"
         )
     return lines
@@ -207,12 +225,21 @@ def rust_imask_type(
     if kind == "same_as_mask_type":
         return mask
     lanes = vector_bits // type_bits
-    width = 8 if lanes <= 8 else 16 if lanes <= 16 else 32 if lanes <= 32 else 64
+    width = rust_imask_width(lanes)
     return f"u{width}"
+
+
+def rust_imask_width(lanes: int) -> int:
+    if lanes <= 0:
+        raise ValueError("Rust integral masks require a positive lane count")
+    return 8 if lanes <= 8 else 16 if lanes <= 16 else 32 if lanes <= 32 else 64
 
 
 __all__ = (
     "RustVectorRegistration",
+    "rust_imask_type",
+    "rust_imask_width",
+    "rust_mask_type",
     "rust_registrations",
     "rust_vector_registrations",
 )

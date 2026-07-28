@@ -155,6 +155,14 @@ def _base_dispatch_clauses(
         elif mode == "projection":
             clauses.append(f"{param.name}::BaseType: BaseTypeDispatch")
         elif mode == "concrete":
+            if (
+                param.name == shape.result_vector_param
+                and param.base_type_binding_spelling is not None
+            ):
+                clauses.append(
+                    f"{param.name}: SimdVector<BaseType = "
+                    f"{param.base_type_binding_spelling}>"
+                )
             clauses.append(
                 f"{param.name}::BaseType: BaseTypeDispatch<Key = "
                 f"{rust_base_dispatch_key_tag(param.base_type_binding)}>"

@@ -2,37 +2,30 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <random>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 
 #include <tsl.hpp>
 
-#include "cosort_network.hpp"
 #include "cosort_bitonic_leaf.hpp"
+#include "cosort_network.hpp"
+#include "equal_runs.hpp"
+#include "multicolumn_sort_types.hpp"
+#include "multicolumn_sort_tasks.hpp"
 
 
 enum class TslLeafKind { INSERTION, NETWORK };
 enum class TslPartitionKind { TWO_WAY, THREE_WAY };
 
 
-// -----------------------------------------------------------------------------
-// Multi-column co-sorting quicksort (prototype).
-//
-// Sorts a key column and reorders a runtime number of payload columns in place
-// so every column follows the key permutation. The vectorized partition reuses
-// TslPartitionReplayStep: the compress/expand plan is derived from the keys once
-// per swap and replayed on each payload column.
-//
-// Two policies select the variant:
-//   PartitionKind: TWO_WAY (< | >=) or THREE_WAY (< | == | >, better on
-//                  duplicates, matching the production partition).
-//   LeafKind:      INSERTION (scalar co-sort, O(m) moves/element/column) or
-//                  NETWORK (co-sorting bitonic leaf, SIMD replay per column).
-// Median-of-three pivots and loop-on-larger recursion bound the stack depth.
-// -----------------------------------------------------------------------------
+// Sorts one active key while replaying its permutation on a runtime number of
+// payload columns. sort_columns builds a lexicographic sort from that primitive
+// by sorting the next column only inside complete equal runs of the active key.
 template <
   class DataType = std::uint32_t,
   TslPartitionKind PartitionKind = TslPartitionKind::TWO_WAY,
@@ -49,7 +42,7 @@ class TslMultiColumnQuickSorter {
   static constexpr std::size_t lane_count = DataSimdStyle::lane_count_v;
   static constexpr std::size_t compute_leaf_threshold() {
     if constexpr (LeafKind == TslLeafKind::NETWORK) {
-      return TslCoSortBitonicLeaf<DataType, SimdStyle>::capacity;  // scales with the extension's lane count
+      return TslCoSortBitonicLeaf<DataType, SimdStyle>::capacity;
     } else {
       return 64;
     }
@@ -58,63 +51,129 @@ class TslMultiColumnQuickSorter {
 
   using column_pointers = std::array<DataType *, MaxColumns>;
 
-  std::mt19937_64 rng;
-  std::size_t column_count = 0;
+  struct three_way_bounds {
+    std::size_t left_end;
+    std::size_t equal_begin;
+    std::size_t equal_end;
+    std::size_t right_begin;
+  };
 
-  void swap_all(DataType * keys, column_pointers const & cols, std::size_t i, std::size_t j) {
-    std::swap(keys[i], keys[j]);
-    for (std::size_t column = 0; column < column_count; ++column) {
-      std::swap(cols[column][i], cols[column][j]);
+  std::uint64_t const seed_;
+
+  static auto mix_seed(std::uint64_t value) -> std::uint64_t {
+    value += 0x9e3779b97f4a7c15ULL;
+    value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
+    return value ^ (value >> 31);
+  }
+
+  auto task_seed(
+    std::size_t column,
+    std::size_t begin,
+    std::size_t end
+  ) const -> std::uint64_t {
+    auto value = seed_;
+    value ^= mix_seed(static_cast<std::uint64_t>(column));
+    value ^= mix_seed(static_cast<std::uint64_t>(begin));
+    value ^= mix_seed(static_cast<std::uint64_t>(end));
+    return mix_seed(value);
+  }
+
+  template <TslSortOrder Order>
+  static auto before(DataType left, DataType right) -> bool {
+    if constexpr (Order == TslSortOrder::ASCENDING) {
+      return left < right;
+    } else {
+      return left > right;
     }
   }
 
-  auto get_pivot(DataType * keys, column_pointers const & cols, std::size_t count) -> DataType {
+  static void swap_all(
+    DataType * keys,
+    column_pointers const & columns,
+    std::size_t payload_count,
+    std::size_t left,
+    std::size_t right
+  ) {
+    std::swap(keys[left], keys[right]);
+    for (std::size_t column = 0; column < payload_count; ++column) {
+      std::swap(columns[column][left], columns[column][right]);
+    }
+  }
+
+  template <TslSortOrder Order>
+  static auto get_pivot(
+    DataType * keys,
+    column_pointers const & columns,
+    std::size_t payload_count,
+    std::size_t count,
+    std::mt19937_64 & rng
+  ) -> DataType {
     auto const i0 = static_cast<std::size_t>(rng() % count);
     auto const i1 = static_cast<std::size_t>(rng() % count);
     auto const i2 = static_cast<std::size_t>(rng() % count);
-    auto const a = keys[i0], b = keys[i1], c = keys[i2];
+    auto const a = keys[i0];
+    auto const b = keys[i1];
+    auto const c = keys[i2];
     std::size_t median_index;
-    if (a < b) {
-      median_index = (b < c) ? i1 : (a < c ? i2 : i0);
+    if (before<Order>(a, b)) {
+      median_index = before<Order>(b, c) ? i1 : (before<Order>(a, c) ? i2 : i0);
     } else {
-      median_index = (a < c) ? i0 : (b < c ? i2 : i1);
+      median_index = before<Order>(a, c) ? i0 : (before<Order>(b, c) ? i2 : i1);
     }
-    swap_all(keys, cols, median_index, count - 1);
+    swap_all(keys, columns, payload_count, median_index, count - 1);
     return keys[count - 1];
   }
 
-  // Partitions [0, count) around the pivot at keys[count - 1], co-moving every
-  // payload column. Returns the index where the left region ends: for LESS_THAN
-  // the first >= pivot, for EQUAL_TO the first > pivot.
-  template <TslPartitionMode Mode>
-  auto partition(DataType * keys, column_pointers const & cols, std::size_t count, DataType pivot_value) -> std::size_t {
+  // The pivot remains at keys[count - 1]. BEFORE_PIVOT returns the first
+  // element not ordered before it. EQUAL_TO returns the first element ordered
+  // after it within a range known to contain only equal/after values.
+  template <TslSortOrder Order, TslPartitionMode Mode>
+  static auto partition(
+    DataType * keys,
+    column_pointers const & columns,
+    std::size_t payload_count,
+    std::size_t count,
+    DataType pivot_value
+  ) -> std::size_t {
     auto const pivot_vec = tsl::set1<DataSimdStyle>(pivot_value);
     DataType * left_ptr = keys;
     DataType * const pivot_ptr = keys + count - 1;
     DataType * scalar_end = pivot_ptr;
 
-    register_type key_l{}, key_r{};
+    register_type key_l{};
+    register_type key_r{};
     std::size_t bad_l_count = 0;
     std::size_t bad_r_count = 0;
     enum class advance_state { LEFT, RIGHT, BOTH };
-    advance_state advance = advance_state::BOTH;
+    auto advance = advance_state::BOTH;
 
-    auto const bad_left = [&](register_type v) {
-      if constexpr (Mode == TslPartitionMode::LESS_THAN) {
-        return tsl::greater_than_or_equal<DataSimdStyle>(v, pivot_vec);
+    auto const bad_left = [&](register_type value) {
+      if constexpr (Mode == TslPartitionMode::BEFORE_PIVOT) {
+        if constexpr (Order == TslSortOrder::ASCENDING) {
+          return tsl::greater_than_or_equal<DataSimdStyle>(value, pivot_vec);
+        } else {
+          return tsl::less_than_or_equal<DataSimdStyle>(value, pivot_vec);
+        }
+      } else if constexpr (Order == TslSortOrder::ASCENDING) {
+        return tsl::greater_than<DataSimdStyle>(value, pivot_vec);
       } else {
-        return tsl::greater_than<DataSimdStyle>(v, pivot_vec);
+        return tsl::less_than<DataSimdStyle>(value, pivot_vec);
       }
     };
-    auto const bad_right = [&](register_type v) {
-      if constexpr (Mode == TslPartitionMode::LESS_THAN) {
-        return tsl::less_than<DataSimdStyle>(v, pivot_vec);
+    auto const bad_right = [&](register_type value) {
+      if constexpr (Mode == TslPartitionMode::BEFORE_PIVOT) {
+        if constexpr (Order == TslSortOrder::ASCENDING) {
+          return tsl::less_than<DataSimdStyle>(value, pivot_vec);
+        } else {
+          return tsl::greater_than<DataSimdStyle>(value, pivot_vec);
+        }
       } else {
-        return tsl::equal<DataSimdStyle>(v, pivot_vec);
+        return tsl::equal<DataSimdStyle>(value, pivot_vec);
       }
     };
 
-    if (static_cast<std::size_t>(pivot_ptr - left_ptr) >= (2 * lane_count)) {
+    if (static_cast<std::size_t>(pivot_ptr - left_ptr) >= 2 * lane_count) {
       DataType * right_ptr = pivot_ptr - lane_count;
       while ((right_ptr - left_ptr) >= static_cast<std::ptrdiff_t>(lane_count)) {
         if (advance == advance_state::LEFT || advance == advance_state::BOTH) {
@@ -136,20 +195,35 @@ class TslMultiColumnQuickSorter {
           }
         }
 
-        auto const left_off = static_cast<std::size_t>(left_ptr - keys);
-        auto const right_off = static_cast<std::size_t>(right_ptr - keys);
-        std::array<register_type, MaxColumns> pay_l, pay_r, pay_wl, pay_wr;
-        for (std::size_t column = 0; column < column_count; ++column) {
-          pay_l[column] = tsl::load<DataSimdStyle, false>(cols[column] + left_off);
-          pay_r[column] = tsl::load<DataSimdStyle, false>(cols[column] + right_off);
+        auto const left_offset = static_cast<std::size_t>(left_ptr - keys);
+        auto const right_offset = static_cast<std::size_t>(right_ptr - keys);
+        std::array<register_type, MaxColumns> payload_l{};
+        std::array<register_type, MaxColumns> payload_r{};
+        std::array<register_type, MaxColumns> payload_write_l{};
+        std::array<register_type, MaxColumns> payload_write_r{};
+        for (std::size_t column = 0; column < payload_count; ++column) {
+          payload_l[column] = tsl::load<DataSimdStyle, false>(columns[column] + left_offset);
+          payload_r[column] = tsl::load<DataSimdStyle, false>(columns[column] + right_offset);
         }
-        register_type key_wl, key_wr;
-        Partition::template step<Mode>(key_l, key_r, pay_l.data(), pay_r.data(), column_count, pivot_vec, key_wl, key_wr, pay_wl.data(), pay_wr.data());
-        tsl::store<DataSimdStyle, false>(left_ptr, key_wl);
-        tsl::store<DataSimdStyle, false>(right_ptr, key_wr);
-        for (std::size_t column = 0; column < column_count; ++column) {
-          tsl::store<DataSimdStyle, false>(cols[column] + left_off, pay_wl[column]);
-          tsl::store<DataSimdStyle, false>(cols[column] + right_off, pay_wr[column]);
+        register_type key_write_l;
+        register_type key_write_r;
+        Partition::template step<Mode, Order>(
+          key_l,
+          key_r,
+          payload_l.data(),
+          payload_r.data(),
+          payload_count,
+          pivot_vec,
+          key_write_l,
+          key_write_r,
+          payload_write_l.data(),
+          payload_write_r.data()
+        );
+        tsl::store<DataSimdStyle, false>(left_ptr, key_write_l);
+        tsl::store<DataSimdStyle, false>(right_ptr, key_write_r);
+        for (std::size_t column = 0; column < payload_count; ++column) {
+          tsl::store<DataSimdStyle, false>(columns[column] + left_offset, payload_write_l[column]);
+          tsl::store<DataSimdStyle, false>(columns[column] + right_offset, payload_write_r[column]);
         }
 
         auto const swappable = std::min(bad_l_count, bad_r_count);
@@ -160,18 +234,18 @@ class TslMultiColumnQuickSorter {
       scalar_end = right_ptr + lane_count;
     }
 
-    auto const left_good = [pivot_value](DataType v) {
-      if constexpr (Mode == TslPartitionMode::LESS_THAN) {
-        return v < pivot_value;
+    auto const left_good = [pivot_value](DataType value) {
+      if constexpr (Mode == TslPartitionMode::BEFORE_PIVOT) {
+        return before<Order>(value, pivot_value);
       } else {
-        return v == pivot_value;
+        return value == pivot_value;
       }
     };
-    auto const right_good = [pivot_value](DataType v) {
-      if constexpr (Mode == TslPartitionMode::LESS_THAN) {
-        return !(v < pivot_value);
+    auto const right_good = [pivot_value](DataType value) {
+      if constexpr (Mode == TslPartitionMode::BEFORE_PIVOT) {
+        return !before<Order>(value, pivot_value);
       } else {
-        return v > pivot_value;
+        return before<Order>(pivot_value, value);
       }
     };
 
@@ -183,7 +257,13 @@ class TslMultiColumnQuickSorter {
         --scalar_end;
       }
       if (left_ptr < scalar_end) {
-        swap_all(keys, cols, static_cast<std::size_t>(left_ptr - keys), static_cast<std::size_t>((scalar_end - 1) - keys));
+        swap_all(
+          keys,
+          columns,
+          payload_count,
+          static_cast<std::size_t>(left_ptr - keys),
+          static_cast<std::size_t>((scalar_end - 1) - keys)
+        );
         ++left_ptr;
         --scalar_end;
       }
@@ -191,90 +271,755 @@ class TslMultiColumnQuickSorter {
     return static_cast<std::size_t>(left_ptr - keys);
   }
 
-  void insertion_leaf(DataType * keys, column_pointers const & cols, std::size_t count) {
-    for (std::size_t i = 1; i < count; ++i) {
-      auto const key = keys[i];
-      std::array<DataType, MaxColumns> payload;
-      for (std::size_t column = 0; column < column_count; ++column) {
-        payload[column] = cols[column][i];
+  template <TslSortOrder Order>
+  static void insertion_leaf(
+    DataType * keys,
+    column_pointers const & columns,
+    std::size_t payload_count,
+    std::size_t count
+  ) {
+    for (std::size_t index = 1; index < count; ++index) {
+      auto const key = keys[index];
+      std::array<DataType, MaxColumns> payload{};
+      for (std::size_t column = 0; column < payload_count; ++column) {
+        payload[column] = columns[column][index];
       }
-      std::size_t j = i;
-      while (j > 0 && key < keys[j - 1]) {
-        keys[j] = keys[j - 1];
-        for (std::size_t column = 0; column < column_count; ++column) {
-          cols[column][j] = cols[column][j - 1];
+      auto destination = index;
+      while (destination > 0 && before<Order>(key, keys[destination - 1])) {
+        keys[destination] = keys[destination - 1];
+        for (std::size_t column = 0; column < payload_count; ++column) {
+          columns[column][destination] = columns[column][destination - 1];
         }
-        --j;
+        --destination;
       }
-      keys[j] = key;
-      for (std::size_t column = 0; column < column_count; ++column) {
-        cols[column][j] = payload[column];
+      keys[destination] = key;
+      for (std::size_t column = 0; column < payload_count; ++column) {
+        columns[column][destination] = payload[column];
       }
     }
   }
 
-  void leaf(DataType * keys, column_pointers const & cols, std::size_t count) {
+  template <TslSortOrder Order>
+  static void leaf(
+    DataType * keys,
+    column_pointers const & columns,
+    std::size_t payload_count,
+    std::size_t count
+  ) {
     if constexpr (LeafKind == TslLeafKind::NETWORK) {
-      TslCoSortBitonicLeaf<DataType, SimdStyle>::sort(keys, cols.data(), column_count, count);
+      TslCoSortBitonicLeaf<DataType, SimdStyle>::template sort<Order>(
+        keys,
+        columns.data(),
+        payload_count,
+        count
+      );
     } else {
-      insertion_leaf(keys, cols, count);
+      insertion_leaf<Order>(keys, columns, payload_count, count);
     }
   }
 
-  void sort_impl(DataType * keys, column_pointers cols, std::size_t count) {
+  template <
+    TslSortOrder Order,
+    bool ReportCompletion,
+    class EqualBandSink,
+    class LeafSink
+  >
+  static void sort_impl(
+    DataType * keys,
+    column_pointers columns,
+    std::size_t payload_count,
+    std::size_t count,
+    std::mt19937_64 & rng,
+    std::size_t absolute_begin,
+    EqualBandSink & equal_band_sink,
+    LeafSink & leaf_sink
+  ) {
     while (count > leaf_threshold) {
-      auto const pivot_value = get_pivot(keys, cols, count);
-      std::size_t right_base;
-      std::size_t left_n;
-      std::size_t right_n;
+      auto const pivot_value = get_pivot<Order>(keys, columns, payload_count, count, rng);
+      std::size_t left_count;
+      std::size_t right_begin;
+      std::size_t right_count;
+
       if constexpr (PartitionKind == TslPartitionKind::TWO_WAY) {
-        auto const less_end = partition<TslPartitionMode::LESS_THAN>(keys, cols, count, pivot_value);
-        swap_all(keys, cols, less_end, count - 1);
-        left_n = less_end;
-        right_base = less_end + 1;
-        right_n = count - right_base;
+        auto const before_end = partition<Order, TslPartitionMode::BEFORE_PIVOT>(
+          keys,
+          columns,
+          payload_count,
+          count,
+          pivot_value
+        );
+        swap_all(keys, columns, payload_count, before_end, count - 1);
+        left_count = before_end;
+        right_begin = before_end + 1;
+        right_count = count - right_begin;
       } else {
-        auto const less_end = partition<TslPartitionMode::LESS_THAN>(keys, cols, count, pivot_value);
-        column_pointers mid_cols;
-        for (std::size_t column = 0; column < column_count; ++column) {
-          mid_cols[column] = cols[column] + less_end;
+        auto const before_end = partition<Order, TslPartitionMode::BEFORE_PIVOT>(
+          keys,
+          columns,
+          payload_count,
+          count,
+          pivot_value
+        );
+        column_pointers middle_columns{};
+        for (std::size_t column = 0; column < payload_count; ++column) {
+          middle_columns[column] = columns[column] + before_end;
         }
-        auto const equal_end = less_end + partition<TslPartitionMode::EQUAL_TO>(keys + less_end, mid_cols, count - less_end, pivot_value);
-        swap_all(keys, cols, equal_end, count - 1);
-        left_n = less_end;
-        right_base = equal_end + 1;
-        right_n = count - right_base;
+        auto const equal_pivot_position = before_end + partition<Order, TslPartitionMode::EQUAL_TO>(
+          keys + before_end,
+          middle_columns,
+          payload_count,
+          count - before_end,
+          pivot_value
+        );
+        swap_all(keys, columns, payload_count, equal_pivot_position, count - 1);
+        three_way_bounds const bounds{
+          before_end,
+          before_end,
+          equal_pivot_position + 1,
+          equal_pivot_position + 1,
+        };
+        left_count = bounds.left_end;
+        right_begin = bounds.right_begin;
+        right_count = count - right_begin;
+        if constexpr (ReportCompletion) {
+          equal_band_sink(
+            absolute_begin + bounds.equal_begin,
+            absolute_begin + bounds.equal_end
+          );
+        }
       }
 
-      column_pointers right_cols;
-      for (std::size_t column = 0; column < column_count; ++column) {
-        right_cols[column] = cols[column] + right_base;
+      column_pointers right_columns{};
+      for (std::size_t column = 0; column < payload_count; ++column) {
+        right_columns[column] = columns[column] + right_begin;
       }
-      DataType * const right_keys = keys + right_base;
-      if (left_n < right_n) {
-        sort_impl(keys, cols, left_n);
+      auto * const right_keys = keys + right_begin;
+      if (left_count < right_count) {
+        sort_impl<Order, ReportCompletion>(
+          keys,
+          columns,
+          payload_count,
+          left_count,
+          rng,
+          absolute_begin,
+          equal_band_sink,
+          leaf_sink
+        );
         keys = right_keys;
-        cols = right_cols;
-        count = right_n;
+        columns = right_columns;
+        count = right_count;
+        absolute_begin += right_begin;
       } else {
-        sort_impl(right_keys, right_cols, right_n);
-        count = left_n;
+        sort_impl<Order, ReportCompletion>(
+          right_keys,
+          right_columns,
+          payload_count,
+          right_count,
+          rng,
+          absolute_begin + right_begin,
+          equal_band_sink,
+          leaf_sink
+        );
+        count = left_count;
       }
     }
+
     if (count >= 2) {
-      leaf(keys, cols, count);
+      leaf<Order>(keys, columns, payload_count, count);
+    }
+    if constexpr (ReportCompletion) {
+      if (count != 0) {
+        leaf_sink(absolute_begin, absolute_begin + count);
+      }
+    }
+  }
+
+  template <bool ReportCompletion, class EqualBandSink, class LeafSink>
+  static void sort_active_range(
+    DataType * keys,
+    column_pointers const & columns,
+    std::size_t payload_count,
+    std::size_t count,
+    TslSortOrder order,
+    std::mt19937_64 & rng,
+    std::size_t absolute_begin,
+    EqualBandSink & equal_band_sink,
+    LeafSink & leaf_sink
+  ) {
+    if (count < 2) {
+      if constexpr (ReportCompletion) {
+        if (count == 1) {
+          leaf_sink(absolute_begin, absolute_begin + 1);
+        }
+      }
+      return;
+    }
+    if (order == TslSortOrder::ASCENDING) {
+      sort_impl<TslSortOrder::ASCENDING, ReportCompletion>(
+        keys,
+        columns,
+        payload_count,
+        count,
+        rng,
+        absolute_begin,
+        equal_band_sink,
+        leaf_sink
+      );
+    } else {
+      sort_impl<TslSortOrder::DESCENDING, ReportCompletion>(
+        keys,
+        columns,
+        payload_count,
+        count,
+        rng,
+        absolute_begin,
+        equal_band_sink,
+        leaf_sink
+      );
+    }
+  }
+
+  static auto payload_columns_for(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    std::size_t active_column,
+    std::size_t begin
+  ) -> column_pointers {
+    column_pointers payloads{};
+    for (auto column = active_column + 1; column < column_count; ++column) {
+      payloads[column - active_column - 1] = columns[column].data + begin;
+    }
+    return payloads;
+  }
+
+  template <TslRunDiscoveryKind Discovery>
+  void sort_columns_impl(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    std::size_t active_column,
+    std::size_t begin,
+    std::size_t end,
+    TslMultiColumnSortMetrics * metrics
+  ) const {
+    if (end - begin < 2 || active_column >= column_count) {
+      return;
+    }
+
+    auto const payload_count = column_count - active_column - 1;
+    auto const payloads = payload_columns_for(columns, column_count, active_column, begin);
+    auto rng = std::mt19937_64(task_seed(active_column, begin, end));
+    auto no_equal_band = [](std::size_t, std::size_t) {};
+    auto no_leaf = [](std::size_t, std::size_t) {};
+
+    if constexpr (
+      Discovery == TslRunDiscoveryKind::INCREMENTAL
+      && PartitionKind == TslPartitionKind::THREE_WAY
+    ) {
+      if (active_column + 1 == column_count) {
+        sort_active_range<false>(
+          columns[active_column].data + begin,
+          payloads,
+          payload_count,
+          end - begin,
+          columns[active_column].order,
+          rng,
+          begin,
+          no_equal_band,
+          no_leaf
+        );
+        return;
+      }
+
+      auto on_equal_band = [&](std::size_t band_begin, std::size_t band_end) {
+        if (band_end - band_begin < 2) {
+          return;
+        }
+        if (metrics != nullptr) {
+          ++metrics->direct_equal_bands;
+          metrics->direct_equal_band_rows += band_end - band_begin;
+        }
+        sort_columns_impl<Discovery>(
+          columns,
+          column_count,
+          active_column + 1,
+          band_begin,
+          band_end,
+          metrics
+        );
+      };
+      auto on_leaf = [&](std::size_t leaf_begin, std::size_t leaf_end) {
+        if (leaf_end - leaf_begin < 2) {
+          return;
+        }
+        if (metrics != nullptr) {
+          metrics->rle_values_scanned += leaf_end - leaf_begin;
+        }
+        tsl_for_each_equal_run(
+          columns[active_column].data,
+          leaf_begin,
+          leaf_end,
+          [&](TslRunSpan span) {
+            sort_columns_impl<Discovery>(
+              columns,
+              column_count,
+              active_column + 1,
+              span.begin,
+              span.end,
+              metrics
+            );
+          }
+        );
+      };
+      sort_active_range<true>(
+        columns[active_column].data + begin,
+        payloads,
+        payload_count,
+        end - begin,
+        columns[active_column].order,
+        rng,
+        begin,
+        on_equal_band,
+        on_leaf
+      );
+      return;
+    }
+
+    sort_active_range<false>(
+      columns[active_column].data + begin,
+      payloads,
+      payload_count,
+      end - begin,
+      columns[active_column].order,
+      rng,
+      begin,
+      no_equal_band,
+      no_leaf
+    );
+    if (active_column + 1 == column_count) {
+      return;
+    }
+    if (metrics != nullptr) {
+      metrics->rle_values_scanned += end - begin;
+    }
+    tsl_for_each_equal_run(
+      columns[active_column].data,
+      begin,
+      end,
+      [&](TslRunSpan span) {
+        sort_columns_impl<Discovery>(
+          columns,
+          column_count,
+          active_column + 1,
+          span.begin,
+          span.end,
+          metrics
+        );
+      }
+    );
+  }
+
+  struct concurrent_sort_metrics {
+    std::atomic<std::size_t> rle_values_scanned{0};
+    std::atomic<std::size_t> direct_equal_bands{0};
+    std::atomic<std::size_t> direct_equal_band_rows{0};
+  };
+
+  template <TslRunDiscoveryKind Discovery, class Schedule>
+  void process_parallel_task(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    TslColumnSortTask task,
+    Schedule & schedule,
+    concurrent_sort_metrics * metrics
+  ) const {
+    if (task.end - task.begin < 2 || task.column >= column_count) {
+      return;
+    }
+
+    auto const payload_count = column_count - task.column - 1;
+    auto const payloads = payload_columns_for(
+      columns,
+      column_count,
+      task.column,
+      task.begin
+    );
+    auto rng = std::mt19937_64(task_seed(task.column, task.begin, task.end));
+    auto no_equal_band = [](std::size_t, std::size_t) {};
+    auto no_leaf = [](std::size_t, std::size_t) {};
+
+    if constexpr (
+      Discovery == TslRunDiscoveryKind::INCREMENTAL
+      && PartitionKind == TslPartitionKind::THREE_WAY
+    ) {
+      if (task.column + 1 == column_count) {
+        sort_active_range<false>(
+          columns[task.column].data + task.begin,
+          payloads,
+          payload_count,
+          task.end - task.begin,
+          columns[task.column].order,
+          rng,
+          task.begin,
+          no_equal_band,
+          no_leaf
+        );
+        return;
+      }
+
+      auto on_equal_band = [&](std::size_t band_begin, std::size_t band_end) {
+        if (band_end - band_begin < 2) {
+          return;
+        }
+        if (metrics != nullptr) {
+          metrics->direct_equal_bands.fetch_add(1, std::memory_order_relaxed);
+          metrics->direct_equal_band_rows.fetch_add(
+            band_end - band_begin,
+            std::memory_order_relaxed
+          );
+        }
+        schedule(TslColumnSortTask{task.column + 1, band_begin, band_end});
+      };
+      auto on_leaf = [&](std::size_t leaf_begin, std::size_t leaf_end) {
+        if (leaf_end - leaf_begin < 2) {
+          return;
+        }
+        if (metrics != nullptr) {
+          metrics->rle_values_scanned.fetch_add(
+            leaf_end - leaf_begin,
+            std::memory_order_relaxed
+          );
+        }
+        tsl_for_each_equal_run(
+          columns[task.column].data,
+          leaf_begin,
+          leaf_end,
+          [&](TslRunSpan span) {
+            schedule(TslColumnSortTask{
+              task.column + 1,
+              span.begin,
+              span.end,
+            });
+          }
+        );
+      };
+      sort_active_range<true>(
+        columns[task.column].data + task.begin,
+        payloads,
+        payload_count,
+        task.end - task.begin,
+        columns[task.column].order,
+        rng,
+        task.begin,
+        on_equal_band,
+        on_leaf
+      );
+      return;
+    }
+
+    sort_active_range<false>(
+      columns[task.column].data + task.begin,
+      payloads,
+      payload_count,
+      task.end - task.begin,
+      columns[task.column].order,
+      rng,
+      task.begin,
+      no_equal_band,
+      no_leaf
+    );
+    if (task.column + 1 == column_count) {
+      return;
+    }
+    if (metrics != nullptr) {
+      metrics->rle_values_scanned.fetch_add(
+        task.end - task.begin,
+        std::memory_order_relaxed
+      );
+    }
+    tsl_for_each_equal_run(
+      columns[task.column].data,
+      task.begin,
+      task.end,
+      [&](TslRunSpan span) {
+        schedule(TslColumnSortTask{
+          task.column + 1,
+          span.begin,
+          span.end,
+        });
+      }
+    );
+  }
+
+  static void validate_columns(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    std::size_t row_count
+  ) {
+    if (column_count > MaxColumns) {
+      throw std::invalid_argument("sort column count exceeds MaxColumns");
+    }
+    if (column_count == 0) {
+      return;
+    }
+    if (row_count == 0) {
+      return;
+    }
+    if (columns == nullptr) {
+      throw std::invalid_argument("sort columns pointer is null");
+    }
+    for (std::size_t column = 0; column < column_count; ++column) {
+      if (columns[column].data == nullptr) {
+        throw std::invalid_argument("sort column data pointer is null");
+      }
+      for (std::size_t previous = 0; previous < column; ++previous) {
+        if (columns[column].data == columns[previous].data) {
+          throw std::invalid_argument("sort columns must not alias");
+        }
+      }
     }
   }
 
  public:
-  explicit TslMultiColumnQuickSorter(std::uint64_t seed) : rng(seed) {}
+  explicit TslMultiColumnQuickSorter(std::uint64_t seed) : seed_(seed) {}
 
-  void operator()(DataType * keys, DataType * const * columns, std::size_t columns_count, std::size_t count) {
-    column_count = columns_count;
-    column_pointers cols{};
-    for (std::size_t column = 0; column < column_count; ++column) {
-      cols[column] = columns[column];
+  static constexpr auto leaf_size_threshold() -> std::size_t {
+    return leaf_threshold;
+  }
+
+  void sort_key(
+    DataType * keys,
+    DataType * const * payload_columns,
+    std::size_t payload_count,
+    std::size_t count,
+    TslSortOrder order
+  ) const {
+    if (payload_count > MaxColumns) {
+      throw std::invalid_argument("payload column count exceeds MaxColumns");
     }
-    sort_impl(keys, cols, count);
+    if (count == 0) {
+      return;
+    }
+    if (count != 0 && keys == nullptr) {
+      throw std::invalid_argument("key pointer is null");
+    }
+    if (payload_count != 0 && payload_columns == nullptr) {
+      throw std::invalid_argument("payload columns pointer is null");
+    }
+
+    column_pointers columns{};
+    for (std::size_t column = 0; column < payload_count; ++column) {
+      if (count != 0 && payload_columns[column] == nullptr) {
+        throw std::invalid_argument("payload column data pointer is null");
+      }
+      if (payload_columns[column] == keys) {
+        throw std::invalid_argument("active key must not alias a payload column");
+      }
+      for (std::size_t previous = 0; previous < column; ++previous) {
+        if (payload_columns[column] == payload_columns[previous]) {
+          throw std::invalid_argument("payload columns must not alias");
+        }
+      }
+      columns[column] = payload_columns[column];
+    }
+    auto rng = std::mt19937_64(task_seed(0, 0, count));
+    auto no_equal_band = [](std::size_t, std::size_t) {};
+    auto no_leaf = [](std::size_t, std::size_t) {};
+    sort_active_range<false>(
+      keys,
+      columns,
+      payload_count,
+      count,
+      order,
+      rng,
+      0,
+      no_equal_band,
+      no_leaf
+    );
+  }
+
+  void operator()(
+    DataType * keys,
+    DataType * const * payload_columns,
+    std::size_t payload_count,
+    std::size_t count
+  ) const {
+    sort_key(
+      keys,
+      payload_columns,
+      payload_count,
+      count,
+      TslSortOrder::ASCENDING
+    );
+  }
+
+  template <class EqualBandSink, class LeafSink>
+  void sort_key_with_completion_events(
+    DataType * keys,
+    DataType * const * payload_columns,
+    std::size_t payload_count,
+    std::size_t count,
+    TslSortOrder order,
+    std::size_t absolute_begin,
+    EqualBandSink & equal_band_sink,
+    LeafSink & leaf_sink
+  ) const {
+    static_assert(
+      PartitionKind == TslPartitionKind::THREE_WAY,
+      "completion events require three-way partitioning"
+    );
+    if (payload_count > MaxColumns) {
+      throw std::invalid_argument("payload column count exceeds MaxColumns");
+    }
+    if (count == 0) {
+      return;
+    }
+    if (count != 0 && keys == nullptr) {
+      throw std::invalid_argument("key pointer is null");
+    }
+    if (payload_count != 0 && payload_columns == nullptr) {
+      throw std::invalid_argument("payload columns pointer is null");
+    }
+    column_pointers columns{};
+    for (std::size_t column = 0; column < payload_count; ++column) {
+      if (count != 0 && payload_columns[column] == nullptr) {
+        throw std::invalid_argument("payload column data pointer is null");
+      }
+      if (payload_columns[column] == keys) {
+        throw std::invalid_argument("active key must not alias a payload column");
+      }
+      for (std::size_t previous = 0; previous < column; ++previous) {
+        if (payload_columns[column] == payload_columns[previous]) {
+          throw std::invalid_argument("payload columns must not alias");
+        }
+      }
+      columns[column] = payload_columns[column];
+    }
+    auto rng = std::mt19937_64(task_seed(
+      0,
+      absolute_begin,
+      absolute_begin + count
+    ));
+    sort_active_range<true>(
+      keys,
+      columns,
+      payload_count,
+      count,
+      order,
+      rng,
+      absolute_begin,
+      equal_band_sink,
+      leaf_sink
+    );
+  }
+
+  void sort_columns(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    std::size_t row_count,
+    TslRunDiscoveryKind discovery = TslRunDiscoveryKind::POST_SORT,
+    TslMultiColumnSortMetrics * metrics = nullptr
+  ) const {
+    validate_columns(columns, column_count, row_count);
+    if (metrics != nullptr) {
+      *metrics = {};
+    }
+    if (column_count == 0 || row_count < 2) {
+      return;
+    }
+    if (
+      discovery == TslRunDiscoveryKind::INCREMENTAL
+      && PartitionKind == TslPartitionKind::THREE_WAY
+    ) {
+      sort_columns_impl<TslRunDiscoveryKind::INCREMENTAL>(
+        columns,
+        column_count,
+        0,
+        0,
+        row_count,
+        metrics
+      );
+    } else {
+      sort_columns_impl<TslRunDiscoveryKind::POST_SORT>(
+        columns,
+        column_count,
+        0,
+        0,
+        row_count,
+        metrics
+      );
+    }
+  }
+
+  void sort_columns_parallel(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    std::size_t row_count,
+    std::size_t worker_count,
+    std::size_t task_threshold,
+    TslRunDiscoveryKind discovery = TslRunDiscoveryKind::POST_SORT,
+    TslMultiColumnSortMetrics * metrics = nullptr
+  ) const {
+    validate_columns(columns, column_count, row_count);
+    if (metrics != nullptr) {
+      *metrics = {};
+    }
+    if (column_count == 0 || row_count < 2) {
+      return;
+    }
+    if (worker_count == 0) {
+      throw std::invalid_argument("parallel sort requires at least one worker");
+    }
+    task_threshold = std::max<std::size_t>(task_threshold, 2);
+
+    concurrent_sort_metrics algorithm_metrics;
+    auto worker = [&](TslColumnSortTask const & task, auto & executor) {
+      auto schedule = [&](TslColumnSortTask child) {
+        if (child.end - child.begin < task_threshold) {
+          executor.run_inline(child);
+        } else {
+          executor.submit(std::move(child));
+        }
+      };
+      if (
+        discovery == TslRunDiscoveryKind::INCREMENTAL
+        && PartitionKind == TslPartitionKind::THREE_WAY
+      ) {
+        process_parallel_task<TslRunDiscoveryKind::INCREMENTAL>(
+          columns,
+          column_count,
+          task,
+          schedule,
+          metrics != nullptr ? &algorithm_metrics : nullptr
+        );
+      } else {
+        process_parallel_task<TslRunDiscoveryKind::POST_SORT>(
+          columns,
+          column_count,
+          task,
+          schedule,
+          metrics != nullptr ? &algorithm_metrics : nullptr
+        );
+      }
+    };
+
+    TslTaskExecutor<TslColumnSortTask, decltype(worker)> executor(
+      worker_count,
+      worker
+    );
+    executor.submit(TslColumnSortTask{0, 0, row_count});
+    executor.wait();
+
+    if (metrics != nullptr) {
+      auto const task_metrics = executor.metrics();
+      metrics->rle_values_scanned =
+        algorithm_metrics.rle_values_scanned.load(std::memory_order_relaxed);
+      metrics->direct_equal_bands =
+        algorithm_metrics.direct_equal_bands.load(std::memory_order_relaxed);
+      metrics->direct_equal_band_rows =
+        algorithm_metrics.direct_equal_band_rows.load(std::memory_order_relaxed);
+      metrics->tasks_submitted = task_metrics.tasks_submitted;
+      metrics->tasks_executed_inline = task_metrics.tasks_executed_inline;
+      metrics->max_outstanding_tasks = task_metrics.max_outstanding_tasks;
+    }
   }
 };

@@ -40,7 +40,7 @@ where
         right: V::RegisterType,
     ) -> V::RegisterType {
         let sum = profile::add::<V>(left, right);
-        profile::blend::<V>(active, left, sum)
+        profile::select::<V>(active, sum, left)
     }
 }
 

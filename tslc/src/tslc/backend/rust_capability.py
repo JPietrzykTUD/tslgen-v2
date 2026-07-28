@@ -14,7 +14,16 @@ from tslc.backend.capability import (
 )
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_api_planner import (
+    plan_rust_facade,
+    rust_facade_closure_seed_primitives,
+)
+from tslc.backend.rust_dispatch import plan_rust_dispatch
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
+from tslc.backend.rust_static_selection import (
+    RustStaticSelectionPlan,
+    plan_rust_static_selection,
+)
 from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
 from tslc.backend.rust_translation import RustBackendDialect
 from tslc.backend.rust_validation import validate_rust_profiles
@@ -32,7 +41,7 @@ from tslc.render.documentation_formatters import RUST_DOCUMENTATION_FORMATTER
 from tslc.render.rust_benchmark_layout import plan_rust_benchmark_layout
 from tslc.render.rust_policy_consumption import plan_rust_policy_consumption_render
 from tslc.render.rust_project import (
-    rust_artifacts,
+    _rust_artifacts,
     rust_verify_profile,
     rust_verify_profiles,
 )
@@ -49,6 +58,7 @@ if TYPE_CHECKING:
     from tslc.output.verify_model import VerifyProfile
     from tslc.lower.lowerer import LoweredSpecialization
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
+    from tslc.project_render import ProjectRenderConfig
 
 
 _RUST_BENCHMARK_ADMISSIONS = frozenset(
@@ -75,9 +85,17 @@ def rust_value_test_support() -> ValueTestBackendSupport:
 
 
 def rust_value_test_artifacts(
-    plan: ValueTestProjectPlan, assets: RenderAssets, media_type: str
+    plan: ValueTestProjectPlan,
+    assets: RenderAssets,
+    media_type: str,
+    static_selection_plan: RustStaticSelectionPlan,
 ) -> list[Artifact]:
-    return rust_test_artifacts(plan, assets, media_type=media_type)
+    return rust_test_artifacts(
+        plan,
+        assets,
+        media_type=media_type,
+        static_selection_plan=static_selection_plan,
+    )
 
 
 def rust_benchmark_plan(
@@ -98,27 +116,45 @@ def rust_backend_artifacts(
     benchmarks: BenchmarkProjectPlan,
     assets: RenderAssets,
     media_type: str,
+    config: ProjectRenderConfig,
 ) -> list[Artifact]:
     """Render Rust from one frozen selection/consumption projection."""
 
     selection_plan = plan_rust_policy_selection(profiles)
+    static_selection_plan = plan_rust_static_selection(profiles)
+    facade_plan = plan_rust_facade(profiles, static_selection_plan)
+    dispatch_plan = plan_rust_dispatch(
+        profiles,
+        static_selection_plan,
+        facade_plan,
+    )
     consumption_plan = plan_rust_policy_consumption_render(
-        plan_rust_policy_consumption(benchmarks, selection_plan)
+        plan_rust_policy_consumption(benchmarks, selection_plan),
+        static_selection_plan,
     )
     benchmark_layout_plan = plan_rust_benchmark_layout(
         tuple(profile.profile.name for profile in profiles)
     )
     return [
-        *rust_artifacts(
+        *_rust_artifacts(
             profiles,
             assets,
             media_type=media_type,
             selection_plan=selection_plan,
+            static_selection_plan=static_selection_plan,
+            facade_plan=facade_plan,
+            dispatch_plan=dispatch_plan,
             consumption_plan=consumption_plan,
             benchmark_layout_plan=benchmark_layout_plan,
-            value_tests=value_tests,
+            package_config=config.rust_package,
         ),
-        *rust_test_artifacts(value_tests, assets, media_type=media_type),
+        *rust_test_artifacts(
+            value_tests,
+            assets,
+            media_type=media_type,
+            static_selection_plan=static_selection_plan,
+            package_config=config.rust_package,
+        ),
         *rust_benchmark_artifacts(
             benchmarks,
             assets,
@@ -171,6 +207,7 @@ RUST_BACKEND = BackendCapability(
     documentation_formatter_factory=rust_documentation_formatter,
     benchmark_plan_builder=rust_benchmark_plan,
     helper_manifest=RUST_HELPER_MANIFEST,
+    additional_closure_seeds=rust_facade_closure_seed_primitives,
     profile_validator=validate_rust_profiles,
     primitive_preview_renderer=rust_primitive_preview,
     generated_format=GeneratedFormatSpec(

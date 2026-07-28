@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import get_args
 
-from tslc.catalog.model import TestCaseRole, TestFailureReason
+from tslc.catalog.model import TestCaseRole, TestComparison, TestFailureReason
 from tslc.catalog.validation._schema_common import (
     diagnose_duplicate_fields,
     invalid_enum,
@@ -12,6 +12,7 @@ from tslc.catalog.validation._schema_common import (
     validate_known_fields,
 )
 from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS, is_type_tag
+from tslc.catalog.signatures import parse_signature
 from tslc.syntax.access import child, children, field_text, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.ast import (
@@ -28,6 +29,7 @@ KNOWN_TEST_FIELDS = frozenset(
         "tags",
         "type",
         "role",
+        "comparison",
         "lane_count",
         "extension",
         "expected_rule",
@@ -47,6 +49,7 @@ KNOWN_TEST_FIELDS = frozenset(
 _REQUIRED_TEST_FIELDS = ("tags", "type", "case")
 # Derived from the typed catalog role so the validator cannot drift from the model.
 KNOWN_TEST_ROLES: frozenset[str] = frozenset(get_args(TestCaseRole))
+KNOWN_TEST_COMPARISONS = frozenset(item.value for item in TestComparison)
 KNOWN_TEST_FAILURES = frozenset(reason.value for reason in TestFailureReason)
 KNOWN_TEST_CASE_FIELDS = frozenset({"inputs", "expected", "failure"})
 
@@ -83,11 +86,17 @@ def validate_tests(
                     )
                 )
                 continue
-            _validate_test_case(declaration.name, item, diagnostics)
+            _validate_test_case(
+                declaration.name,
+                declaration.signature,
+                item,
+                diagnostics,
+            )
 
 
 def _validate_test_case(
     primitive_name: str,
+    primitive_signature: str,
     item: ParsedTslMapValue,
     diagnostics: list[Diagnostic],
 ) -> None:
@@ -147,6 +156,33 @@ def _validate_test_case(
             f"test role {role!r}",
             sorted(KNOWN_TEST_ROLES),
         )
+    comparison = field_text(entries.get("comparison"))
+    if comparison is not None and comparison not in KNOWN_TEST_COMPARISONS:
+        invalid_enum(
+            diagnostics,
+            entries.get("comparison"),
+            f"test comparison {comparison!r}",
+            sorted(KNOWN_TEST_COMPARISONS),
+        )
+    elif comparison == TestComparison.BITWISE:
+        shape = parse_signature(primitive_signature)
+        if (
+            shape is None
+            or shape.result_kind != "v"
+            or not shape.param_kinds
+            or any(kind != "v" for kind in shape.param_kinds)
+        ):
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TEST-BITWISE-COMPARISON-SHAPE",
+                    message=(
+                        f"{owner}: bitwise comparison currently requires a vector "
+                        "result and only vector operands"
+                    ),
+                    source=source_span(entries["comparison"].source),
+                )
+            )
     index_type = field_text(entries.get("index_type"))
     if index_type is not None and not is_type_tag(index_type):
         invalid_enum(

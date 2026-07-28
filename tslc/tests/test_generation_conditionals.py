@@ -28,6 +28,7 @@ from tslc.lower.lowerer import Lowerer
 from tslc.lower._query_model import (
     _QUERY_PARSE_CACHE_SIZE,
     _cached_parse_query,
+    ObjectSize,
     QueryParser,
 )
 from tslc.ir.region_syntax import segments_text
@@ -69,6 +70,26 @@ def _ctx(catalog, ext_name, type_tag, backend="cpp"):
 
 
 # --- query layer -------------------------------------------------------------
+
+
+def test_object_size_requires_one_well_formed_representation() -> None:
+    with pytest.raises(ValueError, match="exactly one"):
+        ObjectSize()
+    with pytest.raises(ValueError, match="exactly one"):
+        ObjectSize(fixed_bits=32, element_bits=32, lanes_symbol="LANES")
+    with pytest.raises(ValueError, match="positive"):
+        ObjectSize.fixed(0)
+    with pytest.raises(ValueError, match="lane symbol"):
+        ObjectSize.sized(32, "")
+
+    assert ObjectSize.fixed(32).same_size_as(ObjectSize.fixed(32))
+    assert not ObjectSize.fixed(32).same_size_as(ObjectSize.fixed(64))
+    assert ObjectSize.sized(32, "LANES").same_size_as(
+        ObjectSize.sized(32, "LANES")
+    )
+    assert not ObjectSize.sized(32, "LANES").same_size_as(
+        ObjectSize.sized(64, "LANES")
+    )
 
 
 def test_query_facade_separates_evaluator_from_namespace_functions() -> None:
@@ -199,6 +220,44 @@ def test_lowering_rejects_legacy_pointer_cast_instead_of_repairing_it(
         "TSL-LOWER-UNSUPPORTED-CAST"
     ]
     assert "type=ptr|const_ptr" in context.effects.diagnostics[0].message
+
+
+def test_safe_bitcast_rejects_a_known_size_mismatch(catalog: Catalog) -> None:
+    region = scan("cast<bitcast>(f64, data)")[0]
+    assert isinstance(region, Region)
+    context = _ctx(catalog, "scalar", "si32", backend="rust")
+
+    rendered = CastLowerer().lower(
+        region,
+        context,
+        lambda _segments: literal_text("data"),
+    )
+
+    assert rendered == region.full_text
+    assert [diagnostic.code for diagnostic in context.effects.diagnostics] == [
+        "TSL-LOWER-INVALID-BITCAST"
+    ]
+
+
+def test_value_reinterpretation_uses_an_explicit_unsafe_boundary(
+    catalog: Catalog,
+) -> None:
+    region = scan("cast<reinterpret>(ui32, data)")[0]
+    assert isinstance(region, Region)
+    context = _ctx(catalog, "scalar", "si32", backend="rust")
+
+    rendered = CastLowerer().lower(
+        region,
+        context,
+        lambda _segments: literal_text("data"),
+    )
+
+    assert (
+        render_text(rendered)
+        == "crate::tsl_core::reinterpret_unchecked::<_, u32>(data)"
+    )
+    assert context.effects.requires_unsafe
+    assert "value_reinterpretation" in context.effects.safety.reasons
 
 
 def test_runtime_vector_length_query_uses_static_or_declared_runtime_count(
@@ -644,16 +703,19 @@ def test_mask_test_imask_lowers_integral_mask_bit_test(
     assert rust.body_text == "return (((mask) as u64 >> 0) & 1u64) != 0;"
 
 
-# --- masked-variant selection: native blend (first mask-consuming primitive) --
+# --- masked-variant selection: native select (first mask-consuming primitive) --
 
 
 def test_masked_only_primitive_is_selectable(catalog: Catalog, machine_profiles) -> None:
-    # `blend` exists only as `[mask=pass_through]`; it must still resolve by name and
+    # `select` exists only as `[mask=pass_through]`; it must still resolve by name and
     # lower its native body, consuming the mask as a parameter (kind `m`).
-    spec = _spec(catalog, machine_profiles, "skylake", "blend", "avx512", "si32")
+    spec = _spec(catalog, machine_profiles, "skylake", "select", "avx512", "si32")
     assert spec is not None
     assert spec.result_kind == "v" and spec.param_kinds == ("m", "v", "v")
-    assert "_mm512_mask_blend_epi32(mask, left, right)" in spec.body_text
+    assert (
+        "_mm512_mask_blend_epi32(mask, false_values, true_values)"
+        in spec.body_text
+    )
 
 
 # --- ptr / void kinds: scalar load/store (leaf of the array/reduction chain) ---
@@ -680,8 +742,8 @@ def test_scalar_load_store_rust_is_unsafe(catalog: Catalog, machine_profiles) ->
 
 
 def test_runtime_if_uses_backend_condition_syntax(catalog: Catalog, machine_profiles) -> None:
-    cpp = _spec(catalog, machine_profiles, "scalar", "blend", "scalar", "si32")
-    rust = _spec(catalog, machine_profiles, "scalar", "blend", "scalar", "si32", backend="rust")
+    cpp = _spec(catalog, machine_profiles, "scalar", "select", "scalar", "si32")
+    rust = _spec(catalog, machine_profiles, "scalar", "select", "scalar", "si32", backend="rust")
 
     assert cpp is not None and "if (mask) {" in cpp.body_text
     assert rust is not None and "if mask {" in rust.body_text

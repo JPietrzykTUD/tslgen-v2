@@ -5,15 +5,25 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from tslc.backend.rust_const_args import RUST_CONST_ARG_WRAPPERS
+from tslc.backend.rust_api_planner import validate_rust_facade
+from tslc.backend.rust_static_selection import (
+    plan_rust_static_selection,
+    validate_rust_static_selection,
+)
 from tslc.diagnostics import Diagnostic, diagnostic_at
-from tslc.lower.lowerer import varying_positions
+from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 
 if TYPE_CHECKING:
     from tslc.backend.emitted_profile import EmittedProfile
 
 
 def validate_rust_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnostic, ...]:
-    diagnostics: list[Diagnostic] = []
+    static_diagnostics = validate_rust_static_selection(profiles)
+    diagnostics: list[Diagnostic] = list(static_diagnostics)
+    if not static_diagnostics and _has_complete_lowered_inventory(profiles):
+        diagnostics.extend(
+            validate_rust_facade(profiles, plan_rust_static_selection(profiles))
+        )
     for profile in profiles:
         by_primitive = profile.specializations("rust")
         for extension_name in profile.used_extensions("rust"):
@@ -84,6 +94,22 @@ def validate_rust_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagno
                         )
                     )
     return tuple(diagnostics)
+
+
+def _has_complete_lowered_inventory(profiles: tuple[EmittedProfile, ...]) -> bool:
+    """Facade planning runs only on the real post-lowering backend boundary.
+
+    Validation-only callers may carry reduced specialization projections for
+    checks that precede lowering; production emission always carries
+    ``LoweredSpecialization`` values.
+    """
+
+    return all(
+        isinstance(spec, LoweredSpecialization)
+        for profile in profiles
+        for specializations in profile.specializations("rust").values()
+        for spec in specializations
+    )
 
 
 __all__ = ("validate_rust_profiles",)

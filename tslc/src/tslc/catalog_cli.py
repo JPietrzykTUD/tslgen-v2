@@ -190,6 +190,32 @@ def _primitive(item: Primitive) -> dict[str, object]:
         "tests": len(item.tests),
         "brief": item.brief_description,
         "arithmetic": _arithmetic(item),
+        "operation": _operation(item),
+        "memory": (
+            None
+            if item.memory is None
+            else {
+                "access": item.memory.access.value,
+                "addressing": item.memory.addressing.value,
+            }
+        ),
+        "conversion": (
+            None
+            if item.conversion is None
+            else {
+                "kind": item.conversion.kind.value,
+                "lane_count": item.conversion.lane_count.value,
+            }
+        ),
+        "shift": (
+            None
+            if item.shift is None
+            else {
+                "count_rule": item.shift.count_rule.value,
+                "lane_rule": item.shift.lane_rule.value,
+                "scalar_count_types": list(item.shift.scalar_count_types),
+            }
+        ),
         "source": _source(item.source),
     }
 
@@ -212,6 +238,23 @@ def _arithmetic(item: Primitive) -> dict[str, object] | None:
         "guarantees": [
             guarantee.value for guarantee in contract.ordered_guarantees
         ],
+    }
+
+
+def _operation(item: Primitive) -> dict[str, object] | None:
+    contract = item.operation
+    if contract is None:
+        return None
+    return {
+        "name": contract.kind.value,
+        "operand_roles": {
+            binding.role.value: {
+                "parameter": binding.parameter_name,
+                "index": binding.parameter_index,
+                "kind": binding.parameter_kind,
+            }
+            for binding in contract.operand_bindings
+        },
     }
 
 

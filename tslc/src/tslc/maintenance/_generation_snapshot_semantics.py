@@ -325,7 +325,11 @@ def _serialize_value_test_inputs(value: ValueTestInputs) -> dict[str, object]:
 
 
 def _serialize_value_test_expectation(value: ValueTestExpectation) -> dict[str, object]:
-    return {"values": value.values, "text": value.text}
+    return {
+        "values": value.values,
+        "text": value.text,
+        "comparison": value.comparison.value,
+    }
 
 
 def _serialize_value_test_failure(

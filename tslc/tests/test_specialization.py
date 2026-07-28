@@ -13,10 +13,35 @@ from tslc.api import generate_project
 from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacadeKind,
     classify_dataparallel_primitive_facade,
+    contiguous_memory_primitive_facades,
 )
+from tslc.backend.cpp import CppBackend
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_algorithm import (
+    _RustAlgorithmImplTarget,
+    _rust_algorithm_load_store_impl,
+    _rust_algorithm_scalar_selected_load_impl,
+)
+from tslc.backend.rust_facades import rust_algorithm_primitive_facades
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryAlignment,
+    PrimitiveMemoryContract,
+)
+from tslc.catalog.overloads import ResolvedPrimitiveOverload
+from tslc.catalog.semantics import (
+    OperandBinding,
+    OperandRole,
+    PrimitiveOperation,
+    PrimitiveSemanticContract,
+)
 from tslc.diagnostics import has_errors
 from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam
+from tslc.lower.primitive_semantics import (
+    LoweredMemoryAlignment,
+    LoweredPrimitiveSemantics,
+)
 from tslc.lower.target_vectors import TargetVector
 from tslc.target_text import LoweredBody
 
@@ -66,6 +91,7 @@ def _facade_spec(
     extension_name: str = "avx2",
     axis: tuple[tuple[str, str], ...] = (),
     target: TargetVector | None = None,
+    semantics: LoweredPrimitiveSemantics = LoweredPrimitiveSemantics(),
 ) -> LoweredSpecialization:
     return LoweredSpecialization(
         backend_id="cpp",
@@ -81,6 +107,36 @@ def _facade_spec(
         body=LoweredBody.from_text(""),
         axis=axis,
         target=target,
+        primitive_semantics=semantics,
+    )
+
+
+def _memory_semantics(
+    operation: PrimitiveOperation,
+    access: MemoryAccess,
+    roles: tuple[OperandRole, ...],
+    parameter_kinds: tuple[str, ...],
+    *,
+    alignment: MemoryAlignment,
+    overload: ResolvedPrimitiveOverload | None = None,
+) -> LoweredPrimitiveSemantics:
+    parameter_names = tuple(f"p{index}" for index in range(len(parameter_kinds)))
+    return LoweredPrimitiveSemantics(
+        overload=overload,
+        operation=PrimitiveSemanticContract(
+            operation,
+            tuple(
+                OperandBinding(role, parameter_names[index], index, kind)
+                for index, (role, kind) in enumerate(
+                    zip(roles, parameter_kinds)
+                )
+            ),
+        ),
+        memory=PrimitiveMemoryContract(
+            access,
+            MemoryAddressing.CONTIGUOUS,
+        ),
+        memory_alignment=LoweredMemoryAlignment("aligned", alignment),
     )
 
 
@@ -138,10 +194,52 @@ def test_dataparallel_primitive_facade_descriptor_classifies_shared_policy_shape
         "store",
         (
             _facade_spec(
-                "store", "void", ("ptr", "s"), axis=(("aligned", "false"),)
+                "store",
+                "void",
+                ("ptr", "s"),
+                axis=(("aligned", "false"),),
+                semantics=_memory_semantics(
+                    PrimitiveOperation.STORE,
+                    MemoryAccess.WRITE,
+                    (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
+                    ("ptr", "s"),
+                    alignment=MemoryAlignment.UNALIGNED,
+                    overload=ResolvedPrimitiveOverload(
+                        "payload_extent", "scalar", False
+                    ),
+                ),
             ),
             _facade_spec(
-                "store", "void", ("ptr", "v"), axis=(("aligned", "true"),)
+                "store",
+                "void",
+                ("ptr", "v"),
+                axis=(("aligned", "false"),),
+                semantics=_memory_semantics(
+                    PrimitiveOperation.STORE,
+                    MemoryAccess.WRITE,
+                    (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
+                    ("ptr", "v"),
+                    alignment=MemoryAlignment.UNALIGNED,
+                    overload=ResolvedPrimitiveOverload(
+                        "payload_extent", "vector", True
+                    ),
+                ),
+            ),
+            _facade_spec(
+                "store",
+                "void",
+                ("ptr", "v"),
+                axis=(("aligned", "true"),),
+                semantics=_memory_semantics(
+                    PrimitiveOperation.STORE,
+                    MemoryAccess.WRITE,
+                    (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
+                    ("ptr", "v"),
+                    alignment=MemoryAlignment.ALIGNED,
+                    overload=ResolvedPrimitiveOverload(
+                        "payload_extent", "vector", True
+                    ),
+                ),
             ),
         ),
     )
@@ -172,10 +270,117 @@ def test_dataparallel_primitive_facade_descriptor_classifies_shared_policy_shape
 
     assert (
         classify_dataparallel_primitive_facade(
-            "blend", (_facade_spec("blend", "v", ("m", "v", "v")),)
+            "select", (_facade_spec("select", "v", ("m", "v", "v")),)
         )
         is None
     )
+
+
+def test_semantically_renamed_memory_primitives_retain_shared_facades() -> None:
+    read_specs = tuple(
+        _facade_spec(
+            "read_contiguous",
+            "v",
+            ("cptr",),
+            axis=(("aligned", literal),),
+            semantics=_memory_semantics(
+                PrimitiveOperation.LOAD,
+                MemoryAccess.READ,
+                (OperandRole.MEMORY_SOURCE,),
+                ("cptr",),
+                alignment=alignment,
+            ),
+        )
+        for literal, alignment in (
+            ("false", MemoryAlignment.UNALIGNED),
+            ("true", MemoryAlignment.ALIGNED),
+        )
+    )
+    scalar_write = _facade_spec(
+        "write_contiguous",
+        "void",
+        ("ptr", "s"),
+        axis=(("aligned", "false"),),
+        semantics=_memory_semantics(
+            PrimitiveOperation.STORE,
+            MemoryAccess.WRITE,
+            (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
+            ("ptr", "s"),
+            alignment=MemoryAlignment.UNALIGNED,
+            overload=ResolvedPrimitiveOverload(
+                "payload_extent", "scalar", False
+            ),
+        ),
+    )
+    vector_write_specs = tuple(
+        _facade_spec(
+            "write_contiguous",
+            "void",
+            ("ptr", "v"),
+            axis=(("aligned", literal),),
+            semantics=_memory_semantics(
+                PrimitiveOperation.STORE,
+                MemoryAccess.WRITE,
+                (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
+                ("ptr", "v"),
+                alignment=alignment,
+                overload=ResolvedPrimitiveOverload(
+                    "payload_extent", "vector", True
+                ),
+            ),
+        )
+        for literal, alignment in (
+            ("false", MemoryAlignment.UNALIGNED),
+            ("true", MemoryAlignment.ALIGNED),
+        )
+    )
+    write_specs = (scalar_write, *vector_write_specs)
+    read_facade = classify_dataparallel_primitive_facade(
+        "read_contiguous",
+        read_specs,
+    )
+    write_facade = classify_dataparallel_primitive_facade(
+        "write_contiguous",
+        write_specs,
+    )
+    assert read_facade is not None
+    assert write_facade is not None
+    assert contiguous_memory_primitive_facades(
+        {
+            "read_contiguous": read_specs,
+            "write_contiguous": write_specs,
+        }
+    ) == (read_facade, write_facade)
+    rust = rust_algorithm_primitive_facades(
+        {
+            "read_contiguous": read_specs,
+            "write_contiguous": write_specs,
+        },
+        reserved_names=frozenset(),
+    )
+    assert "pub unsafe fn read_contiguous<" in rust
+    assert "Read_contiguousImpl<ALIGNED>" in rust
+    assert "super::read_contiguous::<" in rust
+    assert "pub unsafe fn write_contiguous<" in rust
+    assert "Write_contiguousImplArg<" in rust
+    assert "super::write_contiguous::<" in rust
+
+    load_store = _rust_algorithm_load_store_impl(
+        _RustAlgorithmImplTarget("T", "Simd<T, Scalar>"),
+        read_facade,
+        write_facade,
+    )
+    assert "Read_contiguousImpl<false>" in load_store
+    assert "super::read_contiguous::<Simd<T, Scalar>, false>" in load_store
+    assert "Write_contiguousImplArg<Simd<T, Scalar>, false>" in load_store
+    assert "super::write_contiguous::<Simd<T, Scalar>, false, _>" in load_store
+    selected_load = _rust_algorithm_scalar_selected_load_impl(read_facade)
+    assert "Read_contiguousImpl<false>" in selected_load
+    assert "super::read_contiguous::<Simd<T, Scalar>, false>" in selected_load
+
+    cpp = CppBackend().render_primitive("read_contiguous", read_specs)
+    assert "read_contiguous(" in cpp
+    assert "::tsl::read_contiguous<" in cpp
 
 
 def test_artifact_layout(specialization_result) -> None:
@@ -242,6 +447,12 @@ def test_cpp_zero_divisor_failure_traps_on_non_unwinding_targets(
     core = specialization_artifacts["cpp/include/tsl_core.hpp"]
 
     assert "defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)" in core
+    assert (
+        "if (source_lanes != target_lanes) {\n"
+        "#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)\n"
+        "        __builtin_trap();"
+        in core
+    )
     assert '__builtin_trap();\n#else\n    throw std::domain_error(' in core
 
 
@@ -474,14 +685,16 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     lib = specialization_artifacts["rust/src/lib.rs"]
     cargo = specialization_artifacts["rust/Cargo.toml"]
     avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
+    facade = specialization_artifacts["rust/src/tsl_facade.rs"]
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "069a033178bf5fa624ef764f855cdd2a05c9a48f7983c93d21ffb6d70efbd088"
+        "d7035db4a130785bba7e2141a6e26479b9a8796cd645530706e9770c84b9dca8"
     )
 
     assert 'name = "tsl"' in cargo
-    assert 'default = ["scalar"]' in cargo
+    assert "default = []" in cargo
+    assert "avx2 = []" not in cargo
     assert "pub mod tsl_algorithm;" in lib
     assert "pub use tsl_algorithm::dataparallel;" in lib
     assert "#[doc(hidden)]\npub mod tsl_test_core;" in lib
@@ -493,9 +706,14 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     )
     assert "pub use crate::tsl_documentation as profile;" in lib
     assert "#[doc(hidden)]\npub mod tsl_avx2;" in lib
-    assert '#[cfg(all(not(doc), all(feature = "avx2", not(any(' in lib
+    assert '#[cfg(all(not(doc), all(target_arch = "x86_64"' in lib
+    assert 'target_feature = "avx2"' in lib
     assert "#[doc(inline)]\npub use crate::tsl_avx2 as profile;" in lib
     assert "pub use crate::tsl_avx2 as profile;" in lib
+    assert "pub fn hadd(self)" in facade
+    assert "pub fn hadd_masked(self, mask:" in facade
+    assert "pub mod tsl_target_fallback;" in lib
+    assert "pub use crate::tsl_target_fallback as profile;" in lib
     documented_functions = re.findall(
         r"^pub (?:unsafe )?fn (?:r#)?([A-Za-z_][A-Za-z0-9_]*)",
         documentation,
@@ -514,6 +732,11 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "pub struct Integral" in helper
     assert "pub struct Bytes" in helper
     assert "pub struct Bits" in helper
+    assert "mod representation_sealed" in helper
+    assert "representation_sealed::VectorPolicy" in helper
+    assert "representation_sealed::RebindBase" in helper
+    assert "representation_sealed::IntegralMaskWord" in helper
+    assert "representation_sealed::MaskLayout" in helper
     assert "pub trait VectorFor<Profile, T>" in helper
     assert "pub trait RebindBase<ToBase>: SimdVector" in helper
     assert "pub type ReboundBase<V, ToBase> = <V as RebindBase<ToBase>>::Vec;" in helper
@@ -527,6 +750,8 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "pub trait MaskPopulationCount<V: StaticSimdVector>" in helper
     assert "pub trait UnaryKernel<V: StaticSimdVector>" in helper
     assert "pub trait BinaryKernel<V: StaticSimdVector>" in helper
+    assert "impl<V, Kernel> BinaryKernel<V> for &mut Kernel" in helper
+    assert "<Kernel as BinaryKernel<V>>::apply(*self, left, right)" in helper
     assert "pub trait UnaryPredicateKernel<V: StaticSimdVector>" in helper
     assert "pub trait BinaryPredicateKernel<V: StaticSimdVector>" in helper
     assert "pub trait MaskedUnaryKernel<V: StaticSimdVector>" in helper
@@ -877,12 +1102,12 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "impl<const SCALE: u32> SelectedLoad<Simd<i32, super::Avx2>, SCALE> for Profile" in avx2
     assert (
         "super::detail::primitives::Gather_narrowImpl<Simd<usize, Generic<8>>, "
-        "<usize as BaseTypeDispatch>::Key, 4, 1>"
+        "<usize as crate::tsl_core::BaseTypeDispatch>::Key, 4, 1>"
         in avx2
     )
     assert (
         "super::detail::primitives::Gather_narrowImpl<Simd<usize, Generic<8>>, "
-        "<usize as BaseTypeDispatch>::Key, SCALE, 1>"
+        "<usize as crate::tsl_core::BaseTypeDispatch>::Key, SCALE, 1>"
         in avx2
     )
     assert (
@@ -1068,6 +1293,18 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "pub struct U32Arg<const VALUE: u32>;" in core
     assert "pub struct I32Arg<const VALUE: i32>;" in core
     assert "pub trait StaticSimdVector: SimdVector" in core
+    assert "type RegisterType: Copy;" in core
+    assert "pub(crate) mod representation_sealed" in core
+    assert "pub(crate) unsafe trait ValidBitPattern: Copy" in core
+    assert "pub(crate) fn bit_cast<From: Copy, To: ValidBitPattern>" in core
+    assert "pub fn bit_cast<" not in core
+    assert (
+        "pub(crate) unsafe fn reinterpret_unchecked<From: Copy, To: ValidBitPattern>"
+        in core
+    )
+    assert (
+        "unsafe impl ValidBitPattern for core::arch::x86_64::__m256i {}" in core
+    )
     assert "type Extension;" in core
     assert "type WithBaseType<ToBase>;" in core
     assert "type WithExtension<ToExtension>;" in core
@@ -1082,6 +1319,8 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "const ELEMENT_COUNT: usize = LANES;" in core
     assert "const ALIGN: usize;" in core
     assert "const ALIGN: usize = core::mem::align_of::<T>();" in core
+    assert "impl<T: Copy> SimdVector for Simd<T, Scalar>" in core
+    assert "impl<T: Copy, const LANES: usize> SimdVector" in core
     assert (
         "const ALIGN: usize = core::mem::align_of::<array_type<T, LANES>>();"
         in core
@@ -1094,6 +1333,8 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
         in avx2
     )
     assert "impl StaticSimdVector for Simd<i32, Avx2>" in avx2
+    assert "representation_sealed::SimdVector for Simd<i32, Avx2>" in avx2
+    assert "representation_sealed::StaticSimdVector for Simd<i32, Avx2>" in avx2
     assert "type Extension = Avx2;" in avx2
     assert "type WithBaseType<ToBase> = Simd<ToBase, Avx2>;" in avx2
     assert "type WithExtension<ToExtension> = Simd<i32, ToExtension>;" in avx2
@@ -1143,12 +1384,12 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "/// # Semantics" in avx2
     assert "/// # API" in avx2
     assert "/// - Type parameters: S selects the SIMD vector type" in avx2
-    assert "/// - Returns: SIMD register (S::RegisterType)" in avx2
+    assert "/// - Returns: SIMD register (`S::RegisterType`)" in avx2
     assert "/// - Parameters: left: SIMD register; right: SIMD register" in avx2
     assert "/// # Specialization" in avx2
     assert "/// - Extension: avx2" in avx2
-    assert "/// - Element type: i32" in avx2
-    assert "/// - Register type: core::arch::x86_64::__m256i" in avx2
+    assert "/// - Element type: `i32`" in avx2
+    assert "/// - Register type: `core::arch::x86_64::__m256i`" in avx2
     assert "/// - Context:" not in avx2
     assert "/// - Result kind:" not in avx2
     assert "/// - Parameter kinds:" not in avx2
