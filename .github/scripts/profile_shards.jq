@@ -24,14 +24,25 @@ def backend_profile_shards($name; $profiles):
   profile_shards("cpp"; $name; $profiles; cpp_profile_chunk_size),
   profile_shards("rust"; $name; $profiles; rust_profile_chunk_size);
 
+def rust_coexistence_shard:
+  {
+    backend: "rust",
+    name: "rust-x86-coexistence",
+    profiles: "sse,sse2,sse3,avx,avx2,knl",
+    purpose: "coexistence"
+  };
+
 [
-  to_entries[]
-  | .key as $family
-  | backend_profile_shards($family; [.value[] | select(auto_detect_gate == "")]),
-    (
-      [.value[] | select(auto_detect_gate != "")]
-      | group_by(auto_detect_gate)[]
-      | .[0].auto_detect_gate as $gate
-      | backend_profile_shards($family + "-" + ($gate | gsub("_"; "-")); .)
-    )
+  (
+    to_entries[]
+    | .key as $family
+    | backend_profile_shards($family; [.value[] | select(auto_detect_gate == "")]),
+      (
+        [.value[] | select(auto_detect_gate != "")]
+        | group_by(auto_detect_gate)[]
+        | .[0].auto_detect_gate as $gate
+        | backend_profile_shards($family + "-" + ($gate | gsub("_"; "-")); .)
+      )
+  ),
+  rust_coexistence_shard
 ]
