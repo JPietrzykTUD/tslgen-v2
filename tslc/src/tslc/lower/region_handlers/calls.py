@@ -14,6 +14,7 @@ from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.dependencies import (
     CallDependencyOrigin,
+    CallVectorReference,
     VectorIdentity,
     resolve_lowered_call_vector,
     resolve_lowered_call_dependency,
@@ -181,7 +182,7 @@ class CallLowerer:
         self,
         entry: str,
         context: LoweringSession,
-        source: VectorIdentity,
+        source: CallVectorReference,
     ) -> str | None:
         """A forwarded call-bracket arg (entries 1..) as a target template/const-generic arg:
         a query that resolves to a `TextValue` spelling, or an exact `generic_params`
@@ -218,6 +219,8 @@ class CallLowerer:
             return entry
         extension = context.env.catalog.extensions.get(entry)
         if extension is not None:
+            if source.base_tag is None:
+                return None
             base = context.env.backend.types.scalar_spelling(source.base_tag)
             return (
                 _vector_type_for_extension(base, extension, context)
@@ -230,6 +233,8 @@ class CallLowerer:
         # A base tag (`cast[Vec, ToBase]`'s `ToBase`) -> the target vector (`ToVec`) the cast/convert
         # wrapper takes as its second type param: `simd<ToBase, current_ext>`.
         if isinstance(value, TypeValue):
+            if not isinstance(source, VectorIdentity):
+                return None
             base = context.env.backend.types.scalar_spelling(value.type_tag)
             extension = next(
                 (

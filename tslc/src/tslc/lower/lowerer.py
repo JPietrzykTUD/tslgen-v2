@@ -58,7 +58,11 @@ from tslc.lower._diagnostics import (
     lowering_skip_diagnostic,
     primitive_signature_source as _primitive_signature_source,
 )
-from tslc.lower.dependencies import CallDependencyOrigin, origin_sort_key
+from tslc.lower.dependencies import (
+    CallDependencyOrigin,
+    origin_sort_key,
+    symbolic_call_dependency_error,
+)
 from tslc.lower.region_handlers import (
     DEFAULT_REGION_LOWERERS,
     RegionLowerer,
@@ -577,6 +581,61 @@ class Lowerer:
             )
 
         type_param_segments = (segments, *(item[1] for item in variant_sources))
+        type_params = tuple(
+            LoweredTypeParam(
+                name=gp.name,
+                bounds=tuple(
+                    sorted(
+                        {
+                            bound
+                            for body in type_param_segments
+                            for bound in _type_param_bounds(
+                                body,
+                                gp.name,
+                                catalog_facts.primitive_type_param_bounds,
+                                selected.extension.name,
+                            )
+                        }
+                    )
+                ),
+                base_type_constraints=gp.base_type_constraints,
+                specialize_base=gp.specialize_base,
+                base_type_binding=context.env.simd_type_param_base_bindings.get(
+                    gp.name
+                ),
+                base_type_binding_spelling=(
+                    backend.types.scalar_spelling(binding)
+                    if (
+                        binding := context.env.simd_type_param_base_bindings.get(
+                            gp.name
+                        )
+                    )
+                    is not None
+                    else None
+                ),
+            )
+            for gp in selected.primitive.generic_params
+            if gp.kind == "simd_type"
+        )
+        type_param_bounds = {
+            type_param.name: type_param.bounds for type_param in type_params
+        }
+        ordered_dependency_origins = tuple(
+            sorted(call_dependency_origins, key=origin_sort_key)
+        )
+        for origin in ordered_dependency_origins:
+            if (
+                message := symbolic_call_dependency_error(
+                    origin.dependency,
+                    type_param_bounds,
+                )
+            ) is not None:
+                return _error(
+                    "TSL-LOWER-INVALID-SYMBOLIC-CALL-DEPENDENCY",
+                    message,
+                    source=_implementation_source(selected),
+                )
+
         specialization = LoweredSpecialization(
             backend_id=backend.backend_id,
             primitive_name=selected.primitive.name,
@@ -631,42 +690,7 @@ class Lowerer:
                 for gp in selected.primitive.generic_params
                 if gp.kind != "simd_type"
             ),
-            type_params=tuple(
-                LoweredTypeParam(
-                    name=gp.name,
-                    bounds=tuple(
-                        sorted(
-                            {
-                                bound
-                                for body in type_param_segments
-                                for bound in _type_param_bounds(
-                                    body,
-                                    gp.name,
-                                    catalog_facts.primitive_type_param_bounds,
-                                    selected.extension.name,
-                                )
-                            }
-                        )
-                    ),
-                    base_type_constraints=gp.base_type_constraints,
-                    specialize_base=gp.specialize_base,
-                    base_type_binding=context.env.simd_type_param_base_bindings.get(
-                        gp.name
-                    ),
-                    base_type_binding_spelling=(
-                        backend.types.scalar_spelling(binding)
-                        if (
-                            binding := context.env.simd_type_param_base_bindings.get(
-                                gp.name
-                            )
-                        )
-                        is not None
-                        else None
-                    ),
-                )
-                for gp in selected.primitive.generic_params
-                if gp.kind == "simd_type"
-            ),
+            type_params=type_params,
             result_vector_param=(
                 selected.primitive.result_target[1]
                 if selected.primitive.result_target is not None
@@ -681,9 +705,7 @@ class Lowerer:
             mask_policy=selected.primitive.attributes.get("mask"),
             lane_list_params=tuple(context.env.lane_list_params.values()),
             required_features=selected.required_features,
-            call_dependency_origins=tuple(
-                sorted(call_dependency_origins, key=origin_sort_key)
-            ),
+            call_dependency_origins=ordered_dependency_origins,
             implementation_state=default_body.implementation_state,
             safety=effective_safety,
             variant_bodies=tuple(variant_bodies),

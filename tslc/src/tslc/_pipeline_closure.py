@@ -13,6 +13,8 @@ from tslc.lower.dependencies import (
     CallDependencyOrigin,
     VectorIdentity,
     dependency_sort_key,
+    is_concrete_call_dependency,
+    vector_reference_label,
 )
 from tslc.lower.implementation_state import combine_implementation_states
 from tslc.lower.lowerer import LoweredSpecialization
@@ -95,8 +97,16 @@ def _prune_unresolved(
     dependents: dict[_SlotKey, list[int]] = {}
     for index, slot in enumerate(slots):
         items = tuple(
-            (dependency, _dependency_key(slot, dependency, split_names))
+            (dependency, dependency_key)
             for dependency in sorted(slot.callees, key=dependency_sort_key)
+            if (
+                dependency_key := _dependency_key(
+                    slot,
+                    dependency,
+                    split_names,
+                )
+            )
+            is not None
         )
         dependency_items.append(items)
         for _dependency, dependency_key in items:
@@ -227,7 +237,7 @@ def _dependency_key(
     slot: _LoweredSlot,
     dependency: CallDependency,
     split_names: frozenset[str],
-) -> _SlotKey:
+) -> _SlotKey | None:
     return _call_dependency_key(slot.backend, dependency, split_names)
 
 
@@ -235,7 +245,7 @@ def lowering_trace_dependency_key(
     slot: LoweringTraceSlot,
     dependency: CallDependency,
     split_names: frozenset[str],
-) -> _SlotKey:
+) -> _SlotKey | None:
     """Resolve an analysis edge with the pipeline's pruning identity."""
 
     return _call_dependency_key(slot.backend, dependency, split_names)
@@ -260,25 +270,31 @@ def unresolved_callee_reason(unresolved: CallDependencyOrigin | None) -> str:
 
 
 def dependency_label(dependency: CallDependency) -> str:
+    source_reference = vector_reference_label(dependency.source)
     source = (
-        f"{dependency.primitive}<"
-        f"{dependency.source.extension_isa}, {dependency.source.base_tag}>"
+        f"{dependency.primitive}{source_reference}"
+        if isinstance(dependency.source, VectorIdentity)
+        else f"{dependency.primitive}<{source_reference}>"
     )
     if dependency.mask_policy is not None:
         source = f"{source}[mask={dependency.mask_policy}]"
     if dependency.target is None:
         return source
-    return (
-        f"{source} -> <"
-        f"{dependency.target.extension_isa}, {dependency.target.base_tag}>"
-    )
+    return f"{source} -> {vector_reference_label(dependency.target)}"
 
 
 def _call_dependency_key(
     backend: str,
     dependency: CallDependency,
     split_names: frozenset[str],
-) -> _SlotKey:
+) -> _SlotKey | None:
+    if not is_concrete_call_dependency(dependency):
+        return None
+    assert isinstance(dependency.source, VectorIdentity)
+    assert dependency.target is None or isinstance(
+        dependency.target,
+        VectorIdentity,
+    )
     return (
         backend,
         dependency.primitive,
@@ -339,6 +355,8 @@ def _propagate_transitive_call_facts(
     for slot, caller_id in zip(slots, slot_fact_ids, strict=True):
         for dependency in sorted(slot.callees, key=dependency_sort_key):
             dependency_key = _dependency_key(slot, dependency, split_names)
+            if dependency_key is None:
+                continue
             for callee_id in dependency_targets.get(dependency_key, ()):
                 callers = callers_by_callee.setdefault(callee_id, [])
                 if not callers or callers[-1] != caller_id:

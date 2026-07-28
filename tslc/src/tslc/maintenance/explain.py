@@ -33,6 +33,7 @@ import argparse
 from collections.abc import Collection, Sequence
 from pathlib import Path
 
+from tslc._pipeline_closure import dependency_label
 from tslc.api import _expand_sources
 from tslc.backend.registry import create_backend_dialect, registered_backend_ids
 from tslc.catalog.machine_profiles import MachineProfile
@@ -41,7 +42,12 @@ from tslc.diagnostics import Diagnostic, SourceLocation, SourceSpan
 from tslc.ir.scan import scan
 from tslc.maintenance import _repo_context
 from tslc.maintenance._segments_view import format_segment_tree
-from tslc.lower.dependencies import CallDependency
+from tslc.lower.dependencies import (
+    CallDependency,
+    VectorIdentity,
+    dependency_sort_key,
+    is_concrete_call_dependency,
+)
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.pipeline import (
     GenerationRequest,
@@ -419,10 +425,22 @@ def _print_dependencies(
     if not callees:
         out.line("    no call<…> callees (leaf primitive)")
         return
-    out.line("    call<…> callees (✓ = emitted for this profile in the closure):")
-    for dependency in sorted(
-        callees, key=lambda d: (d.primitive, d.source.base_tag, d.source.extension_isa)
-    ):
+    out.line(
+        "    call<…> callees "
+        "(✓ = emitted for this profile; ~ = symbolic trait-bound call):"
+    )
+    for dependency in sorted(callees, key=dependency_sort_key):
+        if not is_concrete_call_dependency(dependency):
+            out.line(
+                f"      ~ {dependency_label(dependency)} "
+                "(symbolic trait-bound call)"
+            )
+            continue
+        assert isinstance(dependency.source, VectorIdentity)
+        assert dependency.target is None or isinstance(
+            dependency.target,
+            VectorIdentity,
+        )
         emitted = verdicts.is_emitted(
             dependency.primitive, dependency.source.extension_isa, dependency.source.base_tag
         )
@@ -524,6 +542,9 @@ class _PipelineVerdicts:
     def missing_callees(self, callees: frozenset[CallDependency]) -> list[str]:
         missing: list[str] = []
         for dependency in sorted(callees, key=lambda d: d.primitive):
+            if not is_concrete_call_dependency(dependency):
+                continue
+            assert isinstance(dependency.source, VectorIdentity)
             if not self.is_emitted(
                 dependency.primitive,
                 dependency.source.extension_isa,

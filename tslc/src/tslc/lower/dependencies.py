@@ -9,6 +9,7 @@ resolution helpers.
 
 from __future__ import annotations
 
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 
 from tslc.catalog.model import RESULT_DIM_VECTOR
@@ -24,11 +25,22 @@ class VectorIdentity:
 
 
 @dataclass(frozen=True, slots=True)
+class GenericVectorReference:
+    """A free SIMD type parameter whose representation is chosen by its caller."""
+
+    parameter_name: str
+    base_tag: str | None = None
+
+
+type CallVectorReference = VectorIdentity | GenericVectorReference
+
+
+@dataclass(frozen=True, slots=True)
 class CallDependency:
     primitive: str
     mask_policy: str | None
-    source: VectorIdentity
-    target: VectorIdentity | None = None
+    source: CallVectorReference
+    target: CallVectorReference | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,20 +95,18 @@ def resolve_lowered_call_dependency(
 
 def dependency_sort_key(
     dependency: CallDependency,
-) -> tuple[str, str, str, str, str, str]:
+) -> tuple[str, ...]:
     return (
         dependency.primitive,
         dependency.mask_policy or "",
-        dependency.source.extension_isa,
-        dependency.source.base_tag,
-        dependency.target.extension_isa if dependency.target is not None else "",
-        dependency.target.base_tag if dependency.target is not None else "",
+        *_vector_reference_sort_key(dependency.source),
+        *_vector_reference_sort_key(dependency.target),
     )
 
 
 def origin_sort_key(
     origin: CallDependencyOrigin,
-) -> tuple[str, str, str, str, str, str, str]:
+) -> tuple[str, ...]:
     return (*dependency_sort_key(origin.dependency), origin.origin)
 
 
@@ -105,12 +115,13 @@ def resolve_lowered_call_vector(
     context: LoweringSession,
     evaluator: QueryEvaluator,
     *,
-    relative_to: VectorIdentity | None = None,
-) -> VectorIdentity | None:
+    relative_to: CallVectorReference | None = None,
+) -> CallVectorReference | None:
     """Resolve one call-vector expression using representation-change rules.
 
     Explicit vectors are absolute. A bare extension target inherits the source
-    vector's base, while a bare base target inherits its extension. Rendering
+    vector's base, while a bare base target inherits only a concrete source
+    extension. Free SIMD parameters retain their symbolic identity. Rendering
     and dependency closure share this resolver so those identities cannot
     drift apart.
     """
@@ -128,24 +139,25 @@ def resolve_lowered_call_vector(
             else None
         )
     if expression in context.env.simd_type_param_names:
-        base = context.env.simd_type_param_base_bindings.get(expression)
-        if base is not None:
-            return VectorIdentity(
-                base,
-                (
-                    relative_to.extension_isa
-                    if relative_to is not None
-                    else context.env.extension.isa_name
-                ),
-            )
+        return GenericVectorReference(
+            expression,
+            context.env.simd_type_param_base_bindings.get(expression),
+        )
 
     vector = context.scope.resolve_vector_alias(expression)
     if vector is not None:
         return VectorIdentity(vector.base_tag, vector.extension_isa)
     extension = _resolve_lowered_extension_isa(expression, context)
     if extension is not None:
+        base_tag = (
+            relative_to.base_tag
+            if relative_to is not None
+            else context.env.type_tag
+        )
+        if base_tag is None:
+            return None
         return VectorIdentity(
-            relative_to.base_tag if relative_to is not None else context.env.type_tag,
+            base_tag,
             extension,
         )
 
@@ -153,6 +165,11 @@ def resolve_lowered_call_vector(
     if isinstance(value, VectorValue):
         return VectorIdentity(value.base_tag, value.extension_isa)
     if isinstance(value, TypeValue):
+        if (
+            relative_to is not None
+            and not isinstance(relative_to, VectorIdentity)
+        ):
+            return None
         return VectorIdentity(
             value.type_tag,
             (
@@ -162,6 +179,66 @@ def resolve_lowered_call_vector(
             ),
         )
     return None
+
+
+def is_concrete_call_dependency(dependency: CallDependency) -> bool:
+    """Whether an edge can participate in exact specialization matching."""
+
+    return isinstance(dependency.source, VectorIdentity) and (
+        dependency.target is None
+        or isinstance(dependency.target, VectorIdentity)
+    )
+
+
+def vector_reference_label(reference: CallVectorReference) -> str:
+    """Return one stable, non-fabricated dependency-reference label."""
+
+    if isinstance(reference, VectorIdentity):
+        return f"<{reference.extension_isa}, {reference.base_tag}>"
+    base = reference.base_tag if reference.base_tag is not None else "?"
+    return f"{reference.parameter_name}[base={base}]"
+
+
+def symbolic_call_dependency_error(
+    dependency: CallDependency,
+    type_param_bounds: Mapping[str, Collection[str]],
+) -> str | None:
+    """Validate that symbolic edges are backed by lowered type-parameter facts."""
+
+    symbolic = tuple(
+        reference
+        for reference in (dependency.source, dependency.target)
+        if isinstance(reference, GenericVectorReference)
+    )
+    for reference in symbolic:
+        if reference.parameter_name not in type_param_bounds:
+            return (
+                f"call to {dependency.primitive!r} references undeclared SIMD "
+                f"type parameter {reference.parameter_name!r}"
+            )
+    # The callee trait is invoked on the source vector. A symbolic target is a
+    # generic selector argument, so its declaration is required but the callee
+    # itself is not one of that target parameter's trait bounds.
+    if isinstance(dependency.source, GenericVectorReference) and (
+        dependency.primitive
+        not in type_param_bounds[dependency.source.parameter_name]
+    ):
+        return (
+            f"call to {dependency.primitive!r} on SIMD type parameter "
+            f"{dependency.source.parameter_name!r} is missing that primitive "
+            "from its compiler-derived bounds"
+        )
+    return None
+
+
+def _vector_reference_sort_key(
+    reference: CallVectorReference | None,
+) -> tuple[str, str, str]:
+    if reference is None:
+        return ("", "", "")
+    if isinstance(reference, VectorIdentity):
+        return ("concrete", reference.extension_isa, reference.base_tag)
+    return ("generic", reference.parameter_name, reference.base_tag or "")
 
 
 def _resolve_lowered_type(
@@ -212,9 +289,14 @@ def _lowered_callee_has_target_axis(
 __all__ = (
     "CallDependency",
     "CallDependencyOrigin",
+    "CallVectorReference",
+    "GenericVectorReference",
     "VectorIdentity",
     "dependency_sort_key",
+    "is_concrete_call_dependency",
     "origin_sort_key",
     "resolve_lowered_call_vector",
     "resolve_lowered_call_dependency",
+    "symbolic_call_dependency_error",
+    "vector_reference_label",
 )

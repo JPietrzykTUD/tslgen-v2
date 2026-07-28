@@ -8,6 +8,7 @@ import pytest
 
 from tslc._pipeline_closure import LoweringTrace, LoweringTraceSlot
 from tslc.concrete_analysis import (
+    ConcreteAnalysis,
     ConcreteAnalysisContext,
     _analysis_roots,
     analyze_concrete_specialization,
@@ -15,6 +16,7 @@ from tslc.concrete_analysis import (
 from tslc.lower.dependencies import (
     CallDependency,
     CallDependencyOrigin,
+    GenericVectorReference,
     VectorIdentity,
 )
 from tslc.lower.implementation_state import ImplementationState
@@ -72,6 +74,38 @@ def test_analysis_keeps_an_actionable_unresolved_edge() -> None:
     assert unresolved.origin == "implementation"
     assert unresolved.reason is not None
     assert "missing<scalar, si32>" in unresolved.reason
+
+
+def test_analysis_keeps_symbolic_dependencies_visible_and_deterministic() -> None:
+    dependency = CallDependency(
+        "to_array",
+        None,
+        GenericVectorReference("Dst", "f64"),
+    )
+    trace = LoweringTrace(
+        frozenset(),
+        (_trace_slot("root", callees=(dependency,)),),
+    )
+
+    first = _analysis_roots(trace, _context("root"), ())
+    second = _analysis_roots(trace, _context("root"), ())
+
+    symbolic = first[0].dependencies[0]
+    assert first == second
+    assert symbolic.status == "symbolic"
+    assert symbolic.extension is None
+    assert symbolic.type_tag == "f64"
+    assert symbolic.vector_reference == "Dst[base=f64]"
+    analysis = ConcreteAnalysis(
+        status="analyzed",
+        input_digest="demo",
+        context=_context("root"),
+        implementation_state=ImplementationState.COMPOSED,
+        roots=first,
+    )
+    rendered = format_analysis_text(analysis)
+    assert "to_array<Dst[base=f64]>" in rendered
+    assert "avx2" not in rendered
 
 
 def test_real_corpus_analysis_reuses_pipeline_lowering_without_rendering(

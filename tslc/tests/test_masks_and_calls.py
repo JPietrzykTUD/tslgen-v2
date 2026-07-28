@@ -15,10 +15,13 @@ from tslc.diagnostics import has_errors
 from tslc.ir.region_syntax import ParsedCallSelector, parse_call_selector
 from tslc.lower.dependencies import (
     CallDependency,
+    GenericVectorReference,
     VectorIdentity,
+    symbolic_call_dependency_error,
 )
 from tslc.lower.lowerer import Lowerer, _type_param_bounds
 from tslc.ir.scan import scan
+from tslc.pipeline import _dependency_discovery_requests
 from tslc.select.selector import Selector
 from tslc.support_policy_views import immediate_split_names
 
@@ -646,6 +649,59 @@ def test_type_param_bounds_use_call_regions_not_raw_text() -> None:
         ignored = "call<primitive=from_string[IndicesType]>(index)";
     '''
     assert _type_param_bounds(body, "IndicesType") == ("mask_test", "to_array")
+
+
+def test_symbolic_call_dependency_requires_declared_bound() -> None:
+    dependency = CallDependency(
+        "to_array",
+        None,
+        GenericVectorReference("Dst", "f64"),
+    )
+
+    assert "undeclared SIMD type parameter 'Dst'" in (
+        symbolic_call_dependency_error(dependency, {}) or ""
+    )
+    assert "missing that primitive" in (
+        symbolic_call_dependency_error(dependency, {"Dst": ()}) or ""
+    )
+    assert symbolic_call_dependency_error(
+        dependency,
+        {"Dst": ("to_array",)},
+    ) is None
+
+
+def test_symbolic_dependency_discovers_callee_without_an_extension_scope(
+    catalog: Catalog,
+) -> None:
+    requests = _dependency_discovery_requests(
+        frozenset(
+            {
+                CallDependency(
+                    "to_array",
+                    None,
+                    GenericVectorReference("Dst", "f64"),
+                ),
+                CallDependency(
+                    "set_zero",
+                    None,
+                    VectorIdentity("si32", "avx2"),
+                ),
+                CallDependency(
+                    "from_array",
+                    None,
+                    GenericVectorReference("Unbound"),
+                ),
+            }
+        ),
+        backend="rust",
+        catalog=catalog,
+        fallback_types=("si8", "ui8"),
+    )
+
+    assert ("to_array", "f64", None, "rust") in requests
+    assert ("set_zero", "si32", "avx2", "rust") in requests
+    assert ("from_array", "si8", None, "rust") in requests
+    assert ("from_array", "ui8", None, "rust") in requests
 
 
 def test_convert_down_insert_call_uses_target_vector_alias(

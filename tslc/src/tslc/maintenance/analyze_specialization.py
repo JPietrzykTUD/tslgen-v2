@@ -110,13 +110,18 @@ def _node_json(node: ConcreteAnalysisNode) -> dict[str, object]:
         "backend": node.backend,
         "extension": node.extension,
         "type": node.type_tag,
+        "vectorReference": node.vector_reference,
         "implementationState": node.implementation_state.value,
         "origin": node.origin,
         "reason": node.reason,
         "parameters": list(node.param_names),
         "parameterKinds": list(node.param_kinds),
         "target": (
-            None
+            (
+                {"vectorReference": node.target_vector_reference}
+                if node.target_vector_reference is not None
+                else None
+            )
             if node.target_extension is None or node.target_type is None
             else {"extension": node.target_extension, "type": node.target_type}
         ),
@@ -151,12 +156,21 @@ def _append_node_text(
     suffix = f" — {node.reason}" if node.reason else ""
     origin = f" [{node.origin}]" if node.origin else ""
     target = (
-        ""
+        (
+            f" -> {node.target_vector_reference}"
+            if node.target_vector_reference is not None
+            else ""
+        )
         if node.target_extension is None or node.target_type is None
         else f" -> {node.target_type}<{node.target_extension}>"
     )
+    source = (
+        f"<{node.vector_reference}>"
+        if node.vector_reference is not None
+        else f"<{node.extension}, {node.type_tag}>"
+    )
     lines.append(
-        f"{'  ' * depth}- {node.primitive}<{node.extension}, {node.type_tag}>"
+        f"{'  ' * depth}- {node.primitive}{source}"
         f"{target}{origin}: {node.status}/{node.implementation_state.value}{suffix}"
     )
     for child in node.dependencies:

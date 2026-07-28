@@ -38,7 +38,12 @@ from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
-from tslc.lower.dependencies import dependency_sort_key
+from tslc.lower.dependencies import (
+    CallDependency,
+    VectorIdentity,
+    dependency_sort_key,
+    is_concrete_call_dependency,
+)
 from tslc.lower.lowerer import (
     POLICY_DEFERRED_SIGNATURE_CODE,
     LoweredSpecialization,
@@ -407,7 +412,13 @@ class _GenerationSession:
                     dependency_backend,
                 ) in discovered_dependencies:
                     dependency_scope = (
-                        (dependency_extension,) if extensions is not None else None
+                        None
+                        if dependency_extension is None
+                        else (
+                            (dependency_extension,)
+                            if extensions is not None
+                            else None
+                        )
                     )
                     if dependency_backend not in processed.get(
                         (dependency_primitive, dependency_type, dependency_scope), set()
@@ -468,10 +479,15 @@ class _GenerationSession:
         selected_extensions: dict[str, Extension],
         backend_ids: frozenset[str],
         extensions: tuple[str, ...] | None,
-    ) -> tuple[list["_LoweredSlot"], tuple[tuple[str, str, str, str], ...]]:
+    ) -> tuple[
+        list["_LoweredSlot"],
+        tuple[tuple[str, str, str | None, str], ...],
+    ]:
         catalog = self.inputs.catalog
         lowered_slots: list[_LoweredSlot] = []
-        discovered_dependencies: set[tuple[str, str, str, str]] = set()
+        discovered_dependencies: set[
+            tuple[str, str, str | None, str]
+        ] = set()
 
         for capability in self.backends:
             backend = capability.backend_id
@@ -522,17 +538,20 @@ class _GenerationSession:
                     )
                 )
                 discovered_dependencies.update(
-                    (
-                        dependency.primitive,
-                        dependency.source.base_tag,
-                        dependency.source.extension_isa,
-                        backend,
+                    _dependency_discovery_requests(
+                        callees,
+                        backend=backend,
+                        catalog=catalog,
+                        fallback_types=self.type_tags,
                     )
-                    for dependency in callees
-                    if catalog.primitives_named(dependency.primitive, unmasked=False)
                 )
 
-        return lowered_slots, tuple(sorted(discovered_dependencies))
+        return lowered_slots, tuple(
+            sorted(
+                discovered_dependencies,
+                key=lambda item: (item[0], item[1], item[2] or "", item[3]),
+            )
+        )
 
     def _record_lowering_diagnostics(
         self,
@@ -602,6 +621,46 @@ class _GenerationSession:
             for slot in lowered_specs
             if slot not in pruned
         )
+
+
+def _dependency_discovery_requests(
+    dependencies: frozenset[CallDependency],
+    *,
+    backend: str,
+    catalog: Catalog,
+    fallback_types: tuple[str, ...],
+) -> tuple[tuple[str, str, str | None, str], ...]:
+    """Project call identities into profile-scoped lowering worklist entries."""
+
+    requests: set[tuple[str, str, str | None, str]] = set()
+    for dependency in dependencies:
+        if not catalog.primitives_named(dependency.primitive, unmasked=False):
+            continue
+        source = dependency.source
+        requested_types = (
+            (source.base_tag,)
+            if source.base_tag is not None
+            else fallback_types
+        )
+        exact_extension = None
+        if is_concrete_call_dependency(dependency):
+            assert isinstance(source, VectorIdentity)
+            exact_extension = source.extension_isa
+        requests.update(
+            (
+                dependency.primitive,
+                type_tag,
+                exact_extension,
+                backend,
+            )
+            for type_tag in requested_types
+        )
+    return tuple(
+        sorted(
+            requests,
+            key=lambda item: (item[0], item[1], item[2] or "", item[3]),
+        )
+    )
 
 
 def _record_render_extensions(

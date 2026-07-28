@@ -370,9 +370,16 @@ The pipeline then runs a **profile-scoped dependency closure**: from the
 requested primitives it resolves those lowered call facts
 ([lower/dependencies.py](src/tslc/lower/dependencies.py)), lowers callees, and
 **prunes to a fixpoint** any specialization whose callees aren't themselves
-emitted for the same `simd<type,ext>` (else the generated call wouldn't link).
-It also **propagates bottom-up** unsafe-ness, required target features, and
-implementation-state joins through the live call graph
+emitted for the same concrete `simd<type,ext>` (else the generated call
+wouldn't link). A call on a free SIMD type parameter instead retains a symbolic
+reference containing the authored parameter name and its optional selected base
+binding, never the caller's extension. Its compiler-derived trait bounds are
+validated during lowering, and dependency discovery keeps the corresponding
+callee family in the profile scope. Because its concrete representation is
+chosen only by the generic caller, that edge does not participate in exact-slot
+pruning or fact propagation. Concrete edges continue to **propagate bottom-up**
+unsafe-ness, required target features, and implementation-state joins through
+the live call graph
 ([_pipeline_closure.py](src/tslc/_pipeline_closure.py),
 `_propagate_transitive_call_facts`).
 

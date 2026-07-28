@@ -17,7 +17,13 @@ from tslc._pipeline_closure import (
 from tslc._pipeline_inputs import _load_inputs
 from tslc.api import _expand_sources
 from tslc.diagnostics import Diagnostic, SourceSpan
-from tslc.lower.dependencies import CallDependency, dependency_sort_key
+from tslc.lower.dependencies import (
+    CallDependency,
+    VectorIdentity,
+    dependency_sort_key,
+    is_concrete_call_dependency,
+    vector_reference_label,
+)
 from tslc.lower.implementation_state import (
     ImplementationState,
     combine_implementation_states,
@@ -25,7 +31,7 @@ from tslc.lower.implementation_state import (
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.pipeline import GenerationRequest, SkippedEntry, _generate_loaded
 
-AnalysisNodeStatus = Literal["resolved", "unresolved", "cycle"]
+AnalysisNodeStatus = Literal["resolved", "unresolved", "cycle", "symbolic"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,8 +51,8 @@ class ConcreteAnalysisNode:
     status: AnalysisNodeStatus
     primitive: str
     backend: str
-    extension: str
-    type_tag: str
+    extension: str | None
+    type_tag: str | None
     implementation_state: ImplementationState
     origin: str | None = None
     reason: str | None = None
@@ -55,6 +61,8 @@ class ConcreteAnalysisNode:
     param_kinds: tuple[str, ...] = ()
     target_extension: str | None = None
     target_type: str | None = None
+    vector_reference: str | None = None
+    target_vector_reference: str | None = None
     dependencies: tuple["ConcreteAnalysisNode", ...] = ()
 
 
@@ -203,6 +211,15 @@ def _node_from_slot(
     for dependency in sorted(slot.callees, key=dependency_sort_key):
         edge_origin = origins.get(dependency, "implementation")
         key = lowering_trace_dependency_key(slot, dependency, trace.split_names)
+        if key is None:
+            dependencies.append(
+                _symbolic_dependency_node(
+                    slot.backend,
+                    dependency,
+                    edge_origin,
+                )
+            )
+            continue
         targets = by_key.get(key, ())
         if not targets:
             dependencies.append(
@@ -286,6 +303,13 @@ def _missing_dependency_node(
     dependency: CallDependency,
     origin: str,
 ) -> ConcreteAnalysisNode:
+    if not is_concrete_call_dependency(dependency):
+        return _symbolic_dependency_node(backend, dependency, origin)
+    assert isinstance(dependency.source, VectorIdentity)
+    assert dependency.target is None or isinstance(
+        dependency.target,
+        VectorIdentity,
+    )
     target = dependency.target
     return ConcreteAnalysisNode(
         status="unresolved",
@@ -301,6 +325,50 @@ def _missing_dependency_node(
         ),
         target_extension=target.extension_isa if target is not None else None,
         target_type=target.base_tag if target is not None else None,
+    )
+
+
+def _symbolic_dependency_node(
+    backend: str,
+    dependency: CallDependency,
+    origin: str,
+) -> ConcreteAnalysisNode:
+    source = dependency.source
+    target = dependency.target
+    concrete_source = source if isinstance(source, VectorIdentity) else None
+    concrete_target = target if isinstance(target, VectorIdentity) else None
+    return ConcreteAnalysisNode(
+        status="symbolic",
+        primitive=dependency.primitive,
+        backend=backend,
+        extension=(
+            concrete_source.extension_isa
+            if concrete_source is not None
+            else None
+        ),
+        type_tag=source.base_tag,
+        implementation_state=ImplementationState.UNKNOWN,
+        origin=origin,
+        reason=(
+            f"symbolic trait-constrained call {dependency_label(dependency)}; "
+            "the concrete specialization is chosen by the generic caller"
+        ),
+        target_extension=(
+            concrete_target.extension_isa
+            if concrete_target is not None
+            else None
+        ),
+        target_type=target.base_tag if target is not None else None,
+        vector_reference=(
+            None
+            if concrete_source is not None
+            else vector_reference_label(source)
+        ),
+        target_vector_reference=(
+            vector_reference_label(target)
+            if target is not None and concrete_target is None
+            else None
+        ),
     )
 
 

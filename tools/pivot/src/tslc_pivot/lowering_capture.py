@@ -23,6 +23,7 @@ from tslc.lower.context import LoweringSession
 from tslc.lower.dependencies import (
     CallDependency,
     CallDependencyOrigin,
+    VectorIdentity,
     resolve_lowered_call_dependency,
     resolve_lowered_call_vector,
 )
@@ -268,9 +269,9 @@ def pivot_call_type_args_supported(
         return False
     if not selector.type_args:
         return True
-    return (
-        resolve_lowered_call_vector(selector.type_args[0], context, evaluator)
-        is not None
+    return isinstance(
+        resolve_lowered_call_vector(selector.type_args[0], context, evaluator),
+        VectorIdentity,
     )
 
 

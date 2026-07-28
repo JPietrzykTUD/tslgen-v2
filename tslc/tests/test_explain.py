@@ -141,6 +141,25 @@ def test_dependency_closure_marks_emitted_callee(
     assert "✓" in report  # the callee is emitted in the closure
 
 
+def test_explain_labels_generic_vector_dependencies_symbolically(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    report = _explain(
+        data_root,
+        machine_profiles_path,
+        primitive="convert_lanes",
+        profile="avx2",
+        type_tag="si32",
+        backend="rust",
+        extension="avx2",
+    )
+
+    assert "to_array<ToVec[base=" in report
+    assert "symbolic trait-bound call" in report
+    assert "to_array<avx2, f64>" not in report
+
+
 def test_unknown_profile_is_reported(
     data_root: Path, machine_profiles_path: Path
 ) -> None:

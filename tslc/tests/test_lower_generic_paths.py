@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from _select_lower_core_support import (
     Catalog,
     create_backend_dialect,
@@ -12,7 +14,15 @@ from _select_lower_core_support import (
 )
 from tslc.backend.cpp_documentation import cpp_doc
 from tslc.backend.rust_documentation import rust_doc
-from tslc.lower.dependencies import CallDependency, VectorIdentity
+from tslc.lower.dependencies import (
+    CallDependency,
+    CallDependencyOrigin,
+    GenericVectorReference,
+    VectorIdentity,
+)
+from tslc.ir.scan import scan
+from tslc.lower.region_handlers import DEFAULT_REGION_LOWERERS
+from tslc.select.selector import SimdTypeBaseBinding
 
 
 @pytest.mark.parametrize("extension", ["generic", "oneapi_fpga"])
@@ -207,12 +217,12 @@ def test_lane_preserving_conversion_keeps_explicit_target_vector_typed(
             CallDependency(
                 "from_array",
                 None,
-                VectorIdentity("f64", "avx2"),
+                GenericVectorReference("ToVec", "f64"),
             ),
             CallDependency(
                 "set_zero",
                 None,
-                VectorIdentity("f64", "avx2"),
+                GenericVectorReference("ToVec", "f64"),
             ),
             CallDependency(
                 "to_array",
@@ -222,7 +232,7 @@ def test_lane_preserving_conversion_keeps_explicit_target_vector_typed(
             CallDependency(
                 "to_array",
                 None,
-                VectorIdentity("f64", "avx2"),
+                GenericVectorReference("ToVec", "f64"),
             ),
         }
         assert "require_same_lanes" in lowered.body_text
@@ -233,6 +243,123 @@ def test_lane_preserving_conversion_keeps_explicit_target_vector_typed(
             else rust_doc(lowered, context="implementation")
         )
         assert "ToVec" in rendered_doc.split("Returns", 1)[1].splitlines()[0]
+
+
+def test_generic_vector_dependency_uses_the_declared_parameter_name(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    selected = next(
+        item
+        for item in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["avx2"],
+            "convert_lanes",
+            ("si32",),
+        )
+        .selected
+        if item.extension.name == "avx2"
+        and item.simd_type_base_bindings[0].base_tag == "f64"
+    )
+    renamed_primitive = replace(
+        selected.primitive,
+        generic_params=tuple(
+            replace(param, name="Dst")
+            if param.name == "ToVec"
+            else param
+            for param in selected.primitive.generic_params
+        ),
+        result_target=(
+            selected.primitive.result_target[0],
+            "Dst",
+        ),
+    )
+    renamed = replace(
+        selected,
+        primitive=renamed_primitive,
+        implementation=replace(
+            selected.implementation,
+            body_text=selected.implementation.body_text.replace(
+                "ToVec",
+                "Dst",
+            ),
+        ),
+        simd_type_base_bindings=(
+            SimdTypeBaseBinding("Dst", "f64"),
+        ),
+    )
+
+    lowered = Lowerer().lower(
+        renamed,
+        catalog,
+        create_backend_dialect(catalog, "rust"),
+    )
+
+    assert lowered.specialization is not None, lowered.diagnostics
+    symbolic = {
+        origin.dependency.source
+        for origin in lowered.specialization.call_dependency_origins
+        if isinstance(
+            origin.dependency.source,
+            GenericVectorReference,
+        )
+    }
+    assert symbolic == {GenericVectorReference("Dst", "f64")}
+    assert "Dst" in lowered.specialization.body_text
+    assert "ToVec" not in lowered.specialization.body_text
+
+
+def test_generic_vector_dependency_without_derived_bound_fails_closed(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    selected = next(
+        item
+        for item in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["avx2"],
+            "convert_lanes",
+            ("si32",),
+        )
+        .selected
+        if item.extension.name == "avx2"
+        and item.simd_type_base_bindings[0].base_tag == "f64"
+    )
+
+    class InvalidCompleteLowerer:
+        keyword = "complete"
+
+        def lower(self, region, context, render):
+            dependency = CallDependency(
+                "to_array",
+                None,
+                GenericVectorReference("ToVec", "f64"),
+            )
+            context.effects.record_call_dependency(
+                CallDependencyOrigin(dependency, "implementation")
+            )
+            return context.env.backend.syntax.frame_return(render(region.body))
+
+    lowerers = tuple(
+        InvalidCompleteLowerer()
+        if lowerer.keyword == "complete"
+        else lowerer
+        for lowerer in DEFAULT_REGION_LOWERERS
+    )
+    lowered = Lowerer(region_lowerers=lowerers).lower(
+        selected,
+        catalog,
+        create_backend_dialect(catalog, "rust"),
+        body_segments=scan("complete(data);"),
+    )
+
+    assert lowered.specialization is None
+    assert tuple(diagnostic.code for diagnostic in lowered.diagnostics) == (
+        "TSL-LOWER-INVALID-SYMBOLIC-CALL-DEPENDENCY",
+    )
+    assert "missing that primitive" in lowered.diagnostics[0].message
 
 
 def test_scalar_lzc_and_cast_are_direct_scalar_operations(

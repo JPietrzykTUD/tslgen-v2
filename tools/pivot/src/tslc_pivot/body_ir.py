@@ -10,7 +10,12 @@ import json
 from pathlib import Path
 
 from tslc.diagnostics import SourceSpan
-from tslc.lower.dependencies import CallDependency
+from tslc.lower.dependencies import (
+    CallDependency,
+    CallVectorReference,
+    GenericVectorReference,
+    VectorIdentity,
+)
 from tslc_pivot.model import PivotDefinition, PivotLanguage
 
 
@@ -586,13 +591,10 @@ def _expression(
                 "call": (
                     piece.dependency.primitive,
                     piece.dependency.mask_policy,
-                    (
-                        piece.dependency.source.base_tag,
-                        piece.dependency.source.extension_isa,
-                    ),
+                    _call_vector_reference(piece.dependency.source),
                     None
                     if target is None
-                    else (target.base_tag, target.extension_isa),
+                    else _call_vector_reference(target),
                 ),
                 "attrs": piece.attrs,
                 "requires_unsafe": piece.requires_unsafe,
@@ -611,6 +613,16 @@ def _expression(
         "pieces": pieces,
         "source": _span(value.source, source_root) if spans else None,
     }
+
+
+def _call_vector_reference(
+    reference: CallVectorReference,
+) -> tuple[object, ...]:
+    if isinstance(reference, VectorIdentity):
+        return (reference.base_tag, reference.extension_isa)
+    if isinstance(reference, GenericVectorReference):
+        return ("generic", reference.parameter_name, reference.base_tag)
+    raise TypeError("unknown compiler call-vector reference")
 
 
 def _span(value: SourceSpan | None, source_root: Path | None) -> object:

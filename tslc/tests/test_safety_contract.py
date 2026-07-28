@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,7 @@ from tslc.diagnostics import Diagnostic
 from tslc.lower.dependencies import (
     CallDependency,
     CallDependencyOrigin,
+    GenericVectorReference,
     VectorIdentity,
 )
 from tslc.lower.implementation_state import ImplementationState
@@ -453,6 +455,47 @@ def test_pruning_chooses_first_unresolved_dependency_deterministically() -> None
     assert pruned == [caller]
     assert caller.unresolved_callee is not None
     assert caller.unresolved_callee.dependency == less_than
+
+
+def test_symbolic_dependency_is_not_exact_pruned_or_propagated() -> None:
+    dependency = CallDependency(
+        primitive="callee",
+        mask_policy=None,
+        source=GenericVectorReference("Dst", "si32"),
+    )
+    caller = _slot(
+        "caller",
+        callees=frozenset({dependency}),
+        callee_origins=(
+            CallDependencyOrigin(dependency, "implementation"),
+        ),
+    )
+    callee = _slot(
+        "callee",
+        safety=ImplementationSafety(
+            internal_unsafe=True,
+            reasons=frozenset({"intrinsic"}),
+        ),
+        required_features=frozenset({"avx2"}),
+        implementation_state=ImplementationState.NATIVE,
+    )
+    callee.spec = replace(
+        callee.spec,
+        extension_name="avx2",
+        register_is_base=False,
+    )
+
+    grouped, pruned = _prune_unresolved([caller], frozenset())
+
+    assert pruned == []
+    assert grouped["rust"]["caller"] == [caller.spec]
+
+    original = caller.spec
+    _propagate_transitive_call_facts([caller, callee], frozenset())
+    assert caller.spec is original
+    assert caller.spec.required_features == frozenset()
+    assert caller.spec.safety == ImplementationSafety()
+    assert caller.spec.implementation_state is ImplementationState.UNKNOWN
 
 
 def test_pruning_one_overload_keeps_live_sibling() -> None:
