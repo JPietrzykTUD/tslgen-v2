@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(
+    cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
+    pwd
+)"
+PROJECT_ROOT="$(
+    cd -- "${SCRIPT_DIR}/.."
+    pwd
+)"
+
+cd "${PROJECT_ROOT}"
+
+export HOST_UID="${HOST_UID:-$(id -u)}"
+export HOST_GID="${HOST_GID:-$(id -g)}"
+
+command="${1:-up}"
+shift || true
+
+case "${command}" in
+    up)
+        exec docker compose up --build -d dev "$@"
+        ;;
+
+    build)
+        exec docker compose build dev "$@"
+        ;;
+
+    shell)
+        exec docker compose exec dev bash -l "$@"
+        ;;
+
+    logs)
+        exec docker compose logs -f dev "$@"
+        ;;
+
+    restart)
+        exec docker compose restart dev "$@"
+        ;;
+
+    stop)
+        exec docker compose stop dev "$@"
+        ;;
+
+    down)
+        exec docker compose down "$@"
+        ;;
+
+    clean)
+        exec docker compose down --volumes --remove-orphans "$@"
+        ;;
+
+    *)
+        echo "Unknown command: ${command}" >&2
+        echo >&2
+        echo "Usage: $0 {up|build|shell|logs|restart|stop|down|clean}" >&2
+        exit 2
+        ;;
+esac

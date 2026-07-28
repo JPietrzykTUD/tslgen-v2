@@ -1,14 +1,46 @@
 services:
-  dev:
+  base:
+    image: tslc-toolchain-base:local
+
     build:
       context: .
       dockerfile: .devcontainer/Dockerfile
 
+  dev:
+    image: tslc-development:local
+
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile.dev
+
+      # Make the image built by the `base` service available as
+      # the named build context `dev_base`.
+      additional_contexts:
+        dev_base: service:base
+
+      args:
+        USERNAME: developer
+        USER_UID: ${HOST_UID:-1000}
+        USER_GID: ${HOST_GID:-1000}
+
     working_dir: /workspace
+
     volumes:
+      # Live project workspace.
       - .:/workspace
-    command: ["sleep", "infinity"]
+
+      # Codex executable, authentication, configuration and state.
+      - codex-state:/home/developer/.codex
+
+      # GitHub CLI authentication and configuration.
+      - github-cli-state:/home/developer/.config/gh
+
     init: true
     stdin_open: true
     tty: true
+
     restart: unless-stopped
+
+volumes:
+  codex-state:
+  github-cli-state:
