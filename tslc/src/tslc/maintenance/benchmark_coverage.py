@@ -37,6 +37,7 @@ from tslc.benchmark.model import (
     BenchmarkCoverageEntry,
     BenchmarkProjectPlan,
 )
+from tslc.catalog.machine_profiles import load_machine_profiles_checked
 from tslc.catalog.model import Catalog
 from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.maintenance.benchmark_inventory import (
@@ -896,39 +897,91 @@ def compute_benchmark_coverage_audit(
     catalog, catalog_errors = _load_catalog(sources, backend_id)
     if catalog is None or catalog_errors:
         return None, catalog_errors or ("catalog promotion failed",)
-    result = generate_project(
-        [sources],
-        machine_profiles_path=machine_profiles,
-        profiles=profiles,
-        type_tags=types,
-        backends=(backend_id,),
-        test_harness=True,
-    )
-    if has_errors(result.diagnostics) or result.rendered is None:
-        errors = tuple(
+    profile_groups: tuple[tuple[str, ...] | None, ...] = (profiles,)
+    if backend_id == "rust":
+        loaded_profiles = load_machine_profiles_checked(
+            machine_profiles,
+            catalog.target_families,
+        )
+        profile_errors = tuple(
             format_diagnostic(diagnostic)
-            for diagnostic in result.diagnostics
+            for diagnostic in loaded_profiles.diagnostics
             if diagnostic.severity == "error"
         )
-        return None, errors or ("generation produced no rendered project",)
+        if profile_errors:
+            return None, profile_errors
+        selected_profiles = tuple(
+            sorted(
+                profiles
+                if profiles is not None
+                else loaded_profiles.profiles
+            )
+        )
+        unknown_profiles = tuple(
+            name
+            for name in selected_profiles
+            if name not in loaded_profiles.profiles
+        )
+        if unknown_profiles:
+            return None, (
+                "unknown profile(s): "
+                + ", ".join(unknown_profiles)
+                + "; known profiles: "
+                + ", ".join(sorted(loaded_profiles.profiles)),
+            )
+        # A generated Rust crate requires compile-target predicates to form an
+        # ordered chain. Benchmark evidence spans every profile, including
+        # unordered alternatives, so generate each package-valid profile
+        # independently and merge only the typed benchmark/selection facts.
+        profile_groups = tuple((profile_name,) for profile_name in selected_profiles)
+
+    benchmark_plans: list[BenchmarkProjectPlan] = []
+    selection_coverage: list[CoverageEntry] = []
+    selection_skips: list[SkippedEntry] = []
+    emitted_profiles: list[EmittedProfile] = []
+    for profile_group in profile_groups:
+        result = generate_project(
+            [sources],
+            machine_profiles_path=machine_profiles,
+            profiles=profile_group,
+            type_tags=types,
+            backends=(backend_id,),
+            test_harness=True,
+        )
+        if has_errors(result.diagnostics) or result.rendered is None:
+            errors = tuple(
+                format_diagnostic(diagnostic)
+                for diagnostic in result.diagnostics
+                if diagnostic.severity == "error"
+            )
+            return None, errors or ("generation produced no rendered project",)
+        benchmark_plans.append(result.rendered.benchmarks)
+        selection_coverage.extend(result.coverage)
+        selection_skips.extend(result.skipped)
+        emitted_profiles.extend(result.emitted_profiles)
+
+    benchmark_plan = BenchmarkProjectPlan.merge(tuple(benchmark_plans))
+    merged_emitted_profiles = tuple(
+        sorted(emitted_profiles, key=lambda item: item.profile.name)
+    )
     rust_policy_coverage: RustPolicyCoveragePlan | None = None
     if backend_id == "rust":
         try:
             rust_policy_coverage = plan_rust_policy_coverage(
-                result.rendered.benchmarks,
-                plan_rust_policy_selection(result.emitted_profiles),
+                benchmark_plan,
+                plan_rust_policy_selection(merged_emitted_profiles),
             )
         except ValueError as exc:
             return None, (f"Rust policy coverage planning failed: {exc}",)
     try:
         audit = audit_benchmark_coverage(
             catalog,
-            result.rendered.benchmarks,
+            benchmark_plan,
             backend_id=backend_id,
-            selection_coverage=result.coverage,
-            selection_skips=result.skipped,
+            selection_coverage=tuple(selection_coverage),
+            selection_skips=tuple(selection_skips),
             emitted_profiles=(
-                result.emitted_profiles if backend_id == "rust" else None
+                merged_emitted_profiles if backend_id == "rust" else None
             ),
             rust_policy_coverage=rust_policy_coverage,
         )

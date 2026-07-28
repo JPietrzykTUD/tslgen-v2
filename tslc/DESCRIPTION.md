@@ -544,10 +544,13 @@ requested missing, foreign, stale, partial, duplicate, or report-only selection
 fails before library compilation. Unadmitted profile and scenario-family pairs
 remain structured Rust coverage gaps. The benchmark maintenance projection runs one
 backend per invocation: the original C++ issue baseline remains unchanged,
-while separate Rust evidence preserves every raw report gap plus exact profile
-manifest, candidate ID/body hash, policy eligibility, and compiler-rendered
-mapping hashes. Aggregate shape counts are explanatory inventory, not the Rust
-ratchet identity. Value-test tags do not control benchmark admission.
+while the Rust audit generates each selected profile independently and merges
+the resulting typed plans instead of combining unordered compile targets in
+one crate. Separate Rust evidence preserves every raw report gap plus exact
+profile manifest, candidate ID/body hash, policy eligibility, and
+compiler-rendered mapping hashes. Aggregate shape counts are explanatory
+inventory, not the Rust ratchet identity. Value-test tags do not control
+benchmark admission.
 Workload semantics are resolved in
 [benchmark/scenarios.py](src/tslc/benchmark/scenarios.py) before rendering:
 each typed scenario and correctness case validates its own structural and

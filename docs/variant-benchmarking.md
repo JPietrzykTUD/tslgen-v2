@@ -356,7 +356,7 @@ The audit checks:
 
 The C++ gate retains `coverage/benchmark-baseline.json` and
 `coverage/benchmark-shape-inventory.md`. Its existing issue identities and
-inventory remain unchanged.
+inventory are refreshed independently from Rust evidence.
 
 Rust uses `coverage/benchmark-rust-baseline.json` and
 `coverage/benchmark-rust-shape-inventory.md`. Its baseline records every raw
@@ -366,6 +366,11 @@ candidate ID/body hash, independent policy status, and compiler-rendered
 mapping hash. A report can therefore remain honestly `report_only`; only a
 policy-supported report must have a complete mapping. Explanatory reason text
 is excluded from stable identity for both backends.
+
+The Rust audit generates each selected machine profile as its own valid crate
+input, then merges the typed benchmark, selection, and policy facts for the
+ratchet. This keeps all profiles in the evidence without pretending that
+unordered compile-target requirements can coexist in one generated crate.
 
 Refresh only the intended backend's two evidence files after reviewing a
 deliberate coverage change:

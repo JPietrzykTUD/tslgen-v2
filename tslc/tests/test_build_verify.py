@@ -1980,6 +1980,29 @@ def test_convert_lanes_builds(
         assert rejected.returncode == 0, rejected.stderr + rejected.stdout
 
 
+def test_convert_lanes_cpp_sse_smoke_builds(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["convert_lanes"],
+        profiles=["sse"],
+        backends=("cpp",),
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    report = verify_project(tmp_path, result.rendered.verify)
+
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_cast_reinterpret_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:

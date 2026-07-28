@@ -844,6 +844,31 @@ class BenchmarkProjectPlan:
     diagnostics: tuple[Diagnostic, ...] = ()
     coverage: tuple[BenchmarkCoverageEntry, ...] = ()
 
+    @classmethod
+    def merge(
+        cls,
+        plans: tuple["BenchmarkProjectPlan", ...],
+    ) -> "BenchmarkProjectPlan":
+        """Combine independently planned backend/profile slices in order."""
+
+        return cls(
+            profiles=tuple(
+                profile
+                for plan in plans
+                for profile in plan.profiles
+            ),
+            diagnostics=tuple(
+                diagnostic
+                for plan in plans
+                for diagnostic in plan.diagnostics
+            ),
+            coverage=tuple(
+                entry
+                for plan in plans
+                for entry in plan.coverage
+            ),
+        )
+
     def profiles_for(self, backend_id: str) -> tuple[BenchmarkProfilePlan, ...]:
         return tuple(profile for profile in self.profiles if profile.backend_id == backend_id)
 

@@ -326,6 +326,15 @@ def _cpp_smoke_instantiations(
     are fully compiled (with the profile's ISA flags), not merely parsed."""
 
     instantiations: list[CppSmokeInstantiation] = []
+    available_specializations = frozenset(
+        (
+            specialization.source_primitive_name,
+            specialization.extension_name,
+            specialization.type_tag,
+        )
+        for specializations in by_primitive.values()
+        for specialization in specializations
+    )
     for name in sorted(by_primitive):
         specs = by_primitive[name]
         first = specs[0]
@@ -394,7 +403,13 @@ def _cpp_smoke_instantiations(
                 [vec]
                 + ([target_spelling] if target_spelling else [])
                 + [
-                    _cpp_type_param_smoke_vector(spec, param, smoke_lanes)
+                    _cpp_type_param_smoke_vector(
+                        emitted_profile,
+                        spec,
+                        param,
+                        smoke_lanes,
+                        available_specializations,
+                    )
                     for param in spec.type_params
                 ]
                 + [value for _, value in spec.axis]
@@ -446,14 +461,60 @@ def _cpp_specializations_for_group(
 
 
 def _cpp_type_param_smoke_vector(
+    emitted_profile: EmittedProfile,
     spec: LoweredSpecialization,
     param: LoweredTypeParam,
     smoke_lanes: int,
+    available_specializations: frozenset[tuple[str, str, str]],
 ) -> str:
     base = param.base_type_binding_spelling or spec.base_type_spelling
-    if spec.uses_sized_vector:
-        return _cpp_sized_vector_type(base, spec.extension_name, smoke_lanes)
-    return f"tsl::simd<{base}, tsl::{spec.extension_name}>"
+    base_tag = param.base_type_binding or spec.type_tag
+    extensions_by_isa = {
+        extension.isa_name: extension
+        for extension in sorted(
+            emitted_profile.extensions.values(),
+            key=lambda extension: extension.name,
+        )
+    }
+    source_extension = extensions_by_isa.get(spec.extension_name)
+    candidates = sorted(
+        extensions_by_isa.values(),
+        key=lambda extension: (
+            extension.isa_name != spec.extension_name,
+            not (
+                extension.is_unconditional_implementation_fallback
+                and DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
+            ),
+            not extension.is_unconditional_implementation_fallback,
+            extension.isa_name,
+        ),
+    )
+    extension = next(
+        (
+            candidate
+            for candidate in candidates
+            if all(
+                (bound, candidate.isa_name, base_tag)
+                in available_specializations
+                for bound in param.bounds
+            )
+        ),
+        source_extension,
+    )
+    if extension is None:
+        return f"tsl::simd<{base}, tsl::{spec.extension_name}>"
+    if DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
+        lanes = (
+            DEFAULT_SUPPORT_POLICY.lane_count(source_extension, spec.type_tag)
+            if source_extension is not None
+            else None
+        )
+        return _cpp_sized_vector_type(
+            base,
+            extension.isa_name,
+            max(16, smoke_lanes if lanes is None else lanes),
+        )
+    return f"tsl::simd<{base}, tsl::{extension.isa_name}>"
 
 
 def _cpp_concrete_arg_type(vec: str, kind: str) -> str:

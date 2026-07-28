@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -13,11 +14,14 @@ from tslc.backend.rust_policy_consumption import (
     plan_rust_policy_coverage,
 )
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
+from tslc.benchmark.model import BenchmarkProjectPlan
 from tslc.catalog.model import Catalog
 from tslc.diagnostics import has_errors
+from tslc.maintenance import benchmark_coverage as benchmark_coverage_module
 from tslc.maintenance.benchmark_coverage import (
     audit_benchmark_coverage,
     benchmark_issue_baseline,
+    compute_benchmark_coverage_audit,
     deserialize_rust_benchmark_baseline,
     deserialize_issue_baseline,
     diff_benchmark_issues,
@@ -715,3 +719,110 @@ def test_benchmark_cli_rejects_an_unowned_backend_before_writing(
 
     assert not baseline.exists()
     assert not inventory.exists()
+
+
+def test_rust_benchmark_audit_generates_unordered_profiles_independently(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    catalog = SimpleNamespace(target_families=object())
+    monkeypatch.setattr(
+        benchmark_coverage_module,
+        "_load_catalog",
+        lambda _sources, _backend_id: (catalog, ()),
+    )
+    monkeypatch.setattr(
+        benchmark_coverage_module,
+        "load_machine_profiles_checked",
+        lambda _path, _families: SimpleNamespace(
+            profiles={"left": object(), "right": object()},
+            diagnostics=(),
+        ),
+    )
+
+    generated_groups: list[tuple[str, ...] | None] = []
+
+    def fake_generate_project(_sources, **kwargs):
+        group = kwargs["profiles"]
+        generated_groups.append(group)
+        assert group is not None and len(group) == 1
+        profile_name = group[0]
+        return SimpleNamespace(
+            diagnostics=(),
+            rendered=SimpleNamespace(
+                benchmarks=BenchmarkProjectPlan(
+                    profiles=(profile_name,),
+                    coverage=(f"benchmark-{profile_name}",),
+                )
+            ),
+            coverage=(f"selection-{profile_name}",),
+            skipped=(f"skip-{profile_name}",),
+            emitted_profiles=(
+                SimpleNamespace(profile=SimpleNamespace(name=profile_name)),
+            ),
+        )
+
+    monkeypatch.setattr(
+        benchmark_coverage_module,
+        "generate_project",
+        fake_generate_project,
+    )
+    policy_inputs: dict[str, object] = {}
+
+    def fake_policy_selection(emitted_profiles):
+        policy_inputs["emitted"] = emitted_profiles
+        return "selection"
+
+    def fake_policy_coverage(benchmarks, selection):
+        policy_inputs["benchmarks"] = benchmarks
+        policy_inputs["selection"] = selection
+        return "coverage"
+
+    monkeypatch.setattr(
+        benchmark_coverage_module,
+        "plan_rust_policy_selection",
+        fake_policy_selection,
+    )
+    monkeypatch.setattr(
+        benchmark_coverage_module,
+        "plan_rust_policy_coverage",
+        fake_policy_coverage,
+    )
+    audit_inputs: dict[str, object] = {}
+    sentinel = object()
+
+    def fake_audit(_catalog, benchmarks, **kwargs):
+        audit_inputs["benchmarks"] = benchmarks
+        audit_inputs.update(kwargs)
+        return sentinel
+
+    monkeypatch.setattr(
+        benchmark_coverage_module,
+        "audit_benchmark_coverage",
+        fake_audit,
+    )
+
+    audit, errors = compute_benchmark_coverage_audit(
+        sources=tmp_path,
+        machine_profiles=tmp_path / "profiles.json",
+        profiles=("right", "left"),
+        types=("si8",),
+        backend_id="rust",
+    )
+
+    assert errors == ()
+    assert audit is sentinel
+    assert generated_groups == [("left",), ("right",)]
+    merged = audit_inputs["benchmarks"]
+    assert isinstance(merged, BenchmarkProjectPlan)
+    assert merged.profiles == ("left", "right")
+    assert merged.coverage == ("benchmark-left", "benchmark-right")
+    assert audit_inputs["selection_coverage"] == (
+        "selection-left",
+        "selection-right",
+    )
+    assert audit_inputs["selection_skips"] == ("skip-left", "skip-right")
+    emitted = audit_inputs["emitted_profiles"]
+    assert tuple(item.profile.name for item in emitted) == ("left", "right")
+    assert policy_inputs["selection"] == "selection"
+    assert policy_inputs["benchmarks"] is merged

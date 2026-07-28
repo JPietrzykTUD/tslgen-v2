@@ -25,7 +25,6 @@ from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
 from tslc._pipeline_lowering_cache import _LoweringCache
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.registry import backend_capabilities, registered_backend_ids
-from tslc.benchmark.model import EMPTY_BENCHMARK_PROJECT_PLAN
 from tslc.benchmark.model import BenchmarkProjectPlan
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
@@ -275,7 +274,7 @@ class _GenerationSession:
             if self.request.value_test_warnings or diagnostic.severity == "error"
         )
         self.diagnostics.extend(value_test_diagnostics)
-        benchmarks = _merge_benchmark_plans(
+        benchmarks = BenchmarkProjectPlan.merge(
             tuple(
                 plan
                 for capability in self.backends
@@ -821,18 +820,6 @@ def _requested_primitives(
     if request.primitives is not None:
         return request.primitives
     return tuple(sorted({primitive.name for primitive in catalog.primitives}))
-
-
-def _merge_benchmark_plans(
-    plans: tuple[BenchmarkProjectPlan, ...],
-) -> BenchmarkProjectPlan:
-    if not plans:
-        return EMPTY_BENCHMARK_PROJECT_PLAN
-    return BenchmarkProjectPlan(
-        profiles=tuple(profile for plan in plans for profile in plan.profiles),
-        diagnostics=tuple(diagnostic for plan in plans for diagnostic in plan.diagnostics),
-        coverage=tuple(entry for plan in plans for entry in plan.coverage),
-    )
 
 
 def _finalize(

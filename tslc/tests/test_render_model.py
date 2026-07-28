@@ -338,6 +338,44 @@ def test_cpp_profile_render_model_decides_smoke_and_guard_facts(
     assert guard.diagnostic
 
 
+def test_cpp_smoke_uses_a_viable_vector_for_symbolic_type_parameters(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["convert_lanes"],
+        profiles=["sse"],
+        backends=("cpp",),
+    )
+    assert not any(diagnostic.severity == "error" for diagnostic in result.diagnostics)
+
+    model = cpp_project_render_model(result.emitted_profiles)
+    smoke = model.profiles[0].base_header.smoke
+    source = "tsl::simd<int8_t, tsl::sse>"
+    source_instantiations = tuple(
+        entry
+        for entry in smoke
+        if entry.symbol == "tsl::convert_lanes"
+        and entry.template_arguments[0] == source
+    )
+
+    assert source_instantiations
+    # SSE has no integer or f64 array/zero helpers without SSE2. The smoke
+    # therefore instantiates those symbolic targets with the emitted sized
+    # fallback, while retaining SSE for the viable f32 target.
+    assert any(
+        entry.template_arguments[1]
+        == "tsl::simd<int8_t, tsl::generic<16>>"
+        for entry in source_instantiations
+    )
+    assert any(
+        entry.template_arguments[1] == "tsl::simd<float, tsl::sse>"
+        for entry in source_instantiations
+    )
+
+
 def test_cpp_project_renderer_formats_without_deciding_smoke_semantics() -> None:
     """render/cpp_project.py must not consult the support policy or type ladders."""
 

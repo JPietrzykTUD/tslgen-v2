@@ -12,11 +12,11 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 ## Summary
 
 - **28 Rust machine profiles** are probed.
-- **4451 selected variant slots** are accounted for.
-- **98 benchmark reports** are emitted.
-- **Policy-mapped reports: 1**; **report-only: 97**.
-- **0 signature shapes benchmarked**, **50 not applicable**, **14 gaps**.
-- **4355 strict audit issues**.
+- **4867 selected variant slots** are accounted for.
+- **106 benchmark reports** are emitted.
+- **Policy-mapped reports: 1**; **report-only: 105**.
+- **0 signature shapes benchmarked**, **53 not applicable**, **14 gaps**.
+- **4763 strict audit issues**.
 
 ## Signature shapes
 
@@ -28,6 +28,7 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 | `im:=m` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `m:=()` | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `m:=(m,m)` | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
+| `m:=(m,usize,usize)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `m:=(m,v)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `m:=(m,v,v)` | 6 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `m:=(m,v,v,v)` | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
@@ -42,6 +43,7 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 | `ptr:=(usize,usize)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `s:=(m,v)` | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `s:=(v,s)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
+| `s:=(v,usize)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `s:=cptr` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `s:=v` | 5 | 5 | 5 | 5 | 428 | 40 | 0 | 40 | gap |
 | `s:=v[idx]` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
@@ -65,9 +67,10 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 | `v:=(m,v,vidx)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(s,s)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(v)` | 1 | 1 | 17 | 17 | 320 | 2 | 0 | 2 | gap |
-| `v:=(v,s)` | 3 | 2 | 2 | 2 | 12 | 0 | 0 | 0 | gap |
+| `v:=(v,s)` | 5 | 2 | 2 | 2 | 12 | 0 | 0 | 0 | gap |
 | `v:=(v,sImm)` | 8 | 2 | 9 | 9 | 330 | 6 | 0 | 6 | gap |
-| `v:=(v,v)` | 14 | 7 | 26 | 26 | 805 | 32 | 1 | 31 | gap |
+| `v:=(v,usize,s)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
+| `v:=(v,v)` | 16 | 7 | 31 | 31 | 1221 | 40 | 1 | 39 | gap |
 | `v:=(v,v,sImm)` | 1 | 1 | 11 | 11 | 390 | 0 | 0 | 0 | gap |
 | `v:=(v,vidx)` | 1 | 1 | 9 | 9 | 818 | 0 | 0 | 0 | gap |
 | `v:=(v,vidx,v)` | 1 | 1 | 8 | 8 | 800 | 0 | 0 | 0 | gap |
@@ -77,7 +80,7 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 | `v:=m` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=s` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=s[]` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
-| `v:=v` | 9 | 2 | 24 | 28 | 496 | 18 | 0 | 18 | gap |
+| `v:=v` | 11 | 2 | 24 | 28 | 496 | 18 | 0 | 18 | gap |
 | `void:=(m,ptr,v)` | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `void:=(m,ptr,vidx,v,sImm)` | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 | gap |
 | `void:=(ptr)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
@@ -92,20 +95,20 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 | Special case | Declarations | Variant declarations | Selected slots | Reports | Status |
 |---|---:|---:|---:|---:|---|
 | masked primitive | 52 | 1 | 0 | 0 | gap |
-| representation-changing result | 15 | 0 | 0 | 0 | not applicable |
+| representation-changing result | 16 | 0 | 0 | 0 | not applicable |
 | cross-lane semantics | 16 | 5 | 2360 | 6 | gap |
 | caller-unsafe implementation | 33 | 3 | 32 | 0 | gap |
 | compile-time immediate operand | 21 | 6 | 752 | 6 | gap |
 | lane-list operand | 1 | 0 | 0 | 0 | not applicable |
-| generic SIMD-type parameter | 10 | 5 | 1650 | 0 | gap |
+| generic SIMD-type parameter | 11 | 5 | 1650 | 0 | gap |
 | boolean attribute axis | 23 | 0 | 0 | 0 | not applicable |
-| sized-vector implementation | 163 | 0 | 0 | 0 | not applicable |
-| scalable-vector implementation | 155 | 4 | 710 | 2 | gap |
+| sized-vector implementation | 172 | 0 | 0 | 0 | not applicable |
+| scalable-vector implementation | 164 | 4 | 710 | 2 | gap |
 | opt-in compiler header implementation | 0 | 0 | 0 | 0 | not applicable |
 
 ## Audit issue counts
 
 | Kind | Count |
 |---|---:|
-| `coverage-gap` | 4353 |
+| `coverage-gap` | 4761 |
 | `inactive-authored-shape` | 2 |
