@@ -2,7 +2,13 @@
 
 ## Status and authority
 
-Status: planned, not implemented.
+Status: implemented and verified in five reviewed slices:
+
+- `e346abeb` — restore Rust policy-consumption evidence;
+- `849e4933` — make PIVOT baseline additions fail closed;
+- `0ca51237` — preserve symbolic SIMD call dependencies;
+- `cc5bd035` — isolate Rust host-target discovery failures;
+- `256988e8` — add the Rust profile-coexistence CI shard.
 
 This plan addresses the findings from the design review of commit
 `2e3e187c19e2fec20fb1522d7556abe703e74bd2`. It is governed by the repository
