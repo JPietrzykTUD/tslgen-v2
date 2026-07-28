@@ -610,8 +610,21 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
         _CONSUMER_SOURCE,
         encoding="utf-8",
     )
+    (examples / "invalid_probe.rs").write_text(
+        'compile_error!("POLICY_VALIDATION_REACHED_CONSUMER");\nfn main() {}\n',
+        encoding="utf-8",
+    )
+    manifest_path = crate / "Cargo.toml"
+    manifest_path.write_text(
+        manifest_path.read_text(encoding="utf-8")
+        + '\n[[example]]\nname = "selection_probe"\n'
+        + 'path = "examples/selection_probe.rs"\n'
+        + '\n[[example]]\nname = "invalid_probe"\n'
+        + 'path = "examples/invalid_probe.rs"\n',
+        encoding="utf-8",
+    )
     source_hashes = _source_hashes(crate)
-    manifest = str(crate / "Cargo.toml")
+    manifest = str(manifest_path)
     cargo_target = generated / "custom-cargo-target"
     workflow_directory = cargo_target / "tsl-benchmark" / "sse2"
     workflow_directory.mkdir(parents=True)
@@ -625,8 +638,6 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
         "--example",
         "selection_probe",
         "--no-default-features",
-        "--features",
-        "variant_benchmarks",
     )
     context = "slice5-two-phase-policy-consumer"
 
@@ -681,8 +692,6 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
             "--bench",
             "tsl_variant_bench_sse2",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--",
             "--rounds",
             "3",
@@ -720,8 +729,6 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
             "--bench",
             "tsl_variant_bench_sse2",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--",
             "--rounds",
             "3",
@@ -813,8 +820,6 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
             "--example",
             "selection_probe",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--",
             "--emit=asm",
         ),
@@ -943,8 +948,6 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
             "--profile",
             "bench",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
         ),
         cwd=crate,
         environment={
@@ -964,8 +967,6 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
             "--profile",
             "bench",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
         ),
         cwd=crate,
         environment={
@@ -987,8 +988,6 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
             "--bench",
             "tsl_variant_bench_sse2",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
             "--no-run",
         ),
         cwd=crate,
@@ -1010,10 +1009,6 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
     assert unset.stdout.strip() == "Fallback"
     assert _source_hashes(crate) == source_hashes
 
-    (examples / "invalid_probe.rs").write_text(
-        'compile_error!("POLICY_VALIDATION_REACHED_CONSUMER");\nfn main() {}\n',
-        encoding="utf-8",
-    )
     invalid_command = (
         "cargo",
         "check",
@@ -1024,8 +1019,6 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
         "--example",
         "invalid_probe",
         "--no-default-features",
-        "--features",
-        "variant_benchmarks",
     )
     _force_mul_candidate(policy, "generic_fallback")
 
@@ -1159,7 +1152,7 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
         TSL_RUST_VARIANT_POLICY_FILE=str(valid_path),
     )
     extra_feature = _run(
-        (*invalid_command[:-1], "variant_benchmarks,value_tests"),
+        (*invalid_command, "--features", "std"),
         cwd=crate,
         environment=valid_environment,
     )
@@ -1167,16 +1160,7 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
     assert "Cargo features do not match" in extra_feature.stderr
     assert "POLICY_VALIDATION_REACHED_CONSUMER" not in extra_feature.stderr
 
-    no_profile = _run(
-        invalid_command[:-2],
-        cwd=crate,
-        environment=valid_environment,
-    )
-    assert no_profile.returncode != 0
-    assert "Cargo features do not match" in no_profile.stderr
-    assert "POLICY_VALIDATION_REACHED_CONSUMER" not in no_profile.stderr
-
-    policy_feature_build = _run(
+    policy_cfg_build = _run(
         (
             "cargo",
             "check",
@@ -1185,13 +1169,11 @@ def test_generated_rust_policy_is_applied_fail_closed_and_invalidated(
             "--profile",
             "bench",
             "--no-default-features",
-            "--features",
-            "variant_benchmarks",
         ),
         cwd=crate,
         environment=valid_environment,
     )
-    assert policy_feature_build.returncode == 0, policy_feature_build.stderr
+    assert policy_cfg_build.returncode == 0, policy_cfg_build.stderr
 
     canonical_flags = RUST_BENCHMARK_CODEGEN_CONTRACT.policy_rustflags_for(
         ("sse", "sse2")

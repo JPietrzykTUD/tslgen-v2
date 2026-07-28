@@ -478,16 +478,17 @@ standalone native benchmark/policy tool. Rust admits scenario coverage through
 explicit named `profile × scenario-family` pairs while deriving profile family,
 features, spellings, modes, and flags from the live machine profile. It renders
 the `sse2` register and immediate families plus `avx2` one-vector scalar
-reductions as standard-library-only custom Cargo benchmarks. The feature-gated
-hot loop lives inside the library crate, and a thin
-per-profile bench target invokes it only with the explicit
-`variant_benchmarks` and profile features, and ordinary Cargo builds retain the
-authored wrapper choice. Rust candidate calls use backend-owned concrete type,
-trait, const-argument, and unsafe spelling; all authored expectations pass
-before any samples are timed or written. The Rust runtime validates the exact
-sample inventory and applies the conservative paired reducer. Its summary keeps
-the observed candidate and improvement even when compile-time selection is
-unsupported; the separate policy decision remains the authored default.
+reductions as standard-library-only custom Cargo benchmarks. The
+compiler-cfg-gated hot loop lives inside the library crate, and a thin
+per-profile bench target invokes it only with the unpublished
+`tsl_variant_benchmarks` compiler cfg plus the exact compiler-owned codegen and
+target-feature flags. Ordinary Cargo builds retain the authored wrapper choice.
+Rust candidate calls use backend-owned concrete type, trait, const-argument, and
+unsafe spelling; all authored expectations pass before any samples are timed or
+written. The Rust runtime validates the exact sample inventory and applies the
+conservative paired reducer. Its summary keeps the observed candidate and
+improvement even when compile-time selection is unsupported; the separate
+policy decision remains the authored default.
 Profiles without a consumable mapping do not advertise or produce a policy
 file. Policy-capable reports stage raw JSONL, summary, and backend-scoped policy
 files before publishing the policy last. Policy production is native x86 and
@@ -512,15 +513,16 @@ separate native policy-enabled Cargo build may consume the precomputed file
 through `TSL_RUST_VARIANT_POLICY_FILE`. The build script joins it to a
 compiler-rendered descriptor, requires the same compiler, target, generated
 codegen contract, attested context identity, and CPU facts. Policy-producing
-and policy-consuming library builds retain the same internal
-`variant_benchmarks` feature so their generated code context is identical; the
-benchmark target itself independently rejects any policy input. The generated
-per-profile benchmark help prints the exact explicit workflow and codegen
-guard. For the policy-capable `sse2` register profile, its first Cargo invocation
-removes `TSL_RUST_VARIANT_POLICY_FILE`, runs the optimized benchmark, and writes
-samples, summary, and policy below the Cargo target tree. A separate
-policy-enabled Cargo invocation consumes that precomputed file; no convenience
-command hides or cycles the two phases. The
+and policy-consuming library builds retain the same private compiler cfg and
+exact codegen contract so their generated code context is identical; this is
+not a published Cargo feature. The benchmark target itself independently
+rejects any policy input. The generated per-profile benchmark help prints the
+exact explicit workflow and codegen guard. For the policy-capable `sse2`
+register profile, its first Cargo invocation removes
+`TSL_RUST_VARIANT_POLICY_FILE`, runs the optimized benchmark, and writes samples,
+summary, and policy below the Cargo target tree. A separate policy-enabled Cargo
+invocation consumes that precomputed file; no convenience command hides or
+cycles the two phases. The
 generated benchmark Cargo profile is pinned to the compiler-owned settings. A
 frozen semantic consumption plan joins benchmark evidence to the selection
 seam; one render projection derives the Cargo and artifact names shared by
