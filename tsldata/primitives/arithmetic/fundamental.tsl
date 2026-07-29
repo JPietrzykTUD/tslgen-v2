@@ -346,6 +346,23 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svadd, build[post=z]>(mask, left, right));"
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=add[Vec]>(left, right),
+                call<primitive=set_zero[Vec]>()
+              )
+            );
+          """
 prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
   arithmetic:
     operations [addition]
@@ -485,6 +502,23 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svadd, build[post=m]>(mask, left, right));"
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=add[Vec]>(left, right),
+                left
+              )
+            );
+          """
 prim<v:=(v,v)> sub(left, right):
   arithmetic:
     operations [subtraction]
@@ -832,6 +866,23 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svsub, build[post=z]>(mask, left, right));"
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=sub[Vec]>(left, right),
+                call<primitive=set_zero[Vec]>()
+              )
+            );
+          """
 prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
   arithmetic:
     operations [subtraction]
@@ -967,6 +1018,23 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svsub, build[post=m]>(mask, left, right));"
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=sub[Vec]>(left, right),
+                left
+              )
+            );
+          """
 prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
   brief_description "Keeps lanes from left where the mask is inactive and writes right plus adder where the mask is active."
   detailed_description """

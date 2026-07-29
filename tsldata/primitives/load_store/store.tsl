@@ -789,3 +789,100 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
               );
             }
           """
+    rvv:
+      [si8, ui8]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(aligned))) {
+              intrin<vse8, build[infix="v", infix_sep="_", post=m]>(
+                mask,
+                assume_aligned<value(vector::alignment)>(ptr),
+                data,
+                value(vector::runtime_length)
+              );
+            } else<generation> {
+              intrin<vse8, build[infix="v", infix_sep="_", post=m]>(
+                mask,
+                ptr,
+                data,
+                value(vector::runtime_length)
+              );
+            }
+          """
+      [si16, ui16]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(aligned))) {
+              intrin<vse16, build[infix="v", infix_sep="_", post=m]>(
+                mask,
+                assume_aligned<value(vector::alignment)>(ptr),
+                data,
+                value(vector::runtime_length)
+              );
+            } else<generation> {
+              intrin<vse16, build[infix="v", infix_sep="_", post=m]>(
+                mask,
+                ptr,
+                data,
+                value(vector::runtime_length)
+              );
+            }
+          """
+      [si32, ui32, f32]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(aligned))) {
+              intrin<vse32, build[infix="v", infix_sep="_", post=m]>(
+                mask,
+                assume_aligned<value(vector::alignment)>(ptr),
+                data,
+                value(vector::runtime_length)
+              );
+            } else<generation> {
+              intrin<vse32, build[infix="v", infix_sep="_", post=m]>(
+                mask,
+                ptr,
+                data,
+                value(vector::runtime_length)
+              );
+            }
+          """
+      [si64, ui64, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(aligned))) {
+              intrin<vse64, build[infix="v", infix_sep="_", post=m]>(
+                mask,
+                assume_aligned<value(vector::alignment)>(ptr),
+                data,
+                value(vector::runtime_length)
+              );
+            } else<generation> {
+              intrin<vse64, build[infix="v", infix_sep="_", post=m]>(
+                mask,
+                ptr,
+                data,
+                value(vector::runtime_length)
+              );
+            }
+          """

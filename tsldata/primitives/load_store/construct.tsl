@@ -442,6 +442,21 @@ prim<v:=()>[value=zero] set_zero():
               call<primitive=binary_xor>(undef, undef)
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=set1[Vec]>(
+                cast<static>(base::in, 0)
+              )
+            );
+          """
     neon:
       arith:
         requires [neon]

@@ -154,7 +154,7 @@ _CASE_REQUIREMENTS = {
     ),
     "masked_pointer_load": ValueTestCaseRequirements(
         expected="lanes",
-        vector_inputs="one",
+        vector_inputs="non_empty",
         mask_inputs="one",
         vector_inputs_match_lanes=True,
     ),
@@ -229,6 +229,22 @@ _CASE_REQUIREMENTS = {
                 ValueTestFact.SCALABLE_MASK_INPUTS,
             }
         ),
+    ),
+    "scalable_masked_pointer_load": ValueTestCaseRequirements(
+        expected="lanes",
+        vector_inputs="non_empty",
+        mask_inputs="one",
+        required_facts=_SCALABLE_VALUE_FACTS
+        | frozenset({ValueTestFact.SCALABLE_MASK_INPUTS}),
+        vector_inputs_match_lanes=True,
+    ),
+    "scalable_masked_pointer_store": ValueTestCaseRequirements(
+        expected="lanes",
+        vector_inputs="one",
+        mask_inputs="one",
+        required_facts=_SCALABLE_VALUE_FACTS
+        | frozenset({ValueTestFact.SCALABLE_MASK_INPUTS}),
+        vector_inputs_match_lanes=True,
     ),
     "scalable_masked": ValueTestCaseRequirements(
         expected="lanes",

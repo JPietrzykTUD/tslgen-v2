@@ -135,28 +135,49 @@ def _mask_pointer_load(case: ValueTestCasePlan) -> str:
 
 
 def _masked_pointer_load(case: ValueTestCasePlan) -> str:
+    memory = _memory(case)
     literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = rust_literal_list(case.expectation.values, case.type_tag)
     axis = axis_args(case)
-    return "\n".join(
+    buflen = memory.buffer_offset + case.lanes
+    pointer = (
+        "buf.as_ptr()"
+        if memory.buffer_offset == 0
+        else f"buf.as_ptr().add({memory.buffer_offset})"
+    )
+    lines = [
+        "    #[test]",
+        f"    fn {case.function_name}() {{",
+        f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
+        f"        let mask: <Vec as SimdVector>::MaskType = {case.inputs.masks[0]}u64;",
+        f"        let in0: [{case.base_spelling}; {case.lanes}] = [{literals}];",
+        f"        let mut buf: [{case.base_spelling}; {buflen}] = "
+        f"[Default::default(); {buflen}];",
+        f"        for i in 0..{case.lanes} {{ buf[{memory.buffer_offset} + i] = in0[i]; }}",
+    ]
+    call_args = f"mask, {pointer}"
+    if len(case.inputs.vectors) == 2:
+        pass_through = rust_literal_list(case.inputs.vectors[1], case.type_tag)
+        lines.extend(
+            [
+                f"        let in1: [{case.base_spelling}; {case.lanes}] = [{pass_through}];",
+                "        let mut v1: <Vec as SimdVector>::RegisterType = Default::default();",
+                f"        for i in 0..{case.lanes} {{ v1[i] = in1[i]; }}",
+            ]
+        )
+        call_args += ", v1"
+    lines.extend(
         [
-            "    #[test]",
-            f"    fn {case.function_name}() {{",
-            f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
-            f"        let mask: <Vec as SimdVector>::MaskType = {case.inputs.masks[0]}u64;",
-            f"        let in0: [{case.base_spelling}; {case.lanes}] = [{literals}];",
-            f"        let mut buf: [{case.base_spelling}; {case.lanes}] = "
-            f"[Default::default(); {case.lanes}];",
-            f"        for i in 0..{case.lanes} {{ buf[i] = in0[i]; }}",
             f"        let expected: [{case.base_spelling}; {case.lanes}] = [{expected}];",
             f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
-            f"::<Vec{axis}>(mask, buf.as_ptr()) }};",
+            f"::<Vec{axis}>({call_args}) }};",
             f"        for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), "
             f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
             "i, expected[i], result[i]); }",
             "    }",
         ]
     )
+    return "\n".join(lines)
 
 
 def _masked_pointer_store(case: ValueTestCasePlan) -> str:

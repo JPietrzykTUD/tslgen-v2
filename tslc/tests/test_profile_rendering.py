@@ -892,7 +892,7 @@ def rvv_project(data_root: Path, machine_profiles_path: Path):
     return _gen(
         data_root,
         machine_profiles_path,
-        primitives=["set1", "load", "store", "add", "sub"],
+        primitives=["set1", "set_zero", "load", "store", "add", "sub"],
         profiles=["rvv"],
         type_tags=[
             "si8", "ui8", "si16", "ui16", "si32",
@@ -971,6 +971,8 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
             "vsub_vv",
         ):
             assert f"__riscv_{stem}_{suffix}" in header
+        assert f"__riscv_vle{width}_v_{suffix}_mu" in header
+        assert f"__riscv_vse{width}_v_{suffix}_m" in header
     for suffix, width in (("f32m1", 32), ("f64m1", 64)):
         for stem in (
             "vfmv_v_f",
@@ -980,6 +982,30 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
             "vfsub_vv",
         ):
             assert f"__riscv_{stem}_{suffix}" in header
+        assert f"__riscv_vle{width}_v_{suffix}_mu" in header
+        assert f"__riscv_vse{width}_v_{suffix}_m" in header
+    assert "return ::tsl::set1<Vec>(static_cast<int32_t>(0));" in header
+    assert "::tsl::add<Vec>(left, right),\n" in header
+    assert "::tsl::sub<Vec>(left, right),\n" in header
+    assert "::tsl::set_zero<Vec>()" in header
+    assert header.count("return ::tsl::select<Vec>(") >= 40
+
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    scalable_kinds = {
+        case.kind
+        for profile in rvv_project.rendered.value_tests.profiles_for("cpp")
+        for case in profile.cases
+        if case.scalable is not None
+        and case.scalable.source_extension == "rvv"
+    }
+    assert "scalable_masked_pointer_load" in scalable_kinds
+    assert "scalable_masked_pointer_store" in scalable_kinds
+    assert "test_scalable_rvv_load_maskz_load_ui32_mask_zero_alternating" in values
+    assert "test_scalable_rvv_load_mask_load_ui32_mask_merge_alternating" in values
+    assert "test_scalable_rvv_store_mask_store_ui8_store_basic" in values
+    assert "tsl::load_maskz<Vec, true>(mask, memory.data() + 0);" in values
+    assert "tsl::load_mask<Vec, true>(mask, memory.data() + 0, v1);" in values
+    assert "tsl::store_mask<Vec, true>(mask, actual.data() + 0, v0);" in values
     assert "static constexpr bool has_static_lane_count_v = false;" in header
     assert "__riscv_vlenb() / sizeof(int32_t)" in header
     assert "__riscv_vlenb() / sizeof(uint32_t)" in header

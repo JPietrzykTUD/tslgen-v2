@@ -6,15 +6,22 @@ from dataclasses import dataclass
 
 from tslc.catalog.model import Catalog, Primitive
 from tslc.catalog.scalar_types import normalize_scalar_tag
+from tslc.catalog.signatures import parse_signature
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_memory import (
     indexed_load_case,
     indexed_store_case,
     mask_store_case,
+    masked_pointer_load_case,
+    masked_pointer_store_case,
     pointer_free_case,
     pointer_lifetime_case,
 )
-from tslc.value_tests._case_scalable_memory import scalable_mask_store_cases
+from tslc.value_tests._case_scalable_memory import (
+    scalable_mask_store_cases,
+    scalable_masked_pointer_load_cases,
+    scalable_masked_pointer_store_cases,
+)
 from tslc.value_tests._pattern_base import (
     _BasePattern,
     PointerLayoutCasePlanBuilder,
@@ -132,6 +139,112 @@ class _MaskStorePattern(_BasePattern):
         return unsupported_param_layout_reason(primitive, "ptr", context.case, specs)
 
 
+def _masked_source_primitive(
+    catalog: Catalog,
+    source_name: str,
+    spec: LoweredSpecialization,
+) -> Primitive | None:
+    for primitive in catalog.primitives_named(source_name, unmasked=False):
+        shape = parse_signature(primitive.signature)
+        if (
+            primitive.attributes.get("mask") == spec.mask_policy
+            and shape is not None
+            and shape.result_kind == spec.result_kind
+            and shape.param_kinds == spec.param_kinds
+        ):
+            return primitive
+    return None
+
+
+class _MaskedPointerLoadPattern(_BasePattern):
+    def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
+        spec = specs[0]
+        return (
+            spec.result_kind == "v"
+            and tuple(spec.param_kinds) in {
+                ("m", "cptr"),
+                ("m", "cptr", "v"),
+            }
+            and spec.mask_policy in {"zero", "pass_through"}
+            and spec.target is None
+            and spec.immediate is None
+            and not spec.generic_params
+            and not spec.type_params
+        )
+
+    def source_primitive(
+        self,
+        catalog: Catalog,
+        source_name: str,
+        spec: LoweredSpecialization,
+    ) -> Primitive | None:
+        return _masked_source_primitive(catalog, source_name, spec)
+
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        plan = masked_pointer_load_case(
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
+        )
+        plans = [plan] if plan is not None else []
+        plans.extend(
+            scalable_masked_pointer_load_cases(
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
+            )
+        )
+        return tuple(plans)
+
+
+class _MaskedPointerStorePattern(_BasePattern):
+    def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
+        spec = specs[0]
+        return (
+            spec.result_kind == "void"
+            and tuple(spec.param_kinds) == ("m", "ptr", "v")
+            and spec.mask_policy == "pass_through"
+            and spec.target is None
+            and spec.immediate is None
+            and not spec.generic_params
+            and not spec.type_params
+        )
+
+    def source_primitive(
+        self,
+        catalog: Catalog,
+        source_name: str,
+        spec: LoweredSpecialization,
+    ) -> Primitive | None:
+        return _masked_source_primitive(catalog, source_name, spec)
+
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        plan = masked_pointer_store_case(
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
+        )
+        plans = [plan] if plan is not None else []
+        plans.extend(
+            scalable_masked_pointer_store_cases(
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
+            )
+        )
+        return tuple(plans)
+
+
 class _PointerFreePattern(_BasePattern):
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         spec = specs[0]
@@ -219,6 +332,8 @@ def _index_base_spelling(
 __all__ = (
     "_PointerLayoutShapePattern",
     "_MaskStorePattern",
+    "_MaskedPointerLoadPattern",
+    "_MaskedPointerStorePattern",
     "_PointerFreePattern",
     "_PointerLifetimePattern",
     "_IndexedMemoryPattern",

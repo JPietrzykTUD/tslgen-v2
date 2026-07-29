@@ -460,6 +460,119 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
               );
             }
           """
+    rvv:
+      [si8, ui8]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(aligned))) {
+              complete(
+                intrin<vle8, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  call<primitive=set_zero[Vec]>(),
+                  assume_aligned<value(vector::alignment)>(ptr),
+                  value(vector::runtime_length)
+                )
+              );
+            } else<generation> {
+              complete(
+                intrin<vle8, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  call<primitive=set_zero[Vec]>(),
+                  ptr,
+                  value(vector::runtime_length)
+                )
+              );
+            }
+          """
+      [si16, ui16]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(aligned))) {
+              complete(
+                intrin<vle16, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  call<primitive=set_zero[Vec]>(),
+                  assume_aligned<value(vector::alignment)>(ptr),
+                  value(vector::runtime_length)
+                )
+              );
+            } else<generation> {
+              complete(
+                intrin<vle16, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  call<primitive=set_zero[Vec]>(),
+                  ptr,
+                  value(vector::runtime_length)
+                )
+              );
+            }
+          """
+      [si32, ui32, f32]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(aligned))) {
+              complete(
+                intrin<vle32, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  call<primitive=set_zero[Vec]>(),
+                  assume_aligned<value(vector::alignment)>(ptr),
+                  value(vector::runtime_length)
+                )
+              );
+            } else<generation> {
+              complete(
+                intrin<vle32, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  call<primitive=set_zero[Vec]>(),
+                  ptr,
+                  value(vector::runtime_length)
+                )
+              );
+            }
+          """
+      [si64, ui64, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(aligned))) {
+              complete(
+                intrin<vle64, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  call<primitive=set_zero[Vec]>(),
+                  assume_aligned<value(vector::alignment)>(ptr),
+                  value(vector::runtime_length)
+                )
+              );
+            } else<generation> {
+              complete(
+                intrin<vle64, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  call<primitive=set_zero[Vec]>(),
+                  ptr,
+                  value(vector::runtime_length)
+                )
+              );
+            }
+          """
 prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
   operation load
   operand_roles:
@@ -631,6 +744,119 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
                 data
               )
             );
+          """
+    rvv:
+      [si8, ui8]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(aligned))) {
+              complete(
+                intrin<vle8, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  data,
+                  assume_aligned<value(vector::alignment)>(ptr),
+                  value(vector::runtime_length)
+                )
+              );
+            } else<generation> {
+              complete(
+                intrin<vle8, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  data,
+                  ptr,
+                  value(vector::runtime_length)
+                )
+              );
+            }
+          """
+      [si16, ui16]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(aligned))) {
+              complete(
+                intrin<vle16, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  data,
+                  assume_aligned<value(vector::alignment)>(ptr),
+                  value(vector::runtime_length)
+                )
+              );
+            } else<generation> {
+              complete(
+                intrin<vle16, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  data,
+                  ptr,
+                  value(vector::runtime_length)
+                )
+              );
+            }
+          """
+      [si32, ui32, f32]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(aligned))) {
+              complete(
+                intrin<vle32, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  data,
+                  assume_aligned<value(vector::alignment)>(ptr),
+                  value(vector::runtime_length)
+                )
+              );
+            } else<generation> {
+              complete(
+                intrin<vle32, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  data,
+                  ptr,
+                  value(vector::runtime_length)
+                )
+              );
+            }
+          """
+      [si64, ui64, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(aligned))) {
+              complete(
+                intrin<vle64, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  data,
+                  assume_aligned<value(vector::alignment)>(ptr),
+                  value(vector::runtime_length)
+                )
+              );
+            } else<generation> {
+              complete(
+                intrin<vle64, build[infix="v", infix_sep="_", post=mu]>(
+                  mask,
+                  data,
+                  ptr,
+                  value(vector::runtime_length)
+                )
+              );
+            }
           """
 
 prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):

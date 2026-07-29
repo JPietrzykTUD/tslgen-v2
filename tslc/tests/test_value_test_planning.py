@@ -3164,6 +3164,20 @@ def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog(
             axis_args=("true",),
         ),
         ValueTestCasePlan(
+            "masked_pointer_load",
+            "test_load_mask",
+            "load_mask",
+            "load_mask",
+            "ui32",
+            "u32",
+            4,
+            vector_inputs=(("1", "2", "3", "4"), ("10", "20", "30", "40")),
+            expected=("1", "20", "3", "40"),
+            mask_inputs=("5",),
+            axis_args=("false",),
+            buffer_offset=1,
+        ),
+        ValueTestCasePlan(
             "masked_pointer_store",
             "test_compress_store",
             "compress_store",
@@ -3332,6 +3346,10 @@ def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog(
     assert "load_scalar::<Vec, false>(buf.as_ptr().add(1))" in source
     assert "load_mask_repr::<Vec, false, false>(" in source
     assert "expand_load::<Vec, true>(mask, buf.as_ptr())" in source
+    assert "let mut buf: [u32; 5] = [Default::default(); 5];" in source
+    assert "for i in 0..4 { buf[1 + i] = in0[i]; }" in source
+    assert "let mut v1: <Vec as SimdVector>::RegisterType = Default::default();" in source
+    assert "load_mask::<Vec, false>(mask, buf.as_ptr().add(1), v1)" in source
     assert "compress_store::<Vec, true>(" in source
     assert "memory_cp::<Vec>(" in source
     assert "let ptr = allocate(64usize);" in source

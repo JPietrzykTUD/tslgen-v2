@@ -6,6 +6,7 @@ from tslc.value_tests.lane_math import runtime_tile_index as _runtime_tile_index
 from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestMemory
 from tslc.value_tests.render_cpp_helpers import (
+    append_runtime_vector_input as _append_runtime_vector_input,
     axis_suffix as _axis_suffix,
     cast_literal_list as _cast_literal_list,
     cpp_string_literal as _cpp_string_literal,
@@ -106,6 +107,7 @@ def _mask_store(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 def _masked_pointer_load(case: ValueTestCasePlan) -> str:
+    memory = _memory(case)
     literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = cpp_literal_list(case.expectation.values, case.type_tag)
     axis = _axis_suffix(case)
@@ -114,14 +116,31 @@ def _masked_pointer_load(case: ValueTestCasePlan) -> str:
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
         f"  typename Vec::mask_type mask = {_uint_literal(case.inputs.masks[0])};",
         f"  static const {case.base_spelling} in0[{case.lanes}] = {{{literals}}};",
-        f"  {case.base_spelling} buf[{case.lanes}] = {{0}};",
-        f"  for (std::size_t i = 0; i < {case.lanes}; ++i) buf[i] = in0[i];",
-        f"  typename Vec::register_type result = tsl::{case.call_name}<Vec{axis}>(mask, buf);",
-        f"  static const {case.base_spelling} expected[{case.lanes}] = {{{expected}}};",
-        f'  return tsl::test::check_lanes<{case.base_spelling}>('
-        f'"{case.case_name}", result, expected, {case.lanes});',
-        "}",
+        f"  {case.base_spelling} buf[{memory.buffer_offset + case.lanes}] = {{0}};",
+        f"  for (std::size_t i = 0; i < {case.lanes}; ++i) "
+        f"buf[{memory.buffer_offset} + i] = in0[i];",
     ]
+    call_args = f"mask, buf + {memory.buffer_offset}"
+    if len(case.inputs.vectors) == 2:
+        pass_through = cpp_literal_list(case.inputs.vectors[1], case.type_tag)
+        lines.extend(
+            [
+                f"  static const {case.base_spelling} in1[{case.lanes}] = {{{pass_through}}};",
+                "  typename Vec::register_type v1;",
+                f"  for (std::size_t i = 0; i < {case.lanes}; ++i) v1[i] = in1[i];",
+            ]
+        )
+        call_args += ", v1"
+    lines.extend(
+        [
+            f"  typename Vec::register_type result = "
+            f"tsl::{case.call_name}<Vec{axis}>({call_args});",
+            f"  static const {case.base_spelling} expected[{case.lanes}] = {{{expected}}};",
+            f'  return tsl::test::check_lanes<{case.base_spelling}>('
+            f'"{case.case_name}", result, expected, {case.lanes});',
+            "}",
+        ]
+    )
     return "\n".join(lines)
 
 def _masked_pointer_store(case: ValueTestCasePlan) -> str:
@@ -374,6 +393,84 @@ def _store(case: ValueTestCasePlan) -> str:
     ]
     return "\n".join(lines)
 
+def _scalable_masked_pointer_load(case: ValueTestCasePlan) -> str:
+    memory = _memory(case)
+    scalable = case.scalable
+    if scalable is None or not scalable.mask_bits or not scalable.value_harness_ready:
+        raise ValueError(
+            "scalable masked-load C++ value test requires extension, mask input, "
+            "and load/store harness primitives"
+        )
+    authored_memory = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
+    authored_expected = cpp_literal_list(case.expectation.values, case.type_tag)
+    axis = _axis_suffix(case)
+    lines = _scalable_header(case)
+    lines.extend(
+        [
+            f"  static const {case.base_spelling} authored_memory[{case.lanes}] = "
+            f"{{{authored_memory}}};",
+            f"  std::vector<{case.base_spelling}> memory({memory.buffer_offset} + lanes);",
+            f"  for (std::size_t i = 0; i < lanes; ++i) "
+            f"memory[{memory.buffer_offset} + i] = "
+            f"authored_memory[{_runtime_tile_index('i', case.lanes)}];",
+            f"  typename Vec::mask_type mask = {_scalable_mask_from_bits(case, 0)};",
+        ]
+    )
+    call_args = f"mask, memory.data() + {memory.buffer_offset}"
+    if len(case.inputs.vectors) == 2:
+        pass_through = _append_runtime_vector_input(lines, case, 1)
+        call_args += f", {pass_through}"
+    lines.extend(
+        [
+            f"  typename Vec::register_type result = "
+            f"tsl::{case.call_name}<Vec{axis}>({call_args});",
+            f"  std::vector<{case.base_spelling}> actual(lanes);",
+            f"  tsl::{scalable.store_name}<Vec, false>(actual.data(), result);",
+            f"  static const {case.base_spelling} authored_expected[{case.lanes}] = "
+            f"{{{authored_expected}}};",
+            f"  std::vector<{case.base_spelling}> expected(lanes);",
+            f"  for (std::size_t i = 0; i < lanes; ++i) expected[i] = "
+            f"authored_expected[{_runtime_tile_index('i', case.lanes)}];",
+            f'  return tsl::test::check_lanes<{case.base_spelling}>('
+            f'"{case.case_name}", actual.data(), expected.data(), lanes);',
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _scalable_masked_pointer_store(case: ValueTestCasePlan) -> str:
+    memory = _memory(case)
+    scalable = case.scalable
+    if scalable is None or not scalable.mask_bits or not scalable.value_harness_ready:
+        raise ValueError(
+            "scalable masked-store C++ value test requires extension, mask input, "
+            "and load/store harness primitives"
+        )
+    authored_expected = cpp_literal_list(case.expectation.values, case.type_tag)
+    axis = _axis_suffix(case)
+    lines = _scalable_header(case)
+    value = _append_runtime_vector_input(lines, case, 0)
+    lines.extend(
+        [
+            f"  typename Vec::mask_type mask = {_scalable_mask_from_bits(case, 0)};",
+            f"  std::vector<{case.base_spelling}> actual({memory.buffer_offset} + lanes);",
+            f"  static const {case.base_spelling} authored_expected[{case.lanes}] = "
+            f"{{{authored_expected}}};",
+            f"  std::vector<{case.base_spelling}> expected({memory.buffer_offset} + lanes);",
+            f"  for (std::size_t i = 0; i < lanes; ++i) "
+            f"expected[{memory.buffer_offset} + i] = "
+            f"authored_expected[{_runtime_tile_index('i', case.lanes)}];",
+            f"  tsl::{case.call_name}<Vec{axis}>("
+            f"mask, actual.data() + {memory.buffer_offset}, {value});",
+            f'  return tsl::test::check_lanes<{case.base_spelling}>('
+            f'"{case.case_name}", actual.data(), expected.data(), expected.size());',
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _scalable_mask_store(case: ValueTestCasePlan) -> str:
     memory = _memory(case)
     scalable = case.scalable
@@ -415,6 +512,8 @@ __all__ = (
     "_mask_pointer_load",
     "_mask_store",
     "_scalable_mask_store",
+    "_scalable_masked_pointer_load",
+    "_scalable_masked_pointer_store",
     "_masked_pointer_load",
     "_masked_pointer_store",
     "_memory_copy",

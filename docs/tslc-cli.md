@@ -193,11 +193,13 @@ state: generated calls pass an explicit `vl`, and lane counts use
 `__riscv_vlenb() / sizeof(T)`. Do not model VLEN as separate fixed-width
 extensions.
 
-The verified primitive surface covers `set1`, `load`, `store`, `add`, and `sub`
-for all declared integer and floating LMUL=1 types. Native predicates support
-all-true/all-false construction, AND/OR/XOR/NOT, unmasked equality and
-ordering comparisons, and `select`. Unsupported later primitive groups remain
-explicit coverage gaps.
+The verified primitive surface covers `set1`, `set_zero`, `load`, `store`,
+`add`, and `sub` for all declared integer and floating LMUL=1 types, including
+zeroing and pass-through masked arithmetic and contiguous memory forms. Masked
+loads use mask-undisturbed policy intrinsics, and masked stores leave inactive
+memory lanes untouched. Native predicates support all-true/all-false
+construction, AND/OR/XOR/NOT, unmasked equality and ordering comparisons, and
+`select`. Unsupported later primitive groups remain explicit coverage gaps.
 
 The repository resolves the `riscv-cpp` tool role to
 `/usr/bin/riscv64-linux-gnu-g++`. Override that role in `[tslc.tools]` on hosts
@@ -208,10 +210,10 @@ with a different cross-compiler path. `dev.sh doctor` and `dev.sh test` discover
 ```bash
 ./dev.sh doctor --profile rvv --backend cpp --run
 rvv_types=si8,ui8,si16,ui16,si32,ui32,si64,ui64,f32,f64
-./dev.sh build --primitives set1,load,store,add,sub \
+./dev.sh build --primitives set1,set_zero,load,store,add,sub \
   --profiles rvv --backends cpp --types "${rvv_types}"
 ./dev.sh test \
-  --primitives mask_false,mask_true,mask_binary_and,mask_binary_or,mask_binary_xor,mask_binary_not,equal,nequal,less_than,greater_than,less_than_or_equal,greater_than_or_equal,select \
+  --primitives set_zero,load,store,add,sub,mask_false,mask_true,mask_binary_and,mask_binary_or,mask_binary_xor,mask_binary_not,equal,nequal,less_than,greater_than,less_than_or_equal,greater_than_or_equal,select \
   --profiles rvv --backends cpp --types "${rvv_types}"
 ```
 
