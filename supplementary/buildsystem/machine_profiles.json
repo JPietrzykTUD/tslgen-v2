@@ -157,6 +157,24 @@
       "runner": {"kind": "qemu-aarch64", "profile": "a64fx"}
     }
   ],
+  "riscv": [
+    {
+      "name": "rvv",
+      "target_features": "v",
+      "backend_flags": {
+        "cpp": [
+          "-march=rv64imafdcv",
+          "-mabi=lp64d",
+          "-mrvv-vector-bits=scalable"
+        ]
+      },
+      "supported_backends": ["cpp"],
+      "runner": {
+        "kind": "qemu-riscv64",
+        "profile": "max,v=true,vext_spec=v1.0,vlen=128,elen=64"
+      }
+    }
+  ],
   "wasm32": [
     {
       "name": "wasm32-simd128",

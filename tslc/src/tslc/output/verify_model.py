@@ -38,6 +38,11 @@ class VerifyProfile:
     target_features: tuple[str, ...] = ()
     target: str | None = None
     linker: str | None = None
+    compiler_role: str | None = None
+    cmake_system_name: str | None = None
+    cmake_system_processor: str | None = None
+    pass_target_to_compiler: bool = True
+    preflight_headers: tuple[str, ...] = ()
     # Optional runner profile used to run value tests for this profile.
     runner: VerifyRunner | None = None
     compile_failures: tuple[VerifyCompileFailure, ...] = ()

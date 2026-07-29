@@ -47,6 +47,7 @@ linker = "ld.lld"
 
 [tslc.runners]
 qemu-aarch64 = "/usr/bin/qemu-aarch64"
+qemu-riscv64 = "/usr/bin/qemu-riscv64"
 ```
 
 The Rust package table is optional as a whole; when present, it supplies the
@@ -181,6 +182,43 @@ tslc generate --primitives add --profiles scalar,avx2
 tslc build --primitives add --profiles avx2 --backends cpp
 tslc test --primitives add --profiles avx2 --backends cpp
 ```
+
+### RISC-V V profile
+
+The `rvv` machine profile targets RV64 Linux with the ratified Vector Extension
+1.0, LP64D, and scalable LMUL=1 registers. It supports the C++17 backend only;
+Rust generation intentionally omits this profile because stable
+`core::arch::riscv64` does not expose RVV intrinsics. Vector length is runtime
+state: generated calls pass an explicit `vl`, and lane counts use
+`__riscv_vlenb() / sizeof(T)`. Do not model VLEN as separate fixed-width
+extensions.
+
+The verified primitive surface covers `set1`, `load`, `store`, `add`, and `sub`
+for all declared integer and floating LMUL=1 types. Native predicates support
+all-true/all-false construction, AND/OR/XOR/NOT, unmasked equality and
+ordering comparisons, and `select`. Unsupported later primitive groups remain
+explicit coverage gaps.
+
+The repository resolves the `riscv-cpp` tool role to
+`/usr/bin/riscv64-linux-gnu-g++`. Override that role in `[tslc.tools]` on hosts
+with a different cross-compiler path. `dev.sh doctor` and `dev.sh test` discover
+`qemu-riscv64` from `TSLC_QEMU_RISCV64` (default
+`/usr/bin/qemu-riscv64`):
+
+```bash
+./dev.sh doctor --profile rvv --backend cpp --run
+rvv_types=si8,ui8,si16,ui16,si32,ui32,si64,ui64,f32,f64
+./dev.sh build --primitives set1,load,store,add,sub \
+  --profiles rvv --backends cpp --types "${rvv_types}"
+./dev.sh test \
+  --primitives mask_false,mask_true,mask_binary_and,mask_binary_or,mask_binary_xor,mask_binary_not,equal,nequal,less_than,greater_than,less_than_or_equal,greater_than_or_equal,select \
+  --profiles rvv --backends cpp --types "${rvv_types}"
+```
+
+The default runner uses QEMU’s `max` CPU with V 1.0 and VLEN 128. CI reruns
+the same generated value binary at VLEN 256 so the scalable contract is checked
+at two runtime widths. Missing cross-compilers, LP64D sysroots, or runners are
+reported by verifier preflight and remain skip-safe outside required CI.
 
 `generate` renders and writes the configured output tree. `build` additionally
 build-verifies it. `test` additionally emits, builds, and runs generated value

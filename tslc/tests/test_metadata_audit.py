@@ -237,7 +237,7 @@ def _requires_source() -> str:
         "        implementation:\n"
         '          tsil "complete(call<primitive=callee>(data));"\n'
         "target_families:\n"
-        "  known_extension_families [scalar, generic_like, x86, arm, wasm]\n"
+        "  known_extension_families [scalar, generic_like, x86, arm, rvv, wasm]\n"
         "  universal_extension_families [scalar, generic_like]\n"
         "  profile_families:\n"
         "    generic:\n"
@@ -249,6 +249,12 @@ def _requires_source() -> str:
         "    aarch64:\n"
         "      extension_families [arm]\n"
         '      runner_kinds ["qemu-aarch64"]\n'
+        "    riscv:\n"
+        "      extension_families [rvv]\n"
+        '      runner_kinds ["qemu-riscv64"]\n'
+        "      backends:\n"
+        "        cpp:\n"
+        "          feature_flags false\n"
         "    wasm32:\n"
         "      extension_families [wasm]\n"
         "      runner_kinds [wasmtime]\n"
@@ -289,7 +295,7 @@ def _single_backend_callee_source() -> str:
         "        implementation:\n"
         '          tsil "complete(call<primitive=callee>(data));"\n'
         "target_families:\n"
-        "  known_extension_families [scalar, generic_like, x86, arm, wasm]\n"
+        "  known_extension_families [scalar, generic_like, x86, arm, rvv, wasm]\n"
         "  universal_extension_families [scalar, generic_like]\n"
         "  profile_families:\n"
         "    generic:\n"
@@ -301,6 +307,12 @@ def _single_backend_callee_source() -> str:
         "    aarch64:\n"
         "      extension_families [arm]\n"
         '      runner_kinds ["qemu-aarch64"]\n'
+        "    riscv:\n"
+        "      extension_families [rvv]\n"
+        '      runner_kinds ["qemu-riscv64"]\n'
+        "      backends:\n"
+        "        cpp:\n"
+        "          feature_flags false\n"
         "    wasm32:\n"
         "      extension_families [wasm]\n"
         "      runner_kinds [wasmtime]\n"

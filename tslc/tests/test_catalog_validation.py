@@ -2582,9 +2582,48 @@ def test_validator_kind_sets_derive_from_typed_catalog_kinds() -> None:
         "exact_lane_bitmask",
         "lane_bitmask",
         "native_predicate",
+        "native_predicate_by_type",
         "native_predicate_by_lanes",
     }
     assert schema_extensions.KNOWN_IMASK_POLICY_KINDS == frozenset(
         get_args(model.ImaskPolicyKind)
     ) == {"lane_bitmask", "same_as_mask_type", "unsigned_scalar"}
     assert frozenset(get_args(model.TestArgKind)) == {"vector", "mask", "scalar"}
+
+
+def test_mask_spelling_by_type_rejects_unknown_scalar_tags() -> None:
+    diagnostics = _diagnostics(
+        "target_families:\n"
+        "  known_extension_families [scalar]\n"
+        "  universal_extension_families [scalar]\n"
+        "  profile_families:\n"
+        "    generic:\n"
+        "      extension_families []\n"
+        "      backends:\n"
+        "        cpp:\n"
+        "          feature_flags false\n"
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        "  extension_name \"scalar\"\n"
+        "  family \"scalar\"\n"
+        "  cpp:\n"
+        "    supported true\n"
+        "  mask_type_policy:\n"
+        "    kind \"native_predicate_by_type\"\n"
+        "    backend_spelling_by_type:\n"
+        "      cpp:\n"
+        "        typo \"bad_mask_t\"\n"
+        "language cpp:\n"
+        "  s32 {type \"int32_t\"}\n"
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        "          tsil \"complete(data);\"\n"
+    )
+
+    assert "TSL-CATALOG-INVALID-ENUM" in {
+        diagnostic.code for diagnostic in diagnostics
+    }

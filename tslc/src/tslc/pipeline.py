@@ -457,11 +457,28 @@ class _GenerationSession:
         )
 
     def _generate_profile(self, profile_name: str, profile: MachineProfile) -> None:
-        active_backends = tuple(
+        requested_backends = tuple(
             capability
             for capability in self.backends
             if self._backend_includes_profile(capability.backend_id, profile_name)
         )
+        active_backends = tuple(
+            capability
+            for capability in requested_backends
+            if profile.supports_backend(capability.backend_id)
+        )
+        for capability in requested_backends:
+            if not profile.supports_backend(capability.backend_id):
+                self.diagnostics.append(
+                    Diagnostic(
+                        severity="info",
+                        code="TSL-PIPELINE-UNSUPPORTED-PROFILE-BACKEND",
+                        message=(
+                            f"machine profile {profile_name!r} does not support "
+                            f"backend {capability.backend_id!r}; skipped"
+                        ),
+                    )
+                )
         if not active_backends:
             return
         # Profile-scoped dependency closure: start from the requested primitives and pull in only

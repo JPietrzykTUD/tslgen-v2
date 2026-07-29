@@ -240,6 +240,104 @@ prim<m:=(v,v)> equal(left, right):
               )
             );
           """
+    rvv:
+      ?i8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmseq, build[infix="vv", infix_sep="_", post=b8]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ?i16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmseq, build[infix="vv", infix_sep="_", post=b16]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ?i32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmseq, build[infix="vv", infix_sep="_", post=b32]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ?i64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmseq, build[infix="vv", infix_sep="_", post=b64]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmfeq, build[infix="vv", infix_sep="_", post=b32]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmfeq, build[infix="vv", infix_sep="_", post=b64]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+
 prim<m:=(v,v)> nequal(left, right):
   operation compare_not_equal
   operand_roles:
@@ -466,6 +564,104 @@ prim<m:=(v,v)> nequal(left, right):
               )
             );
           """
+    rvv:
+      ?i8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsne, build[infix="vv", infix_sep="_", post=b8]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ?i16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsne, build[infix="vv", infix_sep="_", post=b16]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ?i32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsne, build[infix="vv", infix_sep="_", post=b32]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ?i64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsne, build[infix="vv", infix_sep="_", post=b64]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmfne, build[infix="vv", infix_sep="_", post=b32]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmfne, build[infix="vv", infix_sep="_", post=b64]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+
 prim<m:=(v,v)> less_than(left, right):
   operation compare_less
   operand_roles:
@@ -808,6 +1004,168 @@ prim<m:=(v,v)> less_than(left, right):
               )
             );
           """
+    rvv:
+      si8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmslt, build[infix="vv", infix_sep="_", post=b8]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ui8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsltu, build[infix="vv", infix_sep="_", post=b8]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      si16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmslt, build[infix="vv", infix_sep="_", post=b16]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ui16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsltu, build[infix="vv", infix_sep="_", post=b16]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      si32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmslt, build[infix="vv", infix_sep="_", post=b32]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ui32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsltu, build[infix="vv", infix_sep="_", post=b32]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      si64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmslt, build[infix="vv", infix_sep="_", post=b64]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ui64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsltu, build[infix="vv", infix_sep="_", post=b64]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmflt, build[infix="vv", infix_sep="_", post=b32]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmflt, build[infix="vv", infix_sep="_", post=b64]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+
 prim<m:=(v,v)> greater_than(left, right):
   operation compare_greater
   operand_roles:
@@ -1118,6 +1476,20 @@ prim<m:=(v,v)> greater_than(left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=less_than[Vec]>(right, left)
+            );
+          """
+
 prim<m:=(v,v)> less_than_or_equal(left, right):
   operation compare_less_equal
   operand_roles:
@@ -1411,6 +1783,168 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
               )
             );
           """
+    rvv:
+      si8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsle, build[infix="vv", infix_sep="_", post=b8]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ui8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsleu, build[infix="vv", infix_sep="_", post=b8]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      si16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsle, build[infix="vv", infix_sep="_", post=b16]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ui16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsleu, build[infix="vv", infix_sep="_", post=b16]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      si32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsle, build[infix="vv", infix_sep="_", post=b32]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ui32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsleu, build[infix="vv", infix_sep="_", post=b32]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      si64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsle, build[infix="vv", infix_sep="_", post=b64]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ui64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmsleu, build[infix="vv", infix_sep="_", post=b64]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmfle, build[infix="vv", infix_sep="_", post=b32]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmfle, build[infix="vv", infix_sep="_", post=b64]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+
 prim<m:=(v,v)> greater_than_or_equal(left, right):
   operation compare_greater_equal
   operand_roles:
@@ -1702,6 +2236,19 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
+            );
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=less_than_or_equal[Vec]>(right, left)
             );
           """
 

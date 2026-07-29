@@ -96,6 +96,13 @@ profile_families:
         target "wasm32-wasip1"
 ```
 
+For a GNU/Linux cross family, backend profile data may additionally declare
+`compiler_role`, `cmake_system_name`, `cmake_system_processor`, and
+`pass_target_to_compiler`. These typed facts flow into verification; do not
+branch on a profile or extension name in the verifier. Set
+`pass_target_to_compiler false` for prefixed GNU drivers that already encode
+the target.
+
 This file owns routing, documentation classification, and shared target-feature
 capabilities.
 
@@ -116,6 +123,7 @@ Edit `supplementary/buildsystem/machine_profiles.json`.
       "name": "wasm32-simd128",
       "target_features": "simd128",
       "backend_flags": {"cpp": []},
+      "supported_backends": ["cpp", "rust"],
       "runner": {"kind": "wasmtime", "profile": "default"}
     }
   ]
@@ -127,6 +135,11 @@ Edit `supplementary/buildsystem/machine_profiles.json`.
 An implementation with `requires [simd128]` needs that capability.
 
 Wasm target features are not host CPU probes.
+
+`supported_backends` restricts profile emission and CI shards. Omit it to keep
+the profile family's registered backends; use an explicit list for a C++-only or
+Rust-only target. Unsupported requested pairs produce a recorded informational
+skip and no fallback profile for that backend.
 
 ## 5. Add Extension Metadata
 

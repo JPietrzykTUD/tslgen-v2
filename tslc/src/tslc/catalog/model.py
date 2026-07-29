@@ -81,6 +81,7 @@ MaskPolicyKind = Literal[
     "exact_lane_bitmask",
     "lane_bitmask",
     "native_predicate",
+    "native_predicate_by_type",
     "native_predicate_by_lanes",
 ]
 ImaskPolicyKind = Literal["lane_bitmask", "same_as_mask_type", "unsigned_scalar"]
@@ -453,6 +454,8 @@ class MaskPolicy:
       name a lane-parameterized type such as ``ac_int<LANES, false>``.
     - ``"native_predicate"`` (scalable SVE): the mask is one backend-native predicate
       spelling declared directly by backend id.
+    - ``"native_predicate_by_type"`` (scalable RVV): the mask is one backend-native
+      predicate spelling per scalar type.
     - ``"native_predicate_by_lanes"`` (avx512 and the ``_vl`` variants): the mask is a
       native predicate keyed by lane count; spellings are backend-keyed so a new backend
       extends source data without changing this model.
@@ -460,6 +463,9 @@ class MaskPolicy:
 
     kind: MaskPolicyKind = "lane_bitmask"
     backend_spelling: Mapping[str, str] = field(default_factory=dict)
+    backend_spelling_by_type: Mapping[str, Mapping[str, str]] = field(
+        default_factory=dict
+    )
     backend_spelling_by_lanes: Mapping[str, Mapping[int, str]] = field(default_factory=dict)
     source: SourceSpan | None = None
 
@@ -471,12 +477,20 @@ class MaskPolicy:
         )
         object.__setattr__(
             self,
+            "backend_spelling_by_type",
+            _freeze_nested_mapping(self.backend_spelling_by_type),
+        )
+        object.__setattr__(
+            self,
             "backend_spelling_by_lanes",
             _freeze_nested_mapping(self.backend_spelling_by_lanes),
         )
 
     def spelling(self, backend_id: str) -> str | None:
         return self.backend_spelling.get(backend_id)
+
+    def spelling_for_type(self, backend_id: str, type_tag: str) -> str | None:
+        return self.backend_spelling_by_type.get(backend_id, {}).get(type_tag)
 
     def spelling_for_lanes(self, backend_id: str, lanes: int) -> str | None:
         return self.backend_spelling_by_lanes.get(backend_id, {}).get(lanes)

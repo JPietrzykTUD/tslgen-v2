@@ -18,6 +18,10 @@ class BackendProfileFamily:
     target: str | None = None
     linker: str | None = None
     detection: str | None = None
+    compiler_role: str | None = None
+    cmake_system_name: str | None = None
+    cmake_system_processor: str | None = None
+    pass_target_to_compiler: bool = True
     source: SourceSpan | None = None
 
 

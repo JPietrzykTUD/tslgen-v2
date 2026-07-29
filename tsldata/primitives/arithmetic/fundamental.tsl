@@ -177,6 +177,39 @@ prim<v:=(v,v)> add(left, right):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svadd, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vadd, build[infix="vv", infix_sep="_"]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vfadd, build[infix="vv", infix_sep="_"]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
 prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
   arithmetic:
     operations [addition]
@@ -630,6 +663,39 @@ prim<v:=(v,v)> sub(left, right):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svsub, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vsub, build[infix="vv", infix_sep="_"]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vfsub, build[infix="vv", infix_sep="_"]>(
+                left,
+                right,
+                value(vector::runtime_length)
+              )
+            );
+          """
 prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
   arithmetic:
     operations [subtraction]

@@ -463,6 +463,8 @@ def _cpp_mask_type(
     kind = extension.mask_policy.kind
     if kind == "native_predicate":
         return extension.mask_policy.spelling("cpp") or register
+    if kind == "native_predicate_by_type":
+        return extension.mask_policy.spelling_for_type("cpp", type_tag) or register
     if kind == "native_predicate_by_lanes":
         lanes = vector_bits // scalar_bit_width_or_default(type_tag)
         concrete = extension.mask_policy.spelling_for_lanes("cpp", max(8, lanes))

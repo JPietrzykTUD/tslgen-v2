@@ -258,6 +258,24 @@ prim<v:=(m,v,v)>[mask=pass_through] select(mask, true_values, false_values):
                 )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmerge, build[infix="vvm", infix_sep="_"]>(
+                false_values,
+                true_values,
+                mask,
+                value(vector::runtime_length)
+              )
+            );
+          """
 prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
   brief_description "Copies source lanes where the mask is active and writes zero where the mask is inactive."
   detailed_description """

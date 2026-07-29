@@ -7,7 +7,7 @@ from pathlib import Path
 import shlex
 import shutil
 
-from tslc.output._verify_runners import runner_prefix
+from tslc.output._verify_runners import is_cmake_cross_emulator, runner_prefix
 from tslc.output.verify_model import (
     BuildCommandEnvironment,
     BuildVerifierConfig,
@@ -42,7 +42,10 @@ def cmake_cross_emulator(
     profile: VerifyProfile,
     config: BuildVerifierConfig,
 ) -> tuple[str, ...]:
-    if profile.runner is None or profile.runner.kind != "qemu-aarch64":
+    if (
+        profile.runner is None
+        or not is_cmake_cross_emulator(profile.runner.kind)
+    ):
         return ()
     return runner_prefix(profile, config)
 
@@ -83,6 +86,8 @@ def _effective_cpp_compiler_for_profile(
     config: BuildVerifierConfig,
     profile: VerifyProfile,
 ) -> tuple[str, ...]:
+    if profile.compiler_role is not None:
+        return (config.tool_path(profile.compiler_role) or profile.compiler_role,)
     if _is_wasm_cpp_target(profile, config):
         return (config.tool_path("wasi-cpp") or "clang++",)
     if _is_default_aarch64_gnu_cpp_target(profile, config):

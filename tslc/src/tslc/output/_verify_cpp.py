@@ -193,6 +193,8 @@ def _cpp_command_groups(
                         "--test-dir",
                         str(build_dir),
                         "--output-on-failure",
+                        "--timeout",
+                        "60",
                     ),
                     cwd=root,
                     env=env,
@@ -238,7 +240,7 @@ def _cpp_configure_args(
     ]
     target = cpp_target(profile, config)
     if target is not None:
-        args.extend(_cpp_cross_target_cmake_args(target, compiler))
+        args.extend(_cpp_cross_target_cmake_args(profile, target, compiler))
     linker = cpp_linker(config)
     if linker is not None:
         args.append(f"-DCMAKE_LINKER={linker}")
@@ -252,25 +254,25 @@ def _cpp_configure_args(
 
 
 def _cpp_cross_target_cmake_args(
+    profile: VerifyProfile,
     target: str,
     compiler: tuple[str, ...],
 ) -> tuple[str, ...]:
-    accepts_target = cpp_compiler_accepts_explicit_target(compiler)
-    if target.startswith("wasm32-"):
-        args = [
-            "-DCMAKE_SYSTEM_NAME=WASI",
-            "-DCMAKE_SYSTEM_PROCESSOR=wasm32",
-            "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
-        ]
-        if accepts_target:
-            args.append(f"-DCMAKE_CXX_COMPILER_TARGET={target}")
-        return tuple(args)
+    system_name = profile.cmake_system_name
+    system_processor = profile.cmake_system_processor
+    if system_name is None:
+        system_name = "WASI" if target.startswith("wasm32-") else "Linux"
+    if system_processor is None:
+        system_processor = "wasm32" if target.startswith("wasm32-") else "aarch64"
     args = [
-        "-DCMAKE_SYSTEM_NAME=Linux",
-        "-DCMAKE_SYSTEM_PROCESSOR=aarch64",
+        f"-DCMAKE_SYSTEM_NAME={system_name}",
+        f"-DCMAKE_SYSTEM_PROCESSOR={system_processor}",
         "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
     ]
-    if accepts_target:
+    if (
+        profile.pass_target_to_compiler
+        and cpp_compiler_accepts_explicit_target(compiler)
+    ):
         args.append(f"-DCMAKE_CXX_COMPILER_TARGET={target}")
     return tuple(args)
 
@@ -341,9 +343,7 @@ def _cpp_target_preflight_command(
             "\n".join(
                 (
                     "#include <array>",
-                    "#if defined(__aarch64__)",
-                    "#include <arm_neon.h>",
-                    "#endif",
+                    *(f"#include <{header}>" for header in profile.preflight_headers),
                     "int main() { std::array<int, 1> value{}; return value[0]; }",
                     "",
                 )
@@ -363,7 +363,10 @@ def _cpp_target_preflight_command(
     argv = [
         *compiler,
     ]
-    if cpp_compiler_accepts_explicit_target(compiler):
+    if (
+        profile.pass_target_to_compiler
+        and cpp_compiler_accepts_explicit_target(compiler)
+    ):
         argv.append(f"--target={target}")
     argv.extend(
         [

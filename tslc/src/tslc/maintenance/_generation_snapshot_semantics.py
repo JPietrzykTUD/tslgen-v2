@@ -262,6 +262,11 @@ def _serialize_verify_profile(profile: VerifyProfile) -> dict[str, object]:
         "target_features": profile.target_features,
         "target": profile.target,
         "linker": profile.linker,
+        "compiler_role": profile.compiler_role,
+        "cmake_system_name": profile.cmake_system_name,
+        "cmake_system_processor": profile.cmake_system_processor,
+        "pass_target_to_compiler": profile.pass_target_to_compiler,
+        "preflight_headers": profile.preflight_headers,
         "runner": _serialize_verify_runner(profile.runner),
         "compile_failures": tuple(
             {

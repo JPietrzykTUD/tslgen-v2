@@ -14,6 +14,7 @@ from tslc import check_cli
 from tslc import doctor as doctor_module
 from tslc.api import generate_project
 from tslc.authoring import check_catalog
+from tslc.catalog.machine_profiles import MachineProfile
 from tslc.doctor import diagnose
 from tslc.maintenance import coverage_inventory
 from tslc.output.verify_drivers import (
@@ -424,6 +425,12 @@ def test_doctor_reports_registered_backend_through_capability_hooks(
         lambda sources, *, backends: real_check_catalog(sources, backends=("cpp",)),
     )
 
+    monkeypatch.setattr(
+        MachineProfile,
+        "supports_backend",
+        lambda self, backend_id: backend_id == "fake",
+    )
+
     report = diagnose(
         sources=(data_root,),
         machine_profiles=machine_profiles_path,
@@ -490,3 +497,34 @@ def test_coverage_inventory_help_does_not_write(
 
     assert exc.value.code == 0
     assert not output.exists()
+
+
+def test_doctor_rvv_preflight_excludes_universal_overlay_headers(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = diagnose(
+        sources=(data_root,),
+        machine_profiles=machine_profiles_path,
+        backends=("cpp",),
+        profiles=("rvv",),
+        work_root=tmp_path / "doctor",
+        tool_paths={"riscv-cpp": "c++"},
+        runner=runner,
+    )
+
+    assert report["diagnostics"] == []
+    assert [command.step for command in seen] == ["target-preflight"]
+    source = (
+        tmp_path
+        / "doctor/cpp/build/_compiler_preflight/rvv/tslc_target_check.cpp"
+    ).read_text(encoding="utf-8")
+    assert "#include <riscv_vector.h>" in source
+    assert "ac_int.hpp" not in source

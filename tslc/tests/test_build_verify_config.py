@@ -1036,6 +1036,7 @@ def test_cpp_value_test_run_configures_sde_as_test_launcher(tmp_path: Path) -> N
     assert f"-DTSL_TEST_LAUNCHER={sys.executable};-hsw;--" in configure
     assert seen[-2].argv[0] == "cmake"
     assert seen[-1].argv[0] == "ctest"
+    assert seen[-1].argv[-2:] == ("--timeout", "60")
 
 
 def test_sde_cpp_value_tests_pin_default_compiler_over_ambient_cxx(
@@ -1240,6 +1241,7 @@ def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(
     assert emulator.startswith(f"-DCMAKE_CROSSCOMPILING_EMULATOR={sys.executable};")
     assert emulator.endswith(";-cpu;cortex-a76")
     assert seen[-1].argv[0] == "ctest"
+    assert seen[-1].argv[-2:] == ("--timeout", "60")
 
 
 def test_cpp_qemu_value_tests_fall_back_to_clang_target_when_cross_gpp_missing(
@@ -1353,6 +1355,7 @@ def test_cpp_wasm_value_tests_configure_wasi_and_wasmtime(tmp_path: Path) -> Non
     assert "-DCMAKE_CXX_COMPILER_TARGET=wasm32-wasip1" in configure
     assert f"-DTSL_TEST_LAUNCHER={sys.executable}" in configure
     assert seen[-1].argv[0] == "ctest"
+    assert seen[-1].argv[-2:] == ("--timeout", "60")
 
 
 def test_cpp_wasm_default_compiler_uses_configured_wasi_tool_or_clang() -> None:
@@ -1851,3 +1854,66 @@ def _env(command: BuildCommand) -> dict[str, str]:
 
 def _configure_arg(argv: tuple[str, ...], prefix: str) -> str | None:
     return next((arg for arg in argv if arg.startswith(prefix)), None)
+
+
+def test_cpp_rvv_profile_uses_role_riscv_cmake_and_qemu_prefix(tmp_path: Path) -> None:
+    profile = VerifyProfile(
+        profile_name="rvv",
+        file_stem="rvv",
+        family="riscv",
+        flags=(
+            "-march=rv64imafdcv",
+            "-mabi=lp64d",
+            "-mrvv-vector-bits=scalable",
+        ),
+        target="riscv64-linux-gnu",
+        compiler_role="riscv-cpp",
+        cmake_system_name="Linux",
+        cmake_system_processor="riscv64",
+        pass_target_to_compiler=False,
+        preflight_headers=("riscv_vector.h",),
+        runner=VerifyRunner(
+            kind="qemu-riscv64",
+            profile="max,v=true,vext_spec=v1.0,vlen=128,elen=64",
+        ),
+    )
+    project = VerifyProject(
+        backends=(VerifyBackend("cpp", "cpp", (profile,)),)
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    config = BuildVerifierConfig.create(
+        tool_paths={"riscv-cpp": sys.executable},
+        runner_paths={"qemu-riscv64": sys.executable},
+    )
+    report = verify_generated_project(tmp_path, project, runner, config=config)
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == [
+        "target-preflight",
+        "configure",
+        "build",
+    ]
+    preflight, configure, _build = seen
+    assert preflight.argv[0] == sys.executable
+    assert "--target=riscv64-linux-gnu" not in preflight.argv
+    assert "#include <riscv_vector.h>" in (
+        tmp_path
+        / "cpp/build/_compiler_preflight/rvv/tslc_target_check.cpp"
+    ).read_text(encoding="utf-8")
+    assert "-DCMAKE_SYSTEM_NAME=Linux" in configure.argv
+    assert "-DCMAKE_SYSTEM_PROCESSOR=riscv64" in configure.argv
+    assert not any(
+        arg.startswith("-DCMAKE_CXX_COMPILER_TARGET=") for arg in configure.argv
+    )
+    emulator = _configure_arg(
+        configure.argv, "-DCMAKE_CROSSCOMPILING_EMULATOR="
+    )
+    assert emulator is not None
+    assert ";-cpu;max,v=true,vext_spec=v1.0,vlen=128,elen=64" in emulator
+    if Path("/usr/riscv64-linux-gnu/lib/ld-linux-riscv64-lp64d.so.1").is_file():
+        assert ";-L;/usr/riscv64-linux-gnu;" in emulator

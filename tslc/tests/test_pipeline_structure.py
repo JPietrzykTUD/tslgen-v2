@@ -618,6 +618,26 @@ prim<v:=v> id(data):
     )
 
 
+def test_rvv_is_additive_without_generic_compiler_name_branches() -> None:
+    package = _REPO_ROOT / "tslc/src/tslc"
+    paths = [package / "pipeline.py"]
+    paths.extend(
+        path
+        for subtree in ("catalog", "select", "lower", "backend", "render")
+        for path in sorted((package / subtree).rglob("*.py"))
+    )
+    offenders = []
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        offenders.extend(
+            f"{path}:{node.lineno}"
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and node.value == "rvv"
+        )
+
+    assert offenders == []
+
+
 def test_lowerer_imports_region_handlers_directly() -> None:
     forbidden = ".".join(("tslc", "lower", "regions"))
     roots = (_REPO_ROOT / "tslc" / "src", _REPO_ROOT / "tslc" / "tests")

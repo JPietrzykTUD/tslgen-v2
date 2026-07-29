@@ -134,6 +134,7 @@ _BOOLEAN_FIELDS = frozenset(
         "index_vector_register",
         "internal_unsafe",
         "native_without_runner",
+        "pass_target_to_compiler",
         "primary",
         "requires_declared_vector_register",
         "specialize_base",
@@ -144,6 +145,7 @@ _BOOLEAN_FIELDS = frozenset(
 _BACKEND_MAP_FIELDS = frozenset(
     {
         "backend_spelling",
+        "backend_spelling_by_type",
         "runtime_lane_count",
         "test_mask_check",
         "test_mask_from_bits",
@@ -935,6 +937,8 @@ def _extension_fields(
         return KNOWN_TEST_FILTER_FIELDS, "field", "test-filter field"
     if name in _BACKEND_MAP_FIELDS:
         return backends, "keyword", "backend ID"
+    if "backend_spelling_by_type" in path and path[-2] == "backend_spelling_by_type":
+        return (*catalog.type_groups, *KNOWN_SCALAR_TYPE_TAGS), "type", "scalar type"
     if name == "vector_register_types":
         return (*catalog.type_groups, *KNOWN_SCALAR_TYPE_TAGS), "type", "type selector"
     if "vector_register_types" in path and path[-2] == "vector_register_types":

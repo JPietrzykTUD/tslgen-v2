@@ -55,6 +55,9 @@ class MachineProfile:
     # Extra compiler flags keyed by backend. These are full compiler arguments,
     # not feature-token spellings.
     backend_flags: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    # Backends intentionally emitted for this profile. None on a manually
+    # constructed profile preserves the historical unrestricted behavior.
+    supported_backends: frozenset[str] | None = None
     # Optional runner profile used by the after-write verifier to execute value
     # tests on hosts that cannot run the profile directly.
     runner: MachineProfileRunner | None = None
@@ -66,6 +69,10 @@ class MachineProfile:
     def __post_init__(self) -> None:
         object.__setattr__(self, "features", frozenset(self.features))
         object.__setattr__(self, "compile_modes", frozenset(self.compile_modes))
+        if self.supported_backends is not None:
+            object.__setattr__(
+                self, "supported_backends", frozenset(self.supported_backends)
+            )
         object.__setattr__(self, "alternatives", MappingProxyType(dict(self.alternatives)))
         object.__setattr__(
             self,
@@ -85,6 +92,12 @@ class MachineProfile:
 
     def flags_for_backend(self, backend_id: str) -> tuple[str, ...]:
         return self.backend_flags.get(backend_id, ())
+
+    def supports_backend(self, backend_id: str) -> bool:
+        return (
+            self.supported_backends is None
+            or backend_id in self.supported_backends
+        )
 
     def feature_spelling(self, feature: str, backend_id: str) -> str:
         override = self.alternatives.get(feature)
@@ -219,6 +232,7 @@ def load_machine_profiles_checked(
                     "compile_modes",
                     "alternatives",
                     "backend_flags",
+                    "supported_backends",
                     "runner",
                     "auto_detect_gate",
                 },
@@ -288,6 +302,14 @@ def load_machine_profiles_checked(
                 path,
                 diagnostics,
             )
+            supported_backends = _supported_backends(
+                name,
+                family,
+                fields.get("supported_backends"),
+                target_families,
+                path,
+                diagnostics,
+            )
             runner = _runner(
                 name,
                 family,
@@ -311,6 +333,7 @@ def load_machine_profiles_checked(
                 feature_capabilities=feature_capabilities,
                 compile_modes=compile_modes,
                 backend_flags=backend_flags,
+                supported_backends=supported_backends,
                 runner=runner,
                 auto_detect_gate=auto_detect_gate,
             )
@@ -544,6 +567,53 @@ def _backend_flags(
             path,
             diagnostics,
         )
+    return result
+
+
+def _supported_backends(
+    profile_name: str,
+    family: str,
+    value: Any,
+    target_families: TargetFamilyCatalog | None,
+    path: Path,
+    diagnostics: list[Diagnostic],
+) -> frozenset[str] | None:
+    family_capability = (
+        target_families.profile_family(family)
+        if target_families is not None
+        else None
+    )
+    known = (
+        frozenset(family_capability.backends)
+        if family_capability is not None
+        else frozenset()
+    )
+    if value is None:
+        return known or None
+    backends = _string_list_field(
+        profile_name, value, "supported_backends", path, diagnostics
+    )
+    result = frozenset(backends)
+    if len(result) != len(backends):
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-DUPLICATE-BACKEND",
+                f"machine profile {profile_name!r} supported_backends contains duplicates",
+            )
+        )
+    for backend_id in sorted(result - known):
+        if family_capability is not None:
+            diagnostics.append(
+                _diagnostic(
+                    path,
+                    "TSL-PROFILE-UNKNOWN-BACKEND",
+                    (
+                        f"machine profile {profile_name!r} supported_backends "
+                        f"declares unknown backend {backend_id!r}"
+                    ),
+                )
+            )
     return result
 
 

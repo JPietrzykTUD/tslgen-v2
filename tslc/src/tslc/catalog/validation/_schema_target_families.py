@@ -57,7 +57,17 @@ KNOWN_PROFILE_FAMILY_FIELDS = frozenset(
     }
 )
 KNOWN_BACKEND_PROFILE_FIELDS = frozenset(
-    {"detection", "feature_flags", "linker", "target", "target_arch"}
+    {
+        "cmake_system_name",
+        "cmake_system_processor",
+        "compiler_role",
+        "detection",
+        "feature_flags",
+        "linker",
+        "pass_target_to_compiler",
+        "target",
+        "target_arch",
+    }
 )
 
 
@@ -231,25 +241,37 @@ def validate_target_families(
                 diagnostics,
                 label=f"{owner} field",
             )
-            feature_flags = child(backend, "feature_flags")
-            value = field_text(feature_flags)
-            if feature_flags is not None and value not in KNOWN_BOOLEAN_VALUES:
-                invalid_enum(
-                    diagnostics,
-                    feature_flags,
-                    f"{owner} feature_flags {value!r}",
-                    sorted(KNOWN_BOOLEAN_VALUES),
-                )
-            target_arch = child(backend, "target_arch")
-            if target_arch is not None and not field_text(target_arch):
-                diagnostics.append(
-                    diagnostic_at(
-                        severity="error",
-                        code="TSL-CATALOG-TARGET-FAMILIES-MALFORMED-TARGET-ARCH",
-                        message=f"{owner} target_arch must be a non-empty string",
-                        source=source_span(target_arch.source),
+            _validate_boolean_fields(
+                backend,
+                frozenset({"feature_flags", "pass_target_to_compiler"}),
+                diagnostics,
+                owner,
+            )
+            for string_name in (
+                "cmake_system_name",
+                "cmake_system_processor",
+                "compiler_role",
+                "detection",
+                "linker",
+                "target",
+                "target_arch",
+            ):
+                string_field = child(backend, string_name)
+                if string_field is not None and not field_text(string_field):
+                    diagnostics.append(
+                        diagnostic_at(
+                            severity="error",
+                            code=(
+                                "TSL-CATALOG-TARGET-FAMILIES-MALFORMED-TARGET-ARCH"
+                                if string_name == "target_arch"
+                                else "TSL-CATALOG-TARGET-FAMILIES-MALFORMED-FIELD"
+                            ),
+                            message=(
+                                f"{owner} {string_name} must be a non-empty string"
+                            ),
+                            source=source_span(string_field.source),
+                        )
                     )
-                )
 
 
 def _validate_boolean_fields(

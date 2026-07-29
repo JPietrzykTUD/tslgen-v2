@@ -6,6 +6,7 @@ from collections.abc import Collection, Iterable
 from typing import get_args
 
 from tslc.catalog.model import ImaskPolicyKind, MaskPolicyKind, VectorBitsKind
+from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
 from tslc.catalog.target_families import TargetFamilyCatalog
 from tslc.catalog.validation._schema_common import (
     diagnose_duplicate_fields,
@@ -64,7 +65,12 @@ KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
     }
 )
 KNOWN_MASK_POLICY_FIELDS = frozenset(
-    {"kind", "backend_spelling", "backend_spelling_by_lanes"}
+    {
+        "kind",
+        "backend_spelling",
+        "backend_spelling_by_lanes",
+        "backend_spelling_by_type",
+    }
 )
 KNOWN_IMASK_POLICY_FIELDS = frozenset({"kind"})
 KNOWN_INTRINSIC_COMPOSE_FIELDS = frozenset({"prefix", "suffix"})
@@ -380,6 +386,46 @@ def _validate_mask_policy_backend_maps(
             diagnostics,
             owner="mask_type_policy backend_spelling",
         )
+    by_type = child(field, "backend_spelling_by_type")
+    if by_type is not None:
+        diagnose_duplicate_fields(
+            children(by_type),
+            diagnostics,
+            label="mask_type_policy backend_spelling_by_type field",
+        )
+        validate_backend_key_fields(
+            children(by_type),
+            backend_ids,
+            diagnostics,
+            owner="mask_type_policy backend_spelling_by_type",
+        )
+        for backend in children(by_type):
+            diagnose_duplicate_fields(
+                children(backend),
+                diagnostics,
+                label=f"mask_type_policy {backend.key.text!r} type field",
+            )
+            for type_field in children(backend):
+                if type_field.key.text not in KNOWN_SCALAR_TYPE_TAGS:
+                    invalid_enum(
+                        diagnostics,
+                        type_field,
+                        "mask_type_policy scalar type",
+                        sorted(KNOWN_SCALAR_TYPE_TAGS),
+                    )
+                if not field_text(type_field):
+                    diagnostics.append(
+                        diagnostic_at(
+                            severity="error",
+                            code="TSL-CATALOG-EXTENSION-MALFORMED-MASK-TYPE",
+                            message=(
+                                "mask_type_policy backend_spelling_by_type "
+                                "values must be non-empty strings"
+                            ),
+                            source=source_span(type_field.source),
+                        )
+                    )
+
     by_lanes = child(field, "backend_spelling_by_lanes")
     if by_lanes is None:
         return

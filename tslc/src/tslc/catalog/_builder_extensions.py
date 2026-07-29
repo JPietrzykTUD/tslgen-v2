@@ -401,6 +401,9 @@ def _mask_policy(field: ParsedTslField | None) -> MaskPolicy:
     return MaskPolicy(
         kind=cast(MaskPolicyKind, _field_text(_child(field, "kind")) or "lane_bitmask"),
         backend_spelling=_backend_text_map(_child(field, "backend_spelling")),
+        backend_spelling_by_type=_backend_type_map(
+            _child(field, "backend_spelling_by_type")
+        ),
         backend_spelling_by_lanes=_backend_int_map(
             _child(field, "backend_spelling_by_lanes")
         ),
@@ -431,6 +434,13 @@ def _int_keyed_map(field: ParsedTslField | None) -> dict[int, str]:
             result[int(key)] = _field_text(entry) or ""
     return result
 
+
+
+def _backend_type_map(field: ParsedTslField | None) -> dict[str, dict[str, str]]:
+    return {
+        child.key.text: _backend_text_map(child)
+        for child in _children(field)
+    }
 
 
 def _backend_int_map(field: ParsedTslField | None) -> dict[str, dict[int, str]]:
