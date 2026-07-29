@@ -68,6 +68,9 @@ class EmittedProfile:
     ) -> Mapping[str, tuple[LoweredSpecialization, ...]]:
         return self.specializations_by_backend.get(backend_id, _EMPTY_SPECIALIZATIONS)
 
+    def supports_backend(self, backend_id: str) -> bool:
+        return backend_id in self.specializations_by_backend
+
     def used_extensions(self, backend_id: str) -> tuple[str, ...]:
         """Return extension ISAs referenced by one backend's emitted specializations."""
 

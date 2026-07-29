@@ -186,6 +186,16 @@ def _generation_parser(
         ),
     )
     parser.add_argument(
+        "--backend-profiles",
+        action="append",
+        default=[],
+        metavar="BACKEND=PROFILE,...",
+        help=(
+            "restrict one backend to a comma-separated subset of the requested "
+            "machine profiles; repeat for multiple backends"
+        ),
+    )
+    parser.add_argument(
         "--types",
         default="si8,si16,si32,si64,ui8,ui16,ui32,ui64,f32,f64",
         help="comma-separated type tags",
@@ -279,6 +289,14 @@ def _generation_command_settings(
         parse_assignments(args.target, "--target"),
         parse_assignments(args.linker, "--linker"),
     )
+    backend_profiles = {
+        backend_id: split_csv(value)
+        for backend_id, value in parse_assignments(
+            args.backend_profiles, "--backend-profiles"
+        ).items()
+    }
+    if any(not profiles for profiles in backend_profiles.values()):
+        raise ValueError("--backend-profiles requires at least one profile per backend")
     runner_paths = dict(project.runner_paths) if project is not None else {}
     runner_paths.update(parse_assignments(args.runner, "--runner"))
     tool_paths = dict(project.tool_paths) if project is not None else {}
@@ -292,6 +310,7 @@ def _generation_command_settings(
         generation_mode=args.generation_mode,
         primitives=split_csv(args.primitives) if args.primitives is not None else None,
         profiles=split_csv(args.profiles) if args.profiles is not None else None,
+        backend_profiles=backend_profiles,
         output_root=output_root,
         verify=args.verify or command == "build",
         run_value_tests=args.test or command == "test" or args.fuzz,

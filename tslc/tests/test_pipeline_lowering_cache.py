@@ -14,6 +14,7 @@ from tslc.diagnostics import Diagnostic
 from tslc.ir.segments import Segment
 from tslc.lower.lowerer import Lowerer, LoweringResult
 from tslc.pipeline import (
+    BackendProfileScope,
     GenerationRequest,
     _GenerationSession,
     _lowering_skipped_entry,
@@ -174,3 +175,38 @@ def test_equivalent_profiles_reuse_lowering_but_keep_profile_metadata(
     )
     assert profiles[0].features != profiles[1].features
     assert profiles[0] is not profiles[1]
+
+
+def test_backend_profile_scope_limits_only_the_named_backend(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    request = GenerationRequest(
+        source_paths=tuple(sorted(data_root.rglob("*.tsl"))),
+        machine_profiles_path=machine_profiles_path,
+        primitives=("add",),
+        profiles=("skylake", "cascadelake"),
+        type_tags=("si32",),
+        backends=("cpp", "rust"),
+        backend_profile_scopes=(
+            BackendProfileScope("rust", ("skylake",)),
+        ),
+        render_artifacts=False,
+    )
+    inputs, diagnostics = _load_inputs(request)
+    assert inputs is not None
+    session = _GenerationSession(request, inputs, diagnostics)
+
+    result = session.run()
+
+    assert result.diagnostics == ()
+    profiles = {
+        profile.profile.name: profile
+        for profile in result.emitted_profiles
+    }
+    assert set(profiles) == {"cascadelake", "skylake"}
+    assert profiles["cascadelake"].supports_backend("cpp")
+    assert not profiles["cascadelake"].supports_backend("rust")
+    assert profiles["skylake"].supports_backend("cpp")
+    assert profiles["skylake"].supports_backend("rust")
+    assert {entry.backend for entry in result.coverage} == {"cpp", "rust"}

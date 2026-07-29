@@ -1,5 +1,5 @@
-use tsl::tsl_core::StaticSimdVector;
 use tsl::profile;
+use tsl::tsl_core::StaticSimdVector;
 
 struct LessThan;
 
@@ -72,13 +72,12 @@ fn main() {
 
             let mut indices = vec![usize::MAX; left.len()];
             let mut masked_negative = Negative;
-            let produced = profile::algo::select_masked_indices_unary_mask_layout::<_, $layout, _, i32>(
-                policy,
-                &mut masked_negative,
-                &left,
-                &masks,
-                &mut indices,
-            );
+            let produced = profile::algo::select_masked_indices_unary_mask_layout::<
+                _,
+                $layout,
+                _,
+                i32,
+            >(policy, &mut masked_negative, &left, &masks, &mut indices);
             verify_indices(&indices, produced, left.len(), |i| {
                 left[i] < right[i] && left[i] < 0
             });
@@ -146,7 +145,6 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::dataparallel::native());
     run_policy!(tsl::dataparallel::fixed::<1>());
     run_policy!(tsl::dataparallel::generic::<4>());
     run_policy!(tsl::dataparallel::generic::<16>());

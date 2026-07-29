@@ -1,5 +1,5 @@
-use tsl::tsl_core::StaticSimdVector;
 use tsl::profile;
+use tsl::tsl_core::StaticSimdVector;
 
 struct Square;
 
@@ -56,7 +56,7 @@ impl<V> profile::algo::MaskedBinaryAggregateKernel<V> for MaskedPairSum
 where
     V: StaticSimdVector<BaseType = i32>
         + profile::detail::primitives::AddImpl
-        + profile::detail::primitives::BlendImpl
+        + profile::detail::primitives::SelectImpl
         + profile::detail::primitives::HaddImpl
         + profile::detail::primitives::Set1Impl,
 {
@@ -81,7 +81,7 @@ struct MaskedSumSink {
 impl<V> profile::algo::MaskedUnaryConsumeKernel<V> for MaskedSumSink
 where
     V: StaticSimdVector<BaseType = i32>
-        + profile::detail::primitives::BlendImpl
+        + profile::detail::primitives::SelectImpl
         + profile::detail::primitives::HaddImpl
         + profile::detail::primitives::Set1Impl,
 {

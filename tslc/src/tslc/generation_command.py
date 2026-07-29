@@ -38,6 +38,7 @@ class GenerationCommandSettings:
     generation_mode: str
     primitives: tuple[str, ...] | None
     profiles: tuple[str, ...] | None
+    backend_profiles: Mapping[str, tuple[str, ...]]
     output_root: str | Path | None
     verify: bool
     run_value_tests: bool
@@ -86,6 +87,8 @@ def run_generation_command(
     }
     if settings.profiles is not None:
         generate_kwargs["profiles"] = list(settings.profiles)
+    if settings.backend_profiles:
+        generate_kwargs["backend_profiles"] = settings.backend_profiles
     if settings.primitives is not None:
         generate_kwargs["primitives"] = list(settings.primitives)
 

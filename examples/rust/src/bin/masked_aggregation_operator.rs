@@ -1,5 +1,5 @@
-use tsl::tsl_core::StaticSimdVector;
 use tsl::profile;
+use tsl::tsl_core::StaticSimdVector;
 
 struct LessThan;
 
@@ -19,7 +19,7 @@ struct MaskedSumOp {
 impl<V> profile::algo::MaskedUnaryAggregateKernel<V> for MaskedSumOp
 where
     V: StaticSimdVector<BaseType = i32>
-        + profile::detail::primitives::BlendImpl
+        + profile::detail::primitives::SelectImpl
         + profile::detail::primitives::HaddImpl
         + profile::detail::primitives::Set1Impl,
 {
@@ -44,7 +44,7 @@ impl<V> profile::algo::MaskedBinaryAggregateKernel<V> for MaskedPairSumOp
 where
     V: StaticSimdVector<BaseType = i32>
         + profile::detail::primitives::AddImpl
-        + profile::detail::primitives::BlendImpl
+        + profile::detail::primitives::SelectImpl
         + profile::detail::primitives::HaddImpl
         + profile::detail::primitives::Set1Impl,
 {
@@ -103,7 +103,8 @@ fn main() {
             assert_eq!(produced, masks.len());
 
             let mut unary = MaskedSumOp { total: 0 };
-            let unary_result = profile::algo::aggregate_masked_unary(policy, &mut unary, &left, &masks);
+            let unary_result =
+                profile::algo::aggregate_masked_unary(policy, &mut unary, &left, &masks);
             assert_eq!(unary_result, expected_masked_sum(&left, &right));
 
             let mut binary = MaskedPairSumOp { total: 0 };
@@ -113,7 +114,6 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::dataparallel::native());
     run_policy!(tsl::dataparallel::fixed::<1>());
     run_policy!(tsl::dataparallel::generic::<4>());
     run_policy!(tsl::dataparallel::generic::<16>());

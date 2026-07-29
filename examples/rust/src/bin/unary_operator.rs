@@ -1,6 +1,6 @@
+use tsl::profile;
 use tsl::tsl_algorithm::{RebindBase, ReboundBase, VectorFor};
 use tsl::tsl_core::{SimdVector, StaticSimdVector};
-use tsl::profile;
 
 struct Square;
 
@@ -73,20 +73,22 @@ where
     let values_for_cast = unsafe { profile::algo::load::<_, i32, false>(policy, input.as_ptr()) };
     let casted = profile::algo::cast::<_, i32, u32>(policy, values_for_cast);
     unsafe {
-        profile::store::<ReboundBase<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, u32>, false, _>(
-            cast_output.as_mut_ptr(),
-            casted,
-        )
+        profile::store::<
+            ReboundBase<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, u32>,
+            false,
+            _,
+        >(cast_output.as_mut_ptr(), casted)
     };
 
     let values_for_reinterpret =
         unsafe { profile::algo::load::<_, i32, false>(policy, input.as_ptr()) };
     let reinterpreted = profile::algo::reinterpret::<_, i32, u32>(policy, values_for_reinterpret);
     unsafe {
-        profile::store::<ReboundBase<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, u32>, false, _>(
-            reinterpret_output.as_mut_ptr(),
-            reinterpreted,
-        )
+        profile::store::<
+            ReboundBase<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, u32>,
+            false,
+            _,
+        >(reinterpret_output.as_mut_ptr(), reinterpreted)
     };
 
     for (index, value) in input.iter().enumerate() {
@@ -99,22 +101,11 @@ where
 fn main() {
     let scalar_square = profile::algo::mul::<_, i32>(tsl::dataparallel::fixed::<1>(), 7, 7);
     assert_eq!(scalar_square, 49);
-    verify_register_facade(tsl::dataparallel::native());
     verify_register_facade(tsl::dataparallel::generic::<8>());
     verify_conversion_facade(tsl::dataparallel::fixed::<1>());
     verify_conversion_facade(tsl::dataparallel::generic::<8>());
 
     let input: Vec<i32> = (0..1000).map(|value| value - 500).collect();
-
-    let mut native_output = vec![0i32; input.len()];
-    let mut native = Square;
-    profile::algo::transform_unary(
-        tsl::dataparallel::native(),
-        &mut native,
-        &input,
-        &mut native_output,
-    );
-    verify(&input, &native_output);
 
     let mut fixed_output = vec![0i32; input.len()];
     let mut fixed = Square;

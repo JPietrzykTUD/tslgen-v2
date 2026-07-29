@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-tsl = { path = "../../tslctmp/examples/generated/rust", default-features = false, features = ["scalar"] }
+tsl = { path = "../../tslctmp/examples/generated/rust", default-features = false }
 
 [[bin]]
 name = "unary_operator"

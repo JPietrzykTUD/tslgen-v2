@@ -44,10 +44,17 @@ def render_project(
 
     drivers = backend_capabilities(backends)
     for driver in drivers:
-        artifacts.extend(
-            driver.render_artifacts(ordered, value_tests, benchmarks, assets, config)
+        backend_profiles = tuple(
+            profile
+            for profile in ordered
+            if profile.supports_backend(driver.backend_id)
         )
-        verify_backends.append(driver.verify_backend(ordered, value_tests))
+        artifacts.extend(
+            driver.render_artifacts(
+                backend_profiles, value_tests, benchmarks, assets, config
+            )
+        )
+        verify_backends.append(driver.verify_backend(backend_profiles, value_tests))
     artifacts.extend(documentation_artifacts(ordered))
     artifacts.extend(generated_license_artifacts(drivers, assets))
     artifacts = [add_generated_license_notice(artifact) for artifact in artifacts]

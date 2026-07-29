@@ -1,6 +1,6 @@
+use tsl::profile;
 use tsl::tsl_algorithm::{IntegralMask, VectorFor};
 use tsl::tsl_core::{SimdVector, StaticSimdVector};
-use tsl::profile;
 
 struct LessThan;
 
@@ -51,9 +51,10 @@ where
 fn verify_unequal_zero_facade<Policy>(policy: Policy)
 where
     Policy: VectorFor<profile::algo::Profile, i32>,
-    <Policy as VectorFor<profile::algo::Profile, i32>>::Vec: StaticSimdVector<BaseType = i32>
-        + profile::detail::primitives::Unequal_zeroImpl
-        + profile::detail::primitives::LoadImpl<false>,
+    <Policy as VectorFor<profile::algo::Profile, i32>>::Vec:
+        StaticSimdVector<BaseType = i32>
+            + profile::detail::primitives::Unequal_zeroImpl
+            + profile::detail::primitives::LoadImpl<false>,
     profile::algo::Profile: IntegralMask<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec>,
     <<Policy as VectorFor<profile::algo::Profile, i32>>::Vec as SimdVector>::ImaskType: Into<u64>,
 {
@@ -62,7 +63,9 @@ where
     let input: Vec<i32> = (0..count).map(|value| value as i32 - 2).collect();
 
     let values = unsafe {
-        profile::load::<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, false>(input.as_ptr())
+        profile::load::<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, false>(
+            input.as_ptr(),
+        )
     };
     let mask = profile::algo::unequal_zero::<_, i32>(policy, values);
     let bits: u64 = <profile::algo::Profile as IntegralMask<
@@ -96,10 +99,14 @@ where
     fill_inputs(&mut left, &mut right);
 
     let left_values = unsafe {
-        profile::load::<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, false>(left.as_ptr())
+        profile::load::<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, false>(
+            left.as_ptr(),
+        )
     };
     let right_values = unsafe {
-        profile::load::<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, false>(right.as_ptr())
+        profile::load::<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, false>(
+            right.as_ptr(),
+        )
     };
     let mask = profile::algo::less_than::<_, i32>(policy, left_values, right_values);
     let all = profile::algo::mask_true::<_, i32>(policy);
@@ -162,7 +169,6 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::dataparallel::native(), 1);
     run_policy!(tsl::dataparallel::fixed::<1>(), 1);
     run_policy!(tsl::dataparallel::generic::<4>(), 4);
     run_policy!(tsl::dataparallel::generic::<16>(), 16);

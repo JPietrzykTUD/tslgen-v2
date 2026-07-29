@@ -12,6 +12,9 @@ import pytest
 
 _RUST_COEXISTENCE_NAME = "rust-x86-coexistence"
 _RUST_COEXISTENCE_PROFILES = ("sse", "sse2", "sse3", "avx", "avx2", "knl")
+_DISTRIBUTABLE_GENERATOR = (
+    "bash .github/scripts/generate_distributable_project.sh"
+)
 
 
 def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
@@ -122,6 +125,50 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
             for profile in all_profiles
         }
     )
+
+
+def test_package_and_docs_generate_a_supported_distributable_profile_set() -> None:
+    helper = Path(".github/scripts/generate_distributable_project.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "-f .github/scripts/profile_shards.jq" in helper
+    assert '.purpose == "coexistence"' in helper
+    assert helper.count("./dev.sh generate") == 1
+    assert '--backend-profiles "rust=$rust_profiles"' in helper
+    assert "--backends cpp,rust" in helper
+
+    package_workflow = Path(".github/workflows/generated-package.yml").read_text(
+        encoding="utf-8"
+    )
+    docs_workflow = Path(".github/workflows/docs.yml").read_text(encoding="utf-8")
+    assert _DISTRIBUTABLE_GENERATOR in package_workflow
+    assert _DISTRIBUTABLE_GENERATOR in docs_workflow
+    assert "./dev.sh generate --backends cpp,rust" not in package_workflow
+    assert "./dev.sh document" not in docs_workflow
+    assert "python -m tslc.maintenance.documentation" in docs_workflow
+
+    consumer_verifier = Path(
+        "supplementary/ci/verify_generated_consumers.sh"
+    ).read_text(encoding="utf-8")
+    assert 'default-features = false, features = ["scalar"]' not in consumer_verifier
+
+
+def test_rust_examples_use_static_profile_selection_api() -> None:
+    manifest = Path("examples/rust/Cargo.toml").read_text(encoding="utf-8")
+    assert 'features = ["scalar"]' not in manifest
+
+    examples = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(Path("examples/rust/src/bin").glob("*.rs"))
+    )
+    assert "dataparallel::native()" not in examples
+    assert "BlendImpl" not in examples
+    assert "SelectImpl" in examples
+
+    readme = Path("examples/rust/README.md").read_text(encoding="utf-8")
+    assert "profile-named Cargo features are no longer part of the API" in readme
+    assert "dataparallel::native()" not in readme
+    assert "BlendImpl" not in readme
 
 
 def _expected_exhaustive_shards(
