@@ -2,7 +2,10 @@
 
 This directory contains consumer-side examples for the generated Rust TSL
 library. The examples are ordinary Cargo binaries that depend on a generated
-`tsl` crate.
+`tsl` crate. The crate statically selects `tsl::profile` from rustc target
+features; profile-named Cargo features are no longer part of the API. The
+examples use deterministic `fixed` and `generic` data-parallel policies within
+that selected profile.
 
 ## Build Prerequisite
 
@@ -98,7 +101,6 @@ where
 The example allocates 1000 `i32` values, fills them, and verifies the same
 operation through:
 
-- `dataparallel::native()`
 - `dataparallel::fixed::<1>()`
 - `dataparallel::generic::<8>()`
 
@@ -160,7 +162,7 @@ where
 ```
 
 The example allocates two 1000-element `i32` inputs, fills them, and verifies
-the native, fixed scalar, and explicit generic policies.
+the fixed scalar and explicit generic policies.
 
 It also demonstrates the experimental Rust primitive policy facade:
 
@@ -204,7 +206,7 @@ where
 ```
 
 The example allocates 1003 `i32` values, verifies chunk metadata, and sums the
-input through native, fixed scalar, and explicit generic policies. The Rust
+input through fixed scalar and explicit generic policies. The Rust
 example uses explicit `generic::<4>()` and `generic::<16>()` policies where the
 C++ scalar-profile example uses fixed lane-count overloads that can fall back to
 generic vectors.
@@ -249,7 +251,7 @@ where
 
 The unary predicate checks `value < 0` using `profile::set1::<V>(0)` and
 `profile::less_than::<V>`. The example verifies the produced integral mask stream
-for native, fixed scalar, and explicit generic policies. The generated Rust
+for fixed scalar and explicit generic policies. The generated Rust
 helper support roots pull in `to_integral`; the example generation command
 still requests the predicate primitives used by the operation itself.
 
@@ -304,7 +306,7 @@ where
 
 The binary where operation uses `profile::add::<V>`. The example initializes output
 buffers with sentinel values and verifies that inactive rows keep those values
-for native, fixed scalar, and explicit generic policies.
+for fixed scalar and explicit generic policies.
 
 ### `masked_operator.rs`
 
@@ -320,7 +322,7 @@ struct SquareOrOriginal;
 impl<V> profile::algo::MaskedUnaryKernel<V> for SquareOrOriginal
 where
     V: StaticSimdVector<BaseType = i32>
-        + profile::detail::primitives::BlendImpl
+        + profile::detail::primitives::SelectImpl
         + profile::detail::primitives::MulImpl,
     V::RegisterType: Copy,
 {
@@ -379,7 +381,7 @@ where
 ```
 
 The binary sink uses `profile::add::<V>` and `profile::hadd::<V>` to accumulate
-`left + right`. The example verifies native, fixed scalar, and explicit generic
+`left + right`. The example verifies fixed scalar and explicit generic
 policies.
 
 ### `masked_consume_operator.rs`
@@ -398,7 +400,7 @@ struct MaskedSumSink {
 impl<V> profile::algo::MaskedUnaryConsumeKernel<V> for MaskedSumSink
 where
     V: StaticSimdVector<BaseType = i32>
-        + profile::detail::primitives::BlendImpl
+        + profile::detail::primitives::SelectImpl
         + profile::detail::primitives::HaddImpl
         + profile::detail::primitives::Set1Impl,
 {
@@ -442,7 +444,7 @@ where
 ```
 
 The binary aggregate uses `profile::add::<V>` and `profile::hadd::<V>` to accumulate
-`left + right`. The example verifies native, fixed scalar, and explicit generic
+`left + right`. The example verifies fixed scalar and explicit generic
 policies.
 
 It also demonstrates experimental Rust primitive policy facades for reductions:
@@ -475,7 +477,7 @@ struct MaskedSumOp {
 impl<V> profile::algo::MaskedUnaryAggregateKernel<V> for MaskedSumOp
 where
     V: StaticSimdVector<BaseType = i32>
-        + profile::detail::primitives::BlendImpl
+        + profile::detail::primitives::SelectImpl
         + profile::detail::primitives::HaddImpl
         + profile::detail::primitives::Set1Impl,
 {
@@ -495,7 +497,7 @@ where
 
 The binary aggregate uses `profile::add::<V>`, `profile::select::<V>`, and
 `profile::hadd::<V>` to accumulate `left + right` only for active rows. The example
-verifies native, fixed scalar, and explicit generic policies.
+verifies fixed scalar and explicit generic policies.
 
 ### `count_operator.rs`
 
@@ -527,7 +529,7 @@ where
 
 The example builds integral, native, byte-per-row, and packed-bit mask streams,
 then counts rows matching dense unary, dense binary, masked unary, and masked
-binary predicates for native, fixed scalar, and explicit generic policies. It
+binary predicates for fixed scalar and explicit generic policies. It
 also counts over a `usize` selection vector, including the scaled raw selected
 binary entry point where `SCALE = 4` matches `sizeof(i32)`.
 

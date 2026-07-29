@@ -74,6 +74,14 @@ def _default_backend_ids() -> tuple[str, ...]:
 
 
 @dataclass(frozen=True, slots=True)
+class BackendProfileScope:
+    """Restrict one requested backend to a subset of requested machine profiles."""
+
+    backend_id: str
+    profiles: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationRequest:
     source_paths: tuple[Path, ...]
     machine_profiles_path: Path
@@ -82,6 +90,7 @@ class GenerationRequest:
     type_tags: tuple[str, ...]
     extensions: tuple[str, ...] | None = None
     backends: tuple[str, ...] = field(default_factory=_default_backend_ids)
+    backend_profile_scopes: tuple[BackendProfileScope, ...] = ()
     mode: GenerationMode = "partial"
     # Pull the value-test harness primitives (vector<->array round-trip and mask normalization)
     # into the dependency closure so the generated differential tests can build a hardware
@@ -205,9 +214,20 @@ class _GenerationSession:
         self.coverage: list[CoverageEntry] = []
         self.skipped: list[SkippedEntry] = []
         self.emitted_profiles: list[EmittedProfile] = []
+        self.backend_profile_scopes = {
+            scope.backend_id: frozenset(scope.profiles)
+            for scope in request.backend_profile_scopes
+        }
         self.lowering_trace_slots: list[LoweringTraceSlot] = []
 
     def run(self) -> GenerationResult:
+        scope_diagnostics = self._backend_profile_scope_diagnostics()
+        self.diagnostics.extend(scope_diagnostics)
+        if has_errors(scope_diagnostics):
+            return _result_without_artifacts(
+                self.diagnostics, self.coverage, self.skipped
+            )
+
         for profile_name in _expand_requested_profiles(
             self.request.profiles,
             self.inputs.machine_profiles,
@@ -231,7 +251,11 @@ class _GenerationSession:
         )
         backend_diagnostics: list[Diagnostic] = []
         for capability in self.backends:
-            backend_diagnostics.extend(capability.validate_profiles(emitted_profiles))
+            backend_diagnostics.extend(
+                capability.validate_profiles(
+                    self._profiles_for_backend(emitted_profiles, capability.backend_id)
+                )
+            )
         self.diagnostics.extend(backend_diagnostics)
 
         if has_errors(backend_diagnostics):
@@ -280,7 +304,9 @@ class _GenerationSession:
                 for capability in self.backends
                 if (
                     plan := capability.plan_benchmarks(
-                        self.inputs.catalog, emitted_profiles, value_tests
+                        self.inputs.catalog,
+                        self._profiles_for_backend(emitted_profiles, capability.backend_id),
+                        value_tests,
                     )
                 )
                 is not None
@@ -332,12 +358,94 @@ class _GenerationSession:
             )
             for profile in profiles
             for capability in self.backends
+            if profile.supports_backend(capability.backend_id)
         )
         return ValueTestPlanner(
             self.inputs.catalog,
             tuple(capability.value_test_support() for capability in self.backends),
             fuzz=self.request.value_test_fuzz,
         ).plan(inputs)
+
+    def _backend_profile_scope_diagnostics(self) -> tuple[Diagnostic, ...]:
+        requested_backends = frozenset(
+            capability.backend_id for capability in self.backends
+        )
+        requested_profiles = frozenset(
+            _expand_requested_profiles(
+                self.request.profiles,
+                self.inputs.machine_profiles,
+            )
+        )
+        seen: set[str] = set()
+        diagnostics: list[Diagnostic] = []
+        for scope in self.request.backend_profile_scopes:
+            if scope.backend_id in seen:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-PIPELINE-DUPLICATE-BACKEND-PROFILE-SCOPE",
+                        message=(
+                            "backend profile scope repeats backend "
+                            f"{scope.backend_id!r}"
+                        ),
+                    )
+                )
+            seen.add(scope.backend_id)
+            if scope.backend_id not in requested_backends:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-PIPELINE-UNREQUESTED-BACKEND-PROFILE-SCOPE",
+                        message=(
+                            f"backend profile scope names {scope.backend_id!r}, which "
+                            "is not a requested backend"
+                        ),
+                    )
+                )
+            if not scope.profiles:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-PIPELINE-EMPTY-BACKEND-PROFILE-SCOPE",
+                        message=f"backend {scope.backend_id!r} profile scope is empty",
+                    )
+                )
+            for profile_name in sorted(set(scope.profiles)):
+                if profile_name not in self.inputs.machine_profiles:
+                    diagnostics.append(
+                        Diagnostic(
+                            severity="error",
+                            code="TSL-PIPELINE-UNKNOWN-BACKEND-PROFILE",
+                            message=(
+                                f"backend {scope.backend_id!r} profile scope names "
+                                f"unknown machine profile {profile_name!r}"
+                            ),
+                        )
+                    )
+                elif profile_name not in requested_profiles:
+                    diagnostics.append(
+                        Diagnostic(
+                            severity="error",
+                            code="TSL-PIPELINE-OUT-OF-SCOPE-BACKEND-PROFILE",
+                            message=(
+                                f"backend {scope.backend_id!r} profile {profile_name!r} "
+                                "is not in the requested profile set"
+                            ),
+                        )
+                    )
+        return tuple(diagnostics)
+
+    @staticmethod
+    def _profiles_for_backend(
+        profiles: tuple[EmittedProfile, ...], backend_id: str
+    ) -> tuple[EmittedProfile, ...]:
+        return tuple(
+            profile for profile in profiles if profile.supports_backend(backend_id)
+        )
+
+    def _backend_includes_profile(self, backend_id: str, profile_name: str) -> bool:
+        scope = self.backend_profile_scopes.get(backend_id)
+        return scope is None or profile_name in scope
 
     def _record_unknown_profile(self, profile_name: str) -> None:
         self.diagnostics.append(
@@ -349,13 +457,22 @@ class _GenerationSession:
         )
 
     def _generate_profile(self, profile_name: str, profile: MachineProfile) -> None:
+        active_backends = tuple(
+            capability
+            for capability in self.backends
+            if self._backend_includes_profile(capability.backend_id, profile_name)
+        )
+        if not active_backends:
+            return
         # Profile-scoped dependency closure: start from the requested primitives and pull in only
         # callees referenced by bodies actually selected and lowered for this profile.
         lowered_specs: list[_LoweredSlot] = []
         # Which extension block this profile selected for each emitted ISA tag, so the renderer
         # can register the right mask_type (lane-bitmask vs native __mmaskN).
         selected_extensions: dict[str, Extension] = {}
-        all_backend_ids = frozenset(capability.backend_id for capability in self.backends)
+        all_backend_ids = frozenset(
+            capability.backend_id for capability in active_backends
+        )
         worklist = [
             (primitive, self.type_tags, all_backend_ids, self.request.extensions)
             for primitive in _requested_primitives(self.request, self.inputs.catalog)
@@ -374,7 +491,7 @@ class _GenerationSession:
                 if name is not None
             )
         if self.request.render_artifacts or self.request.extensions is None:
-            for capability in self.backends:
+            for capability in active_backends:
                 worklist.extend(
                     (name, self.type_tags, frozenset({capability.backend_id}), None)
                     for name in capability.closure_seed_primitives(self.inputs.catalog)
@@ -459,7 +576,7 @@ class _GenerationSession:
                     capability.backend_id: _finalize(
                         grouped.get(capability.backend_id, {})
                     )
-                    for capability in self.backends
+                    for capability in active_backends
                 },
                 extensions=selected_extensions,
                 profile_family=self.inputs.catalog.target_families.profile_family(

@@ -1,5 +1,5 @@
-use tsl::tsl_core::StaticSimdVector;
 use tsl::profile;
+use tsl::tsl_core::StaticSimdVector;
 
 struct SumOp {
     total: i64,
@@ -107,8 +107,12 @@ fn main() {
             let policy = $policy;
 
             let mut unary_aggregate = SumOp { total: 0 };
-            let unary_result =
-                profile::algo::aggregate_selected_unary(policy, &mut unary_aggregate, &left, &indices);
+            let unary_result = profile::algo::aggregate_selected_unary(
+                policy,
+                &mut unary_aggregate,
+                &left,
+                &indices,
+            );
             assert_eq!(unary_result, expected_unary);
 
             let mut binary_aggregate = PairSumOp { total: 0 };
@@ -150,7 +154,6 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::dataparallel::native());
     run_policy!(tsl::dataparallel::fixed::<1>());
     run_policy!(tsl::dataparallel::generic::<4>());
     run_policy!(tsl::dataparallel::generic::<16>());

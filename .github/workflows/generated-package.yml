@@ -91,7 +91,8 @@ jobs:
             bash supplementary/ci/run_tslc_ci_container.sh \
               -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
               -- \
-              bash -lc './dev.sh generate --backends cpp,rust --output-root "${TSLC_CI_OUTPUT}"'
+              bash -lc \
+                'bash .github/scripts/generate_distributable_project.sh "${TSLC_CI_OUTPUT}"'
 
       - name: Verify generated consumers and examples
         run: |

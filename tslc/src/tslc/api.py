@@ -20,7 +20,13 @@ from tslc.output.verify import (
 )
 from tslc.output.verify_model import BackendToolchain
 from tslc.output.writer import ArtifactWriteMode, ArtifactWriteReport, ArtifactWriter
-from tslc.pipeline import GenerationMode, GenerationRequest, GenerationResult, generate
+from tslc.pipeline import (
+    BackendProfileScope,
+    GenerationMode,
+    GenerationRequest,
+    GenerationResult,
+    generate,
+)
 from tslc.sources import expand_source_paths
 from tslc.project_render import ProjectRenderConfig
 
@@ -33,6 +39,7 @@ def generate_project(
     machine_profiles_path: Path | str,
     primitives: Iterable[str] | None = None,
     profiles: Iterable[str] | None = None,
+    backend_profiles: Mapping[str, Iterable[str]] | None = None,
     type_tags: Iterable[str] = _ARITH_TYPE_TAGS,
     extensions: Iterable[str] | None = None,
     backends: Iterable[str] | None = None,
@@ -50,6 +57,8 @@ def generate_project(
     extension/type/language definitions alongside the primitive files).
     ``profiles`` names machine feature-profiles from ``machine_profiles_path``.
     ``profiles=None`` means every loaded machine profile.
+    ``backend_profiles`` optionally restricts individual requested backends within
+    that global profile set; omitted backends retain every requested profile.
     ``primitives=None`` means every primitive in the loaded catalog.
     """
 
@@ -62,6 +71,15 @@ def generate_project(
         extensions=tuple(extensions) if extensions is not None else None,
         backends=(
             tuple(backends) if backends is not None else registered_backend_ids()
+        ),
+        backend_profile_scopes=tuple(
+            BackendProfileScope(
+                backend_id=backend_id,
+                profiles=tuple(sorted(set(profile_names))),
+            )
+            for backend_id, profile_names in sorted(
+                (backend_profiles or {}).items()
+            )
         ),
         mode=generation_mode,
         test_harness=test_harness,

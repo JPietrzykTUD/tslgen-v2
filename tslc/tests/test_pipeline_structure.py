@@ -88,6 +88,23 @@ def test_public_api_resolves_omitted_backends_for_each_call(monkeypatch) -> None
     assert captured[0].backends == ("future",)
 
 
+def test_public_api_promotes_backend_profiles_to_typed_scopes(monkeypatch) -> None:
+    captured: list[pipeline.GenerationRequest] = []
+
+    monkeypatch.setattr(api, "generate", lambda request: captured.append(request))
+
+    api.generate_project(
+        (),
+        machine_profiles_path=Path("profiles.json"),
+        backends=("cpp", "rust"),
+        backend_profiles={"rust": ("sse2", "sse", "sse2")},
+    )
+
+    assert captured[0].backend_profile_scopes == (
+        pipeline.BackendProfileScope("rust", ("sse", "sse2")),
+    )
+
+
 def test_pipeline_uses_lowering_owned_policy_code_and_one_slot_sort_key() -> None:
     tree = ast.parse((_REPO_ROOT / "tslc/src/tslc/pipeline.py").read_text())
     function_names = {
@@ -424,6 +441,64 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
     assert artifacts["fake/lib.fake"].media_type == "text/fake"
     assert "fake-register" in documentation["strings"]
     assert "fake facade" in documentation["strings"]
+
+
+def test_render_project_filters_profiles_by_backend_membership(monkeypatch) -> None:
+    from tslc.backend import registry
+
+    received: dict[str, tuple[str, ...]] = {}
+
+    def artifact_renderer(
+        profiles: tuple[EmittedProfile, ...],
+        value_tests: ValueTestProjectPlan,
+        benchmarks: object,
+        assets: RenderAssets,
+        media_type: str,
+        config: object,
+    ) -> list[Artifact]:
+        del value_tests, benchmarks, assets, media_type, config
+        received["render"] = tuple(profile.profile.name for profile in profiles)
+        return []
+
+    def verify_profiles(
+        profiles: tuple[EmittedProfile, ...],
+    ) -> tuple[VerifyProfile, ...]:
+        received["verify"] = tuple(profile.profile.name for profile in profiles)
+        return ()
+
+    fake = BackendCapability(
+        backend_id="fake",
+        root_path="fake",
+        artifact_media_type="text/fake",
+        dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
+        artifact_renderer=artifact_renderer,
+        verify_profiles=verify_profiles,
+        value_test_support_factory=lambda: None,  # type: ignore[return-value]
+        verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
+        toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
+        documentation_formatter_factory=_FakeDocumentationFormatter,
+    )
+    monkeypatch.setattr(registry, "BACKEND_CAPABILITIES", (fake,))
+    monkeypatch.setattr(registry, "_BY_ID", {"fake": fake})
+    active = EmittedProfile(
+        MachineProfile("active", "fake", frozenset(), {}),
+        {"fake": {}},
+        immediate_split_names=frozenset(),
+    )
+    inactive = EmittedProfile(
+        MachineProfile("inactive", "fake", frozenset(), {}),
+        {},
+        immediate_split_names=frozenset(),
+    )
+
+    render_project(
+        (inactive, active),
+        ("fake",),
+        assets=load_default_render_assets(),
+    )
+
+    assert received == {"render": ("active",), "verify": ("active",)}
 
 
 def test_third_backend_configuration_reaches_verify_project(

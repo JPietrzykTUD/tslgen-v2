@@ -1,5 +1,5 @@
-use tsl::tsl_core::StaticSimdVector;
 use tsl::profile;
+use tsl::tsl_core::StaticSimdVector;
 
 struct LessThan;
 
@@ -65,7 +65,13 @@ fn main() {
             let unary_preserved = -123456;
             let mut unary_output = vec![unary_preserved; left.len()];
             let mut square = SquareWhere;
-            profile::algo::transform_where_unary(policy, &mut square, &left, &masks, &mut unary_output);
+            profile::algo::transform_where_unary(
+                policy,
+                &mut square,
+                &left,
+                &masks,
+                &mut unary_output,
+            );
 
             for (i, actual) in unary_output.iter().enumerate() {
                 let expected = if left[i] < right[i] {
@@ -99,7 +105,6 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::dataparallel::native());
     run_policy!(tsl::dataparallel::fixed::<1>());
     run_policy!(tsl::dataparallel::generic::<4>());
     run_policy!(tsl::dataparallel::generic::<16>());

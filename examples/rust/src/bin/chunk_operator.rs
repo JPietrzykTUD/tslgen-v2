@@ -1,5 +1,5 @@
-use tsl::tsl_core::StaticSimdVector;
 use tsl::profile;
+use tsl::tsl_core::StaticSimdVector;
 
 struct ChunkSum {
     base: *const i32,
@@ -56,27 +56,15 @@ fn main() {
     fill_input(&mut input);
     let expected = expected_sum(&input);
 
-    let mut native = ChunkSum::new(&input);
-    profile::algo::for_each_chunk(tsl::dataparallel::native(), &mut native, &input);
-    assert!(native.is_valid(expected, input.len()));
-
     let mut fixed = ChunkSum::new(&input);
     profile::algo::for_each_chunk(tsl::dataparallel::fixed::<1>(), &mut fixed, &input);
     assert!(fixed.is_valid(expected, input.len()));
 
     let mut generic4 = ChunkSum::new(&input);
-    profile::algo::for_each_chunk(
-        tsl::dataparallel::generic::<4>(),
-        &mut generic4,
-        &input,
-    );
+    profile::algo::for_each_chunk(tsl::dataparallel::generic::<4>(), &mut generic4, &input);
     assert!(generic4.is_valid(expected, input.len()));
 
     let mut generic16 = ChunkSum::new(&input);
-    profile::algo::for_each_chunk(
-        tsl::dataparallel::generic::<16>(),
-        &mut generic16,
-        &input,
-    );
+    profile::algo::for_each_chunk(tsl::dataparallel::generic::<16>(), &mut generic16, &input);
     assert!(generic16.is_valid(expected, input.len()));
 }

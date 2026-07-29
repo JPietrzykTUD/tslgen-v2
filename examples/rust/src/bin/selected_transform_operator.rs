@@ -1,5 +1,5 @@
-use tsl::tsl_core::StaticSimdVector;
 use tsl::profile;
+use tsl::tsl_core::StaticSimdVector;
 
 struct Square;
 
@@ -74,7 +74,13 @@ fn main() {
 
             let mut output = vec![SENTINEL; COUNT];
             let mut square = Square;
-            profile::algo::transform_selected_unary(policy, &mut square, &left, &indices, &mut output);
+            profile::algo::transform_selected_unary(
+                policy,
+                &mut square,
+                &left,
+                &indices,
+                &mut output,
+            );
             verify_unary(&left, &indices, &output, SENTINEL);
 
             output.fill(SENTINEL);
@@ -105,7 +111,6 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::dataparallel::native());
     run_policy!(tsl::dataparallel::fixed::<1>());
     run_policy!(tsl::dataparallel::generic::<4>());
     run_policy!(tsl::dataparallel::generic::<16>());

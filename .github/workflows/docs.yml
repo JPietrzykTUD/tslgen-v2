@@ -95,9 +95,11 @@ jobs:
               bash -lc '
                 set -e
                 trap "rm -rf tslctmp/toolchain-preflight tslctmp/zig-local-cache tslctmp/zig-global-cache" EXIT
-                ./dev.sh document \
-                  --backends cpp,rust \
-                  --output-root "${TSLC_CI_OUTPUT}"
+                bash .github/scripts/generate_distributable_project.sh \
+                  "${TSLC_CI_OUTPUT}"
+                PYTHONPATH=tslc/src python -m tslc.maintenance.documentation \
+                  --output-root "${TSLC_CI_OUTPUT}" \
+                  --backends cpp,rust
               '
 
       - name: Package docs site

@@ -1,5 +1,5 @@
-use tsl::tsl_core::StaticSimdVector;
 use tsl::profile;
+use tsl::tsl_core::StaticSimdVector;
 
 struct LessThan;
 
@@ -19,7 +19,7 @@ struct MaskedSumSink {
 impl<V> profile::algo::MaskedUnaryConsumeKernel<V> for MaskedSumSink
 where
     V: StaticSimdVector<BaseType = i32>
-        + profile::detail::primitives::BlendImpl
+        + profile::detail::primitives::SelectImpl
         + profile::detail::primitives::HaddImpl
         + profile::detail::primitives::Set1Impl,
 {
@@ -38,7 +38,7 @@ impl<V> profile::algo::MaskedBinaryConsumeKernel<V> for MaskedPairSumSink
 where
     V: StaticSimdVector<BaseType = i32>
         + profile::detail::primitives::AddImpl
-        + profile::detail::primitives::BlendImpl
+        + profile::detail::primitives::SelectImpl
         + profile::detail::primitives::HaddImpl
         + profile::detail::primitives::Set1Impl,
 {
@@ -100,7 +100,6 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::dataparallel::native());
     run_policy!(tsl::dataparallel::fixed::<1>());
     run_policy!(tsl::dataparallel::generic::<4>());
     run_policy!(tsl::dataparallel::generic::<16>());

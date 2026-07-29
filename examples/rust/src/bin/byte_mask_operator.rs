@@ -1,5 +1,5 @@
-use tsl::tsl_core::StaticSimdVector;
 use tsl::profile;
+use tsl::tsl_core::StaticSimdVector;
 
 struct LessThan;
 
@@ -30,7 +30,7 @@ impl<V> profile::algo::MaskedBinaryKernel<V> for AddOrLeft
 where
     V: StaticSimdVector<BaseType = i32>
         + profile::detail::primitives::AddImpl
-        + profile::detail::primitives::BlendImpl,
+        + profile::detail::primitives::SelectImpl,
     V::RegisterType: Copy,
 {
     fn apply(
@@ -117,7 +117,6 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::dataparallel::native());
     run_policy!(tsl::dataparallel::fixed::<1>());
     run_policy!(tsl::dataparallel::generic::<4>());
     run_policy!(tsl::dataparallel::generic::<16>());

@@ -1,6 +1,6 @@
+use tsl::profile;
 use tsl::tsl_algorithm::VectorFor;
 use tsl::tsl_core::{SimdVector, StaticSimdVector};
-use tsl::profile;
 
 struct Add;
 
@@ -29,10 +29,9 @@ fn verify(left: &[i32], right: &[i32], output: &[i32]) {
 fn verify_register_facade<Policy>(policy: Policy)
 where
     Policy: VectorFor<profile::algo::Profile, i32>,
-    <Policy as VectorFor<profile::algo::Profile, i32>>::Vec:
-        StaticSimdVector<BaseType = i32>
-            + profile::detail::primitives::AddImpl
-            + profile::detail::primitives::LoadImpl<false>,
+    <Policy as VectorFor<profile::algo::Profile, i32>>::Vec: StaticSimdVector<BaseType = i32>
+        + profile::detail::primitives::AddImpl
+        + profile::detail::primitives::LoadImpl<false>,
     <<Policy as VectorFor<profile::algo::Profile, i32>>::Vec as SimdVector>::RegisterType:
         profile::detail::primitives::StoreImplArg<
             <Policy as VectorFor<profile::algo::Profile, i32>>::Vec,
@@ -47,10 +46,14 @@ where
     fill_inputs(&mut left, &mut right);
 
     let left_values = unsafe {
-        profile::load::<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, false>(left.as_ptr())
+        profile::load::<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, false>(
+            left.as_ptr(),
+        )
     };
     let right_values = unsafe {
-        profile::load::<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, false>(right.as_ptr())
+        profile::load::<<Policy as VectorFor<profile::algo::Profile, i32>>::Vec, false>(
+            right.as_ptr(),
+        )
     };
     let sum = profile::algo::add::<_, i32>(policy, left_values, right_values);
     unsafe {
@@ -64,26 +67,13 @@ where
 }
 
 fn main() {
-    let scalar_sum =
-        profile::algo::add::<_, i32>(tsl::dataparallel::fixed::<1>(), 11, 31);
+    let scalar_sum = profile::algo::add::<_, i32>(tsl::dataparallel::fixed::<1>(), 11, 31);
     assert_eq!(scalar_sum, 42);
-    verify_register_facade(tsl::dataparallel::native());
     verify_register_facade(tsl::dataparallel::generic::<8>());
 
     let mut left = vec![0i32; 1000];
     let mut right = vec![0i32; 1000];
     fill_inputs(&mut left, &mut right);
-
-    let mut native_output = vec![0i32; left.len()];
-    let mut native = Add;
-    profile::algo::transform_binary(
-        tsl::dataparallel::native(),
-        &mut native,
-        &left,
-        &right,
-        &mut native_output,
-    );
-    verify(&left, &right, &native_output);
 
     let mut fixed_output = vec![0i32; left.len()];
     let mut fixed = Add;

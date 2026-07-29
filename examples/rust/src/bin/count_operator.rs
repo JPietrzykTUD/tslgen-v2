@@ -1,5 +1,5 @@
-use tsl::tsl_core::StaticSimdVector;
 use tsl::profile;
+use tsl::tsl_core::StaticSimdVector;
 
 struct LessThan;
 
@@ -156,8 +156,12 @@ fn main() {
             );
 
             let mut selected_negative = Negative;
-            let selected_unary =
-                profile::algo::count_selected_unary(policy, &mut selected_negative, &left, &indices);
+            let selected_unary = profile::algo::count_selected_unary(
+                policy,
+                &mut selected_negative,
+                &left,
+                &indices,
+            );
             assert_eq!(selected_unary, expected_selected_unary);
 
             let mut selected_less_than = LessThan;
@@ -185,7 +189,6 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::dataparallel::native());
     run_policy!(tsl::dataparallel::fixed::<1>());
     run_policy!(tsl::dataparallel::generic::<4>());
     run_policy!(tsl::dataparallel::generic::<16>());

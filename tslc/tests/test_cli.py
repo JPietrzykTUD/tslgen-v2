@@ -205,6 +205,41 @@ def test_cli_qemu_aarch64_flag_is_forwarded(monkeypatch, tmp_path, capsys) -> No
     assert "through qemu-aarch64: /usr/bin/qemu-aarch64" in captured.out
 
 
+def test_cli_backend_profile_scopes_are_forwarded(monkeypatch, capsys) -> None:
+    calls: dict[str, object] = {}
+
+    def fake_generate_project(source_paths, **kwargs):
+        calls["generate"] = (source_paths, kwargs)
+        return SimpleNamespace(
+            diagnostics=(),
+            coverage=(),
+            artifacts=SimpleNamespace(artifacts=()),
+            rendered=None,
+        )
+
+    monkeypatch.setattr(cli, "generate_project", fake_generate_project)
+
+    rc = cli.main(
+        [
+            "--sources",
+            "tsldata",
+            "--machine-profiles",
+            "supplementary/buildsystem/machine_profiles.json",
+            "--backends",
+            "cpp,rust",
+            "--backend-profiles",
+            "rust=sse,sse2",
+        ]
+    )
+
+    assert rc == 0
+    _, generate_kwargs = calls["generate"]
+    assert generate_kwargs["backend_profiles"] == {
+        "rust": ("sse", "sse2")
+    }
+    assert capsys.readouterr().err == ""
+
+
 def test_cli_omitted_primitives_uses_all_catalog_default(monkeypatch, capsys) -> None:
     calls: dict[str, object] = {}
 
@@ -527,6 +562,7 @@ def _core_settings(**overrides: object) -> GenerationCommandSettings:
         generation_mode="partial",
         primitives=("add",),
         profiles=("scalar",),
+        backend_profiles={},
         output_root=None,
         verify=False,
         run_value_tests=False,
