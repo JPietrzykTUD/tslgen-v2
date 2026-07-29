@@ -37,6 +37,8 @@ prim<v:=(v,v)> mul(factor1, factor2):
     - {tags [edge], extension "avx512", type "si64", case {inputs [[0, -1, 1, 0, -2, 2, 0, -3], [0, -1, 1, 0, -2, 2, 0, -3]], expected [0, 1, 1, 0, 4, 4, 0, 9]}}
     - {tags [basic, neon], extension "neon", type "ui64", case {inputs [[18446744073709551615, 4294967297], [2, 4294967295]], expected [18446744073709551614, 18446744073709551615]}}
     - {tags [edge, neon], extension "neon", type "si64", case {inputs [[-1, -9223372036854775808], [2, -1]], expected [-2, -9223372036854775808]}}
+    - {tags [basic, rvv], extension "rvv", type "ui64", case {inputs [[18446744073709551615, 4294967297], [2, 4294967295]], expected [18446744073709551614, 18446744073709551615]}}
+    - {tags [edge, rvv], extension "rvv", type "si64", case {inputs [[-1, -9223372036854775808], [2, -1]], expected [-2, -9223372036854775808]}}
     - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 12.25, 20.25]}}
     - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, 0.0, INFINITY, INFINITY]}}
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, 4.0]}}
@@ -511,6 +513,39 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svmul, build[post=x]>(call<primitive=mask_true[Vec]>(), factor1, factor2));"
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmul, build[infix="vv", infix_sep="_"]>(
+                factor1,
+                factor2,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vfmul, build[infix="vv", infix_sep="_"]>(
+                factor1,
+                factor2,
+                value(vector::runtime_length)
+              )
+            );
+          """
 prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
   arithmetic:
     operations [multiplication]
@@ -537,6 +572,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
   tests:
     - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 4.0, 0.0, 20.25]}}
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [0, 0, 0, -8]}}
+    - {tags [maskz, basic, rvv], extension "rvv", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [0, 0, 0, -8]}}
   impls:
     scalar:
       arith:
@@ -678,6 +714,23 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svmul, build[post=z]>(mask, factor1, factor2));"
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=mul[Vec]>(factor1, factor2),
+                call<primitive=set_zero[Vec]>()
+              )
+            );
+          """
 prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
   arithmetic:
     operations [multiplication]
@@ -704,6 +757,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
   tests:
     - {tags [mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 3.5, 20.25]}}
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [1, 0, 3, -8]}}
+    - {tags [mask, basic, rvv], extension "rvv", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [1, 0, 3, -8]}}
   impls:
     scalar:
       arith:
@@ -845,6 +899,23 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svmul, build[post=m]>(mask, factor1, factor2));"
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=mul[Vec]>(factor1, factor2),
+                factor1
+              )
+            );
+          """
 prim<v:=(v,v)> div(dividend, divisor):
   brief_description "Divides each dividend lane by the corresponding divisor lane."
   detailed_description """
