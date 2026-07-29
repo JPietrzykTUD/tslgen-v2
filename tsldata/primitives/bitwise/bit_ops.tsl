@@ -269,6 +269,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
   tests:
     - {tags [basic], type "ui32", case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
     - {tags [edge], type "ui32", case {inputs [[4294967295, 4294967295, 4294967295, 4294967295, 0, 1, 2, 3], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 5, 6, 5, 8]}}
+    - {tags [edge, rvv], extension "rvv", type "ui64", case {inputs [[18446744073709551615, 12297829382473034410], [1085102592571150095, 17361641481138401520]], expected [0, 5787213827046133840]}}
     - {tags [basic], type "si32", case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], [1, -2, 3, -4, 5, -6, 7, -8]], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
     - {tags [edge], type "si32", case {inputs [[-1, -1, -1, -1, 0, 1, -2, 3], [1, -2, 3, -4, 5, -6, 7, -8]], expected [0, 0, 0, 0, 5, -6, 1, -8]}}
     - {tags [basic], type "f32", case {inputs [[0.0, 0.0, 0.0, 0.0], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
@@ -455,6 +456,22 @@ prim<v:=(v,v)> binary_andnot(left, right):
                   call<primitive=reinterpret[Vec, BitVec]>(left),
                   call<primitive=reinterpret[Vec, BitVec]>(right)
                 )
+              )
+            );
+          """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=binary_and[Vec]>(
+                call<primitive=inv[Vec]>(left),
+                right
               )
             );
           """
@@ -1032,6 +1049,22 @@ prim<v:=v> inv(data):
               intrin<v128_not, build[suffix=""]>(data)
             );
           """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vnot, build[infix="v", infix_sep="_"]>(
+                data,
+                value(vector::runtime_length)
+              )
+            );
+          """
 
 prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
   operation bit_and
@@ -1434,6 +1467,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
     """
   tests:
     - {tags [binary, andnot, maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 5, 0, 1, 0, 1, 0, 1]}}
+    - {tags [binary, andnot, maskz, edge, rvv], extension "rvv", type "ui64", case {inputs [2, [18446744073709551615, 12297829382473034410], [1085102592571150095, 17361641481138401520]], expected [0, 5787213827046133840]}}
   impls:
     scalar:
       arith:
@@ -1579,6 +1613,23 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
               )
             );
           """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=binary_andnot[Vec]>(left, right),
+                call<primitive=set_zero[Vec]>()
+              )
+            );
+          """
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
   operation bit_and_not
@@ -1605,6 +1656,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
     """
   tests:
     - {tags [binary, andnot, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 5, 3, 1, 5, 1, 7, 1]}}
+    - {tags [binary, andnot, mask, edge, rvv], extension "rvv", type "ui64", case {inputs [2, [18446744073709551615, 12297829382473034410], [1085102592571150095, 17361641481138401520]], expected [18446744073709551615, 5787213827046133840]}}
   impls:
     scalar:
       arith:
@@ -1718,6 +1770,23 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
                 mask,
                 left,
                 call<primitive=binary_andnot>(left, right)
+              )
+            );
+          """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=binary_andnot[Vec]>(left, right),
+                left
               )
             );
           """
@@ -2498,6 +2567,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
     """
   tests:
     - {tags [maskz, basic], type "ui32", case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 0, 4294967292, 0, 4294967290, 0, 4294967288]}}
+    - {tags [maskz, edge, rvv], extension "rvv", type "ui64", case {inputs [2, [1085102592571150095, 12297829382473034410]], expected [0, 6148914691236517205]}}
   impls:
     scalar:
       arith:
@@ -2660,6 +2730,23 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
               )
             );
           """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=inv[Vec]>(data),
+                call<primitive=set_zero[Vec]>()
+              )
+            );
+          """
 
 prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
   operation bit_not
@@ -2684,6 +2771,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
     """
   tests:
     - {tags [mask, basic], type "ui32", case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 2, 4294967292, 4, 4294967290, 6, 4294967288]}}
+    - {tags [mask, edge, rvv], extension "rvv", type "ui64", case {inputs [2, [1085102592571150095, 12297829382473034410]], expected [1085102592571150095, 6148914691236517205]}}
   impls:
     scalar:
       arith:
@@ -2845,6 +2933,23 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
                   mask,
                   call<primitive=reinterpret[Vec, BitVec]>(data)
                 )
+              )
+            );
+          """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=inv[Vec]>(data),
+                data
               )
             );
           """
