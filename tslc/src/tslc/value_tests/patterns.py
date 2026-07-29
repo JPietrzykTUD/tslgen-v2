@@ -187,7 +187,7 @@ def default_value_test_patterns(
         _simple(
             mask_result_case,
             "m",
-            ("m", "usize", "im"),
+            ("m", "usize", "usize"),
             support=support,
             differential=True,
         ),

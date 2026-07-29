@@ -1234,7 +1234,7 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
     )
     set_mask = Primitive(
         "set_mask_lane",
-        "m:=(m,usize,im)",
+        "m:=(m,usize,usize)",
         ("mask", "index", "value"),
         (),
         (),
@@ -1247,7 +1247,7 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
                 inputs=(
                     TslTestArg("mask", mask_bits="5"),
                     TslTestArg("scalar", scalar="3"),
-                    TslTestArg("mask", mask_bits="1"),
+                    TslTestArg("scalar", scalar="1"),
                 ),
                 expected=("13",),
             ),
@@ -1274,7 +1274,7 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
                 "set_mask_lane",
                 "set_mask_lane",
                 result_kind="m",
-                param_kinds=("m", "usize", "im"),
+                param_kinds=("m", "usize", "usize"),
             ),
         ),
     }
@@ -1291,6 +1291,53 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
         ("set_mask_lane", "mask_result"),
     ]
     assert {entry.status for entry in plan.coverage} == {"emitted"}
+
+
+def test_runtime_mask_mutation_rejects_integral_mask_value_operand() -> None:
+    primitive = Primitive(
+        "set_mask_lane",
+        "m:=(m,usize,im)",
+        ("mask", "index", "value"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="set_mask_last",
+                type_tag="si32",
+                tags=("last",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("mask", mask_bits="5"),
+                    TslTestArg("scalar", scalar="3"),
+                    TslTestArg("mask", mask_bits="1"),
+                ),
+                expected=("13",),
+            ),
+        ),
+    )
+    spec = _spec(
+        "set_mask_lane",
+        "set_mask_lane",
+        result_kind="m",
+        param_kinds=("m", "usize", "im"),
+    )
+    plan = ValueTestPlanner(
+        _catalog(primitive, *_harness_primitives()),
+        (CPP_VALUE_TEST_SUPPORT,),
+    ).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp",
+                "unit",
+                {"set_mask_lane": (spec,)},
+            ),
+        )
+    )
+
+    assert plan.profiles_for("cpp")[0].cases == ()
+    assert len(plan.coverage) == 1
+    assert plan.coverage[0].status == "authored_unplanned"
+    assert plan.coverage[0].reason == "no value-test pattern accepted the authored case shape"
 
 
 def test_simple_shape_patterns_are_not_ordered_by_first_overload() -> None:
