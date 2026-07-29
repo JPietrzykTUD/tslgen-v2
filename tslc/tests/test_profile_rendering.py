@@ -892,7 +892,10 @@ def rvv_project(data_root: Path, machine_profiles_path: Path):
     return _gen(
         data_root,
         machine_profiles_path,
-        primitives=["set1", "set_zero", "load", "store", "add", "sub", "mul"],
+        primitives=[
+            "set1", "set_zero", "load", "store", "add", "sub", "mul",
+            "binary_and", "binary_or", "binary_xor",
+        ],
         profiles=["rvv"],
         type_tags=[
             "si8", "ui8", "si16", "ui16", "si32",
@@ -968,6 +971,9 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
             f"vle{width}_v",
             f"vse{width}_v",
             "vadd_vv",
+            "vand_vv",
+            "vor_vv",
+            "vxor_vv",
             "vmul_vv",
             "vsub_vv",
         ):
@@ -988,6 +994,9 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
         assert f"__riscv_vse{width}_v_{suffix}_m" in header
     assert "return ::tsl::set1<Vec>(static_cast<int32_t>(0));" in header
     assert "::tsl::add<Vec>(left, right),\n" in header
+    assert "::tsl::binary_and<Vec>(left, right),\n" in header
+    assert "::tsl::binary_or<Vec>(left, right),\n" in header
+    assert "::tsl::binary_xor<Vec>(left, right),\n" in header
     assert "::tsl::sub<Vec>(left, right),\n" in header
     assert "::tsl::mul<Vec>(factor1, factor2),\n" in header
     assert "::tsl::set_zero<Vec>()" in header
@@ -1010,6 +1019,16 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "test_scalable_rvv_mul_si64_rvv_edge_rvv" in values
     assert "test_scalable_rvv_mul_mask_mul_si32_rvv_mask_basic_rvv" in values
     assert "test_scalable_rvv_mul_maskz_mul_si32_rvv_maskz_basic_rvv" in values
+    for operation in ("binary_and", "binary_or", "binary_xor"):
+        assert f"test_scalable_rvv_{operation}_ui64_rvv_edge_rvv" in values
+        assert (
+            f"test_scalable_rvv_{operation}_mask_{operation}_ui64_rvv_"
+            f"{operation}_mask_edge_rvv"
+        ) in values
+        assert (
+            f"test_scalable_rvv_{operation}_maskz_{operation}_ui64_rvv_"
+            f"{operation}_maskz_edge_rvv"
+        ) in values
     assert "tsl::load_maskz<Vec, true>(mask, memory.data() + 0);" in values
     assert "tsl::load_mask<Vec, true>(mask, memory.data() + 0, v1);" in values
     assert "tsl::store_mask<Vec, true>(mask, actual.data() + 0, v0);" in values
