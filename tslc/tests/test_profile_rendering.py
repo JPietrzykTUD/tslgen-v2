@@ -1030,6 +1030,10 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "::tsl::less_than<Vec>(data, zero)" in header
     assert "::tsl::neg<Vec>(data),\n" in header
     assert "::tsl::set_zero<Vec>()" in header
+    assert "std::vector<float> dividends_storage" in header
+    assert "std::vector<double> divisors_storage" in header
+    assert "::tsl::mod<tsl::simd<float, tsl::scalar>>" in header
+    assert "::tsl::mod<tsl::simd<double, tsl::scalar>>" in header
     assert header.count("return ::tsl::select<Vec>(") >= 40
 
     values = artifacts["cpp/tests/values_rvv.cpp"]
@@ -1097,6 +1101,9 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "test_scalable_rvv_mod_si32_maskz_failure_active_zero" in values
     assert "test_scalable_rvv_mod_maskz_mod_si32_maskz_inactive_zero" in values
     assert "test_scalable_rvv_mod_mask_mod_si32_mask_inactive_zero" in values
+    assert "test_scalable_rvv_mod_f32_basic_float" in values
+    assert "mod_f32_rvv_maskz_float_rvv" in values
+    assert "mod_f64_rvv_mask_float_rvv" in values
     assert "test_scalable_rvv_mul_imm_si32_rvv_basic_rvv" in values
     assert (
         "test_scalable_rvv_mul_imm_maskz_mul_imm_si32_rvv_maskz_basic_rvv"
@@ -1115,6 +1122,9 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
         "test_scalable_rvv_mod_imm_mask_mod_imm_si32_rvv_mask_basic_rvv"
         in values
     )
+    assert "test_scalable_rvv_mod_imm_f64_rvv_basic_float_rvv" in values
+    assert "mod_imm_f32_rvv_maskz_float_rvv" in values
+    assert "mod_imm_f64_rvv_mask_float_rvv" in values
     assert (
         "test_scalable_rvv_div_maskz_div_f32_rvv_"
         "maskz_inactive_zero_rvv"
