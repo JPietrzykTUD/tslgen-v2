@@ -1263,6 +1263,32 @@ def test_rvv_scalar_shifts_plan_runtime_lanes_and_wrapping(
     ) in values
 
 
+def test_rvv_per_lane_shifts_guard_counts_and_wrap(
+    rvv_immediate_shift_project,
+) -> None:
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_immediate_shift_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    assert "__riscv_vsll_vv_i8m1" in header
+    assert "__riscv_vsra_vv_i8m1" in header
+    assert "__riscv_vsrl_vv_u8m1" in header
+    assert "__riscv_vmsltu_vv_u8m1_b8" in header
+    assert "::tsl::select<Vec>(valid, shifted" in header
+    assert "test_scalable_rvv_shift_left_si8_vector_byte_signed" in values
+    assert "test_scalable_rvv_shift_right_si8_vector_byte_signed" in values
+    assert (
+        "test_scalable_rvv_shift_left_wrapping_si8_mixed_negative_count"
+        in values
+    )
+    assert (
+        "test_scalable_rvv_shift_right_wrapping_si8_mixed_negative_count"
+        in values
+    )
+
+
 @pytest.fixture(scope="module")
 def rvv_mask_project(data_root: Path, machine_profiles_path: Path):
     return _gen(

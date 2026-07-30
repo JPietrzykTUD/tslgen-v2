@@ -1652,6 +1652,35 @@ prim<v:=(v,v)> shift_left(data, shift):
               var<const_infer>(ures, intrin<svlsl, build[suffix=UBase, post=x]>(pg, udata, shift_u));
               complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              let<type>(UBase, base::unsigned_of(base::in));
+              let<type>(UVec, vector::as_base(UBase));
+              var<const_infer>(counts, call<primitive=reinterpret[Vec, UVec]>(shift));
+              var<const_infer>(valid, call<primitive=less_than[UVec]>(
+                counts,
+                call<primitive=set1[UVec]>(
+                  cast<static>(UBase, value(type::size_bits(base::in)))
+                )
+              ));
+              var<const_infer>(shifted, intrin<vsll, build[infix="vv", infix_sep="_"]>(
+                data,
+                counts,
+                value(vector::runtime_length)
+              ));
+              complete(call<primitive=select[Vec]>(
+                valid,
+                shifted,
+                call<primitive=set_zero[Vec]>()
+              ));
+            """
 prim<v:=(v,sImm)> shift_right(data, shift):
   operation shift_right
   operand_roles:
@@ -2515,7 +2544,7 @@ prim<v:=(v,v)> shift_left_wrapping(data, shift):
     - {tags [mixed, edge], type "ui8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [0, 1, 7, 8, 9, 15, 16, 17, 255, 254, 253, 252, 251, 250, 249, 248]], expected [1, 2, 128, 1, 2, 128, 1, 2, 128, 64, 32, 16, 8, 4, 2, 1]}}
     - {tags [mixed, negative_count], type "si8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [0, 1, 7, -1, -2, -8, -9, -128, 127, 126, 125, 124, 123, 122, 121, 120]], expected [1, 2, -128, -128, 64, 1, -128, 1, -128, 64, 32, 16, 8, 4, 2, 1]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, rvv, wasm128]:
       ?i?:
         requires:
           scalar []
@@ -2530,6 +2559,7 @@ prim<v:=(v,v)> shift_left_wrapping(data, shift):
           sse [sse2]
           neon [neon]
           sve [sve]
+          rvv [v]
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -2661,7 +2691,7 @@ prim<v:=(v,v)> shift_right_wrapping(data, shift):
     - {tags [mixed, edge], type "ui8", case {inputs [[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255], [0, 1, 7, 8, 9, 15, 16, 17, 255, 254, 253, 252, 251, 250, 249, 248]], expected [255, 127, 1, 255, 127, 1, 255, 127, 1, 3, 7, 15, 31, 63, 127, 255]}}
     - {tags [mixed, negative_count], type "si8", case {inputs [[-128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128], [0, 1, 7, -1, -2, -8, -9, -128, 127, 126, 125, 124, 123, 122, 121, 120]], expected [-128, -64, -1, -1, -2, -128, -1, -128, -1, -2, -4, -8, -16, -32, -64, -128]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, rvv, wasm128]:
       ?i?:
         requires:
           scalar []
@@ -2676,6 +2706,7 @@ prim<v:=(v,v)> shift_right_wrapping(data, shift):
           sse [sse2]
           neon [neon]
           sve [sve]
+          rvv [v]
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -4786,5 +4817,62 @@ prim<v:=(v,v)> shift_right(data, shift):
                 var<const_infer>(sdata, call<primitive=reinterpret[Vec, SVec]>(data));
                 var<const_infer>(sres, intrin<svasr, build[suffix=SBase, post=x]>(pg, sdata, counts));
                 complete(call<primitive=reinterpret[SVec, Vec]>(sres));
+              }
+            """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              let<type>(UBase, base::unsigned_of(base::in));
+              let<type>(UVec, vector::as_base(UBase));
+              var<const_infer>(counts, call<primitive=reinterpret[Vec, UVec]>(shift));
+              var<const_infer>(valid, call<primitive=less_than[UVec]>(
+                counts,
+                call<primitive=set1[UVec]>(
+                  cast<static>(UBase, value(type::size_bits(base::in)))
+                )
+              ));
+              if<generation>(value(type::is_signed(base::in))) {
+                if<compile>(PreserveSign) {
+                  var<const_infer>(shifted, intrin<vsra, build[infix="vv", infix_sep="_"]>(
+                    data,
+                    counts,
+                    value(vector::runtime_length)
+                  ));
+                  var<const_infer>(fill, intrin<vsra, build[infix="vx", infix_sep="_"]>(
+                    data,
+                    value(type::size_bits(base::in)) - 1,
+                    value(vector::runtime_length)
+                  ));
+                  complete(call<primitive=select[Vec]>(valid, shifted, fill));
+                } else<compile> {
+                  var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+                  var<const_infer>(ures, intrin<vsrl, build[infix="vv", infix_sep="_", suffix=UBase]>(
+                    udata,
+                    counts,
+                    value(vector::runtime_length)
+                  ));
+                  complete(call<primitive=select[Vec]>(
+                    valid,
+                    call<primitive=reinterpret[UVec, Vec]>(ures),
+                    call<primitive=set_zero[Vec]>()
+                  ));
+                }
+              } else<generation> {
+                var<const_infer>(shifted, intrin<vsrl, build[infix="vv", infix_sep="_"]>(
+                  data,
+                  counts,
+                  value(vector::runtime_length)
+                ));
+                complete(call<primitive=select[Vec]>(
+                  valid,
+                  shifted,
+                  call<primitive=set_zero[Vec]>()
+                ));
               }
             """
