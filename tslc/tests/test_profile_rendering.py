@@ -896,7 +896,7 @@ def rvv_project(data_root: Path, machine_profiles_path: Path):
             "set1", "set_zero", "load", "store", "add", "sub", "mul",
             "binary_and", "binary_or", "binary_xor",
             "inv", "binary_andnot",
-            "max", "min", "neg", "abs",
+            "max", "min", "neg", "abs", "div",
         ],
         profiles=["rvv"],
         type_tags=[
@@ -985,6 +985,8 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
             assert f"__riscv_vneg_v_{suffix}" in header
         else:
             assert f"__riscv_vneg_v_{suffix}" not in header
+        division_stem = "vdivu_vv" if suffix.startswith("u") else "vdiv_vv"
+        assert f"__riscv_{division_stem}_{suffix}" not in header
         extrema_stems = (
             ("vmaxu_vv", "vminu_vv")
             if suffix.startswith("u")
@@ -1004,8 +1006,11 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
             "vfsub_vv",
             "vfneg_v",
             "vfabs_v",
+            "vfdiv_vv",
         ):
             assert f"__riscv_{stem}_{suffix}" in header
+        assert header.count(f"__riscv_vfdiv_vv_{suffix}") == 3
+        assert header.count(f"__riscv_vfdiv_vv_{suffix}_mu") == 2
         assert f"__riscv_vle{width}_v_{suffix}_mu" in header
         assert f"__riscv_vse{width}_v_{suffix}_m" in header
         assert f"__riscv_vfmax_vv_{suffix}" not in header
@@ -1075,6 +1080,15 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "test_scalable_rvv_abs_ui64_basic" in values
     assert "test_scalable_rvv_abs_si64_signed_min" in values
     assert "test_scalable_rvv_abs_f32_float_sign" in values
+    assert "test_scalable_rvv_div_f32_basic" in values
+    assert (
+        "test_scalable_rvv_div_maskz_div_f32_rvv_"
+        "maskz_inactive_zero_rvv"
+    ) in values
+    assert (
+        "test_scalable_rvv_div_mask_div_f32_rvv_"
+        "mask_inactive_zero_rvv"
+    ) in values
     assert "tsl::load_maskz<Vec, true>(mask, memory.data() + 0);" in values
     assert "tsl::load_mask<Vec, true>(mask, memory.data() + 0, v1);" in values
     assert "tsl::store_mask<Vec, true>(mask, actual.data() + 0, v0);" in values
