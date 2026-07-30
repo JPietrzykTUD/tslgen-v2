@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from tslc.catalog.model import Catalog, TestCase
+from tslc.catalog.conversion import ConversionKind
+from tslc.catalog.model import Catalog, TestCase, TestComparison
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_scalable_common import (
@@ -383,7 +384,13 @@ def scalable_repr_cast_cases(
                 inputs=ValueTestInputs(vectors=vector_inputs),
                 expectation=ValueTestExpectation(
                     values=case.expected,
-                    comparison=case.comparison,
+                    comparison=(
+                        TestComparison.BITWISE
+                        if spec.primitive_semantics.conversion is not None
+                        and spec.primitive_semantics.conversion.kind
+                        is ConversionKind.BIT_PATTERN
+                        else case.comparison
+                    ),
                 ),
                 invocation=ValueTestInvocation(
                     result_kind=spec.result_kind,

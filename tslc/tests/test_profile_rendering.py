@@ -1148,9 +1148,9 @@ def rvv_reinterpret_project(data_root: Path, machine_profiles_path: Path):
     return _gen(
         data_root,
         machine_profiles_path,
-        primitives=["reinterpret"],
+        primitives=["reinterpret", "cast"],
         profiles=["rvv"],
-        type_tags=["si32", "ui32", "f32"],
+        type_tags=["si32", "ui32", "si64", "ui64", "f32", "f64"],
         backends=["cpp"],
     )
 
@@ -1179,6 +1179,32 @@ def test_rvv_reinterpret_uses_runtime_lane_conversion_values(
     assert "using ToVec = tsl::simd<uint32_t, tsl::rvv>;" in values
     assert "tsl::reinterpret<Vec, ToVec>(v0)" in values
     assert "tsl::store<ToVec, false>(actual.data(), result);" in values
+    assert "check_lanes_bitwise<uint32_t>" in values
+
+
+def test_rvv_same_width_numeric_casts_use_value_comparisons(
+    rvv_reinterpret_project,
+) -> None:
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_reinterpret_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    for intrinsic in (
+        "__riscv_vfcvt_rtz_x_f_v_i32m1",
+        "__riscv_vfcvt_rtz_xu_f_v_u32m1",
+        "__riscv_vfcvt_rtz_x_f_v_i64m1",
+        "__riscv_vfcvt_rtz_xu_f_v_u64m1",
+        "__riscv_vfcvt_f_x_v_f32m1",
+        "__riscv_vfcvt_f_xu_v_f32m1",
+        "__riscv_vfcvt_f_x_v_f64m1",
+        "__riscv_vfcvt_f_xu_v_f64m1",
+    ):
+        assert intrinsic in header
+    assert "test_scalable_rvv_cast_cast_f32_rvv_to_ui32_basic_rvv" in values
+    assert "test_scalable_rvv_cast_cast_f64_rvv_to_si64_truncate_rvv" in values
+    assert 'check_lanes<uint32_t>("cast_f32_rvv_to_ui32_basic_rvv"' in values
     assert "check_lanes_bitwise<uint32_t>" in values
 
 

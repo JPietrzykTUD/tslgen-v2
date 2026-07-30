@@ -82,6 +82,11 @@ def _scalable_repr_cast(case: ValueTestCasePlan) -> str:
     )
     source = append_runtime_vector_input(lines, case, 0)
     expected = cpp_literal_list(case.expectation.values, target.type_tag)
+    check = (
+        "check_lanes_bitwise"
+        if case.expectation.comparison is TestComparison.BITWISE
+        else "check_lanes"
+    )
     lines.extend(
         [
             f"  static const {target.base_spelling} authored_expected[{case.lanes}] = "
@@ -93,7 +98,7 @@ def _scalable_repr_cast(case: ValueTestCasePlan) -> str:
             f"  typename ToVec::register_type result = "
             f"tsl::{case.call_name}<Vec, ToVec>({source});",
             f"  tsl::{scalable.store_name}<ToVec, false>(actual.data(), result);",
-            f"  return tsl::test::check_lanes_bitwise<{target.base_spelling}>("
+            f"  return tsl::test::{check}<{target.base_spelling}>("
             f"\"{case.case_name}\", actual.data(), expected.data(), lanes);",
             "}",
         ]
