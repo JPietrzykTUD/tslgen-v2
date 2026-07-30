@@ -35,6 +35,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     - {tags [imm, edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 64, 192, 128, 128, 192, 0, 64, 0, 64, 192, 128, 128, 192, 0, 64]}}
     - {tags [imm, basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
     - {tags [imm, edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -64, 0, -64, 64, -128, -128, -128, 0, -64, 0, -64, 64, -128, -128, -128]}}
+    - {tags [imm, large_count, rvv], extension "rvv", type "si8", case {inputs [[-1, 1, -128, 127, -1, 1, -128, 127, -1, 1, -128, 127, -1, 1, -128, 127], 8], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
     - {tags [imm, basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
     - {tags [imm, edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 16384, 49152, 32768, 32768, 49152, 0, 16384]}}
     - {tags [imm, basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
@@ -388,6 +389,24 @@ prim<v:=(v,sImm)> shift_left(data, shift):
               ));
               complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
+              complete(call<primitive=set_zero[Vec]>());
+            }
+            complete(intrin<vsll, build[infix="vx", infix_sep="_"]>(
+              data,
+              cast<static>(ui64, shift),
+              value(vector::runtime_length)
+            ));
+          """
 prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
   operation shift_left
   operand_roles:
@@ -431,6 +450,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
     - {tags [mask, passthrough, imm, zero], type "ui8", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
     - {tags [mask, passthrough, imm, all], type "ui8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
     - {tags [mask, passthrough, imm, basic], type "si8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 4, 3, 8, 5, 12, 7, 16, 9, 20, 11, 24, 13, 28, 15, 32]}}
+    - {tags [mask, passthrough, imm, large_count, rvv], extension "rvv", type "si8", case {inputs [43690, [-1, 1, -128, 127, -1, 1, -128, 127, -1, 1, -128, 127, -1, 1, -128, 127], 8], expected [-1, 0, -128, 0, -1, 0, -128, 0, -1, 0, -128, 0, -1, 0, -128, 0]}}
     - {tags [mask, passthrough, imm, zero], type "si8", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
     - {tags [mask, passthrough, imm, all], type "si8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
     - {tags [mask, passthrough, imm, basic], type "ui16", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
@@ -556,6 +576,18 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
               complete(call<primitive=select>(mask, shifted, data));
             """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(shifted, call<primitive=@self[Vec, shift]>(data));
+            complete(call<primitive=select>(mask, shifted, data));
+          """
 prim<v:=(v,s)> shift_left(data, shift):
   operation shift_left
   operand_roles:
@@ -1649,6 +1681,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
     - {tags [imm, edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0]}}
     - {tags [imm, basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
     - {tags [imm, edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -1, -2, 1, 0, -1, 0, 1, 0, -1, -2, 1, 0, -1, 0, 1]}}
+    - {tags [imm, large_count, rvv], extension "rvv", type "si8", case {inputs [[-1, 1, -128, 127, -1, 1, -128, 127, -1, 1, -128, 127, -1, 1, -128, 127], 8], expected [-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0]}}
     - {tags [imm, basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
     - {tags [imm, edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 0, 3, 3, 0, 0, 0, 0]}}
     - {tags [imm, basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
@@ -2312,6 +2345,55 @@ prim<v:=(v,sImm)> shift_right(data, shift):
                 complete(call<primitive=reinterpret[SVec, Vec]>(sres));
               }
             """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
+              if<generation>(value(type::is_signed(base::in))) {
+                if<compile>(PreserveSign) {
+                  complete(intrin<vsra, build[infix="vx", infix_sep="_"]>(
+                    data,
+                    value(type::size_bits(base::in)) - 1,
+                    value(vector::runtime_length)
+                  ));
+                }
+              }
+              complete(call<primitive=set_zero[Vec]>());
+            }
+            if<generation>(value(type::is_signed(base::in))) {
+              var<const_infer>(shifted, intrin<vsra, build[infix="vx", infix_sep="_"]>(
+                data,
+                cast<static>(ui64, shift),
+                value(vector::runtime_length)
+              ));
+              if<compile>(PreserveSign) {
+                complete(shifted);
+              } else<compile> {
+                let<type>(UBase, base::unsigned_of(base::in));
+                var<const_infer>(mask_bits, cast<static>(UBase, -1) >>
+                  cast<static>(UBase, shift));
+                complete(call<primitive=binary_and[Vec]>(
+                  shifted,
+                  call<primitive=set1[Vec]>(
+                    cast<bitcast>(base::in, mask_bits)
+                  )
+                ));
+              }
+            } else<generation> {
+              complete(intrin<vsrl, build[infix="vx", infix_sep="_"]>(
+                data,
+                cast<static>(ui64, shift),
+                value(vector::runtime_length)
+              ));
+            }
+          """
+
 
 prim<v:=(v,s)> shift_left_wrapping(data, shift):
   operation shift_left_wrapping

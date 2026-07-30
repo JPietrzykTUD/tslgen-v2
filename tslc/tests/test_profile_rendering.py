@@ -1146,6 +1146,47 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
 
 
 @pytest.fixture(scope="module")
+def rvv_immediate_shift_project(data_root: Path, machine_profiles_path: Path):
+    return _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["shift_left", "shift_right"],
+        profiles=["rvv"],
+        type_tags=["si8", "ui8"],
+        backends=["cpp"],
+    )
+
+
+def test_rvv_immediate_shifts_render_large_count_and_sign_policies(
+    rvv_immediate_shift_project,
+) -> None:
+    assert not has_errors(
+        rvv_immediate_shift_project.diagnostics
+    ), rvv_immediate_shift_project.diagnostics
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_immediate_shift_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    assert "__riscv_vsll_vx_i8m1" in header
+    assert "__riscv_vsll_vx_u8m1" in header
+    assert "__riscv_vsra_vx_i8m1" in header
+    assert "__riscv_vsrl_vx_u8m1" in header
+    assert "__riscv_vsrl_vx_i8m1" not in header
+    assert "if (static_cast<uint64_t>(shift) >= 8)" in header
+    assert "::tsl::binary_and<Vec>(" in header
+    assert "::tsl::shift_left_imm<Vec, shift>(data)" in header
+
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    assert "test_scalable_rvv_shift_left_si8_rvv_imm_large_count_rvv" in values
+    assert (
+        "test_scalable_rvv_shift_left_mask_shift_left_si8_rvv_"
+        "mask_passthrough_imm_large_count_rvv"
+    ) in values
+    assert "test_scalable_rvv_shift_right_si8_rvv_imm_large_count_rvv" in values
+
+
+@pytest.fixture(scope="module")
 def rvv_mask_project(data_root: Path, machine_profiles_path: Path):
     return _gen(
         data_root,
