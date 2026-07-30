@@ -896,7 +896,7 @@ def rvv_project(data_root: Path, machine_profiles_path: Path):
             "set1", "set_zero", "load", "store", "add", "sub", "mul",
             "binary_and", "binary_or", "binary_xor",
             "inv", "binary_andnot",
-            "max", "min",
+            "max", "min", "neg", "abs",
         ],
         profiles=["rvv"],
         type_tags=[
@@ -981,6 +981,10 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
             "vsub_vv",
         ):
             assert f"__riscv_{stem}_{suffix}" in header
+        if suffix.startswith("i"):
+            assert f"__riscv_vneg_v_{suffix}" in header
+        else:
+            assert f"__riscv_vneg_v_{suffix}" not in header
         extrema_stems = (
             ("vmaxu_vv", "vminu_vv")
             if suffix.startswith("u")
@@ -998,6 +1002,8 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
             "vfadd_vv",
             "vfmul_vv",
             "vfsub_vv",
+            "vfneg_v",
+            "vfabs_v",
         ):
             assert f"__riscv_{stem}_{suffix}" in header
         assert f"__riscv_vle{width}_v_{suffix}_mu" in header
@@ -1014,6 +1020,8 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "::tsl::less_than<Vec>(vec_a, vec_b),\n" in header
     assert "::tsl::sub<Vec>(left, right),\n" in header
     assert "::tsl::mul<Vec>(factor1, factor2),\n" in header
+    assert "::tsl::less_than<Vec>(data, zero)" in header
+    assert "::tsl::neg<Vec>(data),\n" in header
     assert "::tsl::set_zero<Vec>()" in header
     assert header.count("return ::tsl::select<Vec>(") >= 40
 
@@ -1062,6 +1070,11 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
         assert (
             f"test_scalable_rvv_{operation}_f32_rvv_nan_ordered_rvv"
         ) in values
+    assert "test_scalable_rvv_neg_si64_signed_min_wrapping" in values
+    assert "test_scalable_rvv_neg_f32_float_sign_bits" in values
+    assert "test_scalable_rvv_abs_ui64_basic" in values
+    assert "test_scalable_rvv_abs_si64_signed_min" in values
+    assert "test_scalable_rvv_abs_f32_float_sign" in values
     assert "tsl::load_maskz<Vec, true>(mask, memory.data() + 0);" in values
     assert "tsl::load_mask<Vec, true>(mask, memory.data() + 0, v1);" in values
     assert "tsl::store_mask<Vec, true>(mask, actual.data() + 0, v0);" in values

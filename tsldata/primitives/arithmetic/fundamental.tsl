@@ -1242,6 +1242,37 @@ prim<v:=v> neg(data):
             ));
             complete(call<primitive=binary_xor[Vec]>(data, sign_mask));
           """
+    rvv:
+      si?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vneg, build[infix="v", infix_sep="_"]>(
+                data,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vfneg, build[infix="v", infix_sep="_"]>(
+                data,
+                value(vector::runtime_length)
+              )
+            );
+          """
 prim<v:=(v)> abs(data):
   brief_description "Returns the lane-wise absolute value while preserving signed-minimum bit patterns."
   detailed_description """
@@ -1732,6 +1763,48 @@ prim<v:=(v)> abs(data):
               }
               complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
             """
+    rvv:
+      ui?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(data);"
+      si?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(zero, call<primitive=set_zero[Vec]>());
+            var<const_infer>(negative, call<primitive=less_than[Vec]>(data, zero));
+            complete(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                negative,
+                call<primitive=neg[Vec]>(data),
+                data
+              )
+            );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vfabs, build[infix="v", infix_sep="_"]>(
+                data,
+                value(vector::runtime_length)
+              )
+            );
+          """
     [generic, oneapi_fpga, oneapi_fpga_rtl]:
       arith:
         requires:
