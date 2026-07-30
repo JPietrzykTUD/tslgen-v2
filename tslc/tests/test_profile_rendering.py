@@ -1192,6 +1192,31 @@ def test_rvv_reinterpret_uses_runtime_lane_conversion_values(
     assert "check_lanes_bitwise<uint32_t>" in values
 
 
+def test_rvv_reinterpret_narrow_type_filter_emits_target_store(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["reinterpret"],
+        profiles=["rvv"],
+        type_tags=["si32", "ui32"],
+        backends=["cpp"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in result.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    assert "using ToVec = tsl::simd<float, tsl::rvv>;" in values
+    assert "tsl::store<ToVec, false>(actual.data(), result);" in values
+    assert "struct store_impl<tsl::simd<float, tsl::rvv>, false>" in header
+
+
 def test_rvv_same_width_numeric_casts_use_value_comparisons(
     rvv_reinterpret_project,
 ) -> None:

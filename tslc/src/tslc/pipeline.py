@@ -494,9 +494,9 @@ class _GenerationSession:
             (primitive, self.type_tags, all_backend_ids, self.request.extensions)
             for primitive in _requested_primitives(self.request, self.inputs.catalog)
         ]
-        if self.request.test_harness:
-            worklist.extend(
-                (name, self.type_tags, all_backend_ids, None)
+        harness_primitives = (
+            tuple(
+                name
                 for name in (
                     self.inputs.test_harness.from_array,
                     self.inputs.test_harness.to_array,
@@ -506,6 +506,14 @@ class _GenerationSession:
                     self.inputs.test_harness.store,
                 )
                 if name is not None
+            )
+            if self.request.test_harness
+            else ()
+        )
+        if harness_primitives:
+            worklist.extend(
+                (name, self.type_tags, all_backend_ids, None)
+                for name in harness_primitives
             )
         if self.request.render_artifacts or self.request.extensions is None:
             for capability in active_backends:
@@ -538,6 +546,22 @@ class _GenerationSession:
                 for type_tag in remaining_types:
                     processed.setdefault((primitive, type_tag, scope), set()).add(backend)
                 lowered_specs.extend(primitive_slots)
+                for slot in primitive_slots:
+                    target = slot.spec.target
+                    if target is None:
+                        continue
+                    for harness_primitive in harness_primitives:
+                        if slot.backend not in processed.get(
+                            (harness_primitive, target.base_tag, None), set()
+                        ):
+                            worklist.append(
+                                (
+                                    harness_primitive,
+                                    (target.base_tag,),
+                                    frozenset({slot.backend}),
+                                    None,
+                                )
+                            )
                 for (
                     dependency_primitive,
                     dependency_type,
