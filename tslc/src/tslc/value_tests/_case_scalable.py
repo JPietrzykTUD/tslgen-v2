@@ -239,6 +239,85 @@ def scalable_immediate_cases(
     return tuple(plans)
 
 
+def scalable_scalar_vector_cases(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+    catalog: Catalog,
+    harness: HarnessPrimitiveNames,
+    backend: ValueTestBackendSupport,
+) -> tuple[ValueTestCasePlan, ...]:
+    del index
+    if (
+        case.lanes is None
+        or case.expected_rule is not None
+        or harness.load is None
+        or harness.store is None
+        or not _args_match(case, specs[0].param_kinds)
+        or not tiling_is_safe(specs, catalog)
+    ):
+        return ()
+    vector_inputs = _vector_inputs(case)
+    mask_inputs = _mask_inputs(case)
+    scalar_inputs = _scalar_inputs(case)
+    if (
+        not vector_inputs
+        or len(scalar_inputs) != 1
+        or len(case.expected) != case.lanes
+        or len(vector_inputs) != specs[0].param_kinds.count("v")
+        or len(mask_inputs) != specs[0].param_kinds.count("m")
+    ):
+        return ()
+    plans: list[ValueTestCasePlan] = []
+    for spec in specs:
+        if spec.type_tag != case.type_tag or spec.result_kind != "v":
+            continue
+        if case.extension is not None and spec.extension_name != case.extension:
+            continue
+        scalable = scalable_case_facts(
+            spec,
+            catalog,
+            backend,
+            mask_bit_tokens=mask_inputs,
+            load_name=harness.load,
+            store_name=harness.store,
+        )
+        if scalable is None:
+            continue
+        plans.append(
+            ValueTestCasePlan(
+                kind="scalable_scalar_vector",
+                function_name=scalable_function_name(
+                    spec.extension_name, case.name, call_name=name
+                ),
+                case_name=case.name,
+                call_name=name,
+                type_tag=case.type_tag,
+                base_spelling=spec.base_type_spelling,
+                lanes=case.lanes,
+                inputs=ValueTestInputs(
+                    vectors=vector_inputs,
+                    masks=mask_inputs,
+                    scalars=scalar_inputs,
+                ),
+                expectation=ValueTestExpectation(
+                    values=case.expected,
+                    comparison=case.comparison,
+                ),
+                invocation=ValueTestInvocation(
+                    result_kind=spec.result_kind,
+                    param_kinds=spec.param_kinds,
+                    generic_defaults=tuple(
+                        default for _name, _type, default in spec.generic_params
+                    ),
+                ),
+                scalable=scalable,
+            )
+        )
+    return tuple(plans)
+
+
 def scalable_repr_cast_cases(
     name: str,
     index: int,
@@ -389,5 +468,6 @@ __all__ = (
     "scalable_immediate_cases",
     "scalable_masked_cases",
     "scalable_repr_cast_cases",
+    "scalable_scalar_vector_cases",
     "scalable_runtime_failure_cases",
 )

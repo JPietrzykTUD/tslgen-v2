@@ -36,7 +36,7 @@ from abc import ABC, abstractmethod
 
 from tslc.catalog.model import TestComparison
 from tslc.value_tests.lane_math import runtime_tile_index
-from tslc.value_tests.literals import cpp_literal_list, token_truthy
+from tslc.value_tests.literals import cpp_literal, cpp_literal_list, token_truthy
 from tslc.value_tests.model import ValueTestCasePlan
 from tslc.value_tests.render_cpp_helpers import (
     append_call_args,
@@ -143,6 +143,7 @@ class _ScalableLaneModel(LaneModel):
         args: list[str] = []
         vector_index = 0
         mask_index = 0
+        scalar_index = 0
         for kind in case.invocation.param_kinds:
             if kind == "v":
                 args.append(append_runtime_vector_input(lines, case, vector_index))
@@ -156,6 +157,11 @@ class _ScalableLaneModel(LaneModel):
                 mask_index += 1
             elif kind == "sImm":
                 continue
+            elif kind == "s":
+                value = cpp_literal(case.inputs.scalars[scalar_index], case.type_tag)
+                lines.append(f"  {case.base_spelling} s{scalar_index} = {value};")
+                args.append(f"s{scalar_index}")
+                scalar_index += 1
             else:
                 raise ValueError(
                     f"scalable value test does not support argument kind {kind!r}"

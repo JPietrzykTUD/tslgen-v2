@@ -210,6 +210,13 @@ _CASE_REQUIREMENTS = {
         required_facts=_CONVERSION_TARGET_FACTS | _SCALABLE_VALUE_FACTS,
         vector_inputs_match_lanes=True,
     ),
+    "scalable_scalar_vector": ValueTestCaseRequirements(
+        expected="lanes",
+        vector_inputs="non_empty",
+        scalar_inputs="one",
+        required_facts=_SCALABLE_VALUE_FACTS,
+        vector_inputs_match_lanes=True,
+    ),
     "scalable_mask_constant": ValueTestCaseRequirements(
         expected="one", required_facts=_SCALABLE_MASK_FACTS
     ),

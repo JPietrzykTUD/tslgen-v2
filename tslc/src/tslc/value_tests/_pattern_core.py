@@ -21,6 +21,7 @@ from tslc.value_tests._case_scalable import (
     scalable_golden_cases,
     scalable_immediate_cases,
     scalable_masked_cases,
+    scalable_scalar_vector_cases,
 )
 from tslc.value_tests._case_scalable_masks import (
     scalable_mask_count_cases,
@@ -281,6 +282,18 @@ class _SimpleShapePattern(_BasePattern):
             specs,
         )
         plans = [plan] if plan is not None else []
+        if self.result_kind == "v" and "s" in self.param_kinds:
+            plans.extend(
+                scalable_scalar_vector_cases(
+                    context.emitted_name,
+                    context.index,
+                    context.case,
+                    specs,
+                    context.catalog,
+                    context.harness,
+                    context.backend,
+                )
+            )
         if (
             self.differential
             and context.backend.supports_differential
@@ -424,7 +437,19 @@ class _MaskedScalarVectorPattern(_BasePattern):
             context.case,
             context.specs,
         )
-        return (plan,) if plan is not None else ()
+        plans = [plan] if plan is not None else []
+        plans.extend(
+            scalable_scalar_vector_cases(
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
+            )
+        )
+        return tuple(plans)
 
 @dataclass(frozen=True, slots=True)
 class _ImmediatePattern(_BasePattern):

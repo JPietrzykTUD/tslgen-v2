@@ -1040,6 +1040,24 @@ prim<v:=(v,s)> shift_left(data, shift):
               ));
               complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
+                complete(call<primitive=set_zero[Vec]>());
+              }
+              complete(intrin<vsll, build[infix="vx", infix_sep="_"]>(
+                data,
+                cast<static>(ui64, shift),
+                value(vector::runtime_length)
+              ));
+            """
 prim<v:=(v,v)> shift_left(data, shift):
   operation shift_left
   operand_roles:
@@ -2431,7 +2449,7 @@ prim<v:=(v,s)> shift_left_wrapping(data, shift):
     - {tags [negative_count, word], type "si16", case {inputs [[1, 2, -1, -32768, 32767, -2, 16384, -16384], -1], expected [-32768, 0, -32768, 0, -32768, 0, 0, 0]}}
     - {tags [very_large], type "ui64", case {inputs [[1, 2], 18446744073709551615], expected [9223372036854775808, 0]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, rvv, wasm128]:
       ?i?:
         requires:
           scalar []
@@ -2446,6 +2464,7 @@ prim<v:=(v,s)> shift_left_wrapping(data, shift):
           sse [sse2]
           neon [neon]
           sve [sve]
+          rvv [v]
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -2573,7 +2592,7 @@ prim<v:=(v,s)> shift_right_wrapping(data, shift):
     - {tags [negative_count, word], type "si16", case {inputs [[-32768, -1, 32767, 16384, -16384, 1, -2, 2], -1], expected [-1, -1, 0, 0, -1, 0, -1, 0]}}
     - {tags [very_large], type "ui64", case {inputs [[18446744073709551615, 9223372036854775808], 18446744073709551615], expected [1, 1]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, rvv, wasm128]:
       ?i?:
         requires:
           scalar []
@@ -2588,6 +2607,7 @@ prim<v:=(v,s)> shift_right_wrapping(data, shift):
           sse [sse2]
           neon [neon]
           sve [sve]
+          rvv [v]
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -3702,6 +3722,52 @@ prim<v:=(v,s)> shift_right(data, shift):
               var<const_infer>(sh, call<primitive=set1[UVec]>(cast<static>(UBase, shift)));
               var<const_infer>(ures, intrin<svlsr, build[suffix=UBase, post=x]>(pg, udata, sh));
               complete(call<primitive=reinterpret[UVec, Vec]>(ures));
+            """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
+                if<generation>(value(type::is_signed(base::in))) {
+                  if<compile>(PreserveSign) {
+                    complete(intrin<vsra, build[infix="vx", infix_sep="_"]>(
+                      data,
+                      value(type::size_bits(base::in)) - 1,
+                      value(vector::runtime_length)
+                    ));
+                  }
+                }
+                complete(call<primitive=set_zero[Vec]>());
+              }
+              if<generation>(value(type::is_signed(base::in))) {
+                if<compile>(PreserveSign) {
+                  complete(intrin<vsra, build[infix="vx", infix_sep="_"]>(
+                    data,
+                    cast<static>(ui64, shift),
+                    value(vector::runtime_length)
+                  ));
+                } else<compile> {
+                  let<type>(UVec, vector::as_base(base::unsigned_of(base::in)));
+                  var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+                  var<const_infer>(ures, intrin<vsrl, build[infix="vx", infix_sep="_", suffix=base::unsigned_of(base::in)]>(
+                    udata,
+                    cast<static>(ui64, shift),
+                    value(vector::runtime_length)
+                  ));
+                  complete(call<primitive=reinterpret[UVec, Vec]>(ures));
+                }
+              } else<generation> {
+                complete(intrin<vsrl, build[infix="vx", infix_sep="_"]>(
+                  data,
+                  cast<static>(ui64, shift),
+                  value(vector::runtime_length)
+                ));
+              }
             """
 prim<v:=(v,v)> shift_right(data, shift):
   operation shift_right

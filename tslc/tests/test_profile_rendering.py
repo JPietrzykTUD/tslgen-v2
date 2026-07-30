@@ -1187,7 +1187,12 @@ def rvv_immediate_shift_project(data_root: Path, machine_profiles_path: Path):
     return _gen(
         data_root,
         machine_profiles_path,
-        primitives=["shift_left", "shift_right"],
+        primitives=[
+            "shift_left",
+            "shift_right",
+            "shift_left_wrapping",
+            "shift_right_wrapping",
+        ],
         profiles=["rvv"],
         type_tags=["si8", "ui8"],
         backends=["cpp"],
@@ -1221,6 +1226,41 @@ def test_rvv_immediate_shifts_render_large_count_and_sign_policies(
         "mask_passthrough_imm_large_count_rvv"
     ) in values
     assert "test_scalable_rvv_shift_right_si8_rvv_imm_large_count_rvv" in values
+
+
+def test_rvv_scalar_shifts_plan_runtime_lanes_and_wrapping(
+    rvv_immediate_shift_project,
+) -> None:
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_immediate_shift_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    assert any(
+        case.kind == "scalable_scalar_vector"
+        and case.scalable is not None
+        and case.scalable.source_extension == "rvv"
+        for profile in rvv_immediate_shift_project.rendered.value_tests.profiles_for(
+            "cpp"
+        )
+        for case in profile.cases
+    )
+    assert header.count("__riscv_vsll_vx_i8m1") >= 2
+    assert header.count("__riscv_vsra_vx_i8m1") >= 2
+    assert header.count("__riscv_vsrl_vx_u8m1") >= 2
+    assert "::tsl::shift_left<Vec>(" in header
+    assert "static_cast<int8_t>(effective)" in header
+    assert "::tsl::shift_right<Vec, true>(" in header
+    assert "test_scalable_rvv_shift_left_shift_left_si8_basic" in values
+    assert (
+        "test_scalable_rvv_shift_left_wrapping_"
+        "shift_left_wrapping_si8_negative_count"
+    ) in values
+    assert (
+        "test_scalable_rvv_shift_right_wrapping_"
+        "shift_right_wrapping_si8_negative_count"
+    ) in values
 
 
 @pytest.fixture(scope="module")

@@ -115,6 +115,7 @@ CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "scalable_golden": render_value_case,
         "scalable_immediate": render_value_case,
         "scalable_repr_cast": _scalable_repr_cast,
+        "scalable_scalar_vector": render_value_case,
         "scalable_mask_constant": render_mask_case,
         "scalable_mask_conversion": render_mask_conversion,
         "scalable_mask_count": _scalable_mask_count,
