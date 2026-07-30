@@ -896,7 +896,7 @@ def rvv_project(data_root: Path, machine_profiles_path: Path):
             "set1", "set_zero", "load", "store", "add", "sub", "mul",
             "binary_and", "binary_or", "binary_xor",
             "inv", "binary_andnot",
-            "max", "min", "neg", "abs", "div",
+            "max", "min", "neg", "abs", "div", "mod",
         ],
         profiles=["rvv"],
         type_tags=[
@@ -986,7 +986,9 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
         else:
             assert f"__riscv_vneg_v_{suffix}" not in header
         division_stem = "vdivu_vv" if suffix.startswith("u") else "vdiv_vv"
-        assert f"__riscv_{division_stem}_{suffix}" not in header
+        assert f"__riscv_{division_stem}_{suffix}" in header
+        remainder_stem = "vremu_vv" if suffix.startswith("u") else "vrem_vv"
+        assert f"__riscv_{remainder_stem}_{suffix}" in header
         extrema_stems = (
             ("vmaxu_vv", "vminu_vv")
             if suffix.startswith("u")
@@ -1081,6 +1083,20 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "test_scalable_rvv_abs_si64_signed_min" in values
     assert "test_scalable_rvv_abs_f32_float_sign" in values
     assert "test_scalable_rvv_div_f32_basic" in values
+    assert "test_scalable_rvv_div_si32_basic" in values
+    assert "test_scalable_rvv_div_si32_edge_overflow_signs" in values
+    assert "test_scalable_rvv_div_si32_failure_zero_divisor" in values
+    assert "test_scalable_rvv_div_si32_mask_failure_active_zero" in values
+    assert "test_scalable_rvv_div_si32_maskz_failure_active_zero" in values
+    assert "test_scalable_rvv_div_maskz_div_si32_maskz_inactive_zero" in values
+    assert "test_scalable_rvv_div_mask_div_si32_mask_inactive_zero" in values
+    assert "test_scalable_rvv_mod_si32_basic" in values
+    assert "test_scalable_rvv_mod_si32_edge_overflow" in values
+    assert "test_scalable_rvv_mod_si32_failure_zero_divisor" in values
+    assert "test_scalable_rvv_mod_si32_mask_failure_active_zero" in values
+    assert "test_scalable_rvv_mod_si32_maskz_failure_active_zero" in values
+    assert "test_scalable_rvv_mod_maskz_mod_si32_maskz_inactive_zero" in values
+    assert "test_scalable_rvv_mod_mask_mod_si32_mask_inactive_zero" in values
     assert (
         "test_scalable_rvv_div_maskz_div_f32_rvv_"
         "maskz_inactive_zero_rvv"

@@ -295,6 +295,74 @@ def test_runtime_failure_cases_plan_and_render_for_both_backends(
     assert 'Some("TSL_ARITH_INTEGER_ZERO_DIVISOR")' in rust_source
 
 
+def test_scalable_runtime_failure_materializes_vector_and_mask_inputs(
+    render_assets: RenderAssets,
+) -> None:
+    primitive = Primitive(
+        "div",
+        "v:=(m,v,v)",
+        ("mask", "dividend", "divisor"),
+        ("mask",),
+        (),
+        attributes={"mask": "zero"},
+        tests=(
+            TslTestCase(
+                name="active_zero",
+                type_tag="si32",
+                tags=("failure",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("mask", mask_bits="10"),
+                    TslTestArg("vector", values=("8", "-9", "10", "-12")),
+                    TslTestArg("vector", values=("2", "0", "-2", "4")),
+                ),
+                expected=(),
+                role="runtime_failure",
+                failure=FailureReason.INTEGER_ZERO_DIVISOR,
+            ),
+        ),
+    )
+    spec = _spec(
+        "div_maskz",
+        "div",
+        param_kinds=("m", "v", "v"),
+        mask_policy="zero",
+        extension_name="sve",
+        uses_sized_vector=False,
+        lane_parameter=None,
+    )
+    catalog = Catalog(
+        primitives=(primitive, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp", "sve", {"div_maskz": (spec,)}
+            ),
+        )
+    )
+
+    assert not plan.diagnostics
+    assert [case.kind for case in plan.profiles[0].cases] == [
+        "runtime_failure",
+        "scalable_runtime_failure",
+    ]
+    scalable = plan.profiles[0].cases[1]
+    assert scalable.scalable is not None
+    assert scalable.scalable.mask_bits == (10,)
+    source = render_cpp_values_runner(plan.profiles[0], render_assets)
+    assert "using Vec = tsl::simd<std::int32_t, tsl::sve>;" in source
+    assert "tsl::load<Vec, false>(in0.data())" in source
+    assert "make_mask<tsl::simd<std::int32_t, tsl::sve>>(10ull, 4, lanes)" in source
+    assert "tsl::div_maskz<Vec>(m0, v0, v1)" in source
+    assert "catch (const std::domain_error& error)" in source
+
+
 def test_runtime_failure_cases_report_wasm_profile_capability_exclusions() -> None:
     primitive = Primitive(
         "div",

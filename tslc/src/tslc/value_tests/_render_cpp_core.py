@@ -6,6 +6,7 @@ from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 from tslc.value_tests.render_cpp_helpers import (
     append_call_args as _append_call_args,
+    append_runtime_vector_input as _append_runtime_vector_input,
     scalable_header as _scalable_header,
     scalable_mask_from_bits as _scalable_mask_from_bits,
     scalar_expected as _scalar_expected,
@@ -112,6 +113,44 @@ def _runtime_failure(case: ValueTestCasePlan) -> str:
             f"    (void){call};",
             "  } catch (const std::domain_error& error) {",
             f'    return std::string(error.what()) == "{marker}" ? 0 : 1;',
+            "  } catch (...) {",
+            "    return 1;",
+            "  }",
+            "  return 1;",
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _scalable_runtime_failure(case: ValueTestCasePlan) -> str:
+    assert case.failure is not None
+    lines = _scalable_header(case)
+    args: list[str] = []
+    vector_index = 0
+    mask_index = 0
+    for kind in case.invocation.param_kinds:
+        if kind == "v":
+            args.append(_append_runtime_vector_input(lines, case, vector_index))
+            vector_index += 1
+        elif kind == "m":
+            lines.append(
+                f"  typename Vec::mask_type m{mask_index} = "
+                f"{_scalable_mask_from_bits(case, mask_index)};"
+            )
+            args.append(f"m{mask_index}")
+            mask_index += 1
+        else:
+            raise ValueError(
+                f"scalable runtime-failure test does not support argument kind {kind!r}"
+            )
+    call = f"tsl::{case.call_name}<Vec>({', '.join(args)})"
+    lines.extend(
+        [
+            "  try {",
+            f"    (void){call};",
+            "  } catch (const std::domain_error& error) {",
+            f'    return std::string(error.what()) == "{case.failure.marker}" ? 0 : 1;',
             "  } catch (...) {",
             "    return 1;",
             "  }",
@@ -295,6 +334,7 @@ __all__ = (
     "_immediate",
     "_compile_only",
     "_runtime_failure",
+    "_scalable_runtime_failure",
     "_array_to_vector",
     "_broadcast",
     "_scalar_vector",

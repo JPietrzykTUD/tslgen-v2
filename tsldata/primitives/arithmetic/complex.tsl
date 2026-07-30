@@ -1215,6 +1215,52 @@ prim<v:=(v,v)> div(dividend, divisor):
             ));
           """
     rvv:
+      si?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(zero_divisors, call<primitive=equal>(
+              divisor,
+              call<primitive=set_zero[Vec]>()
+            ));
+            if (call<primitive=mask_population_count[Vec]>(zero_divisors) != 0) {
+              helper<arith_zero_divisor_fail>();
+            }
+            complete(
+              intrin<vdiv, build[infix="vv", infix_sep="_"]>(
+                dividend,
+                divisor,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ui?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(zero_divisors, call<primitive=equal>(
+              divisor,
+              call<primitive=set_zero[Vec]>()
+            ));
+            if (call<primitive=mask_population_count[Vec]>(zero_divisors) != 0) {
+              helper<arith_zero_divisor_fail>();
+            }
+            complete(
+              intrin<vdivu, build[infix="vv", infix_sep="_"]>(
+                dividend,
+                divisor,
+                value(vector::runtime_length)
+              )
+            );
+          """
       f?:
         requires [v]
         safety:
@@ -1412,6 +1458,30 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
             complete(intrin<svdiv, build[post=z]>(mask, dividend, divisor));
           """
     rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(safe_dividend, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              dividend,
+              call<primitive=set_zero[Vec]>()
+            ));
+            var<const_infer>(safe_divisor, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              divisor,
+              call<primitive=set1[Vec]>(cast<static>(base::in, 1))
+            ));
+            complete(call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              call<primitive=div>(safe_dividend, safe_divisor),
+              call<primitive=set_zero[Vec]>()
+            ));
+          """
       f?:
         requires [v]
         safety:
@@ -1612,6 +1682,30 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
             complete(intrin<svdiv, build[post=m]>(mask, dividend, divisor));
           """
     rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(safe_dividend, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              dividend,
+              call<primitive=set_zero[Vec]>()
+            ));
+            var<const_infer>(safe_divisor, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              divisor,
+              call<primitive=set1[Vec]>(cast<static>(base::in, 1))
+            ));
+            complete(call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              call<primitive=div>(safe_dividend, safe_divisor),
+              dividend
+            ));
+          """
       f?:
         requires [v]
         safety:
@@ -2199,6 +2293,49 @@ prim<v:=(v,v)> mod(dividend, divisor):
             }
             complete(result);
           """
+    rvv:
+      si?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(zero_divisors, call<primitive=equal>(
+              divisor,
+              call<primitive=set_zero[Vec]>()
+            ));
+            if (call<primitive=mask_population_count[Vec]>(zero_divisors) != 0) {
+              helper<arith_zero_divisor_fail>();
+            }
+            complete(intrin<vrem, build[infix="vv", infix_sep="_"]>(
+              dividend,
+              divisor,
+              value(vector::runtime_length)
+            ));
+          """
+      ui?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(zero_divisors, call<primitive=equal>(
+              divisor,
+              call<primitive=set_zero[Vec]>()
+            ));
+            if (call<primitive=mask_population_count[Vec]>(zero_divisors) != 0) {
+              helper<arith_zero_divisor_fail>();
+            }
+            complete(intrin<vremu, build[infix="vv", infix_sep="_"]>(
+              dividend,
+              divisor,
+              value(vector::runtime_length)
+            ));
+          """
     scalar:
       arith:
         requires []
@@ -2347,6 +2484,31 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
               )
             );
           """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(safe_dividend, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              dividend,
+              call<primitive=set_zero[Vec]>()
+            ));
+            var<const_infer>(safe_divisor, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              divisor,
+              call<primitive=set1[Vec]>(cast<static>(base::in, 1))
+            ));
+            complete(call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              call<primitive=mod>(safe_dividend, safe_divisor),
+              call<primitive=set_zero[Vec]>()
+            ));
+          """
 prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
   brief_description "Computes the lane-wise remainder for active lanes and keeps the dividend lane where the mask is inactive."
   detailed_description """
@@ -2434,6 +2596,31 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
                 call<primitive=mod>(safe_dividend, safe_divisor)
               )
             );
+          """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(safe_dividend, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              dividend,
+              call<primitive=set_zero[Vec]>()
+            ));
+            var<const_infer>(safe_divisor, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              divisor,
+              call<primitive=set1[Vec]>(cast<static>(base::in, 1))
+            ));
+            complete(call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              call<primitive=mod>(safe_dividend, safe_divisor),
+              dividend
+            ));
           """
 prim<v:=(v,sImm)> mod_imm(dividend, divisor):
   brief_description "Computes the lane-wise remainder of each dividend lane divided by the compile-time scalar divisor."

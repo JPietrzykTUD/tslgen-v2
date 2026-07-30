@@ -263,6 +263,18 @@ _CASE_REQUIREMENTS = {
         required_facts=_SCALABLE_VALUE_FACTS
         | frozenset({ValueTestFact.SCALABLE_MASK_INPUTS}),
     ),
+    "scalable_runtime_failure": ValueTestCaseRequirements(
+        vector_inputs="non_empty",
+        required_facts=frozenset(
+            {
+                ValueTestFact.RESULT_KIND,
+                ValueTestFact.SCALABLE_RUNTIME,
+                ValueTestFact.SCALABLE_LOAD,
+                ValueTestFact.FAILURE,
+            }
+        ),
+        vector_inputs_match_lanes=True,
+    ),
     "scalable_masked_mask_result": ValueTestCaseRequirements(
         expected="lanes",
         vector_inputs="non_empty",

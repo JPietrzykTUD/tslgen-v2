@@ -258,6 +258,51 @@ def test_lower_sve_integer_division_checks_participating_zero_lanes(
             assert "mask_binary_and" in body
 
 
+@pytest.mark.parametrize(
+    ("primitive", "type_tag", "intrinsic"),
+    (
+        ("div", "si32", "__riscv_vdiv_vv_i32m1"),
+        ("div", "ui32", "__riscv_vdivu_vv_u32m1"),
+        ("mod", "si32", "__riscv_vrem_vv_i32m1"),
+        ("mod", "ui32", "__riscv_vremu_vv_u32m1"),
+    ),
+)
+def test_lower_rvv_integer_division_and_remainder_preserve_failure_contract(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    type_tag: str,
+    intrinsic: str,
+) -> None:
+    slots = tuple(
+        slot
+        for slot in Selector()
+        .select_profile(catalog, machine_profiles["rvv"], primitive, (type_tag,))
+        .selected
+        if slot.extension.name == "rvv"
+    )
+    assert len(slots) == 3
+
+    for slot in slots:
+        lowered = Lowerer().lower(
+            slot,
+            catalog,
+            create_backend_dialect(catalog, "cpp"),
+        ).specialization
+        assert lowered is not None
+        body = lowered.body_text
+        if slot.primitive.attributes.get("mask") is None:
+            assert intrinsic in body
+            assert "arith_zero_divisor_fail" in body
+            assert body.index("arith_zero_divisor_fail") < body.index(intrinsic)
+            assert "__riscv_vlenb()" in body
+        else:
+            assert "safe_dividend" in body
+            assert "safe_divisor" in body
+            assert f"::tsl::{primitive}<Vec>(safe_dividend, safe_divisor)" in body
+            assert "::tsl::select<Vec>" in body
+
+
 def test_lower_scalar_generic_and_clang_integer_remainder_use_normalized_helper(
     catalog: Catalog,
     machine_profiles,

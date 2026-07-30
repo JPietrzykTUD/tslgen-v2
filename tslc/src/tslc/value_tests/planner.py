@@ -11,6 +11,7 @@ from tslc.lower.lowerer import LoweredSpecialization
 from tslc.lower.lowerer import varying_positions
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 from tslc.value_tests._case_conversion import FUZZ_ITERATIONS
+from tslc.value_tests._case_scalable import scalable_runtime_failure_cases
 from tslc.value_tests._pattern_base import (
     ValueTestCaseContext,
     ValueTestFuzzContext,
@@ -179,7 +180,19 @@ class ValueTestPlanner:
                         plan = runtime_failure_case(
                             emitted_name, index, test_case, specs
                         )
-                        planned = (plan,) if plan is not None else ()
+                        planned_cases = [plan] if plan is not None else []
+                        planned_cases.extend(
+                            scalable_runtime_failure_cases(
+                                emitted_name,
+                                index,
+                                test_case,
+                                specs,
+                                self._catalog,
+                                harness,
+                                backend,
+                            )
+                        )
+                        planned = tuple(planned_cases)
                     elif test_case.role == "compile_failure":
                         plan = compile_failure_case(
                             emitted_name, index, test_case, specs
