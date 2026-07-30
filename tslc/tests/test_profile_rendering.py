@@ -1316,6 +1316,45 @@ def test_rvv_per_lane_shifts_guard_counts_and_wrap(
 
 
 @pytest.fixture(scope="module")
+def rvv_float_shift_project(data_root: Path, machine_profiles_path: Path):
+    return _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["shift_left", "shift_right"],
+        profiles=["rvv"],
+        type_tags=["f32", "f64"],
+        backends=["cpp"],
+    )
+
+
+def test_rvv_float_shifts_use_same_width_integer_bit_patterns(
+    rvv_float_shift_project,
+) -> None:
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_float_shift_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    assert "::tsl::reinterpret<Vec, tsl::simd<uint32_t, tsl::rvv>>(data)" in header
+    assert "::tsl::cast<Vec, tsl::simd<uint32_t, tsl::rvv>>(shift)" in header
+    assert (
+        "::tsl::shift_left_imm<tsl::simd<uint32_t, tsl::rvv>, shift>(bits)"
+        in header
+    )
+    assert (
+        "::tsl::shift_right_imm<tsl::simd<int64_t, tsl::rvv>, shift, true>(bits)"
+        in header
+    )
+    assert "::tsl::shift_right<tsl::simd<uint32_t, tsl::rvv>, false>" in header
+    assert "::tsl::shift_right<tsl::simd<int64_t, tsl::rvv>, true>" in header
+    assert "test_scalable_rvv_shift_left_shift_left_f32_basic" in values
+    assert "test_scalable_rvv_shift_left_shift_left_f64_basic" in values
+    assert "test_scalable_rvv_shift_right_shift_right_f32_preserve_sign" in values
+    assert "test_scalable_rvv_shift_right_shift_right_f64_preserve_sign" in values
+
+
+@pytest.fixture(scope="module")
 def rvv_mask_project(data_root: Path, machine_profiles_path: Path):
     return _gen(
         data_root,

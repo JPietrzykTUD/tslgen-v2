@@ -407,6 +407,20 @@ prim<v:=(v,sImm)> shift_left(data, shift):
               value(vector::runtime_length)
             ));
           """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              let<type>(UBase, base::unsigned_of(base::in));
+              let<type>(UVec, vector::as_base(UBase));
+              var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(shifted, call<primitive=@self[UVec, shift]>(bits));
+              complete(call<primitive=reinterpret[UVec, Vec]>(shifted));
+            """
 prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
   operation shift_left
   operand_roles:
@@ -577,7 +591,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
               complete(call<primitive=select>(mask, shifted, data));
             """
     rvv:
-      ?i?:
+      arith:
         requires [v]
         safety:
           internal_unsafe false
@@ -1057,6 +1071,23 @@ prim<v:=(v,s)> shift_left(data, shift):
                 cast<static>(ui64, shift),
                 value(vector::runtime_length)
               ));
+            """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              let<type>(UBase, base::unsigned_of(base::in));
+              let<type>(UVec, vector::as_base(UBase));
+              var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(shifted, call<primitive=@self[UVec]>(
+                bits,
+                cast<static>(UBase, shift)
+              ));
+              complete(call<primitive=reinterpret[UVec, Vec]>(shifted));
             """
 prim<v:=(v,v)> shift_left(data, shift):
   operation shift_left
@@ -1680,6 +1711,21 @@ prim<v:=(v,v)> shift_left(data, shift):
                 shifted,
                 call<primitive=set_zero[Vec]>()
               ));
+            """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              let<type>(UBase, base::unsigned_of(base::in));
+              let<type>(UVec, vector::as_base(UBase));
+              var<const_infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(counts, call<primitive=cast[Vec, UBase]>(shift));
+              var<const_infer>(shifted, call<primitive=@self[UVec]>(bits, counts));
+              complete(call<primitive=reinterpret[UVec, Vec]>(shifted));
             """
 prim<v:=(v,sImm)> shift_right(data, shift):
   operation shift_right
@@ -2440,6 +2486,28 @@ prim<v:=(v,sImm)> shift_right(data, shift):
               ));
             }
           """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              if<compile>(!PreserveSign) {
+                let<type>(BitBase, base::unsigned_of(base::in));
+                let<type>(BitVec, vector::as_base(BitBase));
+                var<const_infer>(bits, call<primitive=reinterpret[Vec, BitVec]>(data));
+                var<const_infer>(shifted, call<primitive=@self[BitVec, shift, false]>(bits));
+                complete(call<primitive=reinterpret[BitVec, Vec]>(shifted));
+              } else<compile> {
+                let<type>(BitBase, base::signed_of(base::in));
+                let<type>(BitVec, vector::as_base(BitBase));
+                var<const_infer>(bits, call<primitive=reinterpret[Vec, BitVec]>(data));
+                var<const_infer>(shifted, call<primitive=@self[BitVec, shift, true]>(bits));
+                complete(call<primitive=reinterpret[BitVec, Vec]>(shifted));
+              }
+            """
 
 
 prim<v:=(v,s)> shift_left_wrapping(data, shift):
@@ -3800,6 +3868,32 @@ prim<v:=(v,s)> shift_right(data, shift):
                 ));
               }
             """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              if<compile>(!PreserveSign) {
+                let<type>(BitBase, base::unsigned_of(base::in));
+                let<type>(BitVec, vector::as_base(BitBase));
+                var<const_infer>(bits, call<primitive=reinterpret[Vec, BitVec]>(data));
+                var<const_infer>(shifted, call<primitive=@self[BitVec, false]>(
+                  bits, cast<static>(BitBase, shift)
+                ));
+                complete(call<primitive=reinterpret[BitVec, Vec]>(shifted));
+              } else<compile> {
+                let<type>(BitBase, base::signed_of(base::in));
+                let<type>(BitVec, vector::as_base(BitBase));
+                var<const_infer>(bits, call<primitive=reinterpret[Vec, BitVec]>(data));
+                var<const_infer>(shifted, call<primitive=@self[BitVec, true]>(
+                  bits, cast<static>(BitBase, shift)
+                ));
+                complete(call<primitive=reinterpret[BitVec, Vec]>(shifted));
+              }
+            """
 prim<v:=(v,v)> shift_right(data, shift):
   operation shift_right
   operand_roles:
@@ -4874,5 +4968,30 @@ prim<v:=(v,v)> shift_right(data, shift):
                   shifted,
                   call<primitive=set_zero[Vec]>()
                 ));
+              }
+            """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              var<const_infer>(counts, call<primitive=cast[Vec, base::unsigned_of(base::in)]>(shift));
+              if<compile>(!PreserveSign) {
+                let<type>(BitBase, base::unsigned_of(base::in));
+                let<type>(BitVec, vector::as_base(BitBase));
+                var<const_infer>(bits, call<primitive=reinterpret[Vec, BitVec]>(data));
+                var<const_infer>(shifted, call<primitive=@self[BitVec, false]>(bits, counts));
+                complete(call<primitive=reinterpret[BitVec, Vec]>(shifted));
+              } else<compile> {
+                let<type>(BitBase, base::signed_of(base::in));
+                let<type>(BitVec, vector::as_base(BitBase));
+                var<const_infer>(bits, call<primitive=reinterpret[Vec, BitVec]>(data));
+                let<type>(CountVec, vector::as_base(base::unsigned_of(base::in)));
+                var<const_infer>(signed_counts, call<primitive=reinterpret[CountVec, BitVec]>(counts));
+                var<const_infer>(shifted, call<primitive=@self[BitVec, true]>(bits, signed_counts));
+                complete(call<primitive=reinterpret[BitVec, Vec]>(shifted));
               }
             """
