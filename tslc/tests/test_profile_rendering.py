@@ -896,7 +896,7 @@ def rvv_project(data_root: Path, machine_profiles_path: Path):
             "set1", "set_zero", "load", "store", "add", "sub", "mul",
             "binary_and", "binary_or", "binary_xor",
             "inv", "binary_andnot",
-            "max", "min", "neg", "abs", "div", "mod",
+            "max", "min", "neg", "abs", "div", "mod", "mul_imm", "mod_imm",
         ],
         profiles=["rvv"],
         type_tags=[
@@ -1097,6 +1097,24 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "test_scalable_rvv_mod_si32_maskz_failure_active_zero" in values
     assert "test_scalable_rvv_mod_maskz_mod_si32_maskz_inactive_zero" in values
     assert "test_scalable_rvv_mod_mask_mod_si32_mask_inactive_zero" in values
+    assert "test_scalable_rvv_mul_imm_si32_rvv_basic_rvv" in values
+    assert (
+        "test_scalable_rvv_mul_imm_maskz_mul_imm_si32_rvv_maskz_basic_rvv"
+        in values
+    )
+    assert (
+        "test_scalable_rvv_mul_imm_mask_mul_imm_si32_rvv_mask_basic_rvv"
+        in values
+    )
+    assert "test_scalable_rvv_mod_imm_si32_rvv_basic_rvv" in values
+    assert (
+        "test_scalable_rvv_mod_imm_maskz_mod_imm_si32_rvv_maskz_basic_rvv"
+        in values
+    )
+    assert (
+        "test_scalable_rvv_mod_imm_mask_mod_imm_si32_rvv_mask_basic_rvv"
+        in values
+    )
     assert (
         "test_scalable_rvv_div_maskz_div_f32_rvv_"
         "maskz_inactive_zero_rvv"

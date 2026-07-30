@@ -19,6 +19,7 @@ from tslc.value_tests._case_core import (
 )
 from tslc.value_tests._case_scalable import (
     scalable_golden_cases,
+    scalable_immediate_cases,
     scalable_masked_cases,
 )
 from tslc.value_tests._case_scalable_masks import (
@@ -471,6 +472,17 @@ class _ImmediatePattern(_BasePattern):
             context.specs,
         )
         plans = [plan] if plan is not None else []
+        plans.extend(
+            scalable_immediate_cases(
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
+            )
+        )
         if (
             context.backend.supports_differential
             and context.harness.round_trip_ready

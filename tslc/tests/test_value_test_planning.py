@@ -2998,6 +2998,110 @@ def _scalable_test_extension() -> Extension:
     )
 
 
+def test_scalable_immediate_cases_plan_and_render_runtime_lanes(
+    render_assets: RenderAssets,
+) -> None:
+    unmasked = Primitive(
+        "mul_imm",
+        "v:=(v,sImm)",
+        ("data", "factor"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="mul_imm_sve",
+                type_tag="si32",
+                tags=("sve",),
+                lanes=4,
+                extension="sve",
+                inputs=(
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("scalar", scalar="3"),
+                ),
+                expected=("3", "6", "9", "12"),
+            ),
+        ),
+    )
+    masked = Primitive(
+        "mul_imm",
+        "v:=(m,v,sImm)",
+        ("mask", "data", "factor"),
+        ("mask",),
+        (),
+        attributes={"mask": "zero"},
+        tests=(
+            TslTestCase(
+                name="mul_imm_maskz_sve",
+                type_tag="si32",
+                tags=("sve",),
+                lanes=4,
+                extension="sve",
+                inputs=(
+                    TslTestArg("mask", mask_bits="10"),
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("scalar", scalar="3"),
+                ),
+                expected=("0", "6", "0", "12"),
+            ),
+        ),
+    )
+    specs = {
+        "mul_imm": (
+            _spec(
+                "mul_imm",
+                "mul_imm",
+                param_kinds=("v", "sImm"),
+                immediate=("factor", "std::uint32_t"),
+                extension_name="sve",
+                uses_sized_vector=False,
+                lane_parameter=None,
+            ),
+        ),
+        "mul_imm_maskz": (
+            _spec(
+                "mul_imm_maskz",
+                "mul_imm",
+                param_kinds=("m", "v", "sImm"),
+                immediate=("factor", "std::uint32_t"),
+                mask_policy="zero",
+                extension_name="sve",
+                uses_sized_vector=False,
+                lane_parameter=None,
+            ),
+        ),
+    }
+    catalog = Catalog(
+        primitives=(unmasked, masked, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (ValueTestBackendProfileInput("cpp", "sve", specs),)
+    )
+
+    assert not plan.diagnostics
+    scalable = tuple(
+        case for case in plan.profiles[0].cases if case.scalable is not None
+    )
+    assert [case.kind for case in scalable] == [
+        "scalable_immediate",
+        "scalable_masked_immediate",
+    ]
+    assert all(case.invocation.immediate == "3" for case in scalable)
+    assert scalable[1].scalable is not None
+    assert scalable[1].scalable.mask_bits == (10,)
+
+    source = render_cpp_values_runner(plan.profiles[0], render_assets)
+    assert "tsl::load<Vec, false>(in0.data())" in source
+    assert "tsl::mul_imm<Vec, 3>(v0)" in source
+    assert "tsl::mul_imm_maskz<Vec, 3>(" in source
+    assert "make_mask<tsl::simd<std::int32_t, tsl::sve>>(10ull, 4, lanes)" in source
+    assert "authored_expected[i % 4]" in source
+
+
 def test_scalable_plan_facts_stay_backend_neutral_for_sve_case() -> None:
     # Planned scalable facts carry raw extension templates, integer mask bits, and the
     # unquoted authored case name. The C++ renderer alone spells `tsl::simd<...>`,

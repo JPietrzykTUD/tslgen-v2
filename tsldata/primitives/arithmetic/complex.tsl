@@ -1740,12 +1740,13 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
     """
   tests:
     - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 3], expected [3, 6, 9, 12, 15, 18, 21, 24]}}
+    - {tags [basic, rvv], extension "rvv", type "si32", case {inputs [[1, 2, 3, 4], 3], expected [3, 6, 9, 12]}}
     - {tags [zero], type "si32", case {inputs [[-1, 0, 1, -2, 2, -3, 3, -4], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
     - {tags [neg], type "si32", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], -2], expected [-2, 4, -6, 8, -10, 12, -14, 16]}}
     - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 5], expected [5, 10, 15, 20, 25, 30, 35, 40]}}
     - {tags [zero], type "ui16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, wasm128, sve]:
+    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, wasm128, sve, rvv]:
       arith:
         requires:
           scalar []
@@ -1758,6 +1759,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           neon [neon]
           wasm128 [simd128]
           sve [sve]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1790,9 +1792,10 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
     """
   tests:
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [0, 6, 0, 12]}}
+    - {tags [maskz, basic, rvv], extension "rvv", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [0, 6, 0, 12]}}
     - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], 2], expected [0.0, -4.0, 0.0, -8.0]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128, rvv]:
       arith:
         requires:
           scalar []
@@ -1805,6 +1808,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
           neon [neon]
           sve [sve]
           wasm128 [simd128]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1838,9 +1842,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
     """
   tests:
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [1, 6, 3, 12]}}
+    - {tags [mask, basic, rvv], extension "rvv", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [1, 6, 3, 12]}}
     - {tags [mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], 2], expected [1.0, -4.0, 3.0, -8.0]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128, rvv]:
       arith:
         requires:
           scalar []
@@ -1853,6 +1858,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
           neon [neon]
           sve [sve]
           wasm128 [simd128]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2656,6 +2662,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
     """
   tests:
     - {tags [basic], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 3], expected [1, 0, 2, -1, 0, -2, 1, 0]}}
+    - {tags [basic, rvv], extension "rvv", type "si32", case {inputs [[10, -9, 8, -7], 3], expected [1, 0, 2, -1]}}
     - {tags [edge, signs], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], -3], expected [1, 0, 2, -1, 0, -2, 1, 0]}}
     - {tags [edge, overflow], type "si32", case {inputs [[-2147483648, -7, 7, 0], -1], expected [0, 0, 0, 0]}}
     - {tags [one], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 1], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
@@ -2666,7 +2673,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
     - {role "compile_failure", tags [failure, zero_immediate], type "si32", case {inputs [[10, -9, 8, -7], 0], failure "integer_zero_divisor"}}
     - {role "compile_failure", tags [failure, narrowed_zero], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 256], failure "integer_zero_divisor"}}
   impls:
-    [scalar, generic, clang_v128, avx512, avx2, sse, sve, wasm128]:
+    [scalar, generic, clang_v128, avx512, avx2, sse, sve, wasm128, rvv]:
       arith:
         requires:
           scalar []
@@ -2677,6 +2684,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
           sse [sse]
           sve [sve]
           wasm128 [simd128]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2728,9 +2736,10 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
     """
   tests:
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [0, 0, 0, -1]}}
+    - {tags [maskz, basic, rvv], extension "rvv", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [0, 0, 0, -1]}}
     - {role "compile_failure", tags [maskz, failure, all_inactive, zero_immediate], type "si32", case {inputs [0, [10, -9, 8, -7], 0], failure "integer_zero_divisor"}}
   impls:
-    [scalar, avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
+    [scalar, avx512, avx2, sse, sve, generic, clang_v128, wasm128, rvv]:
       arith:
         requires:
           scalar []
@@ -2741,6 +2750,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
           generic []
           clang_v128 []
           wasm128 [simd128]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2793,9 +2803,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
     """
   tests:
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [10, 0, 8, -1]}}
+    - {tags [mask, basic, rvv], extension "rvv", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [10, 0, 8, -1]}}
     - {role "compile_failure", tags [mask, failure, all_inactive, zero_immediate], type "si32", case {inputs [0, [10, -9, 8, -7], 0], failure "integer_zero_divisor"}}
   impls:
-    [scalar, avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
+    [scalar, avx512, avx2, sse, sve, generic, clang_v128, wasm128, rvv]:
       arith:
         requires:
           scalar []
@@ -2806,6 +2817,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
           generic []
           clang_v128 []
           wasm128 [simd128]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false

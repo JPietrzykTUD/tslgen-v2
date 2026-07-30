@@ -197,6 +197,13 @@ _CASE_REQUIREMENTS = {
     "scalable_golden": ValueTestCaseRequirements(
         expected="lanes", required_facts=_SCALABLE_VALUE_FACTS
     ),
+    "scalable_immediate": ValueTestCaseRequirements(
+        expected="lanes",
+        vector_inputs="non_empty",
+        required_facts=_SCALABLE_VALUE_FACTS
+        | frozenset({ValueTestFact.IMMEDIATE}),
+        vector_inputs_match_lanes=True,
+    ),
     "scalable_mask_constant": ValueTestCaseRequirements(
         expected="one", required_facts=_SCALABLE_MASK_FACTS
     ),
@@ -262,6 +269,19 @@ _CASE_REQUIREMENTS = {
         mask_inputs="one",
         required_facts=_SCALABLE_VALUE_FACTS
         | frozenset({ValueTestFact.SCALABLE_MASK_INPUTS}),
+    ),
+    "scalable_masked_immediate": ValueTestCaseRequirements(
+        expected="lanes",
+        vector_inputs="non_empty",
+        mask_inputs="one",
+        required_facts=_SCALABLE_VALUE_FACTS
+        | frozenset(
+            {
+                ValueTestFact.IMMEDIATE,
+                ValueTestFact.SCALABLE_MASK_INPUTS,
+            }
+        ),
+        vector_inputs_match_lanes=True,
     ),
     "scalable_runtime_failure": ValueTestCaseRequirements(
         vector_inputs="non_empty",

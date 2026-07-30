@@ -154,6 +154,8 @@ class _ScalableLaneModel(LaneModel):
                 )
                 args.append(f"m{mask_index}")
                 mask_index += 1
+            elif kind == "sImm":
+                continue
             else:
                 raise ValueError(
                     f"scalable value test does not support argument kind {kind!r}"
@@ -221,6 +223,8 @@ def render_value_case(case: ValueTestCasePlan) -> str:
     template_args = ["Vec"]
     if "vidx" in case.invocation.param_kinds:
         template_args.append("Indices")
+    if case.invocation.immediate is not None:
+        template_args.append(case.invocation.immediate)
     template_args.extend(case.invocation.generic_defaults)
     call = f"tsl::{case.call_name}<{', '.join(template_args)}>({', '.join(args)})"
     model.append_result_check(lines, case, call)
