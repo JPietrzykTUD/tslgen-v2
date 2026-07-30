@@ -6,6 +6,8 @@ from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 from tslc.value_tests.render_cpp_helpers import (
     append_call_args as _append_call_args,
+    scalable_header as _scalable_header,
+    scalable_mask_from_bits as _scalable_mask_from_bits,
     scalar_expected as _scalar_expected,
     scalar_result_type as _scalar_result_type,
 )
@@ -229,6 +231,31 @@ def _scalar_result(case: ValueTestCasePlan) -> str:
     lines.append("}")
     return "\n".join(lines)
 
+
+def _scalable_mask_count(case: ValueTestCasePlan) -> str:
+    scalable = case.scalable
+    assert scalable is not None
+    lines = _scalable_header(case)
+    lines.extend(
+        [
+            "  typename Vec::mask_type mask = "
+            f"{_scalable_mask_from_bits(case, 0)};",
+            f"  auto result = tsl::{case.call_name}<Vec>(mask);",
+            f"  constexpr std::uint64_t authored_mask = "
+            f"{scalable.mask_bits[0]}ull;",
+            "  std::size_t expected = 0;",
+            "  for (std::size_t i = 0; i < lanes; ++i) {",
+            f"    expected += static_cast<std::size_t>("
+            f"(authored_mask >> (i % {case.lanes})) & 1ull);",
+            "  }",
+            f'  return tsl::test::check_scalar<std::size_t>("'
+            f'{case.case_name}", result, expected);',
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _lane_list(case: ValueTestCasePlan) -> str:
     literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
     expected = cpp_literal_list(case.expectation.values, case.type_tag)
@@ -273,6 +300,7 @@ __all__ = (
     "_scalar_vector",
     "_vector_to_array",
     "_scalar_result",
+    "_scalable_mask_count",
     "_lane_list",
     "_reduction",
     "_status_pointer",

@@ -206,6 +206,17 @@ _CASE_REQUIREMENTS = {
         required_facts=_SCALABLE_MASK_FACTS
         | frozenset({ValueTestFact.SCALABLE_MASK_INPUTS}),
     ),
+    "scalable_mask_count": ValueTestCaseRequirements(
+        expected="one",
+        mask_inputs="one",
+        required_facts=frozenset(
+            {
+                ValueTestFact.RESULT_KIND,
+                ValueTestFact.SCALABLE_RUNTIME,
+                ValueTestFact.SCALABLE_MASK_INPUTS,
+            }
+        ),
+    ),
     "scalable_mask_logic": ValueTestCaseRequirements(
         expected="one",
         mask_inputs="non_empty",

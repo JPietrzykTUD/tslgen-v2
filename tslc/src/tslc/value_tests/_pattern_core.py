@@ -21,7 +21,10 @@ from tslc.value_tests._case_scalable import (
     scalable_golden_cases,
     scalable_masked_cases,
 )
-from tslc.value_tests._case_scalable_masks import scalable_mask_result_cases
+from tslc.value_tests._case_scalable_masks import (
+    scalable_mask_count_cases,
+    scalable_mask_result_cases,
+)
 from tslc.value_tests._pattern_base import (
     _BasePattern,
     CasePlanBuilder,
@@ -336,6 +339,58 @@ class _IndexedScalarPattern(_BasePattern):
         )
         return (plan,) if plan is not None else ()
 
+
+class _MaskCountPattern(_BasePattern):
+    def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
+        spec = specs[0]
+        return (
+            spec.result_kind == "usize"
+            and tuple(spec.param_kinds) == ("m",)
+            and spec.target is None
+            and spec.mask_policy is None
+            and spec.immediate is None
+            and not spec.axis
+            and not spec.generic_params
+            and not spec.type_params
+        )
+
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        plans: list[ValueTestCasePlan] = []
+        case_extension = (
+            context.catalog.extensions.get(context.case.extension)
+            if context.case.extension is not None
+            else None
+        )
+        if case_extension is None or case_extension.vector_bits_kind != "scalable":
+            fixed = scalar_result_case(
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+            )
+            if fixed is not None:
+                plans.append(fixed)
+        plans.extend(
+            scalable_mask_count_cases(
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
+            )
+        )
+        return tuple(plans)
+
+    def unplanned_reason(self, context: ValueTestCaseContext) -> str | None:
+        del context
+        return (
+            "scalable mask-count value tests require expected_rule 'popcnt', "
+            "one non-negative mask input, and its matching authored-lane count"
+        )
+
+
 class _MaskedScalarVectorPattern(_BasePattern):
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         spec = specs[0]
@@ -439,6 +494,7 @@ __all__ = (
     "_VectorConstantPattern",
     "_SimpleShapePattern",
     "_IndexedScalarPattern",
+    "_MaskCountPattern",
     "_MaskedScalarVectorPattern",
     "_ImmediatePattern",
 )

@@ -90,6 +90,81 @@ def scalable_mask_result_cases(
         )
     return tuple(plans)
 
+
+def scalable_mask_count_cases(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+    catalog: Catalog,
+    harness: HarnessPrimitiveNames,
+    backend: ValueTestBackendSupport,
+) -> tuple[ValueTestCasePlan, ...]:
+    del index
+    del harness
+    if (
+        case.lanes is None
+        or case.expected_rule != "popcnt"
+        or len(case.expected) != 1
+    ):
+        return ()
+    mask_inputs = _mask_inputs(case)
+    if len(mask_inputs) != 1:
+        return ()
+    mask_bits = _mask_bits_value(mask_inputs[0])
+    if mask_bits is None:
+        return ()
+    try:
+        expected = int(case.expected[0], 0)
+    except ValueError:
+        return ()
+    authored_mask = mask_bits & ((1 << case.lanes) - 1)
+    if expected != authored_mask.bit_count():
+        return ()
+    plans: list[ValueTestCasePlan] = []
+    for spec in specs:
+        if (
+            spec.type_tag != case.type_tag
+            or spec.result_kind != "usize"
+            or spec.param_kinds != ("m",)
+        ):
+            continue
+        if case.extension is not None and spec.extension_name != case.extension:
+            continue
+        scalable = scalable_case_facts(
+            spec,
+            catalog,
+            backend,
+            mask_bit_tokens=mask_inputs,
+        )
+        if scalable is None:
+            continue
+        plans.append(
+            ValueTestCasePlan(
+                kind="scalable_mask_count",
+                function_name=scalable_function_name(
+                    spec.extension_name, case.name
+                ),
+                case_name=case.name,
+                call_name=name,
+                type_tag=case.type_tag,
+                base_spelling=spec.base_type_spelling,
+                lanes=case.lanes,
+                inputs=ValueTestInputs(masks=mask_inputs),
+                expectation=ValueTestExpectation(
+                    values=case.expected,
+                    comparison=case.comparison,
+                ),
+                invocation=ValueTestInvocation(
+                    result_kind=spec.result_kind,
+                    param_kinds=spec.param_kinds,
+                ),
+                scalable=scalable,
+            )
+        )
+    return tuple(plans)
+
+
 def scalable_masked_mask_result_cases(
     name: str,
     index: int,
@@ -353,6 +428,7 @@ def _expected_mask_bits(values: tuple[str, ...]) -> int:
 __all__ = (
     "scalable_mask_constant_cases",
     "scalable_mask_conversion_cases",
+    "scalable_mask_count_cases",
     "scalable_mask_logic_cases",
     "scalable_mask_result_cases",
     "scalable_masked_mask_result_cases",

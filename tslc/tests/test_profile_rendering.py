@@ -1123,6 +1123,7 @@ def rvv_mask_project(data_root: Path, machine_profiles_path: Path):
             "mask_binary_or",
             "mask_binary_xor",
             "mask_binary_not",
+            "mask_population_count",
             "equal",
             "nequal",
             "less_than",
@@ -1170,6 +1171,7 @@ def test_rvv_native_masks_comparisons_and_select_render_exact_intrinsics(
             "vmnot_m",
         ):
             assert f"__riscv_{stem}_b{width}" in header
+        assert f"__riscv_vcpop_m_b{width}" in header
     integer_types = (
         ("i8m1", 8, "vmslt", "vmsle"),
         ("u8m1", 8, "vmsltu", "vmsleu"),
@@ -1200,3 +1202,5 @@ def test_rvv_native_masks_comparisons_and_select_render_exact_intrinsics(
     assert "::tsl::test::check_mask_bits<tsl::simd<float, tsl::rvv>>" in values
     assert "__riscv_vid_v_u8m1" in helper
     assert "__riscv_vcpop_m_b64" in helper
+    assert "test_scalable_rvv_mask_population_count_ui8_rvv_mask_popcnt_basic_rvv" in values
+    assert "test_scalable_rvv_mask_population_count_ui64_rvv_mask_popcnt_basic_rvv" in values

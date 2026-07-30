@@ -760,6 +760,10 @@ prim<usize:=m> mask_population_count(mask):
     return count
     """
   tests:
+    - {tags [mask, popcnt, basic, rvv], extension "rvv", type "ui8", expected_rule "popcnt", lane_count 16, case {inputs [43690], expected 8}}
+    - {tags [mask, popcnt, basic, rvv], extension "rvv", type "ui16", expected_rule "popcnt", lane_count 8, case {inputs [170], expected 4}}
+    - {tags [mask, popcnt, basic, rvv], extension "rvv", type "ui32", expected_rule "popcnt", lane_count 4, case {inputs [10], expected 2}}
+    - {tags [mask, popcnt, basic, rvv], extension "rvv", type "ui64", expected_rule "popcnt", lane_count 2, case {inputs [2], expected 1}}
     - {tags [mask, popcnt, basic], extension "avx512", type "ui8", expected_rule "popcnt", lane_count 64, case {inputs [12297829382473034410], expected 32}}
     - {tags [mask, popcnt, edge], extension "avx512", type "ui8", expected_rule "popcnt", lane_count 64, case {inputs [18446744073709551615], expected 64}}
     - {tags [mask, popcnt, zero], extension "avx512", type "ui8", expected_rule "popcnt", lane_count 64, case {inputs [0], expected 0}}
@@ -848,6 +852,59 @@ prim<usize:=m> mask_population_count(mask):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(scalar::size, intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
+    rvv:
+      [si8, ui8]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(intrin<vcpop, build[infix="m", infix_sep="_", suffix="b8"]>(
+              mask,
+              value(vector::runtime_length)
+            ));
+          """
+      [si16, ui16]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(intrin<vcpop, build[infix="m", infix_sep="_", suffix="b16"]>(
+              mask,
+              value(vector::runtime_length)
+            ));
+          """
+      [si32, ui32, f32]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(intrin<vcpop, build[infix="m", infix_sep="_", suffix="b32"]>(
+              mask,
+              value(vector::runtime_length)
+            ));
+          """
+      [si64, ui64, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(intrin<vcpop, build[infix="m", infix_sep="_", suffix="b64"]>(
+              mask,
+              value(vector::runtime_length)
+            ));
+          """
     generic:
       arith:
         requires []

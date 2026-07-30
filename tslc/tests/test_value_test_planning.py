@@ -3043,6 +3043,118 @@ def test_scalable_plan_facts_stay_backend_neutral_for_sve_case() -> None:
     assert "{expected_bits}" in logic.scalable.mask_check_template
 
 
+def test_scalable_mask_count_uses_runtime_tiled_oracle(
+    render_assets: RenderAssets,
+) -> None:
+    count = Primitive(
+        "mask_count",
+        "usize:=m",
+        ("mask",),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="mask_count_si32_sve_basic",
+                type_tag="si32",
+                tags=("basic",),
+                lanes=4,
+                extension="sve",
+                expected_rule="popcnt",
+                inputs=(TslTestArg("mask", mask_bits="10"),),
+                expected=("2",),
+            ),
+        ),
+    )
+    catalog = Catalog(
+        primitives=(count, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+    specs = {
+        "mask_count": (
+            _spec(
+                "mask_count",
+                "mask_count",
+                param_kinds=("m",),
+                result_kind="usize",
+                extension_name="sve",
+                uses_sized_vector=False,
+                lane_parameter=None,
+            ),
+        ),
+    }
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (ValueTestBackendProfileInput("cpp", "sve", specs),)
+    )
+
+    assert not plan.diagnostics
+    assert plan.coverage[0].status == "emitted"
+    assert plan.coverage[0].case_kind == "scalable_mask_count"
+    case = plan.profiles[0].cases[0]
+    assert case.kind == "scalable_mask_count"
+    assert case.scalable is not None
+    assert case.scalable.mask_bits == (10,)
+
+    source = render_cpp_values_runner(plan.profiles[0], render_assets)
+    assert "using Vec = tsl::simd<std::int32_t, tsl::sve>;" in source
+    assert "make_mask<tsl::simd<std::int32_t, tsl::sve>>(10ull, 4, lanes)" in source
+    assert "auto result = tsl::mask_count<Vec>(mask);" in source
+    assert "(authored_mask >> (i % 4)) & 1ull" in source
+    assert "check_scalar<std::size_t>" in source
+
+
+def test_scalable_mask_count_rejects_mismatched_authored_oracle() -> None:
+    count = Primitive(
+        "mask_count",
+        "usize:=m",
+        ("mask",),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="bad_count",
+                type_tag="si32",
+                tags=("bad",),
+                lanes=4,
+                extension="sve",
+                expected_rule="popcnt",
+                inputs=(TslTestArg("mask", mask_bits="10"),),
+                expected=("3",),
+            ),
+        ),
+    )
+    catalog = Catalog(
+        primitives=(count, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+    specs = {
+        "mask_count": (
+            _spec(
+                "mask_count",
+                "mask_count",
+                param_kinds=("m",),
+                result_kind="usize",
+                extension_name="sve",
+                uses_sized_vector=False,
+                lane_parameter=None,
+            ),
+        ),
+    }
+
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (ValueTestBackendProfileInput("cpp", "sve", specs),)
+    )
+
+    assert plan.profiles[0].cases == ()
+    assert plan.coverage[0].status == "authored_unplanned"
+    assert "matching authored-lane count" in plan.coverage[0].reason
+
+
 def test_scalable_only_case_reports_backend_unsupported_without_scalable_kinds() -> None:
     # A case only plannable as a scalable kind (the mask operand is authored as a scalar
     # token, which the fixed masked-mask-result shape rejects) must surface as
