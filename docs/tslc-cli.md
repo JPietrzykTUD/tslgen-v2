@@ -193,13 +193,14 @@ state: generated calls pass an explicit `vl`, and lane counts use
 `__riscv_vlenb() / sizeof(T)`. Do not model VLEN as separate fixed-width
 extensions.
 
-The verified primitive surface covers `set1`, `set_zero`, `load`, `store`,
-`add`, and `sub` for all declared integer and floating LMUL=1 types, including
-zeroing and pass-through masked arithmetic and contiguous memory forms. Masked
-loads use mask-undisturbed policy intrinsics, and masked stores leave inactive
-memory lanes untouched. Native predicates support all-true/all-false
-construction, AND/OR/XOR/NOT, unmasked equality and ordering comparisons, and
-`select`. Unsupported later primitive groups remain explicit coverage gaps.
+The complete catalog surface is selected and build verified for RVV with no
+coverage-gap or policy-deferred slots. Direct RVV intrinsics implement the
+native arithmetic, bitwise, comparison, mask, load/store, shift, conversion,
+and permutation operations. Operations without a ratified vector instruction,
+such as floating remainder, use typed scalable compositions or runtime-lane
+fallbacks while preserving the authored semantics. This includes all declared
+integer and floating LMUL=1 types, mask policies, conversions, reductions,
+permutations, and gather/scatter forms.
 
 The repository resolves the `riscv-cpp` tool role to
 `/usr/bin/riscv64-linux-gnu-g++`. Override that role in `[tslc.tools]` on hosts
@@ -209,12 +210,10 @@ with a different cross-compiler path. `dev.sh doctor` and `dev.sh test` discover
 
 ```bash
 ./dev.sh doctor --profile rvv --backend cpp --run
-rvv_types=si8,ui8,si16,ui16,si32,ui32,si64,ui64,f32,f64
-./dev.sh build --primitives set1,set_zero,load,store,add,sub \
-  --profiles rvv --backends cpp --types "${rvv_types}"
-./dev.sh test \
-  --primitives set_zero,load,store,add,sub,mask_false,mask_true,mask_binary_and,mask_binary_or,mask_binary_xor,mask_binary_not,equal,nequal,less_than,greater_than,less_than_or_equal,greater_than_or_equal,select \
-  --profiles rvv --backends cpp --types "${rvv_types}"
+./dev.sh build --profiles rvv --backends cpp
+./dev.sh test --profiles rvv --backends cpp
+PYTHONPATH=tslc/src python -m tslc coverage inventory \
+  --profiles rvv --backends cpp --format text
 ```
 
 The default runner uses QEMU’s `max` CPU with V 1.0 and VLEN 128. CI reruns

@@ -133,6 +133,23 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
         }
     )
 
+    assert [
+        shard for shard in exhaustive_shards if "rvv" in shard["profiles"].split(",")
+    ] == [
+        {
+            "backend": "cpp",
+            "name": "cpp-riscv-0",
+            "profiles": "rvv",
+        }
+    ]
+
+    values_workflow = Path(".github/workflows/generated-values.yml").read_text(
+        encoding="utf-8"
+    )
+    assert 'TSLC_QEMU_RISCV64="/usr/bin/qemu-riscv64"' in values_workflow
+    assert "vlen=256,elen=64" in values_workflow
+    assert "timeout --signal=KILL 60s /usr/bin/qemu-riscv64" in values_workflow
+
 
 def test_package_and_docs_generate_a_supported_distributable_profile_set() -> None:
     helper = Path(".github/scripts/generate_distributable_project.sh").read_text(
