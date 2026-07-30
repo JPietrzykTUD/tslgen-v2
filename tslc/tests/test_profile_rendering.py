@@ -896,6 +896,7 @@ def rvv_project(data_root: Path, machine_profiles_path: Path):
             "set1", "set_zero", "load", "store", "add", "sub", "mul",
             "binary_and", "binary_or", "binary_xor",
             "inv", "binary_andnot",
+            "max", "min",
         ],
         profiles=["rvv"],
         type_tags=[
@@ -980,6 +981,13 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
             "vsub_vv",
         ):
             assert f"__riscv_{stem}_{suffix}" in header
+        extrema_stems = (
+            ("vmaxu_vv", "vminu_vv")
+            if suffix.startswith("u")
+            else ("vmax_vv", "vmin_vv")
+        )
+        for stem in extrema_stems:
+            assert f"__riscv_{stem}_{suffix}" in header
         assert f"__riscv_vle{width}_v_{suffix}_mu" in header
         assert f"__riscv_vse{width}_v_{suffix}_m" in header
     for suffix, width in (("f32m1", 32), ("f64m1", 64)):
@@ -994,6 +1002,8 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
             assert f"__riscv_{stem}_{suffix}" in header
         assert f"__riscv_vle{width}_v_{suffix}_mu" in header
         assert f"__riscv_vse{width}_v_{suffix}_m" in header
+        assert f"__riscv_vfmax_vv_{suffix}" not in header
+        assert f"__riscv_vfmin_vv_{suffix}" not in header
     assert "return ::tsl::set1<Vec>(static_cast<int32_t>(0));" in header
     assert "::tsl::add<Vec>(left, right),\n" in header
     assert "::tsl::binary_and<Vec>(left, right),\n" in header
@@ -1001,6 +1011,7 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "::tsl::binary_xor<Vec>(left, right),\n" in header
     assert "::tsl::inv<Vec>(left),\n" in header
     assert "::tsl::binary_andnot<Vec>(left, right),\n" in header
+    assert "::tsl::less_than<Vec>(vec_a, vec_b),\n" in header
     assert "::tsl::sub<Vec>(left, right),\n" in header
     assert "::tsl::mul<Vec>(factor1, factor2),\n" in header
     assert "::tsl::set_zero<Vec>()" in header
@@ -1045,6 +1056,12 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
         "test_scalable_rvv_binary_andnot_maskz_binary_andnot_ui64_rvv_"
         "binary_andnot_maskz_edge_rvv"
     ) in values
+    for operation in ("max", "min"):
+        assert f"test_scalable_rvv_{operation}_si64_rvv_edge_rvv" in values
+        assert f"test_scalable_rvv_{operation}_ui64_rvv_edge_rvv" in values
+        assert (
+            f"test_scalable_rvv_{operation}_f32_rvv_nan_ordered_rvv"
+        ) in values
     assert "tsl::load_maskz<Vec, true>(mask, memory.data() + 0);" in values
     assert "tsl::load_mask<Vec, true>(mask, memory.data() + 0, v1);" in values
     assert "tsl::store_mask<Vec, true>(mask, actual.data() + 0, v0);" in values

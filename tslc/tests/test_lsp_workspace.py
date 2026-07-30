@@ -325,10 +325,23 @@ def test_implementation_context_only_offers_slots_where_that_body_wins(
     assert snapshot.catalog is not None
     path = data_root / "primitives" / "arithmetic" / "select.tsl"
     lines = path.read_text(encoding="utf-8").splitlines()
+    extension_group_line = next(
+        line
+        for line, text in enumerate(lines, 1)
+        if text.strip() == (
+            "[scalar, generic, clang_v128, oneapi_fpga, avx512, avx2_vl, "
+            "avx2, sse_vl, sse, neon, sve]:"
+        )
+    )
+    implementation_line = next(
+        line
+        for line, text in enumerate(lines, 1)
+        if line > extension_group_line and text.strip() == "arith:"
+    )
     body_line = next(
         line
         for line, text in enumerate(lines, 1)
-        if line > 150 and text.strip() == "complete("
+        if line > implementation_line and text.strip() == "complete("
     )
 
     def unexpected_lowering(*args, **kwargs):
@@ -347,7 +360,7 @@ def test_implementation_context_only_offers_slots_where_that_body_wins(
 
     assert context.primitive == "max"
     assert context.implementation_source is not None
-    assert context.implementation_source.line == 150
+    assert context.implementation_source.line == implementation_line
     assert context.slots
     assert any(
         slot.profile == "avx2"
