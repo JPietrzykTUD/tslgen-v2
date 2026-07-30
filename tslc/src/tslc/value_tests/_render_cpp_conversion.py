@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 from tslc.catalog.model import TestComparison
+from tslc.value_tests.lane_math import runtime_tile_index
 from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
-from tslc.value_tests.render_cpp_helpers import render_extension_test_template
+from tslc.value_tests.render_cpp_helpers import (
+    append_runtime_vector_input,
+    render_extension_test_template,
+    scalable_header,
+)
 
 
 def _convert(case: ValueTestCasePlan) -> str:
@@ -61,6 +66,38 @@ def _repr_cast(case: ValueTestCasePlan) -> str:
         f'"{case.case_name}", result, expected, {target_lanes});',
         "}",
     ]
+    return "\n".join(lines)
+
+
+def _scalable_repr_cast(case: ValueTestCasePlan) -> str:
+    target = case.target
+    scalable = case.scalable
+    assert target is not None and scalable is not None
+    assert target.base_spelling is not None and target.type_tag is not None
+    assert scalable.store_name is not None
+    lines = scalable_header(case)
+    lines.append(
+        f"  using ToVec = tsl::simd<{target.base_spelling}, "
+        f"tsl::{scalable.source_extension}>;"
+    )
+    source = append_runtime_vector_input(lines, case, 0)
+    expected = cpp_literal_list(case.expectation.values, target.type_tag)
+    lines.extend(
+        [
+            f"  static const {target.base_spelling} authored_expected[{case.lanes}] = "
+            f"{{{expected}}};",
+            f"  std::vector<{target.base_spelling}> expected(lanes);",
+            f"  std::vector<{target.base_spelling}> actual(lanes);",
+            f"  for (std::size_t i = 0; i < lanes; ++i) expected[i] = "
+            f"authored_expected[{runtime_tile_index('i', case.lanes)}];",
+            f"  typename ToVec::register_type result = "
+            f"tsl::{case.call_name}<Vec, ToVec>({source});",
+            f"  tsl::{scalable.store_name}<ToVec, false>(actual.data(), result);",
+            f"  return tsl::test::check_lanes_bitwise<{target.base_spelling}>("
+            f"\"{case.case_name}\", actual.data(), expected.data(), lanes);",
+            "}",
+        ]
+    )
     return "\n".join(lines)
 
 

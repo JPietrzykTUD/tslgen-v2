@@ -16,8 +16,10 @@ from tslc.value_tests._case_conversion import (
     repr_cast_case,
     target_imask_case,
 )
+from tslc.value_tests._case_scalable import scalable_repr_cast_cases
 from tslc.value_tests._pattern_base import _BasePattern, ValueTestCaseContext
 from tslc.value_tests.model import ValueTestCasePlan
+
 
 class _LoadConvertPattern(_BasePattern):
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
@@ -37,6 +39,7 @@ class _LoadConvertPattern(_BasePattern):
             context.harness,
         )
         return (plan,) if plan is not None else ()
+
 
 @dataclass(frozen=True, slots=True)
 class _ConvertPattern(_BasePattern):
@@ -61,6 +64,7 @@ class _ConvertPattern(_BasePattern):
         )
         return (plan,) if plan is not None else ()
 
+
 class _ReprCastPattern(_BasePattern):
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         return any(
@@ -73,6 +77,17 @@ class _ReprCastPattern(_BasePattern):
         )
 
     def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        scalable = scalable_repr_cast_cases(
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
+            context.catalog,
+            context.harness,
+            context.backend,
+        )
+        if scalable:
+            return scalable
         plan = repr_cast_case(
             context.emitted_name,
             context.index,
@@ -221,6 +236,7 @@ class _ExtensionReprPattern(_BasePattern):
             kind, context.emitted_name, context.index, case, specs, harness
         )
         return (plan,) if plan is not None else ()
+
 
 __all__ = (
     "_LoadConvertPattern",

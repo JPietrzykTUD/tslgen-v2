@@ -37,6 +37,7 @@ from tslc.value_tests._render_cpp_conversion import (
     _load_convert,
     _lane_convert,
     _repr_cast,
+    _scalable_repr_cast,
     _target_imask,
 )
 from tslc.value_tests._render_cpp_memory import (
@@ -113,6 +114,7 @@ CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "scalar_vector": _scalar_vector,
         "scalable_golden": render_value_case,
         "scalable_immediate": render_value_case,
+        "scalable_repr_cast": _scalable_repr_cast,
         "scalable_mask_constant": render_mask_case,
         "scalable_mask_conversion": render_mask_conversion,
         "scalable_mask_count": _scalable_mask_count,

@@ -1143,6 +1143,43 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert not cpp_verify.pass_target_to_compiler
     assert cpp_verify.preflight_headers == ("riscv_vector.h",)
 
+@pytest.fixture(scope="module")
+def rvv_reinterpret_project(data_root: Path, machine_profiles_path: Path):
+    return _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["reinterpret"],
+        profiles=["rvv"],
+        type_tags=["si32", "ui32", "f32"],
+        backends=["cpp"],
+    )
+
+
+def test_rvv_reinterpret_uses_runtime_lane_conversion_values(
+    rvv_reinterpret_project,
+) -> None:
+    assert not has_errors(
+        rvv_reinterpret_project.diagnostics
+    ), rvv_reinterpret_project.diagnostics
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_reinterpret_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    assert "__riscv_vreinterpret_v_i32m1_u32m1" in header
+    assert "__riscv_vreinterpret_v_i32m1_f32m1" in header
+    assert any(
+        case.kind == "scalable_repr_cast"
+        and case.scalable is not None
+        and case.scalable.source_extension == "rvv"
+        for profile in rvv_reinterpret_project.rendered.value_tests.profiles_for("cpp")
+        for case in profile.cases
+    )
+    assert "using ToVec = tsl::simd<uint32_t, tsl::rvv>;" in values
+    assert "tsl::reinterpret<Vec, ToVec>(v0)" in values
+    assert "tsl::store<ToVec, false>(actual.data(), result);" in values
+    assert "check_lanes_bitwise<uint32_t>" in values
 
 
 @pytest.fixture(scope="module")

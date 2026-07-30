@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tslc.catalog.model import Catalog, TestCase
+from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_scalable_common import (
     scalable_case_facts,
@@ -24,6 +25,7 @@ from tslc.value_tests.model import (
     ValueTestFailure,
     ValueTestInputs,
     ValueTestInvocation,
+    ValueTestTarget,
 )
 
 
@@ -237,6 +239,88 @@ def scalable_immediate_cases(
     return tuple(plans)
 
 
+def scalable_repr_cast_cases(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+    catalog: Catalog,
+    harness: HarnessPrimitiveNames,
+    backend: ValueTestBackendSupport,
+) -> tuple[ValueTestCasePlan, ...]:
+    del index
+    if (
+        case.lanes is None
+        or case.expected_rule is not None
+        or case.to_type is None
+        or harness.load is None
+        or harness.store is None
+    ):
+        return ()
+    source_info = SCALAR_TYPE_INFOS.get(case.type_tag)
+    target_info = SCALAR_TYPE_INFOS.get(case.to_type)
+    vector_inputs = _vector_inputs(case)
+    if (
+        source_info is None
+        or target_info is None
+        or source_info.bit_width != target_info.bit_width
+        or len(vector_inputs) != 1
+        or len(vector_inputs[0]) != case.lanes
+        or len(case.expected) != case.lanes
+    ):
+        return ()
+    plans: list[ValueTestCasePlan] = []
+    for spec in specs:
+        target = spec.target
+        if (
+            spec.type_tag != case.type_tag
+            or spec.result_kind != "v"
+            or target is None
+            or target.base_tag != case.to_type
+        ):
+            continue
+        if case.extension is not None and spec.extension_name != case.extension:
+            continue
+        scalable = scalable_case_facts(
+            spec,
+            catalog,
+            backend,
+            load_name=harness.load,
+            store_name=harness.store,
+        )
+        if scalable is None:
+            continue
+        plans.append(
+            ValueTestCasePlan(
+                kind="scalable_repr_cast",
+                function_name=scalable_function_name(
+                    spec.extension_name, case.name, call_name=name
+                ),
+                case_name=case.name,
+                call_name=name,
+                type_tag=case.type_tag,
+                base_spelling=spec.base_type_spelling,
+                lanes=case.lanes,
+                inputs=ValueTestInputs(vectors=vector_inputs),
+                expectation=ValueTestExpectation(
+                    values=case.expected,
+                    comparison=case.comparison,
+                ),
+                invocation=ValueTestInvocation(
+                    result_kind=spec.result_kind,
+                    param_kinds=spec.param_kinds,
+                ),
+                target=ValueTestTarget(
+                    type_tag=target.base_tag,
+                    base_spelling=target.base_spelling,
+                    lanes=case.lanes,
+                ),
+                scalable=scalable,
+            )
+        )
+    return tuple(plans)
+
+
 def scalable_runtime_failure_cases(
     name: str,
     index: int,
@@ -304,5 +388,6 @@ __all__ = (
     "scalable_golden_cases",
     "scalable_immediate_cases",
     "scalable_masked_cases",
+    "scalable_repr_cast_cases",
     "scalable_runtime_failure_cases",
 )

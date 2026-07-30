@@ -21,6 +21,7 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
     base: ToBase
   tests:
     - {tags [basic], type "si32", to_type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [basic, rvv], extension "rvv", type "si32", to_type "ui32", case {inputs [[1, -2, 3, -4]], expected [1, 4294967294, 3, 4294967292]}}
     - {tags [bits], type "si32", to_type "f32", case {inputs [[1065353216, -1082130432, 1056964608, -1090519040, 1073741824, 1077936128, 1082130432, 1048576000]], expected [1.0, -1.0, 0.5, -0.5, 2.0, 3.0, 4.0, 0.25]}}
     - {tags [bits], type "ui32", to_type "f32", case {inputs [[0, 2147483648, 1069547520, 3223322624, 1077936128, 1082130432, 1048576000, 1061158912]], expected [0.0, -0.0, 1.5, -2.5, 3.0, 4.0, 0.25, 0.75]}}
     - {tags [special], type "f32", to_type "ui32", case {inputs [[0.0, 1.0, -1.0, 1.40129846e-45, "INFINITY", "-INFINITY", 3.4028235e38, -3.4028235e38]], expected [0, 1065353216, 3212836864, 1, 2139095040, 4286578688, 2139095039, 4286578687]}}
@@ -151,6 +152,23 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
                     complete(data);
                   } else {
                     complete(intrin<svreinterpret_, build[infix=to_type_suffix, suffix=base::in]>(data));
+                  }
+                """
+    rvv:
+      arith:
+        requires [v]
+        ToBase:
+          arith:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
+            implementation:
+              tsil """
+                  if<generation>(type::is_same(base::in, ToBase)) {
+                    complete(data);
+                  } else {
+                    complete(intrin<vreinterpret, build[infix=base::in, infix_sep="_v_", suffix=ToBase]>(data));
                   }
                 """
     [generic, clang_v128, oneapi_fpga, scalar, wasm128]:
