@@ -194,6 +194,16 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
         ),
         "test_set_builds": ("set",),
         "test_to_ostream_builds": ("to_ostream",),
+        "test_rvv_remaining_primitive_coverage_builds": (
+            "align_right_lanes",
+            "expand",
+            "gather_narrow",
+            "gather_narrow_partial",
+            "insert_value",
+            "random_step",
+            "shift_left_imask",
+            "table_lookup",
+        ),
     }
 )
 

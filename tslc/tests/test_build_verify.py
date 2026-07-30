@@ -2952,6 +2952,35 @@ def test_to_ostream_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_rvv_remaining_primitive_coverage_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    compiler = shutil.which("riscv64-linux-gnu-g++")
+    if compiler is None:
+        pytest.skip("riscv64-linux-gnu-g++ is required")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_rvv_remaining_primitive_coverage_builds"),
+        profiles=["rvv"],
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        tool_paths={"riscv-cpp": compiler},
+    )
+    if not report.commands:
+        pytest.skip(f"RVV cross-build tools unavailable: {report.skipped}")
+    assert report.diagnostics == (), report.diagnostics
+
+
 def test_full_corpus_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
