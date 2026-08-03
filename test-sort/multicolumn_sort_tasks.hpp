@@ -58,8 +58,13 @@ class TslTaskExecutor {
         if (failed_ || (shutdown_ && queue_.empty())) {
           return;
         }
-        task = std::move(queue_.front());
-        queue_.pop_front();
+        // Take the newest task. Quicksort partitions publish a child per
+        // recursion level, so oldest-first would expand the tree breadth-first
+        // and grow the queue with the input size. Newest-first follows the
+        // serial visit order and keeps the queue proportional to depth times
+        // worker count. Queue order is not part of the executor contract.
+        task = std::move(queue_.back());
+        queue_.pop_back();
       }
 
       try {

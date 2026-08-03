@@ -318,11 +318,23 @@ class TslMultiColumnQuickSorter {
     }
   }
 
+  // `range_sink` receives the absolute bounds of the partition side that would
+  // otherwise become an inline recursive call. Returning true transfers
+  // ownership of that range and this call skips it; returning false keeps the
+  // recursion. The larger side is always continued in the loop, so recursion
+  // depth stays logarithmic whether or not ranges are offloaded.
+  //
+  // Offering the smaller side is deliberate. Either choice publishes one
+  // independent range per level, but keeping the larger side leaves this worker
+  // with real work; publishing it instead would leave this worker with a
+  // remainder it finishes immediately, and a newest-first queue would then very
+  // likely hand the same large range straight back to it.
   template <
     TslSortOrder Order,
     bool ReportCompletion,
     class EqualBandSink,
-    class LeafSink
+    class LeafSink,
+    class RangeSink
   >
   static void sort_impl(
     DataType * keys,
@@ -332,7 +344,8 @@ class TslMultiColumnQuickSorter {
     std::mt19937_64 & rng,
     std::size_t absolute_begin,
     EqualBandSink & equal_band_sink,
-    LeafSink & leaf_sink
+    LeafSink & leaf_sink,
+    RangeSink & range_sink
   ) {
     while (count > leaf_threshold) {
       auto const pivot_value = get_pivot<Order>(keys, columns, payload_count, count, rng);
@@ -395,31 +408,37 @@ class TslMultiColumnQuickSorter {
       }
       auto * const right_keys = keys + right_begin;
       if (left_count < right_count) {
-        sort_impl<Order, ReportCompletion>(
-          keys,
-          columns,
-          payload_count,
-          left_count,
-          rng,
-          absolute_begin,
-          equal_band_sink,
-          leaf_sink
-        );
+        if (!range_sink(absolute_begin, absolute_begin + left_count)) {
+          sort_impl<Order, ReportCompletion>(
+            keys,
+            columns,
+            payload_count,
+            left_count,
+            rng,
+            absolute_begin,
+            equal_band_sink,
+            leaf_sink,
+            range_sink
+          );
+        }
         keys = right_keys;
         columns = right_columns;
         count = right_count;
         absolute_begin += right_begin;
       } else {
-        sort_impl<Order, ReportCompletion>(
-          right_keys,
-          right_columns,
-          payload_count,
-          right_count,
-          rng,
-          absolute_begin + right_begin,
-          equal_band_sink,
-          leaf_sink
-        );
+        if (!range_sink(absolute_begin + right_begin, absolute_begin + count)) {
+          sort_impl<Order, ReportCompletion>(
+            right_keys,
+            right_columns,
+            payload_count,
+            right_count,
+            rng,
+            absolute_begin + right_begin,
+            equal_band_sink,
+            leaf_sink,
+            range_sink
+          );
+        }
         count = left_count;
       }
     }
@@ -434,7 +453,12 @@ class TslMultiColumnQuickSorter {
     }
   }
 
-  template <bool ReportCompletion, class EqualBandSink, class LeafSink>
+  template <
+    bool ReportCompletion,
+    class EqualBandSink,
+    class LeafSink,
+    class RangeSink
+  >
   static void sort_active_range(
     DataType * keys,
     column_pointers const & columns,
@@ -444,7 +468,8 @@ class TslMultiColumnQuickSorter {
     std::mt19937_64 & rng,
     std::size_t absolute_begin,
     EqualBandSink & equal_band_sink,
-    LeafSink & leaf_sink
+    LeafSink & leaf_sink,
+    RangeSink & range_sink
   ) {
     if (count < 2) {
       if constexpr (ReportCompletion) {
@@ -463,7 +488,8 @@ class TslMultiColumnQuickSorter {
         rng,
         absolute_begin,
         equal_band_sink,
-        leaf_sink
+        leaf_sink,
+        range_sink
       );
     } else {
       sort_impl<TslSortOrder::DESCENDING, ReportCompletion>(
@@ -474,9 +500,15 @@ class TslMultiColumnQuickSorter {
         rng,
         absolute_begin,
         equal_band_sink,
-        leaf_sink
+        leaf_sink,
+        range_sink
       );
     }
+  }
+
+  // Serial entry points never transfer a partition range to another worker.
+  static auto keep_range_local() {
+    return [](std::size_t, std::size_t) { return false; };
   }
 
   static auto payload_columns_for(
@@ -510,6 +542,7 @@ class TslMultiColumnQuickSorter {
     auto rng = std::mt19937_64(task_seed(active_column, begin, end));
     auto no_equal_band = [](std::size_t, std::size_t) {};
     auto no_leaf = [](std::size_t, std::size_t) {};
+    auto no_range = keep_range_local();
 
     if constexpr (
       Discovery == TslRunDiscoveryKind::INCREMENTAL
@@ -525,7 +558,8 @@ class TslMultiColumnQuickSorter {
           rng,
           begin,
           no_equal_band,
-          no_leaf
+          no_leaf,
+          no_range
         );
         return;
       }
@@ -579,7 +613,8 @@ class TslMultiColumnQuickSorter {
         rng,
         begin,
         on_equal_band,
-        on_leaf
+        on_leaf,
+        no_range
       );
       return;
     }
@@ -593,7 +628,8 @@ class TslMultiColumnQuickSorter {
       rng,
       begin,
       no_equal_band,
-      no_leaf
+      no_leaf,
+      no_range
     );
     if (active_column + 1 == column_count) {
       return;
@@ -622,14 +658,16 @@ class TslMultiColumnQuickSorter {
     std::atomic<std::size_t> rle_values_scanned{0};
     std::atomic<std::size_t> direct_equal_bands{0};
     std::atomic<std::size_t> direct_equal_band_rows{0};
+    std::atomic<std::size_t> partition_tasks{0};
   };
 
-  template <TslRunDiscoveryKind Discovery, class Schedule>
+  template <TslRunDiscoveryKind Discovery, class Schedule, class Offload>
   void process_parallel_task(
     TslSortColumn<DataType> const * columns,
     std::size_t column_count,
     TslColumnSortTask task,
     Schedule & schedule,
+    Offload & offload,
     concurrent_sort_metrics * metrics
   ) const {
     if (task.end - task.begin < 2 || task.column >= column_count) {
@@ -647,6 +685,30 @@ class TslMultiColumnQuickSorter {
     auto no_equal_band = [](std::size_t, std::size_t) {};
     auto no_leaf = [](std::size_t, std::size_t) {};
 
+    // A partition subrange may be finished by a different worker only when this
+    // task owes nothing to its complete range. Three-way incremental discovery
+    // qualifies because every maximal equal run lies wholly inside one leaf or
+    // one pivot-equal band, so each partition reports self-contained work no
+    // matter which worker sorts it. A final column qualifies because no column
+    // follows it. Post-sort discovery over a non-final column does not: its RLE
+    // scan needs the whole sorted range, and an equal run may cross a partition
+    // boundary, so those partitions stay on this worker.
+    constexpr bool discovery_is_partition_local =
+      Discovery == TslRunDiscoveryKind::INCREMENTAL
+      && PartitionKind == TslPartitionKind::THREE_WAY;
+    auto offload_range = [&](std::size_t range_begin, std::size_t range_end) {
+      if (!discovery_is_partition_local && task.column + 1 != column_count) {
+        return false;
+      }
+      if (!offload(TslColumnSortTask{task.column, range_begin, range_end})) {
+        return false;
+      }
+      if (metrics != nullptr) {
+        metrics->partition_tasks.fetch_add(1, std::memory_order_relaxed);
+      }
+      return true;
+    };
+
     if constexpr (
       Discovery == TslRunDiscoveryKind::INCREMENTAL
       && PartitionKind == TslPartitionKind::THREE_WAY
@@ -661,7 +723,8 @@ class TslMultiColumnQuickSorter {
           rng,
           task.begin,
           no_equal_band,
-          no_leaf
+          no_leaf,
+          offload_range
         );
         return;
       }
@@ -711,7 +774,8 @@ class TslMultiColumnQuickSorter {
         rng,
         task.begin,
         on_equal_band,
-        on_leaf
+        on_leaf,
+        offload_range
       );
       return;
     }
@@ -725,7 +789,8 @@ class TslMultiColumnQuickSorter {
       rng,
       task.begin,
       no_equal_band,
-      no_leaf
+      no_leaf,
+      offload_range
     );
     if (task.column + 1 == column_count) {
       return;
@@ -824,6 +889,7 @@ class TslMultiColumnQuickSorter {
     auto rng = std::mt19937_64(task_seed(0, 0, count));
     auto no_equal_band = [](std::size_t, std::size_t) {};
     auto no_leaf = [](std::size_t, std::size_t) {};
+    auto no_range = keep_range_local();
     sort_active_range<false>(
       keys,
       columns,
@@ -833,7 +899,8 @@ class TslMultiColumnQuickSorter {
       rng,
       0,
       no_equal_band,
-      no_leaf
+      no_leaf,
+      no_range
     );
   }
 
@@ -899,6 +966,7 @@ class TslMultiColumnQuickSorter {
       absolute_begin,
       absolute_begin + count
     ));
+    auto no_range = keep_range_local();
     sort_active_range<true>(
       keys,
       columns,
@@ -908,7 +976,8 @@ class TslMultiColumnQuickSorter {
       rng,
       absolute_begin,
       equal_band_sink,
-      leaf_sink
+      leaf_sink,
+      no_range
     );
   }
 
@@ -950,12 +1019,18 @@ class TslMultiColumnQuickSorter {
     }
   }
 
+  // `partition_threshold` is zero to keep every quicksort partition on the
+  // worker that produced it, or the smallest partition row count worth handing
+  // to another worker. It is deliberately separate from `task_threshold`: a
+  // next-column task pays for run discovery plus a whole subtree, while a
+  // partition task pays for one partition pass.
   void sort_columns_parallel(
     TslSortColumn<DataType> const * columns,
     std::size_t column_count,
     std::size_t row_count,
     std::size_t worker_count,
     std::size_t task_threshold,
+    std::size_t partition_threshold,
     TslRunDiscoveryKind discovery = TslRunDiscoveryKind::POST_SORT,
     TslMultiColumnSortMetrics * metrics = nullptr
   ) const {
@@ -970,6 +1045,11 @@ class TslMultiColumnQuickSorter {
       throw std::invalid_argument("parallel sort requires at least one worker");
     }
     task_threshold = std::max<std::size_t>(task_threshold, 2);
+    if (partition_threshold != 0) {
+      // A range at or below the leaf threshold is never partitioned, so a
+      // smaller value would only queue ranges that cannot produce children.
+      partition_threshold = std::max(partition_threshold, leaf_threshold + 1);
+    }
 
     concurrent_sort_metrics algorithm_metrics;
     auto worker = [&](TslColumnSortTask const & task, auto & executor) {
@@ -980,6 +1060,19 @@ class TslMultiColumnQuickSorter {
           executor.submit(std::move(child));
         }
       };
+      // Unlike a next-column child, a partition range below the threshold is
+      // declined rather than run inline: the caller still holds it and its own
+      // recursion is cheaper than re-entering a task.
+      auto offload = [&](TslColumnSortTask child) {
+        if (
+          partition_threshold == 0
+          || child.end - child.begin < partition_threshold
+        ) {
+          return false;
+        }
+        executor.submit(std::move(child));
+        return true;
+      };
       if (
         discovery == TslRunDiscoveryKind::INCREMENTAL
         && PartitionKind == TslPartitionKind::THREE_WAY
@@ -989,6 +1082,7 @@ class TslMultiColumnQuickSorter {
           column_count,
           task,
           schedule,
+          offload,
           metrics != nullptr ? &algorithm_metrics : nullptr
         );
       } else {
@@ -997,6 +1091,7 @@ class TslMultiColumnQuickSorter {
           column_count,
           task,
           schedule,
+          offload,
           metrics != nullptr ? &algorithm_metrics : nullptr
         );
       }
@@ -1017,6 +1112,8 @@ class TslMultiColumnQuickSorter {
         algorithm_metrics.direct_equal_bands.load(std::memory_order_relaxed);
       metrics->direct_equal_band_rows =
         algorithm_metrics.direct_equal_band_rows.load(std::memory_order_relaxed);
+      metrics->partition_tasks_submitted =
+        algorithm_metrics.partition_tasks.load(std::memory_order_relaxed);
       metrics->tasks_submitted = task_metrics.tasks_submitted;
       metrics->tasks_executed_inline = task_metrics.tasks_executed_inline;
       metrics->max_outstanding_tasks = task_metrics.max_outstanding_tasks;

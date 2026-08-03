@@ -10,10 +10,18 @@ Run it with:
 Omit ``--json`` to start with the default path in the sidebar. The path remains
 editable, and the upload control can still override it.
 
+Worker count and the task and partition thresholds are scalar per benchmark
+process, so a scaling curve over them needs several runs merged into one file.
+``sweep_multicolumn_bench.py run`` produces exactly that::
+
+    ./sweep_multicolumn_bench.py run --workers 1,2,4,8,16
+    streamlit run visualize_multicolumn_bench.py -- --json build/sweep/merged.json
+
 Design principle: **no hidden aggregation.** Every benchmark dimension
 (algorithm, distribution, direction pattern, data type, SIMD lanes, sort
-columns, working-set size, worker count, and task threshold) is either placed
-on an axis (x / color / facet) or *pinned* to a single value. Dimensions that
+columns, working-set size, worker count, task threshold, and partition
+threshold) is either placed on an axis (x / color / facet) or *pinned* to a
+single value. Dimensions that
 do not apply to a variant use a zero sentinel and remain visible when the
 corresponding parallel/SIMD dimension is pinned.
 """
@@ -43,6 +51,10 @@ ALGO_ORDER = [
     "parallel_post_3way_net",
     "parallel_incremental_3way_ins",
     "parallel_incremental_3way_net",
+    "deep_parallel_post_3way_ins",
+    "deep_parallel_post_3way_net",
+    "deep_parallel_incremental_3way_ins",
+    "deep_parallel_incremental_3way_net",
 ]
 OLD_ALGO_ALIASES = {
     "std_sort": "std_lex_argsort",
@@ -62,6 +74,7 @@ DIMENSIONS = [
     "size",
     "workers",
     "threshold",
+    "partitions",
 ]
 DIMENSION_LABELS = {
     "algo": "algorithm",
@@ -73,9 +86,10 @@ DIMENSION_LABELS = {
     "size": "working-set size",
     "workers": "workers",
     "threshold": "task threshold",
+    "partitions": "partition threshold",
 }
-NUMERIC_X = ("lanes", "cols", "workers", "threshold")
-OPTIONAL_NUMERIC_DIMENSIONS = {"lanes", "workers", "threshold"}
+NUMERIC_X = ("lanes", "cols", "workers", "threshold", "partitions")
+OPTIONAL_NUMERIC_DIMENSIONS = {"lanes", "workers", "threshold", "partitions"}
 METRICS = {
     "ns_per_row": "ns / row (lower is better)",
     "items_per_s": "rows / second (higher is better)",
@@ -89,6 +103,7 @@ METRICS = {
     "tasks_submitted": "tasks submitted",
     "tasks_inline": "tasks executed inline",
     "max_outstanding": "maximum outstanding tasks",
+    "partition_tasks": "quicksort partition ranges offloaded",
 }
 VS_STD = {"speedup_vs_std": 1.0, "improvement_pct": 0.0}
 BASELINE_KEYS = ["dtype", "dist", "order", "cols", "size"]
@@ -174,6 +189,7 @@ def parse_benchmarks(raw: dict) -> tuple[pd.DataFrame, dict]:
         lanes = _integer_value(b.get("lanes", dims.get("lanes", 0)))
         workers = _integer_value(dims.get("workers", 0))
         threshold = _integer_value(dims.get("threshold", 0))
+        partitions = _integer_value(dims.get("partitions", 0))
         direct_band_rows = _counter(b, "direct_band_rows")
         rows.append(dict(
             algo=algo,
@@ -185,6 +201,7 @@ def parse_benchmarks(raw: dict) -> tuple[pd.DataFrame, dict]:
             size=dims.get("size", "?"),
             workers=workers,
             threshold=threshold,
+            partitions=partitions,
             count=count, real_time_ns=rt_ns,
             ns_per_row=rt_ns / count if count else float("nan"),
             items_per_s=float(b.get("items_per_second", 0.0)),
@@ -198,6 +215,7 @@ def parse_benchmarks(raw: dict) -> tuple[pd.DataFrame, dict]:
             tasks_submitted=_counter(b, "tasks_submitted"),
             tasks_inline=_counter(b, "tasks_inline"),
             max_outstanding=_counter(b, "max_outstanding"),
+            partition_tasks=_counter(b, "partition_tasks"),
         ))
     return add_speedup(pd.DataFrame(rows)), caches
 
@@ -333,7 +351,7 @@ def build_chart(df: pd.DataFrame, x: str, color: str | None, facet_col: str | No
 
     if x in NUMERIC_X:
         fig.update_xaxes(tickvals=sorted(agg[x].unique().tolist()))
-        if x in ("lanes", "workers", "threshold"):
+        if x in ("lanes", "workers", "threshold", "partitions"):
             fig.update_xaxes(type="log")
     if metric in VS_STD:
         fig.add_hline(y=VS_STD[metric], line_dash="dash", line_color="gray",
@@ -350,6 +368,7 @@ PRESETS = {
     "SIMD lane scaling": dict(x="lanes", color="algo", facet="dist", chart="line"),
     "Worker scaling": dict(x="workers", color="algo", facet="dist", chart="line"),
     "Task-threshold scaling": dict(x="threshold", color="algo", facet="dist", chart="line"),
+    "Partition-threshold scaling": dict(x="partitions", color="algo", facet="dist", chart="line"),
     "Column scaling": dict(x="cols", color="algo", facet="dist", chart="line"),
     "Improvement vs std::sort": dict(x="size", color="algo", facet="dist", chart="line", metric="speedup_vs_std"),
     "Improvement by algorithm": dict(x="algo", color="algo", facet="dist", chart="bar", metric="speedup_vs_std"),
@@ -444,7 +463,9 @@ def run_app(json_path: str | None = None) -> None:
         pins[dim] = col.selectbox(dim, vals, index=vals.index(dflt) if dflt in vals else 0, key=f"pin_{dim}")
 
     # Zero denotes "not applicable": scalar/serial variants remain comparable
-    # while SIMD lanes, workers, and threshold are pinned for applicable rows.
+    # while SIMD lanes, workers, and the task and partition thresholds are
+    # pinned for applicable rows. Non-deep parallel targets carry partitions=0,
+    # so they stay visible beside a pinned partition threshold.
     view_df = df
     for dim, value in pins.items():
         if dim in OPTIONAL_NUMERIC_DIMENSIONS:
@@ -492,6 +513,7 @@ def run_app(json_path: str | None = None) -> None:
             "lanes",
             "workers",
             "threshold",
+            "partitions",
             "dist",
             "cols",
             "size",

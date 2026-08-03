@@ -37,7 +37,9 @@ As of 2026-07-23, Slices 1 through 7 are implemented in `test-sort`:
 - a dedicated correctness target;
 - a true multi-column Google Benchmark;
 - a C++17 task executor and parallel post-sort sorting;
-- serial and parallel incremental three-way discovery with structural probes.
+- serial and parallel incremental three-way discovery with structural probes;
+- optional quicksort-partition offload, so one active range can be sorted by
+  more than one worker.
 
 The Slice 8 two-way-incremental gate is closed. Representative local `u32`,
 16-lane measurements showed that the two conditions did not coincide:
@@ -120,7 +122,10 @@ multi-column design and remains preserved.
 - Null ordering, locale-aware ordering, or floating-point NaN policy.
 - Stable ordering of rows equal in every sort column.
 - A general-purpose repository thread-pool framework.
-- Parallelizing quicksort partitions that do not expose next-column work.
+- Per-worker queues, work stealing, or any join/continuation mechanism that
+  would let a task wait for a completion condition it does not own.
+- Offloading quicksort partitions of a non-final column under post-sort
+  discovery, which would require exactly such a join before its RLE scan.
 - A mandatory DSA runtime or host-specific test dependency.
 - Changing compiler, source-data, or generated TSL semantics.
 - Refactoring unrelated sorting prototypes.
@@ -690,16 +695,27 @@ Do not build a repository-wide general task framework.
 8. Use task-coordinate seeds; do not share an RNG.
 9. Add configurable:
    - worker count;
-   - minimum queued-run size.
-10. Execute smaller runs inline on the current worker.
+   - minimum queued-run size;
+   - minimum offloaded partition size, zero to keep every partition local.
+10. Execute smaller runs inline on the current worker. Decline a small partition
+    range instead, leaving it to the caller's own recursion.
 11. Start with one queue task per range. Add vector batching only if measurement
     shows queue overhead is material.
-12. Do not require queue order to match index order.
+12. Do not require queue order to match index order. Serve the newest task
+    first so partition offload follows the serial visit order and the queue
+    stays proportional to depth rather than to the input size.
 
 ### Concurrency invariants
 
-- A child is submitted only after its parent column is completely sorted and
-  post-sort RLE has produced a maximal run.
+- A next-column child is submitted only after the run it covers is final: under
+  post-sort discovery after the parent column is completely sorted and RLE has
+  produced a maximal run, and under incremental three-way discovery when a
+  pivot-equal band or a completed leaf reports it.
+- A quicksort partition range is submitted only when finishing it imposes no
+  obligation on the complete range it came from: either no column follows, or
+  incremental three-way discovery already reports self-contained bands and
+  leaves. Post-sort discovery over a non-final column keeps its partitions on
+  the worker that owns the range.
 - Sibling tasks have disjoint half-open ranges.
 - No task writes a preceding column with non-equal values.
 - Sorter configuration and column metadata are immutable.
@@ -923,6 +939,12 @@ equal prefix of the right summary.
 - If the gate fails, document that two-way intentionally remains post-sort.
 
 ## Slice 9: add an optional hardware run-detector boundary
+
+Superseded by `iaa-rle-offload-plan.md`, which instantiates this slice against
+IAA (`qpl_op_scan_eq`, multiple engines per run) and extends it with
+asynchronous completion so workers keep sorting while a scan is in flight. The
+contract below still governs: identical spans to the scalar detector, an
+explicitly gated build option, and no hardware dependency in ordinary builds.
 
 ### Gate
 

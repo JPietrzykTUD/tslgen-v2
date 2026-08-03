@@ -133,14 +133,15 @@ void verify_lexicographic_case(
 }
 
 template <class Sorter, class DataType>
-void verify_parallel_case(
+auto verify_parallel_case(
   columns_type<DataType> input,
   std::vector<TslSortOrder> const & orders,
   TslRunDiscoveryKind discovery,
   std::size_t worker_count,
   std::size_t task_threshold,
-  std::string const & label
-) {
+  std::string const & label,
+  std::size_t partition_threshold = 0
+) -> TslMultiColumnSortMetrics {
   auto expected = rows_from_columns(input);
   std::sort(
     expected.begin(),
@@ -160,6 +161,7 @@ void verify_parallel_case(
     row_count,
     worker_count,
     task_threshold,
+    partition_threshold,
     discovery,
     &metrics
   );
@@ -173,7 +175,18 @@ void verify_parallel_case(
         label + ": large threshold did not execute child work inline"
       );
     }
+    if (partition_threshold == 0) {
+      require(
+        metrics.partition_tasks_submitted == 0,
+        label + ": partitions were offloaded without a partition threshold"
+      );
+    }
+    require(
+      metrics.partition_tasks_submitted <= metrics.tasks_submitted,
+      label + ": partition tasks exceed submitted tasks"
+    );
   }
+  return metrics;
 }
 
 template <class Sorter, class DataType>
@@ -668,6 +681,7 @@ void test_argument_validation() {
       2,
       0,
       2,
+      0,
       TslRunDiscoveryKind::POST_SORT
     );
   } catch (std::invalid_argument const &) {
@@ -804,28 +818,63 @@ void run_parallel_matrix(
   };
   for (auto const workers : {std::size_t{1}, std::size_t{2}, std::size_t{4}}) {
     for (auto const threshold : {std::size_t{2}, std::size_t{100000}}) {
-      verify_parallel_case<Sorter>(
-        make_random_columns<std::uint32_t>(4, 2048, 0x77ULL, 8),
-        orders,
-        discovery,
-        workers,
-        threshold,
-        name + "/workers-" + std::to_string(workers)
-          + "/threshold-" + std::to_string(threshold)
-      );
+      for (auto const partitions : {std::size_t{0}, std::size_t{2}}) {
+        verify_parallel_case<Sorter>(
+          make_random_columns<std::uint32_t>(4, 2048, 0x77ULL, 8),
+          orders,
+          discovery,
+          workers,
+          threshold,
+          name + "/workers-" + std::to_string(workers)
+            + "/threshold-" + std::to_string(threshold)
+            + "/partitions-" + std::to_string(partitions),
+          partitions
+        );
+      }
     }
   }
 
   auto one_large_run = make_random_columns<std::uint32_t>(4, 1024, 0x88ULL, 0);
   std::fill(one_large_run[0].begin(), one_large_run[0].end(), 3);
   std::fill(one_large_run[1].begin(), one_large_run[1].end(), 5);
-  verify_parallel_case<Sorter>(
-    one_large_run,
-    orders,
-    discovery,
+  for (auto const partitions : {std::size_t{0}, std::size_t{2}}) {
+    verify_parallel_case<Sorter>(
+      one_large_run,
+      orders,
+      discovery,
+      4,
+      2,
+      name + "/large-prefix-run/partitions-" + std::to_string(partitions),
+      partitions
+    );
+  }
+
+  // A single column is the final column, so its partitions carry no whole-range
+  // obligation and are offloaded under every discovery mode. This is the only
+  // source of parallelism for a one-column sort.
+  auto single = make_random_columns<std::uint32_t>(1, 8192, 0x99ULL, 0);
+  auto single_specs = column_specs(single, std::vector<TslSortOrder>{
+    TslSortOrder::ASCENDING,
+  });
+  Sorter single_sorter(0x123456789abcdef0ULL);
+  TslMultiColumnSortMetrics single_metrics;
+  single_sorter.sort_columns_parallel(
+    single_specs.data(),
+    single_specs.size(),
+    single.front().size(),
     4,
     2,
-    name + "/large-prefix-run"
+    2,
+    discovery,
+    &single_metrics
+  );
+  require(
+    std::is_sorted(single.front().begin(), single.front().end()),
+    name + "/single-column: output is unsorted"
+  );
+  require(
+    single_metrics.partition_tasks_submitted >= 1,
+    name + "/single-column: no partition range was offloaded"
   );
 }
 
@@ -1052,6 +1101,56 @@ void test_incremental_decomposition() {
   }
 }
 
+// Post-sort discovery must keep partitions of a non-final column on the worker
+// that owns the range, because its RLE scan needs the complete sorted range and
+// an equal run may cross a partition boundary. Incremental three-way discovery
+// has no such obligation and offloads them.
+//
+// Both columns are high cardinality, so the first column carries essentially all
+// the partition work and the second column's discovered runs are too short to
+// offload. Post-sort must therefore report no offloaded partition at all, while
+// incremental reports several from the same input.
+void test_partition_offload_gating() {
+  using Sorter = TslMultiColumnQuickSorter<
+    std::uint32_t,
+    TslPartitionKind::THREE_WAY,
+    TslLeafKind::NETWORK
+  >;
+  auto const input = make_random_columns<std::uint32_t>(2, 8192, 0xa5a5ULL, 0);
+  auto const orders = std::vector<TslSortOrder>{
+    TslSortOrder::ASCENDING,
+    TslSortOrder::DESCENDING,
+  };
+
+  auto const post = verify_parallel_case<Sorter>(
+    input,
+    orders,
+    TslRunDiscoveryKind::POST_SORT,
+    4,
+    2,
+    "gating/post",
+    2
+  );
+  require(
+    post.partition_tasks_submitted == 0,
+    "gating/post: a non-final-column partition was offloaded"
+  );
+
+  auto const incremental = verify_parallel_case<Sorter>(
+    input,
+    orders,
+    TslRunDiscoveryKind::INCREMENTAL,
+    4,
+    2,
+    "gating/incremental",
+    2
+  );
+  require(
+    incremental.partition_tasks_submitted >= 1,
+    "gating/incremental: non-final-column partitions were not offloaded"
+  );
+}
+
 void test_parallel_determinism() {
   using Sorter = TslMultiColumnQuickSorter<
     std::uint32_t,
@@ -1060,34 +1159,45 @@ void test_parallel_determinism() {
   >;
   auto input = make_random_columns<std::uint32_t>(4, 4096, 0xdeadbeefULL, 8);
   std::iota(input.back().begin(), input.back().end(), 0u);
-  auto first = input;
-  auto second = input;
   auto const orders = std::vector<TslSortOrder>{
     TslSortOrder::ASCENDING,
     TslSortOrder::DESCENDING,
     TslSortOrder::ASCENDING,
     TslSortOrder::DESCENDING,
   };
-  auto first_specs = column_specs(first, orders);
-  auto second_specs = column_specs(second, orders);
-  Sorter sorter(0x424242ULL);
-  sorter.sort_columns_parallel(
-    first_specs.data(),
-    first_specs.size(),
-    first.front().size(),
-    4,
-    2,
-    TslRunDiscoveryKind::INCREMENTAL
-  );
-  sorter.sort_columns_parallel(
-    second_specs.data(),
-    second_specs.size(),
-    second.front().size(),
-    4,
-    2,
-    TslRunDiscoveryKind::INCREMENTAL
-  );
-  require(first == second, "fixed-seed parallel output is not deterministic");
+  // Offloading a partition re-seeds from its own range coordinates, so the
+  // pivot sequence must depend on the input and the thresholds alone, never on
+  // which worker picked the range up.
+  for (auto const partitions : {std::size_t{0}, std::size_t{2}}) {
+    auto first = input;
+    auto second = input;
+    auto first_specs = column_specs(first, orders);
+    auto second_specs = column_specs(second, orders);
+    Sorter sorter(0x424242ULL);
+    sorter.sort_columns_parallel(
+      first_specs.data(),
+      first_specs.size(),
+      first.front().size(),
+      4,
+      2,
+      partitions,
+      TslRunDiscoveryKind::INCREMENTAL
+    );
+    sorter.sort_columns_parallel(
+      second_specs.data(),
+      second_specs.size(),
+      second.front().size(),
+      1,
+      2,
+      partitions,
+      TslRunDiscoveryKind::INCREMENTAL
+    );
+    require(
+      first == second,
+      "fixed-seed parallel output is not deterministic for partitions-"
+        + std::to_string(partitions)
+    );
+  }
 }
 
 }  // namespace
@@ -1129,6 +1239,7 @@ int main() {
     test_u64_variants();
     test_task_executor();
     test_incremental_decomposition();
+    test_partition_offload_gating();
     test_parallel_determinism();
 
     run_parallel_matrix<TwoWayInsertion>(

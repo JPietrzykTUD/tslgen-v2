@@ -29,23 +29,36 @@
  * - `2way` versus `3way`: quicksort partitioning policy;
  * - `ins` versus `net`: scalar insertion or SIMD bitonic-network leaf;
  * - optional `parallel_`: submit independent next-column ranges to the
- *   project-owned task executor.
+ *   project-owned task executor;
+ * - optional `deep_parallel_`: additionally submit quicksort partition ranges,
+ *   so one active range is sorted by more than one worker.
  *
  * Registered target names are:
  *
  * ```text
- * post_2way_ins                   post_2way_net
- * post_3way_ins                   post_3way_net
- * incremental_3way_ins            incremental_3way_net
- * parallel_post_2way_ins          parallel_post_2way_net
- * parallel_post_3way_ins          parallel_post_3way_net
- * parallel_incremental_3way_ins   parallel_incremental_3way_net
+ * post_2way_ins                        post_2way_net
+ * post_3way_ins                        post_3way_net
+ * incremental_3way_ins                 incremental_3way_net
+ * parallel_post_2way_ins               parallel_post_2way_net
+ * parallel_post_3way_ins               parallel_post_3way_net
+ * parallel_incremental_3way_ins        parallel_incremental_3way_net
+ * deep_parallel_post_3way_ins          deep_parallel_post_3way_net
+ * deep_parallel_incremental_3way_ins   deep_parallel_incremental_3way_net
  * ```
  *
  * Incremental two-way discovery is intentionally absent: a maximal equal run
  * may cross a two-way pivot or leaf boundary, so a correct implementation
  * needs boundary-summary merging. Complete-range post-sort RLE is the
  * two-way reference and parallel implementation.
+ *
+ * The same boundary property limits where partition ranges may be handed to
+ * another worker. `deep_parallel_incremental_*` offloads partitions of every
+ * column, because each three-way partition reports self-contained equal bands
+ * and leaves. `deep_parallel_post_*` offloads partitions of the final column
+ * only, because a post-sort RLE scan needs the whole sorted range. A
+ * one-column case is therefore the clearest reading of partition parallelism:
+ * the `parallel_` targets leave every worker but one idle there, and only the
+ * `deep_parallel_` targets scale.
  *
  * `std_lex_argsort` is the scalar baseline. It sorts row indices with the same
  * complete lexicographic comparator and gathers every column into that order.
@@ -55,9 +68,13 @@
  * A complete name looks like:
  *
  * ```text
- * parallel_incremental_3way_net/u32/lanes=16/dist=low_entropy/
- * order=alternating/cols=3/size=L2/workers=4/threshold=4096/real_time
+ * deep_parallel_incremental_3way_net/u32/lanes=16/dist=low_entropy/
+ * order=alternating/cols=3/size=L2/workers=4/threshold=4096/
+ * partitions=16384/real_time
  * ```
+ *
+ * The trailing `partitions=` component appears only for `deep_parallel_`
+ * targets.
  *
  * The executable registers `u32` at 4/8/16 fixed SIMD lanes and `u64` at
  * 2/4/8 lanes. Size labels are detected from the host cache hierarchy and
@@ -78,6 +95,8 @@
  * COSORT_MEMORY_CAP_BYTES    skip cases above this estimated allocation
  * COSORT_WORKERS             worker count for every parallel variant
  * COSORT_TASK_THRESHOLD      queue runs of at least this many rows
+ * COSORT_PARTITION_THRESHOLD queue quicksort partitions of at least this many
+ *                            rows, for deep_parallel_ targets only
  * ```
  *
  * Distribution IDs:
@@ -100,9 +119,11 @@
  * 0 L1   1 L2   2 half LLC   3 LLC   4 twice LLC   5 sixteen times LLC
  * ```
  *
- * `COSORT_WORKERS` and `COSORT_TASK_THRESHOLD` are scalar per process. Run
- * the executable more than once to compare several worker counts or task
- * thresholds.
+ * `COSORT_WORKERS`, `COSORT_TASK_THRESHOLD`, and `COSORT_PARTITION_THRESHOLD`
+ * are scalar per process. Run the executable more than once to compare several
+ * worker counts or thresholds, and merge the results with
+ * `sweep_multicolumn_bench.py`, which also avoids re-running targets whose names
+ * do not carry the swept axis.
  *
  * ## Timing and validation
  *
@@ -118,8 +139,9 @@
  * to `test_multicolumn_sort.cpp`, keeping this performance driver lightweight.
  *
  * The target also reports RLE values examined, direct three-way equal bands,
- * submitted/inline tasks, and maximum outstanding tasks. The companion
- * `visualize_multicolumn_bench.py` reads these counters from JSON.
+ * submitted/inline tasks, maximum outstanding tasks, and submitted partition
+ * ranges. The companion `visualize_multicolumn_bench.py` reads these counters
+ * from JSON.
  *
  * ## Typical invocation
  *
@@ -200,7 +222,15 @@ enum algorithm_kind {
   PARALLEL_POST_THREEWAY_NETWORK,
   PARALLEL_INCREMENTAL_THREEWAY_INSERTION,
   PARALLEL_INCREMENTAL_THREEWAY_NETWORK,
+  DEEP_PARALLEL_POST_THREEWAY_INSERTION,
+  DEEP_PARALLEL_POST_THREEWAY_NETWORK,
+  DEEP_PARALLEL_INCREMENTAL_THREEWAY_INSERTION,
+  DEEP_PARALLEL_INCREMENTAL_THREEWAY_NETWORK,
 };
+
+/// Two-way cases withheld as quadratic; reported so the gap is never silent.
+/// Registration is single threaded, so a plain counter is sufficient.
+std::size_t omitted_two_way_cases = 0;
 
 auto distribution_name(int kind) -> char const * {
   switch (kind) {
@@ -406,6 +436,7 @@ struct run_config {
   std::uint64_t memory_cap = 64ULL * 1024 * 1024 * 1024;
   std::size_t worker_count = std::max(1u, std::thread::hardware_concurrency());
   std::size_t task_threshold = 4096;
+  std::size_t partition_threshold = 16384;
 };
 
 /// Reads one unsigned scalar variable; `base=0` also accepts `0x...` values.
@@ -463,6 +494,10 @@ auto load_config() -> run_config {
   config.task_threshold = std::max<std::uint64_t>(
     2,
     env_u64("COSORT_TASK_THRESHOLD", config.task_threshold)
+  );
+  config.partition_threshold = std::max<std::uint64_t>(
+    2,
+    env_u64("COSORT_PARTITION_THRESHOLD", config.partition_threshold)
   );
   if (auto const * value = std::getenv("COSORT_COLUMNS")) {
     config.columns = parse_numeric_list<std::size_t>(value);
@@ -623,6 +658,8 @@ void tag(
       static_cast<double>(metrics->tasks_executed_inline);
     state.counters["max_outstanding"] =
       static_cast<double>(metrics->max_outstanding_tasks);
+    state.counters["partition_tasks"] =
+      static_cast<double>(metrics->partition_tasks_submitted);
   }
 }
 
@@ -636,6 +673,10 @@ void tag(
  * `worker_count == 0` selects the serial public API. A positive worker count
  * selects the parallel API and makes `task_threshold` the boundary between
  * inline child execution and queue submission.
+ *
+ * A positive `partition_threshold` additionally submits quicksort partition
+ * ranges of that size, which is the only way a one-column case obtains
+ * parallelism at all.
  *
  * Allocation, data generation, and reset are not timed. The sort call is
  * timed; for a parallel case that includes executor startup and shutdown.
@@ -656,7 +697,8 @@ void bm_cosort(
   int algorithm,
   TslRunDiscoveryKind discovery,
   std::size_t worker_count = 0,
-  std::size_t task_threshold = 2
+  std::size_t task_threshold = 2,
+  std::size_t partition_threshold = 0
 ) {
   auto count = level.per_column_bytes / sizeof(DataType);
   if (count < 2) count = 2;
@@ -702,6 +744,7 @@ void bm_cosort(
         count,
         worker_count,
         task_threshold,
+        partition_threshold,
         discovery,
         &metrics
       );
@@ -806,7 +849,8 @@ auto benchmark_name(
   std::size_t columns,
   size_level const & size,
   std::size_t worker_count = 0,
-  std::size_t task_threshold = 0
+  std::size_t task_threshold = 0,
+  std::size_t partition_threshold = 0
 ) -> std::string {
   return std::string{algorithm}
     + "/" + type_name
@@ -818,7 +862,10 @@ auto benchmark_name(
     + (worker_count == 0
       ? std::string{}
       : "/workers=" + std::to_string(worker_count)
-        + "/threshold=" + std::to_string(task_threshold));
+        + "/threshold=" + std::to_string(task_threshold))
+    + (partition_threshold == 0
+      ? std::string{}
+      : "/partitions=" + std::to_string(partition_threshold));
 }
 
 /**
@@ -853,7 +900,8 @@ void register_lane(
             char const * name,
             auto function,
             std::size_t workers = 0,
-            std::size_t threshold = 0
+            std::size_t threshold = 0,
+            std::size_t partitions = 0
           ) {
             benchmark::RegisterBenchmark(
               benchmark_name(
@@ -865,15 +913,30 @@ void register_lane(
                 columns,
                 size,
                 workers,
-                threshold
+                threshold,
+                partitions
               ),
               function
             )->Unit(benchmark::kNanosecond)->UseRealTime();
           };
 
+          // Two-way partitioning peels one element per level out of an
+          // all-equal range: `before(value, pivot)` is false for every element,
+          // so the split is always 0 / count-1. A key column with very few
+          // distinct values is therefore quadratic in its equal-run length,
+          // measured at ~3.8x per doubling of rows and 26x slower than
+          // three-way by 256Ki rows. Large cases are omitted because one of
+          // them outlasts the rest of the sweep combined while telling us only
+          // that two-way does not group equal keys.
+          auto const low_cardinality_key =
+            distribution == ALL_EQUAL_PREFIX
+            || distribution == LOW_ENTROPY_PREFIX;
           auto const allow_pathological_two_way =
-            distribution != ALL_EQUAL_PREFIX
+            !low_cardinality_key
             || size.per_column_bytes <= 256 * 1024;
+          if (!allow_pathological_two_way) {
+            omitted_two_way_cases += 4;
+          }
           if (allow_pathological_two_way) {
             register_case("post_2way_ins", [=](benchmark::State & state) {
               bm_cosort<
@@ -1122,6 +1185,110 @@ void register_lane(
             config.worker_count,
             config.task_threshold
           );
+          register_case(
+            "deep_parallel_post_3way_ins",
+            [=](benchmark::State & state) {
+              bm_cosort<
+                DataType,
+                Lanes,
+                TslPartitionKind::THREE_WAY,
+                TslLeafKind::INSERTION
+              >(
+                state,
+                distribution,
+                direction,
+                columns,
+                size,
+                cap,
+                DEEP_PARALLEL_POST_THREEWAY_INSERTION,
+                TslRunDiscoveryKind::POST_SORT,
+                config.worker_count,
+                config.task_threshold,
+                config.partition_threshold
+              );
+            },
+            config.worker_count,
+            config.task_threshold,
+            config.partition_threshold
+          );
+          register_case(
+            "deep_parallel_post_3way_net",
+            [=](benchmark::State & state) {
+              bm_cosort<
+                DataType,
+                Lanes,
+                TslPartitionKind::THREE_WAY,
+                TslLeafKind::NETWORK
+              >(
+                state,
+                distribution,
+                direction,
+                columns,
+                size,
+                cap,
+                DEEP_PARALLEL_POST_THREEWAY_NETWORK,
+                TslRunDiscoveryKind::POST_SORT,
+                config.worker_count,
+                config.task_threshold,
+                config.partition_threshold
+              );
+            },
+            config.worker_count,
+            config.task_threshold,
+            config.partition_threshold
+          );
+          register_case(
+            "deep_parallel_incremental_3way_ins",
+            [=](benchmark::State & state) {
+              bm_cosort<
+                DataType,
+                Lanes,
+                TslPartitionKind::THREE_WAY,
+                TslLeafKind::INSERTION
+              >(
+                state,
+                distribution,
+                direction,
+                columns,
+                size,
+                cap,
+                DEEP_PARALLEL_INCREMENTAL_THREEWAY_INSERTION,
+                TslRunDiscoveryKind::INCREMENTAL,
+                config.worker_count,
+                config.task_threshold,
+                config.partition_threshold
+              );
+            },
+            config.worker_count,
+            config.task_threshold,
+            config.partition_threshold
+          );
+          register_case(
+            "deep_parallel_incremental_3way_net",
+            [=](benchmark::State & state) {
+              bm_cosort<
+                DataType,
+                Lanes,
+                TslPartitionKind::THREE_WAY,
+                TslLeafKind::NETWORK
+              >(
+                state,
+                distribution,
+                direction,
+                columns,
+                size,
+                cap,
+                DEEP_PARALLEL_INCREMENTAL_THREEWAY_NETWORK,
+                TslRunDiscoveryKind::INCREMENTAL,
+                config.worker_count,
+                config.task_threshold,
+                config.partition_threshold
+              );
+            },
+            config.worker_count,
+            config.task_threshold,
+            config.partition_threshold
+          );
         }
       }
     }
@@ -1208,6 +1375,17 @@ int main(int argc, char ** argv) {
   register_lane<std::uint64_t, 2>("u64", config, levels);
   register_lane<std::uint64_t, 4>("u64", config, levels);
   register_lane<std::uint64_t, 8>("u64", config, levels);
+
+  if (omitted_two_way_cases != 0) {
+    std::fprintf(
+      stderr,
+      "omitted %zu two-way case(s): quadratic on all-equal or 16-value key "
+      "columns above 256KiB per column.\n"
+      "Compare 3way targets there; two-way remains registered at smaller "
+      "sizes.\n",
+      omitted_two_way_cases
+    );
+  }
 
   benchmark::Initialize(&argc, argv);
   benchmark::RunSpecifiedBenchmarks();
