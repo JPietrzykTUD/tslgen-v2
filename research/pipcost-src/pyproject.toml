@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pipcost"
+version = "0.2.0a1"
+description = "Representation-aware SIMD pipeline cost-model research prototype"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+  "tslc==0.1.0a1",
+]
+
+[project.scripts]
+pipcost = "pipcost.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["pipcost*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["research/pipcost-src/src", "tslc/src"]
+addopts = "--basetemp=tslctmp/pipcost/pytest -p no:cacheprovider"
+
+[tool.mypy]
+python_version = "3.14"
+files = ["research/pipcost-src/src/pipcost"]
+mypy_path = ["research/pipcost-src/src", "tslc/src"]
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unused_ignores = true
+show_error_codes = true
+cache_dir = "tslctmp/pipcost/mypy-cache"
