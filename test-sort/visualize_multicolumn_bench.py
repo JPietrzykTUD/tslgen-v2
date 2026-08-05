@@ -64,6 +64,9 @@ OLD_ALGO_ALIASES = {
     "3way_net": "post_3way_net",
 }
 ORDER_ORDER = ["asc", "desc", "alternating"]
+# Reference, then the scalar detector, then the accelerated ones in increasing
+# distance from the CPU, so a detector comparison reads left to right.
+RLE_ORDER = ["na", "scalar", "dml_sw", "dsa_hw", "dml_sw_async", "dsa_hw_async"]
 DIMENSIONS = [
     "algo",
     "dtype",
@@ -75,6 +78,11 @@ DIMENSIONS = [
     "workers",
     "threshold",
     "partitions",
+    "rle",
+    "dsa_region",
+    "dsa_slots",
+    "dsa_depth",
+    "dsa_min_offload",
 ]
 DIMENSION_LABELS = {
     "algo": "algorithm",
@@ -87,9 +95,21 @@ DIMENSION_LABELS = {
     "workers": "workers",
     "threshold": "task threshold",
     "partitions": "partition threshold",
+    "rle": "equal-run detector",
+    "dsa_region": "DSA region bytes",
+    "dsa_slots": "DSA concurrent ranges",
+    "dsa_depth": "DSA descriptors per range",
+    "dsa_min_offload": "DSA min offload elements",
 }
-NUMERIC_X = ("lanes", "cols", "workers", "threshold", "partitions")
-OPTIONAL_NUMERIC_DIMENSIONS = {"lanes", "workers", "threshold", "partitions"}
+NUMERIC_X = ("lanes", "cols", "workers", "threshold", "partitions",
+             "dsa_region", "dsa_slots", "dsa_depth", "dsa_min_offload")
+OPTIONAL_NUMERIC_DIMENSIONS = {"lanes", "workers", "threshold", "partitions",
+                               "dsa_region", "dsa_slots", "dsa_depth", "dsa_min_offload"}
+NOT_APPLICABLE = "na"
+# Categorical counterpart of the zeros in OPTIONAL_NUMERIC_DIMENSIONS: a row may
+# legitimately have no value on this axis. Such rows survive any pin on it, which
+# is what keeps the std::sort baseline on screen next to every detector.
+OPTIONAL_CATEGORICAL_DIMENSIONS = {"rle"}
 METRICS = {
     "ns_per_row": "ns / row (lower is better)",
     "items_per_s": "rows / second (higher is better)",
@@ -97,6 +117,8 @@ METRICS = {
     "real_time_ns": "wall time per sort (ns)",
     "speedup_vs_std": "speedup vs std::sort (×, higher is better)",
     "improvement_pct": "improvement vs std::sort (%, higher is better)",
+    "speedup_vs_min_threads": "speedup vs fewest threads measured (×)",
+    "parallel_efficiency": "parallel efficiency (1.0 = linear scaling)",
     "rle_values_per_row": "RLE values examined / row (lower is better)",
     "direct_equal_bands": "direct three-way equal bands",
     "direct_band_rows_per_row": "rows in direct equal bands / input row",
@@ -104,9 +126,19 @@ METRICS = {
     "tasks_inline": "tasks executed inline",
     "max_outstanding": "maximum outstanding tasks",
     "partition_tasks": "quicksort partition ranges offloaded",
+    "rle_offloaded_frac": "fraction of scanned elements offloaded",
+    "rle_descriptors": "accelerator descriptors submitted",
+    "rle_fired_blocks": "delta blocks reported by the accelerator",
+    "rle_spans": "equal-run spans emitted",
 }
 VS_STD = {"speedup_vs_std": 1.0, "improvement_pct": 0.0}
 BASELINE_KEYS = ["dtype", "dist", "order", "cols", "size"]
+# Metrics whose ideal value is a constant, drawn as a reference line. Speedup is
+# absent on purpose: its ideal is the diagonal, not a horizontal line.
+IDEAL_VALUE = {"parallel_efficiency": 1.0}
+# Thread scaling compares a configuration against itself at fewer threads, so
+# every dimension except the worker count identifies the series.
+THREAD_KEYS = [dim for dim in DIMENSIONS if dim != "workers"]
 
 
 # --------------------------------------------------------------------------- #
@@ -202,6 +234,20 @@ def parse_benchmarks(raw: dict) -> tuple[pd.DataFrame, dict]:
             workers=workers,
             threshold=threshold,
             partitions=partitions,
+            # The baseline sorts an index vector with a tuple comparator and
+            # detects no equal runs at all, so no detector value applies to it;
+            # marking it not-applicable is what keeps it visible under a pinned
+            # detector. Benchmarks recorded before the detector axis existed all
+            # used the scalar run detector, so that is the honest default for
+            # every other row.
+            rle=(
+                NOT_APPLICABLE if algo == "std_lex_argsort"
+                else dims.get("rle", "scalar")
+            ),
+            dsa_region=_integer_value(dims.get("dsa_region", 0)),
+            dsa_slots=_integer_value(dims.get("dsa_slots", 0)),
+            dsa_depth=_integer_value(dims.get("dsa_depth", 0)),
+            dsa_min_offload=_integer_value(dims.get("dsa_min_offload", 0)),
             count=count, real_time_ns=rt_ns,
             ns_per_row=rt_ns / count if count else float("nan"),
             items_per_s=float(b.get("items_per_second", 0.0)),
@@ -216,8 +262,12 @@ def parse_benchmarks(raw: dict) -> tuple[pd.DataFrame, dict]:
             tasks_inline=_counter(b, "tasks_inline"),
             max_outstanding=_counter(b, "max_outstanding"),
             partition_tasks=_counter(b, "partition_tasks"),
+            rle_offloaded_frac=_counter(b, "rle_offloaded_frac"),
+            rle_descriptors=_counter(b, "rle_descriptors"),
+            rle_fired_blocks=_counter(b, "rle_fired_blocks"),
+            rle_spans=_counter(b, "rle_spans"),
         ))
-    return add_speedup(pd.DataFrame(rows)), caches
+    return add_thread_scaling(add_speedup(pd.DataFrame(rows))), caches
 
 
 def _integer_value(value) -> int:
@@ -246,6 +296,43 @@ def add_speedup(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_thread_scaling(df: pd.DataFrame) -> pd.DataFrame:
+    """Speedup and efficiency of each configuration against itself at fewer threads.
+
+    The reference is the *smallest worker count present for that configuration*,
+    not a hardcoded 1: a sweep may legitimately start at 2 or 4 threads, and
+    silently returning nothing there would read as "this does not scale". Serial
+    and baseline rows carry ``workers == 0`` and stay unscored.
+    """
+    derived = ("min_threads", "speedup_vs_min_threads", "parallel_efficiency")
+    if df.empty:
+        for column in derived:
+            df[column] = pd.Series(dtype="float64")
+        return df
+
+    parallel = df[df["workers"] > 0]
+    if parallel.empty:
+        for column in derived:
+            df[column] = float("nan")
+        return df
+
+    base = (
+        parallel.sort_values("workers")
+        .drop_duplicates(THREAD_KEYS)[THREAD_KEYS + ["workers", "ns_per_row"]]
+        .rename(columns={"workers": "min_threads", "ns_per_row": "min_thread_ns_per_row"})
+    )
+    df = df.merge(base, on=THREAD_KEYS, how="left")
+    df["speedup_vs_min_threads"] = df["min_thread_ns_per_row"] / df["ns_per_row"]
+    df["parallel_efficiency"] = (
+        df["speedup_vs_min_threads"] / (df["workers"] / df["min_threads"])
+    )
+    # Serial and baseline rows have no thread axis; scoring them would invent a
+    # 1.0 efficiency for a measurement that never used a worker pool.
+    unscored = df["workers"] <= 0
+    df.loc[unscored, ["speedup_vs_min_threads", "parallel_efficiency"]] = float("nan")
+    return df
+
+
 # --------------------------------------------------------------------------- #
 # Dimension value helpers                                                      #
 # --------------------------------------------------------------------------- #
@@ -253,12 +340,15 @@ def dim_values(df: pd.DataFrame, dim: str) -> list:
     vals = df[dim].dropna().unique().tolist()
     if dim in OPTIONAL_NUMERIC_DIMENSIONS:
         vals = [v for v in vals if v > 0]
+    if dim in OPTIONAL_CATEGORICAL_DIMENSIONS:
+        vals = [v for v in vals if v != NOT_APPLICABLE]
     if dim in NUMERIC_X:
         return sorted(vals)
     order = {
         "size": SIZE_ORDER,
         "algo": ALGO_ORDER,
         "order": ORDER_ORDER,
+        "rle": RLE_ORDER,
     }.get(dim)
     if order:
         return sorted(
@@ -287,6 +377,28 @@ def default_pin(dim: str, vals: list):
     return vals[-1] if dim == "size" and vals else (vals[0] if vals else None)
 
 
+def apply_pin(df: pd.DataFrame, dim: str, value) -> pd.DataFrame:
+    """Restrict to one value of `dim`, keeping rows for which it does not apply.
+
+    Zero (and `na` for a categorical) denotes "not applicable": serial and
+    baseline rows carry no lane count, worker count, threshold or detector, and
+    must stay visible beside a pinned value so they remain comparable.
+    """
+    if dim in OPTIONAL_NUMERIC_DIMENSIONS:
+        return df[(df[dim] == value) | (df[dim] == 0)]
+    if dim in OPTIONAL_CATEGORICAL_DIMENSIONS:
+        return df[(df[dim] == value) | (df[dim] == NOT_APPLICABLE)]
+    return df[df[dim] == value]
+
+
+def _coverage_label(dim: str, value) -> str:
+    if dim in OPTIONAL_NUMERIC_DIMENSIONS and value == 0:
+        return "n/a"
+    if dim in OPTIONAL_CATEGORICAL_DIMENSIONS and value == NOT_APPLICABLE:
+        return "n/a"
+    return str(value)
+
+
 def category_order(dim: str, values: list) -> list:
     strs = [str(v) for v in values]
     if dim == "size":
@@ -303,6 +415,13 @@ def category_order(dim: str, values: list) -> list:
         )
     if dim in NUMERIC_X:
         return [str(v) for v in sorted({int(v) for v in strs})]
+    if dim == "rle":
+        # RLE_ORDER leads with not-applicable, which on this axis is the
+        # std::sort reference bar; it reads best as the leftmost one.
+        return (
+            [value for value in RLE_ORDER if value in strs]
+            + sorted(set(strs) - set(RLE_ORDER))
+        )
     return sorted(strs)
 
 
@@ -314,6 +433,17 @@ def build_chart(df: pd.DataFrame, x: str, color: str | None, facet_col: str | No
     if metric in VS_STD:
         df = df[df["algo"] != "std_lex_argsort"]
     df = df.dropna(subset=[metric])
+
+    # An x value of zero means "not applicable", so the baseline is excluded from
+    # every scaling view by construction -- it has no lane, worker, threshold or
+    # DSA setting. It is a constant along those axes, so carry it as a reference
+    # line rather than losing the comparison.
+    reference = float("nan")
+    if metric not in VS_STD and x in OPTIONAL_NUMERIC_DIMENSIONS:
+        excluded = df[(df["algo"] == "std_lex_argsort") & (df[x] == 0)]
+        if not excluded.empty:
+            reference = excluded[metric].median()
+
     axes = [d for d in (x, color, facet_col, facet_row) if d and d != "(none)"]
     agg = df.groupby(list(dict.fromkeys(axes)), observed=True)[metric].median().reset_index()
     if x in OPTIONAL_NUMERIC_DIMENSIONS:
@@ -356,6 +486,12 @@ def build_chart(df: pd.DataFrame, x: str, color: str | None, facet_col: str | No
     if metric in VS_STD:
         fig.add_hline(y=VS_STD[metric], line_dash="dash", line_color="gray",
                       annotation_text="std::sort baseline", annotation_position="top left")
+    elif metric in IDEAL_VALUE:
+        fig.add_hline(y=IDEAL_VALUE[metric], line_dash="dash", line_color="gray",
+                      annotation_text="linear scaling", annotation_position="top left")
+    elif pd.notna(reference):
+        fig.add_hline(y=reference, line_dash="dot", line_color="gray",
+                      annotation_text="std::sort baseline", annotation_position="top left")
     fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]) if "=" in a.text else a)
     fig.update_layout(height=520, margin=dict(t=40))
     return fig
@@ -366,10 +502,22 @@ PRESETS = {
     "Cache-hierarchy sweep": dict(x="size", color="algo", facet="dist", chart="line"),
     "Direction comparison": dict(x="order", color="algo", facet="dist", chart="bar"),
     "SIMD lane scaling": dict(x="lanes", color="algo", facet="dist", chart="line"),
+    # Runtime against thread count for one pinned configuration. facet="(none)"
+    # and a forced wall-time metric are the point: everything except the thread
+    # count and the algorithm is held fixed, so the curve is a scaling curve
+    # rather than a comparison across distributions.
+    "Thread scaling": dict(x="workers", color="algo", facet="(none)", chart="line",
+                           metric="real_time_ns"),
     "Worker scaling": dict(x="workers", color="algo", facet="dist", chart="line"),
     "Task-threshold scaling": dict(x="threshold", color="algo", facet="dist", chart="line"),
     "Partition-threshold scaling": dict(x="partitions", color="algo", facet="dist", chart="line"),
     "Column scaling": dict(x="cols", color="algo", facet="dist", chart="line"),
+    # color=algo rather than rle: the std::sort baseline carries no detector, so
+    # faceting by algo would move it to a panel of its own and defeat the
+    # comparison it exists to provide.
+    "Equal-run detector comparison": dict(x="rle", color="algo", facet="dist", chart="bar"),
+    "DSA slot scaling": dict(x="dsa_slots", color="rle", facet="algo", chart="line"),
+    "DSA region-size scaling": dict(x="dsa_region", color="rle", facet="algo", chart="line"),
     "Improvement vs std::sort": dict(x="size", color="algo", facet="dist", chart="line", metric="speedup_vs_std"),
     "Improvement by algorithm": dict(x="algo", color="algo", facet="dist", chart="bar", metric="speedup_vs_std"),
     "Custom": None,
@@ -455,28 +603,44 @@ def run_app(json_path: str | None = None) -> None:
     st.subheader("Pinned dimensions (single value each — no aggregation)")
     pins: dict[str, object] = {}
     pin_cols = st.columns(max(len(fixed), 1))
+    # Each pin offers only values that survive the pins before it. Dimensions can
+    # be correlated -- u64 is registered at 2/4/8 lanes and u32 at 4/8/16 -- so
+    # options drawn from the whole file let dtype=u64 sit beside lanes=16 and
+    # produce an empty chart that reads as missing data. DIMENSIONS order puts
+    # dtype ahead of lanes, so narrowing left to right resolves that pair.
+    narrowed = df
     for col, dim in zip(pin_cols, fixed):
-        vals = dim_values(df, dim)
+        vals = dim_values(narrowed, dim)
         if not vals:
             continue
+        key = f"pin_{dim}"
+        # Session state outlives a rerun, so a value an earlier pin has just made
+        # impossible would otherwise raise instead of falling back to a default.
+        if key in st.session_state and st.session_state[key] not in vals:
+            del st.session_state[key]
         dflt = default_pin(dim, vals)
-        pins[dim] = col.selectbox(dim, vals, index=vals.index(dflt) if dflt in vals else 0, key=f"pin_{dim}")
+        pins[dim] = col.selectbox(dim, vals, index=vals.index(dflt) if dflt in vals else 0, key=key)
+        narrowed = apply_pin(narrowed, dim, pins[dim])
 
-    # Zero denotes "not applicable": scalar/serial variants remain comparable
-    # while SIMD lanes, workers, and the task and partition thresholds are
-    # pinned for applicable rows. Non-deep parallel targets carry partitions=0,
-    # so they stay visible beside a pinned partition threshold.
-    view_df = df
-    for dim, value in pins.items():
-        if dim in OPTIONAL_NUMERIC_DIMENSIONS:
-            view_df = view_df[(view_df[dim] == value) | (view_df[dim] == 0)]
-        else:
-            view_df = view_df[view_df[dim] == value]
+    view_df = narrowed
 
     pinned_txt = ", ".join(f"{d}={pins[d]}" for d in fixed if d in pins) or "none"
     note = f" · metric forced to **{active_metric}**" if PRESETS[view] and "metric" in PRESETS[view] else ""
     st.caption(f"Pinned: **{pinned_txt}**{note}. Each point is one configuration — no aggregation "
                "beyond the median over benchmark repetitions.")
+
+    # A single measured thread count yields a flat efficiency of exactly 1.0,
+    # which reads as perfect scaling when it actually means there is nothing to
+    # compare against. Say so rather than letting the chart imply it.
+    if x == "workers" and not view_df.empty:
+        measured = sorted(t for t in view_df["workers"].unique() if t > 0)
+        if len(measured) < 2:
+            st.warning(
+                f"Only one thread count was measured here ({measured or 'none'}). "
+                "Scaling needs at least two — `COSORT_WORKERS` is one value per "
+                "process, so sweep it with `sweep_multicolumn_bench.py run "
+                "--workers 1,2,4,8` and load the stitched file."
+            )
 
     if view_df.empty:
         st.warning("No rows for this combination — likely the run had not reached it (see coverage below).")
@@ -496,11 +660,13 @@ def run_app(json_path: str | None = None) -> None:
             order = dim_values(df, dim)
             if dim in OPTIONAL_NUMERIC_DIMENSIONS and 0 in set(df[dim]):
                 order = [0, *order]
+            if (dim in OPTIONAL_CATEGORICAL_DIMENSIONS
+                    and NOT_APPLICABLE in set(df[dim])):
+                order = [NOT_APPLICABLE, *order]
             st.write(
                 f"**{DIMENSION_LABELS[dim]}**: "
                 + ", ".join(
-                    f"{'n/a' if dim in OPTIONAL_NUMERIC_DIMENSIONS and v == 0 else v} "
-                    f"({int(counts.get(v, 0))})"
+                    f"{_coverage_label(dim, v)} ({int(counts.get(v, 0))})"
                     for v in order
                 )
             )

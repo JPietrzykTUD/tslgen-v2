@@ -35,4 +35,7 @@ struct TslMultiColumnSortMetrics {
   std::size_t tasks_executed_inline = 0;
   std::size_t max_outstanding_tasks = 0;
   std::size_t partition_tasks_submitted = 0;
+  // Times a worker woke on the pending-work deadline instead of a notification.
+  // Non-zero means the starvation safeguard was actually needed.
+  std::size_t idle_poll_wakeups = 0;
 };

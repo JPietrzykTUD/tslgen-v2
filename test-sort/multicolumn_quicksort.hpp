@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <random>
 #include <stdexcept>
 #include <type_traits>
@@ -17,6 +18,54 @@
 #include "equal_runs.hpp"
 #include "multicolumn_sort_types.hpp"
 #include "multicolumn_sort_tasks.hpp"
+
+
+// Deferred pivot generator.
+//
+// Only `get_pivot` reads the generator, and only a range above the leaf
+// threshold ever partitions, so a range that goes straight to its leaf never
+// needs one. Seeding `std::mt19937_64` eagerly per task therefore initialized
+// 2496 bytes of state (~400ns) for nothing on every small next-column task --
+// and low-cardinality inputs produce millions of those. Holding the seed and
+// materializing on first use keeps the generated sequence identical for any
+// range that does partition.
+//
+// Unsynchronized on purpose: like the generator it replaces, one instance is a
+// local of a single sort call and is only ever reached from that call's own
+// thread. A worker that takes over a partition receives a task descriptor and
+// seeds its own instance from task_seed. Do not promote this to a member or
+// share one across workers -- the check-then-emplace in get() would then race.
+class TslLazyPivotRng {
+  std::uint64_t seed_;
+  std::optional<std::mt19937_64> rng_;
+
+ public:
+  explicit TslLazyPivotRng(std::uint64_t seed) : seed_(seed) {}
+
+  auto get() -> std::mt19937_64 & {
+    if (!rng_.has_value()) {
+      rng_.emplace(seed_);
+    }
+    return *rng_;
+  }
+};
+
+
+// True when a run detector participates in executor accounting, i.e. exposes
+// bind(TslPendingWork&) and poll(). Synchronous detectors do not, and are wired
+// as plain callables.
+template <class Detector, class = void>
+struct tsl_detector_wants_executor : std::false_type {};
+
+template <class Detector>
+struct tsl_detector_wants_executor<
+  Detector,
+  decltype(
+    std::declval<Detector &>().bind(std::declval<TslPendingWork &>()),
+    std::declval<Detector &>().poll(),
+    void()
+  )
+> : std::true_type {};
 
 
 enum class TslLeafKind { INSERTION, NETWORK };
@@ -341,14 +390,15 @@ class TslMultiColumnQuickSorter {
     column_pointers columns,
     std::size_t payload_count,
     std::size_t count,
-    std::mt19937_64 & rng,
+    TslLazyPivotRng & rng,
     std::size_t absolute_begin,
     EqualBandSink & equal_band_sink,
     LeafSink & leaf_sink,
     RangeSink & range_sink
   ) {
     while (count > leaf_threshold) {
-      auto const pivot_value = get_pivot<Order>(keys, columns, payload_count, count, rng);
+      auto const pivot_value =
+        get_pivot<Order>(keys, columns, payload_count, count, rng.get());
       std::size_t left_count;
       std::size_t right_begin;
       std::size_t right_count;
@@ -465,7 +515,7 @@ class TslMultiColumnQuickSorter {
     std::size_t payload_count,
     std::size_t count,
     TslSortOrder order,
-    std::mt19937_64 & rng,
+    TslLazyPivotRng & rng,
     std::size_t absolute_begin,
     EqualBandSink & equal_band_sink,
     LeafSink & leaf_sink,
@@ -539,7 +589,7 @@ class TslMultiColumnQuickSorter {
 
     auto const payload_count = column_count - active_column - 1;
     auto const payloads = payload_columns_for(columns, column_count, active_column, begin);
-    auto rng = std::mt19937_64(task_seed(active_column, begin, end));
+    auto rng = TslLazyPivotRng(task_seed(active_column, begin, end));
     auto no_equal_band = [](std::size_t, std::size_t) {};
     auto no_leaf = [](std::size_t, std::size_t) {};
     auto no_range = keep_range_local();
@@ -661,13 +711,21 @@ class TslMultiColumnQuickSorter {
     std::atomic<std::size_t> partition_tasks{0};
   };
 
-  template <TslRunDiscoveryKind Discovery, class Schedule, class Offload>
+  template <
+    TslRunDiscoveryKind Discovery,
+    class Schedule,
+    class Offload,
+    class DetectRuns,
+    class MakeEmit
+  >
   void process_parallel_task(
     TslSortColumn<DataType> const * columns,
     std::size_t column_count,
     TslColumnSortTask task,
     Schedule & schedule,
     Offload & offload,
+    DetectRuns & detect_runs,
+    MakeEmit & make_emit,
     concurrent_sort_metrics * metrics
   ) const {
     if (task.end - task.begin < 2 || task.column >= column_count) {
@@ -681,7 +739,7 @@ class TslMultiColumnQuickSorter {
       task.column,
       task.begin
     );
-    auto rng = std::mt19937_64(task_seed(task.column, task.begin, task.end));
+    auto rng = TslLazyPivotRng(task_seed(task.column, task.begin, task.end));
     auto no_equal_band = [](std::size_t, std::size_t) {};
     auto no_leaf = [](std::size_t, std::size_t) {};
 
@@ -752,17 +810,13 @@ class TslMultiColumnQuickSorter {
             std::memory_order_relaxed
           );
         }
-        tsl_for_each_equal_run(
+        // make_emit, not a [&] lambda: an asynchronous detector retains this
+        // callable past the end of this task, so it must own what it needs.
+        detect_runs(
           columns[task.column].data,
           leaf_begin,
           leaf_end,
-          [&](TslRunSpan span) {
-            schedule(TslColumnSortTask{
-              task.column + 1,
-              span.begin,
-              span.end,
-            });
-          }
+          make_emit(task.column + 1)
         );
       };
       sort_active_range<true>(
@@ -801,17 +855,11 @@ class TslMultiColumnQuickSorter {
         std::memory_order_relaxed
       );
     }
-    tsl_for_each_equal_run(
+    detect_runs(
       columns[task.column].data,
       task.begin,
       task.end,
-      [&](TslRunSpan span) {
-        schedule(TslColumnSortTask{
-          task.column + 1,
-          span.begin,
-          span.end,
-        });
-      }
+      make_emit(task.column + 1)
     );
   }
 
@@ -886,7 +934,7 @@ class TslMultiColumnQuickSorter {
       }
       columns[column] = payload_columns[column];
     }
-    auto rng = std::mt19937_64(task_seed(0, 0, count));
+    auto rng = TslLazyPivotRng(task_seed(0, 0, count));
     auto no_equal_band = [](std::size_t, std::size_t) {};
     auto no_leaf = [](std::size_t, std::size_t) {};
     auto no_range = keep_range_local();
@@ -961,7 +1009,7 @@ class TslMultiColumnQuickSorter {
       }
       columns[column] = payload_columns[column];
     }
-    auto rng = std::mt19937_64(task_seed(
+    auto rng = TslLazyPivotRng(task_seed(
       0,
       absolute_begin,
       absolute_begin + count
@@ -1024,6 +1072,21 @@ class TslMultiColumnQuickSorter {
   // to another worker. It is deliberately separate from `task_threshold`: a
   // next-column task pays for run discovery plus a whole subtree, while a
   // partition task pays for one partition pass.
+  // Default equal-run detector: the scalar linear pass. `sort_columns_parallel`
+  // accepts a replacement so an accelerator-backed detector can be substituted
+  // without this header knowing anything about the accelerator.
+  struct scalar_run_detector {
+    template <class Emit>
+    void operator()(
+      DataType const * values,
+      std::size_t begin,
+      std::size_t end,
+      Emit && emit
+    ) const {
+      tsl_for_each_equal_run(values, begin, end, std::forward<Emit>(emit));
+    }
+  };
+
   void sort_columns_parallel(
     TslSortColumn<DataType> const * columns,
     std::size_t column_count,
@@ -1032,6 +1095,25 @@ class TslMultiColumnQuickSorter {
     std::size_t task_threshold,
     std::size_t partition_threshold,
     TslRunDiscoveryKind discovery = TslRunDiscoveryKind::POST_SORT,
+    TslMultiColumnSortMetrics * metrics = nullptr
+  ) const {
+    scalar_run_detector detector;
+    sort_columns_parallel(
+      columns, column_count, row_count, worker_count, task_threshold,
+      partition_threshold, discovery, detector, metrics
+    );
+  }
+
+  template <class DetectRuns>
+  void sort_columns_parallel(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    std::size_t row_count,
+    std::size_t worker_count,
+    std::size_t task_threshold,
+    std::size_t partition_threshold,
+    TslRunDiscoveryKind discovery,
+    DetectRuns & detect_runs,
     TslMultiColumnSortMetrics * metrics = nullptr
   ) const {
     validate_columns(columns, column_count, row_count);
@@ -1073,6 +1155,21 @@ class TslMultiColumnQuickSorter {
         executor.submit(std::move(child));
         return true;
       };
+      // Produces a next-column emitter that captures nothing task-local: the
+      // executor by pointer (it outlives the whole sort) and the threshold and
+      // column by value. An asynchronous detector may invoke the result on
+      // another worker long after this task returned, so a [&] capture of
+      // `schedule` or `task` would dangle. Same scheduling policy as `schedule`.
+      auto make_emit = [&executor, task_threshold](std::size_t next_column) {
+        return [target = &executor, task_threshold, next_column](TslRunSpan span) {
+          TslColumnSortTask child{next_column, span.begin, span.end};
+          if (child.end - child.begin < task_threshold) {
+            target->run_inline(child);
+          } else {
+            target->submit(std::move(child));
+          }
+        };
+      };
       if (
         discovery == TslRunDiscoveryKind::INCREMENTAL
         && PartitionKind == TslPartitionKind::THREE_WAY
@@ -1083,6 +1180,8 @@ class TslMultiColumnQuickSorter {
           task,
           schedule,
           offload,
+          detect_runs,
+          make_emit,
           metrics != nullptr ? &algorithm_metrics : nullptr
         );
       } else {
@@ -1092,6 +1191,8 @@ class TslMultiColumnQuickSorter {
           task,
           schedule,
           offload,
+          detect_runs,
+          make_emit,
           metrics != nullptr ? &algorithm_metrics : nullptr
         );
       }
@@ -1101,6 +1202,15 @@ class TslMultiColumnQuickSorter {
       worker_count,
       worker
     );
+    // An asynchronous detector needs the executor to hold a pending unit per
+    // in-flight range and needs its completions checked from worker threads.
+    // Both are wired here, before the first task exists, so nothing can run
+    // against a half-connected detector. Detectors without these members are
+    // unaffected.
+    if constexpr (tsl_detector_wants_executor<DetectRuns>::value) {
+      detect_runs.bind(executor);
+      executor.set_poller([&detect_runs] { detect_runs.poll(); });
+    }
     executor.submit(TslColumnSortTask{0, 0, row_count});
     executor.wait();
 
@@ -1117,6 +1227,7 @@ class TslMultiColumnQuickSorter {
       metrics->tasks_submitted = task_metrics.tasks_submitted;
       metrics->tasks_executed_inline = task_metrics.tasks_executed_inline;
       metrics->max_outstanding_tasks = task_metrics.max_outstanding_tasks;
+      metrics->idle_poll_wakeups = task_metrics.idle_poll_wakeups;
     }
   }
 };

@@ -209,5 +209,61 @@ if(ENABLE_GBENCH)
   )
 endif()
 
+# --- Intel DSA (DML) run detector -------------------------------------------
+# Off by default: the default build and test run must not require DML or DSA
+# hardware. When on, the detector targets are built and the accelerator is
+# additionally selectable at runtime (scalar / DML software path / DSA
+# hardware), so one binary can compare all three.
+option(TSL_COSORT_ENABLE_DSA "Build the Intel DSA (DML) run-length detector targets" OFF)
+set(DML_ROOT "" CACHE PATH "Pre-built Intel DML install prefix (empty = fetch from GitHub)")
+set(DML_GIT_TAG "v1.2.0" CACHE STRING "Intel DML tag to fetch when DML_ROOT is unset")
+
+if(TSL_COSORT_ENABLE_DSA)
+  # DML ships a C core under its C++ facade.
+  enable_language(C)
+
+  if(DML_ROOT)
+    message(STATUS "DML: using local installation at ${DML_ROOT}")
+    find_package(DML REQUIRED CONFIG
+                 HINTS "${DML_ROOT}" "${DML_ROOT}/lib/cmake/DML" "${DML_ROOT}/lib64/cmake/DML")
+    set(_dsa_link_targets DML::dml)
+  else()
+    message(STATUS "DML: fetching ${DML_GIT_TAG} from github.com/intel/DML")
+    set(DML_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(DML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+      DML
+      GIT_REPOSITORY https://github.com/intel/DML.git
+      GIT_TAG "${DML_GIT_TAG}"
+      GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(DML)
+    set(_dsa_link_targets dml)
+  endif()
+
+  add_executable(test_dsa_run_detector test_dsa_run_detector.cpp)
+  target_compile_features(test_dsa_run_detector PRIVATE cxx_std_17)
+  target_compile_definitions(test_dsa_run_detector PRIVATE TSL_COSORT_ENABLE_DSA=1)
+  target_link_libraries(test_dsa_run_detector PRIVATE tsl::tsl ${_dsa_link_targets})
+  add_test(NAME test_dsa_run_detector COMMAND test_dsa_run_detector)
+
+  add_executable(benchmark_dsa_run_detector benchmark_dsa_run_detector.cpp)
+  target_compile_features(benchmark_dsa_run_detector PRIVATE cxx_std_17)
+  target_compile_definitions(benchmark_dsa_run_detector PRIVATE TSL_COSORT_ENABLE_DSA=1)
+  target_link_libraries(benchmark_dsa_run_detector PRIVATE tsl::tsl ${_dsa_link_targets})
+
+  # The full co-sort with the RLE backend as the registered axis. Needs Google
+  # Benchmark, so it follows ENABLE_GBENCH.
+  if(ENABLE_GBENCH)
+    add_executable(benchmark_dsa_cosort benchmark_dsa_cosort.cpp)
+    target_compile_features(benchmark_dsa_cosort PRIVATE cxx_std_17)
+    target_compile_definitions(benchmark_dsa_cosort PRIVATE TSL_COSORT_ENABLE_DSA=1)
+    target_link_libraries(
+      benchmark_dsa_cosort
+      PRIVATE tsl::tsl benchmark::benchmark Threads::Threads ${_dsa_link_targets}
+    )
+  endif()
+endif()
+
 add_test(NAME test_sort COMMAND test_sort)
 add_test(NAME test_multicolumn_sort COMMAND test_multicolumn_sort)
