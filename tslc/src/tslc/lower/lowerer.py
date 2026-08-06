@@ -216,6 +216,14 @@ class LoweredSpecialization:
     # Feature flags required by this body, including call-graph propagation after
     # dependency pruning.
     required_features: frozenset[str] = frozenset()
+    # Backend compiler capabilities required by this body, including call-graph
+    # propagation after dependency pruning.
+    required_compiler_capabilities: frozenset[str] = frozenset()
+    # Higher-ranked bodies for the same logical specialization. Ordinary
+    # generated projects retain these branches so the downstream compiler can
+    # select them; the main body is the unconditional portable fallback.
+    compiler_alternatives: tuple["LoweredSpecialization", ...] = ()
+
     call_dependency_origins: tuple[CallDependencyOrigin, ...] = ()
     implementation_state: ImplementationState = ImplementationState.UNKNOWN
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
@@ -228,10 +236,23 @@ class LoweredSpecialization:
         return self.body.render()
 
     @property
-    def variant_names(self) -> tuple[str, ...]:
-        """Stable authored identities of the lowered alternative bodies."""
+    def compiler_branches(self) -> tuple["LoweredSpecialization", ...]:
+        """Capability alternatives followed by the canonical fallback branch."""
 
-        return tuple(variant.name for variant in self.variant_bodies)
+        return (*self.compiler_alternatives, self)
+
+    @property
+    def variant_names(self) -> tuple[str, ...]:
+        """Stable authored identities across every compiler-selected branch."""
+
+        names: list[str] = []
+        seen: set[str] = set()
+        for branch in self.compiler_branches:
+            for variant in branch.variant_bodies:
+                if variant.name not in seen:
+                    seen.add(variant.name)
+                    names.append(variant.name)
+        return tuple(names)
 
     @property
     def effective_param_type_overrides(self) -> tuple[str | None, ...]:
@@ -705,6 +726,9 @@ class Lowerer:
             mask_policy=selected.primitive.attributes.get("mask"),
             lane_list_params=tuple(context.env.lane_list_params.values()),
             required_features=selected.required_features,
+            required_compiler_capabilities=(
+                selected.required_compiler_capabilities
+            ),
             call_dependency_origins=ordered_dependency_origins,
             implementation_state=default_body.implementation_state,
             safety=effective_safety,

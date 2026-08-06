@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 from tslc import api, pipeline
 from tslc.backend import cpp_profile
-from tslc.backend.capability import BackendCapability
+from tslc.backend.capability import BackendCapability, CompilerCapability
 from tslc.backend.cpp_capability import CPP_BACKEND
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.helper_requirements import (
@@ -77,6 +77,33 @@ def test_backend_defaults_are_resolved_at_request_construction(
     assert request.backends == ("future",)
 
 
+def test_compiler_capability_vocabulary_is_backend_generic(monkeypatch) -> None:
+    from tslc.backend import registry
+
+    capability = CompilerCapability("future_feature")
+    future = BackendCapability(
+        backend_id="future",
+        root_path="future",
+        artifact_media_type="text/future",
+        dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
+        artifact_renderer=_empty_backend_artifacts,
+        verify_profiles=lambda profiles: (),
+        value_test_support_factory=lambda: None,  # type: ignore[return-value]
+        verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
+        toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
+        documentation_formatter_factory=_FakeDocumentationFormatter,
+        compiler_capabilities=(capability,),
+    )
+    monkeypatch.setattr(registry, "BACKEND_CAPABILITIES", (future,))
+    monkeypatch.setattr(registry, "_BY_ID", {"future": future})
+
+    assert future.compiler_capability("future_feature") is capability
+    assert registry.registered_compiler_capabilities() == {
+        "future": frozenset({"future_feature"})
+    }
+
+
 def test_public_api_resolves_omitted_backends_for_each_call(monkeypatch) -> None:
     captured: list[pipeline.GenerationRequest] = []
 
@@ -86,6 +113,30 @@ def test_public_api_resolves_omitted_backends_for_each_call(monkeypatch) -> None
     api.generate_project((), machine_profiles_path=Path("profiles.json"))
 
     assert captured[0].backends == ("future",)
+
+
+def test_public_api_promotes_compiler_capabilities_to_typed_sets(
+    monkeypatch,
+) -> None:
+    captured: list[pipeline.GenerationRequest] = []
+
+    monkeypatch.setattr(api, "generate", lambda request: captured.append(request))
+
+    api.generate_project(
+        (),
+        machine_profiles_path=Path("profiles.json"),
+        backends=("cpp",),
+        compiler_capabilities={
+            "cpp": ("elementwise_clzg", "elementwise_clzg"),
+        },
+    )
+
+    assert captured[0].backend_compiler_capabilities == (
+        pipeline.BackendCompilerCapabilitySet(
+            "cpp",
+            frozenset({"elementwise_clzg"}),
+        ),
+    )
 
 
 def test_public_api_promotes_backend_profiles_to_typed_scopes(monkeypatch) -> None:

@@ -726,6 +726,12 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
     tmp_path: Path,
 ) -> None:
     catalog = SimpleNamespace(target_families=object())
+    eligible_profile = SimpleNamespace(
+        supports_backend=lambda backend_id: backend_id == "rust"
+    )
+    ineligible_profile = SimpleNamespace(
+        supports_backend=lambda backend_id: backend_id == "cpp"
+    )
     monkeypatch.setattr(
         benchmark_coverage_module,
         "_load_catalog",
@@ -735,7 +741,11 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
         benchmark_coverage_module,
         "load_machine_profiles_checked",
         lambda _path, _families: SimpleNamespace(
-            profiles={"left": object(), "right": object()},
+            profiles={
+                "cpp-only": ineligible_profile,
+                "left": eligible_profile,
+                "right": eligible_profile,
+            },
             diagnostics=(),
         ),
     )
@@ -805,7 +815,7 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
     audit, errors = compute_benchmark_coverage_audit(
         sources=tmp_path,
         machine_profiles=tmp_path / "profiles.json",
-        profiles=("right", "left"),
+        profiles=None,
         types=("si8",),
         backend_id="rust",
     )
@@ -826,3 +836,37 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
     assert tuple(item.profile.name for item in emitted) == ("left", "right")
     assert policy_inputs["selection"] == "selection"
     assert policy_inputs["benchmarks"] is merged
+
+
+def test_rust_benchmark_audit_rejects_explicit_backend_ineligible_profile(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    catalog = SimpleNamespace(target_families=object())
+    ineligible_profile = SimpleNamespace(
+        supports_backend=lambda backend_id: backend_id == "cpp"
+    )
+    monkeypatch.setattr(
+        benchmark_coverage_module,
+        "_load_catalog",
+        lambda _sources, _backend_id: (catalog, ()),
+    )
+    monkeypatch.setattr(
+        benchmark_coverage_module,
+        "load_machine_profiles_checked",
+        lambda _path, _families: SimpleNamespace(
+            profiles={"cpp-only": ineligible_profile},
+            diagnostics=(),
+        ),
+    )
+
+    audit, errors = compute_benchmark_coverage_audit(
+        sources=tmp_path,
+        machine_profiles=tmp_path / "profiles.json",
+        profiles=("cpp-only",),
+        types=("si8",),
+        backend_id="rust",
+    )
+
+    assert audit is None
+    assert errors == ("machine profile(s) cpp-only do not support backend 'rust'",)

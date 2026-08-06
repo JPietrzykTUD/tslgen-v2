@@ -21,7 +21,7 @@ from tslc.benchmark.correctness import (
 )
 from tslc.benchmark.identity import (
     benchmark_slot_identity_hash,
-    implementation_body_hash,
+    implementation_choice_body_hash,
     specialization_key,
     specialization_stable_id,
 )
@@ -447,12 +447,15 @@ class BenchmarkPlanner:
         if not correctness:
             return None, "no authored expected-value case covers this specialization", True
         candidates = (
-            BenchmarkCandidate("default", implementation_body_hash(spec.body_text)),
+            BenchmarkCandidate(
+                "default", implementation_choice_body_hash(spec)
+            ),
             *(
                 BenchmarkCandidate(
-                    variant.name, implementation_body_hash(variant.body_text)
+                    variant_name,
+                    implementation_choice_body_hash(spec, variant_name),
                 )
-                for variant in spec.variant_bodies
+                for variant_name in spec.variant_names
             ),
         )
         return (

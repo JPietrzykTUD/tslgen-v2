@@ -334,6 +334,7 @@ def _serialize_value_test_expectation(value: ValueTestExpectation) -> dict[str, 
         "values": value.values,
         "text": value.text,
         "comparison": value.comparison.value,
+        "scalable_layout": value.scalable_layout,
     }
 
 

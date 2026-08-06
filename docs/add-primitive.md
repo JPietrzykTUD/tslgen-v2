@@ -216,6 +216,39 @@ Prefer this order:
 3. Add a small reusable helper primitive.
 4. Use a generic typed-TSIL fallback.
 
+
+Target features and compiler capabilities are independent requirement axes.
+Use the expanded form when a specialization depends on a backend compiler
+feature:
+
+```tsl
+clang_v128:
+  ?i?:
+    requires:
+      target_features []
+      compiler:
+        cpp:
+          capabilities [elementwise_clzg]
+    implementation:
+      tsil """
+        complete(intrin<__builtin_elementwise_clzg>(data, set1(bitwidth)));
+      """
+```
+
+Capability names come from the selected backend's typed registry. Do not
+encode compiler families or versions in TSL source. Ordinary project generation
+retains the capability-specialized body together with the best unconditional
+body for the same logical slot; an unconditional body is required because the
+capability branch is an optimization, not API availability.
+
+For C++, generated CMake performs a compile-only probe of the registered
+capability construct and exports the result as a target compile definition.
+The generated primitive body uses that macro in a local preprocessor branch, so
+the same package selects the builtin on a supporting compiler and the portable
+body otherwise. Direct header consumers get the backend's conservative
+preprocessor probe as a default. An explicit generation capability set instead
+forces one selection and is intended for focused authoring or pinned-toolchain
+checks.
 Selection uses typed facts:
 
 ```text

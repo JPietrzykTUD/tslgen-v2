@@ -12,6 +12,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from tslc.backend.cpp_compiler_capabilities import (
+    cpp_compiler_capability_header_defaults,
+    used_cpp_compiler_capability_ids,
+)
 from tslc.backend.cpp_profile import (
     _cpp_compiler_builtin_fixed_registrations,
     _cpp_includes,
@@ -127,6 +131,7 @@ class CppProjectRenderModel:
 
     profiles: tuple[CppProfileRenderModel, ...]
     primitive_tag_declarations: str
+    compiler_capability_defaults: str
     dispatch_header_groups: tuple[str, ...]
     supports_algorithm: bool
 
@@ -136,6 +141,7 @@ def cpp_project_render_model(
 ) -> CppProjectRenderModel:
     """Decide every C++ profile-content fact from emitted backend profiles."""
 
+    capability_ids = used_cpp_compiler_capability_ids(profiles)
     tag_names = sorted(
         {
             primitive
@@ -147,6 +153,9 @@ def cpp_project_render_model(
         profiles=tuple(_cpp_profile_model(profile) for profile in profiles),
         primitive_tag_declarations="\n".join(
             f"struct {name} {{}};" for name in tag_names
+        ),
+        compiler_capability_defaults=(
+            cpp_compiler_capability_header_defaults(capability_ids)
         ),
         dispatch_header_groups=tuple(
             sorted(
@@ -224,7 +233,10 @@ def _cpp_base_header(
             for name in sorted(base)
         ),
         definition_groups=_cpp_definition_groups(base, emitted_profile.extensions),
-        guard=_cpp_profile_compile_guard(emitted_exts, emitted_profile.extensions),
+        guard=_cpp_profile_compile_guard(
+            emitted_exts,
+            emitted_profile.extensions,
+        ),
         smoke=_cpp_smoke_instantiations(emitted_profile, base),
     )
 
@@ -280,7 +292,7 @@ def _cpp_definition_groups(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
 ) -> tuple[CppDefinitionGroup, ...]:
-    """Group each primitive's definitions under their compiler capability guard."""
+    """Group primitive definitions under target-extension conditions."""
 
     groups: list[CppDefinitionGroup] = []
     for name in sorted(by_primitive):

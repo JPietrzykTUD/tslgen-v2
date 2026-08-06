@@ -47,6 +47,7 @@ def cpp_artifacts(
             "cpp/include/tsl_primitives.hpp",
             assets.fill(
                 "cpp_primitive_tags.hpp.tmpl",
+                compiler_capability_defaults=model.compiler_capability_defaults,
                 declarations=(
                     f"\n{model.primitive_tag_declarations}"
                     if model.primitive_tag_declarations

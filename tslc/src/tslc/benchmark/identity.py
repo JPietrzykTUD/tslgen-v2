@@ -7,6 +7,7 @@ from hashlib import sha256
 import re
 
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.primitive_rendering import body_for
 from tslc.benchmark.model import SpecializationKey
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.value_tests.lane_math import whole_lanes
@@ -125,6 +126,36 @@ def benchmark_slot_identity_hash(
             target.native_register_spelling,
         )
     )
+    compiler_capabilities = tuple(
+        sorted(specialization.required_compiler_capabilities)
+    )
+    compiler_branch_facts = (
+        tuple(
+            (
+                tuple(sorted(branch.required_compiler_capabilities)),
+                tuple(sorted(branch.required_features)),
+                branch.implementation_state.value,
+                (
+                    branch.safety.internal_unsafe,
+                    branch.safety.caller_unsafe,
+                    tuple(sorted(branch.safety.reasons)),
+                ),
+                tuple(
+                    (
+                        variant.name,
+                        variant.implementation_state.value,
+                        variant.safety.internal_unsafe,
+                        variant.safety.caller_unsafe,
+                        tuple(sorted(variant.safety.reasons)),
+                    )
+                    for variant in branch.variant_bodies
+                ),
+            )
+            for branch in specialization.compiler_branches
+        )
+        if specialization.compiler_alternatives
+        else ()
+    )
     fields = (
         "benchmark-slot-v1",
         specialization.backend_id,
@@ -172,6 +203,15 @@ def benchmark_slot_identity_hash(
             for parameter in specialization.lane_list_params
         ),
         tuple(sorted(specialization.required_features)),
+        *(
+            (("compiler_branches", compiler_branch_facts),)
+            if compiler_branch_facts
+            else (
+                (("compiler_capabilities", compiler_capabilities),)
+                if compiler_capabilities
+                else ()
+            )
+        ),
         specialization.implementation_state.value,
         (
             specialization.safety.internal_unsafe,
@@ -198,6 +238,29 @@ def implementation_body_hash(body: str) -> str:
     return sha256(body.encode("utf-8")).hexdigest()
 
 
+def implementation_choice_body_hash(
+    specialization: LoweredSpecialization,
+    variant_name: str | None = None,
+) -> str:
+    """Hash every capability branch that can implement one candidate body."""
+
+    branches = tuple(
+        (
+            tuple(sorted(branch.required_compiler_capabilities)),
+            selected_body.render(),
+        )
+        for branch in specialization.compiler_branches
+        if (selected_body := body_for(branch, variant_name)) is not None
+    )
+    if not branches:
+        raise ValueError("benchmark candidate has no lowered implementation body")
+    if len(branches) == 1 and not branches[0][0]:
+        return implementation_body_hash(branches[0][1])
+    return sha256(
+        repr(("compiler-choice-body-v1", branches)).encode("utf-8")
+    ).hexdigest()
+
+
 def is_sha256_digest(value: object) -> bool:
     """Return whether ``value`` is one canonical lowercase SHA-256 digest."""
 
@@ -212,6 +275,7 @@ __all__ = (
     "benchmark_slot_identity_hash",
     "implementation_body_hash",
     "is_sha256_digest",
+    "implementation_choice_body_hash",
     "specialization_identity_hash",
     "specialization_key",
     "specialization_stable_id",

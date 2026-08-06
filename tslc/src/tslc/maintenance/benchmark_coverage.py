@@ -929,6 +929,22 @@ def compute_benchmark_coverage_audit(
                 + "; known profiles: "
                 + ", ".join(sorted(loaded_profiles.profiles)),
             )
+        unsupported_profiles = tuple(
+            name
+            for name in selected_profiles
+            if not loaded_profiles.profiles[name].supports_backend(backend_id)
+        )
+        if profiles is not None and unsupported_profiles:
+            return None, (
+                "machine profile(s) "
+                + ", ".join(unsupported_profiles)
+                + f" do not support backend {backend_id!r}",
+            )
+        selected_profiles = tuple(
+            name
+            for name in selected_profiles
+            if loaded_profiles.profiles[name].supports_backend(backend_id)
+        )
         # A generated Rust crate requires compile-target predicates to form an
         # ordered chain. Benchmark evidence spans every profile, including
         # unordered alternatives, so generate each package-valid profile

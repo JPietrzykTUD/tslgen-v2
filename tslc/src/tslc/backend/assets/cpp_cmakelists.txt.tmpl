@@ -3,7 +3,7 @@ project(tsl_generated_cpp CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(TSL_BUILD_BENCHMARKS "Build generated implementation-variant benchmarks" OFF)
+@{compiler_capability_probes}option(TSL_BUILD_BENCHMARKS "Build generated implementation-variant benchmarks" OFF)
 option(TSL_AUTOTUNE_VARIANTS "Benchmark variants and consume a build-local policy" OFF)
 set(TSL_VARIANT_POLICY_FILE "" CACHE FILEPATH "Precomputed TSL variant-policy JSON")
 set(TSL_BENCHMARK_COMPILE_OPTIONS "" CACHE STRING "Additional compile options used for variant tuning")

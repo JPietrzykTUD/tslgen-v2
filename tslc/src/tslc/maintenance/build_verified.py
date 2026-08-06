@@ -36,6 +36,7 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "select",
             "equal",
             "hadd",
+            "lzc",
             "mask_binary_and",
             "mask_binary_not",
             "mask_binary_or",

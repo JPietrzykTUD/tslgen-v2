@@ -8,6 +8,7 @@ from tslc.syntax.access import field_text as _field_text
 from tslc.syntax.access import list_text as _list_text
 from tslc.syntax.access import source_span as _source_span
 from tslc.catalog.model import (
+    CompilerCapabilityRequirement,
     Implementation,
     ImplementationSafety,
     ImplementationVariant,
@@ -173,8 +174,41 @@ def _requirements(
                 else field.children
             )
             for child in children:
+                if child.key.text == "target_features":
+                    if isinstance(child.value, ParsedTslListValue):
+                        clauses.append(RequirementClause(flags=_flag_list(child.value)))
+                    continue
+                if child.key.text == "compiler":
+                    compiler = _compiler_requirements(child)
+                    if compiler:
+                        clauses.append(RequirementClause(compiler=compiler))
+                    continue
                 clauses.extend(_clauses_from_child(child, extension_names))
     return tuple(clauses)
+
+
+def _compiler_requirements(
+    field: ParsedTslField,
+) -> tuple[CompilerCapabilityRequirement, ...]:
+    requirements: list[CompilerCapabilityRequirement] = []
+    for backend in _children(field):
+        capabilities = next(
+            (
+                child.value
+                for child in _children(backend)
+                if child.key.text == "capabilities"
+                and isinstance(child.value, ParsedTslListValue)
+            ),
+            None,
+        )
+        if capabilities is not None:
+            requirements.append(
+                CompilerCapabilityRequirement(
+                    backend_id=backend.key.text,
+                    capabilities=_flag_list(capabilities),
+                )
+            )
+    return tuple(requirements)
 
 
 def _clauses_from_child(
@@ -182,8 +216,13 @@ def _clauses_from_child(
 ) -> list[RequirementClause]:
     is_extension = child.key.text in extension_names
     if isinstance(child.value, ParsedTslListValue):
-        scope = {"extension": child.key.text} if is_extension else {"type_group": child.key.text}
-        return [RequirementClause(flags=_flag_list(child.value), **scope)]
+        return [
+            RequirementClause(
+                flags=_flag_list(child.value),
+                extension=child.key.text if is_extension else None,
+                type_group=None if is_extension else child.key.text,
+            )
+        ]
     if not is_extension:
         return []
     clauses: list[RequirementClause] = []

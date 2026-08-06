@@ -7,13 +7,18 @@ the profile yields its own specialization slot (the extension is part of the
 
     1. most specific type-group (fewest members)
     2. tie -> most required target features (most specialized)
-    3. tie -> first occurrence (source order)
+    3. tie -> most required compiler capabilities (most specialized)
+    4. tie -> first occurrence (source order)
 
-An implementation body is usable only if the `requires` clause that applies to the
-type has its target features ⊆ the profile's feature set. Extension variants such
-as `avx2_vl` become candidates through `active_when` profile capabilities and
-hide their bases through explicit `supersedes`; base extension bodies self-gate
-via `requires`.
+An implementation body is usable only if the `requires` clause that applies to
+the type has its target features ⊆ the profile's feature set. With an explicit
+backend compiler capability set, its compiler requirements must also be a
+subset of that set. Ordinary project generation instead retains every body
+that can win for some compiler capability set, provided that frontier contains
+an unconditional fallback; the backend can then select locally for the
+downstream compiler. Extension variants such as `avx2_vl` become candidates
+through `active_when` profile capabilities and hide their bases through
+explicit `supersedes`; base extension bodies self-gate via `requires`.
 """
 
 from __future__ import annotations
@@ -60,6 +65,13 @@ class SelectedImplementation:
     # The concrete target features selected for this implementation body after
     # applying extension/type-scoped `requires` clauses.
     required_features: frozenset[str] = frozenset()
+    # The backend compiler capabilities selected for this body.
+    required_compiler_capabilities: frozenset[str] = frozenset()
+    # A non-None rank groups automatic capability-frontier winners for
+    # downstream selection. Explicit selection and ordinary single winners
+    # leave it unset.
+    compiler_alternative_rank: int | None = None
+
     # For a representation-change primitive (`result_target`), the concrete target this slot
     # is monomorphized for: a target *type tag* (base dim, e.g. ``ui32``) or a target
     # *extension name* (extension dim, e.g. ``sse``). None for ordinary primitives.
@@ -92,6 +104,7 @@ class ProfileSelectionResult:
 class _BestBody:
     implementation: Implementation
     required_features: frozenset[str]
+    required_compiler_capabilities: frozenset[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,19 +117,27 @@ class _SelectionSlot:
 @dataclass(frozen=True, slots=True)
 class RankedCandidate:
     """A usable implementation body for one ``(extension, type, to_target)`` slot, carrying the
-    four principled ranking keys so callers (selection, and the ``explain`` tool) can see *why*
+    principled ranking keys so callers (selection, and the ``explain`` tool) can see *why*
     one body outranks another. ``sort_key`` is the exact tuple selection minimizes."""
 
     implementation: Implementation
     required_features: frozenset[str]
+    required_compiler_capabilities: frozenset[str]
     distance: int  # (a) position in the extension chain; own extension (0) before inherited
     specificity: int  # (b) type-group member count; fewer = more specific
     flag_count: int  # (c) applicable target-feature count; more = more specialized
-    source_order: int  # (d) first occurrence in source
+    compiler_capability_count: int  # (d) compiler requirements; more = more specialized
+    source_order: int  # (e) first occurrence in source
 
     @property
-    def sort_key(self) -> tuple[int, int, int, int]:
-        return (self.distance, self.specificity, -self.flag_count, self.source_order)
+    def sort_key(self) -> tuple[int, int, int, int, int]:
+        return (
+            self.distance,
+            self.specificity,
+            -self.flag_count,
+            -self.compiler_capability_count,
+            self.source_order,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +163,10 @@ RANKING_KEYS: tuple[tuple[str, str], ...] = (
     ("distance", "own extension before an inherited one"),
     ("specificity", "more specific type-group (fewer members)"),
     ("flag_count", "more required target features (more specialized)"),
+    (
+        "compiler_capability_count",
+        "more required compiler capabilities (more specialized)",
+    ),
     ("source_order", "earlier in source (arbitrary final tiebreak)"),
 )
 
@@ -157,6 +182,7 @@ class Selector:
         primitive_name: str,
         type_tags: tuple[str, ...],
         backend_id: str | None = None,
+        compiler_capabilities: frozenset[str] | None = None,
     ) -> ProfileSelectionResult:
         # Variants of this name fall into two groups, emitted side by side:
         #  - the UNMASKED overload set: same-arity overloads (store's `(ptr,v)`/`(ptr,s)`,
@@ -196,6 +222,7 @@ class Selector:
                         primitive,
                         emitted_extensions,
                         backend_id,
+                        compiler_capabilities,
                         warnings,
                     )
                 )
@@ -211,6 +238,7 @@ class Selector:
                         slot,
                         emitted_extensions,
                         backend_id,
+                        compiler_capabilities,
                         warnings,
                     )
                 )
@@ -225,6 +253,7 @@ class Selector:
         primitive: Primitive,
         emitted_extensions: list[str],
         backend_id: str | None,
+        compiler_capabilities: frozenset[str] | None,
         warnings: dict[str, Diagnostic],
     ) -> tuple[SelectedImplementation, ...]:
         """Select the first ISA-independent declaration owner in profile order."""
@@ -267,6 +296,7 @@ class Selector:
                 slot,
                 emitted_extensions,
                 backend_id,
+                compiler_capabilities,
                 warnings,
             )
             if selected:
@@ -301,18 +331,21 @@ class Selector:
         slot: _SelectionSlot,
         emitted_extensions: list[str],
         backend_id: str | None,
+        compiler_capabilities: frozenset[str] | None,
         warnings: dict[str, Diagnostic],
     ) -> tuple[SelectedImplementation, ...]:
-        best = self._best_body(
+        best_bodies = self._best_bodies(
             catalog,
             profile,
             primitive,
             slot.extension_name,
             slot.type_tag,
             slot.to_target,
+            backend_id,
+            compiler_capabilities,
             warnings,
         )
-        if best is None:
+        if not best_bodies:
             return ()
         extension = catalog.extensions[slot.extension_name]
         fallback = (
@@ -325,6 +358,7 @@ class Selector:
                 slot.to_target,
                 emitted_extensions,
                 backend_id,
+                compiler_capabilities,
             )
             if backend_id is not None
             else None
@@ -337,12 +371,21 @@ class Selector:
                 extension=extension,
                 type_tag=slot.type_tag,
                 required_features=best.required_features,
+                required_compiler_capabilities=(
+                    best.required_compiler_capabilities
+                ),
+                compiler_alternative_rank=(
+                    rank
+                    if compiler_capabilities is None and len(best_bodies) > 1
+                    else None
+                ),
                 to_target=slot.to_target,
                 concrete_lanes=lanes,
                 simd_type_base_bindings=bindings,
                 fixed_fallback_extension=fallback,
                 extension_family_capability=family,
             )
+            for rank, best in enumerate(best_bodies)
             for lanes in self._monomorphized_lanes(
                 extension, best.implementation, slot.type_tag
             )
@@ -361,6 +404,7 @@ class Selector:
         to_target: str | None,
         emitted_extensions: list[str],
         backend_id: str,
+        compiler_capabilities: frozenset[str] | None,
     ) -> Extension | None:
         """Best backend-emitted substrate for the source extension's exact width.
 
@@ -398,14 +442,22 @@ class Selector:
                 catalog, extension, type_tag, backend_id
             ):
                 continue
-            if not self.evaluate_candidates(
+            ranked = self.evaluate_candidates(
                 catalog,
                 profile,
                 primitive,
                 name,
                 type_tag,
                 to_target,
-            ).ranked:
+                backend_id,
+                compiler_capabilities,
+            ).ranked
+            if not ranked:
+                continue
+            if compiler_capabilities is None and not any(
+                not candidate.required_compiler_capabilities
+                for candidate in _compiler_capability_frontier(ranked)
+            ):
                 continue
             candidates.append(
                 (
@@ -495,14 +547,16 @@ class Selector:
         extension_name: str,
         type_tag: str,
         to_target: str | None,
+        backend_id: str | None = None,
+        compiler_capabilities: frozenset[str] | None = None,
     ) -> CandidateEvaluation:
         """The candidate field for one ``(extension, type, to_target)`` slot.
 
         Gathers bodies from the extension and the ancestors it inherits from (e.g. avx2_vl
         borrows avx2's body where it has none of its own), splits them into usable
-        :class:`RankedCandidate` (best-first by the four principled keys) and
+        :class:`RankedCandidate` (best-first by the principled keys) and
         :class:`RejectedCandidate` (with the reason each on-chain body was dropped), and
-        single-sources the selection logic so both :meth:`_best_body` and the ``explain`` tool
+        single-sources selection so both :meth:`_best_bodies` and the ``explain`` tool
         agree on the ranking. Off-chain bodies are not reported — they belong to other slots.
         """
 
@@ -552,14 +606,21 @@ class Selector:
                         )
                     )
                     continue
-            flags = _applicable_flags(catalog, implementation, type_tag)
-            if flags is None:
+            requirements = _applicable_requirements(
+                catalog,
+                implementation,
+                type_tag,
+                backend_id,
+            )
+            if requirements is None:
                 rejected.append(
                     RejectedCandidate(
-                        implementation, f"no requires clause applies to {type_tag}"
+                        implementation,
+                        f"no requires clause applies to {type_tag} for backend {backend_id!r}",
                     )
                 )
                 continue
+            flags, required_capabilities = requirements
             if not (flags <= profile.features):
                 missing = ", ".join(sorted(flags - profile.features))
                 rejected.append(
@@ -570,13 +631,27 @@ class Selector:
                     )
                 )
                 continue
+            if compiler_capabilities is not None and not (
+                required_capabilities <= compiler_capabilities
+            ):
+                missing = ", ".join(sorted(required_capabilities - compiler_capabilities))
+                rejected.append(
+                    RejectedCandidate(
+                        implementation,
+                        f"requires compiler capabilities [{', '.join(sorted(required_capabilities))}] "
+                        f"for backend {backend_id!r} (missing: {missing})",
+                    )
+                )
+                continue
             ranked.append(
                 RankedCandidate(
                     implementation=implementation,
                     required_features=flags,
+                    required_compiler_capabilities=required_capabilities,
                     distance=distance[implementation.extension],
                     specificity=catalog.type_group_specificity(implementation.type_group),
                     flag_count=len(flags),
+                    compiler_capability_count=len(required_capabilities),
                     source_order=implementation.source_order,
                 )
             )
@@ -587,7 +662,7 @@ class Selector:
             rejected=tuple(rejected),
         )
 
-    def _best_body(
+    def _best_bodies(
         self,
         catalog: Catalog,
         profile: MachineProfile,
@@ -595,29 +670,39 @@ class Selector:
         extension_name: str,
         type_tag: str,
         to_target: str | None,
+        backend_id: str | None,
+        compiler_capabilities: frozenset[str] | None,
         warnings: dict[str, Diagnostic],
-    ) -> _BestBody | None:
+    ) -> tuple[_BestBody, ...]:
         ranked = self.evaluate_candidates(
-            catalog, profile, primitive, extension_name, type_tag, to_target
+            catalog,
+            profile,
+            primitive,
+            extension_name,
+            type_tag,
+            to_target,
+            backend_id,
+            compiler_capabilities,
         ).ranked
         if not ranked:
-            return None
+            return ()
         best = ranked[0]
         best_impl = best.implementation
-        # Ambiguity guard: warn only when the pick is genuinely *arbitrary* — two candidate
-        # bodies on the same extension that tie on every principled key (a) distance,
-        # (b) type-group specificity, and (c) target-feature count, yet are keyed to *different*
-        # type-groups. Equal-size different groups are necessarily incomparable (a proper
-        # subset has strictly fewer members), so neither is more type-specific; equal flag
-        # counts mean target-feature specialization doesn't separate them either — so only
-        # `source_order` (d) decides, which is arbitrary. A flag-count difference IS a
-        # principled tiebreak (more required features = more specialized), so it does not warn.
+        # Ambiguity guard: warn only when the pick is genuinely *arbitrary* — two
+        # bodies on the same extension that tie on distance, type-group
+        # specificity, target-feature count, and compiler-capability count, yet
+        # use different type groups. Equal-size different groups are necessarily
+        # incomparable (a proper subset has strictly fewer members), so neither
+        # is more type-specific and only source order decides. Feature or
+        # compiler-capability differences are principled specialization
+        # tiebreaks, so they do not warn.
         rival_groups = {
             candidate.implementation.type_group
             for candidate in ranked
             if candidate.distance == best.distance
             and candidate.specificity == best.specificity
             and candidate.flag_count == best.flag_count
+            and candidate.compiler_capability_count == best.compiler_capability_count
             and candidate.implementation.type_group != best_impl.type_group
         }
         if rival_groups:
@@ -636,12 +721,27 @@ class Selector:
                     source=best_impl.selector_source or best_impl.source or primitive.source,
                 ),
             )
-        return _BestBody(best_impl, best.required_features)
-        # (a) before (b): when a derived extension is active and supersedes its base
-        # (e.g. avx2_vl over avx2 on an avx512vl profile), the derived ext's OWN body
-        # wins even if a base body is more type-specific — so avx512vl comparisons use
-        # the `_vl` native-mask body, not the base's lane-bitmask `si?` body. Within a
-        # single extension distance ties, so specificity still decides there.
+        selected = (
+            _compiler_capability_frontier(ranked)
+            if compiler_capabilities is None
+            else (best,)
+        )
+        # Automatic package generation keeps compiler-gated bodies only as
+        # optimizations over an unconditional implementation. Capability-only
+        # APIs remain available through explicit capability selection.
+        if compiler_capabilities is None and not any(
+            not candidate.required_compiler_capabilities
+            for candidate in selected
+        ):
+            return ()
+        return tuple(
+            _BestBody(
+                candidate.implementation,
+                candidate.required_features,
+                candidate.required_compiler_capabilities,
+            )
+            for candidate in selected
+        )
 
     def _monomorphized_lanes(
         self, extension: Extension, implementation: Implementation, type_tag: str
@@ -669,9 +769,29 @@ class Selector:
         return tuple(size // type_bits for size in extension.size_bits if size >= type_bits)
 
 
-def _applicable_flags(
-    catalog: Catalog, implementation: Implementation, type_tag: str
-) -> frozenset[str] | None:
+def _compiler_capability_frontier(
+    ranked: tuple[RankedCandidate, ...],
+) -> tuple[RankedCandidate, ...]:
+    """Candidates that win for at least one downstream capability set."""
+
+    winners: list[RankedCandidate] = []
+    for candidate in ranked:
+        if any(
+            earlier.required_compiler_capabilities
+            <= candidate.required_compiler_capabilities
+            for earlier in winners
+        ):
+            continue
+        winners.append(candidate)
+    return tuple(winners)
+
+
+def _applicable_requirements(
+    catalog: Catalog,
+    implementation: Implementation,
+    type_tag: str,
+    backend_id: str | None,
+) -> tuple[frozenset[str], frozenset[str]] | None:
     """The requirement-clause flags that apply to ``type_tag`` (None if none apply).
 
     The *union* of every applicable clause's flags: a body's requirements may be the
@@ -681,18 +801,32 @@ def _applicable_flags(
     equivalent to the former first-match for single/disjoint clauses."""
 
     if not implementation.requirements:
-        return frozenset()
+        return frozenset(), frozenset()
     flags: set[str] = set()
+    compiler_capabilities: set[str] = set()
     matched = False
     for clause in implementation.requirements:
         if clause.extension is not None and clause.extension != implementation.extension:
-            continue  # this clause is scoped to a different extension
-        if clause.type_group is None or catalog.type_group_contains(
+            continue
+        if clause.type_group is not None and not catalog.type_group_contains(
             clause.type_group, type_tag
         ):
-            flags |= clause.flags
-            matched = True
-    return frozenset(flags) if matched else None
+            continue
+        flags |= clause.flags
+        if clause.compiler:
+            matching = tuple(
+                requirement
+                for requirement in clause.compiler
+                if requirement.backend_id == backend_id
+            )
+            if not matching:
+                return None
+            for requirement in matching:
+                compiler_capabilities |= requirement.capabilities
+        matched = True
+    if not matched:
+        return None
+    return frozenset(flags), frozenset(compiler_capabilities)
 
 
 def _extension_declares_type(

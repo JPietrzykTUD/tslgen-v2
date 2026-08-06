@@ -26,6 +26,7 @@ from tslc.value_tests.model import (
     ValueTestFailure,
     ValueTestInputs,
     ValueTestInvocation,
+    ValueTestIndex,
     ValueTestTarget,
 )
 
@@ -270,9 +271,27 @@ def scalable_scalar_vector_cases(
         or len(mask_inputs) != specs[0].param_kinds.count("m")
     ):
         return ()
+    indexed_lane = case.index is not None
+    if indexed_lane:
+        assert case.index is not None
+        if (
+            mask_inputs
+            or len(vector_inputs) != 1
+            or not 0 <= case.index < case.lanes
+            or any(
+                actual != expected
+                for lane, (actual, expected) in enumerate(
+                    zip(vector_inputs[0], case.expected, strict=True)
+                )
+                if lane != case.index
+            )
+        ):
+            return ()
     plans: list[ValueTestCasePlan] = []
     for spec in specs:
         if spec.type_tag != case.type_tag or spec.result_kind != "v":
+            continue
+        if indexed_lane and len(spec.generic_params) != 1:
             continue
         if case.extension is not None and spec.extension_name != case.extension:
             continue
@@ -305,13 +324,26 @@ def scalable_scalar_vector_cases(
                 expectation=ValueTestExpectation(
                     values=case.expected,
                     comparison=case.comparison,
+                    scalable_layout=(
+                        "indexed_lane" if indexed_lane else "tiled"
+                    ),
                 ),
                 invocation=ValueTestInvocation(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,
-                    generic_defaults=tuple(
-                        default for _name, _type, default in spec.generic_params
+                    generic_defaults=(
+                        ()
+                        if indexed_lane
+                        else tuple(
+                            default
+                            for _name, _type, default in spec.generic_params
+                        )
                     ),
+                ),
+                index=(
+                    ValueTestIndex(value=str(case.index))
+                    if indexed_lane
+                    else None
                 ),
                 scalable=scalable,
             )

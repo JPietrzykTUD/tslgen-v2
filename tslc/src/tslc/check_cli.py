@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 import sys
 import time
 from typing import Any
 
+from tslc._cli_options import parse_assignments, split_csv
 from tslc.api import _expand_sources, generate_project
 from tslc.authoring import check_catalog
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
@@ -37,6 +38,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--primitive", action="append", default=[])
     parser.add_argument("--profile", action="append", default=[])
     parser.add_argument("--backend", action="append", default=[])
+    parser.add_argument(
+        "--compiler-capabilities",
+        action="append",
+        default=[],
+        metavar="BACKEND=CAPABILITY,...",
+        help="force compiler capabilities during slot selection",
+    )
     parser.add_argument("--extension", action="append", default=[])
     parser.add_argument("--type", action="append", dest="type_tags", default=[])
     parser.add_argument("--format", choices=("text", "json"), default="text")
@@ -86,10 +94,12 @@ class _Settings:
         sources: tuple[Path, ...],
         machine_profiles: Path | None,
         backends: tuple[str, ...],
+        compiler_capabilities: Mapping[str, tuple[str, ...]],
     ) -> None:
         self.sources = sources
         self.machine_profiles = machine_profiles
         self.backends = backends
+        self.compiler_capabilities = compiler_capabilities
 
 
 def _settings(args: argparse.Namespace, config: ProjectConfig | None) -> _Settings:
@@ -102,6 +112,20 @@ def _settings(args: argparse.Namespace, config: ProjectConfig | None) -> _Settin
     backends = tuple(args.backend) or (
         config.backends if config is not None else ("cpp", "rust")
     )
+    compiler_capabilities = {
+        backend_id: toolchain.compiler_capabilities
+        for backend_id, toolchain in (
+            config.toolchains.items() if config is not None else ()
+        )
+        if backend_id in backends and toolchain.compiler_capabilities
+    }
+    for backend_id, value in parse_assignments(
+        args.compiler_capabilities, "--compiler-capabilities"
+    ).items():
+        capabilities = split_csv(value)
+        if not capabilities:
+            raise ValueError("--compiler-capabilities requires at least one capability")
+        compiler_capabilities[backend_id] = capabilities
     machine_profiles = (
         Path(args.machine_profiles)
         if args.machine_profiles
@@ -113,7 +137,7 @@ def _settings(args: argparse.Namespace, config: ProjectConfig | None) -> _Settin
         raise ValueError(
             "slot-aware checks require --machine-profiles or a tslc.toml setting"
         )
-    return _Settings(sources, machine_profiles, backends)
+    return _Settings(sources, machine_profiles, backends, compiler_capabilities)
 
 
 def _slot_requested(args: argparse.Namespace) -> bool:
@@ -123,6 +147,7 @@ def _slot_requested(args: argparse.Namespace) -> bool:
         or args.backend
         or args.extension
         or args.type_tags
+        or args.compiler_capabilities
     )
 
 
@@ -139,6 +164,7 @@ def _run_once(settings: _Settings, args: argparse.Namespace) -> int:
             type_tags=args.type_tags or DEFAULT_SCALAR_TYPE_TAGS,
             extensions=args.extension or None,
             backends=settings.backends,
+            compiler_capabilities=settings.compiler_capabilities,
             generation_mode="strict" if args.strict else "partial",
             render_artifacts=False,
         )

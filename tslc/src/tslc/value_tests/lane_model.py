@@ -24,9 +24,11 @@ per shape.
 
 Tiling caveat (scalable only): the scalable model tiles the authored fixed-length pattern
 across the runtime lane count with ``i % authored_lanes``. That identity holds *only for
-lane-local (elementwise) ops* — output lane ``i`` must depend solely on input lane ``i``. A
-cross-lane op (reduce, shuffle, compress, conflict, iota) must not be routed through a tiled
-scalable case; the case planners gate this on the corpus-declared ``cross_lane`` fact (see
+lane-local (elementwise) ops* — output lane ``i`` must depend solely on input lane ``i``.
+Compile-time indexed-lane cases use a distinct typed expectation: tile the input, then replace
+the one global runtime lane named by the index. Other cross-lane ops (reduce, shuffle,
+compress, conflict, iota) must not be routed through a tiled scalable case; the case planners
+gate this on the corpus-declared ``cross_lane`` fact (see
 ``_case_scalable_common.tiling_is_safe``), never here.
 """
 
@@ -190,8 +192,34 @@ class _ScalableLaneModel(LaneModel):
                 f"{{{expected}}};",
                 f"  std::vector<{case.base_spelling}> expected(lanes);",
                 f"  std::vector<{case.base_spelling}> actual(lanes);",
+            ]
+        )
+        if case.expectation.scalable_layout == "indexed_lane":
+            index = case.index
+            if (
+                index is None
+                or index.value is None
+                or len(case.inputs.vectors) != 1
+            ):
+                raise ValueError(
+                    "indexed-lane scalable expectation requires one vector input "
+                    "and an index value"
+                )
+            lines.extend(
+                [
+                    f"  for (std::size_t i = 0; i < lanes; ++i) expected[i] = "
+                    f"authored0[{runtime_tile_index('i', case.lanes)}];",
+                    f"  if ({index.value} < lanes) "
+                    f"expected[{index.value}] = authored_expected[{index.value}];",
+                ]
+            )
+        else:
+            lines.append(
                 f"  for (std::size_t i = 0; i < lanes; ++i) expected[i] = "
-                f"authored_expected[{runtime_tile_index('i', case.lanes)}];",
+                f"authored_expected[{runtime_tile_index('i', case.lanes)}];"
+            )
+        lines.extend(
+            [
                 f"  typename Vec::register_type result = {call};",
                 f"  tsl::{scalable.store_name}<Vec, false>(actual.data(), result);",
                 f"  return tsl::test::{check}<{case.base_spelling}>("
@@ -229,6 +257,8 @@ def render_value_case(case: ValueTestCasePlan) -> str:
     template_args = ["Vec"]
     if "vidx" in case.invocation.param_kinds:
         template_args.append("Indices")
+    if case.index is not None and case.index.value is not None:
+        template_args.append(case.index.value)
     if case.invocation.immediate is not None:
         template_args.append(case.invocation.immediate)
     template_args.extend(case.invocation.generic_defaults)

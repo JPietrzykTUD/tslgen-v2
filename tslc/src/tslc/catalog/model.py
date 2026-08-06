@@ -93,9 +93,16 @@ VectorBitsKind = Literal["fixed", "sized", "scalable", ""]
 
 
 @dataclass(frozen=True, slots=True)
+class CompilerCapabilityRequirement:
+    """Compiler capabilities required from one generated backend."""
+
+    backend_id: str
+    capabilities: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
 class RequirementClause:
-    """One `requires` clause: a feature-flag set, optionally scoped to an extension
-    and/or a type-group.
+    """One `requires` clause, optionally scoped to an extension/type-group.
 
     A simple ``requires [avx, avx2]`` is one clause with ``extension=None`` and
     ``type_group=None`` (applies to every extension and type). A nested ``requires:``
@@ -103,10 +110,14 @@ class RequirementClause:
     type-group (avx512's ``idqword [avx512f]`` -> ``type_group="idqword"``), or both
     (two-level ``avx512: idqword [...]`` -> ``extension="avx512", type_group="idqword"``).
     A clause applies to a body only when its extension scope matches the body's own
-    extension (or is unscoped).
+    extension (or is unscoped). ``flags`` are target-machine features.
+    ``compiler`` is a backend-scoped compiler-capability requirement; it is
+    intentionally independent of target features so selection never treats
+    compiler support as hardware support.
     """
 
-    flags: frozenset[str]
+    flags: frozenset[str] = frozenset()
+    compiler: tuple[CompilerCapabilityRequirement, ...] = ()
     type_group: str | None = None
     extension: str | None = None
 

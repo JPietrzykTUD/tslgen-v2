@@ -6,6 +6,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from tslc.backend.cpp_detection import CPP_PROFILE_DETECTION_KINDS
+from tslc.backend.cpp_compiler_capabilities import (
+    cpp_compiler_capability_cmake_probes,
+    cpp_compiler_capability_compile_definitions,
+    used_cpp_compiler_capability_ids,
+)
+from tslc.backend.cpp_profile import (
+    cpp_compile_guard_condition,
+    cpp_header_group,
+)
 from tslc.backend.cpp_validation import resolve_cpp_compile_guards
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
 from tslc.catalog.machine_profiles import MachineProfile
@@ -16,10 +25,6 @@ from tslc.output.verify_model import VerifyProfile, VerifyRunner
 from tslc.render._common import slug
 from tslc.value_tests.compile_failure import compile_failure_target_name
 from tslc.value_tests.model import ValueTestProjectPlan
-from tslc.backend.cpp_profile import (
-    cpp_compile_guard_condition,
-    cpp_header_group,
-)
 
 _CMAKE_CXX_FEATURE_FLAG_COMPILERS = "GNU,Clang,AppleClang,IntelLLVM"
 
@@ -152,9 +157,16 @@ def _cpp_cmakelists(
         else ""
     )
     auto_choices = _cpp_profile_auto_choices(profiles)
+    capability_ids = used_cpp_compiler_capability_ids(profiles)
+    capability_definitions = (
+        cpp_compiler_capability_compile_definitions(capability_ids)
+    )
     rendered = assets.fill(
         "cpp_cmakelists.txt.tmpl",
         available_profiles=_cmake_list(slugs),
+        compiler_capability_probes=cpp_compiler_capability_cmake_probes(
+            capability_ids
+        ),
         profile_choices=" ".join(
             _cmake_quote(value)
             for value in (*slugs, *_profile_alias_choices(profiles))
@@ -168,7 +180,7 @@ def _cpp_cmakelists(
         fallback_profile=fallback,
         profile_detection=_cpp_profile_detection(profiles, fallback, auto_gate=None),
         profile_auto_modes=_cpp_profile_auto_modes(profiles),
-        profile_targets=_cpp_profile_targets(profiles),
+        profile_targets=_cpp_profile_targets(profiles, capability_definitions),
         overlay_test_targets=_cpp_overlay_test_targets(profiles),
         compile_failure_targets=_cpp_compile_failure_targets(value_tests),
     )
@@ -239,11 +251,20 @@ def _cpp_profile_aliases(profiles: tuple[EmittedProfile, ...]) -> str:
     return "\n".join(lines)
 
 
-def _cpp_profile_targets(profiles: tuple[EmittedProfile, ...]) -> str:
+def _cpp_profile_targets(
+    profiles: tuple[EmittedProfile, ...],
+    compiler_capability_definitions: tuple[str, ...] = (),
+) -> str:
     blocks: list[str] = []
     for emitted_profile in profiles:
         profile_slug = slug(emitted_profile.profile.name)
         target = f"tsl_profile_{profile_slug}"
+        target_definitions = " ".join(
+            (
+                f"TSL_PROFILE_{profile_slug.upper()}",
+                *compiler_capability_definitions,
+            )
+        )
         lines = [
             f"add_library({target} INTERFACE)",
             f"add_library(tsl::{profile_slug} ALIAS {target})",
@@ -254,7 +275,7 @@ def _cpp_profile_targets(profiles: tuple[EmittedProfile, ...]) -> str:
             f"target_compile_features({target} INTERFACE cxx_std_17)",
             (
                 f"target_compile_definitions({target} INTERFACE "
-                f"TSL_PROFILE_{profile_slug.upper()})"
+                f"{target_definitions})"
             ),
         ]
         flags = cpp_flags(emitted_profile.profile, emitted_profile.profile_family)

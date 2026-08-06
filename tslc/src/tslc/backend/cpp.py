@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tslc.backend.cpp_compiler_capabilities import cpp_compiler_capability
 from tslc.backend.cpp_documentation import (
     cpp_doc as _cpp_doc,
     cpp_register_doc as _cpp_register_doc,
@@ -30,6 +31,92 @@ from tslc.lower.implementation_state import (
     combine_implementation_states,
 )
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+
+
+def _cpp_variant_names(
+    specializations: tuple[LoweredSpecialization, ...]
+) -> tuple[str, ...]:
+    return _variant_names(
+        tuple(
+            branch
+            for specialization in specializations
+            for branch in specialization.compiler_branches
+        )
+    )
+
+
+def _cpp_compiler_condition(
+    specialization: LoweredSpecialization,
+) -> str | None:
+    macros = tuple(
+        cpp_compiler_capability(capability_id).condition_macro
+        for capability_id in sorted(
+            specialization.required_compiler_capabilities
+        )
+    )
+    return " && ".join(macros) if macros else None
+
+
+def _cpp_compiler_diagnostic(
+    specializations: tuple[LoweredSpecialization, ...],
+) -> str:
+    capability_ids = sorted(
+        {
+            capability_id
+            for specialization in specializations
+            for capability_id in specialization.required_compiler_capabilities
+        }
+    )
+    return "; ".join(
+        cpp_compiler_capability(capability_id).diagnostic
+        for capability_id in capability_ids
+    )
+
+
+def _cpp_body_text(
+    specialization: LoweredSpecialization,
+    variant_name: str | None,
+) -> str | None:
+    branches = specialization.compiler_branches
+    rendered = tuple(
+        (branch, selected_body.render())
+        for branch in branches
+        if (selected_body := _body_for(branch, variant_name)) is not None
+    )
+    if not rendered:
+        return None
+    if len(rendered) == 1:
+        branch, body_text = rendered[0]
+        condition = _cpp_compiler_condition(branch)
+        if condition is None:
+            return body_text
+        return (
+            f"#if {condition}\n"
+            f"{body_text}\n"
+            "#else\n"
+            f"#  error \"{_cpp_compiler_diagnostic((branch,))}\"\n"
+            "#endif"
+        )
+
+    lines: list[str] = []
+    has_fallback = False
+    for branch, body_text in rendered:
+        condition = _cpp_compiler_condition(branch)
+        if condition is None:
+            lines.extend(("#else", body_text))
+            has_fallback = True
+            break
+        directive = "#if" if not lines else "#elif"
+        lines.extend((f"{directive} {condition}", body_text))
+    if not has_fallback:
+        lines.extend(
+            (
+                "#else",
+                f"#  error \"{_cpp_compiler_diagnostic(branches)}\"",
+            )
+        )
+    lines.append("#endif")
+    return "\n".join(lines)
 
 
 class CppBackend:
@@ -67,7 +154,7 @@ class CppBackend:
     ) -> str:
         """Render the stable default selector before an optional policy include."""
 
-        variants = _variant_names(specializations)
+        variants = _cpp_variant_names(specializations)
         shape = specializations[0]
         if not variants or DEFAULT_SUPPORT_POLICY.is_free_function_signature(
             shape.result_kind,
@@ -123,7 +210,7 @@ class CppBackend:
         )
         variant_decls = "".join(
             f"template <{decl_params}>\nstruct {_impl_name(primitive_name, name)};\n"
-            for name in _variant_names(specializations)
+            for name in _cpp_variant_names(specializations)
         )
         return (
             "namespace detail::primitives {\n"
@@ -182,7 +269,7 @@ class CppBackend:
             definitions_by_group.append(self._specialization(group))
             definitions_by_group.extend(
                 rendered
-                for name in _variant_names(group)
+                for name in _cpp_variant_names(tuple(group))
                 if (
                     rendered := self._specialization(group, variant_name=name)
                 )
@@ -262,7 +349,7 @@ class CppBackend:
         applies: list[str] = []
         seen: set[tuple[str, ...]] = set()
         for spec in group:
-            body = _body_for(spec, variant_name)
+            body = _cpp_body_text(spec, variant_name)
             if body is None:
                 continue
             # Dedup overloads that collapse to the same parameter types (a `v` and an
@@ -291,7 +378,7 @@ class CppBackend:
                 f"{prefix}"
                 f"    static inline {_apply_result_type(spec)} apply({params}) {{\n"
                 f"{preconditions}"
-                f"        {body.render()}\n"
+                f"        {body}\n"
                 f"    }}"
             )
         if not applies:
@@ -316,7 +403,7 @@ class CppBackend:
         signature = _wrapper_signature(specializations)
         doc = _cpp_doc(specializations[0], context="C++ wrapper", concrete=False)
         prefix = f"{doc}\n" if doc else ""
-        variants = _variant_names(specializations)
+        variants = _cpp_variant_names(specializations)
         selector = (
             f"    using selector = ::tsl::detail::variants::"
             f"{variant_selector_name(primitive_name)}<{signature.selector_args}>;\n"
@@ -572,7 +659,7 @@ def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:
     if not define:
         prefix = f"{doc}\n" if doc else ""
         return f"{prefix}{signature};"
-    return f"{signature} {{\n    {spec.body_text}\n}}"
+    return f"{signature} {{\n    {_cpp_body_text(spec, None) or ''}\n}}"
 
 
 def _implementation_state_query(
@@ -605,7 +692,7 @@ def _implementation_state_query(
         params.append(f"{typ} {name}")
         query_args.append(f"value_arg<{name}>")
         impl_args.append(name)
-    variants = _variant_names(specializations)
+    variants = _cpp_variant_names(specializations)
     varying = varying_positions(specializations)
     if variants:
         selector_params = tuple(f"Arg{index}" for index in varying)

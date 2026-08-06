@@ -3817,10 +3817,18 @@ prim<v:=(v,s)> shift_right(data, shift):
               let<type>(UBase, base::unsigned_of(base::in));
               let<type>(UVec, vector::as_base(UBase));
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
-              var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
               var<const_infer>(sh, call<primitive=set1[UVec]>(cast<static>(UBase, shift)));
-              var<const_infer>(ures, intrin<svlsr, build[suffix=UBase, post=x]>(pg, udata, sh));
-              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
+              if<compile>(!PreserveSign) {
+                var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+                var<const_infer>(ures, intrin<svlsr, build[suffix=UBase, post=x]>(pg, udata, sh));
+                complete(call<primitive=reinterpret[UVec, Vec]>(ures));
+              } else<compile> {
+                let<type>(SBase, base::signed_of(base::in));
+                let<type>(SVec, vector::as_base(SBase));
+                var<const_infer>(sdata, call<primitive=reinterpret[Vec, SVec]>(data));
+                var<const_infer>(sres, intrin<svasr, build[suffix=SBase, post=x]>(pg, sdata, sh));
+                complete(call<primitive=reinterpret[SVec, Vec]>(sres));
+              }
             """
     rvv:
       ?i?:

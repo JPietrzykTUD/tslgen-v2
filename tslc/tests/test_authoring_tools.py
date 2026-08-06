@@ -218,6 +218,7 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
                 'readme = "CRATE.md"',
                 "[tslc.toolchains.cpp]",
                 'compiler = "clang++"',
+                'capabilities = ["elementwise_clzg"]',
                 "[tslc.runners]",
                 'sde = "/opt/sde64"',
                 "[tslc.tools]",
@@ -236,6 +237,9 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
     assert config.output_root == (tmp_path / "out").resolve()
     assert config.authoring_profiles == ("scalar",)
     assert config.toolchains["cpp"].compiler == ("clang++",)
+    assert config.toolchains["cpp"].compiler_capabilities == (
+        "elementwise_clzg",
+    )
     assert config.runner_paths == {"sde": "/opt/sde64"}
     assert config.tool_paths == {"oneapi-cpp": "/opt/oneapi/icpx"}
     assert config.rust_package.name == "custom-tsl"

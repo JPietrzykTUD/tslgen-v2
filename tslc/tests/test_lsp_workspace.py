@@ -1154,3 +1154,61 @@ def test_unsaved_unknown_implementation_metadata_is_diagnosed(
 
     assert definitions
     assert all(location.uri.endswith("/store.tsl") for location in definitions)
+
+
+def test_compiler_capability_frontier_is_shared_by_context_and_explorer(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    assert snapshot.index is not None
+    path = data_root / "primitives" / "bitwise" / "bit_counts.tsl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    builtin_line = next(
+        line
+        for line, content in enumerate(lines, 1)
+        if "__builtin_elementwise_clzg" in content
+    )
+
+    context = specialization_context(
+        snapshot.catalog,
+        snapshot.parsed,
+        workspace.config.profiles,
+        backend="cpp",
+        path=path,
+        line=builtin_line,
+        column=lines[builtin_line - 1].index("__builtin_elementwise_clzg") + 1,
+    )
+
+    assert context.primitive == "lzc"
+    assert any(
+        slot.profile == "sse2"
+        and slot.extension == "clang_v128"
+        and slot.type_tag == "ui32"
+        for slot in context.slots
+    )
+
+    explorer = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        mode="resolved",
+        profile="sse2",
+        backend="cpp",
+        path=path,
+        selected_primitive="lzc",
+    )
+    slot = next(
+        item
+        for item in explorer.slots
+        if item.signature == "v:=v"
+        and item.attributes == ()
+        and item.extension == "clang_v128"
+        and item.type_tag == "ui32"
+    )
+
+    assert slot.status == "selected"
+    assert len(slot.implementations) == 2

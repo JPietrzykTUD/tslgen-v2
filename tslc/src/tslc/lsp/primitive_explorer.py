@@ -409,6 +409,7 @@ def _resolved_primitive_slots(
         primitive_name,
         DEFAULT_SCALAR_TYPE_TAGS,
         backend_id=backend,
+        compiler_capabilities=None,
     )
     selected: dict[_ExplorerSlotKey, list[ExplorerImplementation]] = {}
     primitives_by_declaration = {

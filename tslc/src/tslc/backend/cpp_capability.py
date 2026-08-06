@@ -13,6 +13,7 @@ from tslc.backend.capability import (
     GeneratedFormatSpec,
 )
 from tslc.backend.cpp_translation import CppBackendDialect
+from tslc.backend.cpp_compiler_capabilities import CPP_COMPILER_CAPABILITIES
 from tslc.backend.cpp import CppBackend
 from tslc.benchmark.planner import BenchmarkPlanner
 from tslc.benchmark.render_cpp import cpp_benchmark_artifacts
@@ -159,6 +160,7 @@ CPP_BACKEND = BackendCapability(
         output_path="cpp/docs/doxygen/xml",
         site_input=DocumentationSiteInput.DOXYGEN_XML,
     ),
+    compiler_capabilities=CPP_COMPILER_CAPABILITIES,
 )
 
 

@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 
 import pytest
 
 from tslc.api import generate_project
+from tslc.benchmark.identity import (
+    benchmark_slot_identity_hash,
+    implementation_body_hash,
+    implementation_choice_body_hash,
+)
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.target_families import (
     BackendProfileFamily,
@@ -15,6 +21,7 @@ from tslc.catalog.target_families import (
     TargetFeatureCapability,
 )
 from tslc.diagnostics import has_errors
+from tslc.lower.lowerer import LoweredImplementationVariant
 from tslc.render.cpp_build import _x86_profile_detection_source, cpp_flags, cpp_target
 from tslc.render._common import slug
 from tslc.render.rust_project import rust_linker, rust_target, rust_target_features
@@ -70,6 +77,104 @@ def test_backend_selection_is_honored(data_root: Path, machine_profiles_path: Pa
     assert _roots(cpp_only) == {"cpp", "docs"}
     # verify description only covers the requested backend
     assert [b.backend_id for b in cpp_only.rendered.verify.backends] == ["cpp"]
+
+
+def test_unknown_requested_compiler_capability_is_diagnosed(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["lzc"],
+        profiles=["sse2"],
+        backends=["cpp"],
+        compiler_capabilities={"cpp": ("missing_capability",)},
+        render_artifacts=False,
+    )
+
+    assert "TSL-PIPELINE-UNKNOWN-COMPILER-CAPABILITY" in {
+        diagnostic.code for diagnostic in result.diagnostics
+    }
+
+
+def test_cpp_project_probes_and_retains_compiler_capability_alternatives(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["lzc"],
+        profiles=["sse2"],
+        type_tags=["ui32"],
+        backends=["cpp"],
+    )
+
+    assert not has_errors(result.diagnostics), result.diagnostics
+    specialization = next(
+        spec
+        for profile in result.emitted_profiles
+        for spec in profile.specializations("cpp")["lzc"]
+        if spec.extension_name == "clang_v128"
+        and spec.type_tag == "ui32"
+        and spec.mask_policy is None
+    )
+    assert specialization.required_compiler_capabilities == frozenset()
+    assert len(specialization.compiler_alternatives) == 1
+    assert specialization.compiler_alternatives[
+        0
+    ].required_compiler_capabilities == frozenset({"elementwise_clzg"})
+
+    fallback_only = replace(specialization, compiler_alternatives=())
+    assert benchmark_slot_identity_hash(
+        "sse2", specialization
+    ) != benchmark_slot_identity_hash("sse2", fallback_only)
+    assert implementation_choice_body_hash(
+        specialization
+    ) != implementation_body_hash(specialization.body_text)
+
+    capability_branch = specialization.compiler_alternatives[0]
+    branch_variant = LoweredImplementationVariant(
+        "capability_only",
+        capability_branch.body,
+        implementation_state=capability_branch.implementation_state,
+        safety=capability_branch.safety,
+    )
+    branch_with_variant = replace(
+        capability_branch,
+        variant_bodies=(branch_variant,),
+    )
+    specialization_with_variant = replace(
+        specialization,
+        compiler_alternatives=(branch_with_variant,),
+    )
+    assert specialization_with_variant.variant_names == ("capability_only",)
+    assert implementation_choice_body_hash(
+        specialization_with_variant, "capability_only"
+    ) != implementation_body_hash(branch_variant.body_text)
+
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in result.artifacts.artifacts
+    }
+    clang_header = artifacts["cpp/include/tsl_sse2_clang.hpp"]
+    assert "#if TSL_COMPILER_HAS_ELEMENTWISE_CLZG" in clang_header
+    assert "__builtin_elementwise_clzg" in clang_header
+    assert "binary_or<" in clang_header
+
+    primitive_tags = artifacts["cpp/include/tsl_primitives.hpp"]
+    assert "#ifndef __has_builtin" in primitive_tags
+    assert "__has_builtin(__builtin_elementwise_clzg)" in primitive_tags
+
+    cmake = artifacts["cpp/CMakeLists.txt"]
+    assert "include(CheckCXXSourceCompiles)" in cmake
+    assert "check_cxx_source_compiles" in cmake
+    assert "__builtin_elementwise_clzg" in cmake
+    assert (
+        "TSL_COMPILER_HAS_ELEMENTWISE_CLZG=$<BOOL:"
+        "${TSL_COMPILER_HAS_ELEMENTWISE_CLZG}>"
+    ) in cmake
 
 
 def test_rust_profile_module_is_compiled_only_for_its_target_contract(

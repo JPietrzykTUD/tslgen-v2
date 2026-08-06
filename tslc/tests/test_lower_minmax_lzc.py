@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from _select_lower_extension_support import (
     Catalog,
     create_backend_dialect,
@@ -9,6 +11,8 @@ from _select_lower_extension_support import (
     pytest,
     Selector,
 )
+
+from tslc.select.selector import _compiler_capability_frontier
 
 
 @pytest.mark.parametrize("primitive", ["hmax", "hmin"])
@@ -129,24 +133,30 @@ def test_x86_popcnt_prefers_native_vpopcnt_when_available(
 
 
 @pytest.mark.parametrize(
-    ("extension", "type_tag", "lane_width"),
+    ("extension", "type_tag"),
     [
-        ("clang_v128", "si8", 8),
-        ("clang_v256", "ui32", 32),
-        ("clang_v512", "si64", 64),
+        ("clang_v128", "si8"),
+        ("clang_v256", "ui32"),
+        ("clang_v512", "si64"),
     ],
 )
-def test_clang_lzc_uses_elementwise_builtin_with_defined_zero_result(
+def test_clang_lzc_composes_supported_bit_operations(
     catalog: Catalog,
     machine_profiles,
     extension: str,
     type_tag: str,
-    lane_width: int,
 ) -> None:
     slot = next(
         selected
         for selected in Selector()
-        .select_profile(catalog, machine_profiles["scalar"], "lzc", (type_tag,))
+        .select_profile(
+            catalog,
+            machine_profiles["scalar"],
+            "lzc",
+            (type_tag,),
+            backend_id="cpp",
+            compiler_capabilities=frozenset(),
+        )
         .selected
         if selected.extension.name == extension
         and selected.primitive.attributes.get("mask") is None
@@ -157,8 +167,154 @@ def test_clang_lzc_uses_elementwise_builtin_with_defined_zero_result(
 
     assert cpp is not None
     assert "to_array" not in cpp.body_text
+    assert "__builtin_elementwise_clzg" not in cpp.body_text
+    for function_name in (
+        "reinterpret",
+        "binary_or",
+        "shift_right",
+        "inv",
+        "popcnt",
+    ):
+        assert f"{function_name}<" in cpp.body_text
+
+
+@pytest.mark.parametrize(
+    ("extension", "type_tag"),
+    [
+        ("clang_v128", "si8"),
+        ("clang_v256", "ui32"),
+        ("clang_v512", "si64"),
+    ],
+)
+def test_clang_lzc_prefers_elementwise_builtin_when_capability_is_enabled(
+    catalog: Catalog,
+    machine_profiles,
+    extension: str,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["scalar"],
+            "lzc",
+            (type_tag,),
+            backend_id="cpp",
+            compiler_capabilities=frozenset({"elementwise_clzg"}),
+        )
+        .selected
+        if selected.extension.name == extension
+        and selected.primitive.attributes.get("mask") is None
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert slot.required_features == frozenset()
+    assert slot.required_compiler_capabilities == frozenset(
+        {"elementwise_clzg"}
+    )
+    assert cpp is not None
     assert "__builtin_elementwise_clzg" in cpp.body_text
-    assert f">({lane_width})" in cpp.body_text
+    assert cpp.required_compiler_capabilities == frozenset(
+        {"elementwise_clzg"}
+    )
+
+
+def test_clang_lzc_auto_selection_preserves_capability_frontier(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slots = [
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["scalar"],
+            "lzc",
+            ("ui32",),
+            backend_id="cpp",
+            compiler_capabilities=None,
+        )
+        .selected
+        if selected.extension.name == "clang_v128"
+        and selected.primitive.attributes.get("mask") is None
+    ]
+
+    assert len(slots) == 2
+    by_rank = {
+        slot.compiler_alternative_rank: slot
+        for slot in slots
+    }
+    assert set(by_rank) == {0, 1}
+    assert by_rank[0].required_compiler_capabilities == frozenset(
+        {"elementwise_clzg"}
+    )
+    assert by_rank[1].required_compiler_capabilities == frozenset()
+
+
+def test_compiler_capability_frontier_retains_incomparable_winners(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    primitive = next(
+        item
+        for item in catalog.primitives_named("lzc", unmasked=False)
+        if item.attributes.get("mask") is None
+    )
+    evaluation = Selector().evaluate_candidates(
+        catalog,
+        machine_profiles["scalar"],
+        primitive,
+        "clang_v128",
+        "ui32",
+        None,
+        backend_id="cpp",
+        compiler_capabilities=None,
+    )
+    base = evaluation.ranked[0]
+    ab = replace(
+        base,
+        required_compiler_capabilities=frozenset({"cap_a", "cap_b"}),
+        compiler_capability_count=2,
+        source_order=0,
+    )
+    only_a = replace(
+        base,
+        required_compiler_capabilities=frozenset({"cap_a"}),
+        compiler_capability_count=1,
+        source_order=1,
+    )
+    only_b = replace(
+        base,
+        required_compiler_capabilities=frozenset({"cap_b"}),
+        compiler_capability_count=1,
+        source_order=2,
+    )
+    fallback = replace(
+        base,
+        required_compiler_capabilities=frozenset(),
+        compiler_capability_count=0,
+        source_order=3,
+    )
+    dominated_duplicate = replace(ab, source_order=4)
+
+    frontier = _compiler_capability_frontier(
+        tuple(
+            sorted(
+                (ab, only_a, only_b, fallback, dominated_duplicate),
+                key=lambda candidate: candidate.sort_key,
+            )
+        )
+    )
+
+    assert [candidate.required_compiler_capabilities for candidate in frontier] == [
+        frozenset({"cap_a", "cap_b"}),
+        frozenset({"cap_a"}),
+        frozenset({"cap_b"}),
+        frozenset(),
+    ]
 
 
 @pytest.mark.parametrize(

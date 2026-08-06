@@ -82,6 +82,14 @@ class BackendProfileScope:
 
 
 @dataclass(frozen=True, slots=True)
+class BackendCompilerCapabilitySet:
+    """Compiler capabilities explicitly enabled for one generated backend."""
+
+    backend_id: str
+    capabilities: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationRequest:
     source_paths: tuple[Path, ...]
     machine_profiles_path: Path
@@ -91,6 +99,7 @@ class GenerationRequest:
     extensions: tuple[str, ...] | None = None
     backends: tuple[str, ...] = field(default_factory=_default_backend_ids)
     backend_profile_scopes: tuple[BackendProfileScope, ...] = ()
+    backend_compiler_capabilities: tuple[BackendCompilerCapabilitySet, ...] = ()
     mode: GenerationMode = "partial"
     # Pull the value-test harness primitives (vector<->array round-trip and mask normalization)
     # into the dependency closure so the generated differential tests can build a hardware
@@ -218,12 +227,19 @@ class _GenerationSession:
             scope.backend_id: frozenset(scope.profiles)
             for scope in request.backend_profile_scopes
         }
+        self.compiler_capabilities = {
+            item.backend_id: item.capabilities
+            for item in request.backend_compiler_capabilities
+        }
         self.lowering_trace_slots: list[LoweringTraceSlot] = []
 
     def run(self) -> GenerationResult:
-        scope_diagnostics = self._backend_profile_scope_diagnostics()
-        self.diagnostics.extend(scope_diagnostics)
-        if has_errors(scope_diagnostics):
+        request_diagnostics = (
+            *self._backend_profile_scope_diagnostics(),
+            *self._compiler_capability_diagnostics(),
+        )
+        self.diagnostics.extend(request_diagnostics)
+        if has_errors(request_diagnostics):
             return _result_without_artifacts(
                 self.diagnostics, self.coverage, self.skipped
             )
@@ -365,6 +381,60 @@ class _GenerationSession:
             tuple(capability.value_test_support() for capability in self.backends),
             fuzz=self.request.value_test_fuzz,
         ).plan(inputs)
+
+    def _compiler_capability_diagnostics(self) -> tuple[Diagnostic, ...]:
+        requested_backends = {
+            capability.backend_id
+            for capability in self.backends
+        }
+        known = {
+            capability.backend_id: frozenset(
+                item.capability_id
+                for item in capability.compiler_capabilities
+            )
+            for capability in self.backends
+        }
+        seen: set[str] = set()
+        diagnostics: list[Diagnostic] = []
+        for item in self.request.backend_compiler_capabilities:
+            if item.backend_id in seen:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-PIPELINE-DUPLICATE-COMPILER-CAPABILITY-SET",
+                        message=(
+                            "compiler capability set repeats backend "
+                            f"{item.backend_id!r}"
+                        ),
+                    )
+                )
+            seen.add(item.backend_id)
+            if item.backend_id not in requested_backends:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-PIPELINE-UNREQUESTED-COMPILER-CAPABILITY-BACKEND",
+                        message=(
+                            f"compiler capability set names {item.backend_id!r}, which "
+                            "is not a requested backend"
+                        ),
+                    )
+                )
+                continue
+            unknown = item.capabilities - known[item.backend_id]
+            if unknown:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-PIPELINE-UNKNOWN-COMPILER-CAPABILITY",
+                        message=(
+                            f"backend {item.backend_id!r} uses unknown compiler "
+                            f"capabilities: {', '.join(sorted(unknown))}; expected "
+                            f"{', '.join(sorted(known[item.backend_id])) or '(none)'}"
+                        ),
+                    )
+                )
+        return tuple(diagnostics)
 
     def _backend_profile_scope_diagnostics(self) -> tuple[Diagnostic, ...]:
         requested_backends = frozenset(
@@ -602,6 +672,9 @@ class _GenerationSession:
                     emitted=id(slot) not in pruned_ids,
                     unresolved_callee=slot.unresolved_callee,
                     selection_required_features=slot.selection_required_features,
+                    selection_required_compiler_capabilities=(
+                        slot.selection_required_compiler_capabilities
+                    ),
                     selector_source=slot.selector_source,
                 )
                 for slot in lowered_specs
@@ -656,6 +729,7 @@ class _GenerationSession:
                 primitive,
                 type_tags,
                 backend_id=backend,
+                compiler_capabilities=self.compiler_capabilities.get(backend),
             )
             self.diagnostics.extend(selection.diagnostics)
             for slot in selection.selected:
@@ -691,6 +765,10 @@ class _GenerationSession:
                         callees=callees,
                         callee_origins=callee_origins,
                         selection_required_features=slot.required_features,
+                        selection_required_compiler_capabilities=(
+                            slot.required_compiler_capabilities
+                        ),
+                        compiler_alternative_rank=slot.compiler_alternative_rank,
                         selector_source=slot.implementation.selector_source,
                     )
                 )
@@ -761,23 +839,43 @@ class _GenerationSession:
         lowered_specs: list["_LoweredSlot"],
         pruned: list["_LoweredSlot"],
     ) -> None:
-        self.coverage.extend(
-            CoverageEntry(
-                profile=profile_name,
-                backend=slot.backend,
-                primitive=slot.spec.primitive_name,
-                extension=slot.spec.extension_name,
-                type_tag=slot.spec.type_tag,
-                source_primitive_name=slot.spec.source_primitive_name,
-                result_kind=slot.spec.result_kind,
-                param_kinds=slot.spec.param_kinds,
-                mask_policy=slot.spec.mask_policy,
-                axis=slot.spec.axis,
-                variant_names=slot.spec.variant_names,
+        pruned_ids = {id(slot) for slot in pruned}
+        seen_alternatives: set[tuple[object, ...]] = set()
+        for slot in lowered_specs:
+            if id(slot) in pruned_ids:
+                continue
+            if slot.compiler_alternative_rank is not None:
+                target = slot.spec.target
+                key = (
+                    slot.backend,
+                    slot.spec.primitive_name,
+                    slot.spec.extension_name,
+                    slot.spec.type_tag,
+                    slot.spec.param_kinds,
+                    slot.spec.mask_policy,
+                    slot.spec.axis,
+                    None if target is None else target.base_tag,
+                    None if target is None else target.extension_isa,
+                    slot.spec.lane_parameter,
+                )
+                if key in seen_alternatives:
+                    continue
+                seen_alternatives.add(key)
+            self.coverage.append(
+                CoverageEntry(
+                    profile=profile_name,
+                    backend=slot.backend,
+                    primitive=slot.spec.primitive_name,
+                    extension=slot.spec.extension_name,
+                    type_tag=slot.spec.type_tag,
+                    source_primitive_name=slot.spec.source_primitive_name,
+                    result_kind=slot.spec.result_kind,
+                    param_kinds=slot.spec.param_kinds,
+                    mask_policy=slot.spec.mask_policy,
+                    axis=slot.spec.axis,
+                    variant_names=slot.spec.variant_names,
+                )
             )
-            for slot in lowered_specs
-            if slot not in pruned
-        )
 
 
 def _dependency_discovery_requests(

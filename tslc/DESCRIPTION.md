@@ -149,10 +149,12 @@ profile mode. It owns authored, selected, profile-rejected, missing, and
 backend-unsupported slot states plus callable identity (signature and sorted
 primitive attributes), concrete representation-target identity, implementation
 origins, and source spans from the same catalog, selector, support-policy view,
-and index. A resolved callable-and-target slot has one selected source body, so
-editor navigation opens it directly; authored candidate bodies remain explicit
-when no profile has selected a winner. Preview and analysis forward that exact
-target instead of merging base- and extension-target specializations. Direct
+and index. A resolved callable-and-target slot projects either one exact source
+body or the automatic compiler-capability frontier over its fallback; every
+selected source span remains explicit for navigation. Authored candidate bodies
+remain explicit when no profile has selected a winner. Preview and analysis
+forward that exact target instead of merging base- and extension-target
+specializations. Direct
 Calls/Called By relationships
 are indexed from registered `call` regions. The VS Code tree providers render
 those typed facts and never reconstruct selector or dependency rules.
@@ -196,6 +198,18 @@ prim<v:=(v,v)> add(left, right):
         implementation:
           tsil "complete(intrin<add, build[suffix=base::signed_of(base::in)]>(left, right));"
 ```
+- **Implementation requirements**: target-machine features and backend compiler
+  capabilities are separate typed axes. Legacy `requires [feature]` and scoped
+  feature maps remain valid; the expanded `requires.target_features` form makes
+  the hardware axis explicit. `requires.compiler.<backend>.capabilities` names
+  backend-owned compiler facts; compiler families and versions do not live in
+  source data. Explicit capability inputs select one fixed winner for focused
+  authoring and pinned-toolchain workflows. Ordinary project generation retains
+  the capability winner frontier over an unconditional fallback in one lowered
+  specialization. The C++ project renderer emits backend-owned compile probes,
+  exports their results as target compile definitions, and renders local
+  preprocessor branches around the alternative bodies. Hardware-profile
+  selection and compiler-capability probing therefore remain independent.
 
 - **Signatures** (`v:=(v,v)`): `v` vector, `m` mask, `im` integral mask, `s`
   scalar, `ptr`/`usize` (presence makes it a free function), `lanes<s>` a lane

@@ -44,6 +44,7 @@ readme = "README.md"
 compiler = "clang++"
 target = "aarch64-linux-gnu"
 linker = "ld.lld"
+capabilities = ["elementwise_clzg"]
 
 [tslc.runners]
 qemu-aarch64 = "/usr/bin/qemu-aarch64"
@@ -52,10 +53,28 @@ qemu-riscv64 = "/usr/bin/qemu-riscv64"
 
 The Rust package table is optional as a whole; when present, it supplies the
 complete release metadata rendered into the generated Cargo package. Toolchain
-and runner tables are optional. CLI `--compiler`, `--target`, `--linker`, and
-`--runner` assignments override configured values. The repository configuration
-supplies only portable paths and backend defaults; keep host-specific overrides
-in an uncommitted configuration or pass them on the command line.
+and runner tables are optional. CLI `--compiler`, `--target`, `--linker`,
+`--compiler-capabilities cpp=elementwise_clzg`, and `--runner` assignments
+override configured values. Capability names are backend-owned facts, not
+compiler-version aliases.
+
+For distributable C++ output, omit `capabilities`. Ordinary generation retains
+a compiler-gated optimization together with its unconditional implementation.
+When a downstream project calls `FetchContent_MakeAvailable`, generated CMake
+compile-tests the registered construct with that project's C++ compiler and
+exports the result on the generated interface targets. The primitive header
+then selects the optimized or portable body with a local preprocessor branch.
+This is independent from `TSL_PROFILE`: profile selection controls hardware
+features, while the compile probe controls compiler support. A consumer that
+includes the generated headers without CMake gets a conservative
+`__has_builtin`-based default.
+
+Configured or command-line `capabilities` are an explicit forced-selection
+override for focused authoring checks or a pinned toolchain. If that selected
+body is unavailable, the generated header fails with the backend-owned
+diagnostic. The repository configuration supplies only portable paths and
+backend defaults; keep host-specific overrides in an uncommitted configuration
+or pass them on the command line.
 
 The original flat generation form remains supported for scripts:
 
@@ -247,7 +266,6 @@ produce exit status 1.
 ```bash
 tslc preview --primitive add --profile avx2 --type si32 --backend cpp
 tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
-tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
 tslc explain --primitive add --profile avx2 --type si32 --backend cpp
 tslc inspect --stage lowered --primitive add --profile avx2 --type si32 --backend cpp
 tslc audit metadata
@@ -258,6 +276,13 @@ tslc coverage inventory --format json
 tslc coverage inventory --update
 tslc coverage inventory --check
 ```
+
+`explain` and the selection/lowered `inspect` stages default to the same
+automatic compiler-capability frontier as ordinary generation. Pass
+`--compiler-capabilities elementwise_clzg` to inspect a known toolchain, or
+`--compiler-capabilities ''` to inspect the exact no-capabilities fallback.
+Target-feature selection remains profile-owned in every mode.
+
 
 `preview` normally renders every emitted callable matching the concrete name
 and slot filters. Editor integrations can additionally pass

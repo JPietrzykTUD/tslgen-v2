@@ -45,6 +45,18 @@ def registered_backend_ids() -> tuple[str, ...]:
     return tuple(sorted(_BY_ID))
 
 
+def registered_compiler_capabilities() -> dict[str, frozenset[str]]:
+    """Return the backend-owned compiler-capability vocabulary."""
+
+    return {
+        backend.backend_id: frozenset(
+            capability.capability_id
+            for capability in backend.compiler_capabilities
+        )
+        for backend in BACKEND_CAPABILITIES
+    }
+
+
 def supports_backend(backend_id: str) -> bool:
     return backend_id in _BY_ID
 
@@ -60,5 +72,6 @@ __all__ = [
     "backend_capability",
     "create_backend_dialect",
     "registered_backend_ids",
+    "registered_compiler_capabilities",
     "supports_backend",
 ]

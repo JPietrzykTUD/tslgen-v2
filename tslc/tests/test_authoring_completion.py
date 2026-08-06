@@ -164,6 +164,64 @@ def test_requires_and_datatype_lists_use_distinct_vocabularies(
     assert {"si8", "si16", "si32", "si64"} <= datatypes
     assert "avx512_fp16" not in datatypes
 
+def test_compiler_requires_completion_is_backend_and_capability_scoped(
+    catalog: Catalog,
+) -> None:
+    prefix = (
+        "prim<v:=v> probe(value):\n"
+        "  impls:\n"
+        "    clang_v128:\n"
+        "      arith:\n"
+        "        requires:\n"
+    )
+    capability_baseline = (
+        prefix
+        + "          target_features []\n"
+        + "          compiler:\n"
+        + "            cpp:\n"
+        + "              capabilities [elementwise_clzg]\n"
+    )
+
+    root_baseline = prefix + "          sentinel []\n"
+    root_fields = _labels(catalog, root_baseline, prefix + "          ")
+    assert {"target_features", "compiler"} <= root_fields
+
+    compiler_baseline = (
+        prefix
+        + "          compiler:\n"
+        + "            sentinel:\n"
+        + "              capabilities []\n"
+    )
+    compiler_backends = _labels(
+        catalog,
+        compiler_baseline,
+        prefix + "          compiler:\n            ",
+    )
+    assert {"cpp", "rust"} <= compiler_backends
+
+    backend_baseline = (
+        prefix
+        + "          compiler:\n"
+        + "            cpp:\n"
+        + "              sentinel []\n"
+    )
+    backend_fields = _labels(
+        catalog,
+        backend_baseline,
+        prefix + "          compiler:\n            cpp:\n              ",
+    )
+    assert "capabilities" in backend_fields
+
+    capabilities = _labels(
+        catalog,
+        capability_baseline,
+        prefix
+        + "          compiler:\n"
+        + "            cpp:\n"
+        + "              capabilities [elementwise_",
+    )
+    assert "elementwise_clzg" in capabilities
+
 
 def test_primitive_overload_completion_is_registry_backed_and_axis_scoped(
     catalog: Catalog,

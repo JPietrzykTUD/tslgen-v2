@@ -6,7 +6,10 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
 
-from tslc.backend.registry import registered_backend_ids
+from tslc.backend.registry import (
+    registered_backend_ids,
+    registered_compiler_capabilities,
+)
 from tslc.catalog.arithmetic import (
     arithmetic_guarantee_values,
     arithmetic_operand_role_values,
@@ -864,7 +867,19 @@ def _implementation_fields(
         requires_index = tail.index("requires")
         scoped = tail[requires_index + 1 :]
         if not scoped:
-            return catalog.extensions, "class", "required extension selector"
+            return (
+                (*catalog.extensions, "target_features", "compiler"),
+                "field",
+                "requires axis",
+            )
+        if scoped == ("target_features",):
+            return (), "field", "target feature list"
+        if scoped == ("compiler",):
+            return registered_backend_ids(), "class", "compiler backend"
+        if len(scoped) == 2 and scoped[0] == "compiler":
+            return ("capabilities",), "field", "compiler requirement field"
+        if len(scoped) == 3 and scoped[0] == "compiler":
+            return (), "field", "compiler capability list"
         if len(scoped) == 1:
             return catalog.type_groups, "type", "required type-group selector"
         return (), "field", "requires feature list"
@@ -1052,6 +1067,18 @@ def _value_completions(
     elif field == "operand_kinds" and "overload_axes" in context.block_path:
         values = DEFAULT_SIGNATURE_KINDS.supported_kinds
         detail = "signature kind"
+    elif (
+        field == "capabilities"
+        and "compiler" in context.block_path
+    ):
+        compiler_index = context.block_path.index("compiler")
+        backend_id = (
+            context.block_path[compiler_index + 1]
+            if len(context.block_path) > compiler_index + 1
+            else ""
+        )
+        values = registered_compiler_capabilities().get(backend_id, ())
+        detail = "compiler capability"
     elif field == "requires" or (
         context.position_kind == "list-value" and "requires" in context.block_path
     ):

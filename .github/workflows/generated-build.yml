@@ -134,6 +134,60 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  generated-clang-overlay:
+    name: Generated Clang overlay build and values
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - ci-image
+
+    env:
+      TSLC_CI_IMAGE: ${{ needs['ci-image'].outputs.image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-clang-overlay/docker-pull.log" \
+            docker pull "${TSLC_CI_IMAGE}"
+
+      - name: Build and execute generated Clang overlay paths
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-clang-overlay/tests.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -- \
+              bash -lc '
+                set -e
+                test -x /usr/bin/clang++-21
+                test -x /usr/bin/clang++-22
+                test -x /opt/intel-sde/sde64
+                trap "rm -rf tslctmp/pytest" EXIT
+                PYTHONPATH=tslc/src python -m pytest -q \
+                  --run-generated-builds \
+                  tslc/tests/test_build_verify.py::test_clang_vector_overlay_builds_and_runs_through_opt_in_target \
+                  tslc/tests/test_value_tests.py::test_clang_lzc_value_tests_build_and_pass
+              '
+
+      - name: Upload generated Clang overlay logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-logs-generated-clang-overlay
+          path: tslctmp/ci-logs/generated-clang-overlay
+          if-no-files-found: ignore
+          retention-days: 14
+
   generated-benchmarks:
     name: Generated benchmarks (x86 policy and ARM smoke)
     runs-on: ubuntu-latest

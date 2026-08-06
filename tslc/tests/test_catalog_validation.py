@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from tslc.backend.registry import registered_compiler_capabilities
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import load_machine_profiles_checked
 from tslc.catalog.target_families import (
@@ -40,7 +41,12 @@ def _catalog_and_diagnostics(
     assert result.catalog is not None
     diagnostics = (
         *result.diagnostics,
-        *validate_catalog(result.catalog, parsed, required_backends=backends),
+        *validate_catalog(
+            result.catalog,
+            parsed,
+            required_backends=backends,
+            compiler_capabilities=registered_compiler_capabilities(),
+        ),
     )
     return result.catalog, diagnostics
 
@@ -1947,6 +1953,55 @@ def test_malformed_requires_shape_is_diagnosed() -> None:
     diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-MALFORMED-REQUIRES")
     assert "flag list" in diagnostic.message
 
+def test_compiler_capability_requires_are_promoted_separately_from_target_features() -> None:
+    catalog, diagnostics = _catalog_and_diagnostics(
+        _base_source().replace(
+            "        implementation:\n",
+            "        requires:\n"
+            "          target_features []\n"
+            "          compiler:\n"
+            "            cpp:\n"
+            "              capabilities [elementwise_clzg]\n"
+            "        implementation:\n",
+        )
+    )
+
+    assert diagnostics == ()
+    implementation = catalog.primitive("id").implementations[0]
+    compiler_clause = next(
+        clause for clause in implementation.requirements if clause.compiler
+    )
+    assert compiler_clause.flags == frozenset()
+    assert compiler_clause.compiler[0].backend_id == "cpp"
+    assert compiler_clause.compiler[0].capabilities == frozenset(
+        {"elementwise_clzg"}
+    )
+
+
+@pytest.mark.parametrize(
+    ("backend", "capability", "code"),
+    [
+        ("cpp", "missing_capability", "TSL-CATALOG-UNKNOWN-COMPILER-CAPABILITY"),
+        ("missing_backend", "elementwise_clzg", "TSL-CATALOG-UNKNOWN-COMPILER-BACKEND"),
+    ],
+)
+def test_unknown_compiler_requirement_is_diagnosed(
+    backend: str,
+    capability: str,
+    code: str,
+) -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "        implementation:\n",
+            "        requires:\n"
+            "          compiler:\n"
+            f"            {backend}:\n"
+            f"              capabilities [{capability}]\n"
+            "        implementation:\n",
+        )
+    )
+
+    assert code in {diagnostic.code for diagnostic in diagnostics}
 
 def test_malformed_call_body_region_is_diagnosed() -> None:
     diagnostics = _diagnostics(

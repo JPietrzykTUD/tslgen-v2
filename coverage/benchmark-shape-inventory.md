@@ -13,11 +13,11 @@ applicable**.
 
 ## Summary
 
-- **28 C++ machine profiles** are probed.
-- **10171 selected variant slots** are accounted for.
+- **29 C++ machine profiles** are probed.
+- **10351 selected variant slots** are accounted for.
 - **2720 candidate sets** are emitted; compile-time immediate cases may fan one slot out into several sets.
 - **7 signature shapes benchmarked**, **53 not applicable**, **7 gaps**.
-- **6590 strict audit issues**.
+- **6770 strict audit issues**.
 
 ## Signature shapes
 
@@ -67,12 +67,12 @@ applicable**.
 | `v:=(m,v,v,vidx)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(m,v,vidx)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(s,s)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
-| `v:=(v)` | 1 | 1 | 17 | 17 | 2024 | 338 | gap |
+| `v:=(v)` | 1 | 1 | 17 | 17 | 2084 | 338 | gap |
 | `v:=(v,s)` | 5 | 2 | 2 | 2 | 12 | 12 | benchmarked |
-| `v:=(v,sImm)` | 8 | 2 | 9 | 9 | 2010 | 173 | gap |
+| `v:=(v,sImm)` | 8 | 2 | 9 | 9 | 2070 | 173 | gap |
 | `v:=(v,usize,s)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(v,v)` | 16 | 7 | 31 | 31 | 1221 | 1221 | benchmarked |
-| `v:=(v,v,sImm)` | 1 | 1 | 11 | 11 | 2110 | 0 | gap |
+| `v:=(v,v,sImm)` | 1 | 1 | 11 | 11 | 2170 | 0 | gap |
 | `v:=(v,vidx)` | 1 | 1 | 9 | 9 | 878 | 0 | gap |
 | `v:=(v,vidx,v)` | 1 | 1 | 8 | 8 | 860 | 0 | gap |
 | `v:=(vt,v,sImm)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
@@ -101,15 +101,15 @@ benchmark workload.
 |---|---:|---:|---:|---:|---|
 | masked primitive | 52 | 1 | 40 | 0 | gap |
 | representation-changing result | 16 | 0 | 0 | 0 | not applicable |
-| cross-lane semantics | 16 | 5 | 5880 | 187 | gap |
+| cross-lane semantics | 16 | 5 | 6000 | 187 | gap |
 | caller-unsafe implementation | 33 | 3 | 112 | 32 | gap |
-| compile-time immediate operand | 21 | 6 | 4232 | 205 | gap |
+| compile-time immediate operand | 21 | 6 | 4352 | 205 | gap |
 | lane-list operand | 1 | 0 | 0 | 0 | not applicable |
 | generic SIMD-type parameter | 11 | 5 | 1850 | 32 | gap |
 | boolean attribute axis | 23 | 0 | 0 | 0 | not applicable |
 | sized-vector implementation | 172 | 0 | 0 | 0 | not applicable |
-| scalable-vector implementation | 164 | 4 | 4214 | 338 | gap |
-| opt-in compiler header implementation | 177 | 3 | 6134 | 493 | gap |
+| scalable-vector implementation | 164 | 4 | 4334 | 338 | gap |
+| opt-in compiler header implementation | 177 | 3 | 6314 | 493 | gap |
 
 ## Audit issue counts
 
@@ -118,4 +118,4 @@ Exact stable issue identities are stored in
 
 | Kind | Count |
 |---|---:|
-| `coverage-gap` | 6590 |
+| `coverage-gap` | 6770 |

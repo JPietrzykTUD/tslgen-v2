@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from typing import get_args
 
 from tslc.catalog.model import GenericParamKind, RESULT_DIMENSIONS, RESULT_DIM_VECTOR
@@ -91,6 +91,7 @@ def validate_primitive(
     backend_ids: Collection[str],
     diagnostics: list[Diagnostic],
     known_target_features: Collection[str] = (),
+    known_compiler_capabilities: Mapping[str, Collection[str]] | None = None,
 ) -> None:
     fields = tuple(field.field for field in declaration.fields)
     validate_known_fields(
@@ -118,7 +119,12 @@ def validate_primitive(
     _validate_return_type(declaration, diagnostics)
     validate_benchmarks(declaration, diagnostics)
     validate_tests(declaration, diagnostics)
-    validate_requires(declaration, diagnostics, known_target_features)
+    validate_requires(
+        declaration,
+        diagnostics,
+        known_target_features,
+        known_compiler_capabilities,
+    )
 
 
 def _validate_overload(

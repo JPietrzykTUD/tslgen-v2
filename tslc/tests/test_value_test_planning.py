@@ -130,6 +130,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
             values=values.pop("expected", ()),
             text=values.pop("text_expected", None),
             comparison=values.pop("comparison", CaseComparison.VALUE),
+            scalable_layout=values.pop("scalable_expected_layout", "tiled"),
         ),
         invocation=ValueTestInvocation(
             result_kind=values.pop("result_kind", None),
@@ -3100,6 +3101,71 @@ def test_scalable_immediate_cases_plan_and_render_runtime_lanes(
     assert "tsl::mul_imm_maskz<Vec, 3>(" in source
     assert "make_mask<tsl::simd<std::int32_t, tsl::sve>>(10ull, 4, lanes)" in source
     assert "authored_expected[i % 4]" in source
+
+def test_scalable_indexed_lane_uses_one_runtime_lane() -> None:
+    insert_value = Primitive(
+        "insert_value",
+        "v:=(v,s)",
+        ("data", "value"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="insert_lane_3",
+                type_tag="si32",
+                tags=("sve",),
+                lanes=4,
+                extension="sve",
+                index=3,
+                inputs=(
+                    TslTestArg("vector", values=("1", "-2", "3", "-4")),
+                    TslTestArg("scalar", scalar="-99"),
+                ),
+                expected=("1", "-2", "3", "-99"),
+            ),
+        ),
+    )
+    spec = replace(
+        _spec(
+            "insert_value",
+            "insert_value",
+            param_kinds=("v", "s"),
+            extension_name="sve",
+            uses_sized_vector=False,
+            lane_parameter=None,
+        ),
+        generic_params=(("Index", "std::size_t", "0"),),
+    )
+    catalog = Catalog(
+        primitives=(insert_value, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp", "sve", {"insert_value": (spec,)}
+            ),
+        )
+    )
+
+    assert not plan.diagnostics
+    case = next(
+        case for case in plan.profiles[0].cases if case.scalable is not None
+    )
+    assert case.kind == "scalable_scalar_vector"
+    assert case.index == ValueTestIndex(value="3")
+    assert case.invocation.generic_defaults == ()
+    assert case.expectation.scalable_layout == "indexed_lane"
+
+    source = CPP_VALUE_TEST_RENDERER.render_case(case)
+    assert "tsl::insert_value<Vec, 3>(v0, s0)" in source
+    assert "expected[i] = authored0[i % 4];" in source
+    assert "if (3 < lanes) expected[3] = authored_expected[3];" in source
+    assert "authored_expected[i % 4]" not in source
 
 
 def test_scalable_plan_facts_stay_backend_neutral_for_sve_case() -> None:

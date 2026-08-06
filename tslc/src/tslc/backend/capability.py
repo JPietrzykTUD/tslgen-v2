@@ -130,6 +130,13 @@ def _unsupported_primitive_preview(
 
 
 @dataclass(frozen=True, slots=True)
+class CompilerCapability:
+    """One backend-owned compiler feature usable by specialization selection."""
+
+    capability_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class BackendCapability:
     backend_id: str
     root_path: str
@@ -151,6 +158,17 @@ class BackendCapability:
     )
     generated_format: GeneratedFormatSpec | None = None
     generated_documentation: GeneratedDocumentationSpec | None = None
+    compiler_capabilities: tuple[CompilerCapability, ...] = ()
+
+    def compiler_capability(self, capability_id: str) -> CompilerCapability | None:
+        return next(
+            (
+                capability
+                for capability in self.compiler_capabilities
+                if capability.capability_id == capability_id
+            ),
+            None,
+        )
 
     def create_dialect(self, catalog: Catalog) -> BackendDialect:
         return self.dialect_factory(catalog)
