@@ -1612,29 +1612,23 @@ def test_inert_extension_fields_are_rejected(fields: str, field_name: str) -> No
     assert any(field_name in diagnostic.message for diagnostic in unknown)
 
 
-def test_extension_backend_compile_guards_are_validated() -> None:
+def test_extension_backend_compiler_capabilities_are_validated() -> None:
     diagnostics = _diagnostics(
         _base_source(
             "extension guarded:\n"
             '  extension_name "guarded"\n'
             '  family "x86"\n'
-            "  active_when:\n"
-            "    target_features [sse]\n"
-            "    compile_modes [demo_mode]\n"
             "  cpp:\n"
             "    supported true\n"
-            "    compile_guards:\n"
-            "      demo:\n"
-            '        macro "TSL_DEMO"\n'
-            "        typo true\n"
-            "      broken:\n"
-            "        equals 1\n"
+            "    compiler_capabilities [missing_capability]\n"
         )
     )
 
-    codes = {diagnostic.code for diagnostic in diagnostics}
-    assert "TSL-CATALOG-UNKNOWN-FIELD" in codes
-    assert "TSL-CATALOG-MALFORMED-COMPILE-GUARD" in codes
+    assert any(
+        diagnostic.code == "TSL-CATALOG-UNKNOWN-COMPILER-CAPABILITY"
+        and "missing_capability" in diagnostic.message
+        for diagnostic in diagnostics
+    )
 
 
 def test_extension_backend_dataparallel_inference_is_boolean() -> None:
@@ -1645,7 +1639,6 @@ def test_extension_backend_dataparallel_inference_is_boolean() -> None:
             '  family "x86"\n'
             "  cpp:\n"
             "    supported true\n"
-            '    header_group "clang"\n'
             '    dataparallel_inference "sometimes"\n'
         )
     )
@@ -2265,6 +2258,23 @@ def test_malformed_tsil_region_shells_are_diagnosed(
     assert diagnostic.location is not None
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        "complete(address<unknown>(data));",
+        "complete(address<of>());",
+        "complete(address<borrow_mut>(data, data));",
+    ],
+)
+def test_malformed_address_body_region_is_diagnosed(body: str) -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace('tsil "complete(data);"', f'tsil "{body}"')
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-ADDRESS")
+    assert "address<of|borrow_mut>(expr)" in diagnostic.message
+
+
 def test_legacy_pointer_cast_shell_is_diagnosed() -> None:
     diagnostics = _diagnostics(
         "types:\n"
@@ -2443,6 +2453,35 @@ def test_machine_profile_backend_flags_are_validated(tmp_path: Path) -> None:
 
     assert result.profiles["neon"].flags_for_backend("cpp") == ()
     assert "TSL-PROFILE-MALFORMED-FIELD" in {d.code for d in result.diagnostics}
+
+
+def test_machine_profile_compiler_roles_and_build_fallback_are_typed(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        "{\n"
+        '  "x86": [\n'
+        '    {"name": "first", "target_features": "sse", '
+        '"backend_compiler_roles": {"cpp": "oneapi-cpp"}, '
+        '"default_build_fallback": true},\n'
+        '    {"name": "second", "target_features": "sse", '
+        '"default_build_fallback": true, "auto_detect_gate": "fpga"}\n'
+        "  ]\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path)
+
+    assert result.profiles["first"].compiler_role_for_backend("cpp") == "oneapi-cpp"
+    assert result.profiles["first"].default_build_fallback
+    assert "TSL-PROFILE-MULTIPLE-BUILD-FALLBACKS" in {
+        diagnostic.code for diagnostic in result.diagnostics
+    }
+    assert "TSL-PROFILE-GATED-BUILD-FALLBACK" in {
+        diagnostic.code for diagnostic in result.diagnostics
+    }
 
 
 def test_machine_profile_auto_detect_gate_is_validated(tmp_path: Path) -> None:

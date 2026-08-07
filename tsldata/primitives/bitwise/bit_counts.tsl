@@ -566,7 +566,7 @@ prim<usize:=s> lzc_scalar(data):
           tsil """
                let<type>(UnsignedT, base::unsigned_of(base::in));
                var<infer>(bits, cast<static>(UnsignedT, 0));
-               mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data), value(type::size_bytes(base::in))) ;
+               mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(bits)), cast<reinterpret, type=const_ptr>(void, address<of>(data)), value(type::size_bytes(base::in))) ;
                complete(cast<static>(scalar::size, helper<clz>(bits))) ;
             """
     oneapi_fpga:

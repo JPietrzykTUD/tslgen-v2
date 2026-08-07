@@ -55,6 +55,10 @@ class MachineProfile:
     # Extra compiler flags keyed by backend. These are full compiler arguments,
     # not feature-token spellings.
     backend_flags: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    # Profile-specific compiler tool roles keyed by backend.
+    backend_compiler_roles: Mapping[str, str] = field(default_factory=dict)
+    # Exactly one ungated profile may be the generated-build fallback.
+    default_build_fallback: bool = False
     # Backends intentionally emitted for this profile. None on a manually
     # constructed profile preserves the historical unrestricted behavior.
     supported_backends: frozenset[str] | None = None
@@ -89,9 +93,17 @@ class MachineProfile:
                 }
             ),
         )
+        object.__setattr__(
+            self,
+            "backend_compiler_roles",
+            MappingProxyType(dict(sorted(self.backend_compiler_roles.items()))),
+        )
 
     def flags_for_backend(self, backend_id: str) -> tuple[str, ...]:
         return self.backend_flags.get(backend_id, ())
+
+    def compiler_role_for_backend(self, backend_id: str) -> str | None:
+        return self.backend_compiler_roles.get(backend_id)
 
     def supports_backend(self, backend_id: str) -> bool:
         return (
@@ -232,6 +244,8 @@ def load_machine_profiles_checked(
                     "compile_modes",
                     "alternatives",
                     "backend_flags",
+                    "backend_compiler_roles",
+                    "default_build_fallback",
                     "supported_backends",
                     "runner",
                     "auto_detect_gate",
@@ -302,6 +316,27 @@ def load_machine_profiles_checked(
                 path,
                 diagnostics,
             )
+            backend_compiler_roles = _backend_compiler_roles(
+                name,
+                fields.get("backend_compiler_roles", _JsonObject(())),
+                target_families,
+                path,
+                diagnostics,
+            )
+            default_build_fallback_value = fields.get(
+                "default_build_fallback", False
+            )
+            if not isinstance(default_build_fallback_value, bool):
+                diagnostics.append(
+                    _diagnostic(
+                        path,
+                        "TSL-PROFILE-MALFORMED-FIELD",
+                        f"machine profile {name!r} default_build_fallback must be Boolean",
+                    )
+                )
+                default_build_fallback = False
+            else:
+                default_build_fallback = default_build_fallback_value
             supported_backends = _supported_backends(
                 name,
                 family,
@@ -325,6 +360,14 @@ def load_machine_profiles_checked(
                 path,
                 diagnostics,
             )
+            if default_build_fallback and auto_detect_gate is not None:
+                diagnostics.append(
+                    _diagnostic(
+                        path,
+                        "TSL-PROFILE-GATED-BUILD-FALLBACK",
+                        f"machine profile {name!r} default_build_fallback must be ungated",
+                    )
+                )
             profiles[name] = MachineProfile(
                 name=name,
                 family=family,
@@ -333,10 +376,24 @@ def load_machine_profiles_checked(
                 feature_capabilities=feature_capabilities,
                 compile_modes=compile_modes,
                 backend_flags=backend_flags,
+                backend_compiler_roles=backend_compiler_roles,
+                default_build_fallback=default_build_fallback,
                 supported_backends=supported_backends,
                 runner=runner,
                 auto_detect_gate=auto_detect_gate,
             )
+    fallback_profiles = sorted(
+        profile.name for profile in profiles.values() if profile.default_build_fallback
+    )
+    if len(fallback_profiles) > 1:
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MULTIPLE-BUILD-FALLBACKS",
+                "multiple machine profiles declare default_build_fallback: "
+                + ", ".join(fallback_profiles),
+            )
+        )
     return MachineProfileLoadResult(
         profiles=MappingProxyType(profiles),
         diagnostics=sort_diagnostics(diagnostics),
@@ -567,6 +624,52 @@ def _backend_flags(
             path,
             diagnostics,
         )
+    return result
+
+
+def _backend_compiler_roles(
+    profile_name: str,
+    value: Any,
+    target_families: TargetFamilyCatalog | None,
+    path: Path,
+    diagnostics: list[Diagnostic],
+) -> dict[str, str]:
+    if not isinstance(value, _JsonObject):
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-FIELD",
+                f"machine profile {profile_name!r} backend_compiler_roles "
+                "must be an object",
+            )
+        )
+        return {}
+    fields = _object_fields(value, path, diagnostics)
+    known_backends = (
+        target_families.backend_ids if target_families is not None else frozenset()
+    )
+    result: dict[str, str] = {}
+    for backend_id, role in fields.items():
+        if known_backends and backend_id not in known_backends:
+            diagnostics.append(
+                _diagnostic(
+                    path,
+                    "TSL-PROFILE-UNKNOWN-BACKEND",
+                    f"machine profile {profile_name!r} backend_compiler_roles "
+                    f"declares unknown backend {backend_id!r}",
+                )
+            )
+        if not isinstance(role, str) or not role:
+            diagnostics.append(
+                _diagnostic(
+                    path,
+                    "TSL-PROFILE-MALFORMED-FIELD",
+                    f"machine profile {profile_name!r} backend_compiler_roles "
+                    f"{backend_id!r} must be a non-empty string",
+                )
+            )
+            continue
+        result[backend_id] = role
     return result
 
 

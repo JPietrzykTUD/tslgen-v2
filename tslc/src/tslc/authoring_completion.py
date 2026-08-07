@@ -37,7 +37,6 @@ from tslc.catalog.validation._schema_benchmarks import (
 from tslc.catalog.validation._schema_common import KNOWN_BOOLEAN_VALUES
 from tslc.catalog.validation._schema_extensions import (
     KNOWN_ACTIVE_WHEN_FIELDS,
-    KNOWN_COMPILE_GUARD_FIELDS,
     KNOWN_EXTENSION_BACKEND_FIELDS,
     KNOWN_EXTENSION_FIELDS,
     KNOWN_IMASK_POLICY_FIELDS,
@@ -960,10 +959,6 @@ def _extension_fields(
         return backends, "keyword", "backend ID"
     if name == "backend_spelling_by_lanes":
         return backends, "keyword", "backend ID"
-    if name == "compile_guards":
-        return (), "field", "compile guard"
-    if "compile_guards" in path and path[-2] == "compile_guards":
-        return KNOWN_COMPILE_GUARD_FIELDS, "field", "compile guard field"
     if len(path) == 2 and name in backends:
         return KNOWN_EXTENSION_BACKEND_FIELDS, "field", "extension backend field"
     return (), "field", "extension field"

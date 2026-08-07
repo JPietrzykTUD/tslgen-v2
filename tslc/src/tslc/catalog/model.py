@@ -528,31 +528,15 @@ class ImaskPolicy:
 
 
 @dataclass(frozen=True, slots=True)
-class BackendCompileGuard:
-    """Backend compile-time condition required by an extension's declarations."""
-
-    name: str
-    macro: str
-    equals: str
-    hint_flag: str | None = None
-    diagnostic: str | None = None
-    source: SourceSpan | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class BackendExtensionMetadata:
-    """Backend-specific extension facts consumed by code generation or validation."""
+    """Backend-specific semantic requirements and target projection facts.
 
-    compile_guards: tuple[BackendCompileGuard, ...] = ()
-    # Optional generated-header group. Extensions in a named group are emitted in
-    # a dedicated opt-in header instead of the profile's default header.
-    header_group: str | None = None
-    # CMake compiler IDs that expose this opt-in header group.
-    compiler_ids: tuple[str, ...] = ()
-    # Optional compiler feature-test names required by this extension. The
-    # backend owns their concrete preprocessor spelling and guards only the
-    # declarations/cases that need them.
-    compiler_features: tuple[str, ...] = ()
+    Compiler families, header grouping, concrete macros, and probes are resolved
+    from these capability IDs by the registered backend. They deliberately do
+    not enter the backend-neutral catalog model.
+    """
+
+    compiler_capabilities: tuple[str, ...] = ()
     # None inherits/defaults to true. Compiler-vector overlays set this false so
     # dataparallel::native/fixed<N> continue to resolve to the hardware substrate.
     dataparallel_inference: bool | None = None
@@ -560,12 +544,10 @@ class BackendExtensionMetadata:
     arch_module: str | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "compile_guards", tuple(self.compile_guards))
-        object.__setattr__(self, "compiler_ids", tuple(self.compiler_ids))
         object.__setattr__(
             self,
-            "compiler_features",
-            tuple(sorted(set(self.compiler_features))),
+            "compiler_capabilities",
+            tuple(sorted(set(self.compiler_capabilities))),
         )
 
     @property
@@ -747,11 +729,6 @@ class Extension:
 
     def headers_for_backend(self, backend_id: str) -> tuple[str, ...]:
         return self.backend_headers.get(backend_id, ())
-
-    def header_group_for_backend(self, backend_id: str) -> str | None:
-        metadata = self.metadata.backend.get(backend_id)
-        return None if metadata is None else metadata.header_group
-
 
 @dataclass(frozen=True, slots=True)
 class Catalog:

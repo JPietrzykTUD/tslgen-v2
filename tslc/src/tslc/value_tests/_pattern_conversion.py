@@ -114,6 +114,8 @@ class _LaneConvertPattern(_BasePattern):
             context.case,
             context.specs,
             context.harness,
+            context.catalog,
+            context.backend.backend_id,
         )
         return (plan,) if plan is not None else ()
 

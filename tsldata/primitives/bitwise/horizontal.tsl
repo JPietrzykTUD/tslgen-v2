@@ -343,14 +343,14 @@ prim<s:=v> hand(vec):
           tsil """
             let<type>(UnsignedT, base::unsigned_of(base::in));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &vec[0]), value(type::size_bytes(base::in)));
+            mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(result)), cast<reinterpret, type=const_ptr>(void, address<of>(vec[0])), value(type::size_bytes(base::in)));
             loop<backend>(i, 1, value(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &vec[i]), value(type::size_bytes(base::in)));
+              mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(bits)), cast<reinterpret, type=const_ptr>(void, address<of>(vec[i])), value(type::size_bytes(base::in)));
               result &= bits;
             }
             var<infer>(out, cast<static>(base::in, 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(base::in)));
+            mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(out)), cast<reinterpret, type=const_ptr>(void, address<of>(result)), value(type::size_bytes(base::in)));
             complete(out);
           """
 
@@ -696,14 +696,14 @@ prim<s:=v> hor(vec):
           tsil """
             let<type>(UnsignedT, base::unsigned_of(base::in));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &vec[0]), value(type::size_bytes(base::in)));
+            mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(result)), cast<reinterpret, type=const_ptr>(void, address<of>(vec[0])), value(type::size_bytes(base::in)));
             loop<backend>(i, 1, value(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &vec[i]), value(type::size_bytes(base::in)));
+              mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(bits)), cast<reinterpret, type=const_ptr>(void, address<of>(vec[i])), value(type::size_bytes(base::in)));
               result |= bits;
             }
             var<infer>(out, cast<static>(base::in, 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(base::in)));
+            mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(out)), cast<reinterpret, type=const_ptr>(void, address<of>(result)), value(type::size_bytes(base::in)));
             complete(out);
           """
 
@@ -965,7 +965,7 @@ prim<s:=(m,v)> hand(mask, vec):
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, value(i))) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
-                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[value(i)]), value(type::size_bytes(base::in)));
+                mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(bits)), cast<reinterpret, type=const_ptr>(void, address<of>(values[value(i)])), value(type::size_bytes(base::in)));
                 if (found == 0) {
                   result = bits;
                   found = 1;
@@ -976,7 +976,7 @@ prim<s:=(m,v)> hand(mask, vec):
             }
             var<infer>(out, cast<static>(base::in, 0));
             if (found != 0) {
-              mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(base::in)));
+              mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(out)), cast<reinterpret, type=const_ptr>(void, address<of>(result)), value(type::size_bytes(base::in)));
             }
             complete(out);
           """
@@ -1037,7 +1037,7 @@ prim<s:=(m,v)> hand(mask, vec):
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, i)) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
-                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &vec[i]), value(type::size_bytes(base::in)));
+                mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(bits)), cast<reinterpret, type=const_ptr>(void, address<of>(vec[i])), value(type::size_bytes(base::in)));
                 if (found == 0) {
                   result = bits;
                   found = 1;
@@ -1048,7 +1048,7 @@ prim<s:=(m,v)> hand(mask, vec):
             }
             var<infer>(out, cast<static>(base::in, 0));
             if (found != 0) {
-              mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(base::in)));
+              mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(out)), cast<reinterpret, type=const_ptr>(void, address<of>(result)), value(type::size_bytes(base::in)));
             }
             complete(out);
           """
@@ -1260,12 +1260,12 @@ prim<s:=(m,v)> hor(mask, vec):
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, value(i))) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
-                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[value(i)]), value(type::size_bytes(base::in)));
+                mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(bits)), cast<reinterpret, type=const_ptr>(void, address<of>(values[value(i)])), value(type::size_bytes(base::in)));
                 result |= bits;
               }
             }
             var<infer>(out, cast<static>(base::in, 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(base::in)));
+            mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(out)), cast<reinterpret, type=const_ptr>(void, address<of>(result)), value(type::size_bytes(base::in)));
             complete(out);
           """
     scalar:
@@ -1318,11 +1318,11 @@ prim<s:=(m,v)> hor(mask, vec):
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, i)) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
-                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &vec[i]), value(type::size_bytes(base::in)));
+                mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(bits)), cast<reinterpret, type=const_ptr>(void, address<of>(vec[i])), value(type::size_bytes(base::in)));
                 result |= bits;
               }
             }
             var<infer>(out, cast<static>(base::in, 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(base::in)));
+            mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(out)), cast<reinterpret, type=const_ptr>(void, address<of>(result)), value(type::size_bytes(base::in)));
             complete(out);
           """

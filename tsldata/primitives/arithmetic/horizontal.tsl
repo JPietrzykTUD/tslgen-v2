@@ -47,27 +47,31 @@ prim<s:=v> hadd(vec):
         implementation:
           tsil "complete(intrin<__builtin_reduce_add>(vec));"
       f?:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [reduce_in_order_fadd]
         safety:
           internal_unsafe true
           caller_unsafe false
           reasons [compiler_builtin]
         implementation:
-          # This is the ordered floating reduction, not the integer-only
-          # __builtin_reduce_add used above. Its zero seed preserves the authored
-          # lane-order accumulation semantics. The builtin is target-dependent:
-          # Clang's WebAssembly target does not expose it, so retain an ext-vector
-          # lane fallback without spilling through an array.
+          tsil "complete(__builtin_reduce_in_order_fadd(vec, cast<static>(base::in, 0)));"
+    clang_v128:
+      f?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
           tsil """
-            #if __has_builtin(__builtin_reduce_in_order_fadd)
-              complete(__builtin_reduce_in_order_fadd(vec, cast<static>(base::in, 0)));
-            #else
-              var<typed>(base::in, result, cast<static>(base::in, 0));
-              loop<generation, scoped>(i, 0, value(vector::length), 1) {
-                result = helper<arith_add>(result, vec[value(i)]);
-              }
-              complete(result);
-            #endif
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              result = helper<arith_add>(result, vec[value(i)]);
+            }
+            complete(result);
           """
     sve:
       ?i?:

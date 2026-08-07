@@ -103,6 +103,7 @@ The order matches the descriptor registry.
 | `lanes` | Call | Read a generation-known lane-list element. |
 | `array` | Call | Update backend-owned array storage. |
 | `io` | Call | Format vector output. |
+| `address` | Call | Take a typed address or mutable borrow. |
 | `cast` | Call | Render a backend-specific cast. |
 | `call` | Call | Invoke a generated primitive wrapper. |
 | `if` | Block | Select or emit a branch. |
@@ -505,6 +506,37 @@ io<format>(out, values, modifier)
 
 ```rust
 crate::tsl_core::ostream_write(out, &values, modifier)
+```
+
+</details>
+
+### `address`
+
+Accepted forms:
+
+```tsil
+address<of>(expr)
+address<borrow_mut>(expr)
+```
+
+Use `address<of>` when a semantic operation needs the address of an object.
+Use `address<borrow_mut>` only when the source explicitly requires a mutable
+borrow. Backends own the concrete address spelling; common lowering never
+parses `&` or `&mut` from raw target text.
+
+<details>
+<summary>Example</summary>
+
+```tsil
+cast<reinterpret, type=const_ptr>(void, address<of>(data))
+```
+
+```cpp
+reinterpret_cast<void const *>(&data)
+```
+
+```rust
+core::ptr::addr_of!(data).cast::<u8>()
 ```
 
 </details>

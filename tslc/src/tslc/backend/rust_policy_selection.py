@@ -21,6 +21,65 @@ _PolicySlot = tuple[
 
 
 @dataclass(frozen=True, slots=True)
+class RustPolicySelectionPilot:
+    """One backend-owned specialization identity admitted by the policy pilot."""
+
+    profile_name: str
+    primitive_name: str
+    source_primitive_name: str
+    extension_name: str
+    type_tag: str
+    result_kind: str
+    param_kinds: tuple[str, ...]
+    lanes: int
+    vector_spelling: str
+    caller_unsafe: bool
+
+    def matches(
+        self, key: SpecializationKey, spec: LoweredSpecialization
+    ) -> bool:
+        return (
+            key.profile_name,
+            key.primitive_name,
+            key.source_primitive_name,
+            key.extension_name,
+            key.type_tag,
+            key.result_kind,
+            key.param_kinds,
+            key.lanes,
+            spec.vector_spelling,
+            spec.safety.caller_unsafe,
+        ) == (
+            self.profile_name,
+            self.primitive_name,
+            self.source_primitive_name,
+            self.extension_name,
+            self.type_tag,
+            self.result_kind,
+            self.param_kinds,
+            self.lanes,
+            self.vector_spelling,
+            self.caller_unsafe,
+        )
+
+
+RUST_POLICY_SELECTION_PILOTS = (
+    RustPolicySelectionPilot(
+        profile_name="sse2",
+        primitive_name="mul",
+        source_primitive_name="mul",
+        extension_name="sse",
+        type_tag="si8",
+        result_kind="v",
+        param_kinds=("v", "v"),
+        lanes=16,
+        vector_spelling="Simd<i8, Sse>",
+        caller_unsafe=False,
+    ),
+)
+
+
+@dataclass(frozen=True, slots=True)
 class RustPolicySelection:
     """One policy-supported Rust specialization and its compile-time choice."""
 
@@ -390,35 +449,17 @@ def rust_policy_selection_reason(
         return "SIMD-type-parameter specializations are report-only"
     if spec.lane_list_params:
         return "lane-list specializations are report-only"
-    if (
-        key.profile_name,
-        key.primitive_name,
-        key.source_primitive_name,
-        key.extension_name,
-        key.type_tag,
-        key.result_kind,
-        key.param_kinds,
-        key.lanes,
-        spec.vector_spelling,
-        spec.safety.caller_unsafe,
-    ) != (
-        "sse2",
-        "mul",
-        "mul",
-        "sse",
-        "si8",
-        "v",
-        ("v", "v"),
-        16,
-        "Simd<i8, Sse>",
-        False,
+    if not any(
+        pilot.matches(key, spec) for pilot in RUST_POLICY_SELECTION_PILOTS
     ):
         return "initial Rust policy selection supports only the proven sse2 mul pilot"
     return None
 
 
 __all__ = (
+    "RUST_POLICY_SELECTION_PILOTS",
     "RustPolicySelection",
+    "RustPolicySelectionPilot",
     "RustPolicySelectionCoverageEntry",
     "RustPolicySelectionPlan",
     "RustPolicySelectionProfile",

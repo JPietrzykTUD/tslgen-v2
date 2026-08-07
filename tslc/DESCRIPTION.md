@@ -202,8 +202,10 @@ prim<v:=(v,v)> add(left, right):
   capabilities are separate typed axes. Legacy `requires [feature]` and scoped
   feature maps remain valid; the expanded `requires.target_features` form makes
   the hardware axis explicit. `requires.compiler.<backend>.capabilities` names
-  backend-owned compiler facts; compiler families and versions do not live in
-  source data. Explicit capability inputs select one fixed winner for focused
+  backend-owned compiler facts; extension availability and opt-in header groups
+  use the same capability IDs. Compiler families, feature-test names, macros,
+  diagnostics, and probes do not live in source data. Explicit capability inputs
+  select one fixed winner for focused
   authoring and pinned-toolchain workflows. Ordinary project generation retains
   the capability winner frontier over an unconditional fallback in one lowered
   specialization. The C++ project renderer emits backend-owned compile probes,
@@ -304,10 +306,18 @@ prim<v:=(v,v)> add(left, right):
   `dataparallel::simd_for_t<fixed<N>, T>`. Their `comparison_lane_vector` mask
   policy derives `mask_type` from Clang's exact vector-comparison result. Direct
   mask operations retain all-one/all-zero lane semantics, while
-  `to_integral`/`to_mask` form the representation-safe bridge to hardware masks;
-  mask objects are never assumed bit-cast-compatible. The dense boolean mask is
-  not assumed to map to a hardware predicate register, and its explicit policy
-  keeps that performance choice benchmarkable without changing the default.
+  `to_integral`/`to_mask` form the representation-safe bridge to hardware
+  masks. On little-endian Clang toolchains that provide Boolean extended vectors
+  and `__builtin_convertvector`, a generated compiler-capability branch converts
+  comparison masks through a dense Boolean vector and bit-casts only that
+  one-bit-per-lane representation to the integral mask. The inverse path
+  normalizes unused high bits before the bit-cast and converts Boolean lanes back
+  to canonical all-zero/all-one comparison lanes. Dense Boolean masks use the
+  same normalized bit bridge directly. Other toolchains and byte orders retain
+  the representation-independent lane loop, so arbitrary comparison mask
+  objects are never assumed bit-cast-compatible. The dense boolean mask is not
+  assumed to map to a hardware predicate register, and its explicit policy keeps
+  that performance choice benchmarkable without changing the default.
   Rust does not emit these
   compiler-builtin extensions: stable Rust's SIMD surface is the
   architecture-specific `core::arch`, while its analogous portable

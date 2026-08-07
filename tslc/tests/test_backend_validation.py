@@ -8,17 +8,16 @@ from pathlib import Path
 import pytest
 
 from tslc.backend.cpp_capability import CPP_BACKEND
-from tslc.backend.cpp_validation import (
-    resolve_cpp_compile_guards,
-    validate_cpp_profiles,
+from tslc.backend.cpp_compiler_capabilities import (
+    cpp_extensions_compiler_capabilities,
 )
+from tslc.backend.cpp_validation import validate_cpp_profiles
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_const_args import RUST_CONST_ARG_WRAPPERS
 from tslc.backend.rust_implementation_state import const_arg_type
 from tslc.backend.rust_validation import validate_rust_profiles
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
-    BackendCompileGuard,
     BackendExtensionMetadata,
     Extension,
     ExtensionMetadata,
@@ -83,21 +82,41 @@ def test_cpp_exact_lane_bitmask_requires_backend_spelling() -> None:
     assert "backend_spelling.cpp" in diagnostics[0].message
 
 
-def test_compile_guard_conflicts_are_diagnostics_not_exceptions() -> None:
-    first = BackendCompileGuard("mode_a", "MODE", "1")
-    second = BackendCompileGuard("mode_b", "MODE", "2")
+def test_extension_capability_resolution_is_backend_owned_and_deduplicated() -> None:
     extensions = {
-        "first": _extension("first", cpp=True, guards=(first,)),
-        "second": _extension("second", cpp=True, guards=(second,)),
+        "first": _extension(
+            "first", cpp=True, capabilities=("elementwise_clzg",)
+        ),
+        "second": _extension(
+            "second",
+            cpp=True,
+            capabilities=("clang_vector_types", "elementwise_clzg"),
+        ),
     }
 
-    resolution = resolve_cpp_compile_guards(
-        ("first", "second"), extensions, profile_name="conflict"
+    capabilities = cpp_extensions_compiler_capabilities(
+        ("first", "second"), extensions
     )
 
-    assert tuple(guard.name for guard in resolution.guards) == ("mode_a",)
-    assert [diagnostic.code for diagnostic in resolution.diagnostics] == [
-        "TSL-BACKEND-CPP-CONFLICTING-COMPILE-GUARD-VALUE"
+    assert tuple(capability.capability_id for capability in capabilities) == (
+        "clang_vector_types",
+        "elementwise_clzg",
+    )
+
+
+def test_cpp_unknown_extension_compiler_capability_is_diagnosed() -> None:
+    extension = _extension(
+        "unit", cpp=True, capabilities=("missing_capability",)
+    )
+    profile = _profile(
+        cpp={"add": (_Specialization("unit"),)},
+        extensions={"unit": extension},
+    )
+
+    diagnostics = validate_cpp_profiles((profile,))
+
+    assert [diagnostic.code for diagnostic in diagnostics] == [
+        "TSL-BACKEND-CPP-UNKNOWN-COMPILER-CAPABILITY"
     ]
 
 
@@ -224,12 +243,14 @@ def _extension(
     rust: bool = False,
     family: str = "x86",
     vector_bits: int = 128,
-    guards: tuple[BackendCompileGuard, ...] = (),
+    capabilities: tuple[str, ...] = (),
     mask_policy: MaskPolicy | None = None,
     source: SourceSpan | None = None,
 ) -> Extension:
     backend_metadata = (
-        {"cpp": BackendExtensionMetadata(compile_guards=guards)} if guards else {}
+        {"cpp": BackendExtensionMetadata(compiler_capabilities=capabilities)}
+        if capabilities
+        else {}
     )
     return Extension(
         name=name,

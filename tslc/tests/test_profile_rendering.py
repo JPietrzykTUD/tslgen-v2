@@ -105,7 +105,7 @@ def test_cpp_project_probes_and_retains_compiler_capability_alternatives(
     result = _gen(
         data_root,
         machine_profiles_path,
-        primitives=["lzc"],
+        primitives=["lzc", "to_integral", "to_mask"],
         profiles=["sse2"],
         type_tags=["ui32"],
         backends=["cpp"],
@@ -161,19 +161,34 @@ def test_cpp_project_probes_and_retains_compiler_capability_alternatives(
     clang_header = artifacts["cpp/include/tsl_sse2_clang.hpp"]
     assert "#if TSL_COMPILER_HAS_ELEMENTWISE_CLZG" in clang_header
     assert "__builtin_elementwise_clzg" in clang_header
+    assert "#if TSL_COMPILER_HAS_EXT_VECTOR_BOOLEAN_MASK_BRIDGE" in clang_header
+    assert "__builtin_convertvector" in clang_header
+    assert "::tsl::detail::helpers::imask_low_bits" in clang_header
+    assert "#else" in clang_header
+    assert "if (mask[0] != 0)" in clang_header
+    assert "if (mask[0])" in clang_header
     assert "binary_or<" in clang_header
 
     primitive_tags = artifacts["cpp/include/tsl_primitives.hpp"]
     assert "#ifndef __has_builtin" in primitive_tags
+    assert "#ifndef __has_feature" in primitive_tags
     assert "__has_builtin(__builtin_elementwise_clzg)" in primitive_tags
+    assert "__has_feature(ext_vector_type_boolean)" in primitive_tags
+    assert "__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__" in primitive_tags
 
     cmake = artifacts["cpp/CMakeLists.txt"]
     assert "include(CheckCXXSourceCompiles)" in cmake
     assert "check_cxx_source_compiles" in cmake
     assert "__builtin_elementwise_clzg" in cmake
+    assert "using tsl_probe_boolean = bool" in cmake
+    assert "__builtin_convertvector" in cmake
     assert (
         "TSL_COMPILER_HAS_ELEMENTWISE_CLZG=$<BOOL:"
         "${TSL_COMPILER_HAS_ELEMENTWISE_CLZG}>"
+    ) in cmake
+    assert (
+        "TSL_COMPILER_HAS_EXT_VECTOR_BOOLEAN_MASK_BRIDGE=$<BOOL:"
+        "${TSL_COMPILER_HAS_EXT_VECTOR_BOOLEAN_MASK_BRIDGE}>"
     ) in cmake
 
 
@@ -252,10 +267,10 @@ def test_representative_project_shape_is_byte_stable(
         backends=["cpp", "rust"],
     )
     expected = {
-        "cpp/CMakeLists.txt": "afd9ccd8ea6feffdfe0fa38e44e5027b3e49b8206938b23415c59bf35c510b87",
+        "cpp/CMakeLists.txt": "a544ca7828628a83dcb9b6dcf22b1834a5d7f69cfce7184bfe6bcd0e4855b35e",
         "cpp/docs/input/tsl_api_docs.hpp": "25c8a21fafad064c394b933b6c5d27b6dc07aaf4a509150d9da7e87ff9f8027d",
         "cpp/include/tsl.hpp": "298cd47b4e1509cd59eb4100f7a0d82bcdbc6e5d9f4eedccb0a68ba0bf667e03",
-        "cpp/include/tsl_primitives.hpp": "f1b98a21c8d349dc049eb9bf0d1d651a32156196bad5aa7de1c409ef5cbf496c",
+        "cpp/include/tsl_primitives.hpp": "64d81e783ee0ab6618cbc45d100458eee1ab27e238fe5f8a9b4844299072ce92",
         "cpp/include/tsl_scalar.hpp": "a3d1b9f8fd299e4710f39f7e887380668a9c666311440d0d6eae281e2ba5cef5",
         "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
         "rust/Cargo.toml": "ec632691434d5f98f5bb2035539e9df258ec7fb252f84e5b4cb21a0aa2a144cc",
@@ -332,8 +347,12 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
         in overlay
     )
     assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v128_bool>;" in overlay
-    assert "#if __has_feature(ext_vector_type_boolean)" in overlay
-    assert "#if defined(__clang__) && __clang__ == 1" in overlay
+    assert overlay.startswith("#if (defined(__clang__))\n")
+    assert (
+        "#if TSL_COMPILER_HAS_CLANG_VECTOR_TYPES && "
+        "TSL_COMPILER_HAS_EXT_VECTOR_TYPE_BOOLEAN"
+        in overlay
+    )
     assert "return (left + right);" in overlay
     assert "return __builtin_reduce_add(vec);" in overlay
     assert "struct hadd_impl<tsl::simd<int32_t, tsl::clang_v512>>" in overlay
@@ -463,7 +482,10 @@ def test_feature_flag_spelling(data_root: Path, machine_profiles_path: Path) -> 
     assert "-mavx512_gfni" not in cmake
     assert "-mavx512_vnni" not in cmake
     assert 'add_library(tsl::zen4 ALIAS tsl_profile_zen4)' in cmake
-    assert "target_compile_definitions(tsl_profile_zen4 INTERFACE TSL_PROFILE_ZEN4)" in cmake
+    assert (
+        "target_compile_definitions(tsl_profile_zen4 INTERFACE TSL_PROFILE_ZEN4"
+        in cmake
+    )
     assert 'set(TSL_PROFILE "auto" CACHE STRING' in cmake
     assert 'add_library(tsl::tsl ALIAS tsl_generated)' in cmake
     assert "target_link_libraries(tsl_generated INTERFACE tsl_profile_${TSL_SELECTED_PROFILE})" in cmake
@@ -556,6 +578,32 @@ def test_oneapi_fpga_profiles_are_opt_in_for_cmake_auto_detection(
     assert cmake.index("    check_cxx_source_runs", cmake.index(fpga_auto)) < cmake.index(
         oneapi_selection
     )
+
+
+def test_cpu_auto_detection_uses_declared_default_fallback(
+    data_root: Path, tmp_path: Path
+) -> None:
+    profiles = tmp_path / "machine_profiles.json"
+    profiles.write_text(
+        '{"generic": ['
+        '{"name": "scalar", "target_features": "NOSIMD-INVALID"}, '
+        '{"name": "portable", "target_features": "NOSIMD-INVALID", '
+        '"default_build_fallback": true}]}\n',
+        encoding="utf-8",
+    )
+
+    cmake = {
+        artifact.logical_path: artifact.content
+        for artifact in _gen(
+            data_root,
+            profiles,
+            primitives=["add"],
+            profiles=["scalar", "portable"],
+            backends=["cpp"],
+        ).artifacts.artifacts
+    }["cpp/CMakeLists.txt"]
+
+    assert 'set(TSL_SELECTED_PROFILE "portable")' in cmake
 
 
 def test_cpu_auto_detection_has_no_gated_profile_fallback(
@@ -743,7 +791,8 @@ def test_fixed_sve_profile_registers_guarded_static_cpp_simd_types(
     cmake = by_path["cpp/CMakeLists.txt"]
     dispatch = by_path["cpp/include/tsl.hpp"]
     assert cpp.startswith(
-        f"#if defined(__ARM_FEATURE_SVE_BITS) && __ARM_FEATURE_SVE_BITS == {width}\n"
+        f"#if (defined(__ARM_FEATURE_SVE_BITS) && "
+        f"(__ARM_FEATURE_SVE_BITS == {width}))\n"
     )
     assert (
         f'#  error "TSL {profile} profile requires -msve-vector-bits={width}"'
@@ -810,7 +859,10 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
     assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in cpp
     assert "return svadd_s32_x(::tsl::mask_true<Vec>(), left, right);" in cpp
     assert 'add_library(tsl::sve ALIAS tsl_profile_sve)' in cmake
-    assert "target_compile_definitions(tsl_profile_sve INTERFACE TSL_PROFILE_SVE)" in cmake
+    assert (
+        "target_compile_definitions(tsl_profile_sve INTERFACE TSL_PROFILE_SVE"
+        in cmake
+    )
     assert "target_compile_options(tsl_profile_sve INTERFACE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-mcpu=a64fx>)" in cmake
     assert any(
         case.kind == "scalable_golden"

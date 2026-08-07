@@ -608,7 +608,7 @@ prim<v:=cptr+> load_convert_up(ptr):
                    let<type>(OutVec, vector::as_base(ToBase));
                    var<infer>(loaded, call<primitive=set_zero[InVec]>());
                    mem<copy>(
-                     cast<reinterpret, type=ptr>(void, &loaded),
+                     cast<reinterpret, type=ptr>(void, address<borrow_mut>(loaded)),
                      cast<reinterpret, type=const_ptr>(void, ptr),
                      value(generic::length(OutVec)) * value(type::size_bytes(base::in))
                    );
@@ -653,7 +653,7 @@ prim<v:=cptr+> load_convert_up(ptr):
                    let<type>(OutVec, vector::as_base(ToBase));
                    var<infer>(loaded, call<primitive=set_zero[InVec]>());
                    mem<copy>(
-                     cast<reinterpret, type=ptr>(void, &loaded),
+                     cast<reinterpret, type=ptr>(void, address<borrow_mut>(loaded)),
                      cast<reinterpret, type=const_ptr>(void, ptr),
                      value(generic::length(OutVec)) * value(type::size_bytes(base::in))
                    );
@@ -832,7 +832,7 @@ prim<v:=cptr+> load_convert_up(ptr):
                   let<type>(OutVec, vector::as_base(ToBase));
                   var<infer>(loaded, call<primitive=set_zero[Vec]>());
                   mem<copy>(
-                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=ptr>(void, address<borrow_mut>(loaded)),
                     cast<reinterpret, type=const_ptr>(void, ptr),
                     value(generic::length(OutVec)) * value(type::size_bytes(base::in))
                   );
@@ -865,7 +865,7 @@ prim<v:=cptr+> load_convert_up(ptr):
                   let<type>(OutVec, vector::as_base(ToBase));
                   var<infer>(loaded, call<primitive=set_zero[Vec]>());
                   mem<copy>(
-                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=ptr>(void, address<borrow_mut>(loaded)),
                     cast<reinterpret, type=const_ptr>(void, ptr),
                     value(generic::length(OutVec)) * value(type::size_bytes(base::in))
                   );
@@ -898,7 +898,7 @@ prim<v:=cptr+> load_convert_up(ptr):
                   let<type>(OutVec, vector::as_base(ToBase));
                   var<infer>(loaded, call<primitive=set_zero[Vec]>());
                   mem<copy>(
-                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=ptr>(void, address<borrow_mut>(loaded)),
                     cast<reinterpret, type=const_ptr>(void, ptr),
                     value(generic::length(OutVec)) * value(type::size_bytes(base::in))
                   );
@@ -931,7 +931,7 @@ prim<v:=cptr+> load_convert_up(ptr):
                   let<type>(OutVec, vector::as_base(ToBase));
                   var<infer>(loaded, call<primitive=set_zero[Vec]>());
                   mem<copy>(
-                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=ptr>(void, address<borrow_mut>(loaded)),
                     cast<reinterpret, type=const_ptr>(void, ptr),
                     value(generic::length(OutVec)) * value(type::size_bytes(base::in))
                   );
@@ -1009,7 +1009,7 @@ prim<v:=cptr+> load_convert_up(ptr):
                   let<type>(OutVec, vector::as_base(ToBase));
                   var<infer>(loaded, call<primitive=set_zero[Vec]>());
                   mem<copy>(
-                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=ptr>(void, address<borrow_mut>(loaded)),
                     cast<reinterpret, type=const_ptr>(void, ptr),
                     value(generic::length(OutVec)) * value(type::size_bytes(base::in))
                   );
@@ -1035,7 +1035,7 @@ prim<v:=cptr+> load_convert_up(ptr):
                   let<type>(OutVec, vector::as_base(ToBase));
                   var<infer>(loaded, call<primitive=set_zero[Vec]>());
                   mem<copy>(
-                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=ptr>(void, address<borrow_mut>(loaded)),
                     cast<reinterpret, type=const_ptr>(void, ptr),
                     value(generic::length(OutVec)) * value(type::size_bytes(base::in))
                   );
@@ -1061,7 +1061,7 @@ prim<v:=cptr+> load_convert_up(ptr):
                   let<type>(OutVec, vector::as_base(ToBase));
                   var<infer>(loaded, call<primitive=set_zero[Vec]>());
                   mem<copy>(
-                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=ptr>(void, address<borrow_mut>(loaded)),
                     cast<reinterpret, type=const_ptr>(void, ptr),
                     value(generic::length(OutVec)) * value(type::size_bytes(base::in))
                   );
@@ -1087,7 +1087,7 @@ prim<v:=cptr+> load_convert_up(ptr):
                   let<type>(OutVec, vector::as_base(ToBase));
                   var<infer>(loaded, call<primitive=set_zero[Vec]>());
                   mem<copy>(
-                    cast<reinterpret, type=ptr>(void, &loaded),
+                    cast<reinterpret, type=ptr>(void, address<borrow_mut>(loaded)),
                     cast<reinterpret, type=const_ptr>(void, ptr),
                     value(generic::length(OutVec)) * value(type::size_bytes(base::in))
                   );
@@ -1308,7 +1308,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               let<type>(OutVec, vector::as_base(ToBase));
               var<infer>(loaded, call<primitive=set_zero[Vec]>());
               mem<copy>(
-                cast<reinterpret, type=ptr>(void, &loaded),
+                cast<reinterpret, type=ptr>(void, address<borrow_mut>(loaded)),
                 cast<reinterpret, type=const_ptr>(void, ptr),
                 value(generic::length(OutVec)) * value(type::size_bytes(base::in))
               );

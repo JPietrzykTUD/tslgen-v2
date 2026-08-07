@@ -295,7 +295,12 @@ def test_clang_float_hadd_uses_ordered_compiler_reduction(
     catalog: Catalog, machine_profiles
 ) -> None:
     slots = Selector().select_profile(
-        catalog, machine_profiles["avx2"], "hadd", ("f32",)
+        catalog,
+        machine_profiles["avx2"],
+        "hadd",
+        ("f32",),
+        backend_id="cpp",
+        compiler_capabilities=frozenset({"reduce_in_order_fadd"}),
     ).selected
     unmasked = next(
         slot
@@ -313,16 +318,36 @@ def test_clang_float_hadd_uses_ordered_compiler_reduction(
     unmasked_cpp = Lowerer().lower(
         unmasked, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
+    fallback_slots = Selector().select_profile(
+        catalog,
+        machine_profiles["avx2"],
+        "hadd",
+        ("f32",),
+        backend_id="cpp",
+        compiler_capabilities=frozenset(),
+    ).selected
+    fallback = next(
+        slot
+        for slot in fallback_slots
+        if slot.extension.name == "clang_v256"
+        and slot.primitive.signature == "s:=v"
+    )
+    fallback_cpp = Lowerer().lower(
+        fallback, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
     masked_cpp = Lowerer().lower(
         masked, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
 
     assert unmasked_cpp is not None
-    assert "#if __has_builtin(__builtin_reduce_in_order_fadd)" in unmasked_cpp.body_text
+    assert "#if" not in unmasked_cpp.body_text
     assert "__builtin_reduce_in_order_fadd(vec" in unmasked_cpp.body_text
-    assert "vec[0]" in unmasked_cpp.body_text
+    assert "vec[0]" not in unmasked_cpp.body_text
     assert "for " not in unmasked_cpp.body_text
     assert "to_array" not in unmasked_cpp.body_text
+    assert fallback_cpp is not None
+    assert "__builtin_reduce_in_order_fadd" not in fallback_cpp.body_text
+    assert "vec[0]" in fallback_cpp.body_text
     assert masked_cpp is not None
     assert "::tsl::binary_and<Vec>(mask_vector, vec)" in masked_cpp.body_text
     assert "::tsl::hadd<Vec>" in masked_cpp.body_text

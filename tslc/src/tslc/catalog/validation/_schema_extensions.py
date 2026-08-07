@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, Mapping
 from typing import get_args
 
 from tslc.catalog.model import ImaskPolicyKind, MaskPolicyKind, VectorBitsKind
@@ -54,11 +54,8 @@ KNOWN_EXTENSION_FIELDS = frozenset(
 KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
     {
         "arch_module",
-        "compile_guards",
-        "compiler_features",
-        "compiler_ids",
+        "compiler_capabilities",
         "dataparallel_inference",
-        "header_group",
         "headers",
         "supported",
         "type_name",
@@ -78,9 +75,6 @@ KNOWN_INTRINSIC_SUFFIX_FIELDS = frozenset({"by_type"})
 KNOWN_ACTIVE_WHEN_FIELDS = frozenset({"target_features", "compile_modes"})
 KNOWN_SIZE_PARAMETER_FIELDS = frozenset({"name"})
 KNOWN_VECTOR_REGISTER_POLICY_FIELDS = frozenset({"kind"})
-KNOWN_COMPILE_GUARD_FIELDS = frozenset(
-    {"macro", "equals", "hint_flag", "diagnostic"}
-)
 KNOWN_TEST_FILTER_FIELDS = frozenset({"exclude_templates"})
 # Derived from the typed catalog kinds so the validator cannot drift from the model.
 KNOWN_MASK_POLICY_KINDS: frozenset[str] = frozenset(get_args(MaskPolicyKind))
@@ -101,6 +95,7 @@ def validate_extension_block(
     backend_ids: Collection[str],
     diagnostics: list[Diagnostic],
     target_families: TargetFamilyCatalog,
+    compiler_capabilities: Mapping[str, Collection[str]] | None = None,
 ) -> None:
     fields = {field.key.text: field for field in declaration.fields}
     family = field_text(fields.get("family")) or ""
@@ -238,11 +233,45 @@ def validate_extension_block(
             diagnostics,
             label=f"extension backend {backend_id} field",
         )
-        _validate_compile_guards(
-            child(backend, "compile_guards"),
-            diagnostics,
-            backend_id,
-        )
+        capability_field = child(backend, "compiler_capabilities")
+        if capability_field is not None:
+            known = (compiler_capabilities or {}).get(backend_id)
+            if not isinstance(capability_field.value, ParsedTslListValue):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-MALFORMED-EXTENSION-CAPABILITIES",
+                        message=(
+                            f"extension backend {backend_id!r} compiler_capabilities "
+                            "must be a list"
+                        ),
+                        source=source_span(capability_field.source),
+                    )
+                )
+            else:
+                for item in capability_field.value.items:
+                    if not isinstance(item, ParsedTslScalarValue):
+                        diagnostics.append(
+                            diagnostic_at(
+                                severity="error",
+                                code="TSL-CATALOG-MALFORMED-EXTENSION-CAPABILITIES",
+                                message="extension compiler capabilities must be names",
+                                source=source_span(item.source),
+                            )
+                        )
+                    elif known is not None and item.text not in known:
+                        diagnostics.append(
+                            diagnostic_at(
+                                severity="error",
+                                code="TSL-CATALOG-UNKNOWN-COMPILER-CAPABILITY",
+                                message=(
+                                    f"extension backend {backend_id!r} uses unknown "
+                                    f"compiler capability {item.text!r}; expected one of: "
+                                    f"{', '.join(sorted(known)) or '(none)'}"
+                                ),
+                                source=source_span(item.source),
+                            )
+                        )
         inference_field = child(backend, "dataparallel_inference")
         inference = field_text(inference_field)
         if inference is not None and inference not in {"true", "false"}:
@@ -281,45 +310,6 @@ def validate_extension_block(
                 diagnostics,
                 owner=backend_map_name,
             )
-
-
-def _validate_compile_guards(
-    field: ParsedTslField | None,
-    diagnostics: list[Diagnostic],
-    backend_id: str,
-) -> None:
-    if field is None:
-        return
-    diagnose_duplicate_fields(
-        children(field),
-        diagnostics,
-        label=f"{backend_id} compile guard",
-    )
-    for guard in children(field):
-        validate_known_fields(
-            children(guard),
-            KNOWN_COMPILE_GUARD_FIELDS,
-            diagnostics,
-            owner=f"{backend_id} compile guard {guard.key.text!r}",
-        )
-        diagnose_duplicate_fields(
-            children(guard),
-            diagnostics,
-            label=f"{backend_id} compile guard {guard.key.text!r} field",
-        )
-        for required in ("macro", "equals"):
-            if field_text(child(guard, required)) is None:
-                diagnostics.append(
-                    diagnostic_at(
-                        severity="error",
-                        code="TSL-CATALOG-MALFORMED-COMPILE-GUARD",
-                        message=(
-                            f"{backend_id} compile guard {guard.key.text!r} "
-                            f"requires scalar field {required!r}"
-                        ),
-                        source=source_span(guard.source),
-                    )
-                )
 
 
 def _validate_active_target_features(

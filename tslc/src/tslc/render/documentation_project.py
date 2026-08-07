@@ -434,10 +434,7 @@ def _extension_family(profile: EmittedProfile, spec: LoweredSpecialization) -> s
 def _compiler_ids(extension: Extension | None, backend_id: str) -> tuple[str, ...]:
     if extension is None:
         return ()
-    metadata = extension.metadata.backend.get(backend_id)
-    if metadata is None:
-        return ()
-    return tuple(sorted(metadata.compiler_ids))
+    return backend_capability(backend_id).extension_compiler_ids(extension)
 
 
 def _profile_group(profile: EmittedProfile) -> tuple[str, str, str]:

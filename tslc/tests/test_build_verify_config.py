@@ -1097,6 +1097,7 @@ def test_sde_runner_does_not_override_oneapi_cpp_default_compiler(
                         file_stem="cascadelake_oneapi",
                         family="x86",
                         compile_modes=frozenset({"oneapi_fpga"}),
+                        compiler_role="oneapi-cpp",
                         runner=VerifyRunner(kind="sde", profile="clx"),
                     ),
                 ),
@@ -1390,6 +1391,7 @@ def test_cpp_oneapi_default_compiler_uses_configured_tool_or_icpx() -> None:
                 profile_name="cascadelake_oneapi",
                 file_stem="cascadelake_oneapi",
                 compile_modes=frozenset({"oneapi_fpga"}),
+                compiler_role="oneapi-cpp",
             ),
         ),
     )

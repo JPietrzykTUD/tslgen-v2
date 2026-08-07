@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
@@ -131,9 +131,14 @@ def _unsupported_primitive_preview(
 
 @dataclass(frozen=True, slots=True)
 class CompilerCapability:
-    """One backend-owned compiler feature usable by specialization selection."""
+    """One backend-owned compiler fact used by source semantic requirements."""
 
     capability_id: str
+    header_group: str | None = field(default=None, kw_only=True)
+    compiler_ids: tuple[str, ...] = field(default=(), kw_only=True)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "compiler_ids", tuple(self.compiler_ids))
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +173,46 @@ class BackendCapability:
                 if capability.capability_id == capability_id
             ),
             None,
+        )
+
+    def extension_compiler_capabilities(
+        self, extension: Extension | None
+    ) -> tuple[CompilerCapability, ...]:
+        if extension is None:
+            return ()
+        metadata = extension.metadata.backend.get(self.backend_id)
+        if metadata is None:
+            return ()
+        return tuple(
+            capability
+            for capability_id in metadata.compiler_capabilities
+            if (capability := self.compiler_capability(capability_id)) is not None
+        )
+
+    def extension_header_groups(self, extension: Extension | None) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                {
+                    capability.header_group
+                    for capability in self.extension_compiler_capabilities(extension)
+                    if capability.header_group is not None
+                }
+            )
+        )
+
+    def extension_header_group(self, extension: Extension | None) -> str | None:
+        groups = self.extension_header_groups(extension)
+        return groups[0] if len(groups) == 1 else None
+
+    def extension_compiler_ids(self, extension: Extension | None) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                {
+                    compiler_id
+                    for capability in self.extension_compiler_capabilities(extension)
+                    for compiler_id in capability.compiler_ids
+                }
+            )
         )
 
     def create_dialect(self, catalog: Catalog) -> BackendDialect:

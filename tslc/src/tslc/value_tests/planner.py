@@ -355,12 +355,21 @@ class ValueTestPlanner:
                 extension_names.add(case.representation.source_extension)
             if case.representation.target_extension is not None:
                 extension_names.add(case.representation.target_extension)
+        from tslc.backend.registry import backend_capability
+
+        try:
+            capability = backend_capability(backend_id)
+        except ValueError:
+            capability = None
         groups = {
-            metadata.header_group
+            group
             for name in extension_names
             if (extension := self._catalog.extensions.get(name)) is not None
-            if (metadata := extension.metadata.backend.get(backend_id)) is not None
-            if metadata.header_group is not None
+            for group in (
+                ()
+                if capability is None
+                else capability.extension_header_groups(extension)
+            )
         }
         if len(groups) > 1:
             extensions = tuple(
@@ -392,21 +401,23 @@ class ValueTestPlanner:
                     f"{sorted(groups)} through extensions {sorted(extension_names)}"
                 ),
             )
-        compiler_features = tuple(
+        compiler_capabilities = tuple(
             sorted(
                 {
-                    feature
+                    capability_id
                     for name in extension_names
                     if (extension := self._catalog.extensions.get(name)) is not None
-                    if (metadata := extension.metadata.backend.get(backend_id)) is not None
-                    for feature in metadata.compiler_features
+                    if (
+                        metadata := extension.metadata.backend.get(backend_id)
+                    ) is not None
+                    for capability_id in metadata.compiler_capabilities
                 }
             )
         )
         return replace(
             case,
             header_group=next(iter(groups), None),
-            required_compiler_features=compiler_features,
+            required_compiler_capabilities=compiler_capabilities,
         )
 
 

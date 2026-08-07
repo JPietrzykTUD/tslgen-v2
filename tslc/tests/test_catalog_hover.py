@@ -87,6 +87,11 @@ _REGION_FACTS = (
     ),
     ("io", "Format vector output.", ("io<format>(out, array, modifier)",)),
     (
+        "address",
+        "Take a typed address or mutable borrow.",
+        ("address<of>(expr)", "address<borrow_mut>(expr)"),
+    ),
+    (
         "cast",
         "Render a backend-specific cast.",
         (

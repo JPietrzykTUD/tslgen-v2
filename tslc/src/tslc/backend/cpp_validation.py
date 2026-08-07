@@ -2,84 +2,23 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from tslc.backend.cpp_compiler_capabilities import (
+    CppCompilerCapability,
+    cpp_compiler_capability,
+    cpp_extension_header_group,
+)
 from tslc.backend.cpp_detection import CPP_PROFILE_DETECTION_KINDS
 from tslc.backend.target_capability import (
     cpp_x86_register_helper,
     x86_register_bits,
 )
-from tslc.catalog.model import BackendCompileGuard, Extension
+from tslc.catalog.model import Extension
 from tslc.diagnostics import Diagnostic, diagnostic_at
 
 if TYPE_CHECKING:
     from tslc.backend.emitted_profile import EmittedProfile
-
-
-@dataclass(frozen=True, slots=True)
-class CppCompileGuardResolution:
-    guards: tuple[BackendCompileGuard, ...]
-    diagnostics: tuple[Diagnostic, ...]
-
-
-def resolve_cpp_compile_guards(
-    emitted_extensions: Sequence[str],
-    extensions: Mapping[str, Extension],
-    *,
-    profile_name: str | None = None,
-) -> CppCompileGuardResolution:
-    """Resolve profile guards and report contradictory source facts."""
-
-    guards: dict[str, BackendCompileGuard] = {}
-    macro_values: dict[str, tuple[str, BackendCompileGuard]] = {}
-    diagnostics: list[Diagnostic] = []
-    profile_label = f" for profile {profile_name!r}" if profile_name is not None else ""
-    for extension_name in emitted_extensions:
-        extension = extensions.get(extension_name)
-        metadata = None if extension is None else extension.metadata.backend.get("cpp")
-        for guard in () if metadata is None else metadata.compile_guards:
-            existing = guards.get(guard.name)
-            if existing is not None and _guard_facts(existing) != _guard_facts(guard):
-                diagnostics.append(
-                    diagnostic_at(
-                        severity="error",
-                        code="TSL-BACKEND-CPP-CONFLICTING-COMPILE-GUARD",
-                        message=(
-                            f"conflicting C++ compile guard {guard.name!r}"
-                            f"{profile_label}"
-                        ),
-                        source=(
-                            guard.source
-                            or (extension.source if extension is not None else None)
-                        ),
-                    )
-                )
-                continue
-            required = macro_values.get(guard.macro)
-            if required is not None and required[0] != guard.equals:
-                diagnostics.append(
-                    diagnostic_at(
-                        severity="error",
-                        code="TSL-BACKEND-CPP-CONFLICTING-COMPILE-GUARD-VALUE",
-                        message=(
-                            f"conflicting C++ compile guard values for {guard.macro}"
-                            f"{profile_label}: {required[0]} and {guard.equals}"
-                        ),
-                        source=(
-                            guard.source
-                            or (extension.source if extension is not None else None)
-                        ),
-                    )
-                )
-                continue
-            guards[guard.name] = guard
-            macro_values[guard.macro] = (guard.equals, guard)
-    return CppCompileGuardResolution(
-        guards=tuple(guards[name] for name in sorted(guards)),
-        diagnostics=tuple(diagnostics),
-    )
 
 
 def validate_cpp_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnostic, ...]:
@@ -133,19 +72,39 @@ def validate_cpp_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnos
                     )
                 )
                 continue
-            cpp_metadata = extension.metadata.backend.get("cpp")
-            if (
-                cpp_metadata is not None
-                and cpp_metadata.header_group is not None
-                and not cpp_metadata.compiler_ids
+            capabilities: list[CppCompilerCapability] = []
+            for capability_id in (
+                ()
+                if (metadata := extension.metadata.backend.get("cpp")) is None
+                else metadata.compiler_capabilities
             ):
+                try:
+                    capabilities.append(cpp_compiler_capability(capability_id))
+                except KeyError:
+                    diagnostics.append(
+                        diagnostic_at(
+                            severity="error",
+                            code="TSL-BACKEND-CPP-UNKNOWN-COMPILER-CAPABILITY",
+                            message=(
+                                f"extension {extension.name!r} requires unknown C++ "
+                                f"compiler capability {capability_id!r}"
+                            ),
+                            source=extension.source,
+                        )
+                    )
+            header_groups = {
+                capability.header_group
+                for capability in capabilities
+                if capability.header_group is not None
+            }
+            if len(header_groups) > 1:
                 diagnostics.append(
                     diagnostic_at(
                         severity="error",
-                        code="TSL-BACKEND-CPP-HEADER-GROUP-MISSING-COMPILER-IDS",
+                        code="TSL-BACKEND-CPP-INCOMPATIBLE-HEADER-GROUPS",
                         message=(
-                            f"extension {extension.name!r} uses C++ header group "
-                            f"{cpp_metadata.header_group!r} without compiler_ids"
+                            f"extension {extension.name!r} requires incompatible C++ "
+                            f"header groups {sorted(header_groups)}"
                         ),
                         source=extension.source,
                     )
@@ -193,40 +152,9 @@ def validate_cpp_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnos
                         source=extension.source,
                     )
                 )
-        header_groups = {
-            (
-                extension.header_group_for_backend("cpp")
-                if (extension := profile.extensions.get(name)) is not None
-                else None
-            )
-            for name in emitted_extensions
-        }
-        for header_group in sorted(header_groups, key=lambda value: value or ""):
-            diagnostics.extend(
-                resolve_cpp_compile_guards(
-                    tuple(
-                        name
-                        for name in emitted_extensions
-                        if (
-                            extension.header_group_for_backend("cpp")
-                            if (extension := profile.extensions.get(name)) is not None
-                            else None
-                        )
-                        == header_group
-                    ),
-                    profile.extensions,
-                    profile_name=profile.profile.name,
-                ).diagnostics
-            )
     return tuple(diagnostics)
 
 
-def _guard_facts(guard: BackendCompileGuard) -> tuple[str, str, str | None, str | None]:
-    return (guard.macro, guard.equals, guard.hint_flag, guard.diagnostic)
-
-
 __all__ = (
-    "CppCompileGuardResolution",
-    "resolve_cpp_compile_guards",
     "validate_cpp_profiles",
 )

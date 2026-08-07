@@ -505,10 +505,12 @@ def _uses_opt_in_header(
     backend_id: str = "cpp",
     variants_only: bool = False,
 ) -> bool:
+    from tslc.backend.registry import backend_capability
+
     return any(
         (not variants_only or implementation.variants)
         and (extension := catalog.extensions.get(implementation.extension)) is not None
-        and extension.header_group_for_backend(backend_id) is not None
+        and backend_capability(backend_id).extension_header_group(extension) is not None
         for implementation in primitive.implementations
     )
 

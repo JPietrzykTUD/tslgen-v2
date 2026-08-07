@@ -96,7 +96,7 @@ prim<s[]:=v> to_array(a):
             var<typed>(array_type<type(base::in), value(vector::length)>, result, value(uninit::array));
             mem<copy>(
               cast<reinterpret, type=ptr>(void, result.data()),
-              cast<reinterpret, type=const_ptr>(void, &a),
+              cast<reinterpret, type=const_ptr>(void, address<of>(a)),
               value(vector::length) * value(type::size_bytes(base::in))
             );
             complete(result);
@@ -289,7 +289,7 @@ prim<v:=s[]> from_array(data):
           tsil """
             var<typed>(vector::register, result, call<primitive=set_zero[Vec]>());
             mem<copy>(
-              cast<reinterpret, type=ptr>(void, &result),
+              cast<reinterpret, type=ptr>(void, address<borrow_mut>(result)),
               cast<reinterpret, type=const_ptr>(void, data.as_ptr()),
               value(vector::length) * value(type::size_bytes(base::in))
             );

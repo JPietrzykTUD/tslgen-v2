@@ -9,7 +9,6 @@ from typing import cast
 
 from tslc.catalog._builder_common import _list_text_set, _opt_int
 from tslc.catalog.model import (
-    BackendCompileGuard,
     BackendExtensionMetadata,
     Extension,
     ExtensionActivation,
@@ -251,10 +250,9 @@ def _backend_extension_metadata(
         if backend is None:
             continue
         metadata = BackendExtensionMetadata(
-            compile_guards=_backend_compile_guards(_child(backend, "compile_guards")),
-            header_group=_field_text(_child(backend, "header_group")),
-            compiler_ids=_list_text(_child(backend, "compiler_ids")),
-            compiler_features=_list_text(_child(backend, "compiler_features")),
+            compiler_capabilities=_list_text(
+                _child(backend, "compiler_capabilities")
+            ),
             dataparallel_inference=_bool_text(
                 _child(backend, "dataparallel_inference")
             ),
@@ -264,28 +262,6 @@ def _backend_extension_metadata(
         if metadata != BackendExtensionMetadata():
             result[backend_id] = metadata
     return result
-
-
-def _backend_compile_guards(
-    field: ParsedTslField | None,
-) -> tuple[BackendCompileGuard, ...]:
-    guards: list[BackendCompileGuard] = []
-    for guard in _children(field):
-        macro = _field_text(_child(guard, "macro"))
-        equals = _field_text(_child(guard, "equals"))
-        if macro is None or equals is None:
-            continue
-        guards.append(
-            BackendCompileGuard(
-                name=guard.key.text,
-                macro=macro,
-                equals=equals,
-                hint_flag=_field_text(_child(guard, "hint_flag")),
-                diagnostic=_field_text(_child(guard, "diagnostic")),
-                source=_source_span(guard.source),
-            )
-        )
-    return tuple(guards)
 
 
 def _backend_supported(
@@ -359,15 +335,10 @@ def _merge_backend_metadata(
     for backend_id, child_meta in child.items():
         parent_meta = merged.get(backend_id, BackendExtensionMetadata())
         merged[backend_id] = BackendExtensionMetadata(
-            compile_guards=_merge_backend_compile_guards(
-                parent_meta.compile_guards,
-                child_meta.compile_guards,
-            ),
-            header_group=child_meta.header_group or parent_meta.header_group,
-            compiler_ids=child_meta.compiler_ids or parent_meta.compiler_ids,
-            compiler_features=tuple(
+            compiler_capabilities=tuple(
                 dict.fromkeys(
-                    parent_meta.compiler_features + child_meta.compiler_features
+                    parent_meta.compiler_capabilities
+                    + child_meta.compiler_capabilities
                 )
             ),
             dataparallel_inference=(
@@ -379,16 +350,6 @@ def _merge_backend_metadata(
             arch_module=child_meta.arch_module or parent_meta.arch_module,
         )
     return merged
-
-
-def _merge_backend_compile_guards(
-    parent: tuple[BackendCompileGuard, ...],
-    child: tuple[BackendCompileGuard, ...],
-) -> tuple[BackendCompileGuard, ...]:
-    guards = {guard.name: guard for guard in parent}
-    guards.update({guard.name: guard for guard in child})
-    return tuple(guards[name] for name in sorted(guards))
-
 
 
 def _mask_policy(field: ParsedTslField | None) -> MaskPolicy:

@@ -29,6 +29,8 @@ def specialization_key(
 
     if not backend_id:
         raise ValueError("benchmark specialization identities require a backend ID")
+    from tslc.backend.registry import backend_capability
+
     if not primitive_specializations or any(
         candidate.primitive_name != specialization.primitive_name
         for candidate in primitive_specializations
@@ -48,6 +50,15 @@ def specialization_key(
         else None
     )
     target = specialization.target
+    try:
+        capability = backend_capability(backend_id)
+    except ValueError:
+        capability = None
+    header_group = (
+        None
+        if capability is None
+        else capability.extension_header_group(extension)
+    )
     return SpecializationKey(
         backend_id=backend_id,
         profile_name=profile.profile.name,
@@ -72,11 +83,7 @@ def specialization_key(
             tuple(primitive_specializations)
         ),
         lanes=lanes,
-        header_group=(
-            extension.header_group_for_backend(backend_id)
-            if extension is not None
-            else None
-        ),
+        header_group=header_group,
     )
 
 

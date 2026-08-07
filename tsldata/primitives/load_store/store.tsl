@@ -466,7 +466,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
             } else<generation> {
               mem<copy>(
                 cast<reinterpret, type=ptr>(void, ptr),
-                cast<reinterpret, type=const_ptr>(void, &mask),
+                cast<reinterpret, type=const_ptr>(void, address<of>(mask)),
                 sizeof(mask)
               );
             }

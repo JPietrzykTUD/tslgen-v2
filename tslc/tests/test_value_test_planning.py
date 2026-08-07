@@ -185,7 +185,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
         ),
         failure=values.pop("failure", None),
         header_group=values.pop("header_group", None),
-        required_compiler_features=values.pop("required_compiler_features", ()),
+        required_compiler_capabilities=values.pop("required_compiler_capabilities", ()),
     )
     assert not values, f"unhandled fixture fields: {sorted(values)}"
     return plan
@@ -1878,15 +1878,16 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         result_kind="v",
         param_kinds=("v", "v"),
         header_group="clang",
-        required_compiler_features=("ext_vector_type_boolean",),
+        required_compiler_capabilities=("ext_vector_type_boolean",),
     )
     guarded_source = render_cpp_values_runner(
         ValueTestProfilePlan("cpp", "unit-profile", (guarded_cpp_case,)),
         render_assets,
     )
     assert guarded_source.count("#if defined(TSL_ENABLE_CLANG)") == 2
-    assert guarded_source.count("#if defined(__has_feature)") == 2
-    assert guarded_source.count("#  if __has_feature(ext_vector_type_boolean)") == 2
+    assert guarded_source.count(
+        "#if TSL_COMPILER_HAS_EXT_VECTOR_TYPE_BOOLEAN"
+    ) == 2
 
     cpp_indexed_case = ValueTestCasePlan(
         kind="indexed_load",
@@ -2840,10 +2841,14 @@ def test_opt_in_clang_overlays_get_guarded_differential_targets(
     comparison_cases = tuple(case for case in clang_cases if case not in bool_cases)
     assert bool_cases
     assert all(
-        case.required_compiler_features == ("ext_vector_type_boolean",)
+        case.required_compiler_capabilities
+        == ("clang_vector_types", "ext_vector_type_boolean")
         for case in bool_cases
     )
-    assert all(not case.required_compiler_features for case in comparison_cases)
+    assert all(
+        case.required_compiler_capabilities == ("clang_vector_types",)
+        for case in comparison_cases
+    )
 
     values_source = next(
         artifact.content
@@ -2851,11 +2856,24 @@ def test_opt_in_clang_overlays_get_guarded_differential_targets(
         if artifact.logical_path == "cpp/tests/values_avx2.cpp"
     )
     assert "#if defined(TSL_ENABLE_CLANG)" in values_source
-    assert "#  if __has_feature(ext_vector_type_boolean)" in values_source
+    assert "#if TSL_COMPILER_HAS_EXT_VECTOR_TYPE_BOOLEAN" in values_source
     assert "using Hw = tsl::simd<int32_t, tsl::clang_v256>;" in values_source
 
 
-def test_incompatible_value_test_header_groups_are_diagnosed() -> None:
+def test_incompatible_value_test_header_groups_are_diagnosed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _BackendCapability:
+        def extension_header_groups(
+            self, extension: Extension
+        ) -> tuple[str, ...]:
+            metadata = extension.metadata.backend.get("cpp")
+            return () if metadata is None else metadata.compiler_capabilities
+
+    monkeypatch.setattr(
+        "tslc.backend.registry.backend_capability",
+        lambda backend_id: _BackendCapability(),
+    )
     first = Extension(
         "first",
         "first",
@@ -2865,7 +2883,7 @@ def test_incompatible_value_test_header_groups_are_diagnosed() -> None:
         backend_supported={"cpp": True},
         metadata=ExtensionMetadata(
             backend={
-                "cpp": BackendExtensionMetadata(header_group="first_group")
+                "cpp": BackendExtensionMetadata(compiler_capabilities=("first_group",))
             }
         ),
         source=SourceSpan(Path("extensions.tsl"), 10, 1, 10, 6),
@@ -2879,7 +2897,7 @@ def test_incompatible_value_test_header_groups_are_diagnosed() -> None:
         backend_supported={"cpp": True},
         metadata=ExtensionMetadata(
             backend={
-                "cpp": BackendExtensionMetadata(header_group="second_group")
+                "cpp": BackendExtensionMetadata(compiler_capabilities=("second_group",))
             }
         ),
         source=SourceSpan(Path("extensions.tsl"), 20, 1, 20, 7),

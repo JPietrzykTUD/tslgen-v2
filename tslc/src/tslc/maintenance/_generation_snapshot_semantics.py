@@ -316,7 +316,7 @@ def _serialize_value_test_case(case: ValueTestCasePlan) -> dict[str, object]:
         "scalable": _serialize_value_test_scalable(case.scalable),
         "differential": _serialize_value_test_differential(case.differential),
         "header_group": case.header_group,
-        "required_compiler_features": case.required_compiler_features,
+        "required_compiler_capabilities": case.required_compiler_capabilities,
     }
 
 

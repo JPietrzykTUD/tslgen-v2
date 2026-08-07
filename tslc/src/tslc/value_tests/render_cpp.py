@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.backend.cpp_compiler_capabilities import cpp_compiler_capability
 from tslc.compiler_assets import RenderAssets
 from tslc.value_tests._render_cpp_dispatch import CPP_VALUE_TEST_RENDERER, render_cpp_case
 from tslc.value_tests.case_plan import ValueTestCasePlan
@@ -34,14 +35,9 @@ def render_cpp_values_runner(
 
 def _guarded(text: str, case: ValueTestCasePlan) -> str:
     guarded = text
-    for feature in reversed(case.required_compiler_features):
-        guarded = (
-            "#if defined(__has_feature)\n"
-            f"#  if __has_feature({feature})\n"
-            f"{guarded}\n"
-            "#  endif\n"
-            "#endif"
-        )
+    for capability_id in reversed(case.required_compiler_capabilities):
+        condition = cpp_compiler_capability(capability_id).condition_macro
+        guarded = f"#if {condition}\n{guarded}\n#endif"
     if case.header_group is not None:
         macro = f"TSL_ENABLE_{case.header_group.upper()}"
         guarded = f"#if defined({macro})\n{guarded}\n#endif"

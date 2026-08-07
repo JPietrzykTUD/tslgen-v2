@@ -73,6 +73,7 @@ def validate_parsed_documents(
                     backend_ids,
                     diagnostics,
                     target_families,
+                    compiler_capabilities,
                 )
                 if declaration.kind == "types":
                     type_group_fields.extend(declaration.fields)
@@ -268,6 +269,7 @@ def _validate_block(
     backend_ids: frozenset[str],
     diagnostics: list[Diagnostic],
     target_families: TargetFamilyCatalog,
+    compiler_capabilities: Mapping[str, Collection[str]] | None,
 ) -> None:
     if declaration.kind == "extension":
         validate_known_fields(
@@ -282,6 +284,7 @@ def _validate_block(
             backend_ids,
             diagnostics,
             target_families,
+            compiler_capabilities,
         )
     elif declaration.kind == "types":
         for field in declaration.fields:

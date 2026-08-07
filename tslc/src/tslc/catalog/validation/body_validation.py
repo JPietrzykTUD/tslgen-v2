@@ -253,6 +253,28 @@ def _validate_var_region(
     )
 
 
+def _validate_address_region(
+    primitive_name: str,
+    region: Region,
+    diagnostics: list[Diagnostic],
+) -> None:
+    selector = region.selector_text.strip()
+    args = split_top_level(_segments_text(region.body))
+    if selector in {"of", "borrow_mut"} and len(args) == 1 and args[0].strip():
+        return
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-BODY-BAD-ADDRESS",
+            message=(
+                f"primitive {primitive_name!r}: address must be "
+                "`address<of|borrow_mut>(expr)`"
+            ),
+            source=region.source,
+        )
+    )
+
+
 def _validate_cast_region(
     primitive_name: str,
     region: Region,
@@ -410,6 +432,7 @@ def _segments_text(segments: tuple[Segment, ...]) -> str:
 ShellValidator = Callable[[str, Region, list[Diagnostic]], None]
 
 _SHELL_VALIDATORS: dict[str, ShellValidator] = {
+    "address_selector": _validate_address_region,
     "array_set": _validate_array_region,
     "call_selector": _validate_call_region,
     "cast_selector": _validate_cast_region,

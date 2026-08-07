@@ -555,7 +555,16 @@ def _common_unsupported_reason(
         return "only fixed-width hardware vectors are benchmarked"
     if not extension.default_test_target:
         return "extension is not enabled as a native value-test target"
-    if extension.header_group_for_backend(backend_id) is not None:
+    from tslc.backend.registry import backend_capability
+
+    try:
+        capability = backend_capability(backend_id)
+    except ValueError:
+        capability = None
+    if (
+        capability is not None
+        and capability.extension_header_group(extension) is not None
+    ):
         return "opt-in header-group extensions are not supported by benchmark planning"
     return None
 

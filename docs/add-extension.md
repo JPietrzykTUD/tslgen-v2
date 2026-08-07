@@ -180,14 +180,16 @@ The implementation `requires` field gates the feature.
 
 ## 6. Model Compiler-Vector Overlays Explicitly
 
-An overlay may need separate metadata:
+An overlay names semantic backend capabilities rather than concrete compiler facts:
 
 | Field | Effect |
 | --- | --- |
-| `header_group "clang"` | Emits a separate opt-in header. |
-| `compiler_ids [Clang, AppleClang]` | Gates the CMake target. |
-| `compile_guards` | Defines the macro contract. |
+| `compiler_capabilities [clang_vector_types]` | Requests the backend-owned Clang vector contract, including its header group, compiler IDs, probes, macros, and diagnostics. |
+| `compiler_capabilities [ext_vector_type_boolean]` | Adds the semantic Boolean-vector requirement. |
 | `dataparallel_inference false` | Excludes the overlay from normal inference. |
+
+Concrete compiler IDs, feature tests, preprocessor macros, and probe sources belong
+to the backend capability registry, not extension source data.
 
 Use `vector::fixed` for the hardware fallback.
 

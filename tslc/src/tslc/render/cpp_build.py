@@ -7,18 +7,17 @@ from dataclasses import dataclass
 
 from tslc.backend.cpp_detection import CPP_PROFILE_DETECTION_KINDS
 from tslc.backend.cpp_compiler_capabilities import (
+    CppCompilerCapability,
     cpp_compiler_capability_cmake_probes,
     cpp_compiler_capability_compile_definitions,
+    cpp_extension_compiler_ids,
+    cpp_extension_header_group,
+    cpp_extensions_compiler_capabilities,
     used_cpp_compiler_capability_ids,
 )
-from tslc.backend.cpp_profile import (
-    cpp_compile_guard_condition,
-    cpp_header_group,
-)
-from tslc.backend.cpp_validation import resolve_cpp_compile_guards
+from tslc.backend.cpp_profile import cpp_compiler_capability_condition
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import BackendCompileGuard
 from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.compiler_assets import RenderAssets
 from tslc.output.verify_model import VerifyProfile, VerifyRunner
@@ -93,7 +92,9 @@ def cpp_verify_profile(
         compile_modes=profile.compile_modes,
         flags=cpp_flags(profile, capability),
         target=cpp_target(profile, capability),
-        compiler_role=backend.compiler_role,
+        compiler_role=(
+            profile.compiler_role_for_backend("cpp") or backend.compiler_role
+        ),
         cmake_system_name=backend.cmake_system_name,
         cmake_system_processor=backend.cmake_system_processor,
         pass_target_to_compiler=backend.pass_target_to_compiler,
@@ -149,12 +150,14 @@ def _cpp_cmakelists(
         for profile in profiles
         if profile.profile.auto_detect_gate is None
     )
-    fallback = (
-        "scalar"
-        if "scalar" in ungated_slugs
-        else ungated_slugs[0]
-        if ungated_slugs
-        else ""
+    declared_fallbacks = tuple(
+        slug(profile.profile.name)
+        for profile in profiles
+        if profile.profile.auto_detect_gate is None
+        and profile.profile.default_build_fallback
+    )
+    fallback = declared_fallbacks[0] if declared_fallbacks else (
+        ungated_slugs[0] if ungated_slugs else ""
     )
     auto_choices = _cpp_profile_auto_choices(profiles)
     capability_ids = used_cpp_compiler_capability_ids(profiles)
@@ -316,7 +319,7 @@ def _cpp_profile_header_groups(profile: EmittedProfile) -> tuple[str, ...]:
             {
                 group
                 for name, extension in profile.extensions.items()
-                if name in used and (group := cpp_header_group(extension)) is not None
+                if name in used and (group := cpp_extension_header_group(extension)) is not None
             }
         )
     )
@@ -331,8 +334,8 @@ def _cpp_header_group_compiler_ids(
             {
                 compiler_id
                 for extension in profile.extensions.values()
-                if cpp_header_group(extension) == header_group
-                for compiler_id in extension.metadata.backend["cpp"].compiler_ids
+                if cpp_extension_header_group(extension) == header_group
+                for compiler_id in cpp_extension_compiler_ids(extension)
             }
         )
     )
@@ -515,24 +518,24 @@ def _cpp_profile_detection_source(
     renderer = _CPP_DETECTION_RENDERERS.get(detection)
     if renderer is None:
         return None
-    guards = resolve_cpp_compile_guards(
+    guards = cpp_extensions_compiler_capabilities(
         tuple(
             extension_name
             for extension_name in used_extensions(
                 emitted_profile.specializations("cpp")
             )
-            if cpp_header_group(
+            if cpp_extension_header_group(
                 emitted_profile.extensions.get(extension_name)
             ) is None
         ),
         emitted_profile.extensions,
-    ).guards
+    )
     return renderer(profile, guards)
 
 
 def _x86_profile_detection_source(
     profile: MachineProfile,
-    guards: Sequence[BackendCompileGuard] = (),
+    guards: Sequence[CppCompilerCapability] = (),
 ) -> str:
     cpuid_probes = {
         feature: _X86_CPUID_PROBES[feature]
@@ -548,7 +551,7 @@ def _x86_profile_detection_source(
                 f'__builtin_cpu_supports("{profile.feature_spelling(feature, "cpp")}")'
             )
     if guards:
-        checks.append(cpp_compile_guard_condition(guards))
+        checks.append(cpp_compiler_capability_condition(guards))
     condition = " && ".join(checks) if checks else "1"
     target_condition = (
         "(defined(__x86_64__) || defined(__i386__)) "
@@ -607,11 +610,11 @@ def _x86_profile_detection_source(
 
 def _aarch64_profile_detection_source(
     profile: MachineProfile,
-    guards: Sequence[BackendCompileGuard] = (),
+    guards: Sequence[CppCompilerCapability] = (),
 ) -> str | None:
     if "sve" in profile.features:
         guard_condition = (
-            f" && {cpp_compile_guard_condition(guards)}" if guards else ""
+            f" && {cpp_compiler_capability_condition(guards)}" if guards else ""
         )
         return "\n".join(
             (

@@ -685,6 +685,26 @@ def test_value_full_corpus_avx2_rust_parity_inventory_is_explicit(
             "resize_up_zero",
             "resize_up_zero_si32_clang_v128_to_clang_v512_zero_clang",
         ),
+        (
+            "to_integral",
+            "to_integral_f64_clang_v128_bool_clang_boolean_edge",
+        ),
+        ("to_integral", "to_integral_f64_clang_v128_clang_edge"),
+        (
+            "to_integral",
+            "to_integral_ui8_clang_v512_bool_clang_boolean_wide_edge",
+        ),
+        ("to_integral", "to_integral_ui8_clang_v512_clang_wide_edge"),
+        (
+            "to_mask",
+            "to_mask_f64_clang_v128_bool_clang_boolean_padding_edge",
+        ),
+        ("to_mask", "to_mask_f64_clang_v128_clang_padding_edge"),
+        (
+            "to_mask",
+            "to_mask_ui8_clang_v512_bool_clang_boolean_wide_edge",
+        ),
+        ("to_mask", "to_mask_ui8_clang_v512_clang_wide_edge"),
     }
     assert all(
         len(entry.backend_statuses) == 1

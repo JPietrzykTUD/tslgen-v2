@@ -14,6 +14,8 @@ from dataclasses import dataclass
 
 from tslc.backend.cpp_compiler_capabilities import (
     cpp_compiler_capability_header_defaults,
+    cpp_extension_header_group,
+    cpp_extensions_compiler_capabilities,
     used_cpp_compiler_capability_ids,
 )
 from tslc.backend.cpp_profile import (
@@ -23,13 +25,11 @@ from tslc.backend.cpp_profile import (
     _cpp_native_registration,
     _cpp_registration,
     _cpp_sized_registration,
-    cpp_compile_guard_condition,
-    cpp_compile_guard_diagnostic,
+    cpp_compiler_capability_condition,
+    cpp_compiler_capability_diagnostic,
     cpp_extension_availability_condition,
-    cpp_header_group,
     cpp_profiles_support_algorithm,
 )
-from tslc.backend.cpp_validation import resolve_cpp_compile_guards
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
 from tslc.backend.target_capability import is_x86_register_extension
 from tslc.catalog.model import Extension
@@ -163,7 +163,7 @@ def cpp_project_render_model(
                     group
                     for profile in profiles
                     for extension in profile.extensions.values()
-                    if (group := cpp_header_group(extension)) is not None
+                    if (group := cpp_extension_header_group(extension)) is not None
                 }
             )
         ),
@@ -183,7 +183,7 @@ def _cpp_profile_model(emitted_profile: EmittedProfile) -> CppProfileRenderModel
         {
             group
             for extension in emitted_profile.extensions.values()
-            if (group := cpp_header_group(extension)) is not None
+            if (group := cpp_extension_header_group(extension)) is not None
         }
     )
     for header_group in header_groups:
@@ -236,6 +236,7 @@ def _cpp_base_header(
         guard=_cpp_profile_compile_guard(
             emitted_exts,
             emitted_profile.extensions,
+            header_group=None,
         ),
         smoke=_cpp_smoke_instantiations(emitted_profile, base),
     )
@@ -268,6 +269,7 @@ def _cpp_overlay_header(
         guard=_cpp_profile_compile_guard(
             used_extensions(grouped),
             emitted_profile.extensions,
+            header_group=header_group,
         ),
         smoke=_cpp_smoke_instantiations(emitted_profile, grouped),
     )
@@ -276,14 +278,22 @@ def _cpp_overlay_header(
 def _cpp_profile_compile_guard(
     emitted_exts: tuple[str, ...],
     extensions: Mapping[str, Extension],
+    *,
+    header_group: str | None,
 ) -> CppProfileCompileGuard | None:
-    guards = resolve_cpp_compile_guards(emitted_exts, extensions).guards
+    guards = tuple(
+        capability
+        for capability in cpp_extensions_compiler_capabilities(
+            emitted_exts, extensions
+        )
+        if capability.header_group == header_group
+    )
     if not guards:
         return None
     return CppProfileCompileGuard(
-        condition=cpp_compile_guard_condition(guards),
+        condition=cpp_compiler_capability_condition(guards),
         diagnostic="; ".join(
-            cpp_compile_guard_diagnostic(guard) for guard in guards
+            cpp_compiler_capability_diagnostic(guard) for guard in guards
         ),
     )
 
@@ -464,7 +474,7 @@ def _cpp_specializations_for_group(
         selected = tuple(
             specialization
             for specialization in specializations
-            if cpp_header_group(extensions.get(specialization.extension_name))
+            if cpp_extension_header_group(extensions.get(specialization.extension_name))
             == header_group
         )
         if selected:
