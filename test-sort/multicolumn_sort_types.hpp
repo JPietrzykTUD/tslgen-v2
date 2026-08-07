@@ -38,4 +38,9 @@ struct TslMultiColumnSortMetrics {
   // Times a worker woke on the pending-work deadline instead of a notification.
   // Non-zero means the starvation safeguard was actually needed.
   std::size_t idle_poll_wakeups = 0;
+  // Sealed discovery only: ranges reported whole to the run detector, and the
+  // rows they covered. `sealed_range_rows / sealed_ranges` is the mean scan
+  // range actually achieved, which the seal threshold only bounds from above.
+  std::size_t sealed_ranges = 0;
+  std::size_t sealed_range_rows = 0;
 };

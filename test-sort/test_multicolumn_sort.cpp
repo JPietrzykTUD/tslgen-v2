@@ -189,6 +189,63 @@ auto verify_parallel_case(
   return metrics;
 }
 
+// Sealed discovery. The lexicographic comparison is a sufficient oracle for run
+// decomposition: a missed run leaves the next column unsorted inside it, and a
+// duplicated run sorts a range twice, which a wrong-order check would catch.
+template <class Sorter, class DataType>
+auto verify_sealed_case(
+  columns_type<DataType> input,
+  std::vector<TslSortOrder> const & orders,
+  std::size_t worker_count,
+  std::size_t task_threshold,
+  std::size_t seal_threshold,
+  std::string const & label
+) -> TslMultiColumnSortMetrics {
+  auto expected = rows_from_columns(input);
+  std::sort(
+    expected.begin(),
+    expected.end(),
+    [&](auto const & left, auto const & right) {
+      return row_before(left, right, orders);
+    }
+  );
+
+  auto specs = column_specs(input, orders);
+  Sorter sorter(0x123456789abcdef0ULL);
+  TslMultiColumnSortMetrics metrics;
+  auto const row_count = input.empty() ? 0 : input.front().size();
+  sorter.sort_columns_sealed_parallel(
+    specs.data(),
+    specs.size(),
+    row_count,
+    worker_count,
+    task_threshold,
+    seal_threshold,
+    &metrics
+  );
+  require(rows_from_columns(input) == expected, label + ": sealed result differs");
+  if (row_count >= 2 && input.size() > 1) {
+    // Every row of a non-final column reaches the next column either through a
+    // pivot-equal band or through a sealed scan. Neither counter may exceed the
+    // row count of the column that produced it, and a scan that never happened
+    // means the whole range was published as bands.
+    require(
+      metrics.sealed_ranges == 0
+        || metrics.sealed_range_rows >= metrics.sealed_ranges * 2,
+      label + ": sealed ranges smaller than the minimum run length"
+    );
+    require(
+      metrics.rle_values_scanned == metrics.sealed_range_rows,
+      label + ": scanned values disagree with sealed range rows"
+    );
+    require(
+      metrics.partition_tasks_submitted <= metrics.tasks_submitted,
+      label + ": partition tasks exceed submitted tasks"
+    );
+  }
+  return metrics;
+}
+
 template <class Sorter, class DataType>
 void verify_active_key_case(
   std::vector<DataType> keys,
@@ -806,6 +863,117 @@ void test_u64_variants() {
 }
 
 template <class Sorter>
+void run_sealed_matrix(std::string const & name) {
+  auto const orders = std::vector<TslSortOrder>{
+    TslSortOrder::ASCENDING,
+    TslSortOrder::DESCENDING,
+    TslSortOrder::ASCENDING,
+    TslSortOrder::DESCENDING,
+  };
+  auto const leaf = Sorter::leaf_size_threshold();
+  // Seals spanning the clamp boundary, a mid-range value, the whole input, and
+  // more than the whole input: the last two must degenerate to one sealed range
+  // rather than fail.
+  std::vector<std::size_t> const seals{
+    1, leaf, leaf + 1, 257, 2048, 4096
+  };
+  for (auto const workers : {std::size_t{1}, std::size_t{2}, std::size_t{4}}) {
+    for (auto const threshold : {std::size_t{2}, std::size_t{100000}}) {
+      for (auto const seal : seals) {
+        verify_sealed_case<Sorter>(
+          make_random_columns<std::uint32_t>(4, 2048, 0x77ULL, 8),
+          orders,
+          workers,
+          threshold,
+          seal,
+          name + "/workers-" + std::to_string(workers)
+            + "/threshold-" + std::to_string(threshold)
+            + "/seal-" + std::to_string(seal)
+        );
+      }
+    }
+  }
+
+  // Cardinality extremes. All-equal keys make every range one pivot-equal band,
+  // so no scan should ever run; all-distinct keys make every range a seal.
+  auto all_equal = make_random_columns<std::uint32_t>(4, 2048, 0x88ULL, 0);
+  for (auto & column : all_equal) {
+    std::fill(column.begin(), column.end(), 7);
+  }
+  auto const equal_metrics = verify_sealed_case<Sorter>(
+    all_equal, orders, 4, 2, 257, name + "/all-equal"
+  );
+  require(
+    equal_metrics.direct_equal_bands >= 1,
+    name + "/all-equal: no pivot-equal band was published"
+  );
+
+  auto distinct = make_random_columns<std::uint32_t>(4, 2048, 0x99ULL, 0);
+  verify_sealed_case<Sorter>(distinct, orders, 4, 2, 257, name + "/all-distinct");
+
+  // Degenerate ranges.
+  verify_sealed_case<Sorter>(
+    make_random_columns<std::uint32_t>(2, 0, 0xA1ULL, 4), {
+      TslSortOrder::ASCENDING, TslSortOrder::ASCENDING
+    }, 2, 2, 257, name + "/empty"
+  );
+  verify_sealed_case<Sorter>(
+    make_random_columns<std::uint32_t>(2, 1, 0xA2ULL, 4), {
+      TslSortOrder::ASCENDING, TslSortOrder::ASCENDING
+    }, 2, 2, 257, name + "/single-row"
+  );
+  verify_sealed_case<Sorter>(
+    make_random_columns<std::uint32_t>(1, 4096, 0xA3ULL, 16), {
+      TslSortOrder::ASCENDING
+    }, 4, 2, 257, name + "/single-column"
+  );
+
+  // The design claim: a seal well below the row count must both distribute
+  // partitions and produce many scan ranges. Without this a silent degeneration
+  // to one serial seal would still pass every ordering check above.
+  auto const three_orders = std::vector<TslSortOrder>{
+    TslSortOrder::ASCENDING,
+    TslSortOrder::DESCENDING,
+    TslSortOrder::ASCENDING,
+  };
+  auto wide = make_random_columns<std::uint32_t>(3, 200000, 0xB1ULL, 512);
+  auto const wide_metrics = verify_sealed_case<Sorter>(
+    wide, three_orders, 4, 4096, 8192, name + "/distributed"
+  );
+  require(
+    wide_metrics.partition_tasks_submitted >= 2,
+    name + "/distributed: partitions were not offloaded to other workers"
+  );
+  require(
+    wide_metrics.sealed_ranges >= 2,
+    name + "/distributed: the range was not split into several sealed scans"
+  );
+  require(
+    wide_metrics.sealed_range_rows / wide_metrics.sealed_ranges > leaf,
+    name + "/distributed: mean sealed range collapsed to leaf size"
+  );
+
+  // A seal at or above the row count leaves exactly one sealed range and no
+  // partition offload: correct, just serial.
+  auto const two_orders = std::vector<TslSortOrder>{
+    TslSortOrder::ASCENDING,
+    TslSortOrder::DESCENDING,
+  };
+  auto whole = make_random_columns<std::uint32_t>(2, 4096, 0xB2ULL, 64);
+  auto const whole_metrics = verify_sealed_case<Sorter>(
+    whole, two_orders, 4, 100000, 1u << 20, name + "/seal-exceeds-input"
+  );
+  require(
+    whole_metrics.partition_tasks_submitted == 0,
+    name + "/seal-exceeds-input: partitions offloaded below the seal threshold"
+  );
+  require(
+    whole_metrics.sealed_ranges == 1,
+    name + "/seal-exceeds-input: expected exactly one sealed range"
+  );
+}
+
+template <class Sorter>
 void run_parallel_matrix(
   std::string const & name,
   TslRunDiscoveryKind discovery
@@ -1266,6 +1434,9 @@ int main() {
       "parallel/three-way/network/incremental",
       TslRunDiscoveryKind::INCREMENTAL
     );
+
+    run_sealed_matrix<ThreeWayInsertion>("sealed/three-way/insertion");
+    run_sealed_matrix<ThreeWayNetwork>("sealed/three-way/network");
 
     std::cout << "multi-column sort tests passed\n";
     return 0;

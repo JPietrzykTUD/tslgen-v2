@@ -55,6 +55,8 @@ ALGO_ORDER = [
     "deep_parallel_post_3way_net",
     "deep_parallel_incremental_3way_ins",
     "deep_parallel_incremental_3way_net",
+    "deep_parallel_sealed_3way_ins",
+    "deep_parallel_sealed_3way_net",
 ]
 OLD_ALGO_ALIASES = {
     "std_sort": "std_lex_argsort",
@@ -78,6 +80,7 @@ DIMENSIONS = [
     "workers",
     "threshold",
     "partitions",
+    "seal",
     "rle",
     "dsa_region",
     "dsa_slots",
@@ -95,15 +98,16 @@ DIMENSION_LABELS = {
     "workers": "workers",
     "threshold": "task threshold",
     "partitions": "partition threshold",
+    "seal": "sealed scan range",
     "rle": "equal-run detector",
     "dsa_region": "DSA region bytes",
     "dsa_slots": "DSA concurrent ranges",
     "dsa_depth": "DSA descriptors per range",
     "dsa_min_offload": "DSA min offload elements",
 }
-NUMERIC_X = ("lanes", "cols", "workers", "threshold", "partitions",
+NUMERIC_X = ("lanes", "cols", "workers", "threshold", "partitions", "seal",
              "dsa_region", "dsa_slots", "dsa_depth", "dsa_min_offload")
-OPTIONAL_NUMERIC_DIMENSIONS = {"lanes", "workers", "threshold", "partitions",
+OPTIONAL_NUMERIC_DIMENSIONS = {"lanes", "workers", "threshold", "partitions", "seal",
                                "dsa_region", "dsa_slots", "dsa_depth", "dsa_min_offload"}
 NOT_APPLICABLE = "na"
 # Categorical counterpart of the zeros in OPTIONAL_NUMERIC_DIMENSIONS: a row may
@@ -130,6 +134,8 @@ METRICS = {
     "rle_descriptors": "accelerator descriptors submitted",
     "rle_fired_blocks": "delta blocks reported by the accelerator",
     "rle_spans": "equal-run spans emitted",
+    "sealed_ranges": "sealed scan ranges reported",
+    "sealed_rows_mean": "mean rows per sealed scan range",
 }
 VS_STD = {"speedup_vs_std": 1.0, "improvement_pct": 0.0}
 BASELINE_KEYS = ["dtype", "dist", "order", "cols", "size"]
@@ -234,6 +240,7 @@ def parse_benchmarks(raw: dict) -> tuple[pd.DataFrame, dict]:
             workers=workers,
             threshold=threshold,
             partitions=partitions,
+            seal=_integer_value(dims.get("seal", 0)),
             # The baseline sorts an index vector with a tuple comparator and
             # detects no equal runs at all, so no detector value applies to it;
             # marking it not-applicable is what keeps it visible under a pinned
@@ -266,6 +273,8 @@ def parse_benchmarks(raw: dict) -> tuple[pd.DataFrame, dict]:
             rle_descriptors=_counter(b, "rle_descriptors"),
             rle_fired_blocks=_counter(b, "rle_fired_blocks"),
             rle_spans=_counter(b, "rle_spans"),
+            sealed_ranges=_counter(b, "sealed_ranges"),
+            sealed_rows_mean=_counter(b, "sealed_rows_mean"),
         ))
     return add_thread_scaling(add_speedup(pd.DataFrame(rows))), caches
 
@@ -516,6 +525,7 @@ PRESETS = {
     # faceting by algo would move it to a panel of its own and defeat the
     # comparison it exists to provide.
     "Equal-run detector comparison": dict(x="rle", color="algo", facet="dist", chart="bar"),
+    "Seal-size scaling": dict(x="seal", color="rle", facet="algo", chart="line"),
     "DSA slot scaling": dict(x="dsa_slots", color="rle", facet="algo", chart="line"),
     "DSA region-size scaling": dict(x="dsa_region", color="rle", facet="algo", chart="line"),
     "Improvement vs std::sort": dict(x="size", color="algo", facet="dist", chart="line", metric="speedup_vs_std"),

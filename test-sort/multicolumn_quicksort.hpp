@@ -709,7 +709,271 @@ class TslMultiColumnQuickSorter {
     std::atomic<std::size_t> direct_equal_bands{0};
     std::atomic<std::size_t> direct_equal_band_rows{0};
     std::atomic<std::size_t> partition_tasks{0};
+    std::atomic<std::size_t> sealed_ranges{0};
+    std::atomic<std::size_t> sealed_range_rows{0};
   };
+
+  // Sealed post-sort discovery.
+  //
+  // Two properties of three-way partitioning carry this:
+  //
+  //   * a pivot-equal band is a maximal equal run by construction, so it is
+  //     published without ever being scanned;
+  //   * every other subrange sits strictly between two pivot values, so no equal
+  //     run can cross its bounds. Scanning such a subrange in isolation yields
+  //     exactly the runs a scan of the whole range would. This is the same
+  //     property `process_parallel_task` already relies on to offload partitions
+  //     under incremental discovery, used here at a coarser reporting grain.
+  //
+  // The second property lets the scan granularity be chosen while descending,
+  // which needs no synchronization at all. Partition and offer both sides out as
+  // tasks while the range exceeds `seal_threshold`; once it does not, sort that
+  // range and report it whole. The worker that scans a range is the worker that
+  // sorted it, so the range is provably complete, contiguous and monotonic
+  // without a join or completion counter, and no worker can ever scan another
+  // worker's unfinished output.
+  //
+  // Choosing the grain on the way down costs size variance: `seal_threshold`
+  // bounds a sealed range from above but not below, because a range of
+  // `seal_threshold + 1` may split one element off. Set the threshold well above
+  // the detector's offload floor and read `sealed_range_rows / sealed_ranges` to
+  // see what was achieved.
+  template <
+    TslSortOrder Order,
+    class EqualBandSink,
+    class SealSink,
+    class RangeSink
+  >
+  static void sort_sealed_impl(
+    DataType * keys,
+    column_pointers columns,
+    std::size_t payload_count,
+    std::size_t count,
+    TslLazyPivotRng & rng,
+    std::size_t absolute_begin,
+    std::size_t seal_threshold,
+    EqualBandSink & equal_band_sink,
+    SealSink & seal_sink,
+    RangeSink & range_sink
+  ) {
+    while (count > seal_threshold) {
+      auto const pivot_value =
+        get_pivot<Order>(keys, columns, payload_count, count, rng.get());
+      auto const before_end = partition<Order, TslPartitionMode::BEFORE_PIVOT>(
+        keys,
+        columns,
+        payload_count,
+        count,
+        pivot_value
+      );
+      column_pointers middle_columns{};
+      for (std::size_t column = 0; column < payload_count; ++column) {
+        middle_columns[column] = columns[column] + before_end;
+      }
+      auto const equal_pivot_position = before_end
+        + partition<Order, TslPartitionMode::EQUAL_TO>(
+          keys + before_end,
+          middle_columns,
+          payload_count,
+          count - before_end,
+          pivot_value
+        );
+      swap_all(keys, columns, payload_count, equal_pivot_position, count - 1);
+
+      auto const left_count = before_end;
+      auto const right_begin = equal_pivot_position + 1;
+      auto const right_count = count - right_begin;
+
+      // Already a maximal run: publish it, never scan it.
+      equal_band_sink(absolute_begin + before_end, absolute_begin + right_begin);
+
+      column_pointers right_columns{};
+      for (std::size_t column = 0; column < payload_count; ++column) {
+        right_columns[column] = columns[column] + right_begin;
+      }
+      auto * const right_keys = keys + right_begin;
+      if (left_count < right_count) {
+        if (!range_sink(absolute_begin, absolute_begin + left_count)) {
+          sort_sealed_impl<Order>(
+            keys,
+            columns,
+            payload_count,
+            left_count,
+            rng,
+            absolute_begin,
+            seal_threshold,
+            equal_band_sink,
+            seal_sink,
+            range_sink
+          );
+        }
+        keys = right_keys;
+        columns = right_columns;
+        count = right_count;
+        absolute_begin += right_begin;
+      } else {
+        if (!range_sink(absolute_begin + right_begin, absolute_begin + count)) {
+          sort_sealed_impl<Order>(
+            right_keys,
+            right_columns,
+            payload_count,
+            right_count,
+            rng,
+            absolute_begin + right_begin,
+            seal_threshold,
+            equal_band_sink,
+            seal_sink,
+            range_sink
+          );
+        }
+        count = left_count;
+      }
+    }
+
+    if (count == 0) {
+      return;
+    }
+    // Sealed: reuse the existing sort with reporting and range offloading off,
+    // then report this range exactly once. Bands found below the seal are not
+    // published separately -- the single scan below rediscovers them, and that
+    // scan is the unit this target exists to hand to an accelerator.
+    auto no_equal_band = [](std::size_t, std::size_t) {};
+    auto no_leaf = [](std::size_t, std::size_t) {};
+    auto keep_local = keep_range_local();
+    sort_impl<Order, false>(
+      keys,
+      columns,
+      payload_count,
+      count,
+      rng,
+      absolute_begin,
+      no_equal_band,
+      no_leaf,
+      keep_local
+    );
+    seal_sink(absolute_begin, absolute_begin + count);
+  }
+
+  template <class Schedule, class Offload, class DetectRuns, class MakeEmit>
+  void process_sealed_task(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    TslColumnSortTask task,
+    std::size_t seal_threshold,
+    Schedule & schedule,
+    Offload & offload,
+    DetectRuns & detect_runs,
+    MakeEmit & make_emit,
+    concurrent_sort_metrics * metrics
+  ) const {
+    if (task.end - task.begin < 2 || task.column >= column_count) {
+      return;
+    }
+
+    auto const payload_count = column_count - task.column - 1;
+    auto const payloads = payload_columns_for(
+      columns,
+      column_count,
+      task.column,
+      task.begin
+    );
+    auto rng = TslLazyPivotRng(task_seed(task.column, task.begin, task.end));
+    auto offload_range = [&](std::size_t range_begin, std::size_t range_end) {
+      if (!offload(TslColumnSortTask{task.column, range_begin, range_end})) {
+        return false;
+      }
+      if (metrics != nullptr) {
+        metrics->partition_tasks.fetch_add(1, std::memory_order_relaxed);
+      }
+      return true;
+    };
+
+    // No column follows the last one, so it needs no discovery at all and its
+    // partitions may be split all the way down to the leaf.
+    if (task.column + 1 == column_count) {
+      auto no_equal_band = [](std::size_t, std::size_t) {};
+      auto no_leaf = [](std::size_t, std::size_t) {};
+      sort_active_range<false>(
+        columns[task.column].data + task.begin,
+        payloads,
+        payload_count,
+        task.end - task.begin,
+        columns[task.column].order,
+        rng,
+        task.begin,
+        no_equal_band,
+        no_leaf,
+        offload_range
+      );
+      return;
+    }
+
+    auto on_equal_band = [&](std::size_t band_begin, std::size_t band_end) {
+      if (band_end - band_begin < 2) {
+        return;
+      }
+      if (metrics != nullptr) {
+        metrics->direct_equal_bands.fetch_add(1, std::memory_order_relaxed);
+        metrics->direct_equal_band_rows.fetch_add(
+          band_end - band_begin,
+          std::memory_order_relaxed
+        );
+      }
+      schedule(TslColumnSortTask{task.column + 1, band_begin, band_end});
+    };
+    auto on_seal = [&](std::size_t seal_begin, std::size_t seal_end) {
+      if (seal_end - seal_begin < 2) {
+        return;
+      }
+      if (metrics != nullptr) {
+        metrics->sealed_ranges.fetch_add(1, std::memory_order_relaxed);
+        metrics->sealed_range_rows.fetch_add(
+          seal_end - seal_begin,
+          std::memory_order_relaxed
+        );
+        metrics->rle_values_scanned.fetch_add(
+          seal_end - seal_begin,
+          std::memory_order_relaxed
+        );
+      }
+      // make_emit, not a [&] lambda: an asynchronous detector retains this
+      // callable past the end of this task, so it must own what it needs.
+      detect_runs(
+        columns[task.column].data,
+        seal_begin,
+        seal_end,
+        make_emit(task.column + 1)
+      );
+    };
+
+    if (columns[task.column].order == TslSortOrder::ASCENDING) {
+      sort_sealed_impl<TslSortOrder::ASCENDING>(
+        columns[task.column].data + task.begin,
+        payloads,
+        payload_count,
+        task.end - task.begin,
+        rng,
+        task.begin,
+        seal_threshold,
+        on_equal_band,
+        on_seal,
+        offload_range
+      );
+    } else {
+      sort_sealed_impl<TslSortOrder::DESCENDING>(
+        columns[task.column].data + task.begin,
+        payloads,
+        payload_count,
+        task.end - task.begin,
+        rng,
+        task.begin,
+        seal_threshold,
+        on_equal_band,
+        on_seal,
+        offload_range
+      );
+    }
+  }
 
   template <
     TslRunDiscoveryKind Discovery,
@@ -1224,6 +1488,141 @@ class TslMultiColumnQuickSorter {
         algorithm_metrics.direct_equal_band_rows.load(std::memory_order_relaxed);
       metrics->partition_tasks_submitted =
         algorithm_metrics.partition_tasks.load(std::memory_order_relaxed);
+      metrics->tasks_submitted = task_metrics.tasks_submitted;
+      metrics->tasks_executed_inline = task_metrics.tasks_executed_inline;
+      metrics->max_outstanding_tasks = task_metrics.max_outstanding_tasks;
+      metrics->idle_poll_wakeups = task_metrics.idle_poll_wakeups;
+    }
+  }
+
+  // Sealed post-sort discovery: large scan ranges and partition parallelism at
+  // once. See sort_sealed_impl for why a subrange may be scanned in isolation.
+  //
+  // Deliberately not a `TslRunDiscoveryKind`: it dispatches to its own recursion,
+  // so routing it through the existing discovery switch would put a third policy
+  // inside code that two policies already share.
+  //
+  // `seal_threshold` is the range size at which a worker stops handing partitions
+  // out and instead sorts and scans the range itself. It replaces
+  // `partition_threshold`, which has no meaning here: every partition above the
+  // seal is offloaded, and no partition below it ever is.
+  void sort_columns_sealed_parallel(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    std::size_t row_count,
+    std::size_t worker_count,
+    std::size_t task_threshold,
+    std::size_t seal_threshold,
+    TslMultiColumnSortMetrics * metrics = nullptr
+  ) const {
+    scalar_run_detector detector;
+    sort_columns_sealed_parallel(
+      columns, column_count, row_count, worker_count, task_threshold,
+      seal_threshold, detector, metrics
+    );
+  }
+
+  template <class DetectRuns>
+  void sort_columns_sealed_parallel(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    std::size_t row_count,
+    std::size_t worker_count,
+    std::size_t task_threshold,
+    std::size_t seal_threshold,
+    DetectRuns & detect_runs,
+    TslMultiColumnSortMetrics * metrics = nullptr
+  ) const {
+    static_assert(
+      PartitionKind == TslPartitionKind::THREE_WAY,
+      "sealed discovery requires three-way partitioning: two-way splits equal "
+      "elements across both sides of a pivot, so an equal run can cross a "
+      "partition boundary and a subrange is not run-closed"
+    );
+    validate_columns(columns, column_count, row_count);
+    if (metrics != nullptr) {
+      *metrics = {};
+    }
+    if (column_count == 0 || row_count < 2) {
+      return;
+    }
+    if (worker_count == 0) {
+      throw std::invalid_argument("parallel sort requires at least one worker");
+    }
+    task_threshold = std::max<std::size_t>(task_threshold, 2);
+    // A range at or below the leaf threshold is never partitioned, so a seal at
+    // or below it would make every sealed range one leaf and reproduce the
+    // fragmentation this target exists to avoid.
+    seal_threshold = std::max(seal_threshold, leaf_threshold + 1);
+
+    concurrent_sort_metrics algorithm_metrics;
+    auto worker = [&](TslColumnSortTask const & task, auto & executor) {
+      auto schedule = [&](TslColumnSortTask child) {
+        if (child.end - child.begin < task_threshold) {
+          executor.run_inline(child);
+        } else {
+          executor.submit(std::move(child));
+        }
+      };
+      // A partition below the seal threshold is one sealed range's worth of work
+      // and is still cache-warm from the partition pass that just produced it, so
+      // it is declined and the caller's own recursion seals it. Anything at or
+      // above the threshold will descend further and is worth distributing.
+      auto offload = [&, seal_threshold](TslColumnSortTask child) {
+        if (child.end - child.begin < seal_threshold) {
+          return false;
+        }
+        executor.submit(std::move(child));
+        return true;
+      };
+      auto make_emit = [&executor, task_threshold](std::size_t next_column) {
+        return [target = &executor, task_threshold, next_column](TslRunSpan span) {
+          TslColumnSortTask child{next_column, span.begin, span.end};
+          if (child.end - child.begin < task_threshold) {
+            target->run_inline(child);
+          } else {
+            target->submit(std::move(child));
+          }
+        };
+      };
+      process_sealed_task(
+        columns,
+        column_count,
+        task,
+        seal_threshold,
+        schedule,
+        offload,
+        detect_runs,
+        make_emit,
+        metrics != nullptr ? &algorithm_metrics : nullptr
+      );
+    };
+
+    TslTaskExecutor<TslColumnSortTask, decltype(worker)> executor(
+      worker_count,
+      worker
+    );
+    if constexpr (tsl_detector_wants_executor<DetectRuns>::value) {
+      detect_runs.bind(executor);
+      executor.set_poller([&detect_runs] { detect_runs.poll(); });
+    }
+    executor.submit(TslColumnSortTask{0, 0, row_count});
+    executor.wait();
+
+    if (metrics != nullptr) {
+      auto const task_metrics = executor.metrics();
+      metrics->rle_values_scanned =
+        algorithm_metrics.rle_values_scanned.load(std::memory_order_relaxed);
+      metrics->direct_equal_bands =
+        algorithm_metrics.direct_equal_bands.load(std::memory_order_relaxed);
+      metrics->direct_equal_band_rows =
+        algorithm_metrics.direct_equal_band_rows.load(std::memory_order_relaxed);
+      metrics->partition_tasks_submitted =
+        algorithm_metrics.partition_tasks.load(std::memory_order_relaxed);
+      metrics->sealed_ranges =
+        algorithm_metrics.sealed_ranges.load(std::memory_order_relaxed);
+      metrics->sealed_range_rows =
+        algorithm_metrics.sealed_range_rows.load(std::memory_order_relaxed);
       metrics->tasks_submitted = task_metrics.tasks_submitted;
       metrics->tasks_executed_inline = task_metrics.tasks_executed_inline;
       metrics->max_outstanding_tasks = task_metrics.max_outstanding_tasks;

@@ -34,10 +34,31 @@
 //   COSORT_MIN_OFFLOAD  min elements to offload               (default 4096)
 //   COSORT_DSA_SLOTS    concurrent offloaded ranges           (default 16)
 //   COSORT_DSA_DEPTH    descriptors in flight per range       (default 4)
+//   COSORT_SEAL         sealed-discovery scan range size      (default 65536)
 //   COSORT_RLE          detector backends to register, by name:
 //                       scalar,dml_sw,dsa_hw,dml_sw_async,dsa_hw_async
 //                       (default: all five)
-//   COSORT_DISCOVERY    post,incremental                      (default both)
+//   COSORT_DISCOVERY    post,incremental,sealed               (default all three)
+//   COSORT_TYPES        u32,u64                               (default both)
+//   COSORT_LANES        fixed SIMD lane counts                (default 2,4,8,16)
+//
+// Element type and lane count are compile-time specializations, registered the
+// same way benchmark_multicolumn_gbench's register_lane does: u32 at 4/8/16 lanes
+// and u64 at 2/4/8, i.e. SSE/AVX2/AVX512 for each. COSORT_LANES filters that set
+// per type, so a lane count one type does not provide is skipped rather than an
+// error -- note that 8 lanes means AVX2 for u32 but AVX512 for u64.
+//
+// Size levels describe bytes *per column*, so at one label u64 gets half the rows
+// of u32. An explicit COSORT_ROWS is taken literally and doubles u64's footprint.
+//
+// The three discovery modes differ in what the detector ever sees. `post` scans
+// one whole column per range but cannot offload partitions, so it is effectively
+// serial. `incremental` offloads partitions but reports leaf-sized ranges, which
+// fall below COSORT_MIN_OFFLOAD and never reach the device. `sealed` does both:
+// partitions are distributed and each is scanned whole at COSORT_SEAL grain.
+// COSORT_SEAL bounds a scan range from above only -- read `sealed_rows_mean` for
+// what was achieved, and note that it governs the first column, since deeper
+// columns arrive as ranges already smaller than the threshold.
 //
 // Scratch memory is slots * depth * 1.25 * region_bytes per detector, so a large
 // COSORT_DSA_SLOTS with 512 KiB regions allocates hundreds of MiB. Raise slots
@@ -65,9 +86,18 @@ extern char ** environ;
 
 namespace {
 
-using DataType = std::uint32_t;
-using Sorter = TslMultiColumnQuickSorter<DataType, TslPartitionKind::THREE_WAY, TslLeafKind::INSERTION>;
-using SorterSimd = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, DataType>;
+// Element type and SIMD width are template parameters, so every (type, lanes)
+// pair is its own instantiation -- exactly how benchmark_multicolumn_gbench's
+// register_lane works. `fixed<N>` selects the extension providing N lanes for
+// that type: u32 at 4/8/16 is SSE/AVX2/AVX512, u64 at 2/4/8 the same three.
+template <class DataType, std::size_t Lanes>
+using sorter_for = TslMultiColumnQuickSorter<
+  DataType,
+  TslPartitionKind::THREE_WAY,
+  TslLeafKind::INSERTION,
+  16,
+  tsl::dataparallel::simd_for_t<tsl::dataparallel::fixed<Lanes>, DataType>
+>;
 
 // Parses a comma-separated axis: "1,2,3" is three values, not one combined
 // value. Empty tokens are ignored. Matches parse_numeric_list in
@@ -216,6 +246,10 @@ struct config {
   std::size_t min_offload = 4096;
   std::size_t dsa_slots = 16;
   std::size_t dsa_depth = 4;
+  // Sealed discovery only. 65536 u32 elements is 256 KiB, i.e. one DSA region,
+  // and leaves ~240 sealed ranges over a 16M-row column -- enough independent
+  // scans for a 12-worker pool. Ignored by post and incremental discovery.
+  std::size_t seal = 65536;
 
   // 4096 distinct values per column is exactly the main sweep's `low_entropy`
   // shape, so keep the label identical when it matches and be explicit otherwise.
@@ -239,12 +273,22 @@ struct matrix {
   std::vector<std::size_t> min_offload = env_list("COSORT_MIN_OFFLOAD", {4096});
   std::vector<std::size_t> dsa_slots = env_list("COSORT_DSA_SLOTS", {16});
   std::vector<std::size_t> dsa_depth = env_list("COSORT_DSA_DEPTH", {4});
+  std::vector<std::size_t> seal = env_list("COSORT_SEAL", {65536});
   std::vector<std::string> backends =
     parse_text_list("COSORT_RLE", {"scalar", "dml_sw", "dsa_hw", "dml_sw_async", "dsa_hw_async"});
   std::vector<std::string> discovery =
-    parse_text_list("COSORT_DISCOVERY", {"post", "incremental"});
+    parse_text_list("COSORT_DISCOVERY", {"post", "incremental", "sealed"});
+  std::vector<std::string> types = parse_text_list("COSORT_TYPES", {"u32", "u64"});
+  // Lane counts are per type: 8 is AVX2 for u32 but AVX512 for u64. The union of
+  // both types' valid widths is the default, and each type keeps only its own.
+  std::vector<std::size_t> lanes = env_list("COSORT_LANES", {2, 4, 8, 16});
 };
 
+// Which recursion runs. `sealed` is not a TslRunDiscoveryKind: it dispatches to
+// its own entry point, so it cannot be folded into that enum.
+enum class cosort_algorithm { POST, INCREMENTAL, SEALED };
+
+template <class DataType>
 class dataset {
   std::vector<std::vector<DataType>> pristine_;
   std::vector<std::vector<DataType>> work_;
@@ -288,6 +332,7 @@ class dataset {
 
 // Complete lexicographic row comparator, matching the main sweep's baseline so
 // the two are the same measurement.
+template <class DataType>
 auto row_before(
   std::vector<std::vector<DataType>> const & columns,
   std::size_t left,
@@ -300,6 +345,37 @@ auto row_before(
   return false;
 }
 
+// Single place that maps an algorithm choice onto a sorter call, so the
+// synchronous and asynchronous benchmark bodies cannot drift apart.
+// `specs` is passed in rather than built here: building it allocates, and every
+// caller builds it while timing is paused.
+template <class DataType, std::size_t Lanes, class Detector>
+void run_sort(
+  sorter_for<DataType, Lanes> const & sorter,
+  std::vector<TslSortColumn<DataType>> & specs,
+  config const & cfg,
+  cosort_algorithm algorithm,
+  Detector & detector,
+  TslMultiColumnSortMetrics * metrics
+) {
+  if (algorithm == cosort_algorithm::SEALED) {
+    sorter.sort_columns_sealed_parallel(
+      specs.data(), specs.size(), cfg.rows, cfg.workers,
+      cfg.task_threshold, cfg.seal, detector, metrics
+    );
+    return;
+  }
+  sorter.sort_columns_parallel(
+    specs.data(), specs.size(), cfg.rows, cfg.workers,
+    cfg.task_threshold, cfg.partition_threshold,
+    algorithm == cosort_algorithm::INCREMENTAL
+      ? TslRunDiscoveryKind::INCREMENTAL
+      : TslRunDiscoveryKind::POST_SORT,
+    detector, metrics
+  );
+}
+
+template <class DataType>
 void tag(benchmark::State & state, config const & cfg,
          TslMultiColumnSortMetrics const & sort_metrics,
          TslDsaRunDetectorMetrics const & rle_metrics) {
@@ -326,6 +402,13 @@ void tag(benchmark::State & state, config const & cfg,
   state.counters["partition_tasks"] = Counter(double(sort_metrics.partition_tasks_submitted));
   state.counters["idle_poll_wakeups"] = Counter(double(sort_metrics.idle_poll_wakeups));
 
+  // Sealed discovery: zero on the other two paths. `sealed_rows_mean` is what the
+  // seal threshold actually achieved, which it only bounds from above.
+  state.counters["sealed_ranges"] = Counter(double(sort_metrics.sealed_ranges));
+  state.counters["sealed_rows_mean"] = Counter(
+    sort_metrics.sealed_ranges == 0 ? 0.0
+      : double(sort_metrics.sealed_range_rows) / double(sort_metrics.sealed_ranges));
+
   // Detector-specific counters.
   state.counters["rle_ranges"] = Counter(double(rle_metrics.ranges));
   state.counters["rle_elements"] = Counter(double(rle_metrics.elements));
@@ -343,9 +426,10 @@ void tag(benchmark::State & state, config const & cfg,
 
 // Asynchronous variant: the detector hands each range to the device and returns,
 // so the worker goes back to sorting. No thread waits on the accelerator.
-void run_async(benchmark::State & state, config const & cfg, TslRleBackend backend, TslRunDiscoveryKind discovery) {
-  dataset data(cfg);
-  Sorter sorter(0xC0FFEEu);
+template <class DataType, std::size_t Lanes>
+void run_async(benchmark::State & state, config const & cfg, TslRleBackend backend, cosort_algorithm algorithm) {
+  dataset<DataType> data(cfg);
+  sorter_for<DataType, Lanes> sorter(0xC0FFEEu);
 
   TslMultiColumnSortMetrics sort_metrics{};
   TslDsaAsyncMetrics async_metrics{};
@@ -359,10 +443,7 @@ void run_async(benchmark::State & state, config const & cfg, TslRleBackend backe
     );
     state.ResumeTiming();
 
-    sorter.sort_columns_parallel(
-      specs.data(), specs.size(), cfg.rows, cfg.workers,
-      cfg.task_threshold, cfg.partition_threshold, discovery, detector, &sort_metrics
-    );
+    run_sort<DataType, Lanes>(sorter, specs, cfg, algorithm, detector, &sort_metrics);
 
     state.PauseTiming();
     async_metrics = detector.metrics();
@@ -382,7 +463,7 @@ void run_async(benchmark::State & state, config const & cfg, TslRleBackend backe
   as_sync.fired_blocks = async_metrics.fired_blocks;
   as_sync.fallback_small = async_metrics.fallback_small;
   as_sync.spans_emitted = async_metrics.spans_emitted;
-  tag(state, cfg, sort_metrics, as_sync);
+  tag<DataType>(state, cfg, sort_metrics, as_sync);
   state.counters["rle_async_jobs"] = benchmark::Counter(double(async_metrics.offloaded_ranges));
   state.counters["rle_fallback_no_slot"] = benchmark::Counter(double(async_metrics.fallback_no_slot));
   state.counters["rle_poll_calls"] = benchmark::Counter(double(async_metrics.poll_calls));
@@ -395,8 +476,9 @@ void run_async(benchmark::State & state, config const & cfg, TslRleBackend backe
 // the `speedup_vs_std` denominator the visualizer needs, and BASELINE_KEYS
 // (dtype, dist, order, cols, size) deliberately excludes workers and rle, so
 // one baseline row serves every detector and worker count at that shape.
+template <class DataType>
 void run_std_baseline(benchmark::State & state, config const & cfg) {
-  dataset data(cfg);
+  dataset<DataType> data(cfg);
   std::vector<std::uint32_t> indices(cfg.rows);
   std::vector<DataType> gather(cfg.rows);
 
@@ -424,12 +506,13 @@ void run_std_baseline(benchmark::State & state, config const & cfg) {
     state.SkipWithError("std argsort produced lexicographically unsorted output");
     return;
   }
-  tag(state, cfg, TslMultiColumnSortMetrics{}, TslDsaRunDetectorMetrics{});
+  tag<DataType>(state, cfg, TslMultiColumnSortMetrics{}, TslDsaRunDetectorMetrics{});
 }
 
-void run(benchmark::State & state, config const & cfg, TslRleBackend backend, TslRunDiscoveryKind discovery) {
-  dataset data(cfg);
-  Sorter sorter(0xC0FFEEu);
+template <class DataType, std::size_t Lanes>
+void run(benchmark::State & state, config const & cfg, TslRleBackend backend, cosort_algorithm algorithm) {
+  dataset<DataType> data(cfg);
+  sorter_for<DataType, Lanes> sorter(0xC0FFEEu);
 
   TslMultiColumnSortMetrics sort_metrics{};
   TslDsaRunDetectorMetrics rle_metrics{};
@@ -442,10 +525,7 @@ void run(benchmark::State & state, config const & cfg, TslRleBackend backend, Ts
     TslDsaDetectorFleet<DataType> fleet(backend, cfg.workers, cfg.region_bytes, cfg.min_offload);
     state.ResumeTiming();
 
-    sorter.sort_columns_parallel(
-      specs.data(), specs.size(), cfg.rows, cfg.workers,
-      cfg.task_threshold, cfg.partition_threshold, discovery, fleet, &sort_metrics
-    );
+    run_sort<DataType, Lanes>(sorter, specs, cfg, algorithm, fleet, &sort_metrics);
 
     state.PauseTiming();
     rle_metrics = fleet.aggregate_metrics();
@@ -456,7 +536,7 @@ void run(benchmark::State & state, config const & cfg, TslRleBackend backend, Ts
     state.SkipWithError("lexicographically unsorted output");
     return;
   }
-  tag(state, cfg, sort_metrics, rle_metrics);
+  tag<DataType>(state, cfg, sort_metrics, rle_metrics);
 }
 
 // Full dimension path so every axis the visualizer reads is populated, plus the
@@ -464,19 +544,27 @@ void run(benchmark::State & state, config const & cfg, TslRleBackend backend, Ts
 // dimension, so scalar/sync/async are directly comparable on one axis.
 auto benchmark_name(
   char const * algo,
+  char const * type_name,
+  std::size_t lanes,
   config const & cfg,
+  cosort_algorithm algorithm,
   std::string const & backend_name
 ) -> std::string {
+  auto const sealed = algorithm == cosort_algorithm::SEALED;
+  // Sealed discovery has no partition threshold and the other two have no seal,
+  // so each emits zero for the knob it does not own. The visualizer already reads
+  // zero on a numeric dimension as "not applicable", which keeps rows joinable.
   return std::string(algo)
-    + "/u32"
-    + "/lanes=" + std::to_string(SorterSimd::lane_count_v)
+    + "/" + type_name
+    + "/lanes=" + std::to_string(lanes)
     + "/dist=" + cfg.dist_name()
     + "/order=asc"
     + "/cols=" + std::to_string(cfg.columns)
     + "/size=" + cfg.size_name
     + "/workers=" + std::to_string(cfg.workers)
     + "/threshold=" + std::to_string(cfg.task_threshold)
-    + "/partitions=" + std::to_string(cfg.partition_threshold)
+    + "/partitions=" + std::to_string(sealed ? 0 : cfg.partition_threshold)
+    + "/seal=" + std::to_string(sealed ? cfg.seal : 0)
     + "/dsa_region=" + std::to_string(cfg.region_bytes)
     + "/dsa_slots=" + std::to_string(cfg.dsa_slots)
     + "/dsa_depth=" + std::to_string(cfg.dsa_depth)
@@ -499,12 +587,15 @@ auto parse_backend(std::string const & name) -> backend_choice {
   throw std::invalid_argument("unknown COSORT_RLE backend: " + name);
 }
 
-auto parse_discovery(std::string const & name) -> std::pair<char const *, TslRunDiscoveryKind> {
+auto parse_discovery(std::string const & name) -> std::pair<char const *, cosort_algorithm> {
   if (name == "post") {
-    return {"deep_parallel_post_3way_ins", TslRunDiscoveryKind::POST_SORT};
+    return {"deep_parallel_post_3way_ins", cosort_algorithm::POST};
   }
   if (name == "incremental") {
-    return {"deep_parallel_incremental_3way_ins", TslRunDiscoveryKind::INCREMENTAL};
+    return {"deep_parallel_incremental_3way_ins", cosort_algorithm::INCREMENTAL};
+  }
+  if (name == "sealed") {
+    return {"deep_parallel_sealed_3way_ins", cosort_algorithm::SEALED};
   }
   throw std::invalid_argument("unknown COSORT_DISCOVERY value: " + name);
 }
@@ -519,7 +610,7 @@ void warn_about_unused_environment() {
     "COSORT_TASK_THRESHOLD", "COSORT_PARTITION_THRESHOLD",
     "COSORT_REGION_BYTES", "COSORT_MIN_OFFLOAD",
     "COSORT_DSA_SLOTS", "COSORT_DSA_DEPTH", "COSORT_RLE", "COSORT_DISCOVERY",
-    "COSORT_BASELINE",
+    "COSORT_BASELINE", "COSORT_SEAL", "COSORT_TYPES", "COSORT_LANES",
   };
   for (char ** entry = environ; *entry != nullptr; ++entry) {
     std::string const text{*entry};
@@ -551,38 +642,53 @@ void warn_about_unused_environment() {
   }
 }
 
-void register_all() {
-  warn_about_unused_environment();
-  matrix const axes;
-  auto const cache_levels = size_levels(read_caches());
+// Rows per column for one element type. Size levels describe bytes *per column*,
+// so u64 gets half the rows of u32 at the same label -- the same semantics as
+// make_size_levels in the main benchmark. An explicit COSORT_ROWS is taken
+// literally, which does mean equal rows and double the bytes for u64.
+struct size_point {
+  std::size_t rows;
+  std::string name;
+};
 
-  // Rows either come from an explicit COSORT_ROWS list or from size levels.
-  struct size_point {
-    std::size_t rows;
-    std::string name;
-  };
+template <class DataType>
+auto size_points(matrix const & axes, std::vector<size_level> const & cache_levels)
+  -> std::vector<size_point> {
   std::vector<size_point> sizes;
   if (!axes.rows.empty()) {
     for (auto rows : axes.rows) {
       sizes.push_back({rows, "custom" + std::to_string(rows)});
     }
-  } else {
-    for (auto level : axes.size_levels) {
-      auto const clamped = std::min<std::size_t>(level, cache_levels.size() - 1);
-      sizes.push_back({
-        std::size_t(cache_levels[clamped].per_column_bytes / sizeof(DataType)),
-        cache_levels[clamped].name
-      });
-    }
+    return sizes;
   }
+  for (auto level : axes.size_levels) {
+    auto const clamped = std::min<std::size_t>(level, cache_levels.size() - 1);
+    sizes.push_back({
+      std::size_t(cache_levels[clamped].per_column_bytes / sizeof(DataType)),
+      cache_levels[clamped].name
+    });
+  }
+  return sizes;
+}
 
+// One scalar reference per (type, shape). Lanes-independent, so it is registered
+// once per requested element type rather than per lane count -- tying it to a
+// particular lane count would drop it whenever that count is not requested.
+// Name carries lanes=na and no worker/threshold/partition/dsa/rle segments,
+// matching how the main sweep registers std_lex_argsort, so `speedup_vs_std`
+// joins across every detector, lane count and worker count at that shape.
+template <class DataType>
+auto register_baseline(
+  char const * type_name,
+  matrix const & axes,
+  std::vector<size_level> const & cache_levels
+) -> std::size_t {
+  if (env_list("COSORT_BASELINE", {1}).front() == 0) {
+    return 0;
+  }
+  auto const sizes = size_points<DataType>(axes, cache_levels);
   std::size_t registered = 0;
-
-  // One scalar reference per baseline shape. Name carries lanes=na and no
-  // worker/threshold/partition/dsa/rle segments, matching how the main sweep
-  // registers std_lex_argsort, so `speedup_vs_std` joins across every detector
-  // and worker count at that shape.
-  if (env_list("COSORT_BASELINE", {1}).front() != 0) {
+  {
     for (auto const & size : sizes) {
       for (auto columns : axes.columns) {
         for (auto distinct : axes.distinct) {
@@ -591,20 +697,33 @@ void register_all() {
           cfg.size_name = size.name;
           cfg.columns = std::max<std::size_t>(columns, 1);
           cfg.distinct = std::max<std::size_t>(distinct, 1);
-          auto const name = std::string("std_lex_argsort/u32/lanes=na")
+          auto const name = std::string("std_lex_argsort/") + type_name + "/lanes=na"
             + "/dist=" + cfg.dist_name()
             + "/order=asc"
             + "/cols=" + std::to_string(cfg.columns)
             + "/size=" + cfg.size_name;
           benchmark::RegisterBenchmark(
             name.c_str(),
-            [cfg](benchmark::State & state) { run_std_baseline(state, cfg); }
+            [cfg](benchmark::State & state) { run_std_baseline<DataType>(state, cfg); }
           )->UseRealTime()->Unit(benchmark::kMillisecond);
           ++registered;
         }
       }
     }
   }
+  return registered;
+}
+
+// Registers every algorithm x detector combination for one (type, lanes)
+// specialization, mirroring register_lane in benchmark_multicolumn_gbench.
+template <class DataType, std::size_t Lanes>
+auto register_variant(
+  char const * type_name,
+  matrix const & axes,
+  std::vector<size_level> const & cache_levels
+) -> std::size_t {
+  auto const sizes = size_points<DataType>(axes, cache_levels);
+  std::size_t registered = 0;
 
   for (auto const & discovery_name : axes.discovery) {
     auto const [algo, discovery] = parse_discovery(discovery_name);
@@ -618,6 +737,7 @@ void register_all() {
                   for (auto min_offload : axes.min_offload) {
                     for (auto slots : axes.dsa_slots) {
                       for (auto depth : axes.dsa_depth) {
+                       for (auto seal : axes.seal) {
                         config cfg;
                         cfg.rows = size.rows;
                         cfg.size_name = size.name;
@@ -630,6 +750,18 @@ void register_all() {
                         cfg.min_offload = min_offload;
                         cfg.dsa_slots = std::max<std::size_t>(slots, 1);
                         cfg.dsa_depth = std::max<std::size_t>(depth, 1);
+                        cfg.seal = std::max<std::size_t>(seal, 1);
+
+                        // Each algorithm owns one of the two range knobs and
+                        // ignores the other, so sweeping the ignored one would
+                        // register byte-different names for identical work.
+                        auto const sealed = discovery == cosort_algorithm::SEALED;
+                        if (sealed && partition_threshold != axes.partition_thresholds.front()) {
+                          continue;
+                        }
+                        if (!sealed && seal != axes.seal.front()) {
+                          continue;
+                        }
 
                         for (auto const & backend_name : axes.backends) {
                           auto const choice = parse_backend(backend_name);
@@ -642,17 +774,20 @@ void register_all() {
                             continue;
                           }
                           benchmark::RegisterBenchmark(
-                            benchmark_name(algo, cfg, backend_name).c_str(),
+                            benchmark_name(
+                              algo, type_name, Lanes, cfg, discovery, backend_name
+                            ).c_str(),
                             [cfg, choice, discovery](benchmark::State & state) {
                               if (choice.async) {
-                                run_async(state, cfg, choice.backend, discovery);
+                                run_async<DataType, Lanes>(state, cfg, choice.backend, discovery);
                               } else {
-                                run(state, cfg, choice.backend, discovery);
+                                run<DataType, Lanes>(state, cfg, choice.backend, discovery);
                               }
                             }
                           )->UseRealTime()->Unit(benchmark::kMillisecond);
                           ++registered;
                         }
+                       }
                       }
                     }
                   }
@@ -664,7 +799,71 @@ void register_all() {
       }
     }
   }
-  std::printf("registered %zu benchmark configurations\n", registered);
+  return registered;
+}
+
+// Skips a (type, lanes) pair the environment did not ask for. A lane count that
+// this type does not provide is simply not registered.
+template <class DataType, std::size_t Lanes>
+auto register_if_requested(
+  char const * type_name,
+  matrix const & axes,
+  std::vector<size_level> const & cache_levels
+) -> std::size_t {
+  auto const wants_type = std::find(axes.types.begin(), axes.types.end(), type_name)
+    != axes.types.end();
+  auto const wants_lanes = std::find(axes.lanes.begin(), axes.lanes.end(), Lanes)
+    != axes.lanes.end();
+  if (!wants_type || !wants_lanes) {
+    return 0;
+  }
+  return register_variant<DataType, Lanes>(type_name, axes, cache_levels);
+}
+
+void register_all() {
+  warn_about_unused_environment();
+  matrix const axes;
+  auto const cache_levels = size_levels(read_caches());
+  for (auto const & type : axes.types) {
+    if (type != "u32" && type != "u64") {
+      throw std::invalid_argument("unknown COSORT_TYPES value: " + type);
+    }
+  }
+
+  std::size_t registered = 0;
+  // Counted apart from the baseline: a lane count no requested type provides
+  // leaves the baseline registered and every sorter row missing, which reads as a
+  // finished run with no data unless it is called out.
+  std::size_t variants = 0;
+  // Same six specializations as the main benchmark: u32 at 4/8/16 lanes and u64
+  // at 2/4/8, i.e. SSE/AVX2/AVX512 for each. COSORT_TYPES and COSORT_LANES
+  // narrow the set; a lane count that no requested type provides simply matches
+  // nothing, which the summary below makes visible.
+  for (auto const & type : axes.types) {
+    if (type == "u32") {
+      registered += register_baseline<std::uint32_t>("u32", axes, cache_levels);
+    } else {
+      registered += register_baseline<std::uint64_t>("u64", axes, cache_levels);
+    }
+  }
+  variants += register_if_requested<std::uint32_t, 4>("u32", axes, cache_levels);
+  variants += register_if_requested<std::uint32_t, 8>("u32", axes, cache_levels);
+  variants += register_if_requested<std::uint32_t, 16>("u32", axes, cache_levels);
+  variants += register_if_requested<std::uint64_t, 2>("u64", axes, cache_levels);
+  variants += register_if_requested<std::uint64_t, 4>("u64", axes, cache_levels);
+  variants += register_if_requested<std::uint64_t, 8>("u64", axes, cache_levels);
+
+  if (variants == 0) {
+    std::printf(
+      "warning: COSORT_TYPES/COSORT_LANES selected no sort configuration; only "
+      "the std::sort baseline will run. Valid lane counts are 4,8,16 for u32 "
+      "and 2,4,8 for u64.\n"
+    );
+  }
+  std::printf(
+    "registered %zu benchmark configurations (%zu sort, %zu baseline)\n",
+    registered + variants, variants, registered
+  );
 }
 
 }  // namespace
