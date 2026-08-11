@@ -23,6 +23,7 @@ from tslc.catalog.overloads import (
 )
 from tslc.catalog.semantics import PrimitiveSemanticContract
 from tslc.catalog.shift import PrimitiveShiftContract
+from tslc.catalog.signature_kinds import PointerMutability
 from tslc.catalog.target_families import (
     ExtensionFamilyCapability,
     TargetFamilyCatalog,
@@ -370,13 +371,30 @@ class GenericParamBaseWidthConstraint:
 
 
 @dataclass(frozen=True, slots=True)
+class ParamTypeExpression:
+    """One target-neutral pointer wrapper around a TSIL type expression."""
+
+    pointer_kind: PointerMutability
+    pointee_expr: str
+
+    def __post_init__(self) -> None:
+        if not self.pointee_expr.strip():
+            raise ValueError("param_types pointee expressions must not be empty")
+
+    @property
+    def source_text(self) -> str:
+        wrapper = "cptr" if self.pointer_kind == "const" else "ptr"
+        return f"{wrapper}({self.pointee_expr})"
+
+
+@dataclass(frozen=True, slots=True)
 class ParamTypeRule:
     """One `param_types:` rule for a primitive parameter."""
 
     parameter_name: str
     attribute_name: str | None
     attribute_value: str | None
-    type_expr: str
+    type_expr: ParamTypeExpression
     source: SourceSpan | None = None
 
 
@@ -589,6 +607,35 @@ class ExtensionActivation:
         )
 
 
+class IntrinsicNameOrder(StrEnum):
+    """Order of the semantic base and optional type suffix in an intrinsic."""
+
+    BASE_SUFFIX = "base_suffix"
+    SUFFIX_BASE = "suffix_base"
+
+
+@dataclass(frozen=True, slots=True)
+class IntrinsicComposition:
+    """Source-owned intrinsic fragments and language-neutral composition rules."""
+
+    prefix_by_backend: Mapping[str, str] = field(default_factory=dict)
+    suffix_by_type: Mapping[str, str] = field(default_factory=dict)
+    order: IntrinsicNameOrder = IntrinsicNameOrder.BASE_SUFFIX
+    require_explicit_suffix: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "prefix_by_backend",
+            _freeze_mapping(self.prefix_by_backend),
+        )
+        object.__setattr__(
+            self,
+            "suffix_by_type",
+            _freeze_mapping(self.suffix_by_type),
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class Extension:
     """Target extension metadata needed for backend translation.
@@ -602,8 +649,9 @@ class Extension:
     name: str  # internal identity = TSL block name (e.g. "avx2_vl"); drives selection
     isa_name: str  # emitted tag = `extension_name` (e.g. "avx2"); `_vl` is internal only
     family: str  # "x86" | "arm" | "scalar" | … — picks the Rust core::arch module
-    compose_prefix: Mapping[str, str]  # backend_id -> intrinsic prefix
-    compose_suffix_by_type: Mapping[str, str]  # type tag -> suffix fragment
+    intrinsic_composition: IntrinsicComposition = field(
+        default_factory=IntrinsicComposition
+    )
     family_capability: ExtensionFamilyCapability = field(
         default_factory=lambda: ExtensionFamilyCapability("")
     )
@@ -614,7 +662,6 @@ class Extension:
     # backend_id -> whether this extension is emittable for that backend. Missing entries are
     # unsupported; inherited extensions receive parent entries during catalog promotion.
     backend_supported: Mapping[str, bool] = field(default_factory=dict)
-    intrinsic_style: str = ""
     inherits: str | None = None  # extension this one borrows impls/metadata from
     active_when: ExtensionActivation = field(default_factory=ExtensionActivation)
     supersedes: frozenset[str] = frozenset()
@@ -645,13 +692,19 @@ class Extension:
     unroll_variants: bool = False
     source: SourceSpan | None = None
 
+    @property
+    def compose_prefix(self) -> Mapping[str, str]:
+        """Read-only projection of the typed intrinsic composition."""
+
+        return self.intrinsic_composition.prefix_by_backend
+
+    @property
+    def compose_suffix_by_type(self) -> Mapping[str, str]:
+        """Read-only projection of the typed intrinsic composition."""
+
+        return self.intrinsic_composition.suffix_by_type
+
     def __post_init__(self) -> None:
-        object.__setattr__(self, "compose_prefix", _freeze_mapping(self.compose_prefix))
-        object.__setattr__(
-            self,
-            "compose_suffix_by_type",
-            _freeze_mapping(self.compose_suffix_by_type),
-        )
         object.__setattr__(
             self,
             "vector_register_types",

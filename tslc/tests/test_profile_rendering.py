@@ -560,7 +560,8 @@ def test_oneapi_fpga_profiles_are_opt_in_for_cmake_auto_detection(
     assert '"auto-oneapi-fpga"' in cmake
     assert "TSL_AUTO_ONEAPI_FPGA" not in cmake
     assert 'elseif(_TSL_REQUESTED_PROFILE STREQUAL "auto-oneapi-fpga")' in cmake
-    assert '_tsl_detect_profile_gate("oneapi_fpga" _TSL_GATE_READY _TSL_GATE_REASON)' in cmake
+    assert "_tsl_detect_oneapi_fpga(_TSL_GATE_READY _TSL_GATE_REASON)" in cmake
+    assert "_tsl_detect_profile_gate" not in cmake
     assert "sycl-ls" in cmake
     assert "clinfo" in cmake
     assert "aocl list-devices" in cmake

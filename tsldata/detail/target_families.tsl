@@ -34,6 +34,7 @@ target_families:
       documentation_sort_order 90
     x86:
       index_vector_register true
+      width_indexed_registers true
       documentation_family "x86"
     arm:
       documentation_family "aarch64"

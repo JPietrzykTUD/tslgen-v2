@@ -279,8 +279,6 @@ def _selected(
             name=family,
             isa_name=family,
             family=family,
-            compose_prefix={},
-            compose_suffix_by_type={},
             mask_policy=mask_policy or MaskPolicy(),
             imask_policy=imask_policy or ImaskPolicy(),
         ),

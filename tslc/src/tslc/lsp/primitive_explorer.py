@@ -813,8 +813,15 @@ def _selected_profile(
                 -configured.index(name),
             ),
         )
-    if "scalar" in profiles:
-        return "scalar"
+    declared_fallbacks = tuple(
+        sorted(
+            name
+            for name, profile in profiles.items()
+            if profile.default_build_fallback
+        )
+    )
+    if len(declared_fallbacks) == 1:
+        return declared_fallbacks[0]
     return min(profiles, default="")
 
 

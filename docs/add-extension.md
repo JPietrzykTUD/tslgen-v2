@@ -38,10 +38,13 @@ machine_profiles.json
   -> selects concrete target features, flags, and a runner
 
 extension.tsl
-  -> defines vector types, headers, masks, and intrinsic policy
+  -> defines vector types, headers, masks, and typed intrinsic composition
 
 primitive implementations
   -> declare required features and TSIL bodies
+
+backend compiler-capability registries
+  -> own concrete compiler IDs, probes, macros, diagnostics, and header groups
 
 backend dialects and assets
   -> spell already-decided target code
@@ -106,6 +109,10 @@ the target.
 This file owns routing, documentation classification, and shared target-feature
 capabilities.
 
+Declare behavioral family roles such as `width_indexed_registers` only when
+every member shares that mechanism. Compiler consumers query the role; they do
+not recognize a family name.
+
 It does not own primitive selection.
 
 It does not own intrinsic names.
@@ -141,6 +148,13 @@ the profile family's registered backends; use an explicit list for a C++-only or
 Rust-only target. Unsupported requested pairs produce a recorded informational
 skip and no fallback profile for that backend.
 
+Generated-build selection uses explicit profile roles. At most one ungated
+profile declares `default_build_fallback true`. An opt-in compiler-specific
+profile declares a semantic `auto_detect_gate`; the selected backend maps that
+ID to build-system modes and probes. Do not infer either role from a profile
+name or `compile_modes` value. A new C++ gate needs one entry in the backend's
+`CPP_PROFILE_AUTO_GATES` registry; its CMake helper names remain backend-owned.
+
 ## 5. Add Extension Metadata
 
 Edit `tsldata/extensions/extension.tsl`.
@@ -149,7 +163,6 @@ Edit `tsldata/extensions/extension.tsl`.
 extension wasm128:
   extension_name "wasm128"
   family "wasm"
-  intrinsic_style "wasm"
   vector_bits 128
   native_sort_order 800
   default_test_target true
@@ -160,6 +173,17 @@ extension wasm128:
     supported true
     type_name "Wasm128"
     arch_module "wasm32"
+  intrinsic_compose:
+    order "suffix_base"
+    require_explicit_suffix true
+    prefix:
+      cpp "wasm_"
+      rust "core::arch::wasm32::"
+    suffix:
+      by_type:
+        si32 "i32x4_"
+        ui32 "i32x4_"
+        f32 "f32x4_"
 ```
 
 Also define:
@@ -199,11 +223,10 @@ Do not name `sse`, `avx2`, `avx512`, or `neon` in the fallback body.
 
 Dependency closure selects the concrete hardware extension.
 
-## 7. Add An Intrinsic Dialect Only When Needed
+## 7. Declare Intrinsic Composition Directly
 
-Reuse an existing intrinsic style when possible.
-
-Add a new typed style when the composition rule differs.
+An extension declares the language-neutral order of the semantic base and type
+suffix. Backends contribute only their prefix spelling.
 
 Example:
 
@@ -216,13 +239,24 @@ Wasm lane-shape-first:
   core::arch::wasm32::i32x4_add
 ```
 
-The extension declares:
+The extension declares the differing composition rule directly:
 
 ```tsl
-intrinsic_style "wasm"
+intrinsic_compose:
+  order "suffix_base"
+  require_explicit_suffix true
+  prefix:
+    cpp "wasm_"
+    rust "core::arch::wasm32::"
+  suffix:
+    by_type:
+      si32 "i32x4_"
 ```
 
-The backend intrinsic dialect interprets that value.
+`base_suffix` is the default order; `suffix_base` covers lane-shape-first
+intrinsics. `require_explicit_suffix` prevents an untyped fallback when every
+operation needs a lane-shape fragment. The retired `intrinsic_style` field is
+an error rather than a compatibility alias.
 
 Do not build intrinsic names in a project template.
 
@@ -367,9 +401,12 @@ Update coverage baselines last.
 ## Review Checklist
 
 - Target-family routing is source data.
+- Family behavior is expressed as a typed role, not a recognized name.
 - Machine-profile capabilities are explicit.
+- Build fallback and auto-detection use typed profile/gate roles.
 - Extension metadata owns target facts.
 - Primitive bodies declare feature requirements.
+- Compiler IDs, probes, macros, and header groups have one backend owner.
 - Backend dialects own target spelling.
 - Templates only format decided values.
 - Missing tools skip cleanly.

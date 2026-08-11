@@ -10,8 +10,13 @@ from types import SimpleNamespace
 
 from tslc import api, pipeline
 from tslc.backend import cpp_profile
-from tslc.backend.capability import BackendCapability, CompilerCapability
+from tslc.backend.capability import (
+    BackendCapability,
+    CompilerCapability,
+    CompilerCapabilityRegistry,
+)
 from tslc.backend.cpp_capability import CPP_BACKEND
+from tslc.backend.cpp_compiler_capabilities import CPP_COMPILER_CAPABILITIES
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.helper_requirements import (
     CPP_HELPER_MANIFEST,
@@ -93,7 +98,7 @@ def test_compiler_capability_vocabulary_is_backend_generic(monkeypatch) -> None:
         verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
         toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
         documentation_formatter_factory=_FakeDocumentationFormatter,
-        compiler_capabilities=(capability,),
+        compiler_capabilities=CompilerCapabilityRegistry((capability,)),
     )
     monkeypatch.setattr(registry, "BACKEND_CAPABILITIES", (future,))
     monkeypatch.setattr(registry, "_BY_ID", {"future": future})
@@ -102,6 +107,7 @@ def test_compiler_capability_vocabulary_is_backend_generic(monkeypatch) -> None:
     assert registry.registered_compiler_capabilities() == {
         "future": frozenset({"future_feature"})
     }
+    assert CPP_BACKEND.compiler_capabilities is CPP_COMPILER_CAPABILITIES
 
 
 def test_public_api_resolves_omitted_backends_for_each_call(monkeypatch) -> None:

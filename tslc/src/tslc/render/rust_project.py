@@ -679,6 +679,7 @@ def _rust_build_policy_profiles(
         (
             "tsl_rust_variant_policy::GeneratedProfile {",
             f"    name: {json.dumps(entry.profile.profile_name)},",
+            f"    family: {json.dumps(entry.profile.profile_family)},",
             "    target_arch: "
             f"{json.dumps(entry.static_selection.requirement.target_arch)},",
             "    target_features: &["

@@ -214,11 +214,9 @@ def _fallback_extension(
 ) -> Extension:
     family = "generic_like" if sized else "scalar"
     return Extension(
-        name,
-        name,
-        family,
-        {},
-        {},
+        name=name,
+        isa_name=name,
+        family=family,
         family_capability=ExtensionFamilyCapability(
             family,
             implementation_fallback=True,

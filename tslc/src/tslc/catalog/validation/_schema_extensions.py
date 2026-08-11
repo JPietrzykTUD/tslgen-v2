@@ -5,10 +5,16 @@ from __future__ import annotations
 from collections.abc import Collection, Iterable, Mapping
 from typing import get_args
 
-from tslc.catalog.model import ImaskPolicyKind, MaskPolicyKind, VectorBitsKind
+from tslc.catalog.model import (
+    ImaskPolicyKind,
+    IntrinsicNameOrder,
+    MaskPolicyKind,
+    VectorBitsKind,
+)
 from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
 from tslc.catalog.target_families import TargetFamilyCatalog
 from tslc.catalog.validation._schema_common import (
+    KNOWN_BOOLEAN_VALUES,
     diagnose_duplicate_fields,
     invalid_enum,
     validate_backend_key_fields,
@@ -33,7 +39,6 @@ KNOWN_EXTENSION_FIELDS = frozenset(
         "inherits",
         "integral_mask_type_policy",
         "intrinsic_compose",
-        "intrinsic_style",
         "mask_type_policy",
         "native_sort_order",
         "runtime_lane_count",
@@ -51,6 +56,7 @@ KNOWN_EXTENSION_FIELDS = frozenset(
         "vector_register_types",
     }
 )
+OBSOLETE_EXTENSION_FIELDS = frozenset({"intrinsic_style"})
 KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
     {
         "arch_module",
@@ -70,7 +76,9 @@ KNOWN_MASK_POLICY_FIELDS = frozenset(
     }
 )
 KNOWN_IMASK_POLICY_FIELDS = frozenset({"kind"})
-KNOWN_INTRINSIC_COMPOSE_FIELDS = frozenset({"prefix", "suffix"})
+KNOWN_INTRINSIC_COMPOSE_FIELDS = frozenset(
+    {"order", "prefix", "require_explicit_suffix", "suffix"}
+)
 KNOWN_INTRINSIC_SUFFIX_FIELDS = frozenset({"by_type"})
 KNOWN_ACTIVE_WHEN_FIELDS = frozenset({"target_features", "compile_modes"})
 KNOWN_SIZE_PARAMETER_FIELDS = frozenset({"name"})
@@ -87,7 +95,13 @@ KNOWN_VECTOR_BITS_SPELLINGS: frozenset[str] = frozenset(
 
 
 def known_extension_fields(backend_ids: Iterable[str] = ()) -> frozenset[str]:
-    return KNOWN_EXTENSION_FIELDS | frozenset(backend_ids)
+    # Obsolete forms remain recognized only so validation can give a targeted
+    # migration diagnostic. They are never promoted or offered by authoring.
+    return (
+        KNOWN_EXTENSION_FIELDS
+        | OBSOLETE_EXTENSION_FIELDS
+        | frozenset(backend_ids)
+    )
 
 
 def validate_extension_block(
@@ -98,6 +112,21 @@ def validate_extension_block(
     compiler_capabilities: Mapping[str, Collection[str]] | None = None,
 ) -> None:
     fields = {field.key.text: field for field in declaration.fields}
+    obsolete_style = fields.get("intrinsic_style")
+    if obsolete_style is not None:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-OBSOLETE-INTRINSIC-STYLE",
+                message=(
+                    "extension field 'intrinsic_style' is obsolete; declare semantic "
+                    "name composition under intrinsic_compose using order "
+                    "'base_suffix' or 'suffix_base' and "
+                    "require_explicit_suffix when needed"
+                ),
+                source=source_span(obsolete_style.source),
+            )
+        )
     family = field_text(fields.get("family")) or ""
     if (
         family
@@ -173,6 +202,28 @@ def validate_extension_block(
                 KNOWN_INTRINSIC_SUFFIX_FIELDS,
                 diagnostics,
                 owner="intrinsic suffix",
+            )
+        order_field = child(compose, "order")
+        order = field_text(order_field)
+        known_orders = tuple(item.value for item in IntrinsicNameOrder)
+        if order is not None and order not in known_orders:
+            invalid_enum(
+                diagnostics,
+                order_field,
+                f"intrinsic_compose order {order!r}",
+                known_orders,
+            )
+        require_field = child(compose, "require_explicit_suffix")
+        require = field_text(require_field)
+        if require is not None and require not in KNOWN_BOOLEAN_VALUES:
+            invalid_enum(
+                diagnostics,
+                require_field,
+                (
+                    "intrinsic_compose require_explicit_suffix value "
+                    f"{require!r}"
+                ),
+                sorted(KNOWN_BOOLEAN_VALUES),
             )
     active_when = fields.get("active_when")
     if active_when is not None:

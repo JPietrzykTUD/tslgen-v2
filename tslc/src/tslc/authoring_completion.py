@@ -24,7 +24,12 @@ from tslc.catalog.conversion import (
 from tslc.catalog.conversion_promotion import KNOWN_CONVERSION_FIELDS
 from tslc.catalog.memory import memory_access_values, memory_addressing_values
 from tslc.catalog.memory_promotion import KNOWN_MEMORY_FIELDS
-from tslc.catalog.model import Catalog, Primitive, RESULT_DIM_VECTOR
+from tslc.catalog.model import (
+    Catalog,
+    IntrinsicNameOrder,
+    Primitive,
+    RESULT_DIM_VECTOR,
+)
 from tslc.catalog.semantics import operand_role_values, primitive_operation_values
 from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
 from tslc.catalog.shift import shift_count_rule_values, shift_lane_rule_values
@@ -138,10 +143,12 @@ _BOOLEAN_FIELDS = frozenset(
         "native_without_runner",
         "pass_target_to_compiler",
         "primary",
+        "require_explicit_suffix",
         "requires_declared_vector_register",
         "specialize_base",
         "supported",
         "unroll_variants",
+        "width_indexed_registers",
     }
 )
 _BACKEND_MAP_FIELDS = frozenset(
@@ -1009,6 +1016,12 @@ def _value_completions(
     elif field in _BOOLEAN_FIELDS:
         values = KNOWN_BOOLEAN_VALUES
         detail = "boolean"
+    elif (
+        field == "order"
+        and context.block_path[-1:] == ("intrinsic_compose",)
+    ):
+        values = tuple(item.value for item in IntrinsicNameOrder)
+        detail = "intrinsic name order"
     elif field == "operation" and context.block_path == ("primitive",):
         values = primitive_operation_values()
         detail = "primitive operation"

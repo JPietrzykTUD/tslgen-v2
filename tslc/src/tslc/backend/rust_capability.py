@@ -20,6 +20,7 @@ from tslc.backend.rust_api_planner import (
 )
 from tslc.backend.rust_dispatch import plan_rust_dispatch
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
+from tslc.backend.rust_policy_manifest import DEFAULT_RUST_POLICY_MANIFEST
 from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
     plan_rust_static_selection,
@@ -27,10 +28,7 @@ from tslc.backend.rust_static_selection import (
 from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
 from tslc.backend.rust_translation import RustBackendDialect
 from tslc.backend.rust_validation import validate_rust_profiles
-from tslc.benchmark.planner import (
-    BenchmarkPlanner,
-    BenchmarkScenarioAdmission,
-)
+from tslc.benchmark.planner import BenchmarkPlanner
 from tslc.benchmark.render_rust import rust_benchmark_artifacts
 from tslc.catalog.model import Catalog
 from tslc.output._verify_rust import (
@@ -61,13 +59,7 @@ if TYPE_CHECKING:
     from tslc.project_render import ProjectRenderConfig
 
 
-_RUST_BENCHMARK_ADMISSIONS = frozenset(
-    {
-        BenchmarkScenarioAdmission("avx2", "reduction"),
-        BenchmarkScenarioAdmission("sse2", "immediate"),
-        BenchmarkScenarioAdmission("sse2", "register"),
-    }
-)
+RUST_POLICY_MANIFEST = DEFAULT_RUST_POLICY_MANIFEST
 
 
 def create_rust_dialect(catalog: Catalog) -> BackendDialect:
@@ -106,7 +98,7 @@ def rust_benchmark_plan(
     return BenchmarkPlanner(
         catalog,
         backend_id="rust",
-        supported_admissions=_RUST_BENCHMARK_ADMISSIONS,
+        supported_admissions=RUST_POLICY_MANIFEST.benchmark_admission_set,
     ).plan(profiles, value_tests)
 
 
@@ -120,7 +112,7 @@ def rust_backend_artifacts(
 ) -> list[Artifact]:
     """Render Rust from one frozen selection/consumption projection."""
 
-    selection_plan = plan_rust_policy_selection(profiles)
+    selection_plan = plan_rust_policy_selection(profiles, RUST_POLICY_MANIFEST)
     static_selection_plan = plan_rust_static_selection(profiles)
     facade_plan = plan_rust_facade(profiles, static_selection_plan)
     dispatch_plan = plan_rust_dispatch(
@@ -179,7 +171,10 @@ def rust_primitive_preview(
     specializations: tuple[LoweredSpecialization, ...],
 ) -> str:
     family = profile.profile_family
-    policy_selection = plan_rust_policy_selection((profile,)).profile(
+    policy_selection = plan_rust_policy_selection(
+        (profile,),
+        RUST_POLICY_MANIFEST,
+    ).profile(
         profile.profile.name
     )
     if policy_selection is None:

@@ -16,14 +16,19 @@ description: Add a backend or backend capability to tslc. Use when asked to intr
    spellings, intrinsic/query translations, generated project layout, and
    verification story.
 3. Add backend capabilities through the live backend registry/support-policy
-   boundary. Keep default backend choice explicit in requests/configuration and
-   do not scatter hardcoded backend ID lists or import-time registry snapshots.
+   boundary. A compiler capability's IDs, probes, feature tests, macros,
+   diagnostics, and header groups belong to one immutable backend registry row;
+   source data names only the semantic capability. Keep default backend choice
+   explicit in requests/configuration and do not scatter hardcoded backend ID
+   lists or import-time registry snapshots.
 4. Add typed translation/render values before templates. Templates may format decided values only.
 5. Place packaged backend static files, templates, and helpers under
    `tslc/src/tslc/backend/assets/`. Keep generated-documentation inputs under
    `supplementary/docs/` and machine-profile configuration under
    `supplementary/buildsystem/`. Put compiler-owned static symbol manifests next
-   to their backend owner and test exact parity with the packaged asset.
+   to their backend owner and test exact parity with the packaged asset. Put
+   validated backend policy evidence under a focused packaged asset directory;
+   planners consume its typed projection rather than embedding source identities.
 6. Diagnose unsupported capability combinations before rendering or artifact writing.
 7. Add focused tests for registration, capability validation, signature/query
    projection, rendering, compiler assets, deterministic artifacts, and verifier
@@ -35,6 +40,8 @@ description: Add a backend or backend capability to tslc. Use when asked to intr
 - Adding a future backend should mostly add a backend module/assets/tests, not edit unrelated schema, lowering, or renderer dispatch code.
 - Missing backend support should produce structured diagnostics, not late template errors.
 - Backend-specific syntax must not be inferred from raw TSIL text unless the accepted source form is already typed and tested.
+- Generated build detection must consume a typed backend plan; never infer a
+  compiler role from a profile name or compile-mode literal in a renderer.
 - Keep build/test verification injectable and skip-safe for unavailable toolchains.
 
 ## Useful Commands

@@ -277,8 +277,8 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
 prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
   param_types:
     ptr:
-      "if packed=true" "type(vector::imask) *"
-      "if packed=false" "type(base::unsigned_of(type(base::in))) *"
+      "if packed=true" "ptr(type(vector::imask))"
+      "if packed=false" "ptr(type(base::unsigned_of(type(base::in))))"
   brief_description "Stores a mask value to memory using the selected mask representation."
   detailed_description """
     Stores a mask value to memory. With `packed=true`, memory receives the

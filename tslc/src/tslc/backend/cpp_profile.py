@@ -12,8 +12,8 @@ from tslc.backend.cpp_compiler_capabilities import (
 from tslc.backend.emitted_profile import EmittedProfile, used_vector_type_specs
 from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.target_capability import (
-    cpp_x86_register_helper,
-    is_x86_register_extension,
+    cpp_width_indexed_register_helper,
+    is_width_indexed_register_extension,
 )
 from tslc.catalog.model import Extension
 from tslc.catalog.scalar_types import scalar_bit_width_or_default
@@ -55,7 +55,10 @@ def _cpp_includes(
         '#include "tsl_primitives.hpp"',
         '#include "tsl_dataparallel.hpp"',
     ]
-    if any(is_x86_register_extension(extensions.get(ext)) for ext in emitted_exts):
+    if any(
+        is_width_indexed_register_extension(extensions.get(ext))
+        for ext in emitted_exts
+    ):
         lines.append('#include "tsl_x86_traits.hpp"')
     headers = sorted(
         {
@@ -97,7 +100,7 @@ def cpp_compiler_capability_diagnostic(guard: CppCompilerCapability) -> str:
 def _cpp_registration(ext: str, extension: Extension | None) -> str:
     """A C++ extension tag + `simd<T, ext>` register/mask-type wiring for one ISA ext."""
 
-    helper = cpp_x86_register_helper(extension)
+    helper = cpp_width_indexed_register_helper(extension)
     bits = extension.vector_bits if extension is not None else None
     assert helper is not None and bits is not None, (
         f"C++ profile validation missed unsupported x86 extension {ext!r}"
@@ -141,7 +144,7 @@ def _cpp_native_registration(
         ext
         for ext, type_tag, _base in used_vector_type_specs(by_primitive)
         if (extension := extensions.get(ext)) is not None
-        and not is_x86_register_extension(extension)
+        and not is_width_indexed_register_extension(extension)
         and extension.direct_vector_register_type("cpp", type_tag) is not None
     }
     for ext in sorted(emitted):
@@ -153,7 +156,7 @@ def _cpp_native_registration(
         )
     for ext, type_tag, base in used_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
-        if extension is None or is_x86_register_extension(extension):
+        if extension is None or is_width_indexed_register_extension(extension):
             continue
         register = extension.direct_vector_register_type("cpp", type_tag)
         if register is None:
@@ -351,19 +354,25 @@ def _cpp_inferred_simd_registrations(
     return "".join(lines)
 
 
-def _cpp_compiler_builtin_fixed_registrations(
+def _cpp_overlay_fixed_registrations(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
     header_group: str,
 ) -> str:
-    """Expose an explicit fixed-lane policy for one compiler-builtin overlay."""
+    """Expose an explicit fixed-lane policy for one opt-in header overlay."""
 
     candidates: dict[tuple[str, str, int], tuple[tuple[int, str], str]] = {}
     for ext, type_tag, base in used_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
+        metadata = (
+            None
+            if extension is None
+            else extension.metadata.backend.get("cpp")
+        )
         if (
             extension is None
-            or extension.family != "compiler_builtin"
+            or metadata is None
+            or metadata.participates_in_dataparallel_inference
             or cpp_extension_header_group(extension) != header_group
             or extension.vector_bits_kind != "fixed"
             or extension.direct_vector_register_type("cpp", type_tag) is None
@@ -420,7 +429,7 @@ def _cpp_compiler_builtin_fixed_registrations(
 def _cpp_extension_register_is_available(extension: Extension, type_tag: str) -> bool:
     if extension.vector_bits <= 0 and not DEFAULT_SUPPORT_POLICY.uses_scalable_vector(extension):
         return True
-    return is_x86_register_extension(extension) or (
+    return is_width_indexed_register_extension(extension) or (
         extension.direct_vector_register_type("cpp", type_tag) is not None
     )
 

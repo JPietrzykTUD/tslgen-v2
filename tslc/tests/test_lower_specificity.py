@@ -37,7 +37,6 @@ def test_ambiguous_specificity_warns(machine_profiles) -> None:
     # a body (no failure) but emits a warning so the corpus author can disambiguate.
     ext = Extension(
         name="scalar", isa_name="scalar", family="scalar",
-        compose_prefix={}, compose_suffix_by_type={},
     )
     prim = Primitive(
         name="amb", signature="v:=v", parameters=("a",), attribute_keys=(),
@@ -70,7 +69,6 @@ def test_nested_specificity_does_not_warn(machine_profiles) -> None:
     # unambiguous and no warning is emitted.
     ext = Extension(
         name="scalar", isa_name="scalar", family="scalar",
-        compose_prefix={}, compose_suffix_by_type={},
     )
     prim = Primitive(
         name="amb2", signature="v:=v", parameters=("a",), attribute_keys=(),

@@ -23,7 +23,11 @@ from tslc.catalog.model import (
     ExtensionMetadata,
     MaskPolicy,
 )
-from tslc.catalog.target_families import BackendProfileFamily, ProfileFamilyCapability
+from tslc.catalog.target_families import (
+    BackendProfileFamily,
+    ExtensionFamilyCapability,
+    ProfileFamilyCapability,
+)
 from tslc.diagnostics import SourceSpan
 
 
@@ -42,7 +46,7 @@ class _Specialization:
     source: SourceSpan | None = None
 
 
-def test_cpp_unsupported_declared_x86_width_is_source_located() -> None:
+def test_cpp_unsupported_width_indexed_register_is_source_located() -> None:
     source = SourceSpan(Path("extensions.tsl"), 4, 1, 8, 1)
     extension = _extension("wide", cpp=True, vector_bits=192, source=source)
     profile = _profile(
@@ -53,10 +57,25 @@ def test_cpp_unsupported_declared_x86_width_is_source_located() -> None:
     diagnostics = validate_cpp_profiles((profile,))
 
     assert [diagnostic.code for diagnostic in diagnostics] == [
-        "TSL-BACKEND-CPP-UNSUPPORTED-X86-WIDTH"
+        "TSL-BACKEND-CPP-UNSUPPORTED-WIDTH-INDEXED-REGISTER-WIDTH"
     ]
     assert diagnostics[0].location == source.start
     assert CPP_BACKEND.validate_profiles((profile,)) == diagnostics
+
+
+def test_cpp_unknown_auto_detect_gate_is_diagnosed_before_rendering() -> None:
+    extension = _extension("base", cpp=True)
+    profile = _profile(
+        cpp={"add": (_Specialization("base"),)},  # type: ignore[arg-type]
+        extensions={"base": extension},
+        auto_detect_gate="future_accelerator",
+    )
+
+    diagnostics = validate_cpp_profiles((profile,))
+
+    assert [diagnostic.code for diagnostic in diagnostics] == [
+        "TSL-BACKEND-CPP-UNSUPPORTED-AUTO-DETECT-GATE"
+    ]
 
 
 def test_cpp_exact_lane_bitmask_requires_backend_spelling() -> None:
@@ -222,6 +241,7 @@ def _profile(
     cpp: dict[str, tuple[_Specialization, ...]] | None = None,
     rust: dict[str, tuple[_Specialization, ...]] | None = None,
     extensions: dict[str, Extension],
+    auto_detect_gate: str | None = None,
 ) -> EmittedProfile:
     by_backend = {}
     if cpp is not None:
@@ -229,7 +249,13 @@ def _profile(
     if rust is not None:
         by_backend["rust"] = rust
     return EmittedProfile(
-        profile=MachineProfile("test", "test", frozenset(), {}),
+        profile=MachineProfile(
+            "test",
+            "test",
+            frozenset(),
+            {},
+            auto_detect_gate=auto_detect_gate,
+        ),
         specializations_by_backend=by_backend,  # type: ignore[arg-type]
         extensions=extensions,
         immediate_split_names=frozenset(),
@@ -256,8 +282,10 @@ def _extension(
         name=name,
         isa_name=name,
         family=family,
-        compose_prefix={},
-        compose_suffix_by_type={},
+        family_capability=ExtensionFamilyCapability(
+            family,
+            width_indexed_registers=family == "x86",
+        ),
         backend_supported={"cpp": cpp, "rust": rust},
         vector_bits=vector_bits,
         vector_bits_kind="fixed" if vector_bits else "",

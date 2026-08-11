@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tslc.catalog.model import Primitive, TestCase
+from tslc.catalog.model import ParamTypeExpression, Primitive, TestCase
 from tslc.catalog.param_types import resolve_param_type_scalar_tag
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests.case_helpers import base_spelling
@@ -65,13 +65,14 @@ def resolve_param_layout_checked(
         if spelling is None:
             return ParamLayoutResolution(
                 reason=(
-                    f"param_types layout expression {rule.type_expr!r} resolved to "
+                    "param_types layout expression "
+                    f"{rule.type_expr.source_text!r} resolved to "
                     f"type tag {type_tag!r}, but this backend has no scalar spelling for it"
                 )
             )
         return ParamLayoutResolution(
             layout=ParamLayout(
-                type_expr=rule.type_expr,
+                type_expr=rule.type_expr.source_text,
                 type_tag=type_tag,
                 base_spelling=spelling,
             )
@@ -84,7 +85,10 @@ def resolve_param_layout_checked(
     )
 
 
-def scalar_type_tag_from_expr(type_expr: str, input_type_tag: str) -> str | None:
+def scalar_type_tag_from_expr(
+    type_expr: ParamTypeExpression,
+    input_type_tag: str,
+) -> str | None:
     """Resolve the scalar subset of `param_types` expressions used by value tests."""
 
     return resolve_param_type_scalar_tag(type_expr, input_type_tag).type_tag

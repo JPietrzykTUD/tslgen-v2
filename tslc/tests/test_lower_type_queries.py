@@ -101,8 +101,6 @@ def test_fixed_non_x86_extension_requires_register_metadata(backend_id: str) -> 
         name="tiny_arm",
         isa_name="tiny_arm",
         family="arm",
-        compose_prefix={},
-        compose_suffix_by_type={},
         backend_supported={"cpp": True, "rust": True},
         vector_bits=128,
     )

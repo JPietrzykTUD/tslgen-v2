@@ -129,7 +129,12 @@ def cpp_artifacts(
     artifacts.append(
         text(
             "cpp/CMakeLists.txt",
-            _cpp_cmakelists(profiles, assets, value_tests=value_tests),
+            _cpp_cmakelists(
+                model,
+                profiles,
+                assets,
+                value_tests=value_tests,
+            ),
             media_type=media_type,
         )
     )

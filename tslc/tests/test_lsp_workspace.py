@@ -31,7 +31,12 @@ from tslc.lsp.positions import (
     source_position,
     span_to_range,
 )
-from tslc.lsp.primitive_explorer import PrimitiveExplorerCache, primitive_explorer
+from tslc.catalog.machine_profiles import MachineProfile
+from tslc.lsp.primitive_explorer import (
+    PrimitiveExplorerCache,
+    _selected_profile,
+    primitive_explorer,
+)
 from tslc.lsp.server import (
     _check_and_publish,
     _publish,
@@ -48,6 +53,26 @@ from tslc.syntax.parser import TslParser
 
 
 _COMPLETION_PATH = Path("tslctmp/lsp-completion.tsl").resolve()
+
+
+def test_primitive_explorer_fallback_is_profile_role_driven() -> None:
+    profiles = {
+        "alphabetic_first": MachineProfile(
+            name="alphabetic_first",
+            family="test",
+            features=frozenset(),
+            alternatives={},
+        ),
+        "renamed_base": MachineProfile(
+            name="renamed_base",
+            family="test",
+            features=frozenset(),
+            alternatives={},
+            default_build_fallback=True,
+        ),
+    }
+
+    assert _selected_profile(profiles, None, ()) == "renamed_base"
 
 
 def test_index_requests_wait_for_a_completed_initial_check() -> None:

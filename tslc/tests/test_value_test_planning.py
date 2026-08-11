@@ -15,6 +15,7 @@ from tslc.catalog.model import (
     Catalog,
     Extension,
     ExtensionMetadata,
+    ParamTypeExpression,
     ParamTypeRule,
     Primitive,
     TestComparison as CaseComparison,
@@ -1558,7 +1559,7 @@ def test_pointer_layout_planning_consumes_param_types() -> None:
                 parameter_name="ptr",
                 attribute_name="packed",
                 attribute_value="false",
-                type_expr="type(base::in) *",
+                type_expr=ParamTypeExpression("mutable", "type(base::in)"),
             ),
         ),
         tests=(
@@ -1650,10 +1651,19 @@ def test_packed_mask_store_plan_keeps_honest_result_kind(
 
 
 def test_pointer_layout_scalar_resolver_uses_param_type_expression_parser() -> None:
-    assert scalar_type_tag_from_expr("type(base::in) *", "si32") == "si32"
     assert (
         scalar_type_tag_from_expr(
-            "type(base::unsigned_of(type(base::in))) const*",
+            ParamTypeExpression("mutable", "type(base::in)"),
+            "si32",
+        )
+        == "si32"
+    )
+    assert (
+        scalar_type_tag_from_expr(
+            ParamTypeExpression(
+                "const",
+                "type(base::unsigned_of(type(base::in)))",
+            ),
             "si32",
         )
         == "ui32"
@@ -1673,7 +1683,10 @@ def test_pointer_layout_warning_names_unsupported_param_types_expression() -> No
                 parameter_name="ptr",
                 attribute_name="packed",
                 attribute_value="false",
-                type_expr="type(vector::imask) *",
+                type_expr=ParamTypeExpression(
+                    "mutable",
+                    "type(vector::imask)",
+                ),
             ),
         ),
         tests=(
@@ -1707,7 +1720,7 @@ def test_pointer_layout_warning_names_unsupported_param_types_expression() -> No
         if diagnostic.code == "TSL-VALUE-TEST-UNSUPPORTED-CASE"
     )
     assert "unsupported param_types layout expression" in warning.message
-    assert "type(vector::imask) *" in warning.message
+    assert "ptr(type(vector::imask))" in warning.message
 
 
 def test_planner_warns_for_each_unsupported_authored_case() -> None:

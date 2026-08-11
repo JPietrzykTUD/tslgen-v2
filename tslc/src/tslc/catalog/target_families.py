@@ -57,6 +57,7 @@ class ExtensionFamilyCapability:
     free_function_owner: bool = True
     requires_declared_vector_register: bool = True
     index_vector_register: bool = False
+    width_indexed_registers: bool = False
     documentation_family: str | None = None
     documentation_sort_order: int | None = None
     source: SourceSpan | None = None

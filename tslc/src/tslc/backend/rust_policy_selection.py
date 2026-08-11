@@ -7,6 +7,11 @@ from dataclasses import dataclass, replace
 from typing import Literal
 
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.rust_policy_manifest import (
+    DEFAULT_RUST_POLICY_MANIFEST,
+    RustPolicyManifest,
+    RustPolicySelectionPilot,
+)
 from tslc.benchmark.model import SpecializationKey
 from tslc.lower.lowerer import LoweredSpecialization
 
@@ -21,65 +26,6 @@ _PolicySlot = tuple[
 
 
 @dataclass(frozen=True, slots=True)
-class RustPolicySelectionPilot:
-    """One backend-owned specialization identity admitted by the policy pilot."""
-
-    profile_name: str
-    primitive_name: str
-    source_primitive_name: str
-    extension_name: str
-    type_tag: str
-    result_kind: str
-    param_kinds: tuple[str, ...]
-    lanes: int
-    vector_spelling: str
-    caller_unsafe: bool
-
-    def matches(
-        self, key: SpecializationKey, spec: LoweredSpecialization
-    ) -> bool:
-        return (
-            key.profile_name,
-            key.primitive_name,
-            key.source_primitive_name,
-            key.extension_name,
-            key.type_tag,
-            key.result_kind,
-            key.param_kinds,
-            key.lanes,
-            spec.vector_spelling,
-            spec.safety.caller_unsafe,
-        ) == (
-            self.profile_name,
-            self.primitive_name,
-            self.source_primitive_name,
-            self.extension_name,
-            self.type_tag,
-            self.result_kind,
-            self.param_kinds,
-            self.lanes,
-            self.vector_spelling,
-            self.caller_unsafe,
-        )
-
-
-RUST_POLICY_SELECTION_PILOTS = (
-    RustPolicySelectionPilot(
-        profile_name="sse2",
-        primitive_name="mul",
-        source_primitive_name="mul",
-        extension_name="sse",
-        type_tag="si8",
-        result_kind="v",
-        param_kinds=("v", "v"),
-        lanes=16,
-        vector_spelling="Simd<i8, Sse>",
-        caller_unsafe=False,
-    ),
-)
-
-
-@dataclass(frozen=True, slots=True)
 class RustPolicySelection:
     """One policy-supported Rust specialization and its compile-time choice."""
 
@@ -87,6 +33,7 @@ class RustPolicySelection:
     specialization: LoweredSpecialization
     candidate_ids: tuple[str, ...]
     selected_candidate: str
+    pilot_id: str
 
     def __post_init__(self) -> None:
         expected_candidates = ("default", *self.specialization.variant_names)
@@ -100,8 +47,8 @@ class RustPolicySelection:
             raise ValueError(
                 f"Rust policy selects unavailable candidate {self.selected_candidate!r}"
             )
-        if reason := rust_policy_selection_reason(self.key, self.specialization):
-            raise ValueError(f"unsupported Rust policy selection: {reason}")
+        if not self.pilot_id:
+            raise ValueError("Rust policy selections require a pilot ID")
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,6 +177,7 @@ class RustPolicySelectionPlan:
 
 def plan_rust_policy_selection(
     profiles: tuple[EmittedProfile, ...],
+    manifest: RustPolicyManifest = DEFAULT_RUST_POLICY_MANIFEST,
 ) -> RustPolicySelectionPlan:
     """Plan the narrow stable-Rust selection family from finalized backend facts."""
 
@@ -253,15 +201,12 @@ def plan_rust_policy_selection(
                     primitive_specializations=specializations,
                 )
                 candidate_ids = ("default", *spec.variant_names)
-                reason = rust_policy_selection_reason(key, spec)
-                if (
-                    reason is None
-                    and candidate_ids != ("default", "generic_fallback")
-                ):
-                    reason = (
-                        "initial Rust policy selection requires the proven pilot "
-                        "candidate inventory"
-                    )
+                reason = rust_policy_selection_reason(
+                    key,
+                    spec,
+                    manifest,
+                    candidate_ids=candidate_ids,
+                )
                 impl_identity = (
                     (primitive_name, spec.vector_spelling)
                     if reason is None and spec.vector_spelling is not None
@@ -329,6 +274,11 @@ def plan_rust_policy_selection(
                 specialization=spec,
                 candidate_ids=candidate_ids,
                 selected_candidate="default",
+                pilot_id=manifest.matching_pilots(
+                    key,
+                    spec,
+                    candidate_ids,
+                )[0].pilot_id,
             )
             selections.append(selection)
             coverage.append(
@@ -352,10 +302,11 @@ def plan_rust_policy_selection(
 def validate_rust_policy_selection_plan(
     profiles: tuple[EmittedProfile, ...],
     plan: RustPolicySelectionPlan,
+    manifest: RustPolicyManifest = DEFAULT_RUST_POLICY_MANIFEST,
 ) -> None:
     """Reject a stale, partial, or foreign mapping before Rust source rendering."""
 
-    expected = plan_rust_policy_selection(profiles)
+    expected = plan_rust_policy_selection(profiles, manifest)
     expected_by_name = {
         profile.profile_name: profile for profile in expected.profiles
     }
@@ -367,11 +318,21 @@ def validate_rust_policy_selection_plan(
     for profile_name, expected_profile in expected_by_name.items():
         actual_profile = actual_by_name[profile_name]
         expected_inventory = tuple(
-            (selection.key, selection.specialization, selection.candidate_ids)
+            (
+                selection.key,
+                selection.specialization,
+                selection.candidate_ids,
+                selection.pilot_id,
+            )
             for selection in expected_profile.selections
         )
         actual_inventory = tuple(
-            (selection.key, selection.specialization, selection.candidate_ids)
+            (
+                selection.key,
+                selection.specialization,
+                selection.candidate_ids,
+                selection.pilot_id,
+            )
             for selection in actual_profile.selections
         )
         if (
@@ -387,6 +348,9 @@ def validate_rust_policy_selection_plan(
 def rust_policy_selection_reason(
     key: SpecializationKey,
     spec: LoweredSpecialization,
+    manifest: RustPolicyManifest = DEFAULT_RUST_POLICY_MANIFEST,
+    *,
+    candidate_ids: tuple[str, ...] | None = None,
 ) -> str | None:
     """Return why an exact Rust candidate key cannot use the stable selection seam."""
 
@@ -449,15 +413,59 @@ def rust_policy_selection_reason(
         return "SIMD-type-parameter specializations are report-only"
     if spec.lane_list_params:
         return "lane-list specializations are report-only"
-    if not any(
-        pilot.matches(key, spec) for pilot in RUST_POLICY_SELECTION_PILOTS
-    ):
-        return "initial Rust policy selection supports only the proven sse2 mul pilot"
+    candidates = (
+        ("default", *spec.variant_names)
+        if candidate_ids is None
+        else candidate_ids
+    )
+    matching_pilots = manifest.matching_pilots(key, spec, candidates)
+    if not matching_pilots:
+        return "specialization is not admitted by the Rust policy manifest"
+    if len(matching_pilots) > 1:
+        return "multiple Rust policy pilots match this specialization"
     return None
 
 
+def validate_rust_policy_manifest_profiles(
+    profiles: tuple[EmittedProfile, ...],
+    manifest: RustPolicyManifest = DEFAULT_RUST_POLICY_MANIFEST,
+) -> None:
+    """Prove each declared pilot matches exactly one full-corpus lowered slot."""
+
+    from tslc.benchmark.identity import specialization_key
+
+    counts = {pilot.pilot_id: 0 for pilot in manifest.selection_pilots}
+    for profile in profiles:
+        for specializations in profile.specializations("rust").values():
+            for spec in specializations:
+                if not spec.variant_bodies:
+                    continue
+                key = specialization_key(
+                    backend_id="rust",
+                    profile=profile,
+                    specialization=spec,
+                    primitive_specializations=specializations,
+                )
+                candidates = ("default", *spec.variant_names)
+                for pilot in manifest.matching_pilots(key, spec, candidates):
+                    counts[pilot.pilot_id] += 1
+    invalid = {
+        pilot_id: count
+        for pilot_id, count in counts.items()
+        if count != 1
+    }
+    if invalid:
+        details = ", ".join(
+            f"{pilot_id} matched {count}"
+            for pilot_id, count in sorted(invalid.items())
+        )
+        raise ValueError(
+            "Rust policy manifest pilots must each match exactly one lowered "
+            f"slot: {details}"
+        )
+
+
 __all__ = (
-    "RUST_POLICY_SELECTION_PILOTS",
     "RustPolicySelection",
     "RustPolicySelectionPilot",
     "RustPolicySelectionCoverageEntry",
@@ -467,4 +475,5 @@ __all__ = (
     "plan_rust_policy_selection",
     "rust_policy_selection_reason",
     "validate_rust_policy_selection_plan",
+    "validate_rust_policy_manifest_profiles",
 )

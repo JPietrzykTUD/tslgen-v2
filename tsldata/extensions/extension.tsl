@@ -1,7 +1,6 @@
 extension avx512:
   extension_name "avx512"
   family "x86"
-  intrinsic_style "x86"
   vector_bits 512
   native_sort_order 500
   default_test_target true
@@ -57,7 +56,6 @@ extension avx512:
 extension avx2:
   extension_name "avx2"
   family "x86"
-  intrinsic_style "x86"
   vector_bits 256
   native_sort_order 300
   default_test_target true
@@ -132,7 +130,6 @@ extension avx2_vl:
 extension wasm128:
   extension_name "wasm128"
   family "wasm"
-  intrinsic_style "wasm"
   vector_bits 128
   native_sort_order 800
   default_test_target true
@@ -175,6 +172,8 @@ extension wasm128:
       cpp "v128_t"
       rust "core::arch::wasm32::v128"
   intrinsic_compose:
+    order "suffix_base"
+    require_explicit_suffix true
     prefix:
       cpp "wasm_"
       rust "core::arch::wasm32::"
@@ -198,7 +197,6 @@ extension wasm128:
 extension sse:
   extension_name "sse"
   family "x86"
-  intrinsic_style "x86"
   vector_bits 128
   native_sort_order 100
   default_test_target true
@@ -271,7 +269,6 @@ extension sse_vl:
 extension cuda:
   extension_name "cuda"
   family "cuda"
-  intrinsic_style "cuda"
   default_test_target false
   cpp:
     supported true
@@ -282,7 +279,6 @@ extension oneapi_fpga:
   extension_name "oneapi_fpga"
   inherits "generic"
   family "generic_like"
-  intrinsic_style "generic"
   vector_bits "sized"
   native_sort_order 0
   active_when:
@@ -310,7 +306,6 @@ extension oneapi_fpga_rtl:
 extension neon:
   extension_name "neon"
   family "arm"
-  intrinsic_style "arm"
   vector_bits 128
   native_sort_order 600
   default_test_target true
@@ -379,7 +374,6 @@ extension sve:
   extension_name "sve"
   family "arm"
   documentation_width "SVE"
-  intrinsic_style "arm"
   vector_bits "scalable"
   native_sort_order 700
   runtime_lane_count:
@@ -445,7 +439,6 @@ extension rvv:
   extension_name "rvv"
   family "rvv"
   documentation_width "RVV"
-  intrinsic_style "rvv"
   vector_bits "scalable"
   native_sort_order 750
   runtime_lane_count:
@@ -648,7 +641,6 @@ extension sve512:
 extension scalar:
   extension_name "scalar"
   family "scalar"
-  intrinsic_style "scalar"
   vector_bits 0
   native_sort_order 0
   default_test_target false
@@ -676,7 +668,6 @@ extension clang_v128:
   extension_name "clang_v128"
   inherits "generic"
   family "compiler_builtin"
-  intrinsic_style "compiler_builtin"
   vector_bits 128
   native_sort_order 0
   default_test_target true
@@ -804,7 +795,6 @@ extension clang_v512_bool:
 extension generic:
   extension_name "generic"
   family "generic_like"
-  intrinsic_style "generic"
   vector_bits "sized"
   native_sort_order 0
   default_test_target true

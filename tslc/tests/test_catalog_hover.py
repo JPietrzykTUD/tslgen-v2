@@ -193,8 +193,6 @@ def _catalog_and_definitions(
                 name="wide",
                 isa_name="wide",
                 family="test",
-                compose_prefix={},
-                compose_suffix_by_type={},
                 backend_supported={"rust": False, "cpp": True},
                 inherits="base",
                 active_when=ExtensionActivation(
@@ -209,8 +207,6 @@ def _catalog_and_definitions(
                 name="minimal",
                 isa_name="minimal",
                 family="",
-                compose_prefix={},
-                compose_suffix_by_type={},
             ),
         },
         type_spellings={},

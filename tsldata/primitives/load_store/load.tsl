@@ -862,8 +862,8 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
 prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
   param_types:
     ptr:
-      "if packed=true" "type(vector::imask) const*"
-      "if packed=false" "type(base::unsigned_of(type(base::in))) const*"
+      "if packed=true" "cptr(type(vector::imask))"
+      "if packed=false" "cptr(type(base::unsigned_of(type(base::in))))"
   brief_description "Loads a mask value from memory using the selected mask representation."
   detailed_description """
     Loads a mask value from memory. With `packed=true`, memory contains the

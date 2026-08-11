@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import TYPE_CHECKING, Protocol
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
 
 from tslc.backend.helper_requirements import (
     BackendHelperManifest,
@@ -141,6 +142,90 @@ class CompilerCapability:
         object.__setattr__(self, "compiler_ids", tuple(self.compiler_ids))
 
 
+_CompilerCapabilityT = TypeVar(
+    "_CompilerCapabilityT", bound=CompilerCapability, covariant=True
+)
+
+
+class CompilerCapabilityRegistry(Generic[_CompilerCapabilityT]):
+    """One immutable owner for a backend's compiler-capability vocabulary."""
+
+    __slots__ = ("_capabilities", "_by_id")
+
+    def __init__(self, capabilities: Iterable[_CompilerCapabilityT] = ()) -> None:
+        ordered = tuple(capabilities)
+        by_id: dict[str, _CompilerCapabilityT] = {}
+        duplicates: set[str] = set()
+        for capability in ordered:
+            if capability.capability_id in by_id:
+                duplicates.add(capability.capability_id)
+            by_id[capability.capability_id] = capability
+        if duplicates:
+            raise ValueError(
+                "duplicate compiler capability IDs: "
+                + ", ".join(sorted(duplicates))
+            )
+        self._capabilities = ordered
+        self._by_id = MappingProxyType(by_id)
+
+    def __iter__(self) -> Iterator[_CompilerCapabilityT]:
+        return iter(self._capabilities)
+
+    def __len__(self) -> int:
+        return len(self._capabilities)
+
+    @property
+    def capability_ids(self) -> frozenset[str]:
+        return frozenset(self._by_id)
+
+    def get(self, capability_id: str) -> _CompilerCapabilityT | None:
+        return self._by_id.get(capability_id)
+
+    def require(self, capability_id: str) -> _CompilerCapabilityT:
+        return self._by_id[capability_id]
+
+    def known(
+        self, capability_ids: Iterable[str]
+    ) -> tuple[_CompilerCapabilityT, ...]:
+        return tuple(
+            capability
+            for capability_id in capability_ids
+            if (capability := self.get(capability_id)) is not None
+        )
+
+    def require_all(
+        self, capability_ids: Iterable[str]
+    ) -> tuple[_CompilerCapabilityT, ...]:
+        return tuple(self.require(capability_id) for capability_id in capability_ids)
+
+    def header_groups(self, capability_ids: Iterable[str]) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                {
+                    capability.header_group
+                    for capability in self.known(capability_ids)
+                    if capability.header_group is not None
+                }
+            )
+        )
+
+    def compiler_ids(self, capability_ids: Iterable[str]) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                {
+                    compiler_id
+                    for capability in self.known(capability_ids)
+                    for compiler_id in capability.compiler_ids
+                }
+            )
+        )
+
+
+EMPTY_COMPILER_CAPABILITY_REGISTRY: CompilerCapabilityRegistry[
+    CompilerCapability
+] = CompilerCapabilityRegistry()
+
+
 @dataclass(frozen=True, slots=True)
 class BackendCapability:
     backend_id: str
@@ -163,17 +248,12 @@ class BackendCapability:
     )
     generated_format: GeneratedFormatSpec | None = None
     generated_documentation: GeneratedDocumentationSpec | None = None
-    compiler_capabilities: tuple[CompilerCapability, ...] = ()
+    compiler_capabilities: CompilerCapabilityRegistry[CompilerCapability] = (
+        EMPTY_COMPILER_CAPABILITY_REGISTRY
+    )
 
     def compiler_capability(self, capability_id: str) -> CompilerCapability | None:
-        return next(
-            (
-                capability
-                for capability in self.compiler_capabilities
-                if capability.capability_id == capability_id
-            ),
-            None,
-        )
+        return self.compiler_capabilities.get(capability_id)
 
     def extension_compiler_capabilities(
         self, extension: Extension | None
@@ -183,21 +263,16 @@ class BackendCapability:
         metadata = extension.metadata.backend.get(self.backend_id)
         if metadata is None:
             return ()
-        return tuple(
-            capability
-            for capability_id in metadata.compiler_capabilities
-            if (capability := self.compiler_capability(capability_id)) is not None
-        )
+        return self.compiler_capabilities.known(metadata.compiler_capabilities)
 
     def extension_header_groups(self, extension: Extension | None) -> tuple[str, ...]:
-        return tuple(
-            sorted(
-                {
-                    capability.header_group
-                    for capability in self.extension_compiler_capabilities(extension)
-                    if capability.header_group is not None
-                }
-            )
+        if extension is None:
+            return ()
+        metadata = extension.metadata.backend.get(self.backend_id)
+        if metadata is None:
+            return ()
+        return self.compiler_capabilities.header_groups(
+            metadata.compiler_capabilities
         )
 
     def extension_header_group(self, extension: Extension | None) -> str | None:
@@ -205,14 +280,13 @@ class BackendCapability:
         return groups[0] if len(groups) == 1 else None
 
     def extension_compiler_ids(self, extension: Extension | None) -> tuple[str, ...]:
-        return tuple(
-            sorted(
-                {
-                    compiler_id
-                    for capability in self.extension_compiler_capabilities(extension)
-                    for compiler_id in capability.compiler_ids
-                }
-            )
+        if extension is None:
+            return ()
+        metadata = extension.metadata.backend.get(self.backend_id)
+        if metadata is None:
+            return ()
+        return self.compiler_capabilities.compiler_ids(
+            metadata.compiler_capabilities
         )
 
     def create_dialect(self, catalog: Catalog) -> BackendDialect:

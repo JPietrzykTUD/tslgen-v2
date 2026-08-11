@@ -9,10 +9,13 @@ from tslc.backend.cpp_compiler_capabilities import (
     cpp_compiler_capability,
     cpp_extension_header_group,
 )
-from tslc.backend.cpp_detection import CPP_PROFILE_DETECTION_KINDS
+from tslc.backend.cpp_detection import (
+    CPP_PROFILE_AUTO_GATES,
+    CPP_PROFILE_DETECTION_KINDS,
+)
 from tslc.backend.target_capability import (
-    cpp_x86_register_helper,
-    x86_register_bits,
+    cpp_width_indexed_register_helper,
+    width_indexed_register_bits,
 )
 from tslc.catalog.model import Extension
 from tslc.diagnostics import Diagnostic, diagnostic_at
@@ -24,6 +27,22 @@ if TYPE_CHECKING:
 def validate_cpp_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
     for profile in profiles:
+        auto_gate = profile.profile.auto_detect_gate
+        if (
+            auto_gate is not None
+            and auto_gate not in CPP_PROFILE_AUTO_GATES.gate_ids
+        ):
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-BACKEND-CPP-UNSUPPORTED-AUTO-DETECT-GATE",
+                    message=(
+                        f"C++ profile {profile.profile.name!r} declares unsupported "
+                        f"auto-detection gate {auto_gate!r}; expected one of: "
+                        + ", ".join(sorted(CPP_PROFILE_AUTO_GATES.gate_ids))
+                    ),
+                )
+            )
         family = profile.profile_family
         detection = None if family is None else family.backend("cpp").detection
         if (
@@ -124,15 +143,22 @@ def validate_cpp_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnos
                         source=extension.mask_policy.source or extension.source,
                     )
                 )
-            bits = x86_register_bits(extension)
-            if bits is not None and cpp_x86_register_helper(extension) is None:
+            bits = width_indexed_register_bits(extension)
+            if (
+                bits is not None
+                and cpp_width_indexed_register_helper(extension) is None
+            ):
                 diagnostics.append(
                     diagnostic_at(
                         severity="error",
-                        code="TSL-BACKEND-CPP-UNSUPPORTED-X86-WIDTH",
+                        code=(
+                            "TSL-BACKEND-CPP-UNSUPPORTED-"
+                            "WIDTH-INDEXED-REGISTER-WIDTH"
+                        ),
                         message=(
                             f"extension {extension.name!r} declares C++ support with "
-                            f"unsupported x86 register width {bits}; expected 128, 256, or 512"
+                            "unsupported width-indexed register width "
+                            f"{bits}; expected 128, 256, or 512"
                         ),
                         source=extension.source,
                     )

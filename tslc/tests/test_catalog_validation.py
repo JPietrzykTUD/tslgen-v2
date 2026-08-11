@@ -1545,6 +1545,40 @@ def test_lscpu_flags_is_no_longer_an_extension_field() -> None:
     assert "lscpu_flags" in diagnostic.message
 
 
+def test_intrinsic_style_is_rejected_with_typed_composition_guidance() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension legacy:\n"
+            '  extension_name "legacy"\n'
+            '  family "scalar"\n'
+            '  intrinsic_style "wasm"\n'
+        )
+    )
+
+    diagnostic = next(
+        d
+        for d in diagnostics
+        if d.code == "TSL-CATALOG-OBSOLETE-INTRINSIC-STYLE"
+    )
+    assert "intrinsic_compose" in diagnostic.message
+    assert "suffix_base" in diagnostic.message
+
+
+def test_intrinsic_compose_closed_values_are_validated() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension malformed:\n"
+            '  extension_name "malformed"\n'
+            '  family "scalar"\n'
+            "  intrinsic_compose:\n"
+            '    order "middle"\n'
+            '    require_explicit_suffix "sometimes"\n'
+        )
+    )
+
+    assert sum(d.code == "TSL-CATALOG-INVALID-ENUM" for d in diagnostics) >= 2
+
+
 def test_unknown_extension_backend_metadata_fields_are_diagnosed() -> None:
     diagnostics = _diagnostics(
         _base_source(
@@ -2592,10 +2626,10 @@ def _param_types_catalog_and_diagnostics(condition_key: str):
         '  s32 {type "int32_t"}\n'
         "language rust:\n"
         '  s32 {type "i32"}\n'
-        "prim<v:=v>[aligned=*] id(data):\n"
+        "prim<v:=ptr>[aligned=*] id(data):\n"
         "  param_types:\n"
         "    data:\n"
-        f'      {condition_key} "type(base::in)"\n'
+        f'      {condition_key} "ptr(type(base::in))"\n'
         "  impls:\n"
         "    scalar:\n"
         "      ints:\n"

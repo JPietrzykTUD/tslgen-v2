@@ -51,6 +51,9 @@ def _build_target_families(fields: list[ParsedTslField]) -> TargetFamilyCatalog:
                 index_vector_register=_bool_field(
                     _child(entry, "index_vector_register"), default=False
                 ),
+                width_indexed_registers=_bool_field(
+                    _child(entry, "width_indexed_registers"), default=False
+                ),
                 documentation_family=_field_text(
                     _child(entry, "documentation_family")
                 ),

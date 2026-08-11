@@ -197,7 +197,6 @@ def _record_rust_vector(
     if (
         extension is None
         or uses_sized_vector
-        or extension.family in {"scalar", "generic_like"}
         or extension.vector_bits_kind != "fixed"
         or extension.vector_bits <= 0
         or not extension.supports_backend("rust")

@@ -12,7 +12,9 @@ from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_policy_selection import (
     plan_rust_policy_selection,
     rust_policy_selection_reason,
+    validate_rust_policy_manifest_profiles,
 )
+from tslc.backend.rust_policy_manifest import DEFAULT_RUST_POLICY_MANIFEST
 from tslc.diagnostics import has_errors
 
 
@@ -43,6 +45,7 @@ def test_plan_has_exact_supported_and_report_only_keys(rust_selection_result) ->
     selection = profile.selections[0]
     assert selection.candidate_ids == ("default", "generic_fallback")
     assert selection.selected_candidate == "default"
+    assert selection.pilot_id == "sse2_mul_sse_si8"
 
     report = rust_selection_result.rendered.benchmarks.profile("rust", "sse2")
     assert report is not None
@@ -106,7 +109,44 @@ def test_selection_gate_is_exact_and_deterministic(rust_selection_result) -> Non
     assert planned.selections == ()
     assert len(planned.coverage) == 1
     assert planned.coverage[0].status == "report_only"
-    assert "proven sse2 mul pilot" in planned.coverage[0].reason
+    assert "not admitted by the Rust policy manifest" in planned.coverage[0].reason
+
+
+def test_synthetic_manifest_pilot_is_additive(rust_selection_result) -> None:
+    emitted = rust_selection_result.emitted_profiles[0]
+    source = _variant_spec(emitted, "mul")
+    renamed = replace(
+        source,
+        primitive_name="structural_probe",
+        source_primitive_name="structural_probe",
+    )
+    profile = _profile_with(emitted, {"structural_probe": (renamed,)})
+    pilot = replace(
+        DEFAULT_RUST_POLICY_MANIFEST.selection_pilots[0],
+        pilot_id="synthetic_structural_probe",
+        primitive_name="structural_probe",
+        source_primitive_name="structural_probe",
+    )
+    manifest = replace(
+        DEFAULT_RUST_POLICY_MANIFEST,
+        selection_pilots=(pilot,),
+    )
+
+    planned = plan_rust_policy_selection((profile,), manifest).profile("sse2")
+
+    assert planned is not None
+    assert [selection.pilot_id for selection in planned.selections] == [
+        "synthetic_structural_probe"
+    ]
+
+
+def test_loaded_manifest_pilot_matches_exactly_one_lowered_slot(
+    rust_selection_result,
+) -> None:
+    validate_rust_policy_manifest_profiles(
+        rust_selection_result.emitted_profiles,
+        DEFAULT_RUST_POLICY_MANIFEST,
+    )
 
 
 def test_duplicate_key_coverage_is_fail_closed_and_order_independent(
@@ -175,7 +215,7 @@ def test_backend_query_owns_deferred_shape_classification(
     assert "parameter type overrides" in rust_policy_selection_reason(
         key, replace(spec, param_type_overrides=("u32", None))
     )
-    assert "proven sse2 mul pilot" in rust_policy_selection_reason(
+    assert "not admitted by the Rust policy manifest" in rust_policy_selection_reason(
         replace(key, primitive_name="renamed"),
         replace(spec, primitive_name="renamed"),
     )

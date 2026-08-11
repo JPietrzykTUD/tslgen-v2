@@ -12,6 +12,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from tslc.backend.cpp_detection import (
+    CppProfileDetectionPlan,
+    cpp_profile_detection_plan,
+)
 from tslc.backend.cpp_compiler_capabilities import (
     cpp_compiler_capability_header_defaults,
     cpp_extension_header_group,
@@ -19,7 +23,7 @@ from tslc.backend.cpp_compiler_capabilities import (
     used_cpp_compiler_capability_ids,
 )
 from tslc.backend.cpp_profile import (
-    _cpp_compiler_builtin_fixed_registrations,
+    _cpp_overlay_fixed_registrations,
     _cpp_includes,
     _cpp_inferred_simd_registrations,
     _cpp_native_registration,
@@ -31,7 +35,7 @@ from tslc.backend.cpp_profile import (
     cpp_profiles_support_algorithm,
 )
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
-from tslc.backend.target_capability import is_x86_register_extension
+from tslc.backend.target_capability import is_width_indexed_register_extension
 from tslc.catalog.model import Extension
 from tslc.lower.lowerer import (
     LoweredArithmeticPreconditionKind,
@@ -134,6 +138,7 @@ class CppProjectRenderModel:
     compiler_capability_defaults: str
     dispatch_header_groups: tuple[str, ...]
     supports_algorithm: bool
+    profile_detection: CppProfileDetectionPlan
 
 
 def cpp_project_render_model(
@@ -168,6 +173,9 @@ def cpp_project_render_model(
             )
         ),
         supports_algorithm=cpp_profiles_support_algorithm(profiles),
+        profile_detection=cpp_profile_detection_plan(
+            tuple(profile.profile for profile in profiles)
+        ),
     )
 
 
@@ -211,7 +219,7 @@ def _cpp_base_header(
     x86_exts = [
         ext
         for ext in emitted_exts
-        if is_x86_register_extension(emitted_profile.extensions.get(ext))
+        if is_width_indexed_register_extension(emitted_profile.extensions.get(ext))
     ]
     registrations = "".join(
         _cpp_registration(ext, emitted_profile.extensions.get(ext))
@@ -249,7 +257,7 @@ def _cpp_overlay_header(
     header_group: str,
 ) -> CppProfileHeader:
     registrations = _cpp_native_registration(grouped, emitted_profile.extensions)
-    registrations += _cpp_compiler_builtin_fixed_registrations(
+    registrations += _cpp_overlay_fixed_registrations(
         grouped,
         emitted_profile.extensions,
         header_group,

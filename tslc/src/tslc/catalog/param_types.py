@@ -1,8 +1,8 @@
 """Source-owned ``param_types`` expression and condition-key grammar.
 
-``param_types`` entries are authored as TSIL-ish type expressions, with an
-optional C-like pointer suffix because the source corpus is C-family today. This
-module owns that source syntax — the type expressions, the ``default`` /
+``param_types`` entries are authored as target-neutral ``ptr(...)`` or
+``cptr(...)`` wrappers around TSIL type expressions. This module owns that
+source syntax — the type expressions, the ``default`` /
 ``if attribute=value`` rule-condition keys, and the related generic-parameter
 base-width constraint keys — so catalog promotion, schema validation, lowering,
 and value-test planning share one grammar instead of drifting copies.
@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass
 from typing import cast, get_args
 
-from tslc.catalog.model import BaseWidthRelation
+from tslc.catalog.model import BaseWidthRelation, ParamTypeExpression
 from tslc.catalog.scalar_types import signed_of, unsigned_of
 
 _PARAM_TYPE_CONDITION_RE = re.compile(r"^if\s+([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_]+)$")
@@ -32,16 +32,6 @@ _BASE_WIDTH_CONSTRAINT_RE = re.compile(
 _BASE_WIDTH_SHAPE_RE = re.compile(
     r"^width\(self::base\)\s*(\S+?)\s*width\(base::in\)$"
 )
-
-
-@dataclass(frozen=True, slots=True)
-class ParamTypeExpression:
-    value_expr: str
-    pointer_const: bool | None = None
-
-    @property
-    def is_pointer(self) -> bool:
-        return self.pointer_const is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,24 +89,29 @@ def base_width_relation_text(text: str) -> str | None:
     return None if match is None else match.group(1)
 
 
-def parse_param_type_expression(type_expr: str) -> ParamTypeExpression:
-    """Parse the source-level pointer shell around a ``param_types`` expression."""
+def parse_param_type_expression(type_expr: str) -> ParamTypeExpression | None:
+    """Parse an exact target-neutral pointer wrapper."""
 
-    pointer = _split_c_like_pointer_type(type_expr)
-    if pointer is None:
-        return ParamTypeExpression(type_expr.strip())
-    value_expr, is_const = pointer
-    return ParamTypeExpression(value_expr, pointer_const=is_const)
+    head_arg = _split_head_arg(type_expr)
+    if head_arg is None:
+        return None
+    head, pointee = head_arg
+    if not pointee:
+        return None
+    if head == "ptr":
+        return ParamTypeExpression("mutable", pointee)
+    if head == "cptr":
+        return ParamTypeExpression("const", pointee)
+    return None
 
 
 def resolve_param_type_scalar_tag(
-    type_expr: str,
+    type_expr: ParamTypeExpression,
     input_type_tag: str,
 ) -> ParamTypeScalarResolution:
     """Resolve the scalar-layout subset used by generated value tests."""
 
-    parsed = parse_param_type_expression(type_expr)
-    query = _unwrap_type_call(parsed.value_expr)
+    query = _unwrap_type_call(type_expr.pointee_expr)
     if query is None:
         return _unsupported_scalar_layout(type_expr)
     resolved = _resolve_scalar_query(query, input_type_tag)
@@ -143,10 +138,13 @@ def _resolve_scalar_query(query: str, input_type_tag: str) -> str | None:
     return None
 
 
-def _unsupported_scalar_layout(type_expr: str) -> ParamTypeScalarResolution:
+def _unsupported_scalar_layout(
+    type_expr: ParamTypeExpression,
+) -> ParamTypeScalarResolution:
     return ParamTypeScalarResolution(
         reason=(
-            f"unsupported param_types layout expression {type_expr!r}; value tests "
+            "unsupported param_types layout expression "
+            f"{type_expr.source_text!r}; value tests "
             "support type(base::in), type(base::unsigned_of(type(base::in))), "
             "and type(base::signed_of(type(base::in)))"
         )
@@ -161,18 +159,10 @@ def _unwrap_type_call(text: str) -> str | None:
     return arg.strip() if head == "type" else None
 
 
-def _split_c_like_pointer_type(type_expr: str) -> tuple[str, bool] | None:
-    text = type_expr.strip()
-    if not text.endswith("*"):
-        return None
-    base = text[:-1].rstrip()
-    is_const = False
-    if base.endswith("const"):
-        is_const = True
-        base = base[: -len("const")].rstrip()
-    if not base:
-        return None
-    return base, is_const
+def uses_c_like_pointer_syntax(type_expr: str) -> bool:
+    """Whether a rejected expression uses the retired target-language shell."""
+
+    return type_expr.strip().endswith("*")
 
 
 def _split_head_arg(text: str) -> tuple[str, str] | None:
@@ -203,4 +193,5 @@ __all__ = (
     "parse_param_type_expression",
     "resolve_param_type_scalar_tag",
     "unquote_key",
+    "uses_c_like_pointer_syntax",
 )

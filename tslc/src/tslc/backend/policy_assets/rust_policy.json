@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "benchmark_admissions": [
+    {
+      "profile_name": "avx2",
+      "scenario_family": "reduction"
+    },
+    {
+      "profile_name": "sse2",
+      "scenario_family": "immediate"
+    },
+    {
+      "profile_name": "sse2",
+      "scenario_family": "register"
+    }
+  ],
+  "selection_pilots": [
+    {
+      "pilot_id": "sse2_mul_sse_si8",
+      "profile_name": "sse2",
+      "primitive_name": "mul",
+      "source_primitive_name": "mul",
+      "extension_name": "sse",
+      "type_tag": "si8",
+      "result_kind": "v",
+      "param_kinds": ["v", "v"],
+      "lanes": 16,
+      "vector_spelling": "Simd<i8, Sse>",
+      "caller_unsafe": false,
+      "candidate_ids": ["default", "generic_fallback"]
+    }
+  ]
+}

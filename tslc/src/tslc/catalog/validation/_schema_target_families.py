@@ -37,6 +37,7 @@ KNOWN_EXTENSION_FAMILY_FIELDS = frozenset(
         "documentation_family",
         "documentation_sort_order",
         "requires_declared_vector_register",
+        "width_indexed_registers",
     }
 )
 BOOLEAN_EXTENSION_FAMILY_FIELDS = frozenset(
@@ -45,6 +46,7 @@ BOOLEAN_EXTENSION_FAMILY_FIELDS = frozenset(
         "implementation_fallback",
         "index_vector_register",
         "requires_declared_vector_register",
+        "width_indexed_registers",
     }
 )
 KNOWN_PROFILE_FAMILY_FIELDS = frozenset(

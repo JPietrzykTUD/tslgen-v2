@@ -96,8 +96,8 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     assert category_counts == {
         "callee_resolution": 282,
         "forwarded_call_arguments": 3_574,
-        "local_declaration": 792,
-        "residual_target_text": 8_592,
+        "local_declaration": 840,
+        "residual_target_text": 8_544,
         "schema_conflict": 650,
         "signature_admissibility": 12_589,
         "specialization_admissibility": 5_446,
@@ -151,7 +151,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         )
     ).hexdigest() == actual["skip_location_inventory_sha256"]
     assert actual["skip_semantic_inventory_sha256"] == (
-        "804dfa3379187282cf306844778142e89674f345ef6c557918a324b053d923e9"
+        "e82f33d10c7a62b5e07254522d234e768f99118268768a15faf8c953b0c4259c"
     )
 
 

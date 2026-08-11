@@ -15,6 +15,8 @@ from tslc.catalog.model import (
     ExtensionMetadata,
     ImaskPolicy,
     ImaskPolicyKind,
+    IntrinsicComposition,
+    IntrinsicNameOrder,
     MaskPolicy,
     MaskPolicyKind,
     VectorBitsKind,
@@ -41,15 +43,30 @@ def _resolve_extension_inheritance(
             return ext
         parent = resolve(ext.inherits, seen | {name})
         declared_fields = declared_fields_by_name.get(name, frozenset())
+        intrinsic_composition = IntrinsicComposition(
+            prefix_by_backend={
+                **parent.intrinsic_composition.prefix_by_backend,
+                **ext.intrinsic_composition.prefix_by_backend,
+            },
+            suffix_by_type={
+                **parent.intrinsic_composition.suffix_by_type,
+                **ext.intrinsic_composition.suffix_by_type,
+            },
+            order=(
+                ext.intrinsic_composition.order
+                if "intrinsic_compose.order" in declared_fields
+                else parent.intrinsic_composition.order
+            ),
+            require_explicit_suffix=(
+                ext.intrinsic_composition.require_explicit_suffix
+                if "intrinsic_compose.require_explicit_suffix" in declared_fields
+                else parent.intrinsic_composition.require_explicit_suffix
+            ),
+        )
         return replace(
             ext,
             family=ext.family or parent.family,
-            intrinsic_style=ext.intrinsic_style or parent.intrinsic_style,
-            compose_prefix={**parent.compose_prefix, **ext.compose_prefix},
-            compose_suffix_by_type={
-                **parent.compose_suffix_by_type,
-                **ext.compose_suffix_by_type,
-            },
+            intrinsic_composition=intrinsic_composition,
             vector_register_types=_merge_nested_string_maps(
                 parent.vector_register_types,
                 ext.vector_register_types,
@@ -117,7 +134,20 @@ def _resolve_extension_inheritance(
 
 
 def _declared_extension_fields(declaration: ParsedBlockDeclaration) -> frozenset[str]:
-    return frozenset(field.key.text for field in declaration.fields)
+    fields = {field.key.text for field in declaration.fields}
+    compose = next(
+        (
+            field
+            for field in declaration.fields
+            if field.key.text == "intrinsic_compose"
+        ),
+        None,
+    )
+    fields.update(
+        f"intrinsic_compose.{field.key.text}"
+        for field in _children(compose)
+    )
+    return frozenset(fields)
 
 
 def _build_extension(
@@ -133,30 +163,14 @@ def _build_extension(
     # Identity is the block name: `avx2` and `avx2_vl` are distinct extensions
     # (avx2-only hardware vs. avx512vl-present hardware) even though they share the
     # `extension_name` ISA spelling "avx2".
-    compose_prefix: dict[str, str] = {}
-    compose_suffix_by_type: dict[str, str] = {}
     compose = fields.get("intrinsic_compose")
-    if compose is not None:
-        prefix_field = _child(compose, "prefix")
-        if prefix_field is not None:
-            compose_prefix = {
-                bk.key.text: (_field_text(bk) or "") for bk in _children(prefix_field)
-            }
-        suffix_field = _child(compose, "suffix")
-        by_type = _child(suffix_field, "by_type") if suffix_field is not None else None
-        if by_type is not None:
-            compose_suffix_by_type = {
-                e.key.text: (_field_text(e) or "") for e in _children(by_type)
-            }
 
     name = declaration.name or ""
     return Extension(
         name=name,
         isa_name=_field_text(fields.get("extension_name")) or name,
         family=_field_text(fields.get("family")) or "",
-        intrinsic_style=_field_text(fields.get("intrinsic_style")) or "",
-        compose_prefix=compose_prefix,
-        compose_suffix_by_type=compose_suffix_by_type,
+        intrinsic_composition=_intrinsic_composition(compose),
         vector_register_types=_vector_register_types(fields.get("vector_register_types")),
         backend_headers=_backend_headers(fields, backend_ids),
         backend_supported=_backend_supported(fields, backend_ids),
@@ -188,6 +202,33 @@ def _build_extension(
         ),
         unroll_variants=(_field_text(fields.get("unroll_variants")) or "").lower() == "true",
         source=_source_span(declaration.source),
+    )
+
+
+def _intrinsic_composition(
+    field: ParsedTslField | None,
+) -> IntrinsicComposition:
+    prefix = _child(field, "prefix")
+    suffix = _child(_child(field, "suffix"), "by_type")
+    order_text = _field_text(_child(field, "order"))
+    order = (
+        IntrinsicNameOrder(order_text)
+        if order_text in {item.value for item in IntrinsicNameOrder}
+        else IntrinsicNameOrder.BASE_SUFFIX
+    )
+    return IntrinsicComposition(
+        prefix_by_backend={
+            entry.key.text: (_field_text(entry) or "")
+            for entry in _children(prefix)
+        },
+        suffix_by_type={
+            entry.key.text: (_field_text(entry) or "")
+            for entry in _children(suffix)
+        },
+        order=order,
+        require_explicit_suffix=bool(
+            _bool_text(_child(field, "require_explicit_suffix"))
+        ),
     )
 
 

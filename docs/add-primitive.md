@@ -109,6 +109,30 @@ It must not infer a generic kind from the parameter name.
 
 Keep source constraints in the source contract.
 
+### Typed Pointer Parameter Overrides
+
+When a public pointer parameter needs a more specific pointee type, use an
+exact target-neutral `ptr(...)` or `cptr(...)` expression around a TSIL type
+query:
+
+```tsl
+param_types:
+  data:
+    default "cptr(type(base::in))"
+```
+
+Conditional rules use the same wrappers:
+
+```tsl
+param_types:
+  ptr:
+    "if packed=true" "ptr(type(vector::imask))"
+    "if packed=false" "ptr(type(base::unsigned_of(type(base::in))))"
+```
+
+C/C++ declarations such as `T *` or `T const *` are rejected immediately; the
+catalog carries pointer mutability and the pointee expression as typed values.
+
 ## 5. Declare A Registered Semantic Overload Only When Needed
 
 Use `overload` when same-name declarations differ along an axis already owned
@@ -249,6 +273,24 @@ body otherwise. Direct header consumers get the backend's conservative
 preprocessor probe as a default. An explicit generation capability set instead
 forces one selection and is intended for focused authoring or pinned-toolchain
 checks.
+
+Do not put `#if`, `__has_builtin`, compiler IDs, or feature-test macros in an
+implementation body. Express each alternative as a capability-selected
+implementation plus an unconditional semantic fallback; the backend registry
+owns the concrete probe and generated branch.
+
+Pointer casts distinguish an existing pointer expression from address intent
+through typed structure:
+
+```tsl
+cast<reinterpret, type=const_ptr>(void, address<of>(value))
+cast<reinterpret, type=ptr>(void, address<borrow_mut>(value))
+```
+
+Use `address<of>` for a shared address and `address<borrow_mut>` for a mutable
+borrow. Do not spell C++ `&value` or Rust `&mut value` in shared TSIL; common
+lowering does not parse target-language address tokens from raw text.
+
 Selection uses typed facts:
 
 ```text
@@ -351,7 +393,9 @@ Use an emulator only for a profile that requires one.
 - Documentation states special semantics.
 - Tests cover supported types and edge cases.
 - Requirements match the target features.
+- Compiler alternatives use semantic capabilities and an unconditional fallback.
 - Safety is explicit.
+- Pointer overrides and address intent use typed source forms.
 - Unsupported cases produce diagnostics or skips.
 - Python does not branch on the primitive name.
 - Renderers only format planned values.

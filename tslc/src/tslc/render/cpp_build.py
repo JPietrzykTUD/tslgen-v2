@@ -5,7 +5,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from tslc.backend.cpp_detection import CPP_PROFILE_DETECTION_KINDS
+from tslc.backend.cpp_detection import (
+    CPP_PROFILE_DETECTION_KINDS,
+    CppProfileDetectionPlan,
+)
 from tslc.backend.cpp_compiler_capabilities import (
     CppCompilerCapability,
     cpp_compiler_capability_cmake_probes,
@@ -16,6 +19,7 @@ from tslc.backend.cpp_compiler_capabilities import (
     used_cpp_compiler_capability_ids,
 )
 from tslc.backend.cpp_profile import cpp_compiler_capability_condition
+from tslc.backend.cpp_profile_model import CppProjectRenderModel
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.target_families import ProfileFamilyCapability
@@ -139,27 +143,20 @@ def _verify_runner(profile: MachineProfile) -> VerifyRunner | None:
 
 
 def _cpp_cmakelists(
+    model: CppProjectRenderModel,
     profiles: tuple[EmittedProfile, ...],
     assets: RenderAssets,
     *,
     value_tests: ValueTestProjectPlan | None = None,
 ) -> str:
     slugs = tuple(slug(profile.profile.name) for profile in profiles)
-    ungated_slugs = tuple(
-        slug(profile.profile.name)
-        for profile in profiles
-        if profile.profile.auto_detect_gate is None
+    detection_plan = model.profile_detection
+    fallback = (
+        ""
+        if detection_plan.fallback_profile_name is None
+        else slug(detection_plan.fallback_profile_name)
     )
-    declared_fallbacks = tuple(
-        slug(profile.profile.name)
-        for profile in profiles
-        if profile.profile.auto_detect_gate is None
-        and profile.profile.default_build_fallback
-    )
-    fallback = declared_fallbacks[0] if declared_fallbacks else (
-        ungated_slugs[0] if ungated_slugs else ""
-    )
-    auto_choices = _cpp_profile_auto_choices(profiles)
+    auto_choices = detection_plan.auto_choices
     capability_ids = used_cpp_compiler_capability_ids(profiles)
     capability_definitions = (
         cpp_compiler_capability_compile_definitions(capability_ids)
@@ -178,11 +175,15 @@ def _cpp_cmakelists(
             _cmake_quote(value) for value in auto_choices
         ),
         profile_aliases=_cpp_profile_aliases(profiles),
-        profile_auto_helpers=_cpp_profile_auto_helpers(profiles, assets),
+        profile_auto_helpers=_cpp_profile_auto_helpers(detection_plan, assets),
         profile_auto_hint=_cpp_profile_auto_hint(auto_choices),
         fallback_profile=fallback,
-        profile_detection=_cpp_profile_detection(profiles, fallback, auto_gate=None),
-        profile_auto_modes=_cpp_profile_auto_modes(profiles),
+        profile_detection=_cpp_profile_detection(
+            profiles,
+            fallback,
+            auto_gate_id=None,
+        ),
+        profile_auto_modes=_cpp_profile_auto_modes(profiles, detection_plan),
         profile_targets=_cpp_profile_targets(profiles, capability_definitions),
         overlay_test_targets=_cpp_overlay_test_targets(profiles),
         compile_failure_targets=_cpp_compile_failure_targets(value_tests),
@@ -219,13 +220,6 @@ def _profile_alias_choices(profiles: tuple[EmittedProfile, ...]) -> tuple[str, .
     )
 
 
-def _cpp_profile_auto_choices(profiles: tuple[EmittedProfile, ...]) -> tuple[str, ...]:
-    return tuple(
-        _cpp_profile_auto_mode_name(gate)
-        for gate in _cpp_profile_auto_gates(profiles)
-    )
-
-
 def _cpp_profile_auto_hint(auto_choices: tuple[str, ...]) -> str:
     if not auto_choices:
         return ""
@@ -233,12 +227,13 @@ def _cpp_profile_auto_hint(auto_choices: tuple[str, ...]) -> str:
 
 
 def _cpp_profile_auto_helpers(
-    profiles: tuple[EmittedProfile, ...],
+    plan: CppProfileDetectionPlan,
     assets: RenderAssets,
 ) -> str:
-    if not _cpp_profile_auto_gates(profiles):
-        return ""
-    return assets.text("cpp_profile_auto_helpers.cmake").strip()
+    return "\n\n".join(
+        assets.text(asset_name).strip()
+        for asset_name in plan.helper_assets
+    )
 
 
 def _cpp_profile_aliases(profiles: tuple[EmittedProfile, ...]) -> str:
@@ -391,13 +386,13 @@ def _cpp_profile_detection(
     profiles: tuple[EmittedProfile, ...],
     fallback_profile: str,
     *,
-    auto_gate: str | None,
+    auto_gate_id: str | None,
 ) -> str:
     blocks: list[str] = []
     for emitted_profile in _auto_detection_order(profiles):
         profile = emitted_profile.profile
         profile_slug = slug(profile.name)
-        if profile.auto_detect_gate != auto_gate:
+        if profile.auto_detect_gate != auto_gate_id:
             continue
         if profile_slug == fallback_profile and not profile.features:
             continue
@@ -417,25 +412,34 @@ def _cpp_profile_detection(
     return "\n".join(blocks)
 
 
-def _cpp_profile_auto_modes(profiles: tuple[EmittedProfile, ...]) -> str:
+def _cpp_profile_auto_modes(
+    profiles: tuple[EmittedProfile, ...],
+    plan: CppProfileDetectionPlan,
+) -> str:
     blocks: list[str] = []
-    for gate in _cpp_profile_auto_gates(profiles):
+    for gate in plan.auto_gates:
         gated_profiles = tuple(
-            profile for profile in profiles if profile.profile.auto_detect_gate == gate
+            profile
+            for profile in profiles
+            if profile.profile.auto_detect_gate == gate.gate_id
         )
         gated_slugs = tuple(slug(profile.profile.name) for profile in gated_profiles)
         if not gated_slugs:
             continue
-        mode = _cpp_profile_auto_mode_name(gate)
-        detection = _cpp_profile_detection(gated_profiles, "", auto_gate=gate)
+        mode = gate.mode_name
+        detection = _cpp_profile_detection(
+            gated_profiles,
+            "",
+            auto_gate_id=gate.gate_id,
+        )
         lines = [
             f'elseif(_TSL_REQUESTED_PROFILE STREQUAL "{mode}")',
             '  set(TSL_SELECTED_PROFILE "")',
-            f'  _tsl_detect_profile_gate("{gate}" _TSL_GATE_READY _TSL_GATE_REASON)',
+            f"  {gate.helper_function}(_TSL_GATE_READY _TSL_GATE_REASON)",
             "  if(NOT _TSL_GATE_READY)",
             (
                 f'    message(FATAL_ERROR "TSL_PROFILE={mode} requested, but '
-                f'{gate} auto-detection failed: ${{_TSL_GATE_REASON}}")'
+                f'{gate.gate_id} auto-detection failed: ${{_TSL_GATE_REASON}}")'
             ),
             "  endif()",
             "  if(CMAKE_CROSSCOMPILING)",
@@ -453,7 +457,7 @@ def _cpp_profile_auto_modes(profiles: tuple[EmittedProfile, ...]) -> str:
                 '    if(TSL_SELECTED_PROFILE STREQUAL "")',
                 (
                     f'      message(FATAL_ERROR "TSL_PROFILE={mode} verified '
-                    f'{gate}, but no generated gated profile matched this CPU. '
+                    f'{gate.gate_id}, but no generated gated profile matched this CPU. '
                     f'Available gated profiles: {", ".join(gated_slugs)}")'
                 ),
                 "    endif()",
@@ -463,22 +467,6 @@ def _cpp_profile_auto_modes(profiles: tuple[EmittedProfile, ...]) -> str:
         )
         blocks.append("\n".join(lines))
     return "\n".join(blocks)
-
-
-def _cpp_profile_auto_gates(profiles: tuple[EmittedProfile, ...]) -> tuple[str, ...]:
-    return tuple(
-        sorted(
-            {
-                profile.profile.auto_detect_gate
-                for profile in profiles
-                if profile.profile.auto_detect_gate is not None
-            }
-        )
-    )
-
-
-def _cpp_profile_auto_mode_name(gate: str) -> str:
-    return "auto-" + slug(gate).replace("_", "-")
 
 
 def _indent_lines(text: str, prefix: str) -> str:

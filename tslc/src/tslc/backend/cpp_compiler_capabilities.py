@@ -6,7 +6,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from tslc.backend.capability import CompilerCapability
+from tslc.backend.capability import (
+    CompilerCapability,
+    CompilerCapabilityRegistry,
+)
 
 if TYPE_CHECKING:
     from tslc.backend.emitted_profile import EmittedProfile
@@ -23,7 +26,7 @@ class CppCompilerCapability(CompilerCapability):
     diagnostic: str
 
 
-CPP_COMPILER_CAPABILITIES = (
+_CPP_COMPILER_CAPABILITIES = (
     CppCompilerCapability(
         capability_id="clang_vector_types",
         condition_macro="TSL_COMPILER_HAS_CLANG_VECTOR_TYPES",
@@ -159,16 +162,15 @@ int main() { return 0; }
 )
 
 
-_CPP_COMPILER_CAPABILITY_BY_ID = {
-    capability.capability_id: capability
-    for capability in CPP_COMPILER_CAPABILITIES
-}
+CPP_COMPILER_CAPABILITIES = CompilerCapabilityRegistry(
+    _CPP_COMPILER_CAPABILITIES
+)
 
 
 def cpp_compiler_capability(capability_id: str) -> CppCompilerCapability:
     """Return one registered C++ capability probe record."""
 
-    return _CPP_COMPILER_CAPABILITY_BY_ID[capability_id]
+    return CPP_COMPILER_CAPABILITIES.require(capability_id)
 
 
 def cpp_extension_compiler_capabilities(
@@ -179,10 +181,7 @@ def cpp_extension_compiler_capabilities(
     metadata = extension.metadata.backend.get("cpp")
     if metadata is None:
         return ()
-    return tuple(
-        cpp_compiler_capability(capability_id)
-        for capability_id in metadata.compiler_capabilities
-    )
+    return CPP_COMPILER_CAPABILITIES.require_all(metadata.compiler_capabilities)
 
 
 def cpp_extensions_compiler_capabilities(
@@ -203,14 +202,13 @@ def cpp_extensions_compiler_capabilities(
 
 
 def cpp_extension_header_groups(extension: Extension | None) -> tuple[str, ...]:
-    return tuple(
-        sorted(
-            {
-                capability.header_group
-                for capability in cpp_extension_compiler_capabilities(extension)
-                if capability.header_group is not None
-            }
-        )
+    if extension is None:
+        return ()
+    metadata = extension.metadata.backend.get("cpp")
+    if metadata is None:
+        return ()
+    return CPP_COMPILER_CAPABILITIES.header_groups(
+        metadata.compiler_capabilities
     )
 
 
@@ -220,14 +218,13 @@ def cpp_extension_header_group(extension: Extension | None) -> str | None:
 
 
 def cpp_extension_compiler_ids(extension: Extension | None) -> tuple[str, ...]:
-    return tuple(
-        sorted(
-            {
-                compiler_id
-                for capability in cpp_extension_compiler_capabilities(extension)
-                for compiler_id in capability.compiler_ids
-            }
-        )
+    if extension is None:
+        return ()
+    metadata = extension.metadata.backend.get("cpp")
+    if metadata is None:
+        return ()
+    return CPP_COMPILER_CAPABILITIES.compiler_ids(
+        metadata.compiler_capabilities
     )
 
 

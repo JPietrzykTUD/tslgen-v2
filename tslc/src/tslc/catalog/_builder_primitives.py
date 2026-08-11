@@ -26,6 +26,7 @@ from tslc.catalog.model import (
 from tslc.catalog.param_types import (
     parse_base_width_constraint,
     parse_param_type_condition,
+    parse_param_type_expression,
 )
 from tslc.catalog.overloads import PrimitiveOverload
 from tslc.catalog.signatures import parse_signature
@@ -191,8 +192,13 @@ def _param_type_rules(declaration: ParsedPrimitiveDeclaration) -> tuple[ParamTyp
                 # Rejected conditions/empty types are dropped here; the schema
                 # validator diagnoses them through the same shared grammar.
                 condition = parse_param_type_condition(entry.key.text)
-                type_expr = _field_text(entry)
-                if condition is None or not type_expr:
+                type_text = _field_text(entry)
+                type_expr = (
+                    None
+                    if type_text is None
+                    else parse_param_type_expression(type_text)
+                )
+                if condition is None or type_expr is None:
                     continue
                 attribute_name, attribute_value = condition
                 rules.append(
