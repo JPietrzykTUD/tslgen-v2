@@ -221,12 +221,20 @@ prim<v:=(v,v)> add(left, right):
   exports their results as target compile definitions, and renders local
   preprocessor branches around the alternative bodies. Hardware-profile
   selection and compiler-capability probing therefore remain independent.
+  C++ compiler option families, runtime-probe programs, overlay compiler sets,
+  and overlay enable macros are finalized in the backend-owned
+  [backend/cpp_profile_model.py](src/tslc/backend/cpp_profile_model.py) snapshot;
+  [render/cpp_build.py](src/tslc/render/cpp_build.py) only formats those values.
 
 - **Signatures** (`v:=(v,v)`): `v` vector, `m` mask, `im` integral mask, `s`
   scalar, `ptr`/`usize` (presence makes it a free function), `lanes<s>` a lane
   list. Representation changes may use target-owned operands such as `vt`
   (target register) and `imt` (target integral mask); a target result projects
   the declared result kind through the target vector.
+- **Primitive attribute semantics**: closed `cast` and `value` spellings are
+  promoted once into `PrimitiveCastMode` and `PrimitiveValueMode`. Selection
+  and value-test planning consume those typed fields rather than comparing raw
+  attribute strings or recognizing primitive names.
 - **Type-group keys**: `?i?` (any int), `f?` (any float), `arith` (all), plus
   concrete tags. Ranked by **specificity** — `si32` beats `?i?` beats `arith`.
 - **Extension fallback**: extensions form `inherits` chains (e.g. `avx2_vl →
@@ -241,7 +249,10 @@ prim<v:=(v,v)> add(left, right):
   target features plus their default/backend compiler spellings;
   machine profiles retain only genuine profile-specific overrides. Selection,
   lowering, translation, documentation, and verification consume those typed
-  roles instead of recognizing family or feature-name patterns.
+  roles instead of recognizing family or feature-name patterns. Documentation
+  target classes combine that declared family label with scalar, lane-count,
+  numeric-bit-width, scalable, or explicitly declared width facts; the renderer
+  does not recognize concrete family or extension identities.
 - **Profile build roles**: a machine profile may declare
   `default_build_fallback` and a semantic `auto_detect_gate`. Exactly one
   ungated fallback is accepted. The C++ detection registry
@@ -360,9 +371,12 @@ recursive `tuple[Segment, ...]`:
 `let<type>(Name, ...)` creates a typed lowering binding rather than a target-language
 declaration. TSIL-owned type positions resolve it directly, for example
 `cast<static>(Name, value)` or `var<typed>(Name, local, init)`. Use `type(Name)` only
-to insert its spelling into otherwise raw target text. A bare `Name` inside `RawText`
-is ordinary target text and is never searched or rewritten, including in comments,
-literals, and Rust lifetimes.
+to insert its spelling into otherwise raw target text. Bare names inside `RawText`
+are ordinary target text and are never searched or rewritten, including in comments,
+literals, and Rust lifetimes. The one narrow, non-rewriting identity check is owned by
+the existing `complete` region: a payload whose complete trimmed text exactly equals
+a declared primitive parameter is classified as a direct parameter return. Parentheses,
+comments, local names, operators, and every other raw expression remain opaque.
 
 The descriptor registry
 ([ir/region_registry.py](src/tslc/ir/region_registry.py)) is the lexical and
@@ -546,6 +560,11 @@ target-feature flags. Those exact admissions and the deliberately narrow
 compile-time selection pilot are backend-owned declarative evidence in
 `backend/policy_assets/rust_policy.json`, strictly promoted by
 [backend/rust_policy_manifest.py](src/tslc/backend/rust_policy_manifest.py).
+The backend registry loads this resource once for each artifact-producing
+request into a frozen `BackendPolicyInputs` snapshot at the compiler input
+boundary. Benchmark planning, artifact rendering, and focused preview receive
+that same explicit snapshot; importing a backend module performs no policy-file
+I/O.
 Unknown fields, duplicate identities, and live specializations that do not
 match the complete declared identity fail closed; primitive, extension,
 profile, and type literals do not appear in the planner's control flow.

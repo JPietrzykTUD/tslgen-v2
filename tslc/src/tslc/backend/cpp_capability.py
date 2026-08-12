@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from tslc.backend.capability import (
     BackendCapability,
     BackendDocumentationFormatter,
+    BackendPolicyInputs,
     DocumentationSiteInput,
     GeneratedDocumentationBuilder,
     GeneratedDocumentationSpec,
@@ -78,7 +79,9 @@ def cpp_benchmark_plan(
     catalog: Catalog,
     profiles: tuple[EmittedProfile, ...],
     value_tests: ValueTestProjectPlan,
+    policy_inputs: BackendPolicyInputs,
 ) -> BenchmarkProjectPlan:
+    del policy_inputs
     return BenchmarkPlanner(catalog, backend_id="cpp").plan(profiles, value_tests)
 
 
@@ -99,10 +102,11 @@ def cpp_backend_artifacts(
     assets: RenderAssets,
     media_type: str,
     config: ProjectRenderConfig,
+    policy_inputs: BackendPolicyInputs,
 ) -> list[Artifact]:
     """Render the complete C++ artifact set from one fact snapshot."""
 
-    del config
+    del config, policy_inputs
     return [
         *cpp_project_artifacts(profiles, assets, media_type, value_tests),
         *cpp_value_test_artifacts(value_tests, assets, media_type),
@@ -127,8 +131,9 @@ def cpp_primitive_preview(
     profile: EmittedProfile,
     primitive_name: str,
     specializations: tuple[LoweredSpecialization, ...],
+    policy_inputs: BackendPolicyInputs,
 ) -> str:
-    del profile
+    del profile, policy_inputs
     return CppBackend().render_primitive(primitive_name, specializations)
 
 

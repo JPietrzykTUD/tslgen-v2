@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Protocol
 
 from tslc.authoring import check_documents
+from tslc.backend.capability import (
+    BackendPolicyInputs,
+    EMPTY_BACKEND_POLICY_INPUTS,
+)
+from tslc.backend.registry import load_backend_policy_inputs
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
 from tslc.compiler_assets import (
@@ -51,6 +56,7 @@ class _PipelineInputs:
     catalog: Catalog
     machine_profiles: Mapping[str, MachineProfile]
     render_assets: RenderAssets | None
+    policy_inputs: BackendPolicyInputs
     split_names: frozenset[str]
     imm_split_names: frozenset[str]
     test_harness: HarnessPrimitiveNames
@@ -83,6 +89,11 @@ def _load_inputs(request: _InputRequest) -> tuple[_PipelineInputs | None, list[D
             machine_profiles=profile_result.profiles,
             render_assets=(
                 load_default_render_assets() if request.render_artifacts else None
+            ),
+            policy_inputs=(
+                load_backend_policy_inputs(request.backends)
+                if request.render_artifacts
+                else EMPTY_BACKEND_POLICY_INPUTS
             ),
             split_names=split_names,
             imm_split_names=imm_split_names,

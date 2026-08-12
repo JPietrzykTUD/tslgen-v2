@@ -30,7 +30,7 @@ from tslc.backend.rust_implementation_state import (
 from tslc.backend.rust_policy_selection import (
     RustPolicySelection,
     RustPolicySelectionProfile,
-    rust_policy_selection_reason,
+    rust_policy_selection_shape_reason,
 )
 from tslc.backend.rust_signatures import (
     arithmetic_preconditions as _rust_arithmetic_preconditions,
@@ -402,7 +402,7 @@ class RustBackend:
         if (
             variant_name is None
             and selection_key is not None
-            and rust_policy_selection_reason(selection_key, spec) is None
+            and rust_policy_selection_shape_reason(selection_key, spec) is None
         ):
             direct_variant = "default"
         trait_name = _implementation_trait_name(spec.primitive_name, direct_variant)
@@ -794,7 +794,7 @@ class RustBackend:
         caller_unsafe: bool,
     ) -> str:
         spec = selection.specialization
-        reason = rust_policy_selection_reason(selection.key, spec)
+        reason = rust_policy_selection_shape_reason(selection.key, spec)
         if reason is not None:
             raise ValueError(
                 f"Rust policy selection renderer received an unsupported shape: {reason}"

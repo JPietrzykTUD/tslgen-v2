@@ -46,6 +46,16 @@ def test_direct_state_classifies_intrinsic_call_composition_and_fallback() -> No
     assert _state("native", "complete(left + right);") is ImplementationState.UNKNOWN
 
 
+def test_direct_state_recognizes_only_the_canonical_parameter_return() -> None:
+    assert _state("native", "complete(data);") is ImplementationState.NATIVE
+    assert _state("native", "complete(result);") is ImplementationState.UNKNOWN
+    assert _state("native", "complete((data));") is ImplementationState.UNKNOWN
+    assert (
+        _state("native", "complete(/* identity */ data);")
+        is ImplementationState.UNKNOWN
+    )
+
+
 def test_direct_state_classifies_mask_vector_identity_from_extension_policy() -> None:
     lane_bitmask = _selected(
         "native",

@@ -10,7 +10,11 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.backend.emitted_profile import EmittedProfile
-from tslc.backend.registry import backend_capability, supports_backend
+from tslc.backend.registry import (
+    backend_capability,
+    load_backend_policy_inputs,
+    supports_backend,
+)
 from tslc.benchmark.identity import (
     implementation_body_hash,
     specialization_key,
@@ -32,6 +36,9 @@ from tslc.catalog.model import Catalog
 from tslc.compiler_assets import load_default_render_assets
 from tslc.diagnostics import has_errors
 from tslc.value_tests.model import ValueTestProjectPlan
+
+RUST_POLICY_INPUTS = load_backend_policy_inputs(("rust",))
+
 
 
 @pytest.fixture(scope="module")
@@ -133,6 +140,7 @@ def test_rust_backend_produces_typed_plan_and_report_artifacts(
         rust_benchmark_planning_result.rendered.value_tests,
         plan,
         load_default_render_assets(),
+        policy_inputs=RUST_POLICY_INPUTS,
     )
 
 
@@ -435,6 +443,7 @@ def test_rust_sse2_admission_uses_live_profile_context(
             catalog,
             (emitted_profile,),
             result.rendered.value_tests,
+            RUST_POLICY_INPUTS,
         )
         assert plan is not None
         profile = plan.profile("rust", "sse2")

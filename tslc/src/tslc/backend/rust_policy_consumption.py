@@ -12,7 +12,7 @@ from tslc.backend.rust_policy_selection import (
     RustPolicySelectionPlan,
     RustPolicySelectionProfile,
     RustPolicySelectionStatus,
-    rust_policy_selection_reason,
+    rust_policy_selection_shape_reason,
 )
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
@@ -482,7 +482,7 @@ def _coverage_for_candidate_set(
     unbound = coverage.get(replace(candidate_set.key, immediate=None))
     if unbound is None or unbound.status != "report_only":
         return None
-    reason = rust_policy_selection_reason(
+    reason = rust_policy_selection_shape_reason(
         candidate_set.key,
         candidate_set.specialization,
     )

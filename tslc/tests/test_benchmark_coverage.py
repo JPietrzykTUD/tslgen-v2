@@ -13,6 +13,7 @@ from tslc.api import generate_project
 from tslc.backend.rust_policy_consumption import (
     plan_rust_policy_coverage,
 )
+from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
 from tslc.benchmark.model import BenchmarkProjectPlan
 from tslc.catalog.model import Catalog
@@ -34,6 +35,9 @@ from tslc.maintenance.benchmark_coverage import (
 )
 from tslc.maintenance.rust_benchmark_evidence import RustBenchmarkEvidence
 from tslc.pipeline import SkippedEntry
+
+RUST_POLICY_MANIFEST = load_rust_policy_manifest()
+
 
 
 @pytest.fixture(scope="module")
@@ -73,7 +77,9 @@ def _rust_audit(catalog: Catalog, result, *, plan=None):
     benchmarks = result.rendered.benchmarks if plan is None else plan
     policy_coverage = plan_rust_policy_coverage(
         benchmarks,
-        plan_rust_policy_selection(result.emitted_profiles),
+        plan_rust_policy_selection(
+            result.emitted_profiles, RUST_POLICY_MANIFEST
+        ),
     )
     return audit_benchmark_coverage(
         catalog,
@@ -408,7 +414,9 @@ def test_rust_audit_detects_planner_slot_identity_drift(
 ) -> None:
     result = focused_rust_benchmark_result
     plan = result.rendered.benchmarks
-    selection = plan_rust_policy_selection(result.emitted_profiles)
+    selection = plan_rust_policy_selection(
+        result.emitted_profiles, RUST_POLICY_MANIFEST
+    )
     policy_coverage = plan_rust_policy_coverage(plan, selection)
     baseline_audit = _rust_audit(catalog, result)
     baseline = rust_benchmark_coverage_baseline(baseline_audit)
@@ -497,7 +505,9 @@ def test_rust_policy_gap_issue_baseline_round_trips(
 ) -> None:
     result = focused_rust_benchmark_result
     plan = result.rendered.benchmarks
-    selections = plan_rust_policy_selection(result.emitted_profiles)
+    selections = plan_rust_policy_selection(
+        result.emitted_profiles, RUST_POLICY_MANIFEST
+    )
     supported_key = next(
         selection.key
         for profile in selections.profiles
@@ -779,8 +789,9 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
     )
     policy_inputs: dict[str, object] = {}
 
-    def fake_policy_selection(emitted_profiles):
+    def fake_policy_selection(emitted_profiles, manifest):
         policy_inputs["emitted"] = emitted_profiles
+        policy_inputs["manifest"] = manifest
         return "selection"
 
     def fake_policy_coverage(benchmarks, selection):

@@ -20,6 +20,7 @@ from tslc.backend.rust_policy_consumption import (
     plan_rust_policy_consumption,
     plan_rust_policy_coverage,
 )
+from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_selection import (
     RustPolicySelectionPlan,
     plan_rust_policy_selection,
@@ -36,6 +37,9 @@ from tslc.render.rust_policy_consumption import (
     EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN,
     plan_rust_policy_consumption_render,
 )
+
+
+RUST_POLICY_MANIFEST = load_rust_policy_manifest()
 
 
 @pytest.fixture(scope="module")
@@ -188,7 +192,8 @@ def test_rust_immediate_reports_bind_const_calls_and_policy_reason(
     )
 
     selection = plan_rust_policy_selection(
-        rust_immediate_benchmark_result.emitted_profiles
+        rust_immediate_benchmark_result.emitted_profiles,
+        RUST_POLICY_MANIFEST,
     )
     policy = plan_rust_policy_coverage(plan, selection).profile("sse2")
     assert policy is not None
@@ -248,7 +253,8 @@ def test_rust_avx2_reduction_reports_are_exact_and_report_only(
     } == {"reduction"}
 
     selection = plan_rust_policy_selection(
-        rust_avx2_reduction_benchmark_result.emitted_profiles
+        rust_avx2_reduction_benchmark_result.emitted_profiles,
+        RUST_POLICY_MANIFEST,
     )
     policy = plan_rust_policy_coverage(plan, selection).profile("avx2")
     assert policy is not None
@@ -288,7 +294,8 @@ def test_rust_benchmark_artifacts_are_opt_in_and_deterministic(
     assert "Write a consumable context-bound Rust policy" in benchmark_source
 
     selection = plan_rust_policy_selection(
-        rust_benchmark_result.emitted_profiles
+        rust_benchmark_result.emitted_profiles,
+        RUST_POLICY_MANIFEST,
     )
     consumption = plan_rust_policy_consumption_render(
         plan_rust_policy_consumption(
@@ -346,7 +353,9 @@ def test_rust_candidate_calls_and_correctness_keep_backend_ownership(
 def test_rust_default_call_uses_actual_selection_membership(
     rust_benchmark_result,
 ) -> None:
-    plan = plan_rust_policy_selection(rust_benchmark_result.emitted_profiles)
+    plan = plan_rust_policy_selection(
+        rust_benchmark_result.emitted_profiles, RUST_POLICY_MANIFEST
+    )
     profile = plan.profile("sse2")
     assert profile is not None
     selected_key = profile.selections[0].key
@@ -396,7 +405,8 @@ def test_rust_policy_support_uses_actual_selection_membership(
     rust_benchmark_result,
 ) -> None:
     selection_plan = plan_rust_policy_selection(
-        rust_benchmark_result.emitted_profiles
+        rust_benchmark_result.emitted_profiles,
+        RUST_POLICY_MANIFEST,
     )
     selection_profile = selection_plan.profile("sse2")
     benchmark_profile = rust_benchmark_result.rendered.benchmarks.profile(
@@ -1178,7 +1188,8 @@ def test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence(
     profile_plan = rust_benchmark_result.rendered.benchmarks.profile("rust", "sse2")
     assert profile_plan is not None
     selection_profile = plan_rust_policy_selection(
-        rust_benchmark_result.emitted_profiles
+        rust_benchmark_result.emitted_profiles,
+        RUST_POLICY_MANIFEST,
     ).profile("sse2")
     assert selection_profile is not None
     supported_keys = {selection.key for selection in selection_profile.selections}

@@ -8,7 +8,11 @@ from pathlib import Path
 
 from tslc.api import _expand_sources
 from tslc.backend.emitted_profile import EmittedProfile
-from tslc.backend.registry import backend_capability, registered_backend_ids
+from tslc.backend.registry import (
+    backend_capability,
+    load_backend_policy_inputs,
+    registered_backend_ids,
+)
 from tslc.diagnostics import (
     Diagnostic,
     SourceLocation,
@@ -153,12 +157,16 @@ def render_preview(
         )
 
     capability = backend_capability(backend)
+    policy_inputs = load_backend_policy_inputs((backend,))
     parts: list[str] = []
     try:
         for emitted_name, specializations in matching:
             parts.append(
                 capability.render_primitive_preview(
-                    emitted, emitted_name, specializations
+                    emitted,
+                    emitted_name,
+                    specializations,
+                    policy_inputs,
                 ).rstrip()
             )
     except ValueError as exc:

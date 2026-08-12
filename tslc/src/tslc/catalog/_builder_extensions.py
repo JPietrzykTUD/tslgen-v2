@@ -102,8 +102,8 @@ def _resolve_extension_inheritance(
             vector_register_type_policy=(
                 ext.vector_register_type_policy or parent.vector_register_type_policy
             ),
-            # A sized extension inheriting another (oneapi_fpga inherits generic) shares its size
-            # ladder / unroll default unless it states its own.
+            # A sized extension inherits its parent's size ladder and unroll default
+            # unless it states its own.
             size_bits=ext.size_bits if "size_bits" in declared_fields else parent.size_bits,
             unroll_variants=(
                 ext.unroll_variants

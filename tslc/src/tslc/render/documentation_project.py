@@ -371,18 +371,10 @@ def _target_class_parts(
 ) -> tuple[str, str]:
     if extension is None:
         return ("unknown", "unknown")
-    family = extension.family_capability.documented_family
-    if family == "scalar":
-        return ("scalar", "scalar")
-    if extension.metadata.documentation_width is not None:
-        return (family, extension.metadata.documentation_width)
-    if extension.vector_bits_kind == "scalable":
-        return (family, "scalable")
-    if spec.uses_sized_vector:
-        return ("generic", "lanes")
-    if extension.vector_bits > 0:
-        return (family, f"{extension.vector_bits}-bit")
-    return (family, "scalar")
+    return (
+        extension.family_capability.documented_family,
+        _width_label(spec, extension),
+    )
 
 
 def _target_class_key(family: str, width: str) -> str:
@@ -395,10 +387,8 @@ def _target_class_key(family: str, width: str) -> str:
 
 
 def _target_class_label(family: str, width: str) -> str:
-    if family == "scalar":
-        return "scalar"
-    if family == "generic":
-        return "generic lanes"
+    if family.casefold() == width.casefold():
+        return family
     return f"{family} {width}"
 
 
@@ -413,16 +403,7 @@ def _target_class_sort_key(
         else extension.family_capability.documented_sort_order
     )
     family_order = f"{order:02d}" if order < 90 else f"{order:02d}-{family}"
-    width_order = {
-        "scalar": "0000",
-        "lanes": "0001",
-        "128-bit": "0128",
-        "256-bit": "0256",
-        "512-bit": "0512",
-        "SVE": "9998",
-        "scalable": "9999",
-        "unknown": "zzzz",
-    }.get(width, f"z-{width}")
+    width_order = _width_sort_key(width)
     return f"{family_order}:{width_order}:{family}:{width}"
 
 
@@ -486,25 +467,34 @@ def _register_type(spec: LoweredSpecialization, backend_id: str) -> str:
 def _width_label(spec: LoweredSpecialization, extension: Extension | None) -> str:
     if extension is None:
         return "unknown"
+    if extension.metadata.documentation_width is not None:
+        return extension.metadata.documentation_width
     if extension.vector_bits_kind == "scalable":
         return "scalable"
     if spec.uses_sized_vector:
-        return "generic lanes"
+        return "lanes"
     if extension.vector_bits > 0:
         return f"{extension.vector_bits}-bit"
     return "scalar"
 
 
 def _width_rank(spec: LoweredSpecialization, extension: Extension | None) -> str:
-    if extension is None:
-        return "z-unknown"
-    if extension.vector_bits_kind == "scalable":
-        return "9999"
-    if spec.uses_sized_vector:
-        return "0001"
-    if extension.vector_bits > 0:
-        return str(extension.vector_bits).zfill(4)
-    return "0000"
+    return _width_sort_key(_width_label(spec, extension))
+
+
+def _width_sort_key(width: str) -> str:
+    semantic_order = {
+        "scalar": "0000",
+        "lanes": "0001",
+        "scalable": "9999",
+        "unknown": "zzzz",
+    }
+    if width in semantic_order:
+        return semantic_order[width]
+    bit_width = width.removesuffix("-bit")
+    if bit_width.isdigit():
+        return str(int(bit_width)).zfill(4)
+    return f"9000-{width.casefold()}"
 
 
 def _extension_group(spec: LoweredSpecialization) -> str:

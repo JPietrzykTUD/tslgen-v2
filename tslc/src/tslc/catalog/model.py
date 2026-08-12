@@ -62,6 +62,21 @@ TestCaseRole = Literal[
 ]
 
 
+class PrimitiveCastMode(StrEnum):
+    """Source-declared representation relation for conversion primitives."""
+
+    CONVERT = "convert"
+    REINTERPRET = "reinterpret"
+
+
+class PrimitiveValueMode(StrEnum):
+    """Source-declared result initialization/definedness semantics."""
+
+    ALL = "all"
+    UNDEFINED = "undef"
+    ZERO = "zero"
+
+
 class TestComparison(StrEnum):
     """How authored expected lane values are compared to generated results."""
 
@@ -244,6 +259,10 @@ class Primitive:
     # (aligned/packed) is expanded by the builder into concrete-value copies, so here the
     # value is always concrete. `attribute_keys` is kept for the masked-variant filter.
     attributes: Mapping[str, str] = field(default_factory=dict)
+    # Semantic meanings promoted once from the source attribute spelling.
+    cast_mode: PrimitiveCastMode | None = field(init=False, default=None)
+    value_mode: PrimitiveValueMode | None = field(init=False, default=None)
+
     # Pointer parameter layout rules from a `param_types:` block. Conditional
     # rules are source-owned facts about what an abstract pointer parameter
     # points to under a concrete attribute value; consumers such as value-test
@@ -305,6 +324,18 @@ class Primitive:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "attributes", _freeze_mapping(self.attributes))
+        declared_cast = self.attributes.get("cast")
+        declared_value = self.attributes.get("value")
+        object.__setattr__(
+            self,
+            "cast_mode",
+            None if declared_cast is None else PrimitiveCastMode(declared_cast),
+        )
+        object.__setattr__(
+            self,
+            "value_mode",
+            None if declared_value is None else PrimitiveValueMode(declared_value),
+        )
 
     def immediate_param(self, name: str) -> "ImmediateParam | None":
         """The `params:` metadata for the `sImm` parameter `name`, or None."""

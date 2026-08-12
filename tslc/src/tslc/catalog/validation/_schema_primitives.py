@@ -5,7 +5,13 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping
 from typing import get_args
 
-from tslc.catalog.model import GenericParamKind, RESULT_DIMENSIONS, RESULT_DIM_VECTOR
+from tslc.catalog.model import (
+    GenericParamKind,
+    PrimitiveCastMode,
+    PrimitiveValueMode,
+    RESULT_DIMENSIONS,
+    RESULT_DIM_VECTOR,
+)
 from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS, PointerMutability
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.param_types import (
@@ -79,12 +85,12 @@ KNOWN_PRIMITIVE_FIELDS = frozenset(
 KNOWN_PRIMITIVE_ATTRIBUTES = {
     "aligned": frozenset({"true", "false", "*"}),
     "arg_count": frozenset({"return_vector_length"}),
-    "cast": frozenset({"reinterpret", "convert"}),
+    "cast": frozenset(mode.value for mode in PrimitiveCastMode),
     "direction": frozenset({"up", "down"}),
     "mask": frozenset({"zero", "pass_through"}),
     "op": frozenset({"pack", "expand", "keep"}),
     "packed": frozenset({"true", "false", "*"}),
-    "value": frozenset({"zero", "undef", "all"}),
+    "value": frozenset(mode.value for mode in PrimitiveValueMode),
 }
 
 

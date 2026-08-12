@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 
 import pytest
 
 from tslc.api import generate_project
+from tslc.catalog.target_families import ExtensionFamilyCapability
+from tslc.render.documentation_project import (
+    _target_class_label,
+    _target_class_parts,
+    _width_label,
+)
+
 
 
 @pytest.fixture(scope="module")
@@ -33,6 +41,31 @@ def docs_specialization_result(data_root: Path, machine_profiles_path: Path):
         ],
         profiles=["scalar", "sse2", "avx", "avx2", "skylake", "neon", "sve"],
     )
+
+
+def test_sized_target_class_preserves_source_declared_family(
+    docs_specialization_result,
+) -> None:
+    profile = docs_specialization_result.emitted_profiles[0]
+    specialization = next(
+        spec
+        for specializations in profile.specializations("cpp").values()
+        for spec in specializations
+    )
+    extension = replace(
+        profile.extensions[specialization.extension_name],
+        family_capability=ExtensionFamilyCapability(
+            "future_vectors",
+            documentation_family="portable",
+        ),
+    )
+    sized = replace(specialization, uses_sized_vector=True)
+
+    family, width = _target_class_parts(sized, extension)
+
+    assert (family, width) == ("portable", "lanes")
+    assert _target_class_label(family, width) == "portable lanes"
+    assert _width_label(sized, extension) == "lanes"
 
 
 @pytest.fixture(scope="module")
@@ -188,7 +221,7 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
         "label": "aarch64 SVE",
         "family": "aarch64",
         "width": "SVE",
-        "sort_key": "20:9998:aarch64:SVE",
+        "sort_key": "20:9000-sve:aarch64:SVE",
     }
     assert not any(key.startswith("arm_") for key in target_class_rows)
     assert any(

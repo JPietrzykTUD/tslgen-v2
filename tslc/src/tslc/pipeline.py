@@ -323,6 +323,7 @@ class _GenerationSession:
                         self.inputs.catalog,
                         self._profiles_for_backend(emitted_profiles, capability.backend_id),
                         value_tests,
+                        self.inputs.policy_inputs,
                     )
                 )
                 is not None
@@ -347,6 +348,7 @@ class _GenerationSession:
                 benchmarks,
                 assets=self.inputs.render_assets,
                 config=self.request.render_config,
+                policy_inputs=self.inputs.policy_inputs,
             )
             if self.emitted_profiles
             else None

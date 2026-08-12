@@ -8,7 +8,6 @@ from typing import Literal
 
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_policy_manifest import (
-    DEFAULT_RUST_POLICY_MANIFEST,
     RustPolicyManifest,
     RustPolicySelectionPilot,
 )
@@ -177,7 +176,7 @@ class RustPolicySelectionPlan:
 
 def plan_rust_policy_selection(
     profiles: tuple[EmittedProfile, ...],
-    manifest: RustPolicyManifest = DEFAULT_RUST_POLICY_MANIFEST,
+    manifest: RustPolicyManifest,
 ) -> RustPolicySelectionPlan:
     """Plan the narrow stable-Rust selection family from finalized backend facts."""
 
@@ -302,7 +301,7 @@ def plan_rust_policy_selection(
 def validate_rust_policy_selection_plan(
     profiles: tuple[EmittedProfile, ...],
     plan: RustPolicySelectionPlan,
-    manifest: RustPolicyManifest = DEFAULT_RUST_POLICY_MANIFEST,
+    manifest: RustPolicyManifest,
 ) -> None:
     """Reject a stale, partial, or foreign mapping before Rust source rendering."""
 
@@ -345,14 +344,13 @@ def validate_rust_policy_selection_plan(
             )
 
 
-def rust_policy_selection_reason(
+def rust_policy_selection_shape_reason(
     key: SpecializationKey,
     spec: LoweredSpecialization,
-    manifest: RustPolicyManifest = DEFAULT_RUST_POLICY_MANIFEST,
     *,
     candidate_ids: tuple[str, ...] | None = None,
 ) -> str | None:
-    """Return why an exact Rust candidate key cannot use the stable selection seam."""
+    """Return why a Rust candidate's typed shape cannot use policy selection."""
 
     if key.backend_id != "rust" or spec.backend_id != "rust":
         return "policy selection requires Rust backend facts"
@@ -413,6 +411,23 @@ def rust_policy_selection_reason(
         return "SIMD-type-parameter specializations are report-only"
     if spec.lane_list_params:
         return "lane-list specializations are report-only"
+    return None
+
+
+def rust_policy_selection_reason(
+    key: SpecializationKey,
+    spec: LoweredSpecialization,
+    manifest: RustPolicyManifest,
+    *,
+    candidate_ids: tuple[str, ...] | None = None,
+) -> str | None:
+    """Return why an exact Rust candidate is not admitted for selection."""
+
+    shape_reason = rust_policy_selection_shape_reason(
+        key, spec, candidate_ids=candidate_ids
+    )
+    if shape_reason is not None:
+        return shape_reason
     candidates = (
         ("default", *spec.variant_names)
         if candidate_ids is None
@@ -428,7 +443,7 @@ def rust_policy_selection_reason(
 
 def validate_rust_policy_manifest_profiles(
     profiles: tuple[EmittedProfile, ...],
-    manifest: RustPolicyManifest = DEFAULT_RUST_POLICY_MANIFEST,
+    manifest: RustPolicyManifest,
 ) -> None:
     """Prove each declared pilot matches exactly one full-corpus lowered slot."""
 
@@ -475,5 +490,6 @@ __all__ = (
     "plan_rust_policy_selection",
     "rust_policy_selection_reason",
     "validate_rust_policy_selection_plan",
+    "rust_policy_selection_shape_reason",
     "validate_rust_policy_manifest_profiles",
 )

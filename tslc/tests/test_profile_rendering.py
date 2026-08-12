@@ -14,6 +14,8 @@ from tslc.benchmark.identity import (
     implementation_body_hash,
     implementation_choice_body_hash,
 )
+from tslc.backend.cpp_build_policy import cpp_profile_flags, cpp_profile_target
+from tslc.backend.cpp_detection import x86_profile_detection_source
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.target_families import (
     BackendProfileFamily,
@@ -22,7 +24,6 @@ from tslc.catalog.target_families import (
 )
 from tslc.diagnostics import has_errors
 from tslc.lower.lowerer import LoweredImplementationVariant
-from tslc.render.cpp_build import _x86_profile_detection_source, cpp_flags, cpp_target
 from tslc.render._common import slug
 from tslc.render.rust_project import rust_linker, rust_target, rust_target_features
 
@@ -514,9 +515,9 @@ def test_cpp_auto_detection_uses_cpuid_for_unsupported_clang_builtins() -> None:
         feature_capabilities=capabilities,
     )
 
-    source = _x86_profile_detection_source(profile)
+    source = x86_profile_detection_source(profile)
 
-    assert cpp_flags(profile) == (
+    assert cpp_profile_flags(profile) == (
         "-mavx2",
         "-mavx512fp16",
         "-mvaes",
@@ -535,7 +536,7 @@ def test_cpp_auto_detection_uses_cpuid_for_unsupported_clang_builtins() -> None:
     assert '__builtin_cpu_supports("vaes")' not in source
     assert '__builtin_cpu_supports("avx512fp16")' not in source
 
-    source_without_rdrand = _x86_profile_detection_source(
+    source_without_rdrand = x86_profile_detection_source(
         MachineProfile("avx", "x86", frozenset({"avx"}), {})
     )
     assert '__builtin_cpu_supports("avx")' in source_without_rdrand
@@ -644,8 +645,8 @@ def test_cpp_profile_flags_are_profile_family_owned() -> None:
         },
     )
 
-    assert cpp_flags(profile, capability) == ("-march=armv8-a+sve",)
-    assert cpp_target(profile, capability) == "aarch64-linux-gnu"
+    assert cpp_profile_flags(profile, capability) == ("-march=armv8-a+sve",)
+    assert cpp_profile_target(profile, capability) == "aarch64-linux-gnu"
 
 
 def test_rust_profile_toolchain_is_profile_family_owned() -> None:

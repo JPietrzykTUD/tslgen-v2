@@ -23,6 +23,7 @@ from tslc.backend.rust_policy_consumption import (
     RustPolicyCoveragePlan,
     plan_rust_policy_coverage,
 )
+from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
 from tslc.benchmark.model import BenchmarkProjectPlan
 from tslc.catalog.machine_profiles import load_machine_profiles_checked
@@ -177,7 +178,10 @@ def compute_benchmark_coverage_audit(
         try:
             rust_policy_coverage = plan_rust_policy_coverage(
                 benchmark_plan,
-                plan_rust_policy_selection(merged_emitted_profiles),
+                plan_rust_policy_selection(
+                    merged_emitted_profiles,
+                    load_rust_policy_manifest(),
+                ),
             )
         except ValueError as exc:
             return None, (f"Rust policy coverage planning failed: {exc}",)

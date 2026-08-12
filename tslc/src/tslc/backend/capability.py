@@ -46,7 +46,12 @@ ToolchainCommandsResolver = Callable[
     ["VerifyProfile", "BuildVerifierConfig"], "ToolchainCommands"
 ]
 BenchmarkPlanBuilder = Callable[
-    ["Catalog", tuple["EmittedProfile", ...], "ValueTestProjectPlan"],
+    [
+        "Catalog",
+        tuple["EmittedProfile", ...],
+        "ValueTestProjectPlan",
+        "BackendPolicyInputs",
+    ],
     "BenchmarkProjectPlan",
 ]
 ClosureSeedProjector = Callable[["Catalog"], tuple[str, ...]]
@@ -58,6 +63,7 @@ BackendArtifactRenderer = Callable[
         "RenderAssets",
         str,
         "ProjectRenderConfig",
+        "BackendPolicyInputs",
     ],
     list["Artifact"],
 ]
@@ -66,8 +72,53 @@ ValueTestSupportFactory = Callable[[], "ValueTestBackendSupport"]
 VerifyDriverFactory = Callable[[], "VerifyBackendDriver"]
 ProfileValidator = Callable[[tuple["EmittedProfile", ...]], tuple["Diagnostic", ...]]
 PrimitivePreviewRenderer = Callable[
-    ["EmittedProfile", str, tuple["LoweredSpecialization", ...]], str
+    [
+        "EmittedProfile",
+        str,
+        tuple["LoweredSpecialization", ...],
+        "BackendPolicyInputs",
+    ],
+    str,
 ]
+
+
+class BackendPolicyInput:
+    """Marker base for one backend-owned, parsed compiler input."""
+
+    __slots__ = ()
+
+
+_BackendPolicyT = TypeVar("_BackendPolicyT", bound=BackendPolicyInput)
+
+
+@dataclass(frozen=True, slots=True)
+class BackendPolicyInputs:
+    """Frozen backend-policy inputs loaded before planning or rendering."""
+
+    values: Mapping[str, BackendPolicyInput] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "values",
+            MappingProxyType(dict(sorted(self.values.items()))),
+        )
+
+    def require(
+        self,
+        backend_id: str,
+        expected_type: type[_BackendPolicyT],
+    ) -> _BackendPolicyT:
+        value = self.values.get(backend_id)
+        if not isinstance(value, expected_type):
+            raise ValueError(
+                f"backend {backend_id!r} requires a loaded "
+                f"{expected_type.__name__} policy input"
+            )
+        return value
+
+
+EMPTY_BACKEND_POLICY_INPUTS = BackendPolicyInputs()
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,8 +176,9 @@ def _unsupported_primitive_preview(
     profile: EmittedProfile,
     primitive_name: str,
     specializations: tuple[LoweredSpecialization, ...],
+    policy_inputs: BackendPolicyInputs,
 ) -> str:
-    del profile, primitive_name, specializations
+    del profile, primitive_name, specializations, policy_inputs
     raise ValueError("this backend does not support specialization preview")
 
 
@@ -240,6 +292,7 @@ class BackendCapability:
     toolchain_commands: ToolchainCommandsResolver
     documentation_formatter_factory: DocumentationFormatterFactory
     benchmark_plan_builder: BenchmarkPlanBuilder | None = None
+    policy_input_loader: Callable[[], BackendPolicyInput] | None = None
     helper_manifest: BackendHelperManifest = EMPTY_HELPER_MANIFEST
     additional_closure_seeds: ClosureSeedProjector = _no_additional_closure_seeds
     profile_validator: ProfileValidator = _no_profile_diagnostics
@@ -251,6 +304,11 @@ class BackendCapability:
     compiler_capabilities: CompilerCapabilityRegistry[CompilerCapability] = (
         EMPTY_COMPILER_CAPABILITY_REGISTRY
     )
+
+    def load_policy_input(self) -> BackendPolicyInput | None:
+        if self.policy_input_loader is None:
+            return None
+        return self.policy_input_loader()
 
     def compiler_capability(self, capability_id: str) -> CompilerCapability | None:
         return self.compiler_capabilities.get(capability_id)
@@ -302,6 +360,7 @@ class BackendCapability:
         benchmarks: BenchmarkProjectPlan,
         assets: RenderAssets,
         config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG,
+        policy_inputs: BackendPolicyInputs = EMPTY_BACKEND_POLICY_INPUTS,
     ) -> list[Artifact]:
         """Render the backend's complete artifact set from one fact snapshot."""
 
@@ -312,6 +371,7 @@ class BackendCapability:
             assets,
             self.artifact_media_type,
             config,
+            policy_inputs,
         )
 
     def plan_benchmarks(
@@ -319,10 +379,13 @@ class BackendCapability:
         catalog: Catalog,
         profiles: tuple[EmittedProfile, ...],
         value_tests: ValueTestProjectPlan,
+        policy_inputs: BackendPolicyInputs = EMPTY_BACKEND_POLICY_INPUTS,
     ) -> BenchmarkProjectPlan | None:
         if self.benchmark_plan_builder is None:
             return None
-        return self.benchmark_plan_builder(catalog, profiles, value_tests)
+        return self.benchmark_plan_builder(
+            catalog, profiles, value_tests, policy_inputs
+        )
 
     def documentation_formatter(self) -> BackendDocumentationFormatter:
         return self.documentation_formatter_factory()
@@ -399,9 +462,10 @@ class BackendCapability:
         profile: EmittedProfile,
         primitive_name: str,
         specializations: tuple[LoweredSpecialization, ...],
+        policy_inputs: BackendPolicyInputs = EMPTY_BACKEND_POLICY_INPUTS,
     ) -> str:
         return self.primitive_preview_renderer(
-            profile, primitive_name, specializations
+            profile, primitive_name, specializations, policy_inputs
         )
 
 
@@ -409,6 +473,9 @@ __all__ = [
     "BackendArtifactRenderer",
     "BackendCapability",
     "BackendDocumentationFormatter",
+    "BackendPolicyInput",
+    "BackendPolicyInputs",
+    "EMPTY_BACKEND_POLICY_INPUTS",
     "DocumentationSiteInput",
     "DocumentationSpec",
     "GeneratedDocumentationBuilder",

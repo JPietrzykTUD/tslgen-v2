@@ -9,13 +9,16 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_selection import (
     plan_rust_policy_selection,
     rust_policy_selection_reason,
     validate_rust_policy_manifest_profiles,
 )
-from tslc.backend.rust_policy_manifest import DEFAULT_RUST_POLICY_MANIFEST
 from tslc.diagnostics import has_errors
+
+
+RUST_POLICY_MANIFEST = load_rust_policy_manifest()
 
 
 @pytest.fixture(scope="module")
@@ -35,7 +38,9 @@ def rust_selection_result(data_root: Path, machine_profiles_path: Path):
 
 
 def test_plan_has_exact_supported_and_report_only_keys(rust_selection_result) -> None:
-    plan = plan_rust_policy_selection(rust_selection_result.emitted_profiles)
+    plan = plan_rust_policy_selection(
+        rust_selection_result.emitted_profiles, RUST_POLICY_MANIFEST
+    )
     profile = plan.profile("sse2")
     assert profile is not None
     assert [selection.key.primitive_name for selection in profile.selections] == [
@@ -64,7 +69,9 @@ def test_plan_has_exact_supported_and_report_only_keys(rust_selection_result) ->
 
 
 def test_forced_override_is_validated_and_immutable(rust_selection_result) -> None:
-    default = plan_rust_policy_selection(rust_selection_result.emitted_profiles)
+    default = plan_rust_policy_selection(
+        rust_selection_result.emitted_profiles, RUST_POLICY_MANIFEST
+    )
     profile = default.profile("sse2")
     assert profile is not None
     selected = profile.selections[0]
@@ -100,8 +107,8 @@ def test_selection_gate_is_exact_and_deterministic(rust_selection_result) -> Non
     )
     profile = _profile_with(emitted, {"structural_probe": (renamed,)})
 
-    first = plan_rust_policy_selection((profile,))
-    second = plan_rust_policy_selection((profile,))
+    first = plan_rust_policy_selection((profile,), RUST_POLICY_MANIFEST)
+    second = plan_rust_policy_selection((profile,), RUST_POLICY_MANIFEST)
     planned = first.profile("sse2")
 
     assert first == second
@@ -122,13 +129,13 @@ def test_synthetic_manifest_pilot_is_additive(rust_selection_result) -> None:
     )
     profile = _profile_with(emitted, {"structural_probe": (renamed,)})
     pilot = replace(
-        DEFAULT_RUST_POLICY_MANIFEST.selection_pilots[0],
+        RUST_POLICY_MANIFEST.selection_pilots[0],
         pilot_id="synthetic_structural_probe",
         primitive_name="structural_probe",
         source_primitive_name="structural_probe",
     )
     manifest = replace(
-        DEFAULT_RUST_POLICY_MANIFEST,
+        RUST_POLICY_MANIFEST,
         selection_pilots=(pilot,),
     )
 
@@ -145,7 +152,7 @@ def test_loaded_manifest_pilot_matches_exactly_one_lowered_slot(
 ) -> None:
     validate_rust_policy_manifest_profiles(
         rust_selection_result.emitted_profiles,
-        DEFAULT_RUST_POLICY_MANIFEST,
+        RUST_POLICY_MANIFEST,
     )
 
 
@@ -163,8 +170,12 @@ def test_duplicate_key_coverage_is_fail_closed_and_order_independent(
     forward = _profile_with(emitted, {"mul": (source, alternate)})
     reverse = _profile_with(emitted, {"mul": (alternate, source)})
 
-    planned = plan_rust_policy_selection((forward,)).profile("sse2")
-    reversed_plan = plan_rust_policy_selection((reverse,)).profile("sse2")
+    planned = plan_rust_policy_selection(
+        (forward,), RUST_POLICY_MANIFEST
+    ).profile("sse2")
+    reversed_plan = plan_rust_policy_selection(
+        (reverse,), RUST_POLICY_MANIFEST
+    ).profile("sse2")
 
     assert planned is not None
     assert planned == reversed_plan
@@ -182,42 +193,54 @@ def test_duplicate_key_coverage_is_fail_closed_and_order_independent(
 def test_backend_query_owns_deferred_shape_classification(
     rust_selection_result,
 ) -> None:
-    plan = plan_rust_policy_selection(rust_selection_result.emitted_profiles)
+    plan = plan_rust_policy_selection(
+        rust_selection_result.emitted_profiles, RUST_POLICY_MANIFEST
+    )
     profile = plan.profile("sse2")
     assert profile is not None
     selection = profile.selections[0]
     key = selection.key
     spec = selection.specialization
 
-    assert rust_policy_selection_reason(key, spec) is None
+    assert rust_policy_selection_reason(key, spec, RUST_POLICY_MANIFEST) is None
     assert "fixed-width" in rust_policy_selection_reason(
-        replace(key, lanes=None), spec
+        replace(key, lanes=None), spec, RUST_POLICY_MANIFEST
     )
     assert "header-group" in rust_policy_selection_reason(
-        replace(key, header_group="optional"), spec
+        replace(key, header_group="optional"), spec, RUST_POLICY_MANIFEST
     )
     assert "overloaded" in rust_policy_selection_reason(
-        replace(key, overload_parameter_positions=(1,)), spec
+        replace(key, overload_parameter_positions=(1,)),
+        spec,
+        RUST_POLICY_MANIFEST,
     )
     assert "masked" in rust_policy_selection_reason(
-        key, replace(spec, mask_policy="zero")
+        key, replace(spec, mask_policy="zero"), RUST_POLICY_MANIFEST
     )
     assert "axis" in rust_policy_selection_reason(
         replace(key, axis=(("aligned", "false"),)),
         replace(spec, axis=(("aligned", "false"),)),
+        RUST_POLICY_MANIFEST,
     )
     assert "immediate" in rust_policy_selection_reason(
-        key, replace(spec, immediate=("amount", "u32"))
+        key,
+        replace(spec, immediate=("amount", "u32")),
+        RUST_POLICY_MANIFEST,
     )
     assert "const-generic" in rust_policy_selection_reason(
-        key, replace(spec, generic_params=(("N", "usize", "1"),))
+        key,
+        replace(spec, generic_params=(("N", "usize", "1"),)),
+        RUST_POLICY_MANIFEST,
     )
     assert "parameter type overrides" in rust_policy_selection_reason(
-        key, replace(spec, param_type_overrides=("u32", None))
+        key,
+        replace(spec, param_type_overrides=("u32", None)),
+        RUST_POLICY_MANIFEST,
     )
     assert "not admitted by the Rust policy manifest" in rust_policy_selection_reason(
         replace(key, primitive_name="renamed"),
         replace(spec, primitive_name="renamed"),
+        RUST_POLICY_MANIFEST,
     )
 
 

@@ -131,7 +131,6 @@ def cpp_artifacts(
             "cpp/CMakeLists.txt",
             _cpp_cmakelists(
                 model,
-                profiles,
                 assets,
                 value_tests=value_tests,
             ),

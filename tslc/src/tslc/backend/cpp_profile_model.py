@@ -12,12 +12,21 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from tslc.backend.cpp_build_policy import (
+    CppCompilerOption,
+    cpp_profile_compile_options,
+    cpp_value_test_compile_options,
+)
 from tslc.backend.cpp_detection import (
     CppProfileDetectionPlan,
+    cpp_profile_detection_candidates,
     cpp_profile_detection_plan,
 )
 from tslc.backend.cpp_compiler_capabilities import (
+    cpp_compiler_capability_cmake_probes,
+    cpp_compiler_capability_compile_definitions,
     cpp_compiler_capability_header_defaults,
+    cpp_extension_compiler_ids,
     cpp_extension_header_group,
     cpp_extensions_compiler_capabilities,
     used_cpp_compiler_capability_ids,
@@ -104,6 +113,8 @@ class CppProfileHeader:
     """Decided content of one generated profile header and its smoke test."""
 
     header_group: str | None
+    compiler_ids: tuple[str, ...]
+    enable_macro: str | None
     includes: str | None
     registrations: str
     declarations: tuple[CppDeclaredPrimitive, ...]
@@ -119,6 +130,7 @@ class CppProfileRenderModel:
     profile_name: str
     profile_family: str
     headers: tuple[CppProfileHeader, ...]
+    compile_options: tuple[CppCompilerOption, ...]
 
     @property
     def base_header(self) -> CppProfileHeader:
@@ -137,6 +149,9 @@ class CppProjectRenderModel:
     primitive_tag_declarations: str
     compiler_capability_defaults: str
     dispatch_header_groups: tuple[str, ...]
+    compiler_capability_probes: str
+    compiler_capability_definitions: tuple[str, ...]
+    value_test_compile_options: tuple[CppCompilerOption, ...]
     supports_algorithm: bool
     profile_detection: CppProfileDetectionPlan
 
@@ -162,6 +177,12 @@ def cpp_project_render_model(
         compiler_capability_defaults=(
             cpp_compiler_capability_header_defaults(capability_ids)
         ),
+        compiler_capability_probes=cpp_compiler_capability_cmake_probes(
+            capability_ids
+        ),
+        compiler_capability_definitions=(
+            cpp_compiler_capability_compile_definitions(capability_ids)
+        ),
         dispatch_header_groups=tuple(
             sorted(
                 {
@@ -172,9 +193,11 @@ def cpp_project_render_model(
                 }
             )
         ),
+        value_test_compile_options=cpp_value_test_compile_options(),
         supports_algorithm=cpp_profiles_support_algorithm(profiles),
         profile_detection=cpp_profile_detection_plan(
-            tuple(profile.profile for profile in profiles)
+            tuple(profile.profile for profile in profiles),
+            candidates=cpp_profile_detection_candidates(profiles),
         ),
     )
 
@@ -207,6 +230,9 @@ def _cpp_profile_model(emitted_profile: EmittedProfile) -> CppProfileRenderModel
         profile_name=emitted_profile.profile.name,
         profile_family=emitted_profile.profile.family,
         headers=tuple(headers),
+        compile_options=cpp_profile_compile_options(
+            emitted_profile.profile, emitted_profile.profile_family
+        ),
     )
 
 
@@ -232,6 +258,8 @@ def _cpp_base_header(
     )
     return CppProfileHeader(
         header_group=None,
+        compiler_ids=(),
+        enable_macro=None,
         includes=_cpp_includes(emitted_exts, emitted_profile.extensions),
         registrations=registrations,
         # The base header declares selectors/wrappers over EVERY specialization
@@ -264,6 +292,18 @@ def _cpp_overlay_header(
     )
     return CppProfileHeader(
         header_group=header_group,
+        compiler_ids=tuple(
+            sorted(
+                {
+                    compiler_id
+                    for extension_name in used_extensions(grouped)
+                    for compiler_id in cpp_extension_compiler_ids(
+                        emitted_profile.extensions.get(extension_name)
+                    )
+                }
+            )
+        ),
+        enable_macro=f"TSL_ENABLE_{header_group.upper()}",
         includes=None,
         registrations=registrations,
         declarations=tuple(

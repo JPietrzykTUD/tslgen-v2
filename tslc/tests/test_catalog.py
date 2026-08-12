@@ -16,7 +16,11 @@ from tslc.catalog._builder_implementations import _implementations_from_entries
 from tslc.catalog._builder_primitives import _build_primitives
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import Catalog, TargetConstraint
+from tslc.catalog.model import (
+    Catalog,
+    PrimitiveValueMode,
+    TargetConstraint,
+)
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
@@ -306,6 +310,7 @@ def test_boolean_wildcard_attributes_expand_to_concrete_variants() -> None:
     }
     assert len(variants) == 4
     assert all(p.attributes["value"] == "zero" for p in variants)
+    assert all(p.value_mode is PrimitiveValueMode.ZERO for p in variants)
     bodies = {
         tuple(impl.body_text for impl in p.implementations) for p in variants
     }

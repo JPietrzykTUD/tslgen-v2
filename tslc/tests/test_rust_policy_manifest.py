@@ -5,11 +5,14 @@ from __future__ import annotations
 from copy import deepcopy
 from importlib.resources import files
 import json
+import os
+from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
 from tslc.backend.rust_policy_manifest import (
-    DEFAULT_RUST_POLICY_MANIFEST,
     load_rust_policy_manifest,
     parse_rust_policy_manifest,
 )
@@ -38,7 +41,32 @@ def test_packaged_manifest_loads_once_through_injectable_reader() -> None:
     loaded = load_rust_policy_manifest(read_text)
 
     assert calls == 1
-    assert loaded == DEFAULT_RUST_POLICY_MANIFEST
+    assert loaded == load_rust_policy_manifest()
+
+
+def test_importing_rust_backend_does_not_read_policy_asset() -> None:
+    source_root = Path(__file__).parents[1] / "src"
+    script = """
+import importlib.resources
+
+def reject_eager_read(*args, **kwargs):
+    raise AssertionError("Rust policy asset was read during backend import")
+
+importlib.resources.files = reject_eager_read
+import tslc.backend.rust_capability
+"""
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(source_root)
+
+    completed = subprocess.run(
+        (sys.executable, "-c", script),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert completed.returncode == 0, completed.stderr
 
 
 @pytest.mark.parametrize(

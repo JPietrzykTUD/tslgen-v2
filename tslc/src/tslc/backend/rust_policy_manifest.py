@@ -10,6 +10,7 @@ from typing import Any, cast, get_args
 
 from tslc.benchmark.model import BenchmarkScenarioFamily, SpecializationKey
 from tslc.benchmark.planner import BenchmarkScenarioAdmission
+from tslc.backend.capability import BackendPolicyInput
 from tslc.lower.lowerer import LoweredSpecialization
 
 RUST_POLICY_MANIFEST_VERSION = 1
@@ -83,7 +84,7 @@ class RustPolicySelectionPilot:
 
 
 @dataclass(frozen=True, slots=True)
-class RustPolicyManifest:
+class RustPolicyManifest(BackendPolicyInput):
     """Complete static evidence consumed by Rust benchmark and selection plans."""
 
     version: int
@@ -160,7 +161,7 @@ def parse_rust_policy_manifest(text: str) -> RustPolicyManifest:
 def load_rust_policy_manifest(
     read_text: Callable[[], str] | None = None,
 ) -> RustPolicyManifest:
-    """Load once from package data, with an injectable reader for tests."""
+    """Load package data at an explicit input boundary."""
 
     if read_text is None:
         resource = files("tslc.backend").joinpath(
@@ -295,11 +296,7 @@ def _boolean(value: Any, owner: str) -> bool:
     return value
 
 
-DEFAULT_RUST_POLICY_MANIFEST = load_rust_policy_manifest()
-
-
 __all__ = (
-    "DEFAULT_RUST_POLICY_MANIFEST",
     "RUST_POLICY_MANIFEST_VERSION",
     "RustPolicyManifest",
     "RustPolicySelectionPilot",

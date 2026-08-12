@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from tslc import api, pipeline
-from tslc.backend import cpp_profile
+from tslc.backend import cpp_build_policy, cpp_profile
 from tslc.backend.capability import (
     BackendCapability,
     CompilerCapability,
@@ -45,7 +45,7 @@ from tslc.lower.lowerer import (
 )
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile
-from tslc.render import cpp_build, cpp_project
+from tslc.render import cpp_project
 from tslc.render.project import render_project
 from tslc.select.selector import Selector
 from tslc.sources import SourceDocument
@@ -182,7 +182,10 @@ def test_pipeline_uses_lowering_owned_policy_code_and_one_slot_sort_key() -> Non
 def test_cpp_project_renderer_has_focused_owned_modules() -> None:
     assert cpp_project.cpp_artifacts.__module__ == "tslc.render.cpp_project"
     assert cpp_profile._cpp_registration.__module__ == "tslc.backend.cpp_profile"
-    assert cpp_build.cpp_flags.__module__ == "tslc.render.cpp_build"
+    assert (
+        cpp_build_policy.cpp_profile_flags.__module__
+        == "tslc.backend.cpp_build_policy"
+    )
 
 
 def test_render_assets_have_one_packaged_source_of_truth() -> None:
@@ -381,8 +384,8 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
 def test_backend_capability_owns_optional_benchmark_planning(catalog) -> None:
     calls: list[str] = []
 
-    def plan_benchmarks(catalog, profiles, value_tests):  # noqa: ANN001
-        del catalog, profiles, value_tests
+    def plan_benchmarks(catalog, profiles, value_tests, policy_inputs):  # noqa: ANN001
+        del catalog, profiles, value_tests, policy_inputs
         calls.append("future")
         return EMPTY_BENCHMARK_PROJECT_PLAN
 
@@ -440,8 +443,9 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
         assets: RenderAssets,
         media_type: str,
         config: object,
+        policy_inputs: object,
     ) -> list[Artifact]:
-        del profiles, value_tests, benchmarks, assets, config
+        del profiles, value_tests, benchmarks, assets, config, policy_inputs
         return [Artifact("fake/lib.fake", "fake\n", media_type)]
 
     fake = BackendCapability(
@@ -512,8 +516,9 @@ def test_render_project_filters_profiles_by_backend_membership(monkeypatch) -> N
         assets: RenderAssets,
         media_type: str,
         config: object,
+        policy_inputs: object,
     ) -> list[Artifact]:
-        del value_tests, benchmarks, assets, media_type, config
+        del value_tests, benchmarks, assets, media_type, config, policy_inputs
         received["render"] = tuple(profile.profile.name for profile in profiles)
         return []
 
@@ -955,8 +960,9 @@ def _empty_backend_artifacts(
     assets: RenderAssets,
     media_type: str,
     config: object,
+    policy_inputs: object,
 ) -> list[Artifact]:
-    del profiles, value_tests, benchmarks, assets, media_type, config
+    del profiles, value_tests, benchmarks, assets, media_type, config, policy_inputs
     return []
 
 

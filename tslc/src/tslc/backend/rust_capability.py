@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from tslc.backend.capability import (
     BackendCapability,
+    BackendPolicyInputs,
     BackendDocumentationFormatter,
     DocumentationSiteInput,
     GeneratedDocumentationBuilder,
@@ -20,7 +21,10 @@ from tslc.backend.rust_api_planner import (
 )
 from tslc.backend.rust_dispatch import plan_rust_dispatch
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
-from tslc.backend.rust_policy_manifest import DEFAULT_RUST_POLICY_MANIFEST
+from tslc.backend.rust_policy_manifest import (
+    RustPolicyManifest,
+    load_rust_policy_manifest,
+)
 from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
     plan_rust_static_selection,
@@ -59,7 +63,11 @@ if TYPE_CHECKING:
     from tslc.project_render import ProjectRenderConfig
 
 
-RUST_POLICY_MANIFEST = DEFAULT_RUST_POLICY_MANIFEST
+_BACKEND_ID = "rust"
+
+
+def _rust_policy_manifest(inputs: BackendPolicyInputs) -> RustPolicyManifest:
+    return inputs.require(_BACKEND_ID, RustPolicyManifest)
 
 
 def create_rust_dialect(catalog: Catalog) -> BackendDialect:
@@ -94,11 +102,14 @@ def rust_benchmark_plan(
     catalog: Catalog,
     profiles: tuple[EmittedProfile, ...],
     value_tests: ValueTestProjectPlan,
+    policy_inputs: BackendPolicyInputs,
 ) -> BenchmarkProjectPlan:
     return BenchmarkPlanner(
         catalog,
         backend_id="rust",
-        supported_admissions=RUST_POLICY_MANIFEST.benchmark_admission_set,
+        supported_admissions=(
+            _rust_policy_manifest(policy_inputs).benchmark_admission_set
+        ),
     ).plan(profiles, value_tests)
 
 
@@ -109,10 +120,13 @@ def rust_backend_artifacts(
     assets: RenderAssets,
     media_type: str,
     config: ProjectRenderConfig,
+    policy_inputs: BackendPolicyInputs,
 ) -> list[Artifact]:
     """Render Rust from one frozen selection/consumption projection."""
 
-    selection_plan = plan_rust_policy_selection(profiles, RUST_POLICY_MANIFEST)
+    selection_plan = plan_rust_policy_selection(
+        profiles, _rust_policy_manifest(policy_inputs)
+    )
     static_selection_plan = plan_rust_static_selection(profiles)
     facade_plan = plan_rust_facade(profiles, static_selection_plan)
     dispatch_plan = plan_rust_dispatch(
@@ -169,11 +183,12 @@ def rust_primitive_preview(
     profile: EmittedProfile,
     primitive_name: str,
     specializations: tuple[LoweredSpecialization, ...],
+    policy_inputs: BackendPolicyInputs,
 ) -> str:
     family = profile.profile_family
     policy_selection = plan_rust_policy_selection(
         (profile,),
-        RUST_POLICY_MANIFEST,
+        _rust_policy_manifest(policy_inputs),
     ).profile(
         profile.profile.name
     )
@@ -204,6 +219,7 @@ RUST_BACKEND = BackendCapability(
     helper_manifest=RUST_HELPER_MANIFEST,
     additional_closure_seeds=rust_facade_closure_seed_primitives,
     profile_validator=validate_rust_profiles,
+    policy_input_loader=load_rust_policy_manifest,
     primitive_preview_renderer=rust_primitive_preview,
     generated_format=GeneratedFormatSpec(
         executable="rustfmt",

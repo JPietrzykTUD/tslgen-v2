@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tslc.catalog.model import PrimitiveValueMode
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import SupportPolicy
 from tslc.value_tests._case_conversion import (
@@ -196,7 +197,7 @@ class _ExtensionResultPattern(_BasePattern):
             context.harness,
             undefined_upper=(
                 primitive is not None
-                and primitive.attributes.get("value") == "undef"
+                and primitive.value_mode is PrimitiveValueMode.UNDEFINED
             ),
         )
         return (plan,) if plan is not None else ()

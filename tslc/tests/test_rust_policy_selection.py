@@ -15,6 +15,7 @@ import pytest
 
 from rust_project_test_support import render_rust_artifacts_for_test
 from tslc.api import generate_project, write_artifacts
+from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
 from tslc.backend.rust_policy_selection import (
     RustPolicySelection,
@@ -32,6 +33,10 @@ from tslc.render.rust_policy_consumption import (
     plan_rust_policy_consumption_render,
 )
 from tslc.target_text import LoweredBody
+
+
+RUST_POLICY_MANIFEST = load_rust_policy_manifest()
+
 
 
 @pytest.fixture(scope="module")
@@ -94,7 +99,9 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
     rust_policy_result,
     render_assets: RenderAssets,
 ) -> None:
-    plan = plan_rust_policy_selection(rust_policy_result.emitted_profiles)
+    plan = plan_rust_policy_selection(
+        rust_policy_result.emitted_profiles, RUST_POLICY_MANIFEST
+    )
     profile = plan.profile("sse2")
     assert profile is not None
     selection = _mul_selection(plan)
@@ -221,6 +228,7 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
         validate_rust_policy_selection_plan(
             rust_policy_result.emitted_profiles,
             stale_plan,
+            RUST_POLICY_MANIFEST,
         )
 
 
@@ -449,7 +457,9 @@ def test_generated_rust_default_and_forced_selection_are_static_and_correct(
     }:
         pytest.skip("the optimized Rust selection proof requires native x86-64 Linux")
 
-    default_plan = plan_rust_policy_selection(rust_policy_result.emitted_profiles)
+    default_plan = plan_rust_policy_selection(
+        rust_policy_result.emitted_profiles, RUST_POLICY_MANIFEST
+    )
     selected = _mul_selection(default_plan)
     forced_plan = default_plan.with_forced_selection(
         selected.key,
