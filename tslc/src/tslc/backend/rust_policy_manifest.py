@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from hashlib import sha256
 from importlib.resources import files
 import json
 from typing import Any, cast, get_args
@@ -90,6 +91,7 @@ class RustPolicyManifest(BackendPolicyInput):
     version: int
     benchmark_admissions: tuple[BenchmarkScenarioAdmission, ...]
     selection_pilots: tuple[RustPolicySelectionPilot, ...]
+    source_digest: str
 
     def __post_init__(self) -> None:
         if self.version != RUST_POLICY_MANIFEST_VERSION:
@@ -109,6 +111,9 @@ class RustPolicyManifest(BackendPolicyInput):
             raise ValueError(
                 "ambiguous Rust policy pilots match the same specialization"
             )
+
+    def snapshot_digest(self) -> str:
+        return self.source_digest
 
     @property
     def benchmark_admission_set(
@@ -155,7 +160,19 @@ def parse_rust_policy_manifest(text: str) -> RustPolicyManifest:
             _list(root.get("selection_pilots"), "selection_pilots")
         )
     )
-    return RustPolicyManifest(version, admissions, pilots)
+    return RustPolicyManifest(
+        version,
+        admissions,
+        pilots,
+        sha256(
+            json.dumps(
+                root,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest(),
+    )
 
 
 def load_rust_policy_manifest(

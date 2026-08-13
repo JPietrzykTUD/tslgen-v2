@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 from typing import Literal
 
-from tslc.ir.scan import tsil_cursor_context
+from tslc.ir.cursor import tsil_cursor_context
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedBlockDeclaration,

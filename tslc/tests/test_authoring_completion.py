@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import tslc.authoring_completion as completion_module
 from tslc.authoring_completion import AuthoringCompletion, authoring_completions
 from tslc.catalog.model import Catalog
 from tslc.compiler_assets import load_default_tsl_grammar
@@ -17,6 +18,14 @@ from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS, TSIL_REGION
 
 
 _PATH = Path("tslctmp/authoring-completion.tsl").resolve()
+
+
+def test_completion_records_and_tsil_projection_have_focused_owners() -> None:
+    assert AuthoringCompletion.__module__ == "tslc.authoring_completion_model"
+    assert (
+        completion_module._tsil_shell_completions.__module__
+        == "tslc.authoring_tsil_completion"
+    )
 
 
 def test_empty_file_and_primitive_header_complete_declarations_and_shapes(

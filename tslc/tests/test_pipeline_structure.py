@@ -9,7 +9,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from tslc import api, pipeline
-from tslc.backend import cpp_build_policy, cpp_profile
+from tslc import pipeline_request
+from tslc.backend import (
+    cpp_build_policy,
+    cpp_profile,
+    cpp_verification,
+    rust_verification,
+)
 from tslc.backend.capability import (
     BackendCapability,
     CompilerCapability,
@@ -45,7 +51,7 @@ from tslc.lower.lowerer import (
 )
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile
-from tslc.render import cpp_project
+from tslc.render import cpp_build, cpp_project, rust_project
 from tslc.render.project import render_project
 from tslc.select.selector import Selector
 from tslc.sources import SourceDocument
@@ -59,6 +65,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def test_pipeline_facade_keeps_input_and_closure_boundaries() -> None:
     assert pipeline.generate.__module__ == "tslc.pipeline"
+    assert pipeline.GenerationRequest.__module__ == "tslc.pipeline_request"
     assert pipeline._load_inputs.__module__ == "tslc._pipeline_inputs"
     assert pipeline._LoweringCache.__module__ == "tslc._pipeline_lowering_cache"
     assert pipeline._LoweredSlot.__module__ == "tslc._pipeline_closure"
@@ -69,7 +76,9 @@ def test_pipeline_facade_keeps_input_and_closure_boundaries() -> None:
 def test_backend_defaults_are_resolved_at_request_construction(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(pipeline, "registered_backend_ids", lambda: ("future",))
+    monkeypatch.setattr(
+        pipeline_request, "registered_backend_ids", lambda: ("future",)
+    )
 
     request = pipeline.GenerationRequest(
         source_paths=(),
@@ -186,6 +195,19 @@ def test_cpp_project_renderer_has_focused_owned_modules() -> None:
         cpp_build_policy.cpp_profile_flags.__module__
         == "tslc.backend.cpp_build_policy"
     )
+
+
+def test_verification_projection_is_backend_owned() -> None:
+    assert (
+        cpp_verification.cpp_verify_profile.__module__
+        == "tslc.backend.cpp_verification"
+    )
+    assert (
+        rust_verification.rust_verify_profile.__module__
+        == "tslc.backend.rust_verification"
+    )
+    assert not hasattr(cpp_build, "cpp_verify_profile")
+    assert not hasattr(rust_project, "rust_verify_profile")
 
 
 def test_render_assets_have_one_packaged_source_of_truth() -> None:

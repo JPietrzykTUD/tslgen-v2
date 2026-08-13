@@ -31,6 +31,10 @@ from tslc.backend.rust_static_selection import (
 )
 from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
 from tslc.backend.rust_translation import RustBackendDialect
+from tslc.backend.rust_verification import (
+    rust_verify_profile,
+    rust_verify_profiles,
+)
 from tslc.backend.rust_validation import validate_rust_profiles
 from tslc.benchmark.planner import BenchmarkPlanner
 from tslc.benchmark.render_rust import rust_benchmark_artifacts
@@ -42,11 +46,7 @@ from tslc.output._verify_rust_config import rust_toolchain_commands
 from tslc.render.documentation_formatters import RUST_DOCUMENTATION_FORMATTER
 from tslc.render.rust_benchmark_layout import plan_rust_benchmark_layout
 from tslc.render.rust_policy_consumption import plan_rust_policy_consumption_render
-from tslc.render.rust_project import (
-    _rust_artifacts,
-    rust_verify_profile,
-    rust_verify_profiles,
-)
+from tslc.render.rust_project import _rust_artifacts
 from tslc.render.tests_project import rust_test_artifacts
 from tslc.value_tests.render_rust import RUST_VALUE_TEST_SUPPORT
 

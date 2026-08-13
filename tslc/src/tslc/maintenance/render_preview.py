@@ -10,7 +10,6 @@ from tslc.api import _expand_sources
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.registry import (
     backend_capability,
-    load_backend_policy_inputs,
     registered_backend_ids,
 )
 from tslc.diagnostics import (
@@ -107,6 +106,7 @@ def render_preview(
         extensions=(extension,) if extension is not None else None,
         backends=(backend,),
         render_artifacts=False,
+        load_policy_inputs=True,
     )
     inputs, load_diagnostics = _load_inputs(request)
     if inputs is None:
@@ -157,7 +157,6 @@ def render_preview(
         )
 
     capability = backend_capability(backend)
-    policy_inputs = load_backend_policy_inputs((backend,))
     parts: list[str] = []
     try:
         for emitted_name, specializations in matching:
@@ -166,7 +165,7 @@ def render_preview(
                     emitted,
                     emitted_name,
                     specializations,
-                    policy_inputs,
+                    inputs.policy_inputs,
                 ).rstrip()
             )
     except ValueError as exc:

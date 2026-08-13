@@ -28,7 +28,10 @@ build, not by the number of internal abstractions.
 ## The pipeline
 
 The compiler is a pure function once source data and static compiler assets are
-loaded, orchestrated in [pipeline.py](src/tslc/pipeline.py):
+loaded, orchestrated in [pipeline.py](src/tslc/pipeline.py). Typed generation
+requests and their cross-field validation live in
+[pipeline_request.py](src/tslc/pipeline_request.py), separate from the mutable
+per-run orchestration session:
 
 ```
 sources + compiler assets → parse → catalog → select → scan body → lower → finalize names → validate/plan → render → write → verify
@@ -96,15 +99,20 @@ target axes are recognized by name and `where` constraint levels are never
 indexed as type groups. The parsed-source boundary
 in [syntax/authoring.py](src/tslc/syntax/authoring.py) constructs a typed cursor
 context from declaration, field, selector, map, list, and value spans. Inside
-TSIL payloads it uses the recursive scanner's cursor spans to retain enclosing
-region paths and distinguish region boundaries, selector shells, and raw text;
-its outer-language fallback reads only the active incomplete line. Schema- and
-registry-backed
-[authoring_completion.py](src/tslc/authoring_completion.py) returns typed
-completion records with replacement ranges, snippets, details, and stable
-ordering for the LSP adapter. Region-shell terms and option bags come from the
-same authoring descriptors as registered region keywords, while catalog-backed
-providers supply primitive and backend-translation names. Typed query
+TSIL payloads it uses the tolerant projection in
+[ir/cursor.py](src/tslc/ir/cursor.py), which shares lexical rules with the
+recursive scanner through [ir/lexical.py](src/tslc/ir/lexical.py), to retain
+enclosing region paths and distinguish region boundaries, selector shells, and
+raw text. Its outer-language fallback reads only the active incomplete line.
+Schema- and registry-backed
+[authoring_completion.py](src/tslc/authoring_completion.py) orchestrates typed
+completion records from
+[authoring_completion_model.py](src/tslc/authoring_completion_model.py).
+TSIL query and region-shell completion lives in the focused
+[authoring_tsil_completion.py](src/tslc/authoring_tsil_completion.py).
+Region-shell terms and option bags come from the same authoring descriptors as
+registered region keywords, while catalog-backed providers supply primitive
+and backend-translation names. Typed query
 completion is a pure projection of the evaluator function descriptors and
 closed leaf namespaces in
 [lower/query_authoring.py](src/tslc/lower/query_authoring.py); lexical scanner
@@ -172,12 +180,15 @@ client owns only cancellable execution, complete-context caching, stale-state
 presentation, and source navigation. Lookup refreshes never collect this trace
 or start analysis.
 Concrete preview runs `tslc preview` as a separate saved-file child. It uses
-one loaded input snapshot for selection, lowering, and dependency closure, then
-passes the requested emitted specialization through the registered backend's
-normal primitive renderer. An optional compiler source point restricts the
-result to lowered specializations originating in that exact authored selector,
-which lets editor CodeLens previews avoid merging overloads or other source
-bodies with the same primitive name. Concrete wildcard-attribute
+one loaded input snapshot for selection, lowering, dependency closure, and
+backend policy, then passes the requested emitted specialization through the
+registered backend's normal primitive renderer. Its reported input digest
+includes the canonical backend-policy fingerprint, so a policy change cannot
+silently alter output under an unchanged snapshot identity. An optional
+compiler source point restricts the result to lowered specializations
+originating in that exact authored selector, which lets editor CodeLens
+previews avoid merging overloads or other source bodies with the same primitive
+name. Concrete wildcard-attribute
 variants that share that selector intentionally remain grouped. It does not
 load project render assets, plan tests or benchmarks, write a generated
 project, or invoke a toolchain. `tslc explain` remains the detailed
@@ -462,8 +473,11 @@ spellings, intrinsic composition, call syntax, and unsafe framing). The
 [backend registry](src/tslc/backend/registry.py) owns each backend's dialect
 factory, artifact media type, complete artifact renderer, documentation
 formatter, validation, helper manifest, value-test support, optional benchmark
-planner, verification adapter, and
-post-generation formatting/documentation specs. Signature type
+planner, verification adapter, and post-generation formatting/documentation
+specs. C++ and Rust machine-profile verification projections live in
+[backend/cpp_verification.py](src/tslc/backend/cpp_verification.py) and
+[backend/rust_verification.py](src/tslc/backend/rust_verification.py);
+render modules only format their already-decided project models. Signature type
 projection machinery and the concrete C++/Rust projection tables are co-located
 in [backend/signature_types.py](src/tslc/backend/signature_types.py), then shared
 by function emitters and documentation formatting. They are backend-owned facts,
@@ -714,7 +728,8 @@ AVX-512/NEON/SVE code runs on hardware that lacks it.
 
 - Big picture / rules: [README.md](README.md), [CHARTER.md](CHARTER.md).
 - The body model: [ir/segments.py](src/tslc/ir/segments.py),
-  [ir/scan.py](src/tslc/ir/scan.py).
-- Orchestration: [pipeline.py](src/tslc/pipeline.py).
+  [ir/scan.py](src/tslc/ir/scan.py), and [ir/cursor.py](src/tslc/ir/cursor.py).
+- Orchestration and request ownership: [pipeline.py](src/tslc/pipeline.py) and
+  [pipeline_request.py](src/tslc/pipeline_request.py).
 - A real primitive with all the moving parts:
   [`tsldata/primitives/arithmetic/fundamental.tsl`](../tsldata/primitives/arithmetic/fundamental.tsl).

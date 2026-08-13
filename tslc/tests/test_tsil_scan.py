@@ -12,6 +12,7 @@ import pytest
 import tslc.ir.scan as scan_module
 from tslc.catalog.validation.body_validation import _SHELL_VALIDATORS
 from tslc.diagnostics import SourceSpan
+from tslc.ir.cursor import tsil_cursor_context
 from tslc.ir.region_registry import (
     DEFAULT_TSIL_REGION_DESCRIPTORS,
     TSIL_REGION_KEYWORDS,
@@ -26,7 +27,6 @@ from tslc.ir.scan import (
     _cached_scan,
     find_malformed_regions,
     scan,
-    tsil_cursor_context,
 )
 from tslc.ir.segments import RawText, Region
 from tslc.lower.region_handlers.registry import (
@@ -34,6 +34,11 @@ from tslc.lower.region_handlers.registry import (
     REGION_LOWERING_REGISTRATIONS,
 )
 from tslc.lower.queries import DEFAULT_QUERY_FUNCTIONS
+
+
+def test_cursor_projection_has_a_focused_owner() -> None:
+    assert tsil_cursor_context.__module__ == "tslc.ir.cursor"
+    assert scan_module.tsil_cursor_context is tsil_cursor_context
 
 
 def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:

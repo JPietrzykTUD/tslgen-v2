@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from enum import Enum
+from hashlib import sha256
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
 
@@ -83,9 +84,14 @@ PrimitivePreviewRenderer = Callable[
 
 
 class BackendPolicyInput:
-    """Marker base for one backend-owned, parsed compiler input."""
+    """One backend-owned, parsed compiler input in a generation snapshot."""
 
     __slots__ = ()
+
+    def snapshot_digest(self) -> str:
+        """Return the SHA-256 digest of the loaded source input."""
+
+        raise NotImplementedError
 
 
 _BackendPolicyT = TypeVar("_BackendPolicyT", bound=BackendPolicyInput)
@@ -116,6 +122,18 @@ class BackendPolicyInputs:
                 f"{expected_type.__name__} policy input"
             )
         return value
+
+    @property
+    def input_digest(self) -> str:
+        """Fingerprint the complete, backend-keyed policy-input snapshot."""
+
+        digest = sha256()
+        for backend_id, value in self.values.items():
+            digest.update(backend_id.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(value.snapshot_digest().encode("ascii"))
+            digest.update(b"\0")
+        return digest.hexdigest()
 
 
 EMPTY_BACKEND_POLICY_INPUTS = BackendPolicyInputs()

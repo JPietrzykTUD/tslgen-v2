@@ -9,8 +9,7 @@ headers/modules with a top-level dispatch.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Literal
 
 from tslc._pipeline_closure import (
@@ -24,7 +23,7 @@ from tslc._pipeline_closure import (
 from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
 from tslc._pipeline_lowering_cache import _LoweringCache
 from tslc.backend.emitted_profile import EmittedProfile
-from tslc.backend.registry import backend_capabilities, registered_backend_ids
+from tslc.backend.registry import backend_capabilities
 from tslc.benchmark.model import BenchmarkProjectPlan
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
@@ -50,8 +49,15 @@ from tslc.lower.lowerer import (
     LoweringResult,
 )
 from tslc.output.artifacts import ArtifactSet
+from tslc.pipeline_request import (
+    BackendCompilerCapabilitySet,
+    BackendProfileScope,
+    GenerationMode,
+    GenerationRequest,
+    backend_profile_scope_diagnostics,
+    compiler_capability_diagnostics,
+)
 from tslc.render.project import RenderedProject, render_project
-from tslc.project_render import DEFAULT_PROJECT_RENDER_CONFIG, ProjectRenderConfig
 from tslc.select.selector import (
     SelectedImplementation,
     Selector,
@@ -62,64 +68,8 @@ from tslc.value_tests import (
     ValueTestProjectPlan,
 )
 
-GenerationMode = Literal["partial", "strict"]
 SkipStatus = Literal["coverage_gap", "policy_deferred"]
 _TYPE_ORDER = SCALAR_TYPE_ORDER
-
-
-def _default_backend_ids() -> tuple[str, ...]:
-    """Resolve registry defaults when a request is created, not at import time."""
-
-    return registered_backend_ids()
-
-
-@dataclass(frozen=True, slots=True)
-class BackendProfileScope:
-    """Restrict one requested backend to a subset of requested machine profiles."""
-
-    backend_id: str
-    profiles: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class BackendCompilerCapabilitySet:
-    """Compiler capabilities explicitly enabled for one generated backend."""
-
-    backend_id: str
-    capabilities: frozenset[str]
-
-
-@dataclass(frozen=True, slots=True)
-class GenerationRequest:
-    source_paths: tuple[Path, ...]
-    machine_profiles_path: Path
-    primitives: tuple[str, ...] | None
-    profiles: tuple[str, ...] | None
-    type_tags: tuple[str, ...]
-    extensions: tuple[str, ...] | None = None
-    backends: tuple[str, ...] = field(default_factory=_default_backend_ids)
-    backend_profile_scopes: tuple[BackendProfileScope, ...] = ()
-    backend_compiler_capabilities: tuple[BackendCompilerCapabilitySet, ...] = ()
-    mode: GenerationMode = "partial"
-    # Pull the value-test harness primitives (vector<->array round-trip and mask normalization)
-    # into the dependency closure so the generated differential tests can build a hardware
-    # register from a lane array and read its result back. Off for ordinary generation.
-    test_harness: bool = False
-    # Report authored value-test cases that could not be planned for a backend/profile. Off for
-    # ordinary generation because source data often includes broader test intent than the current
-    # backend test harness supports.
-    value_test_warnings: bool = False
-    # Emit differential-fuzz value tests: a runtime PRNG loop comparing each hardware
-    # specialization against the generic scalar reference over many random inputs. Opt-in (adds
-    # build/run cost); requires the test harness so the generated code can round-trip registers.
-    value_test_fuzz: bool = False
-    # Authoring checks reuse selection and lowering but stop before test planning,
-    # benchmarking, render-asset loading, and artifact rendering.
-    render_artifacts: bool = True
-    # Explicit concrete-analysis commands may retain the lowered call graph.
-    # Ordinary checking/generation discards it after closure and propagation.
-    collect_lowering_trace: bool = False
-    render_config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,8 +185,16 @@ class _GenerationSession:
 
     def run(self) -> GenerationResult:
         request_diagnostics = (
-            *self._backend_profile_scope_diagnostics(),
-            *self._compiler_capability_diagnostics(),
+            *backend_profile_scope_diagnostics(
+                self.request,
+                self.backends,
+                self.inputs.machine_profiles,
+                _expand_requested_profiles(
+                    self.request.profiles,
+                    self.inputs.machine_profiles,
+                ),
+            ),
+            *compiler_capability_diagnostics(self.request, self.backends),
         )
         self.diagnostics.extend(request_diagnostics)
         if has_errors(request_diagnostics):
@@ -383,129 +341,6 @@ class _GenerationSession:
             tuple(capability.value_test_support() for capability in self.backends),
             fuzz=self.request.value_test_fuzz,
         ).plan(inputs)
-
-    def _compiler_capability_diagnostics(self) -> tuple[Diagnostic, ...]:
-        requested_backends = {
-            capability.backend_id
-            for capability in self.backends
-        }
-        known = {
-            capability.backend_id: frozenset(
-                item.capability_id
-                for item in capability.compiler_capabilities
-            )
-            for capability in self.backends
-        }
-        seen: set[str] = set()
-        diagnostics: list[Diagnostic] = []
-        for item in self.request.backend_compiler_capabilities:
-            if item.backend_id in seen:
-                diagnostics.append(
-                    Diagnostic(
-                        severity="error",
-                        code="TSL-PIPELINE-DUPLICATE-COMPILER-CAPABILITY-SET",
-                        message=(
-                            "compiler capability set repeats backend "
-                            f"{item.backend_id!r}"
-                        ),
-                    )
-                )
-            seen.add(item.backend_id)
-            if item.backend_id not in requested_backends:
-                diagnostics.append(
-                    Diagnostic(
-                        severity="error",
-                        code="TSL-PIPELINE-UNREQUESTED-COMPILER-CAPABILITY-BACKEND",
-                        message=(
-                            f"compiler capability set names {item.backend_id!r}, which "
-                            "is not a requested backend"
-                        ),
-                    )
-                )
-                continue
-            unknown = item.capabilities - known[item.backend_id]
-            if unknown:
-                diagnostics.append(
-                    Diagnostic(
-                        severity="error",
-                        code="TSL-PIPELINE-UNKNOWN-COMPILER-CAPABILITY",
-                        message=(
-                            f"backend {item.backend_id!r} uses unknown compiler "
-                            f"capabilities: {', '.join(sorted(unknown))}; expected "
-                            f"{', '.join(sorted(known[item.backend_id])) or '(none)'}"
-                        ),
-                    )
-                )
-        return tuple(diagnostics)
-
-    def _backend_profile_scope_diagnostics(self) -> tuple[Diagnostic, ...]:
-        requested_backends = frozenset(
-            capability.backend_id for capability in self.backends
-        )
-        requested_profiles = frozenset(
-            _expand_requested_profiles(
-                self.request.profiles,
-                self.inputs.machine_profiles,
-            )
-        )
-        seen: set[str] = set()
-        diagnostics: list[Diagnostic] = []
-        for scope in self.request.backend_profile_scopes:
-            if scope.backend_id in seen:
-                diagnostics.append(
-                    Diagnostic(
-                        severity="error",
-                        code="TSL-PIPELINE-DUPLICATE-BACKEND-PROFILE-SCOPE",
-                        message=(
-                            "backend profile scope repeats backend "
-                            f"{scope.backend_id!r}"
-                        ),
-                    )
-                )
-            seen.add(scope.backend_id)
-            if scope.backend_id not in requested_backends:
-                diagnostics.append(
-                    Diagnostic(
-                        severity="error",
-                        code="TSL-PIPELINE-UNREQUESTED-BACKEND-PROFILE-SCOPE",
-                        message=(
-                            f"backend profile scope names {scope.backend_id!r}, which "
-                            "is not a requested backend"
-                        ),
-                    )
-                )
-            if not scope.profiles:
-                diagnostics.append(
-                    Diagnostic(
-                        severity="error",
-                        code="TSL-PIPELINE-EMPTY-BACKEND-PROFILE-SCOPE",
-                        message=f"backend {scope.backend_id!r} profile scope is empty",
-                    )
-                )
-            for profile_name in sorted(set(scope.profiles)):
-                if profile_name not in self.inputs.machine_profiles:
-                    diagnostics.append(
-                        Diagnostic(
-                            severity="error",
-                            code="TSL-PIPELINE-UNKNOWN-BACKEND-PROFILE",
-                            message=(
-                                f"backend {scope.backend_id!r} profile scope names "
-                                f"unknown machine profile {profile_name!r}"
-                            ),
-                        )
-                    )
-                elif profile_name not in requested_profiles:
-                    diagnostics.append(
-                        Diagnostic(
-                            severity="error",
-                            code="TSL-PIPELINE-OUT-OF-SCOPE-BACKEND-PROFILE",
-                            message=(
-                                f"backend {scope.backend_id!r} profile {profile_name!r} "
-                                "is not in the requested profile set"
-                            ),
-                        )
-                    )
-        return tuple(diagnostics)
 
     @staticmethod
     def _profiles_for_backend(

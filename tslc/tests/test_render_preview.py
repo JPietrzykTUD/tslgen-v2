@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import tslc._pipeline_inputs as pipeline_inputs
+from tslc.backend.capability import BackendPolicyInputs
+from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.diagnostics import Diagnostic, SourceLocation
 from tslc.maintenance.render_preview import render_preview
 from tslc.select.selector import Selector
@@ -64,6 +67,54 @@ def test_rust_preview_uses_backend_renderer(
     assert "tslc rendered specialization preview" in rendered
     assert "trait AddImpl" in rendered
     assert "_mm256_add_epi32" in rendered
+
+
+def test_rust_preview_uses_one_policy_snapshot_and_fingerprints_it(
+    data_root: Path,
+    machine_profiles_path: Path,
+    monkeypatch,
+) -> None:
+    manifest = load_rust_policy_manifest()
+
+    def preview_digest(policy_digest: str) -> str:
+        calls = 0
+        snapshot = BackendPolicyInputs(
+            {"rust": replace(manifest, source_digest=policy_digest)}
+        )
+
+        def load_policy_inputs(
+            backend_ids: tuple[str, ...],
+        ) -> BackendPolicyInputs:
+            nonlocal calls
+            calls += 1
+            assert backend_ids == ("rust",)
+            return snapshot
+
+        monkeypatch.setattr(
+            pipeline_inputs,
+            "load_backend_policy_inputs",
+            load_policy_inputs,
+        )
+        rendered, diagnostics = _preview(
+            data_root,
+            machine_profiles_path,
+            backend="rust",
+        )
+
+        assert diagnostics == ()
+        assert rendered is not None
+        assert calls == 1
+        line = next(
+            value
+            for value in rendered.splitlines()
+            if value.startswith("// input snapshot: sha256:")
+        )
+        return line.rsplit(":", 1)[1]
+
+    first = preview_digest("1" * 64)
+    second = preview_digest("2" * 64)
+
+    assert first != second
 
 
 def test_preview_reports_a_slot_that_is_not_emitted(

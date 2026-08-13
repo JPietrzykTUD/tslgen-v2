@@ -16,6 +16,11 @@ from tslc.benchmark.identity import (
 )
 from tslc.backend.cpp_build_policy import cpp_profile_flags, cpp_profile_target
 from tslc.backend.cpp_detection import x86_profile_detection_source
+from tslc.backend.rust_verification import (
+    rust_linker,
+    rust_target,
+    rust_target_features,
+)
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.target_families import (
     BackendProfileFamily,
@@ -25,7 +30,6 @@ from tslc.catalog.target_families import (
 from tslc.diagnostics import has_errors
 from tslc.lower.lowerer import LoweredImplementationVariant
 from tslc.render._common import slug
-from tslc.render.rust_project import rust_linker, rust_target, rust_target_features
 
 
 def _roots(result) -> set[str]:

@@ -19,13 +19,13 @@ from tslc.backend.cpp import CppBackend
 from tslc.benchmark.planner import BenchmarkPlanner
 from tslc.benchmark.render_cpp import cpp_benchmark_artifacts
 from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
+from tslc.backend.cpp_verification import cpp_verify_profile, cpp_verify_profiles
 from tslc.backend.cpp_validation import validate_cpp_profiles
 from tslc.catalog.model import Catalog
 from tslc.output._verify_cpp import (
     create_cpp_verify_driver as _create_cpp_verify_driver,
 )
 from tslc.output._verify_cpp_config import cpp_toolchain_commands
-from tslc.render.cpp_build import cpp_verify_profile, cpp_verify_profiles
 from tslc.render.cpp_project import cpp_artifacts
 from tslc.render.documentation_formatters import CPP_DOCUMENTATION_FORMATTER
 from tslc.render.tests_project import cpp_test_artifacts

@@ -44,6 +44,21 @@ def test_packaged_manifest_loads_once_through_injectable_reader() -> None:
     assert loaded == load_rust_policy_manifest()
 
 
+def test_manifest_snapshot_digest_is_canonical_and_semantic() -> None:
+    data = _packaged_data()
+    compact = parse_rust_policy_manifest(
+        json.dumps(data, separators=(",", ":"))
+    )
+    formatted = parse_rust_policy_manifest(json.dumps(data, indent=4))
+
+    assert compact.source_digest == formatted.source_digest
+
+    data["benchmark_admissions"][0]["profile_name"] = "changed-profile"
+    changed = parse_rust_policy_manifest(json.dumps(data))
+
+    assert changed.source_digest != compact.source_digest
+
+
 def test_importing_rust_backend_does_not_read_policy_asset() -> None:
     source_root = Path(__file__).parents[1] / "src"
     script = """
