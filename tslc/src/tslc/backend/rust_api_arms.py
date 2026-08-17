@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from tslc.backend.rust_api_core import RUST_FACADE_CORE_CALL_ROLES
 from tslc.backend.rust_api_model import (
     RustFacadeCoreDelegate,
     RustFacadeDelegate,
@@ -15,29 +16,6 @@ from tslc.backend.rust_api_model import (
 )
 from tslc.backend.rust_names import rust_lower_module_name
 from tslc.catalog.semantics import PrimitiveOperation
-
-RUST_FACADE_CORE_CALL_ROLES = (
-    "vector_splat",
-    "vector_from_array",
-    "vector_to_array",
-    "vector_zero",
-    "extract_lane",
-    "insert_lane",
-    "load",
-    "store",
-    "mask_false",
-    "mask_true",
-    "mask_from_bitmask",
-    "mask_to_bitmask",
-    "mask_to_integral_for_test",
-    "integral_mask_test",
-    "mask_set_lane",
-    "mask_population_count",
-    "mask_and",
-    "mask_or",
-    "mask_xor",
-    "mask_not",
-)
 
 
 @dataclass(frozen=True, slots=True)

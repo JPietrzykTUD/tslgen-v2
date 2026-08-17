@@ -679,7 +679,7 @@ class Extension:
 
     name: str  # internal identity = TSL block name (e.g. "avx2_vl"); drives selection
     isa_name: str  # emitted tag = `extension_name` (e.g. "avx2"); `_vl` is internal only
-    family: str  # "x86" | "arm" | "scalar" | … — picks the Rust core::arch module
+    family: str  # source-named extension-family routing key
     intrinsic_composition: IntrinsicComposition = field(
         default_factory=IntrinsicComposition
     )

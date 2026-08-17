@@ -32,7 +32,10 @@ from tslc.catalog.model import (
     Catalog,
     Extension,
 )
-from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
+from tslc.catalog.scalar_types import (
+    DEFAULT_SCALAR_TYPE_TAGS,
+    SCALAR_TYPE_ORDER,
+)
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
@@ -225,11 +228,23 @@ class _GenerationSession:
         )
         backend_diagnostics: list[Diagnostic] = []
         for capability in self.backends:
-            backend_diagnostics.extend(
-                capability.validate_profiles(
-                    self._profiles_for_backend(emitted_profiles, capability.backend_id)
-                )
+            profiles_for_backend = self._profiles_for_backend(
+                emitted_profiles, capability.backend_id
             )
+            backend_diagnostics.extend(
+                capability.validate_profiles(profiles_for_backend)
+            )
+            if (
+                _request_has_complete_backend_inventory(
+                    self.request, capability.backend_id
+                )
+                and capability.backend_id in self.inputs.policy_inputs.values
+            ):
+                backend_diagnostics.extend(
+                    capability.validate_policy_inventory(
+                        profiles_for_backend, self.inputs.policy_inputs
+                    )
+                )
         self.diagnostics.extend(backend_diagnostics)
 
         if has_errors(backend_diagnostics):
@@ -943,6 +958,25 @@ def _trace_slot_key(slot: LoweringTraceSlot) -> tuple[object, ...]:
         source.path.as_posix() if source is not None else "",
         source.line if source is not None else 0,
         source.column if source is not None else 0,
+    )
+
+
+def _request_has_complete_backend_inventory(
+    request: GenerationRequest, backend_id: str
+) -> bool:
+    return (
+        request.primitives is None
+        and request.profiles is None
+        and request.extensions is None
+        and frozenset(request.type_tags) == frozenset(DEFAULT_SCALAR_TYPE_TAGS)
+        and all(
+            scope.backend_id != backend_id
+            for scope in request.backend_profile_scopes
+        )
+        and all(
+            item.backend_id != backend_id
+            for item in request.backend_compiler_capabilities
+        )
     )
 
 

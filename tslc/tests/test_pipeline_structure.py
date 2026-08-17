@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 from collections.abc import Iterable
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -32,6 +33,7 @@ from tslc.backend.rust_capability import RUST_BACKEND
 from tslc.benchmark.model import EMPTY_BENCHMARK_PROJECT_PLAN
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
+from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.catalog.semantics import (
     OperandBinding,
     OperandRole,
@@ -89,6 +91,52 @@ def test_backend_defaults_are_resolved_at_request_construction(
     )
 
     assert request.backends == ("future",)
+
+
+def test_full_backend_inventory_detection_rejects_focused_requests() -> None:
+    request = pipeline.GenerationRequest(
+        source_paths=(),
+        machine_profiles_path=Path("profiles.json"),
+        primitives=None,
+        profiles=None,
+        type_tags=DEFAULT_SCALAR_TYPE_TAGS,
+        backends=("rust",),
+    )
+
+    assert pipeline._request_has_complete_backend_inventory(request, "rust")
+    assert pipeline._request_has_complete_backend_inventory(
+        replace(
+            request,
+            backend_profile_scopes=(
+                pipeline.BackendProfileScope("cpp", ("scalar",)),
+            ),
+        ),
+        "rust",
+    )
+    focused_requests = (
+        replace(request, primitives=("mul",)),
+        replace(request, profiles=("sse2",)),
+        replace(request, extensions=("sse",)),
+        replace(request, type_tags=("si8",)),
+        replace(
+            request,
+            backend_profile_scopes=(
+                pipeline.BackendProfileScope("rust", ("sse2",)),
+            ),
+        ),
+        replace(
+            request,
+            backend_compiler_capabilities=(
+                pipeline.BackendCompilerCapabilitySet(
+                    "rust", frozenset({"synthetic"})
+                ),
+            ),
+        ),
+    )
+    assert all(
+        not pipeline._request_has_complete_backend_inventory(item, "rust")
+        for item in focused_requests
+    )
 
 
 def test_compiler_capability_vocabulary_is_backend_generic(monkeypatch) -> None:

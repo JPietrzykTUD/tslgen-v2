@@ -72,6 +72,10 @@ DocumentationFormatterFactory = Callable[[], "BackendDocumentationFormatter"]
 ValueTestSupportFactory = Callable[[], "ValueTestBackendSupport"]
 VerifyDriverFactory = Callable[[], "VerifyBackendDriver"]
 ProfileValidator = Callable[[tuple["EmittedProfile", ...]], tuple["Diagnostic", ...]]
+PolicyInventoryValidator = Callable[
+    [tuple["EmittedProfile", ...], "BackendPolicyInputs"],
+    tuple["Diagnostic", ...],
+]
 PrimitivePreviewRenderer = Callable[
     [
         "EmittedProfile",
@@ -182,6 +186,14 @@ def _no_profile_diagnostics(
     profiles: tuple[EmittedProfile, ...],
 ) -> tuple[Diagnostic, ...]:
     del profiles
+    return ()
+
+
+def _no_policy_inventory_diagnostics(
+    profiles: tuple[EmittedProfile, ...],
+    policy_inputs: BackendPolicyInputs,
+) -> tuple[Diagnostic, ...]:
+    del profiles, policy_inputs
     return ()
 
 
@@ -314,6 +326,9 @@ class BackendCapability:
     helper_manifest: BackendHelperManifest = EMPTY_HELPER_MANIFEST
     additional_closure_seeds: ClosureSeedProjector = _no_additional_closure_seeds
     profile_validator: ProfileValidator = _no_profile_diagnostics
+    policy_inventory_validator: PolicyInventoryValidator = (
+        _no_policy_inventory_diagnostics
+    )
     primitive_preview_renderer: PrimitivePreviewRenderer = (
         _unsupported_primitive_preview
     )
@@ -474,6 +489,13 @@ class BackendCapability:
         self, profiles: tuple[EmittedProfile, ...]
     ) -> tuple[Diagnostic, ...]:
         return self.profile_validator(profiles)
+
+    def validate_policy_inventory(
+        self,
+        profiles: tuple[EmittedProfile, ...],
+        policy_inputs: BackendPolicyInputs,
+    ) -> tuple[Diagnostic, ...]:
+        return self.policy_inventory_validator(profiles, policy_inputs)
 
     def render_primitive_preview(
         self,

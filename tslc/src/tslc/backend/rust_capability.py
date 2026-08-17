@@ -20,7 +20,10 @@ from tslc.backend.rust_api_planner import (
     rust_facade_closure_seed_primitives,
 )
 from tslc.backend.rust_dispatch import plan_rust_dispatch
-from tslc.backend.rust_policy_selection import plan_rust_policy_selection
+from tslc.backend.rust_policy_selection import (
+    plan_rust_policy_selection,
+    validate_rust_policy_manifest_profiles,
+)
 from tslc.backend.rust_policy_manifest import (
     RustPolicyManifest,
     load_rust_policy_manifest,
@@ -55,6 +58,7 @@ if TYPE_CHECKING:
     from tslc.backend.translation import BackendDialect
     from tslc.backend.emitted_profile import EmittedProfile
     from tslc.compiler_assets import RenderAssets
+    from tslc.diagnostics import Diagnostic
     from tslc.output.artifacts import Artifact
     from tslc.output.verify_drivers import VerifyBackendDriver
     from tslc.output.verify_model import VerifyProfile
@@ -68,6 +72,15 @@ _BACKEND_ID = "rust"
 
 def _rust_policy_manifest(inputs: BackendPolicyInputs) -> RustPolicyManifest:
     return inputs.require(_BACKEND_ID, RustPolicyManifest)
+
+
+def rust_policy_inventory_validation(
+    profiles: tuple[EmittedProfile, ...],
+    policy_inputs: BackendPolicyInputs,
+) -> tuple[Diagnostic, ...]:
+    return validate_rust_policy_manifest_profiles(
+        profiles, _rust_policy_manifest(policy_inputs)
+    )
 
 
 def create_rust_dialect(catalog: Catalog) -> BackendDialect:
@@ -219,6 +232,7 @@ RUST_BACKEND = BackendCapability(
     helper_manifest=RUST_HELPER_MANIFEST,
     additional_closure_seeds=rust_facade_closure_seed_primitives,
     profile_validator=validate_rust_profiles,
+    policy_inventory_validator=rust_policy_inventory_validation,
     policy_input_loader=load_rust_policy_manifest,
     primitive_preview_renderer=rust_primitive_preview,
     generated_format=GeneratedFormatSpec(

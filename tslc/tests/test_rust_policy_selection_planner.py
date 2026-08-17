@@ -8,7 +8,9 @@ from pathlib import Path
 import pytest
 
 from tslc.api import generate_project
+from tslc.backend.capability import BackendPolicyInputs
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.rust_capability import RUST_BACKEND
 from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_selection import (
     plan_rust_policy_selection,
@@ -150,10 +152,37 @@ def test_synthetic_manifest_pilot_is_additive(rust_selection_result) -> None:
 def test_loaded_manifest_pilot_matches_exactly_one_lowered_slot(
     rust_selection_result,
 ) -> None:
-    validate_rust_policy_manifest_profiles(
-        rust_selection_result.emitted_profiles,
-        RUST_POLICY_MANIFEST,
+    assert (
+        validate_rust_policy_manifest_profiles(
+            rust_selection_result.emitted_profiles,
+            RUST_POLICY_MANIFEST,
+        )
+        == ()
     )
+
+
+def test_backend_diagnoses_a_stale_policy_pilot(rust_selection_result) -> None:
+    stale_pilot = replace(
+        RUST_POLICY_MANIFEST.selection_pilots[0],
+        extension_name="missing_extension",
+    )
+    stale_manifest = replace(
+        RUST_POLICY_MANIFEST,
+        selection_pilots=(stale_pilot,),
+    )
+
+    diagnostics = RUST_BACKEND.validate_policy_inventory(
+        rust_selection_result.emitted_profiles,
+        BackendPolicyInputs({"rust": stale_manifest}),
+    )
+
+    assert [(item.code, item.message) for item in diagnostics] == [
+        (
+            "TSL-BACKEND-RUST-POLICY-PILOT-CARDINALITY",
+            "Rust policy pilot 'sse2_mul_sse_si8' must match exactly one "
+            "full-corpus lowered slot; matched 0",
+        )
+    ]
 
 
 def test_duplicate_key_coverage_is_fail_closed_and_order_independent(

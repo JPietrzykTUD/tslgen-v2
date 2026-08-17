@@ -516,7 +516,11 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   with an asset-consistency test preventing drift.
 
 The ordinary Rust API is finalized before source rendering by the frozen records
-in [backend/rust_api_model.py](src/tslc/backend/rust_api_model.py) and focused
+in [backend/rust_api_model.py](src/tslc/backend/rust_api_model.py), the
+cross-record invariants in
+[backend/rust_api_model_validation.py](src/tslc/backend/rust_api_model_validation.py),
+the joined semantic-and-call inventory in
+[backend/rust_api_core.py](src/tslc/backend/rust_api_core.py), and focused
 candidate, comprehensive, curated, and surface planners under `backend/rust_api_*`.
 The public
 [backend/rust_api_planner.py](src/tslc/backend/rust_api_planner.py)
@@ -578,7 +582,9 @@ The backend registry loads this resource once for each artifact-producing
 request into a frozen `BackendPolicyInputs` snapshot at the compiler input
 boundary. Benchmark planning, artifact rendering, and focused preview receive
 that same explicit snapshot; importing a backend module performs no policy-file
-I/O.
+I/O. For an unfiltered backend inventory, backend validation also emits
+structured diagnostics unless every declared pilot matches exactly one lowered
+slot; focused projections skip that full-inventory proof.
 Unknown fields, duplicate identities, and live specializations that do not
 match the complete declared identity fail closed; primitive, extension,
 profile, and type literals do not appear in the planner's control flow.

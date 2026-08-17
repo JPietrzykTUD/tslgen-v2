@@ -31,6 +31,9 @@ from tslc.backend.rust_api_curated import (
     _trait_collision_diagnostics,
     _trait_sort_key,
 )
+from tslc.backend.rust_api_core import (
+    RUST_FACADE_CORE_OPERATION_REQUIREMENTS,
+)
 from tslc.backend.rust_api_model import (
     RustComprehensiveMethod,
     RustFacadeConversionPair,
@@ -40,7 +43,6 @@ from tslc.backend.rust_api_model import (
     RustFacadePlan,
 )
 from tslc.backend.rust_api_surface import (
-    RUST_FACADE_CORE_OPERATION_REQUIREMENTS,
     _core_delegates,
     _core_facade_type_tags,
     _core_implementation_arms,

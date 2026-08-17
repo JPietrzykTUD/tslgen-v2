@@ -8,6 +8,9 @@ from dataclasses import dataclass, replace
 from tslc.backend import rust_api_arm_planner as _arm_planner
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_api_candidates import _invocation_from_roles
+from tslc.backend.rust_api_core import (
+    RUST_FACADE_CORE_OPERATION_REQUIREMENTS,
+)
 from tslc.backend.rust_api_model import (
     RustComprehensiveMethod,
     RustCuratedMethod,
@@ -30,9 +33,8 @@ from tslc.backend.rust_api_model import (
     rust_facade_representations_can_coexist,
 )
 from tslc.backend.rust_static_selection import RustStaticSelectionPlan
-from tslc.catalog.memory import MemoryAccess, MemoryAddressing, MemoryAlignment
 from tslc.catalog.scalar_types import scalar_bit_width
-from tslc.catalog.semantics import OperandRole, PrimitiveOperation
+from tslc.catalog.semantics import PrimitiveOperation
 from tslc.diagnostics import Diagnostic
 
 
@@ -830,146 +832,6 @@ def _has_surface_delegate(
         )
         == 1
     )
-
-
-RUST_FACADE_CORE_OPERATION_REQUIREMENTS = (
-    RustFacadeCoreOperationRequirement(
-        "vector_splat",
-        PrimitiveOperation.VECTOR_SPLAT,
-        "v",
-        ("s",),
-        (OperandRole.VALUE,),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "vector_from_array",
-        PrimitiveOperation.VECTOR_FROM_ARRAY,
-        "v",
-        ("s[]",),
-        (OperandRole.VALUE,),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "vector_to_array",
-        PrimitiveOperation.VECTOR_TO_ARRAY,
-        "s[]",
-        ("v",),
-        (OperandRole.PRIMARY,),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "vector_zero", PrimitiveOperation.VECTOR_ZERO, "v", (), ()
-    ),
-    RustFacadeCoreOperationRequirement(
-        "extract_lane",
-        PrimitiveOperation.EXTRACT_LANE,
-        "s",
-        ("v", "usize"),
-        (OperandRole.PRIMARY, OperandRole.INDEX),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "insert_lane",
-        PrimitiveOperation.INSERT_LANE,
-        "v",
-        ("v", "usize", "s"),
-        (OperandRole.PRIMARY, OperandRole.INDEX, OperandRole.VALUE),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "load",
-        PrimitiveOperation.LOAD,
-        "v",
-        ("cptr",),
-        (OperandRole.MEMORY_SOURCE,),
-        axis_names=("aligned",),
-        memory_access=MemoryAccess.READ,
-        memory_addressing=MemoryAddressing.CONTIGUOUS,
-        memory_alignment_modes=(
-            MemoryAlignment.ALIGNED,
-            MemoryAlignment.UNALIGNED,
-        ),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "store",
-        PrimitiveOperation.STORE,
-        "void",
-        ("ptr", "v"),
-        (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
-        axis_names=("aligned",),
-        memory_access=MemoryAccess.WRITE,
-        memory_addressing=MemoryAddressing.CONTIGUOUS,
-        memory_alignment_modes=(
-            MemoryAlignment.ALIGNED,
-            MemoryAlignment.UNALIGNED,
-        ),
-        overload=("payload_extent", "vector", True),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "mask_false", PrimitiveOperation.MASK_ALL_FALSE, "m", (), ()
-    ),
-    RustFacadeCoreOperationRequirement(
-        "mask_true", PrimitiveOperation.MASK_ALL_TRUE, "m", (), ()
-    ),
-    RustFacadeCoreOperationRequirement(
-        "mask_to_integral",
-        PrimitiveOperation.MASK_TO_INTEGRAL,
-        "im",
-        ("m",),
-        (OperandRole.PRIMARY,),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "mask_from_integral",
-        PrimitiveOperation.MASK_FROM_INTEGRAL,
-        "m",
-        ("im",),
-        (OperandRole.VALUE,),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "integral_mask_test",
-        PrimitiveOperation.INTEGRAL_MASK_TEST,
-        "im",
-        ("im", "usize"),
-        (OperandRole.PRIMARY, OperandRole.INDEX),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "mask_set_lane",
-        PrimitiveOperation.MASK_SET_LANE,
-        "m",
-        ("m", "usize", "usize"),
-        (OperandRole.PRIMARY, OperandRole.INDEX, OperandRole.VALUE),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "mask_population_count",
-        PrimitiveOperation.MASK_POPULATION_COUNT,
-        "usize",
-        ("m",),
-        (OperandRole.PRIMARY,),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "mask_and",
-        PrimitiveOperation.MASK_AND,
-        "m",
-        ("m", "m"),
-        (OperandRole.PRIMARY, OperandRole.SECONDARY),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "mask_or",
-        PrimitiveOperation.MASK_OR,
-        "m",
-        ("m", "m"),
-        (OperandRole.PRIMARY, OperandRole.SECONDARY),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "mask_xor",
-        PrimitiveOperation.MASK_XOR,
-        "m",
-        ("m", "m"),
-        (OperandRole.PRIMARY, OperandRole.SECONDARY),
-    ),
-    RustFacadeCoreOperationRequirement(
-        "mask_not",
-        PrimitiveOperation.MASK_NOT,
-        "m",
-        ("m",),
-        (OperandRole.PRIMARY,),
-    ),
-)
 
 
 _FACADE_FIXED_WIDTHS = frozenset({128, 256, 512})

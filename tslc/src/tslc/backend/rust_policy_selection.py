@@ -12,6 +12,7 @@ from tslc.backend.rust_policy_manifest import (
     RustPolicySelectionPilot,
 )
 from tslc.benchmark.model import SpecializationKey
+from tslc.diagnostics import Diagnostic
 from tslc.lower.lowerer import LoweredSpecialization
 
 RustPolicySelectionStatus = Literal["supported", "report_only"]
@@ -444,8 +445,8 @@ def rust_policy_selection_reason(
 def validate_rust_policy_manifest_profiles(
     profiles: tuple[EmittedProfile, ...],
     manifest: RustPolicyManifest,
-) -> None:
-    """Prove each declared pilot matches exactly one full-corpus lowered slot."""
+) -> tuple[Diagnostic, ...]:
+    """Diagnose pilots that do not match one full-corpus lowered slot."""
 
     from tslc.benchmark.identity import specialization_key
 
@@ -464,20 +465,18 @@ def validate_rust_policy_manifest_profiles(
                 candidates = ("default", *spec.variant_names)
                 for pilot in manifest.matching_pilots(key, spec, candidates):
                     counts[pilot.pilot_id] += 1
-    invalid = {
-        pilot_id: count
-        for pilot_id, count in counts.items()
+    return tuple(
+        Diagnostic(
+            severity="error",
+            code="TSL-BACKEND-RUST-POLICY-PILOT-CARDINALITY",
+            message=(
+                f"Rust policy pilot {pilot_id!r} must match exactly one "
+                f"full-corpus lowered slot; matched {count}"
+            ),
+        )
+        for pilot_id, count in sorted(counts.items())
         if count != 1
-    }
-    if invalid:
-        details = ", ".join(
-            f"{pilot_id} matched {count}"
-            for pilot_id, count in sorted(invalid.items())
-        )
-        raise ValueError(
-            "Rust policy manifest pilots must each match exactly one lowered "
-            f"slot: {details}"
-        )
+    )
 
 
 __all__ = (
