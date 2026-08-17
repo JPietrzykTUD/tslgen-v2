@@ -108,6 +108,7 @@ def serialize_generation_semantics(
                         "manifest_hash": profile.manifest_hash,
                         "profile_family": profile.profile_family,
                         "backend_feature_spellings": profile.backend_feature_spellings,
+                        "feature_detection_strategy": profile.feature_detection_strategy,
                         "candidate_sets": [
                             {
                                 "stable_id": item.stable_id,

@@ -135,6 +135,10 @@ def _build_backend_profile_families(
                 _child(entry, "pass_target_to_compiler"),
                 default=True,
             ),
+            runtime_failure_observable=_bool_field(
+                _child(entry, "runtime_failure_observable"),
+                default=True,
+            ),
             source=_source_span(entry.source),
         )
         for entry in _children(field)

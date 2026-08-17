@@ -11,6 +11,7 @@ from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     Catalog,
     Primitive,
+    PrimitiveMaskMode,
 )
 from tslc.catalog.signatures import parse_signature
 
@@ -27,7 +28,7 @@ class SourceShapeKey:
     primitive_name: str
     result_kind: str
     param_kinds: tuple[str, ...]
-    mask_policy: str | None
+    mask_policy: PrimitiveMaskMode | None
 
     def sort_key(self) -> tuple[object, ...]:
         return (
@@ -457,7 +458,7 @@ def source_shape(primitive: Primitive) -> SourceShapeKey:
         primitive_name=primitive.name,
         result_kind=shape.result_kind,
         param_kinds=shape.param_kinds,
-        mask_policy=primitive.attributes.get("mask"),
+        mask_policy=primitive.mask_mode,
     )
 
 

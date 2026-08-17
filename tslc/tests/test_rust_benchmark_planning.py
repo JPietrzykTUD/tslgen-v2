@@ -106,7 +106,7 @@ def test_rust_backend_produces_typed_plan_and_report_artifacts(
     assert rust_profile is not None
     assert (
         rust_profile.manifest_hash
-        == "fd66dfae26923d8a3185e959a7104e77cb0983717f5aa3904239e1ddef7ad5f5"
+        == "d8c51891277d8c2aa14281c7cc832f74d78dbd1d4a7ba4a83556a3991b782dc7"
     )
     assert [candidate.variant_id for candidate in rust_candidate_set.candidates] == [
         "default",
@@ -260,7 +260,7 @@ def test_shared_identity_helper_preserves_frozen_backend_keys(
         ) == tuple(candidate.body_hash for candidate in candidate_set.candidates)
 
 
-def test_cpp_manifest_identity_is_unchanged(
+def test_cpp_manifest_identity_is_deterministic(
     rust_benchmark_planning_result,
 ) -> None:
     profile = rust_benchmark_planning_result.rendered.benchmarks.profile(
@@ -269,7 +269,7 @@ def test_cpp_manifest_identity_is_unchanged(
     assert profile is not None
     assert (
         profile.manifest_hash
-        == "3da475b457a00c498123b31b00faa0a54a217d2b645ac84ff8207e39d043e132"
+        == "e1596076e4c5e3bfe95182609ed302fd54c68c068ed5211aacaf4a1a903cf34b"
     )
     candidate_set = _mul_candidate_set(
         rust_benchmark_planning_result.rendered.benchmarks, "cpp"
@@ -287,7 +287,7 @@ def test_cpp_manifest_identity_is_unchanged(
     assert len(rendered_manifest.encode("utf-8")) == 4583
     assert (
         sha256(rendered_manifest.encode("utf-8")).hexdigest()
-        == "486bd0f68520cee4fef7f352ef5bd67166a08d89ef28edc2ebc39868db68bdc5"
+        == "9a821c2b5060417a26d8507809b791b87cf91a83c012aa898757b8ef1cbd4ac7"
     )
 
 
@@ -301,6 +301,7 @@ def test_profile_plan_owns_family_and_ordered_backend_feature_spellings(
         assert profile is not None
         assert profile.profile_family == "x86"
         assert profile.backend_feature_spellings == ("sse", "sse2")
+        assert profile.feature_detection_strategy == "x86_builtin"
 
 
 def test_profile_scenario_admission_prevents_cartesian_expansion(

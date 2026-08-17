@@ -1716,6 +1716,9 @@ def test_invalid_enum_like_values_are_diagnosed() -> None:
         "    generic:\n"
         "      extension_families []\n"
         "      native_without_runner sometimes\n"
+        "      backends:\n"
+        "        cpp:\n"
+        "          runtime_failure_observable sometimes\n"
         "types:\n"
         "  ints {types [si32]}\n"
         "extension scalar:\n"
@@ -1740,6 +1743,7 @@ def test_invalid_enum_like_values_are_diagnosed() -> None:
     assert any("mask_type_policy" in message for message in messages)
     assert any("implementation_fallback" in message for message in messages)
     assert any("native_without_runner" in message for message in messages)
+    assert any("runtime_failure_observable" in message for message in messages)
 
 
 def test_target_family_data_makes_new_extension_family_additive() -> None:
@@ -2053,6 +2057,19 @@ def test_malformed_call_body_region_is_diagnosed() -> None:
     assert "malformed call selector" in diagnostic.message
 
 
+def test_unknown_call_mask_mode_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            '          tsil "complete(data);"\n',
+            '          tsil "complete(call<primitive=id, attrs[mask=merge]>(data));"\n',
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-BODY-BAD-CALL-MASK"
+    )
+    assert "unknown call mask mode 'merge'" in diagnostic.message
+
 def test_malformed_let_body_region_is_diagnosed() -> None:
     diagnostics = _diagnostics(
         "types:\n"
@@ -2329,6 +2346,7 @@ def test_legacy_pointer_cast_shell_is_diagnosed() -> None:
     )
 
     diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-CAST")
+    assert "must be a TSIL type expression" in diagnostic.message
     assert "cast<reinterpret, type=ptr|const_ptr>" in diagnostic.message
 
 

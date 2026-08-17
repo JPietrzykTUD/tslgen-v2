@@ -41,7 +41,7 @@ _EXPECTED_COMPILER_IMPORTS = (
         "tslc.catalog.machine_profiles",
         ("MachineProfile", "load_machine_profiles_checked"),
     ),
-    ("tslc.catalog.model", ("BOOLEAN_WILDCARD_ATTRIBUTES", "Catalog")),
+    ("tslc.catalog.model", ("BOOLEAN_WILDCARD_ATTRIBUTES", "Catalog", "PrimitiveMaskMode")),
     (
         "tslc.catalog.scalar_types",
         (

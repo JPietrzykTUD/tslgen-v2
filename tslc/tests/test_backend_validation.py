@@ -164,6 +164,31 @@ def test_cpp_unknown_profile_detection_is_source_located() -> None:
     assert diagnostics[0].location == source.start
 
 
+def test_rust_unknown_benchmark_detection_is_source_located() -> None:
+    source = SourceSpan(Path("target_families.tsl"), 11, 5, 13, 1)
+    profile = EmittedProfile(
+        profile=MachineProfile("test", "renamed", frozenset(), {}),
+        specializations_by_backend={"rust": {}},
+        profile_family=ProfileFamilyCapability(
+            "renamed",
+            backends={
+                "rust": BackendProfileFamily(
+                    detection="typo_detection",
+                    source=source,
+                )
+            },
+        ),
+        immediate_split_names=frozenset(),
+    )
+
+    diagnostics = validate_rust_profiles((profile,))
+
+    assert [diagnostic.code for diagnostic in diagnostics] == [
+        "TSL-BACKEND-RUST-UNSUPPORTED-BENCHMARK-DETECTION"
+    ]
+    assert diagnostics[0].location == source.start
+
+
 def test_rust_unsupported_const_query_type_is_diagnostic() -> None:
     source = SourceSpan(Path("primitive.tsl"), 12, 3, 12, 20)
     extension = _extension("scalar", rust=True, family="scalar", vector_bits=0)

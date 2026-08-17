@@ -278,7 +278,7 @@ def test_renamed_extension_family_uses_declared_behavior_only(
     slot = next(
         slot
         for slot in selected
-        if slot.primitive.attributes.get("mask") is None
+        if slot.primitive.mask_mode is None
     )
     lowered = Lowerer().lower(
         slot,

@@ -8,6 +8,7 @@ from tslc.ir.region_syntax import parse_cast_selector, segments_text, split_arg_
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lane_count import LaneCount
 from tslc.lower.context import LoweringSession
+from tslc.lower.region_safety import direct_region_safety
 from tslc.lower.object_representation import register_object_size
 from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _resolve_type_expression
@@ -90,17 +91,6 @@ class CastLowerer:
                 render=render,
             )
 
-        if type_text.rstrip().endswith("*"):
-            context.effects.skip(
-                "TSL-LOWER-UNSUPPORTED-CAST",
-                (
-                    "legacy pointer cast syntax is unsupported; use "
-                    "cast<reinterpret, type=ptr|const_ptr>"
-                ),
-                source=region.source,
-            )
-            return region.full_text
-
         key = f"cast_{selector.variant}"
         if context.env.backend.templates.template(key) is None:
             context.effects.skip(
@@ -122,13 +112,7 @@ class CastLowerer:
             resolved[0], context, region
         ):
             return region.full_text
-        if selector.variant == "reinterpret":
-            # Value reinterpretation is deliberately distinct from a pointer
-            # cast and from the checked bitcast path. The implementation leaf
-            # owns the concrete pair; lowering records its unsafe boundary so
-            # Rust frames the generated call even if source safety metadata is
-            # accidentally incomplete.
-            context.effects.mark_internal_unsafe("value_reinterpretation")
+        context.effects.merge_safety(direct_region_safety(region))
         return context.env.backend.templates.render_template(
             key, type=resolved[1], expr=render(args[1])
         )

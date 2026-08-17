@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 
 from tslc.backend.rust_api_core import RUST_FACADE_CORE_CALL_ROLES
+from tslc.backend.rust_api_kinds import (
+    RustCuratedMethodKind,
+    RustFacadeBitConversionDirection,
+)
 from tslc.backend.rust_api_model import (
     RustFacadeCoreDelegate,
     RustFacadeDelegate,
@@ -169,12 +172,6 @@ class RustComprehensivePrivateImplementationArm:
             raise ValueError(
                 "Rust comprehensive arm attributes must be unique by name"
             )
-
-
-class RustCuratedMethodKind(StrEnum):
-    NUMERIC_CAST = "numeric_cast"
-    COMPARISON = "comparison"
-    SELECTION = "selection"
 
 
 @dataclass(frozen=True, slots=True)
@@ -395,11 +392,6 @@ _MASK_FACADE_METHODS = {
     PrimitiveOperation.MASK_XOR: "mask_xor",
     PrimitiveOperation.MASK_NOT: "mask_not",
 }
-
-
-class RustFacadeBitConversionDirection(StrEnum):
-    TO_BITS = "to_bits"
-    FROM_BITS = "from_bits"
 
 
 @dataclass(frozen=True, slots=True)

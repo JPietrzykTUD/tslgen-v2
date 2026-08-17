@@ -501,7 +501,7 @@ class Lowerer:
             # a source capability, not a vector_bits shortcut.
             register_is_base=self._support.register_is_base(context.env.extension),
             target=target,
-            mask_policy=selected.primitive.attributes.get("mask"),
+            mask_policy=selected.primitive.mask_mode,
             lane_list_params=tuple(context.env.lane_list_params.values()),
             required_features=selected.required_features,
             required_compiler_capabilities=(

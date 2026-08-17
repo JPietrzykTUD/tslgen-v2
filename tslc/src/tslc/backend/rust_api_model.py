@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from tslc.backend.rust_api_kinds import (
+    RustCuratedMethodKind,
+    RustFacadeConstParameterSource,
+    RustFacadeCoverageStatus,
+    RustFacadeParameterPlacement,
+    RustFacadeReceiverKind,
+    RustFacadeTraitRhsKind,
+    RustFacadeTypeParameterRole,
+)
+from tslc.backend.rust_api_model_validation import validate_rust_facade_plan
 from tslc.backend.rust_names import rust_profile_module_name
 from tslc.backend.rust_static_selection import (
     RustStaticVectorMapping,
@@ -13,7 +22,7 @@ from tslc.backend.rust_static_selection import (
 )
 from tslc.catalog.arithmetic import ArithmeticOperandRole, ArithmeticOperation
 from tslc.catalog.memory import MemoryAccess, MemoryAddressing, MemoryAlignment
-from tslc.catalog.model import VectorBitsKind
+from tslc.catalog.model import PrimitiveMaskMode, VectorBitsKind
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.documentation import PrimitiveDocumentation
 
@@ -21,7 +30,6 @@ if TYPE_CHECKING:
     from tslc.backend.rust_api_arms import (
         RustComprehensivePrivateImplementationArm,
         RustCuratedMethodImplementationArm,
-        RustCuratedMethodKind,
         RustFacadeBitConversionImplementationArm,
         RustFacadeConversionImplementationArm,
         RustFacadeCoreImplementationArm,
@@ -29,38 +37,6 @@ if TYPE_CHECKING:
         RustFacadeGenericMaskOperatorImplementation,
         RustFacadeOperatorImplementation,
     )
-
-
-class RustFacadeReceiverKind(StrEnum):
-    VECTOR = "vector"
-    MASK = "mask"
-    FREE = "free"
-
-
-class RustFacadeTraitRhsKind(StrEnum):
-    SAME_TYPE = "same_type"
-    SCALAR = "scalar"
-
-
-class RustFacadeParameterPlacement(StrEnum):
-    RECEIVER = "receiver"
-    ARGUMENT = "argument"
-    CONST_GENERIC = "const_generic"
-
-
-class RustFacadeTypeParameterRole(StrEnum):
-    RESULT_ELEMENT = "result_element"
-
-
-class RustFacadeConstParameterSource(StrEnum):
-    ATTRIBUTE = "attribute"
-    IMMEDIATE = "immediate"
-    GENERIC = "generic"
-
-
-class RustFacadeCoverageStatus(StrEnum):
-    ADMITTED = "admitted"
-    EXCLUDED = "excluded"
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +109,11 @@ class RustFacadeRepresentation:
             "vector_descriptor",
             _rust_facade_vector_descriptor(self.mapping, self.profile_name),
         )
+
+    def can_coexist_with(self, other: RustFacadeRepresentation) -> bool:
+        """Whether this representation and the other can be active together."""
+
+        return rust_facade_representations_can_coexist(self, other)
 
 
 def _rust_facade_vector_descriptor(
@@ -397,7 +378,7 @@ class RustFacadeOperationBinding:
     memory_addressing: MemoryAddressing | None
     memory_alignment_axis_name: str | None
     memory_alignment_modes: tuple[MemoryAlignment, ...]
-    mask_policy: str | None
+    mask_policy: PrimitiveMaskMode | None
     overload: tuple[str, str, bool] | None
     type_tags: tuple[str, ...]
     caller_unsafe: bool
@@ -514,7 +495,7 @@ class RustComprehensiveMethod:
     public_name: str
     source_primitive_name: str
     signature: str
-    mask_policy: str | None
+    mask_policy: PrimitiveMaskMode | None
     receiver_kind: RustFacadeReceiverKind
     parameters: tuple[RustFacadeParameter, ...]
     const_parameters: tuple[RustFacadeConstParameter, ...]
@@ -649,7 +630,7 @@ class RustOperationValue:
 class RustFacadeCoverageEntry:
     source_primitive_name: str
     signature: str
-    mask_policy: str | None
+    mask_policy: PrimitiveMaskMode | None
     status: RustFacadeCoverageStatus
     public_name: str | None = None
     reason: str | None = None
@@ -671,10 +652,6 @@ class RustFacadePlan:
     coverage: tuple[RustFacadeCoverageEntry, ...]
 
     def __post_init__(self) -> None:
-        from tslc.backend.rust_api_model_validation import (
-            validate_rust_facade_plan,
-        )
-
         validate_rust_facade_plan(self)
 
 

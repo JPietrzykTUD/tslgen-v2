@@ -318,7 +318,7 @@ def test_neon_float_shifts_compose_integer_bit_shifts(
         .selected
         if selected.extension.name == "neon"
         and selected.primitive.signature == signature
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):

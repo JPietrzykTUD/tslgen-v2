@@ -8,6 +8,7 @@ from typing import get_args
 from tslc.catalog.model import (
     GenericParamKind,
     PrimitiveCastMode,
+    PrimitiveMaskMode,
     PrimitiveValueMode,
     RESULT_DIMENSIONS,
     RESULT_DIM_VECTOR,
@@ -21,7 +22,6 @@ from tslc.catalog.param_types import (
     parse_param_type_condition,
     parse_param_type_expression,
     unquote_key,
-    uses_c_like_pointer_syntax,
 )
 from tslc.catalog.validation._schema_common import (
     KNOWN_BOOLEAN_VALUES,
@@ -87,7 +87,7 @@ KNOWN_PRIMITIVE_ATTRIBUTES = {
     "arg_count": frozenset({"return_vector_length"}),
     "cast": frozenset(mode.value for mode in PrimitiveCastMode),
     "direction": frozenset({"up", "down"}),
-    "mask": frozenset({"zero", "pass_through"}),
+    "mask": frozenset(mode.value for mode in PrimitiveMaskMode),
     "op": frozenset({"pack", "expand", "keep"}),
     "packed": frozenset({"true", "false", "*"}),
     "value": frozenset(mode.value for mode in PrimitiveValueMode),
@@ -628,24 +628,14 @@ def _validate_param_type_expression(
         return
     parsed = parse_param_type_expression(type_text)
     if parsed is None:
-        if uses_c_like_pointer_syntax(type_text):
-            code = "TSL-CATALOG-PARAM-TYPES-OBSOLETE-POINTER-SYNTAX"
-            message = (
-                f"param_types expression {type_text!r} uses obsolete C-like "
-                "pointer syntax; wrap the pointee expression in cptr(...) for "
-                "a const pointer or ptr(...) for a mutable pointer"
-            )
-        else:
-            code = "TSL-CATALOG-PARAM-TYPES-MALFORMED-TYPE"
-            message = (
-                f"param_types expression {type_text!r} must use exactly "
-                "cptr(<pointee expression>) or ptr(<pointee expression>)"
-            )
         diagnostics.append(
             diagnostic_at(
                 severity="error",
-                code=code,
-                message=message,
+                code="TSL-CATALOG-PARAM-TYPES-MALFORMED-TYPE",
+                message=(
+                    f"param_types expression {type_text!r} must use exactly "
+                    "cptr(<TSIL type expression>) or ptr(<TSIL type expression>)"
+                ),
                 source=source_span(entry.source),
             )
         )

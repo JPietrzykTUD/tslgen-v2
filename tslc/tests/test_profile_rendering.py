@@ -1070,6 +1070,18 @@ def rvv_project(data_root: Path, machine_profiles_path: Path):
     )
 
 
+def test_catalog_target_families_own_backend_runtime_capabilities(catalog) -> None:
+    x86 = catalog.target_families.profile_family("x86")
+    wasm = catalog.target_families.profile_family("wasm32")
+
+    assert x86 is not None
+    assert wasm is not None
+    assert x86.backend("rust").detection == "x86_builtin"
+    assert x86.backend("rust").runtime_failure_observable
+    assert not wasm.backend("cpp").runtime_failure_observable
+    assert not wasm.backend("rust").runtime_failure_observable
+
+
 def test_rvv_catalog_is_scalable_lmul1_cpp_only(catalog, machine_profiles) -> None:
     extension = catalog.extensions["rvv"]
     profile = machine_profiles["rvv"]

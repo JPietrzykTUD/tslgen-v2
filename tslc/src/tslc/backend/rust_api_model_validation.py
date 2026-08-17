@@ -2,28 +2,31 @@
 
 from __future__ import annotations
 
-from tslc.backend.rust_api_arms import (
+from typing import TYPE_CHECKING
+
+from tslc.backend.rust_api_kinds import (
     RustCuratedMethodKind,
     RustFacadeBitConversionDirection,
-    RustFacadeConversionImplementationArm,
-)
-from tslc.backend.rust_api_model import (
-    RustComprehensiveMethod,
-    RustCuratedMethod,
-    RustCuratedTraitImplementation,
-    RustFacadeBitConversion,
-    RustFacadeConversionPair,
     RustFacadeParameterPlacement,
-    RustFacadePlan,
     RustFacadeReceiverKind,
-    RustFacadeShape,
     RustFacadeTraitRhsKind,
-    rust_facade_representations_can_coexist,
 )
 from tslc.catalog.semantics import PrimitiveOperation
 
+if TYPE_CHECKING:
+    from tslc.backend.rust_api_arms import RustFacadeConversionImplementationArm
+    from tslc.backend.rust_api_model import (
+        RustComprehensiveMethod,
+        RustCuratedMethod,
+        RustCuratedTraitImplementation,
+        RustFacadeBitConversion,
+        RustFacadeConversionPair,
+        RustFacadePlan,
+        RustFacadeShape,
+    )
+
 _ShapeKey = tuple[str, int]
-_ShapeIndex = dict[_ShapeKey, RustFacadeShape]
+_ShapeIndex = dict[_ShapeKey, "RustFacadeShape"]
 _ConversionRepresentationKey = tuple[
     str,
     int,
@@ -547,10 +550,7 @@ def _expected_conversion_representation_keys(
         for target_shape in (shapes[(pair.target_type_tag, source_shape.lanes)],)
         for source_representation in source_shape.representations
         for target_representation in target_shape.representations
-        if rust_facade_representations_can_coexist(
-            source_representation,
-            target_representation,
-        )
+        if source_representation.can_coexist_with(target_representation)
     )
 
 

@@ -18037,7 +18037,7 @@
         "path": "supplementary/buildsystem/machine_profiles.json",
         "sha256": "3fe743bc6b11ae4c1f1431cb22759cc9bde9fae9a8ece4bce59fed3be4344e4d"
       },
-      "portable_sha256": "409cc757fc018f882dbdc3e0a146f6d738be9daf691f6010fd8e195eb0576795",
+      "portable_sha256": "80515f884e3edcd3dfd7e73b373aeadab19b2b84e4497b5941133f5c365b38ee",
       "request": {
         "languages": [
           "cpp",
@@ -18059,7 +18059,7 @@
           "f64"
         ]
       },
-      "source_corpus_sha256": "23ea8c5e723d110a0ae30f5c8f41c1c2f8aae8ec5da2669904a7682931304471",
+      "source_corpus_sha256": "d73ec320d6fda9515ae7898694e1ba6ccbb12d40ec4738c6ff5f4ddcd8bd9d0f",
       "source_files": [
         {
           "path": "tsldata/detail/flags.tsl",
@@ -18091,7 +18091,7 @@
         },
         {
           "path": "tsldata/detail/target_families.tsl",
-          "sha256": "3ee2c45dfacd152578aec44b3143ef70697936a303cb0329a07d22cd45862fda"
+          "sha256": "f29cd4c7158cdbb4bf6945daf1b282a574f807c9696e4fd3c9b574a494c648c2"
         },
         {
           "path": "tsldata/detail/templates.tsl",

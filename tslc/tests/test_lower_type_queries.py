@@ -65,7 +65,7 @@ def test_oneapi_exact_lane_mask_policy_lowers_lane_bitmask_operations(
         for s in Selector()
         .select_profile(catalog, machine_profiles["skylake-oneapi"], "less_than", ("si32",))
         .selected
-        if s.primitive.attributes.get("mask") is None
+        if s.primitive.mask_mode is None
     }
     slot = slots[("si32", "oneapi_fpga")]
 

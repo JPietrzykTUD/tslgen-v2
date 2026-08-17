@@ -52,7 +52,7 @@ class ValueTestBackendProfileInput:
     backend_id: str
     profile_name: str
     specializations: Mapping[str, tuple[LoweredSpecialization, ...]]
-    profile_family: str = ""
+    observes_runtime_failures: bool = True
 
 
 class ValueTestPlanner:
@@ -132,7 +132,7 @@ class ValueTestPlanner:
                     fuzz_supported, fuzz_drops = self._supported_cases(
                         fuzz_planned,
                         backend,
-                        profile.profile_family,
+                        profile.observes_runtime_failures,
                         profile.specializations,
                         diagnostics,
                     )
@@ -216,7 +216,7 @@ class ValueTestPlanner:
                     supported, drops = self._supported_cases(
                         planned,
                         backend,
-                        profile.profile_family,
+                        profile.observes_runtime_failures,
                         profile.specializations,
                         diagnostics,
                     )
@@ -290,7 +290,7 @@ class ValueTestPlanner:
         self,
         cases: tuple[ValueTestCasePlan, ...],
         backend: ValueTestBackendSupport,
-        profile_family: str,
+        observes_runtime_failures: bool,
         specializations: Mapping[str, tuple[LoweredSpecialization, ...]],
         diagnostics: list[Diagnostic],
     ) -> tuple[tuple[ValueTestCasePlan, ...], tuple[ValueTestCaseDrop, ...]]:
@@ -307,13 +307,19 @@ class ValueTestPlanner:
                 )
                 drops.append(ValueTestCaseDrop(case, cause))
                 continue
-            exclusion = backend.exclusion_for(profile_family, case.kind)
-            if exclusion is not None:
+            requirements = DEFAULT_VALUE_TEST_CASE_REQUIREMENTS[case.kind]
+            if (
+                requirements.requires_runtime_failure_observation
+                and not observes_runtime_failures
+            ):
                 drops.append(
                     ValueTestCaseDrop(
                         case,
                         "profile_unsupported",
-                        detail=exclusion.reason,
+                        detail=(
+                            backend.unobservable_runtime_failure_reason
+                            or "the generated target cannot observe runtime failures"
+                        ),
                     )
                 )
                 continue

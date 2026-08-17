@@ -42,6 +42,7 @@ from tslc.catalog.arithmetic import (
 )
 from tslc.catalog.conversion import ConversionKind, LaneCountRelation
 from tslc.catalog.memory import MemoryAlignment
+from tslc.catalog.model import PrimitiveMaskMode
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.diagnostics import Diagnostic
@@ -65,7 +66,7 @@ def _curated_methods(
         operation = candidate.key.operation
         if (
             operation is PrimitiveOperation.SELECT
-            and candidate.key.mask_policy in {None, "pass_through"}
+            and candidate.key.mask_policy in {None, PrimitiveMaskMode.PASS_THROUGH}
             and candidate.key.result_kind == "v"
             and sorted(candidate.key.param_kinds) == ["m", "v", "v"]
         ):

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tslc.backend.rust_benchmark_detection import (
+    RUST_BENCHMARK_DETECTION_KINDS,
+)
 from tslc.backend.rust_const_args import RUST_CONST_ARG_WRAPPERS
 from tslc.backend.rust_api_planner import validate_rust_facade
 from tslc.backend.rust_static_selection import (
@@ -25,6 +28,26 @@ def validate_rust_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagno
             validate_rust_facade(profiles, plan_rust_static_selection(profiles))
         )
     for profile in profiles:
+        family = profile.profile_family
+        detection = None if family is None else family.backend("rust").detection
+        if (
+            family is not None
+            and detection is not None
+            and detection not in RUST_BENCHMARK_DETECTION_KINDS
+        ):
+            backend_family = family.backend("rust")
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-BACKEND-RUST-UNSUPPORTED-BENCHMARK-DETECTION",
+                    message=(
+                        f"Rust profile family {family.name!r} declares unsupported "
+                        f"benchmark detection strategy {detection!r}; expected one of: "
+                        + ", ".join(sorted(RUST_BENCHMARK_DETECTION_KINDS))
+                    ),
+                    source=backend_family.source or family.source,
+                )
+            )
         by_primitive = profile.specializations("rust")
         for extension_name in profile.used_extensions("rust"):
             extension = profile.extensions.get(extension_name)

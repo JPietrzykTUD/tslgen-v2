@@ -22,6 +22,7 @@ class BackendProfileFamily:
     cmake_system_name: str | None = None
     cmake_system_processor: str | None = None
     pass_target_to_compiler: bool = True
+    runtime_failure_observable: bool = True
     source: SourceSpan | None = None
 
 

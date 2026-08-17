@@ -30,7 +30,10 @@ from tslc.benchmark.model import (
     BenchmarkReductionCorrectnessCase,
     BenchmarkReductionScenario,
 )
-from tslc.benchmark.render_rust import rust_benchmark_artifacts
+from tslc.benchmark.render_rust import (
+    _render_native_cpu_check,
+    rust_benchmark_artifacts,
+)
 from tslc.compiler_assets import load_default_render_assets
 from tslc.diagnostics import has_errors
 from tslc.render.rust_policy_consumption import (
@@ -517,6 +520,19 @@ def test_rust_runtime_produces_backend_scoped_policy_without_consuming_it(
         for candidate_set in manifest["candidate_sets"]
         for scenario in candidate_set["scenarios"]
     )
+
+
+def test_rust_native_detection_does_not_dispatch_on_profile_family_name(
+    rust_benchmark_result,
+) -> None:
+    profile = rust_benchmark_result.rendered.benchmarks.profile("rust", "sse2")
+    assert profile is not None
+
+    renamed = replace(profile, profile_family="renamed-family")
+
+    assert renamed.feature_detection_strategy == "x86_builtin"
+    assert _render_native_cpu_check(renamed) == _render_native_cpu_check(profile)
+    assert "is_x86_feature_detected" in _render_native_cpu_check(renamed)
 
 
 def test_documented_rust_workflow_tracks_codegen_contract() -> None:

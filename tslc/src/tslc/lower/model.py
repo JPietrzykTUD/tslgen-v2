@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from tslc.catalog.arithmetic import ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER
-from tslc.catalog.model import ImplementationSafety
+from tslc.catalog.model import ImplementationSafety, PrimitiveMaskMode
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.documentation import PrimitiveDocumentation
 from tslc.lower.context import LaneListParameter
@@ -105,7 +105,7 @@ class LoweredSpecialization:
     result_vector_param: str | None = None
     register_is_base: bool = False
     target: TargetVector | None = None
-    mask_policy: str | None = None
+    mask_policy: PrimitiveMaskMode | None = None
     lane_list_params: tuple[LaneListParameter, ...] = ()
     required_features: frozenset[str] = frozenset()
     required_compiler_capabilities: frozenset[str] = frozenset()

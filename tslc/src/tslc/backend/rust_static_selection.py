@@ -130,10 +130,16 @@ class RustStaticFallbackModule:
         tuple[str, tuple[LoweredSpecialization, ...]], ...
     ]
     extensions: tuple[tuple[str, Extension], ...]
+    metadata_profile_name: str = "target_fallback"
+    metadata_profile_family: str = "fallback"
 
     def __post_init__(self) -> None:
         primitive_names = tuple(name for name, _specs in self.primitive_specializations)
         extension_names = tuple(name for name, _extension in self.extensions)
+        if not self.metadata_profile_name or not self.metadata_profile_family:
+            raise ValueError(
+                "Rust static fallback metadata requires profile and family identities"
+            )
         if len(set(primitive_names)) != len(primitive_names):
             raise ValueError("Rust static fallback primitives must be unique")
         if len(set(extension_names)) != len(extension_names):

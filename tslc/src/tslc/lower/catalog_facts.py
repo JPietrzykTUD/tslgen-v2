@@ -193,7 +193,7 @@ def _primitive_arg_generics(
         if shape is None:
             continue
         name = primitive.name
-        mask_policy = primitive.attributes.get("mask")
+        mask_policy = primitive.mask_mode
         if mask_policy is not None and name in policy_names:
             name = f"{name}{support.mask_suffix(mask_policy)}"
         if primitive.name in immediate_names and support.has_immediate_operand(shape):

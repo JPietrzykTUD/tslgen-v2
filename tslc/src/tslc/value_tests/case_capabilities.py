@@ -179,6 +179,7 @@ _CASE_REQUIREMENTS = {
     "runtime_failure": ValueTestCaseRequirements(
         required_facts=_RESULT | frozenset({ValueTestFact.FAILURE}),
         vector_inputs_match_lanes=True,
+        requires_runtime_failure_observation=True,
     ),
     "repr_cast": ValueTestCaseRequirements(
         expected="target_lanes",
@@ -307,6 +308,7 @@ _CASE_REQUIREMENTS = {
             }
         ),
         vector_inputs_match_lanes=True,
+        requires_runtime_failure_observation=True,
     ),
     "scalable_masked_mask_result": ValueTestCaseRequirements(
         expected="lanes",

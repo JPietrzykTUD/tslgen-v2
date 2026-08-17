@@ -196,7 +196,7 @@ def test_param_type_rules_are_validated() -> None:
     assert "TSL-CATALOG-INVALID-ENUM" in codes
     assert "TSL-CATALOG-PARAM-TYPES-DUPLICATE-RULE" in codes
     assert "TSL-CATALOG-PARAM-TYPES-MISSING-TYPE" in codes
-    assert "TSL-CATALOG-PARAM-TYPES-OBSOLETE-POINTER-SYNTAX" in codes
+    assert "TSL-CATALOG-PARAM-TYPES-MALFORMED-TYPE" in codes
 
 
 def test_param_type_wrappers_match_pointer_signature_kinds() -> None:

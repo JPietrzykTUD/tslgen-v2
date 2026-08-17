@@ -5,6 +5,7 @@ from __future__ import annotations
 from tslc.catalog.model import (
     Catalog,
     PrimitiveCastMode,
+    PrimitiveMaskMode,
     PrimitiveValueMode,
 )
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
@@ -38,6 +39,11 @@ def test_views_select_callable_variants(catalog: Catalog) -> None:
 
     assert add_variants
     assert any("mask" in p.attributes for p in add_variants)
+    assert {p.mask_mode for p in add_variants} == {
+        None,
+        PrimitiveMaskMode.PASS_THROUGH,
+        PrimitiveMaskMode.ZERO,
+    }
     assert all(p.name == "add" for p in add_variants)
     assert gather_variants
     assert any("mask" in p.attributes for p in gather_variants)

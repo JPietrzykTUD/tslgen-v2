@@ -159,12 +159,6 @@ def _unwrap_type_call(text: str) -> str | None:
     return arg.strip() if head == "type" else None
 
 
-def uses_c_like_pointer_syntax(type_expr: str) -> bool:
-    """Whether a rejected expression uses the retired target-language shell."""
-
-    return type_expr.strip().endswith("*")
-
-
 def _split_head_arg(text: str) -> tuple[str, str] | None:
     text = text.strip()
     open_index = text.find("(")
@@ -193,5 +187,4 @@ __all__ = (
     "parse_param_type_expression",
     "resolve_param_type_scalar_tag",
     "unquote_key",
-    "uses_c_like_pointer_syntax",
 )

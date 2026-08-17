@@ -197,6 +197,9 @@ class BenchmarkPlanner:
                             )
                         )
                     ),
+                    feature_detection_strategy=_feature_detection_strategy(
+                        emitted_profile, backend_id
+                    ),
                 )
             )
         return BenchmarkProjectPlan(
@@ -630,7 +633,7 @@ def _source_primitive(
             shape is not None
             and shape.result_kind == spec.result_kind
             and shape.param_kinds == spec.param_kinds
-            and primitive.attributes.get("mask") == spec.mask_policy
+            and primitive.mask_mode == spec.mask_policy
         ):
             return primitive
     return None
@@ -652,6 +655,9 @@ def _manifest_hash(
             ),
             "compile_modes": sorted(profile.profile.compile_modes),
             f"{backend_id}_flags": profile.profile.flags_for_backend(backend_id),
+            "feature_detection_strategy": _feature_detection_strategy(
+                profile, backend_id
+            ),
         },
         "candidate_sets": [
             {
@@ -678,6 +684,14 @@ def _manifest_hash(
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _feature_detection_strategy(
+    profile: EmittedProfile,
+    backend_id: str,
+) -> str | None:
+    family = profile.profile_family
+    return None if family is None else family.backend(backend_id).detection
 
 
 def _specialization_sort_key(spec: LoweredSpecialization) -> tuple[object, ...]:

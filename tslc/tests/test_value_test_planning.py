@@ -56,7 +56,6 @@ from tslc.value_tests.model import (
     ValueTestInputs,
     ValueTestInvocation,
     ValueTestMemory,
-    ValueTestProfileCaseExclusion,
     ValueTestProfilePlan,
     ValueTestProjectPlan,
     ValueTestRepresentation,
@@ -365,7 +364,7 @@ def test_scalable_runtime_failure_materializes_vector_and_mask_inputs(
     assert "catch (const std::domain_error& error)" in source
 
 
-def test_runtime_failure_cases_report_wasm_profile_capability_exclusions() -> None:
+def test_runtime_failure_cases_report_unobservable_profile_capability() -> None:
     primitive = Primitive(
         "div",
         "v:=(v,v)",
@@ -402,10 +401,10 @@ def test_runtime_failure_cases_report_wasm_profile_capability_exclusions() -> No
     ).plan(
         (
             ValueTestBackendProfileInput(
-                "cpp", "wasm32-simd128", {"div": (cpp_spec,)}, "wasm32"
+                "cpp", "wasm32-simd128", {"div": (cpp_spec,)}, False
             ),
             ValueTestBackendProfileInput(
-                "rust", "wasm32-simd128", {"div": (rust_spec,)}, "wasm32"
+                "rust", "wasm32-simd128", {"div": (rust_spec,)}, False
             ),
         )
     )
@@ -3990,16 +3989,12 @@ def test_value_test_renderer_rejects_unregistered_case_kind() -> None:
         )
 
 
-def test_value_test_renderer_rejects_exclusion_for_undeclared_case_kind() -> None:
-    with pytest.raises(ValueError, match="excludes undeclared case kind"):
+def test_value_test_renderer_rejects_empty_runtime_failure_reason() -> None:
+    with pytest.raises(ValueError, match="observation reason cannot be empty"):
         ValueTestRendererCapability(
             backend_id="unit",
             case_renderers={"generic_golden": lambda case: ""},
-            profile_case_exclusions=(
-                ValueTestProfileCaseExclusion(
-                    "wasm32", "runtime_failure", "unobservable failure"
-                ),
-            ),
+            unobservable_runtime_failure_reason="",
         )
 
 

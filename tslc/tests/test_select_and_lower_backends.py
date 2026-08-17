@@ -175,7 +175,7 @@ def test_lower_scalar_and_generic_division_use_normalized_lane_helper(
         .select_profile(catalog, machine_profiles["scalar"], "div", ("si32",))
         .selected
         if slot.extension.name == "scalar"
-        and slot.primitive.attributes.get("mask") is None
+        and slot.primitive.mask_mode is None
     )
     generic = next(
         slot
@@ -183,7 +183,7 @@ def test_lower_scalar_and_generic_division_use_normalized_lane_helper(
         .select_profile(catalog, machine_profiles["avx2"], "div", ("si32",))
         .selected
         if slot.extension.name == "generic"
-        and slot.primitive.attributes.get("mask") is None
+        and slot.primitive.mask_mode is None
     )
 
     for backend_id, helper_call in (
@@ -209,9 +209,9 @@ def test_lower_generic_masked_division_sanitizes_inactive_operands(
         .select_profile(catalog, machine_profiles["avx2"], "div", ("si32",))
         .selected
         if slot.extension.name == "generic"
-        and slot.primitive.attributes.get("mask") is not None
+        and slot.primitive.mask_mode is not None
     )
-    assert {slot.primitive.attributes.get("mask") for slot in masked} == {
+    assert {slot.primitive.mask_mode for slot in masked} == {
         "zero",
         "pass_through",
     }
@@ -253,7 +253,7 @@ def test_lower_sve_integer_division_checks_participating_zero_lanes(
         body = lowered.body_text
         assert "arith_zero_divisor_fail" in body
         assert body.index("arith_zero_divisor_fail") < body.index("svdiv")
-        if slot.primitive.attributes.get("mask") is not None:
+        if slot.primitive.mask_mode is not None:
             assert "active_zero_divisors" in body
             assert "mask_binary_and" in body
 
@@ -291,7 +291,7 @@ def test_lower_rvv_integer_division_and_remainder_preserve_failure_contract(
         ).specialization
         assert lowered is not None
         body = lowered.body_text
-        if slot.primitive.attributes.get("mask") is None:
+        if slot.primitive.mask_mode is None:
             assert intrinsic in body
             assert "arith_zero_divisor_fail" in body
             assert body.index("arith_zero_divisor_fail") < body.index(intrinsic)
@@ -314,7 +314,7 @@ def test_lower_scalar_generic_and_clang_integer_remainder_use_normalized_helper(
             .select_profile(catalog, machine_profiles["scalar"], "mod", ("si32",))
             .selected
             if slot.extension.name == extension
-            and slot.primitive.attributes.get("mask") is None
+            and slot.primitive.mask_mode is None
         )
         for extension in ("scalar", "generic", "clang_v128")
     )
@@ -345,7 +345,7 @@ def test_lower_sve_floating_remainder_uses_fmod_helper_without_vector_quotient(
         .select_profile(catalog, machine_profiles["sve"], "mod", ("f32",))
         .selected
         if slot.extension.name == "sve"
-        and slot.primitive.attributes.get("mask") is None
+        and slot.primitive.mask_mode is None
     )
     lowered = Lowerer().lower(
         slot,
@@ -369,9 +369,9 @@ def test_lower_generic_masked_remainder_sanitizes_inactive_operands(
         .select_profile(catalog, machine_profiles["avx2"], "mod", ("si32",))
         .selected
         if slot.extension.name == "generic"
-        and slot.primitive.attributes.get("mask") is not None
+        and slot.primitive.mask_mode is not None
     )
-    assert {slot.primitive.attributes.get("mask") for slot in slots} == {
+    assert {slot.primitive.mask_mode for slot in slots} == {
         "zero",
         "pass_through",
     }
@@ -457,7 +457,7 @@ def test_integer_div_composes_unrolled_lane_primitives(
         .select_profile(catalog, machine_profiles[profile], "div", (type_tag,))
         .selected
         if selected.extension.name == extension
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):
@@ -497,7 +497,7 @@ def test_mod_composes_unrolled_lane_primitives(
         .select_profile(catalog, machine_profiles[profile], "mod", (type_tag,))
         .selected
         if selected.extension.name == extension
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):
@@ -527,7 +527,7 @@ def test_sve_narrow_mod_uses_register_lane_predicates(
         .select_profile(catalog, machine_profiles["sve"], "mod", (type_tag,))
         .selected
         if selected.extension.name == "sve"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
     lowered = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
@@ -582,7 +582,7 @@ def test_x86_mod_composes_through_semantic_register_operations(
         .select_profile(catalog, machine_profiles[profile], "mod", (type_tag,))
         .selected
         if selected.extension.name == extension
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):

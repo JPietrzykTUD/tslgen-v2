@@ -61,6 +61,30 @@ def test_interactive_apply_accepts_applicable_suggestion(tmp_path: Path) -> None
     assert "reasons [intrinsic, raw_pointer]" in source.read_text(encoding="utf-8")
 
 
+def test_safety_audit_keeps_raw_comments_and_literals_opaque(tmp_path: Path) -> None:
+    source = tmp_path / "opaque_safety_fixture.tsl"
+    source.write_text(
+        _safety_source()
+        .replace("prim<void:=(ptr,v)> store(ptr, data):", "prim<v:=v> store(data):")
+        .replace(
+            'tsil "intrin<store>(ptr, data);"',
+            (
+                'tsil "// intrin<fake>(data)\\n'
+                'const char* note = \\"mem<copy>(a,b,c)\\";\\n'
+                'complete(data);"'
+            ),
+        ),
+        encoding="utf-8",
+    )
+
+    result = audit_metadata(
+        (source,), checks=("safety",), machine_profiles_path=None, backends=("cpp",)
+    )
+
+    assert result.diagnostics == ()
+    assert result.suggestions == ()
+
+
 def test_requires_suggestion_uses_transitive_call_requirements(
     tmp_path: Path,
     machine_profiles_path: Path,

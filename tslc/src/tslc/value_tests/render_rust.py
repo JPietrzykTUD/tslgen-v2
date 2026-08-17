@@ -52,7 +52,6 @@ from tslc.value_tests._render_rust_memory import (
 )
 from tslc.value_tests.model import (
     ValueTestCasePlan,
-    ValueTestProfileCaseExclusion,
     ValueTestProfilePlan,
 )
 from tslc.value_tests.renderer_capability import ValueTestRendererCapability
@@ -101,15 +100,9 @@ RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
     supports_differential=True,
     overload_inference_placeholders=1,
     isolated_case_kinds=frozenset({"compile_failure"}),
-    profile_case_exclusions=(
-        ValueTestProfileCaseExclusion(
-            profile_family="wasm32",
-            case_kind="runtime_failure",
-            reason=(
-                "the generated wasm32 Rust target uses aborting panics, so "
-                "catch_unwind cannot observe the runtime-failure marker"
-            ),
-        ),
+    unobservable_runtime_failure_reason=(
+        "the generated Rust target uses aborting panics, so catch_unwind "
+        "cannot observe the runtime-failure marker"
     ),
     case_renderers={
         "array_to_vector": _array_to_vector,

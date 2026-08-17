@@ -69,6 +69,13 @@ class PrimitiveCastMode(StrEnum):
     REINTERPRET = "reinterpret"
 
 
+class PrimitiveMaskMode(StrEnum):
+    """Source-declared behavior for inactive lanes of a masked primitive."""
+
+    PASS_THROUGH = "pass_through"
+    ZERO = "zero"
+
+
 class PrimitiveValueMode(StrEnum):
     """Source-declared result initialization/definedness semantics."""
 
@@ -261,6 +268,7 @@ class Primitive:
     attributes: Mapping[str, str] = field(default_factory=dict)
     # Semantic meanings promoted once from the source attribute spelling.
     cast_mode: PrimitiveCastMode | None = field(init=False, default=None)
+    mask_mode: PrimitiveMaskMode | None = field(init=False, default=None)
     value_mode: PrimitiveValueMode | None = field(init=False, default=None)
 
     # Pointer parameter layout rules from a `param_types:` block. Conditional
@@ -325,11 +333,17 @@ class Primitive:
     def __post_init__(self) -> None:
         object.__setattr__(self, "attributes", _freeze_mapping(self.attributes))
         declared_cast = self.attributes.get("cast")
+        declared_mask = self.attributes.get("mask")
         declared_value = self.attributes.get("value")
         object.__setattr__(
             self,
             "cast_mode",
             None if declared_cast is None else PrimitiveCastMode(declared_cast),
+        )
+        object.__setattr__(
+            self,
+            "mask_mode",
+            None if declared_mask is None else PrimitiveMaskMode(declared_mask),
         )
         object.__setattr__(
             self,

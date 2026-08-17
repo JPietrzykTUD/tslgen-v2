@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tslc.catalog.model import RESULT_DIM_BASE, Extension
+from tslc.catalog.model import RESULT_DIM_BASE, Extension, PrimitiveMaskMode
 from tslc.catalog.scalar_types import (
     same_scalar_width,
     scalar_bit_width,
@@ -27,7 +27,7 @@ from tslc.lane_count import LaneCount
 @dataclass(frozen=True, slots=True)
 class SupportPolicy:
     signature_kinds: SignatureKindCatalog
-    mask_suffixes: tuple[tuple[str, str], ...]
+    mask_suffixes: tuple[tuple[PrimitiveMaskMode, str], ...]
     sized_vector_bits_kinds: frozenset[str]
     scalable_vector_bits_kinds: frozenset[str]
     scalar_register_policy_kind: str
@@ -247,7 +247,7 @@ class SupportPolicy:
             and not any(kind in self.mask_deferred_param_kinds for kind in shape.param_kinds)
         )
 
-    def mask_suffix(self, policy: str) -> str:
+    def mask_suffix(self, policy: PrimitiveMaskMode) -> str:
         for candidate, suffix in self.mask_suffixes:
             if candidate == policy:
                 return suffix
@@ -277,7 +277,10 @@ class SupportPolicy:
 
 DEFAULT_SUPPORT_POLICY = SupportPolicy(
     signature_kinds=DEFAULT_SIGNATURE_KINDS,
-    mask_suffixes=(("pass_through", "_mask"), ("zero", "_maskz")),
+    mask_suffixes=(
+        (PrimitiveMaskMode.PASS_THROUGH, "_mask"),
+        (PrimitiveMaskMode.ZERO, "_maskz"),
+    ),
     # Sized vectors carry a source-visible `LANES` parameter. Scalable vectors are native runtime
     # length vectors: they can be selected for intrinsic-only C++ bodies, but fixed-lane queries
     # such as `vector::length` stay unsupported until a typed scalable lane model exists.

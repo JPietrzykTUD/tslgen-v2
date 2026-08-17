@@ -114,7 +114,7 @@ def test_x86_popcnt_prefers_native_vpopcnt_when_available(
         )
         .selected
         if selected.extension.name == extension
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     cpp = Lowerer().lower(
@@ -159,7 +159,7 @@ def test_clang_lzc_composes_supported_bit_operations(
         )
         .selected
         if selected.extension.name == extension
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
     cpp = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
@@ -205,7 +205,7 @@ def test_clang_lzc_prefers_elementwise_builtin_when_capability_is_enabled(
         )
         .selected
         if selected.extension.name == extension
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
     cpp = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
@@ -239,7 +239,7 @@ def test_clang_lzc_auto_selection_preserves_capability_frontier(
         )
         .selected
         if selected.extension.name == "clang_v128"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     ]
 
     assert len(slots) == 2
@@ -261,7 +261,7 @@ def test_compiler_capability_frontier_retains_incomparable_winners(
     primitive = next(
         item
         for item in catalog.primitives_named("lzc", unmasked=False)
-        if item.attributes.get("mask") is None
+        if item.mask_mode is None
     )
     evaluation = Selector().evaluate_candidates(
         catalog,
@@ -339,7 +339,7 @@ def test_x86_lzc_without_avx512cd_uses_register_bit_propagation(
         .select_profile(catalog, machine_profiles[profile], "lzc", (type_tag,))
         .selected
         if selected.extension.name == extension
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):
@@ -379,7 +379,7 @@ def test_x86_lzc_handles_avx1_and_avx512f_without_bw_in_registers(
         .select_profile(catalog, machine_profiles[profile], "lzc", (type_tag,))
         .selected
         if selected.extension.name == extension
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):
@@ -415,7 +415,7 @@ def test_avx512_bitalg_lzc_keeps_preferred_composed_path(
         )
         .selected
         if selected.extension.name == "avx512"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
     cpp = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
@@ -453,7 +453,7 @@ def test_float_lzc_composes_native_integer_lzc_and_numeric_cast(
         .select_profile(catalog, machine_profiles[profile], "lzc", (type_tag,))
         .selected
         if selected.extension.name == extension
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
     cpp = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
@@ -478,7 +478,7 @@ def test_neon_lzc_64_composes_native_word_intrinsics(
         .select_profile(catalog, machine_profiles["neon"], "lzc", (type_tag,))
         .selected
         if selected.extension.name == "neon"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):
@@ -512,7 +512,7 @@ def test_wasm_integer_lzc_unrolls_semantic_lane_primitives(
         )
         .selected
         if selected.extension.name == "wasm128"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):
@@ -543,7 +543,7 @@ def test_neon_lzc_float_composes_bit_lzc_and_numeric_conversion(
         .select_profile(catalog, machine_profiles["neon"], "lzc", (type_tag,))
         .selected
         if selected.extension.name == "neon"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):

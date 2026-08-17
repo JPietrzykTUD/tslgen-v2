@@ -76,7 +76,7 @@ def _by_key(catalog, profile, primitive):
     # only declaration for the name.
     result = {}
     for slot in _slots(catalog, profile, primitive):
-        if slot.primitive.attributes.get("mask") is not None:
+        if slot.primitive.mask_mode is not None:
             continue
         key = (slot.type_tag, slot.extension.name)
         current = result.get(key)

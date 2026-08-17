@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.model import Catalog, Primitive, PrimitiveMaskMode
 from tslc.catalog.scalar_types import normalize_scalar_tag
 from tslc.catalog.signatures import parse_signature
 from tslc.lower.lowerer import LoweredSpecialization
@@ -147,7 +147,7 @@ def _masked_source_primitive(
     for primitive in catalog.primitives_named(source_name, unmasked=False):
         shape = parse_signature(primitive.signature)
         if (
-            primitive.attributes.get("mask") == spec.mask_policy
+            primitive.mask_mode == spec.mask_policy
             and shape is not None
             and shape.result_kind == spec.result_kind
             and shape.param_kinds == spec.param_kinds
@@ -165,7 +165,7 @@ class _MaskedPointerLoadPattern(_BasePattern):
                 ("m", "cptr"),
                 ("m", "cptr", "v"),
             }
-            and spec.mask_policy in {"zero", "pass_through"}
+            and spec.mask_policy in {PrimitiveMaskMode.ZERO, PrimitiveMaskMode.PASS_THROUGH}
             and spec.target is None
             and spec.immediate is None
             and not spec.generic_params
@@ -208,7 +208,7 @@ class _MaskedPointerStorePattern(_BasePattern):
         return (
             spec.result_kind == "void"
             and tuple(spec.param_kinds) == ("m", "ptr", "v")
-            and spec.mask_policy == "pass_through"
+            and spec.mask_policy == PrimitiveMaskMode.PASS_THROUGH
             and spec.target is None
             and spec.immediate is None
             and not spec.generic_params
@@ -299,7 +299,7 @@ class _IndexedMemoryPattern(_BasePattern):
     ) -> Primitive | None:
         if spec.mask_policy is not None:
             for primitive in catalog.primitives_named(source_name, unmasked=False):
-                if primitive.attributes.get("mask") == spec.mask_policy:
+                if primitive.mask_mode == spec.mask_policy:
                     return primitive
         return super().source_primitive(catalog, source_name, spec)
 

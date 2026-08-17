@@ -11,6 +11,7 @@ from itertools import count
 import re
 from threading import Lock
 
+from tslc.catalog.model import PrimitiveMaskMode
 from tslc.diagnostics import SourceSpan
 from tslc.ir.region_syntax import (
     ParsedCallSelector,
@@ -219,11 +220,23 @@ class PivotCallCaptureLowerer:
         attrs = tuple(
             (key, self._resolve_attr(value, context)) for key, value in parsed.attrs
         )
+        mask_text = dict(attrs).get("mask")
+        try:
+            mask_policy = (
+                None if mask_text is None else PrimitiveMaskMode(mask_text)
+            )
+        except ValueError:
+            context.effects.skip(
+                "TSL-PIVOT-UNSUPPORTED-CALL",
+                f"PIVOT cannot resolve call mask policy {mask_text!r}",
+                source=region.source,
+            )
+            return region.full_text
         dependency = resolve_lowered_call_dependency(
             parsed,
             context,
             self._evaluator,
-            mask_policy=dict(attrs).get("mask"),
+            mask_policy=mask_policy,
         )
         context.effects.record_call_dependency(
             CallDependencyOrigin(dependency, context.env.dependency_origin)

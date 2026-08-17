@@ -31,6 +31,7 @@ from tslc.catalog.model import (
     RESULT_DIM_EXTENSION,
     Catalog,
     Extension,
+    PrimitiveMaskMode,
 )
 from tslc.catalog.scalar_types import (
     DEFAULT_SCALAR_TYPE_TAGS,
@@ -85,7 +86,7 @@ class CoverageEntry:
     source_primitive_name: str = ""
     result_kind: str = ""
     param_kinds: tuple[str, ...] = ()
-    mask_policy: str | None = None
+    mask_policy: PrimitiveMaskMode | None = None
     axis: tuple[tuple[str, str], ...] = ()
     variant_names: tuple[str, ...] = ()
 
@@ -105,7 +106,7 @@ class SkippedEntry:
     source_primitive_name: str = ""
     result_kind: str = ""
     param_kinds: tuple[str, ...] = ()
-    mask_policy: str | None = None
+    mask_policy: PrimitiveMaskMode | None = None
     axis: tuple[tuple[str, str], ...] = ()
     variant_names: tuple[str, ...] = ()
 
@@ -345,7 +346,12 @@ class _GenerationSession:
                 capability.backend_id,
                 profile.profile.name,
                 capability.specializations(profile),
-                profile.profile.family,
+                (
+                    profile.profile_family is None
+                    or profile.profile_family.backend(
+                        capability.backend_id
+                    ).runtime_failure_observable
+                ),
             )
             for profile in profiles
             for capability in self.backends
@@ -838,7 +844,7 @@ def _lowering_skipped_entry(
         source_primitive_name=slot.primitive.name,
         result_kind="" if shape is None else shape.result_kind,
         param_kinds=() if shape is None else shape.param_kinds,
-        mask_policy=slot.primitive.attributes.get("mask"),
+        mask_policy=slot.primitive.mask_mode,
         axis=tuple(
             (key, slot.primitive.attributes[key])
             for key in sorted(slot.primitive.attributes)

@@ -53,6 +53,7 @@ class ValueTestCaseRequirements:
     required_facts: frozenset[ValueTestFact] = frozenset()
     vector_inputs_match_lanes: bool = False
     fuzz_case: bool = False
+    requires_runtime_failure_observation: bool = False
 
 
 @dataclass(frozen=True, slots=True)

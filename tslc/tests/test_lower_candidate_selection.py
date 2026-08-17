@@ -691,7 +691,7 @@ def test_bit_count_algorithms_keep_additive_benchmark_candidates(
         )
         .selected
         if selected.extension.name == extension_name
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):
@@ -734,7 +734,7 @@ def test_integer_division_keeps_generic_round_trip_as_additive_candidate(
         .select_profile(catalog, machine_profiles[profile_name], "div", ("si32",))
         .selected
         if selected.extension.name == extension_name
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):

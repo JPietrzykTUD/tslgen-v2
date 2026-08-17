@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.model import Catalog, Primitive, PrimitiveMaskMode
 from tslc.catalog.scalar_types import normalize_scalar_tag
 from tslc.catalog.signatures import parse_signature
 from tslc.lower.lowerer import LoweredSpecialization
@@ -140,7 +140,7 @@ class _MaskedPattern(_BasePattern):
         spec = specs[0]
         return (
             spec.result_kind == "v"
-            and spec.mask_policy in ("zero", "pass_through")
+            and spec.mask_policy in (PrimitiveMaskMode.ZERO, PrimitiveMaskMode.PASS_THROUGH)
             and spec.param_kinds.count("m") == 1
             and all(kind in ("m", "v", "vidx") for kind in spec.param_kinds)
             and spec.param_kinds.count("vidx") <= 1
@@ -166,7 +166,7 @@ class _MaskedPattern(_BasePattern):
         for primitive in catalog.primitives_named(source_name, unmasked=False):
             shape = parse_signature(primitive.signature)
             if (
-                primitive.attributes.get("mask") == spec.mask_policy
+                primitive.mask_mode == spec.mask_policy
                 and shape is not None
                 and shape.result_kind == spec.result_kind
                 and shape.param_kinds == spec.param_kinds
@@ -412,7 +412,7 @@ class _MaskedScalarVectorPattern(_BasePattern):
             spec.result_kind == "v"
             and tuple(spec.param_kinds) == ("m", "v", "s")
             and spec.target is None
-            and spec.mask_policy in {"zero", "pass_through"}
+            and spec.mask_policy in {PrimitiveMaskMode.ZERO, PrimitiveMaskMode.PASS_THROUGH}
             and spec.immediate is None
             and not spec.axis
             and not spec.generic_params
@@ -426,7 +426,7 @@ class _MaskedScalarVectorPattern(_BasePattern):
         spec: LoweredSpecialization,
     ) -> Primitive | None:
         for primitive in catalog.primitives_named(source_name, unmasked=False):
-            if primitive.attributes.get("mask") == spec.mask_policy:
+            if primitive.mask_mode == spec.mask_policy:
                 return primitive
         return None
 
@@ -467,7 +467,7 @@ class _ImmediatePattern(_BasePattern):
             )
             and spec.param_kinds.count("m") <= 1
             and spec.target is None
-            and spec.mask_policy in (None, "zero", "pass_through")
+            and spec.mask_policy in (None, PrimitiveMaskMode.ZERO, PrimitiveMaskMode.PASS_THROUGH)
             and not spec.axis
             and not spec.type_params
         )
@@ -484,7 +484,7 @@ class _ImmediatePattern(_BasePattern):
                 shape is not None
                 and shape.result_kind == spec.result_kind
                 and shape.param_kinds == spec.param_kinds
-                and primitive.attributes.get("mask") == spec.mask_policy
+                and primitive.mask_mode == spec.mask_policy
             ):
                 return primitive
         return None

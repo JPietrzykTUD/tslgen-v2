@@ -5,6 +5,7 @@ from __future__ import annotations
 from tslc.ir.region_syntax import IntrinsicSelector, split_arg_groups
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
+from tslc.lower.region_safety import direct_region_safety
 from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.target_text import RenderField, literal_text, render_sequence, render_text
@@ -21,7 +22,7 @@ class IntrinLowerer:
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        context.effects.mark_internal_unsafe("intrinsic")
+        context.effects.merge_safety(direct_region_safety(region))
         selector = IntrinsicSelector.parse(region.selector_text)
         if selector.name is None:
             context.effects.skip(

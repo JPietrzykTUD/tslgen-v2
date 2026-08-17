@@ -67,6 +67,7 @@ KNOWN_BACKEND_PROFILE_FIELDS = frozenset(
         "feature_flags",
         "linker",
         "pass_target_to_compiler",
+        "runtime_failure_observable",
         "target",
         "target_arch",
     }
@@ -245,7 +246,13 @@ def validate_target_families(
             )
             _validate_boolean_fields(
                 backend,
-                frozenset({"feature_flags", "pass_target_to_compiler"}),
+                frozenset(
+                    {
+                        "feature_flags",
+                        "pass_target_to_compiler",
+                        "runtime_failure_observable",
+                    }
+                ),
                 diagnostics,
                 owner,
             )

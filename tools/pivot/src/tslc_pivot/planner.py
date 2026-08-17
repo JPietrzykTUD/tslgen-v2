@@ -441,7 +441,7 @@ class PivotPlanner:
         for candidate in selected:
             if candidate.extension.isa_name != dependency.source.extension_isa:
                 continue
-            if candidate.primitive.attributes.get("mask") != dependency.mask_policy:
+            if candidate.primitive.mask_mode != dependency.mask_policy:
                 continue
             if len(candidate.primitive.parameters) != argument_count:
                 continue
@@ -788,7 +788,7 @@ def _target_matches(
 
 
 def _callable_name(slot: SelectedImplementation) -> str:
-    policy = slot.primitive.attributes.get("mask")
+    policy = slot.primitive.mask_mode
     return (
         slot.primitive.name
         if policy is None
@@ -814,7 +814,7 @@ def _slot_key(slot: SelectedImplementation) -> tuple[object, ...]:
         slot.extension.isa_name,
         slot.type_tag,
         slot.to_target,
-        slot.primitive.attributes.get("mask"),
+        slot.primitive.mask_mode,
         tuple(sorted(slot.primitive.attributes.items())),
         slot.implementation.extension,
         slot.implementation.source_order,

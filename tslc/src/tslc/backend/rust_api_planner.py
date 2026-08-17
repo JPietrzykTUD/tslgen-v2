@@ -326,28 +326,26 @@ def _plan_rust_facade(
         curated_methods, shapes
     )
     core_arms = _core_implementation_arms(core_delegates, shapes)
-    return (
-        RustFacadePlan(
-            shapes=shapes,
-            operation_bindings=operation_bindings,
-            core_delegates=core_delegates,
-            core_implementation_arms=core_arms,
-            comprehensive_methods=tuple(sorted(methods, key=_method_sort_key)),
-            curated_methods=tuple(sorted(curated_methods, key=_curated_method_sort_key)),
-            equality_implementations=equality_arms,
-            bit_conversions=bit_conversions,
-            trait_implementations=tuple(sorted(traits, key=_trait_sort_key)),
-            native_aliases=_native_aliases(
-                profiles,
-                static_selection,
-                facade_type_tags,
-                shapes,
-            ),
-            operation_values=operation_values,
-            coverage=tuple(sorted(coverage, key=_coverage_sort_key)),
+    plan = RustFacadePlan(
+        shapes=shapes,
+        operation_bindings=operation_bindings,
+        core_delegates=core_delegates,
+        core_implementation_arms=core_arms,
+        comprehensive_methods=tuple(sorted(methods, key=_method_sort_key)),
+        curated_methods=tuple(sorted(curated_methods, key=_curated_method_sort_key)),
+        equality_implementations=equality_arms,
+        bit_conversions=bit_conversions,
+        trait_implementations=tuple(sorted(traits, key=_trait_sort_key)),
+        native_aliases=_native_aliases(
+            profiles,
+            static_selection,
+            facade_type_tags,
+            shapes,
         ),
-        (),
+        operation_values=operation_values,
+        coverage=tuple(sorted(coverage, key=_coverage_sort_key)),
     )
+    return plan, ()
 
 
 __all__ = (

@@ -6,6 +6,7 @@ import json
 from typing import Any, cast
 
 from tslc.benchmark.identity import is_sha256_digest
+from tslc.catalog.model import PrimitiveMaskMode
 from tslc.maintenance.benchmark_coverage_model import (
     BenchmarkCoverageAudit,
     BenchmarkCoverageIssue,
@@ -298,11 +299,19 @@ def _issue_key_from_record(
         or (mask_policy is not None and not isinstance(mask_policy, str))
     ):
         raise ValueError("benchmark issue shape contains invalid field types")
+    try:
+        mask_mode = (
+            None
+            if mask_policy is None
+            else PrimitiveMaskMode(mask_policy)
+        )
+    except ValueError as error:
+        raise ValueError("benchmark issue shape has an unknown mask mode") from error
     source_shape = SourceShapeKey(
         primitive_name,
         result_kind,
         tuple(cast(list[str], param_kinds_value)),
-        mask_policy,
+        mask_mode,
     )
     slot: BenchmarkSlotKey | None = None
     if slot_value is not None:

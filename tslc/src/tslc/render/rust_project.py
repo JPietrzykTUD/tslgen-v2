@@ -313,8 +313,12 @@ def _rust_artifacts(
         ),
         profile_metadata=assets.fill(
             "rust_profile_metadata.rs.tmpl",
-            profile_name=json.dumps("target_fallback"),
-            profile_family=json.dumps("generic"),
+            profile_name=json.dumps(
+                static_selection_plan.fallback_module.metadata_profile_name
+            ),
+            profile_family=json.dumps(
+                static_selection_plan.fallback_module.metadata_profile_family
+            ),
         ).rstrip(),
         registrations=rust_registrations(
             fallback_by_primitive, fallback_extensions

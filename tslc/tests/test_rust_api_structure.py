@@ -24,9 +24,10 @@ def test_rust_facade_child_planners_do_not_import_the_orchestrator() -> None:
 
 
 def test_rust_facade_plan_validation_is_a_focused_module() -> None:
-    model_tree = ast.parse(
-        (_BACKEND_ROOT / "rust_api_model.py").read_text(encoding="utf-8")
+    model_source = (_BACKEND_ROOT / "rust_api_model.py").read_text(
+        encoding="utf-8"
     )
+    model_tree = ast.parse(model_source)
     plan_class = next(
         node
         for node in model_tree.body
@@ -37,14 +38,32 @@ def test_rust_facade_plan_validation_is_a_focused_module() -> None:
         for node in plan_class.body
         if isinstance(node, ast.FunctionDef) and node.name == "__post_init__"
     )
-    assert post_init.end_lineno is not None
-    assert post_init.end_lineno - post_init.lineno < 10
+    assert any(
+        isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+        and node.value.func.id == "validate_rust_facade_plan"
+        for node in post_init.body
+    )
 
     validation_tree = ast.parse(
         (_BACKEND_ROOT / "rust_api_model_validation.py").read_text(
             encoding="utf-8"
         )
     )
+    runtime_imports = {
+        node.module
+        for node in validation_tree.body
+        if isinstance(node, ast.ImportFrom)
+    }
+    assert "tslc.backend.rust_api_model" not in runtime_imports
+    assert "tslc.backend.rust_api_arms" not in runtime_imports
+
+    planner_source = (_BACKEND_ROOT / "rust_api_planner.py").read_text(
+        encoding="utf-8"
+    )
+    assert "rust_api_model_validation" not in planner_source
+
     definitions = {
         node.name
         for node in validation_tree.body

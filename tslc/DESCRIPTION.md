@@ -242,10 +242,11 @@ prim<v:=(v,v)> add(left, right):
   list. Representation changes may use target-owned operands such as `vt`
   (target register) and `imt` (target integral mask); a target result projects
   the declared result kind through the target vector.
-- **Primitive attribute semantics**: closed `cast` and `value` spellings are
-  promoted once into `PrimitiveCastMode` and `PrimitiveValueMode`. Selection
-  and value-test planning consume those typed fields rather than comparing raw
-  attribute strings or recognizing primitive names.
+- **Primitive attribute semantics**: closed `cast`, `mask`, and `value`
+  spellings are promoted once into `PrimitiveCastMode`, `PrimitiveMaskMode`,
+  and `PrimitiveValueMode`. Selection, lowering, dependency closure, benchmark
+  inventory, and value-test planning consume those typed fields rather than
+  comparing raw attribute strings or recognizing primitive names.
 - **Type-group keys**: `?i?` (any int), `f?` (any float), `arith` (all), plus
   concrete tags. Ranked by **specificity** — `si32` beats `?i?` beats `arith`.
 - **Extension fallback**: extensions form `inherits` chains (e.g. `avx2_vl →
@@ -255,8 +256,11 @@ prim<v:=(v,v)> add(left, right):
   source-named extension families—fallback classification, free-function
   ownership, declared-register requirements, and index-vector support—and for
   profile families, including whether a profile runs natively without an
-  emulator and each backend's explicit target architecture/toolchain facts. It
-  also owns documentation family/order labels and the catalog of accepted
+  emulator, whether runtime failures can be observed, and each backend's
+  explicit target architecture/toolchain facts. Source selects an optional
+  backend detection strategy ID; the backend registry owns its concrete target
+  syntax, feature-test macros, validation, and probes. It also owns
+  documentation family/order labels and the catalog of accepted
   target features plus their default/backend compiler spellings;
   machine profiles retain only genuine profile-specific overrides. Selection,
   lowering, translation, documentation, and verification consume those typed
@@ -376,8 +380,9 @@ recursive `tuple[Segment, ...]`:
 - **`RawText`** — target source, passed through verbatim; line and block comments
   are opaque to the keyword scanner (including nested Rust block comments);
 - **`Region`** — a recognized keyword island whose `<...>` shell is parsed by
-  syntax-only helpers in [ir/region_syntax.py](src/tslc/ir/region_syntax.py) and
-  whose `(...)` payload is recursively scanned.
+  syntax-only helpers in [ir/region_syntax.py](src/tslc/ir/region_syntax.py)
+  and [ir/query_syntax.py](src/tslc/ir/query_syntax.py), and whose `(...)`
+  payload is recursively scanned.
 
 `let<type>(Name, ...)` creates a typed lowering binding rather than a target-language
 declaration. TSIL-owned type positions resolve it directly, for example
@@ -525,7 +530,11 @@ candidate, comprehensive, curated, and surface planners under `backend/rust_api_
 The public
 [backend/rust_api_planner.py](src/tslc/backend/rust_api_planner.py)
 orchestrates those projections directly and preserves the compiler-facing
-planning and validation API.
+planning and validation API. The frozen plan owns its cross-record invariant
+and invokes the focused validator on construction. The validator depends at
+runtime only on shared facade enum vocabulary and semantic operations; model
+and arm types are type-checking-only dependencies, so plan replacement remains
+validated without a runtime import cycle.
 That projection combines lowered language-neutral operation, operand-role,
 overload, conversion, and safety contracts with static fixed-shape selection.
 It owns Rust receiver placement, const/type-parameter spelling, method suffixes,
@@ -570,8 +579,12 @@ standalone native benchmark/policy tool. Rust admits scenario coverage through
 explicit named `profile × scenario-family` pairs while deriving profile family,
 features, spellings, modes, and flags from the live machine profile. It renders
 the `sse2` register and immediate families plus `avx2` one-vector scalar
-reductions as standard-library-only custom Cargo benchmarks. The
-compiler-cfg-gated hot loop lives inside the library crate, and a thin
+reductions as standard-library-only custom Cargo benchmarks. Native feature
+detection consumes the profile family's typed strategy ID; concrete Rust
+`target_arch` and feature-test macro spellings live in
+[backend/rust_benchmark_detection.py](src/tslc/backend/rust_benchmark_detection.py),
+not in profile-family-name branches. The compiler-cfg-gated hot loop lives
+inside the library crate, and a thin
 per-profile bench target invokes it only with the unpublished
 `tsl_variant_benchmarks` compiler cfg plus the exact compiler-owned codegen and
 target-feature flags. Those exact admissions and the deliberately narrow

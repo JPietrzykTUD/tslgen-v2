@@ -5,6 +5,7 @@ from __future__ import annotations
 from tslc.ir.region_syntax import split_arg_groups
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
+from tslc.lower.region_safety import direct_region_safety
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.target_text import RenderField, RenderText, render_text, trimmed_text
 
@@ -21,7 +22,7 @@ class MemLowerer:
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        context.effects.mark_internal_unsafe("raw_memory")
+        context.effects.merge_safety(direct_region_safety(region))
         op = region.selector_text.strip()
         args: list[RenderText] = []
         for group in split_arg_groups(region.body):
