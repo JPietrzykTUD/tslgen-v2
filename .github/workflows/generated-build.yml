@@ -161,6 +161,29 @@ jobs:
             "tslctmp/ci-logs/generated-clang-overlay/docker-pull.log" \
             docker pull "${TSLC_CI_IMAGE}"
 
+      - name: Verify generated Clang overlay toolchain
+        run: |
+          bash supplementary/ci/run_tslc_ci_container.sh \
+            -- \
+            bash -lc '
+              set -e
+              for required_tool in \
+                /usr/bin/clang++-21 \
+                /usr/bin/clang++-22 \
+                /opt/intel-sde/sde64
+              do
+                if [[ ! -x "${required_tool}" ]]; then
+                  echo "missing executable required by the Clang overlay gate: ${required_tool}" >&2
+                  exit 1
+                fi
+                if [[ "${required_tool}" == /usr/bin/clang++-* ]]; then
+                  "${required_tool}" --version | sed -n "1p"
+                else
+                  echo "found ${required_tool}"
+                fi
+              done
+            '
+
       - name: Build and execute generated Clang overlay paths
         run: |
           bash .github/scripts/run_with_log.sh \
@@ -169,9 +192,6 @@ jobs:
               -- \
               bash -lc '
                 set -e
-                test -x /usr/bin/clang++-21
-                test -x /usr/bin/clang++-22
-                test -x /opt/intel-sde/sde64
                 trap "rm -rf tslctmp/pytest" EXIT
                 PYTHONPATH=tslc/src python -m pytest -q \
                   --run-generated-builds \
