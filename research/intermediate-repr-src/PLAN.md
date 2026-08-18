@@ -1,6 +1,6 @@
 # Intermediate-representation prototype plan
 
-## Implementation status (2026-08-02)
+## Implementation status (2026-08-06)
 
 The source tree described below is implemented. It provides four genuinely
 materialized TSL boundary representations, fused/autovectorized/scalar
@@ -28,20 +28,36 @@ pressure. The 1/4/8-aggregate slice is the direct register-pressure probe; the
 threading slice tests whether a single-thread representation result survives
 parallel execution.
 
-A Clang 22 overlay build with generated TSL v0.2.7 is available on this host:
+A Clang 22 overlay build generated from the current workspace is available on
+this host. It is deliberately not based on a tagged release:
 
 ```bash
+TSLC_OUTPUT_ROOT=./tslctmp/intermediate-repr/generated/mask-after \
+  TSLC_BACKENDS=cpp ./dev.sh generate --profiles avx2 --backends cpp
 cmake -S research/intermediate-repr-src \
-  -B tslctmp/intermediate-repr/build/clang22-avx2-overlay -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++-22 \
-  -DIRBENCH_PROFILE=avx2 -DIRBENCH_ENABLE_CLANG_OVERLAY=ON
-cmake --build tslctmp/intermediate-repr/build/clang22-avx2-overlay --parallel
-ctest --test-dir tslctmp/intermediate-repr/build/clang22-avx2-overlay \
+  -B tslctmp/intermediate-repr/build/clang22-avx2-mask-after2 -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=/usr/bin/clang++-22 \
+  -DIRBENCH_PROFILE=avx2 -DIRBENCH_ENABLE_CLANG_OVERLAY=ON \
+  -DTSL_LOCAL_SOURCE_DIR=/workspace/tslctmp/intermediate-repr/generated/mask-after
+cmake --build tslctmp/intermediate-repr/build/clang22-avx2-mask-after2 --parallel
+ctest --test-dir tslctmp/intermediate-repr/build/clang22-avx2-mask-after2 \
   --output-on-failure
 ```
 
-Clang 22.1.8 supplies `__builtin_elementwise_clzg`, so the generated TSL
-Clang overlay configures successfully. The correctness executable validates
+The repository base commit was
+`7115056373ee979c24b2d9e8a6afe43d74e9a11c`; the generated C++ tree records
+the local source identity
+`e7c85c78b23c996179a3bd883cdd8c5bf433cf1d12ac3130ac4c0e1945bd383f`.
+That identity includes the working-tree mask-bridge change described below.
+The pre-change current-workspace snapshot used for the paired diagnostic run
+had generated identity
+`3642e1939a027757754c756bd96982a621cfb3ff5d83dd995ef03b4ec458d79a`.
+These are local generated-product identities, not release-version labels.
+
+Clang 22.1.8 supplies `__builtin_elementwise_clzg`; the generated project also
+probes and enables `ext_vector_boolean_mask_bridge`. The current-source Clang
+overlay therefore configures with both capability branches. The correctness
+executable validates
 111 compiled candidates: all materialized and fused hardware/Clang policies at
 1, 4, and 8 aggregates, plus scalar references. CTest also dry-runs a focused
 pressure matrix and one-/two-worker strong/weak matrix. Clang emits `-Wpsabi`
@@ -56,7 +72,7 @@ policies.
 A safe registration smoke is:
 
 ```bash
-tslctmp/intermediate-repr/build/clang22-avx2-overlay/irbench_benchmark \
+tslctmp/intermediate-repr/build/clang22-avx2-mask-after2/irbench_benchmark \
   --irbench_matrix=smoke --benchmark_dry_run \
   --benchmark_filter='N=1003/B=257/sA_bp=5000/sBgA_bp=9000'
 ```
@@ -90,8 +106,89 @@ stack-resident state object and the outlined vector loop writes eight aggregate
 states back through that object on each iteration. This is a genuine codegen
 cliff, but not proof of hardware register exhaustion alone: live state, inlining,
 and alias analysis are confounded. Full disassembly across representations and
-hardware counters remain required. No full performance sweep or go/no-go
-decision has been performed as part of implementation.
+hardware counters remain required.
+
+### Current-source mask-bridge diagnostic (2026-08-06)
+
+The first current-workspace build exposed a confounder, not a research result:
+Clang comparison and Boolean masks reached `to_integral` and `to_mask`
+through generated per-lane tests and assignments. That implementation dominated
+many compiler-vector measurements. The fix now in the current source corpus
+adds a C++ compiler capability,
+`ext_vector_boolean_mask_bridge`, guarded by all of the following:
+
+- Clang Boolean extended-vector support;
+- `__builtin_convertvector`;
+- little-endian lane order;
+- a compile probe that exercises comparison-to-Boolean packing and expansion.
+
+The comparison-mask path converts 0/-1 lanes to a dense Boolean vector, then
+bit-casts that one-bit-per-lane value to the integral mask. Expansion first
+clears unused high bits, bit-casts to the Boolean vector, converts to the
+comparison-mask type, and negates 0/1 lanes into canonical 0/-1 lanes. The
+Boolean-mask path uses the normalized bit bridge directly. The original lane
+loop remains the generated fallback when the capability is absent. Authored and
+generated tests cover comparison and Boolean policies, two-lane padding, and
+64-lane high bits.
+
+The paired diagnostic used the same command for the pre- and post-change local
+products:
+
+```bash
+irbench_benchmark --irbench_matrix=stage2 \
+  --benchmark_filter='scaling=strong/N=65536/B=16384/sA_bp=(100|9000)/sBgA_bp=9000/distribution=random/seed=2672458773$' \
+  --benchmark_min_time=0.25s --benchmark_min_warmup_time=0.20 \
+  --benchmark_repetitions=9 --benchmark_enable_random_interleaving=true
+```
+
+Both runs contain 74 paired median cells. Representative compiler-vector changes
+are:
+
+| Cell, Filter-A selectivity 1% | Before median | After median | Before/after |
+|---|---:|---:|---:|
+| Boolean, 256-bit, integral | 381,448 ns | 10,671 ns | 35.7x |
+| Boolean, 512-bit, integral | 516,008 ns | 10,997 ns | 46.9x |
+| Comparison, 256-bit, fused | 64,422 ns | 7,313 ns | 8.8x |
+| Comparison, 128-bit, packed bits | 148,471 ns | 153,902 ns | 0.96x |
+
+The last row is an important counterexample: the bridge does not cure all
+compiler-vector code generation. Post-change symbols still show outlined
+algorithm helpers for the slow 128-bit Boolean and 512-bit packed-bit cases,
+whereas the fast 256-bit cases inline completely. Blanket `always_inline` or
+`flatten` attributes were deliberately not added; the remaining cliffs are
+mechanism evidence to investigate, not a reason to obscure code generation.
+
+The following are the within-run materialized-representation oracle results:
+
+| Filter-A selectivity | Fastest materialized choice | Median | Nearest dense alternative | Position-list median |
+|---:|---|---:|---:|---:|
+| 1% | positions, Clang 512 comparison | 9,653 ns | integral, Clang 256 Boolean: 10,671 ns | 9,653 ns |
+| 90% | integral, Clang 256 Boolean | 10,800 ns | native, Clang 512 Boolean: 11,005 ns | 30,749 ns |
+
+At 1%, positions beat the best integral choice by 10.5%. At 90%, positions are
+184.7% slower than the best integral choice, although integral beats native by
+only 1.9%. The best fused Clang reference is still faster (7,313 ns at 1% and
+7,310 ns at 90%), so the result concerns an unavoidable boundary, not a reason
+to materialize when fusion is legal.
+
+This is a positive direction check, not a passed go/no-go gate:
+
+- H1 is promising: the observed sparse/dense crossover is large, and choosing
+  integral everywhere incurs 10.5% regret in the tested sparse cell.
+- H1 is not established: only one process, seed, distribution, data size, batch
+  size, and aggregate count were measured; confidence intervals and independent
+  confirmation runs are absent.
+- H2 is also not established. Compiler vectors are now competitive, and the
+  apparent winner changes from 512-bit comparison/positions to 256-bit
+  Boolean/integral, but the best same-representation width/policy margins are
+  generally below the predeclared 5% threshold.
+- Unaffected scalar, autovectorized, and hardware-reference medians shifted by
+  roughly 5-17% between the two processes. The very large bridge improvements
+  are credible as a defect removal, but smaller cross-process differences must
+  not be treated as scientific effects.
+
+Therefore the mask fix makes the prototype worth pursuing through Stage 1 and
+confirmation. It does not yet justify implementing a predictive cost model.
 
 ## Decision at a glance
 
@@ -502,7 +599,9 @@ by the preceding evidence.
 Purpose: prove that each promised C++ policy and representation can compile and
 produce identical results before timing anything.
 
-- TSL: exact `v0.2.7` source commit and generated-artifact digest;
+- TSL: exact current-workspace base commit, working-tree identity, and
+  generated-artifact digest; a tagged release may be measured separately but
+  must not substitute for the current project state;
 - Google Benchmark: pinned `v1.9.5` source release;
 - compilers: one supported Clang and one supported GCC;
 - profiles: SSE2, AVX2, and AVX-512 only when the host natively supports them;
@@ -811,16 +910,17 @@ Use CMake 3.20 or newer and C++17, matching the generated C++ project examples.
 
 ### TSL
 
-- reproducibility source: the exact local `v0.2.7` tag commit
-  `0a2cbe068ad5984339b3622f70a74003dfacb966`;
-- preferred artifact input: a `v0.2.7` generated release archive only after its
-  immutable URL and SHA-256 digest have been verified;
-- fallback artifact input: generate the C++ product once from that exact tag
-  into `tslctmp/intermediate-repr/generated/` and record its artifact-manifest
-  digest; generation is setup, never part of a timed run;
+- reproducibility source: the exact local current-workspace base commit plus
+  the working-tree diff/status identity used for generation;
+- preferred artifact input: generate the C++ product once from that exact
+  workspace snapshot into `tslctmp/intermediate-repr/generated/` and record
+  both its compiler-reported source identity and artifact-manifest digest;
+  generation is setup, never part of a timed run;
+- optional release comparison: a verified generated release archive is a
+  separate historical baseline, never the source for current-state conclusions;
 - development override: `TSL_LOCAL_SOURCE_DIR`, pointing to an already
   generated C++ root, with its artifact digest and dirty-source identity
-  recorded and results kept separate from the tagged baseline;
+  recorded and results kept separate from every other source snapshot;
 - selected machine profile: one explicit `TSL_PROFILE` cache value per build
   directory;
 - normal compiler: link `tsl::<profile>`;
