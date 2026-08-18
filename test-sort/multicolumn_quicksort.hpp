@@ -246,10 +246,13 @@ class TslMultiColumnQuickSorter {
 
         auto const left_offset = static_cast<std::size_t>(left_ptr - keys);
         auto const right_offset = static_cast<std::size_t>(right_ptr - keys);
-        std::array<register_type, MaxColumns> payload_l{};
-        std::array<register_type, MaxColumns> payload_r{};
-        std::array<register_type, MaxColumns> payload_write_l{};
-        std::array<register_type, MaxColumns> payload_write_r{};
+        // Uninitialized on purpose: only [0, payload_count) is ever written or
+        // read. Value-initializing them made every swap iteration memset
+        // 4 * MaxColumns * sizeof(register_type) bytes of stack.
+        std::array<register_type, MaxColumns> payload_l;
+        std::array<register_type, MaxColumns> payload_r;
+        std::array<register_type, MaxColumns> payload_write_l;
+        std::array<register_type, MaxColumns> payload_write_r;
         for (std::size_t column = 0; column < payload_count; ++column) {
           payload_l[column] = tsl::load<DataSimdStyle, false>(columns[column] + left_offset);
           payload_r[column] = tsl::load<DataSimdStyle, false>(columns[column] + right_offset);
