@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from tslc.catalog.model import Extension
 
-_CPP_X86_HELPER_WIDTHS = frozenset({128, 256, 512})
+_CPP_WIDTH_INDEXED_HELPER_WIDTHS = frozenset({128, 256, 512})
 
 
-def is_x86_register_extension(extension: Extension | None) -> bool:
-    return x86_register_bits(extension) is not None
+def is_width_indexed_register_extension(extension: Extension | None) -> bool:
+    return width_indexed_register_bits(extension) is not None
 
 
-def x86_register_bits(extension: Extension | None) -> int | None:
+def width_indexed_register_bits(extension: Extension | None) -> int | None:
     if (
         extension is None
-        or extension.family != "x86"
+        or not extension.family_capability.width_indexed_registers
         or extension.vector_bits_kind != "fixed"
         or extension.vector_bits <= 0
     ):
@@ -22,9 +22,9 @@ def x86_register_bits(extension: Extension | None) -> int | None:
     return extension.vector_bits
 
 
-def cpp_x86_register_helper(extension: Extension | None) -> str | None:
-    bits = x86_register_bits(extension)
-    if bits not in _CPP_X86_HELPER_WIDTHS:
+def cpp_width_indexed_register_helper(extension: Extension | None) -> str | None:
+    bits = width_indexed_register_bits(extension)
+    if bits not in _CPP_WIDTH_INDEXED_HELPER_WIDTHS:
         return None
     return f"reg{bits}"
 
@@ -62,9 +62,9 @@ def _rust_type_name_from_identifier(identifier: str) -> str:
 
 
 __all__ = [
-    "cpp_x86_register_helper",
-    "is_x86_register_extension",
+    "cpp_width_indexed_register_helper",
+    "is_width_indexed_register_extension",
     "rust_arch_module",
     "rust_extension_tag",
-    "x86_register_bits",
+    "width_indexed_register_bits",
 ]

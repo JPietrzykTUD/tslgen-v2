@@ -28,6 +28,10 @@ prim<im:=m> to_integral(mask):
     - {tags [basic], type "ui64", case {inputs [2], expected 2}}
     - {tags [basic], type "si64", case {inputs [2], expected 2}}
     - {tags [basic], type "f64", case {inputs [2], expected 2}}
+    - {tags [clang, edge], extension "clang_v128", type "f64", lane_count 2, case {inputs [2], expected 2}}
+    - {tags [clang, wide, edge], extension "clang_v512", type "ui8", lane_count 64, case {inputs [9223372036854775809], expected 9223372036854775809}}
+    - {tags [clang, boolean, edge], extension "clang_v128_bool", type "f64", lane_count 2, case {inputs [3], expected 3}}
+    - {tags [clang, boolean, wide, edge], extension "clang_v512_bool", type "ui8", lane_count 64, case {inputs [9223372036854775809], expected 9223372036854775809}}
     - {tags [zero], type "ui32", lane_count 4, case {inputs [0], expected 0}}
     - {tags [wide, basic], extension "avx512", type "ui8", case {inputs [12297829382473034410], expected 12297829382473034410}}
     - {tags [wide, edge], extension "avx512", type "ui8", case {inputs [18446744073709551615], expected 18446744073709551615}}
@@ -51,6 +55,54 @@ prim<im:=m> to_integral(mask):
     - {tags [wide, edge], extension "avx512", type "f64", case {inputs [255], expected 255}}
     - {tags [scalable, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690], expected 43690}}
   impls:
+    clang_v128:
+      arith:
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [ext_vector_boolean_mask_bridge]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil """
+            let<type>(ImaskT, vector::imask);
+            using BoolMaskT = bool __attribute__((ext_vector_type(Vec::vector_element_count)));
+            var<const_typed>(
+              BoolMaskT,
+              packed,
+              __builtin_convertvector(mask, type(BoolMaskT))
+            );
+            var<const_typed>(
+              ImaskT,
+              low_bits,
+              cast<static>(ImaskT, helper<imask_low_bits>(value(vector::length)))
+            );
+            complete(::tsl::bit_cast<type(ImaskT)>(packed) & low_bits);
+          """
+    [clang_v128_bool, clang_v256_bool, clang_v512_bool]:
+      arith:
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [ext_vector_boolean_mask_bridge]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil """
+            let<type>(ImaskT, vector::imask);
+            var<const_typed>(
+              ImaskT,
+              low_bits,
+              cast<static>(ImaskT, helper<imask_low_bits>(value(vector::length)))
+            );
+            complete(::tsl::bit_cast<type(ImaskT)>(mask) & low_bits);
+          """
     clang_v128:
       arith:
         requires []
@@ -649,7 +701,63 @@ prim<m:=im> to_mask(mask):
     - {tags [basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170], expected 170}}
     - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [129], expected 129}}
     - {tags [basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690], expected 43690}}
+    - {tags [clang, padding, edge], extension "clang_v128", type "f64", lane_count 2, case {inputs [255], expected 3}}
+    - {tags [clang, wide, edge], extension "clang_v512", type "ui8", lane_count 64, case {inputs [9223372036854775809], expected 9223372036854775809}}
+    - {tags [clang, boolean, padding, edge], extension "clang_v128_bool", type "f64", lane_count 2, case {inputs [255], expected 3}}
+    - {tags [clang, boolean, wide, edge], extension "clang_v512_bool", type "ui8", lane_count 64, case {inputs [9223372036854775809], expected 9223372036854775809}}
   impls:
+    clang_v128:
+      arith:
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [ext_vector_boolean_mask_bridge]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil """
+            let<type>(ImaskT, vector::imask);
+            let<type>(MaskT, vector::mask);
+            using BoolMaskT = bool __attribute__((ext_vector_type(Vec::vector_element_count)));
+            var<const_typed>(
+              ImaskT,
+              low_bits,
+              cast<static>(ImaskT, helper<imask_low_bits>(value(vector::length)))
+            );
+            var<const_typed>(ImaskT, normalized, mask & low_bits);
+            var<const_typed>(
+              BoolMaskT,
+              packed,
+              ::tsl::bit_cast<BoolMaskT>(normalized)
+            );
+            complete(-__builtin_convertvector(packed, type(MaskT)));
+          """
+    [clang_v128_bool, clang_v256_bool, clang_v512_bool]:
+      arith:
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [ext_vector_boolean_mask_bridge]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil """
+            let<type>(ImaskT, vector::imask);
+            let<type>(MaskT, vector::mask);
+            var<const_typed>(
+              ImaskT,
+              low_bits,
+              cast<static>(ImaskT, helper<imask_low_bits>(value(vector::length)))
+            );
+            var<const_typed>(ImaskT, normalized, mask & low_bits);
+            complete(::tsl::bit_cast<type(MaskT)>(normalized));
+          """
     clang_v128:
       arith:
         requires []

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import tslc.authoring_completion as completion_module
 from tslc.authoring_completion import AuthoringCompletion, authoring_completions
 from tslc.catalog.model import Catalog
 from tslc.compiler_assets import load_default_tsl_grammar
@@ -17,6 +18,14 @@ from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS, TSIL_REGION
 
 
 _PATH = Path("tslctmp/authoring-completion.tsl").resolve()
+
+
+def test_completion_records_and_tsil_projection_have_focused_owners() -> None:
+    assert AuthoringCompletion.__module__ == "tslc.authoring_completion_model"
+    assert (
+        completion_module._tsil_shell_completions.__module__
+        == "tslc.authoring_tsil_completion"
+    )
 
 
 def test_empty_file_and_primitive_header_complete_declarations_and_shapes(
@@ -100,7 +109,7 @@ def test_empty_file_and_primitive_header_complete_declarations_and_shapes(
         (
             "extension sample:\n  cpp:\n    supported true\n",
             "extension sample:\n  cpp:\n    supported true\n    ",
-            {"headers", "compile_guards", "dataparallel_inference"},
+            {"headers", "compiler_capabilities", "dataparallel_inference"},
             {"supported", "active_when"},
         ),
         (
@@ -163,6 +172,64 @@ def test_requires_and_datatype_lists_use_distinct_vocabularies(
 
     assert {"si8", "si16", "si32", "si64"} <= datatypes
     assert "avx512_fp16" not in datatypes
+
+def test_compiler_requires_completion_is_backend_and_capability_scoped(
+    catalog: Catalog,
+) -> None:
+    prefix = (
+        "prim<v:=v> probe(value):\n"
+        "  impls:\n"
+        "    clang_v128:\n"
+        "      arith:\n"
+        "        requires:\n"
+    )
+    capability_baseline = (
+        prefix
+        + "          target_features []\n"
+        + "          compiler:\n"
+        + "            cpp:\n"
+        + "              capabilities [elementwise_clzg]\n"
+    )
+
+    root_baseline = prefix + "          sentinel []\n"
+    root_fields = _labels(catalog, root_baseline, prefix + "          ")
+    assert {"target_features", "compiler"} <= root_fields
+
+    compiler_baseline = (
+        prefix
+        + "          compiler:\n"
+        + "            sentinel:\n"
+        + "              capabilities []\n"
+    )
+    compiler_backends = _labels(
+        catalog,
+        compiler_baseline,
+        prefix + "          compiler:\n            ",
+    )
+    assert {"cpp", "rust"} <= compiler_backends
+
+    backend_baseline = (
+        prefix
+        + "          compiler:\n"
+        + "            cpp:\n"
+        + "              sentinel []\n"
+    )
+    backend_fields = _labels(
+        catalog,
+        backend_baseline,
+        prefix + "          compiler:\n            cpp:\n              ",
+    )
+    assert "capabilities" in backend_fields
+
+    capabilities = _labels(
+        catalog,
+        capability_baseline,
+        prefix
+        + "          compiler:\n"
+        + "            cpp:\n"
+        + "              capabilities [elementwise_",
+    )
+    assert "elementwise_clzg" in capabilities
 
 
 def test_primitive_overload_completion_is_registry_backed_and_axis_scoped(

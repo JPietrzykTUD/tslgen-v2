@@ -20,6 +20,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
     - {tags [mask, and, basic], extension "avx512", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 34952}}
     - {tags [mask, and, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 204], expected 136}}
     - {tags [mask, and, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 34952}}
+    - {tags [mask, and, basic], extension "rvv", type "ui32", lane_count 4, case {inputs [10, 12], expected 8}}
   impls:
     [clang_v128, avx512]:
       arith:
@@ -41,6 +42,71 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svand_b_z>(call<primitive=mask_true[Vec]>(), mask_a, mask_b));"
+    rvv:
+      ?i8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmand, build[infix="mm", infix_sep="_", suffix="b8"]>(
+                mask_a,
+                mask_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ?i16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmand, build[infix="mm", infix_sep="_", suffix="b16"]>(
+                mask_a,
+                mask_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      [?i32, f32]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmand, build[infix="mm", infix_sep="_", suffix="b32"]>(
+                mask_a,
+                mask_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      [?i64, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmand, build[infix="mm", infix_sep="_", suffix="b64"]>(
+                mask_a,
+                mask_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
@@ -140,6 +206,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
     - {tags [mask, or, basic], extension "avx512", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 61166}}
     - {tags [mask, or, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 204], expected 238}}
     - {tags [mask, or, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 61166}}
+    - {tags [mask, or, basic], extension "rvv", type "ui32", lane_count 4, case {inputs [10, 12], expected 14}}
   impls:
     [clang_v128, avx512]:
       arith:
@@ -161,6 +228,71 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svorr_b_z>(call<primitive=mask_true[Vec]>(), mask_a, mask_b));"
+    rvv:
+      ?i8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmor, build[infix="mm", infix_sep="_", suffix="b8"]>(
+                mask_a,
+                mask_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ?i16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmor, build[infix="mm", infix_sep="_", suffix="b16"]>(
+                mask_a,
+                mask_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      [?i32, f32]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmor, build[infix="mm", infix_sep="_", suffix="b32"]>(
+                mask_a,
+                mask_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      [?i64, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmor, build[infix="mm", infix_sep="_", suffix="b64"]>(
+                mask_a,
+                mask_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
@@ -260,6 +392,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
     - {tags [mask, xor, basic], extension "avx512", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 26214}}
     - {tags [mask, xor, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 204], expected 102}}
     - {tags [mask, xor, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 26214}}
+    - {tags [mask, xor, basic], extension "rvv", type "ui32", lane_count 4, case {inputs [10, 12], expected 6}}
   impls:
     [clang_v128, avx512]:
       arith:
@@ -281,6 +414,71 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<sveor_b_z>(call<primitive=mask_true[Vec]>(), mask_a, mask_b));"
+    rvv:
+      ?i8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmxor, build[infix="mm", infix_sep="_", suffix="b8"]>(
+                mask_a,
+                mask_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ?i16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmxor, build[infix="mm", infix_sep="_", suffix="b16"]>(
+                mask_a,
+                mask_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      [?i32, f32]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmxor, build[infix="mm", infix_sep="_", suffix="b32"]>(
+                mask_a,
+                mask_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      [?i64, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmxor, build[infix="mm", infix_sep="_", suffix="b64"]>(
+                mask_a,
+                mask_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
@@ -382,6 +580,7 @@ prim<m:=m> mask_binary_not(mask):
     - {tags [mask, not, edge], extension "avx512", type "ui32", lane_count 16, case {inputs [0], expected 65535}}
     - {tags [mask, not, edge], extension "avx512", type "ui64", lane_count 8, case {inputs [0], expected 255}}
     - {tags [mask, not, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690], expected 21845}}
+    - {tags [mask, not, basic], extension "rvv", type "ui32", lane_count 4, case {inputs [10], expected 5}}
   impls:
     [clang_v128, avx512]:
       arith:
@@ -403,6 +602,67 @@ prim<m:=m> mask_binary_not(mask):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svnot_b_z>(call<primitive=mask_true[Vec]>(), mask));"
+    rvv:
+      ?i8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmnot, build[infix="m", infix_sep="_", suffix="b8"]>(
+                mask,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ?i16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmnot, build[infix="m", infix_sep="_", suffix="b16"]>(
+                mask,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      [?i32, f32]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmnot, build[infix="m", infix_sep="_", suffix="b32"]>(
+                mask,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      [?i64, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmnot, build[infix="m", infix_sep="_", suffix="b64"]>(
+                mask,
+                value(vector::runtime_length)
+              )
+            );
+          """
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
@@ -500,6 +760,10 @@ prim<usize:=m> mask_population_count(mask):
     return count
     """
   tests:
+    - {tags [mask, popcnt, basic, rvv], extension "rvv", type "ui8", expected_rule "popcnt", lane_count 16, case {inputs [43690], expected 8}}
+    - {tags [mask, popcnt, basic, rvv], extension "rvv", type "ui16", expected_rule "popcnt", lane_count 8, case {inputs [170], expected 4}}
+    - {tags [mask, popcnt, basic, rvv], extension "rvv", type "ui32", expected_rule "popcnt", lane_count 4, case {inputs [10], expected 2}}
+    - {tags [mask, popcnt, basic, rvv], extension "rvv", type "ui64", expected_rule "popcnt", lane_count 2, case {inputs [2], expected 1}}
     - {tags [mask, popcnt, basic], extension "avx512", type "ui8", expected_rule "popcnt", lane_count 64, case {inputs [12297829382473034410], expected 32}}
     - {tags [mask, popcnt, edge], extension "avx512", type "ui8", expected_rule "popcnt", lane_count 64, case {inputs [18446744073709551615], expected 64}}
     - {tags [mask, popcnt, zero], extension "avx512", type "ui8", expected_rule "popcnt", lane_count 64, case {inputs [0], expected 0}}
@@ -588,6 +852,59 @@ prim<usize:=m> mask_population_count(mask):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(scalar::size, intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
+    rvv:
+      [si8, ui8]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(intrin<vcpop, build[infix="m", infix_sep="_", suffix="b8"]>(
+              mask,
+              value(vector::runtime_length)
+            ));
+          """
+      [si16, ui16]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(intrin<vcpop, build[infix="m", infix_sep="_", suffix="b16"]>(
+              mask,
+              value(vector::runtime_length)
+            ));
+          """
+      [si32, ui32, f32]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(intrin<vcpop, build[infix="m", infix_sep="_", suffix="b32"]>(
+              mask,
+              value(vector::runtime_length)
+            ));
+          """
+      [si64, ui64, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(intrin<vcpop, build[infix="m", infix_sep="_", suffix="b64"]>(
+              mask,
+              value(vector::runtime_length)
+            ));
+          """
     generic:
       arith:
         requires []

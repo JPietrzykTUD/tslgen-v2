@@ -11,6 +11,7 @@ from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     Catalog,
     Primitive,
+    PrimitiveMaskMode,
 )
 from tslc.catalog.signatures import parse_signature
 
@@ -27,7 +28,7 @@ class SourceShapeKey:
     primitive_name: str
     result_kind: str
     param_kinds: tuple[str, ...]
-    mask_policy: str | None
+    mask_policy: PrimitiveMaskMode | None
 
     def sort_key(self) -> tuple[object, ...]:
         return (
@@ -457,7 +458,7 @@ def source_shape(primitive: Primitive) -> SourceShapeKey:
         primitive_name=primitive.name,
         result_kind=shape.result_kind,
         param_kinds=shape.param_kinds,
-        mask_policy=primitive.attributes.get("mask"),
+        mask_policy=primitive.mask_mode,
     )
 
 
@@ -505,10 +506,12 @@ def _uses_opt_in_header(
     backend_id: str = "cpp",
     variants_only: bool = False,
 ) -> bool:
+    from tslc.backend.registry import backend_capability
+
     return any(
         (not variants_only or implementation.variants)
         and (extension := catalog.extensions.get(implementation.extension)) is not None
-        and extension.header_group_for_backend(backend_id) is not None
+        and backend_capability(backend_id).extension_header_group(extension) is not None
         for implementation in primitive.implementations
     )
 

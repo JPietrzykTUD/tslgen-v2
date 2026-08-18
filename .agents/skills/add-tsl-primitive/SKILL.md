@@ -11,11 +11,19 @@ description: Add or update a TSL primitive in tsldata and the tslc compiler. Use
    `tslc/AGENTS.md`, `tslc/CHARTER.md`, and the closest existing primitive
    examples under `tsldata/primitives/`.
 2. Identify the primitive family, signatures, type groups, extension coverage, masks, immediate parameters, and value-test needs before editing.
-3. Add or update source data in `tsldata/` first. Keep source forms explicit; do not make the compiler silently repair malformed `.tsl`.
+3. Add or update source data in `tsldata/` first. Keep source forms explicit;
+   reject obsolete forms immediately rather than preserving aliases or silently
+   repairing malformed `.tsl`.
 4. If the current parser/catalog/schema does not accept the needed shape, add
    typed validation and promotion through the shared syntax accessors, parameter
-   type vocabulary, and region syntax at the parser/catalog boundary.
-5. If selection or lowering needs new behavior, add typed domain/lowering values. Avoid raw string rewrites and avoid leaking dictionaries past catalog boundaries.
+   type vocabulary, and region syntax at the parser/catalog boundary. Pointer
+   overrides use exact `ptr(...)` / `cptr(...)` expressions; address intent uses
+   `address<of|borrow_mut>` rather than raw C++/Rust address tokens.
+5. If selection or lowering needs new behavior, add typed domain/lowering
+   values. Avoid raw string rewrites and avoid leaking dictionaries past catalog
+   boundaries. Compiler-specific alternatives use semantic capability-selected
+   implementations plus an unconditional fallback, never raw preprocessor
+   selection in implementation text.
 6. If rendering or value tests need support, add backend capability checks before render-time surprises.
 7. When a schema, selector, region, or query vocabulary changes, also use
    `extend-tslc-authoring` and prove completion/index/query projection from the

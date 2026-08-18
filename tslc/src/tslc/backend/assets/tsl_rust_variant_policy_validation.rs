@@ -23,7 +23,7 @@ pub(crate) fn validate_descriptor(
     }
     if descriptor.backend != BACKEND_ID
         || descriptor.profile != profile.name
-        || descriptor.profile_family != "x86"
+        || descriptor.profile_family != profile.family
         || descriptor.benchmark_codegen_contract != context.benchmark_codegen_contract
     {
         return Err(

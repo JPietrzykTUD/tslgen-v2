@@ -7,6 +7,9 @@ def chunks($n):
   . as $items
   | [range(0; length; $n) as $i | $items[$i:($i + $n)]];
 
+def supports_backend($backend):
+  ((.supported_backends // ["cpp", "rust"]) | index($backend)) != null;
+
 def auto_detect_gate:
   .auto_detect_gate // "";
 
@@ -21,8 +24,18 @@ def profile_shards($backend; $name; $profiles; $chunk_size):
     };
 
 def backend_profile_shards($name; $profiles):
-  profile_shards("cpp"; $name; $profiles; cpp_profile_chunk_size),
-  profile_shards("rust"; $name; $profiles; rust_profile_chunk_size);
+  profile_shards(
+    "cpp";
+    $name;
+    [$profiles[] | select(supports_backend("cpp"))];
+    cpp_profile_chunk_size
+  ),
+  profile_shards(
+    "rust";
+    $name;
+    [$profiles[] | select(supports_backend("rust"))];
+    rust_profile_chunk_size
+  );
 
 def rust_coexistence_shard:
   {

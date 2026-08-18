@@ -12,17 +12,22 @@ description: Add a target extension or machine-profile family through TSL source
    Inspect the closest extension family, target family, and machine profiles.
 2. Define the target contract before editing: extension/family names, vector
    width model, inheritance/superseding, supported backends, feature and compile
-   modes, profile selection, target triples/flags, headers/modules, and runner.
+   modes, profile selection, build fallback/auto-detection roles, target
+   triples/flags, headers/modules, and runner.
 3. Update only the source-owned surfaces required by the contract:
    `tsldata/detail/target_families.tsl` for family roles, accepted features,
    compiler spellings, and documentation facts;
    `tsldata/extensions/extension.tsl` for extension metadata; and
-   `supplementary/buildsystem/machine_profiles.json` for profile instances or
+   `supplementary/buildsystem/machine_profiles.json` for profile instances,
+   explicit `default_build_fallback` / semantic `auto_detect_gate` roles, or
    genuine profile overrides. A feature-, compile-mode-, or profile-only change
    need not edit all three. Do not branch on the new name in generic stages.
 4. Add typed catalog/schema/backend support only for concepts the current model
-   cannot express. Keep selection and lowering driven by source capabilities;
-   keep target syntax and intrinsic composition backend-owned. Add backend
+   cannot express. Keep selection and lowering driven by source capabilities.
+   Declare intrinsic order and explicit-suffix policy through
+   `intrinsic_compose`; obsolete style tags are errors. Source may request a
+   semantic compiler capability, but concrete compiler IDs, probes, macros,
+   diagnostics, and header groups stay in its backend registry. Add backend
    query leaves through `query_value::<namespace>::<name>` translation data so
    lowering and authoring discover a namespace without generic resolver edits.
 5. Prove one small primitive/type slice through selection, lowering, rendering,
@@ -44,6 +49,8 @@ description: Add a target extension or machine-profile family through TSL source
   implementations, and tests rather than new name classifiers.
 - Unsupported backend/profile/type combinations must remain explicit.
 - Templates must format typed decisions, not infer target semantics.
+- Family/profile behavior must use typed roles; synthetic renamed-family and
+  renamed-profile tests should keep generic consumers unchanged.
 - Update coverage ratchets only after generated build/value behavior is stable
   and the task explicitly authorizes baseline changes.
 

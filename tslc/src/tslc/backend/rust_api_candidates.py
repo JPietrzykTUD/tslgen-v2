@@ -23,7 +23,7 @@ from tslc.catalog.conversion import (
     NumericConversionMode,
 )
 from tslc.catalog.memory import MemoryAccess, MemoryAddressing
-from tslc.catalog.model import Extension, VectorBitsKind
+from tslc.catalog.model import Extension, PrimitiveMaskMode, VectorBitsKind
 from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.diagnostics import Diagnostic, diagnostic_at
@@ -51,7 +51,7 @@ class _CandidateKey:
     ] | None
     memory: tuple[MemoryAccess, MemoryAddressing] | None
     has_concrete_target: bool
-    mask_policy: str | None
+    mask_policy: PrimitiveMaskMode | None
     overload: tuple[str, str, bool] | None
     operation: PrimitiveOperation | None
     operation_roles: tuple[tuple[OperandRole, int, str], ...]

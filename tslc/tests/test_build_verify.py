@@ -153,11 +153,17 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
                   tsl::dataparallel::clang_fixed<4>, float>;
               using WideVec = tsl::dataparallel::simd_for_t<
                   tsl::dataparallel::clang_fixed<64>, std::uint8_t>;
+              using SmallVec = tsl::dataparallel::simd_for_t<
+                  tsl::dataparallel::clang_fixed<2>, double>;
 #if __has_feature(ext_vector_type_boolean)
               using BoolVec = tsl::dataparallel::simd_for_t<
                   tsl::dataparallel::clang_fixed<
                       4, tsl::dataparallel::clang_mask::boolean_vector>,
                   std::int32_t>;
+              using BoolSmallVec = tsl::dataparallel::simd_for_t<
+                  tsl::dataparallel::clang_fixed<
+                      2, tsl::dataparallel::clang_mask::boolean_vector>,
+                  double>;
 #endif
               Vec::register_type left = {1, 2, 3, 4};
               Vec::register_type right = {4, 3, 2, 1};
@@ -181,6 +187,8 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
               auto float_magnitude = tsl::abs<FloatVec>(float_abs_input);
               constexpr std::uint64_t wide_bits = 0x8000000000000001ull;
               auto wide = tsl::to_mask<WideVec>(wide_bits);
+              auto small = tsl::to_mask<SmallVec>(
+                  static_cast<SmallVec::imask_type>(0xff));
 #if __has_feature(ext_vector_type_boolean)
               BoolVec::register_type bool_left = {1, 2, 3, 4};
               BoolVec::register_type bool_right = {1, 0, 3, 0};
@@ -194,6 +202,8 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
               auto bool_different = tsl::mask_binary_xor<BoolVec>(bool_equal, bool_odd);
               auto bool_inverted = tsl::mask_binary_not<BoolVec>(bool_equal);
               auto bool_blended = tsl::select<BoolVec>(bool_odd, bool_right, bool_left);
+              auto bool_small = tsl::to_mask<BoolSmallVec>(
+                  static_cast<BoolSmallVec::imask_type>(0xff));
 #endif
               return sum[0] == 5 && sum[3] == 5 &&
                              magnitude[0] == 1 && magnitude[1] == INT32_MIN &&
@@ -214,7 +224,11 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
                              float_magnitude[2] == 2.0f &&
                              float_magnitude[3] == 3.25f &&
                              tsl::to_integral<WideVec>(wide) == wide_bits &&
+                             tsl::to_integral<SmallVec>(small) == 0b11 &&
+                             tsl::mask_population_count<SmallVec>(small) == 2 &&
 #if __has_feature(ext_vector_type_boolean)
+                             tsl::to_integral<BoolSmallVec>(bool_small) == 0b11 &&
+                             tsl::mask_population_count<BoolSmallVec>(bool_small) == 2 &&
                              bool_magnitude[0] == 1 &&
                              bool_magnitude[1] == INT32_MIN &&
                              bool_magnitude[2] == 3 && bool_magnitude[3] == 4 &&
@@ -2950,6 +2964,35 @@ def test_to_ostream_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_rvv_remaining_primitive_coverage_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    compiler = shutil.which("riscv64-linux-gnu-g++")
+    if compiler is None:
+        pytest.skip("riscv64-linux-gnu-g++ is required")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_rvv_remaining_primitive_coverage_builds"),
+        profiles=["rvv"],
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        tool_paths={"riscv-cpp": compiler},
+    )
+    if not report.commands:
+        pytest.skip(f"RVV cross-build tools unavailable: {report.skipped}")
+    assert report.diagnostics == (), report.diagnostics
 
 
 def test_full_corpus_builds(

@@ -38,6 +38,11 @@ class VerifyProfile:
     target_features: tuple[str, ...] = ()
     target: str | None = None
     linker: str | None = None
+    compiler_role: str | None = None
+    cmake_system_name: str | None = None
+    cmake_system_processor: str | None = None
+    pass_target_to_compiler: bool = True
+    preflight_headers: tuple[str, ...] = ()
     # Optional runner profile used to run value tests for this profile.
     runner: VerifyRunner | None = None
     compile_failures: tuple[VerifyCompileFailure, ...] = ()
@@ -62,6 +67,7 @@ class BackendToolchain:
     compiler: tuple[str, ...] | None = None
     target: str | None = None
     linker: str | None = None
+    compiler_capabilities: tuple[str, ...] = ()
 
     @classmethod
     def create(
@@ -70,11 +76,13 @@ class BackendToolchain:
         compiler: str | Sequence[str] | None = None,
         target: str | None = None,
         linker: str | None = None,
+        compiler_capabilities: Sequence[str] = (),
     ) -> "BackendToolchain":
         return cls(
             compiler=_normalize_compiler_command(compiler),
             target=_normalize_compiler_executable(target),
             linker=_normalize_compiler_executable(linker),
+            compiler_capabilities=_normalize_capabilities(compiler_capabilities),
         )
 
 
@@ -203,6 +211,15 @@ def _normalize_compiler_command(compiler: str | Sequence[str] | None) -> tuple[s
     else:
         normalized = tuple(str(part) for part in compiler)
     return normalized or None
+
+
+def _normalize_capabilities(capabilities: Sequence[str]) -> tuple[str, ...]:
+    normalized = {
+        str(capability).strip()
+        for capability in capabilities
+        if str(capability).strip()
+    }
+    return tuple(sorted(normalized))
 
 
 def _normalize_compiler_executable(compiler: str | None) -> str | None:

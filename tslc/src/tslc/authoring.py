@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 
-from tslc.backend.registry import registered_backend_ids
+from tslc.backend.registry import (
+    registered_backend_ids,
+    registered_compiler_capabilities,
+)
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.model import Catalog
 from tslc.catalog.validation import validate_catalog
@@ -233,6 +236,7 @@ def check_parsed_documents(
             parsed,
             required_backends=required_backends,
             supported_backends=registered_backend_ids(),
+            compiler_capabilities=registered_compiler_capabilities(),
         )
     )
     catalog = None if has_errors(diagnostics) else built.catalog

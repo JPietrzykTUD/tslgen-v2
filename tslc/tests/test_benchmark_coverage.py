@@ -13,6 +13,7 @@ from tslc.api import generate_project
 from tslc.backend.rust_policy_consumption import (
     plan_rust_policy_coverage,
 )
+from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
 from tslc.benchmark.model import BenchmarkProjectPlan
 from tslc.catalog.model import Catalog
@@ -34,6 +35,9 @@ from tslc.maintenance.benchmark_coverage import (
 )
 from tslc.maintenance.rust_benchmark_evidence import RustBenchmarkEvidence
 from tslc.pipeline import SkippedEntry
+
+RUST_POLICY_MANIFEST = load_rust_policy_manifest()
+
 
 
 @pytest.fixture(scope="module")
@@ -73,7 +77,9 @@ def _rust_audit(catalog: Catalog, result, *, plan=None):
     benchmarks = result.rendered.benchmarks if plan is None else plan
     policy_coverage = plan_rust_policy_coverage(
         benchmarks,
-        plan_rust_policy_selection(result.emitted_profiles),
+        plan_rust_policy_selection(
+            result.emitted_profiles, RUST_POLICY_MANIFEST
+        ),
     )
     return audit_benchmark_coverage(
         catalog,
@@ -408,7 +414,9 @@ def test_rust_audit_detects_planner_slot_identity_drift(
 ) -> None:
     result = focused_rust_benchmark_result
     plan = result.rendered.benchmarks
-    selection = plan_rust_policy_selection(result.emitted_profiles)
+    selection = plan_rust_policy_selection(
+        result.emitted_profiles, RUST_POLICY_MANIFEST
+    )
     policy_coverage = plan_rust_policy_coverage(plan, selection)
     baseline_audit = _rust_audit(catalog, result)
     baseline = rust_benchmark_coverage_baseline(baseline_audit)
@@ -497,7 +505,9 @@ def test_rust_policy_gap_issue_baseline_round_trips(
 ) -> None:
     result = focused_rust_benchmark_result
     plan = result.rendered.benchmarks
-    selections = plan_rust_policy_selection(result.emitted_profiles)
+    selections = plan_rust_policy_selection(
+        result.emitted_profiles, RUST_POLICY_MANIFEST
+    )
     supported_key = next(
         selection.key
         for profile in selections.profiles
@@ -726,6 +736,12 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
     tmp_path: Path,
 ) -> None:
     catalog = SimpleNamespace(target_families=object())
+    eligible_profile = SimpleNamespace(
+        supports_backend=lambda backend_id: backend_id == "rust"
+    )
+    ineligible_profile = SimpleNamespace(
+        supports_backend=lambda backend_id: backend_id == "cpp"
+    )
     monkeypatch.setattr(
         benchmark_coverage_module,
         "_load_catalog",
@@ -735,7 +751,11 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
         benchmark_coverage_module,
         "load_machine_profiles_checked",
         lambda _path, _families: SimpleNamespace(
-            profiles={"left": object(), "right": object()},
+            profiles={
+                "cpp-only": ineligible_profile,
+                "left": eligible_profile,
+                "right": eligible_profile,
+            },
             diagnostics=(),
         ),
     )
@@ -769,8 +789,9 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
     )
     policy_inputs: dict[str, object] = {}
 
-    def fake_policy_selection(emitted_profiles):
+    def fake_policy_selection(emitted_profiles, manifest):
         policy_inputs["emitted"] = emitted_profiles
+        policy_inputs["manifest"] = manifest
         return "selection"
 
     def fake_policy_coverage(benchmarks, selection):
@@ -805,7 +826,7 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
     audit, errors = compute_benchmark_coverage_audit(
         sources=tmp_path,
         machine_profiles=tmp_path / "profiles.json",
-        profiles=("right", "left"),
+        profiles=None,
         types=("si8",),
         backend_id="rust",
     )
@@ -826,3 +847,37 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
     assert tuple(item.profile.name for item in emitted) == ("left", "right")
     assert policy_inputs["selection"] == "selection"
     assert policy_inputs["benchmarks"] is merged
+
+
+def test_rust_benchmark_audit_rejects_explicit_backend_ineligible_profile(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    catalog = SimpleNamespace(target_families=object())
+    ineligible_profile = SimpleNamespace(
+        supports_backend=lambda backend_id: backend_id == "cpp"
+    )
+    monkeypatch.setattr(
+        benchmark_coverage_module,
+        "_load_catalog",
+        lambda _sources, _backend_id: (catalog, ()),
+    )
+    monkeypatch.setattr(
+        benchmark_coverage_module,
+        "load_machine_profiles_checked",
+        lambda _path, _families: SimpleNamespace(
+            profiles={"cpp-only": ineligible_profile},
+            diagnostics=(),
+        ),
+    )
+
+    audit, errors = compute_benchmark_coverage_audit(
+        sources=tmp_path,
+        machine_profiles=tmp_path / "profiles.json",
+        profiles=("cpp-only",),
+        types=("si8",),
+        backend_id="rust",
+    )
+
+    assert audit is None
+    assert errors == ("machine profile(s) cpp-only do not support backend 'rust'",)

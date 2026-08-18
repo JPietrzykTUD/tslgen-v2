@@ -29,3 +29,4 @@ readme = "README.md"
 # remove per host. Missing tools become recorded verification skips.
 oneapi-cpp = "/opt/intel/oneapi/compiler/2025.0/bin/icpx"
 wasi-cpp = "/opt/wasi-sdk/bin/clang++"
+riscv-cpp = "/usr/bin/riscv64-linux-gnu-g++"

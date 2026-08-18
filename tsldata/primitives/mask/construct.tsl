@@ -15,6 +15,7 @@ prim<m:=()>[value=zero] mask_false():
     - {tags [false], extension "avx512", type "ui32", lane_count 16, case {inputs [], expected 0}}
     - {tags [false], extension "avx512", type "ui64", lane_count 8, case {inputs [], expected 0}}
     - {tags [false], extension "sve", type "ui32", lane_count 16, case {inputs [], expected 0}}
+    - {tags [false], extension "rvv", type "ui32", lane_count 4, case {inputs [], expected 0}}
   impls:
     [clang_v128, avx512, avx2_vl, sse_vl]:
       arith:
@@ -52,6 +53,63 @@ prim<m:=()>[value=zero] mask_false():
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svpfalse_b>());"
+    rvv:
+      ?i8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmclr, build[infix="m", infix_sep="_", suffix="b8"]>(
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ?i16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmclr, build[infix="m", infix_sep="_", suffix="b16"]>(
+                value(vector::runtime_length)
+              )
+            );
+          """
+      [?i32, f32]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmclr, build[infix="m", infix_sep="_", suffix="b32"]>(
+                value(vector::runtime_length)
+              )
+            );
+          """
+      [?i64, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmclr, build[infix="m", infix_sep="_", suffix="b64"]>(
+                value(vector::runtime_length)
+              )
+            );
+          """
     wasm128:
       arith:
         requires [simd128]
@@ -98,6 +156,7 @@ prim<m:=()>[value=all] mask_true():
     - {tags [true], extension "avx512", type "ui32", lane_count 16, case {inputs [], expected 65535}}
     - {tags [true], extension "avx512", type "ui64", lane_count 8, case {inputs [], expected 255}}
     - {tags [true], extension "sve", type "ui32", lane_count 16, case {inputs [], expected 65535}}
+    - {tags [true], extension "rvv", type "ui32", lane_count 4, case {inputs [], expected 15}}
   impls:
     [clang_v128, avx512, avx2_vl, sse_vl]:
       arith:
@@ -175,6 +234,63 @@ prim<m:=()>[value=all] mask_true():
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svptrue_b64>());"
+    rvv:
+      ?i8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmset, build[infix="m", infix_sep="_", suffix="b8"]>(
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ?i16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmset, build[infix="m", infix_sep="_", suffix="b16"]>(
+                value(vector::runtime_length)
+              )
+            );
+          """
+      [?i32, f32]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmset, build[infix="m", infix_sep="_", suffix="b32"]>(
+                value(vector::runtime_length)
+              )
+            );
+          """
+      [?i64, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmset, build[infix="m", infix_sep="_", suffix="b64"]>(
+                value(vector::runtime_length)
+              )
+            );
+          """
     wasm128:
       arith:
         requires [simd128]

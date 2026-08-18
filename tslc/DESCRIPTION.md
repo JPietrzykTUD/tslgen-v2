@@ -28,7 +28,10 @@ build, not by the number of internal abstractions.
 ## The pipeline
 
 The compiler is a pure function once source data and static compiler assets are
-loaded, orchestrated in [pipeline.py](src/tslc/pipeline.py):
+loaded, orchestrated in [pipeline.py](src/tslc/pipeline.py). Typed generation
+requests and their cross-field validation live in
+[pipeline_request.py](src/tslc/pipeline_request.py), separate from the mutable
+per-run orchestration session:
 
 ```
 sources + compiler assets → parse → catalog → select → scan body → lower → finalize names → validate/plan → render → write → verify
@@ -74,8 +77,13 @@ Editor overlays use that same boundary through
 reparses changed buffers and reuses unchanged documents; a per-document
 [catalog index](src/tslc/catalog_index.py) similarly reuses unchanged source
 fragments before deterministic full-catalog validation publishes a new
-snapshot. Symbols, references, hover, completion, and semantic tokens are pure
-projections of the latest successful catalog/index. Hierarchical document
+snapshot. The façade builds and caches indexes; immutable query records live in
+[catalog_index_model.py](src/tslc/catalog_index_model.py), semantic source
+occurrence construction in
+[catalog_occurrences.py](src/tslc/catalog_occurrences.py), and hover
+presentation in [catalog_hover.py](src/tslc/catalog_hover.py). Symbols,
+references, hover, completion, and semantic tokens are pure projections of the
+latest successful catalog/index. Hierarchical document
 symbols and registry-backed semantic token facts are built separately in
 [catalog_authoring_index.py](src/tslc/catalog_authoring_index.py); the core
 index retains resolvable catalog occurrences, including individual list
@@ -91,15 +99,20 @@ target axes are recognized by name and `where` constraint levels are never
 indexed as type groups. The parsed-source boundary
 in [syntax/authoring.py](src/tslc/syntax/authoring.py) constructs a typed cursor
 context from declaration, field, selector, map, list, and value spans. Inside
-TSIL payloads it uses the recursive scanner's cursor spans to retain enclosing
-region paths and distinguish region boundaries, selector shells, and raw text;
-its outer-language fallback reads only the active incomplete line. Schema- and
-registry-backed
-[authoring_completion.py](src/tslc/authoring_completion.py) returns typed
-completion records with replacement ranges, snippets, details, and stable
-ordering for the LSP adapter. Region-shell terms and option bags come from the
-same authoring descriptors as registered region keywords, while catalog-backed
-providers supply primitive and backend-translation names. Typed query
+TSIL payloads it uses the tolerant projection in
+[ir/cursor.py](src/tslc/ir/cursor.py), which shares lexical rules with the
+recursive scanner through [ir/lexical.py](src/tslc/ir/lexical.py), to retain
+enclosing region paths and distinguish region boundaries, selector shells, and
+raw text. Its outer-language fallback reads only the active incomplete line.
+Schema- and registry-backed
+[authoring_completion.py](src/tslc/authoring_completion.py) orchestrates typed
+completion records from
+[authoring_completion_model.py](src/tslc/authoring_completion_model.py).
+TSIL query and region-shell completion lives in the focused
+[authoring_tsil_completion.py](src/tslc/authoring_tsil_completion.py).
+Region-shell terms and option bags come from the same authoring descriptors as
+registered region keywords, while catalog-backed providers supply primitive
+and backend-translation names. Typed query
 completion is a pure projection of the evaluator function descriptors and
 closed leaf namespaces in
 [lower/query_authoring.py](src/tslc/lower/query_authoring.py); lexical scanner
@@ -149,10 +162,12 @@ profile mode. It owns authored, selected, profile-rejected, missing, and
 backend-unsupported slot states plus callable identity (signature and sorted
 primitive attributes), concrete representation-target identity, implementation
 origins, and source spans from the same catalog, selector, support-policy view,
-and index. A resolved callable-and-target slot has one selected source body, so
-editor navigation opens it directly; authored candidate bodies remain explicit
-when no profile has selected a winner. Preview and analysis forward that exact
-target instead of merging base- and extension-target specializations. Direct
+and index. A resolved callable-and-target slot projects either one exact source
+body or the automatic compiler-capability frontier over its fallback; every
+selected source span remains explicit for navigation. Authored candidate bodies
+remain explicit when no profile has selected a winner. Preview and analysis
+forward that exact target instead of merging base- and extension-target
+specializations. Direct
 Calls/Called By relationships
 are indexed from registered `call` regions. The VS Code tree providers render
 those typed facts and never reconstruct selector or dependency rules.
@@ -165,12 +180,15 @@ client owns only cancellable execution, complete-context caching, stale-state
 presentation, and source navigation. Lookup refreshes never collect this trace
 or start analysis.
 Concrete preview runs `tslc preview` as a separate saved-file child. It uses
-one loaded input snapshot for selection, lowering, and dependency closure, then
-passes the requested emitted specialization through the registered backend's
-normal primitive renderer. An optional compiler source point restricts the
-result to lowered specializations originating in that exact authored selector,
-which lets editor CodeLens previews avoid merging overloads or other source
-bodies with the same primitive name. Concrete wildcard-attribute
+one loaded input snapshot for selection, lowering, dependency closure, and
+backend policy, then passes the requested emitted specialization through the
+registered backend's normal primitive renderer. Its reported input digest
+includes the canonical backend-policy fingerprint, so a policy change cannot
+silently alter output under an unchanged snapshot identity. An optional
+compiler source point restricts the result to lowered specializations
+originating in that exact authored selector, which lets editor CodeLens
+previews avoid merging overloads or other source bodies with the same primitive
+name. Concrete wildcard-attribute
 variants that share that selector intentionally remain grouped. It does not
 load project render assets, plan tests or benchmarks, write a generated
 project, or invoke a toolchain. `tslc explain` remains the detailed
@@ -196,12 +214,39 @@ prim<v:=(v,v)> add(left, right):
         implementation:
           tsil "complete(intrin<add, build[suffix=base::signed_of(base::in)]>(left, right));"
 ```
+- **Implementation requirements**: target-machine features and backend compiler
+  capabilities are separate typed axes. Legacy `requires [feature]` and scoped
+  feature maps remain valid; the expanded `requires.target_features` form makes
+  the hardware axis explicit. `requires.compiler.<backend>.capabilities` names
+  backend-owned compiler facts; extension availability and opt-in header groups
+  use the same capability IDs. The generic registry mechanics live in
+  [backend/capability.py](src/tslc/backend/capability.py), while each backend
+  owns its complete concrete evidence (for C++,
+  [backend/cpp_compiler_capabilities.py](src/tslc/backend/cpp_compiler_capabilities.py)).
+  Compiler families, feature-test names, macros, diagnostics, header groups,
+  and probes do not live in source data. Explicit capability inputs
+  select one fixed winner for focused
+  authoring and pinned-toolchain workflows. Ordinary project generation retains
+  the capability winner frontier over an unconditional fallback in one lowered
+  specialization. The C++ project renderer emits backend-owned compile probes,
+  exports their results as target compile definitions, and renders local
+  preprocessor branches around the alternative bodies. Hardware-profile
+  selection and compiler-capability probing therefore remain independent.
+  C++ compiler option families, runtime-probe programs, overlay compiler sets,
+  and overlay enable macros are finalized in the backend-owned
+  [backend/cpp_profile_model.py](src/tslc/backend/cpp_profile_model.py) snapshot;
+  [render/cpp_build.py](src/tslc/render/cpp_build.py) only formats those values.
 
 - **Signatures** (`v:=(v,v)`): `v` vector, `m` mask, `im` integral mask, `s`
   scalar, `ptr`/`usize` (presence makes it a free function), `lanes<s>` a lane
   list. Representation changes may use target-owned operands such as `vt`
   (target register) and `imt` (target integral mask); a target result projects
   the declared result kind through the target vector.
+- **Primitive attribute semantics**: closed `cast`, `mask`, and `value`
+  spellings are promoted once into `PrimitiveCastMode`, `PrimitiveMaskMode`,
+  and `PrimitiveValueMode`. Selection, lowering, dependency closure, benchmark
+  inventory, and value-test planning consume those typed fields rather than
+  comparing raw attribute strings or recognizing primitive names.
 - **Type-group keys**: `?i?` (any int), `f?` (any float), `arith` (all), plus
   concrete tags. Ranked by **specificity** — `si32` beats `?i?` beats `arith`.
 - **Extension fallback**: extensions form `inherits` chains (e.g. `avx2_vl →
@@ -211,12 +256,25 @@ prim<v:=(v,v)> add(left, right):
   source-named extension families—fallback classification, free-function
   ownership, declared-register requirements, and index-vector support—and for
   profile families, including whether a profile runs natively without an
-  emulator and each backend's explicit target architecture/toolchain facts. It
-  also owns documentation family/order labels and the catalog of accepted
+  emulator, whether runtime failures can be observed, and each backend's
+  explicit target architecture/toolchain facts. Source selects an optional
+  backend detection strategy ID; the backend registry owns its concrete target
+  syntax, feature-test macros, validation, and probes. It also owns
+  documentation family/order labels and the catalog of accepted
   target features plus their default/backend compiler spellings;
   machine profiles retain only genuine profile-specific overrides. Selection,
   lowering, translation, documentation, and verification consume those typed
-  roles instead of recognizing family or feature-name patterns.
+  roles instead of recognizing family or feature-name patterns. Documentation
+  target classes combine that declared family label with scalar, lane-count,
+  numeric-bit-width, scalable, or explicitly declared width facts; the renderer
+  does not recognize concrete family or extension identities.
+- **Profile build roles**: a machine profile may declare
+  `default_build_fallback` and a semantic `auto_detect_gate`. Exactly one
+  ungated fallback is accepted. The C++ detection registry
+  ([backend/cpp_detection.py](src/tslc/backend/cpp_detection.py)) maps gate IDs
+  to CMake modes, helper functions, and packaged assets before render-model
+  construction; renderers never infer compiler selection from a compile-mode or
+  profile-name literal.
 - **Semantic overloads**: `overload_axes:` declares closed axes, values, and
   accepted operand signature kinds in source data. A primitive `overload`
   block selects one axis/value and may mark its source declaration primary.
@@ -290,10 +348,18 @@ prim<v:=(v,v)> add(left, right):
   `dataparallel::simd_for_t<fixed<N>, T>`. Their `comparison_lane_vector` mask
   policy derives `mask_type` from Clang's exact vector-comparison result. Direct
   mask operations retain all-one/all-zero lane semantics, while
-  `to_integral`/`to_mask` form the representation-safe bridge to hardware masks;
-  mask objects are never assumed bit-cast-compatible. The dense boolean mask is
-  not assumed to map to a hardware predicate register, and its explicit policy
-  keeps that performance choice benchmarkable without changing the default.
+  `to_integral`/`to_mask` form the representation-safe bridge to hardware
+  masks. On little-endian Clang toolchains that provide Boolean extended vectors
+  and `__builtin_convertvector`, a generated compiler-capability branch converts
+  comparison masks through a dense Boolean vector and bit-casts only that
+  one-bit-per-lane representation to the integral mask. The inverse path
+  normalizes unused high bits before the bit-cast and converts Boolean lanes back
+  to canonical all-zero/all-one comparison lanes. Dense Boolean masks use the
+  same normalized bit bridge directly. Other toolchains and byte orders retain
+  the representation-independent lane loop, so arbitrary comparison mask
+  objects are never assumed bit-cast-compatible. The dense boolean mask is not
+  assumed to map to a hardware predicate register, and its explicit policy keeps
+  that performance choice benchmarkable without changing the default.
   Rust does not emit these
   compiler-builtin extensions: stable Rust's SIMD surface is the
   architecture-specific `core::arch`, while its analogous portable
@@ -314,15 +380,19 @@ recursive `tuple[Segment, ...]`:
 - **`RawText`** — target source, passed through verbatim; line and block comments
   are opaque to the keyword scanner (including nested Rust block comments);
 - **`Region`** — a recognized keyword island whose `<...>` shell is parsed by
-  syntax-only helpers in [ir/region_syntax.py](src/tslc/ir/region_syntax.py) and
-  whose `(...)` payload is recursively scanned.
+  syntax-only helpers in [ir/region_syntax.py](src/tslc/ir/region_syntax.py)
+  and [ir/query_syntax.py](src/tslc/ir/query_syntax.py), and whose `(...)`
+  payload is recursively scanned.
 
 `let<type>(Name, ...)` creates a typed lowering binding rather than a target-language
 declaration. TSIL-owned type positions resolve it directly, for example
 `cast<static>(Name, value)` or `var<typed>(Name, local, init)`. Use `type(Name)` only
-to insert its spelling into otherwise raw target text. A bare `Name` inside `RawText`
-is ordinary target text and is never searched or rewritten, including in comments,
-literals, and Rust lifetimes.
+to insert its spelling into otherwise raw target text. Bare names inside `RawText`
+are ordinary target text and are never searched or rewritten, including in comments,
+literals, and Rust lifetimes. The one narrow, non-rewriting identity check is owned by
+the existing `complete` region: a payload whose complete trimmed text exactly equals
+a declared primitive parameter is classified as a direct parameter return. Parentheses,
+comments, local names, operators, and every other raw expression remain opaque.
 
 The descriptor registry
 ([ir/region_registry.py](src/tslc/ir/region_registry.py)) is the lexical and
@@ -356,13 +426,21 @@ free-function primitive follows a separate path and returns the first usable
 declaration-owning extension slot in established profile order, because its
 rendered declaration has no SIMD axis.
 
-The [Lowerer](src/tslc/lower/lowerer.py) walks the segments for one
+The [Lowerer](src/tslc/lower/lowerer.py) orchestrates one
 `(primitive, extension, type, backend)` slot → a `LoweredSpecialization`
 (concrete type spellings, register type, body text, mask policy, safety,
-required target features). Region handlers
+required target features). The frozen lowered records live in
+[lower/model.py](src/tslc/lower/model.py), cached catalog-derived facts in
+[lower/catalog_facts.py](src/tslc/lower/catalog_facts.py), and typed public
+parameter projection in [lower/param_types.py](src/tslc/lower/param_types.py).
+Region handlers
 ([lower/region_handlers/](src/tslc/lower/region_handlers/)) translate each
 keyword; a query evaluator ([lower/queries.py](src/tslc/lower/queries.py))
 resolves the `<...>` selectors.
+
+Address intent is a typed `address<of|borrow_mut>(...)` TSIL region. Pointer
+casts consume that region or an ordinary pointer-valued expression; common
+lowering never parses C++ `&` or Rust `&mut` tokens from `RawText`.
 
 Successful `call<...>` lowering records typed dependency origins using the same
 query evaluator and live generation-time control flow that produced the body.
@@ -400,8 +478,11 @@ spellings, intrinsic composition, call syntax, and unsafe framing). The
 [backend registry](src/tslc/backend/registry.py) owns each backend's dialect
 factory, artifact media type, complete artifact renderer, documentation
 formatter, validation, helper manifest, value-test support, optional benchmark
-planner, verification adapter, and
-post-generation formatting/documentation specs. Signature type
+planner, verification adapter, and post-generation formatting/documentation
+specs. C++ and Rust machine-profile verification projections live in
+[backend/cpp_verification.py](src/tslc/backend/cpp_verification.py) and
+[backend/rust_verification.py](src/tslc/backend/rust_verification.py);
+render modules only format their already-decided project models. Signature type
 projection machinery and the concrete C++/Rust projection tables are co-located
 in [backend/signature_types.py](src/tslc/backend/signature_types.py), then shared
 by function emitters and documentation formatting. They are backend-owned facts,
@@ -422,7 +503,12 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
 - **C++** — `*_impl<Vec>` struct partial-specializations + wrapper function
   templates ([backend/cpp.py](src/tslc/backend/cpp.py)).
 - **Rust** — traits + impls + turbofish wrappers, explicit `unsafe {}` framing,
-  `core::arch` intrinsic qualification ([backend/rust.py](src/tslc/backend/rust.py)).
+  and `core::arch` intrinsic qualification. The
+  [backend/rust.py](src/tslc/backend/rust.py) façade owns orchestration;
+  [backend/rust_signatures.py](src/tslc/backend/rust_signatures.py),
+  [backend/rust_direct_calls.py](src/tslc/backend/rust_direct_calls.py), and
+  [backend/rust_documentation_api.py](src/tslc/backend/rust_documentation_api.py)
+  own signature projection, direct-call rendering, and documentation API text.
   Generated rustdoc uses a `cfg(doc)` profile-neutral facade containing one
   public signature per emitted Rust primitive; concrete profile availability
   stays in the specialization explorer, while normal builds select their
@@ -435,12 +521,20 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   with an asset-consistency test preventing drift.
 
 The ordinary Rust API is finalized before source rendering by the frozen records
-in [backend/rust_api_model.py](src/tslc/backend/rust_api_model.py) and focused
+in [backend/rust_api_model.py](src/tslc/backend/rust_api_model.py), the
+cross-record invariants in
+[backend/rust_api_model_validation.py](src/tslc/backend/rust_api_model_validation.py),
+the joined semantic-and-call inventory in
+[backend/rust_api_core.py](src/tslc/backend/rust_api_core.py), and focused
 candidate, comprehensive, curated, and surface planners under `backend/rust_api_*`.
 The public
 [backend/rust_api_planner.py](src/tslc/backend/rust_api_planner.py)
 orchestrates those projections directly and preserves the compiler-facing
-planning and validation API.
+planning and validation API. The frozen plan owns its cross-record invariant
+and invokes the focused validator on construction. The validator depends at
+runtime only on shared facade enum vocabulary and semantic operations; model
+and arm types are type-checking-only dependencies, so plan replacement remains
+validated without a runtime import cycle.
 That projection combines lowered language-neutral operation, operand-role,
 overload, conversion, and safety contracts with static fixed-shape selection.
 It owns Rust receiver placement, const/type-parameter spelling, method suffixes,
@@ -485,11 +579,29 @@ standalone native benchmark/policy tool. Rust admits scenario coverage through
 explicit named `profile × scenario-family` pairs while deriving profile family,
 features, spellings, modes, and flags from the live machine profile. It renders
 the `sse2` register and immediate families plus `avx2` one-vector scalar
-reductions as standard-library-only custom Cargo benchmarks. The
-compiler-cfg-gated hot loop lives inside the library crate, and a thin
+reductions as standard-library-only custom Cargo benchmarks. Native feature
+detection consumes the profile family's typed strategy ID; concrete Rust
+`target_arch` and feature-test macro spellings live in
+[backend/rust_benchmark_detection.py](src/tslc/backend/rust_benchmark_detection.py),
+not in profile-family-name branches. The compiler-cfg-gated hot loop lives
+inside the library crate, and a thin
 per-profile bench target invokes it only with the unpublished
 `tsl_variant_benchmarks` compiler cfg plus the exact compiler-owned codegen and
-target-feature flags. Ordinary Cargo builds retain the authored wrapper choice.
+target-feature flags. Those exact admissions and the deliberately narrow
+compile-time selection pilot are backend-owned declarative evidence in
+`backend/policy_assets/rust_policy.json`, strictly promoted by
+[backend/rust_policy_manifest.py](src/tslc/backend/rust_policy_manifest.py).
+The backend registry loads this resource once for each artifact-producing
+request into a frozen `BackendPolicyInputs` snapshot at the compiler input
+boundary. Benchmark planning, artifact rendering, and focused preview receive
+that same explicit snapshot; importing a backend module performs no policy-file
+I/O. For an unfiltered backend inventory, backend validation also emits
+structured diagnostics unless every declared pilot matches exactly one lowered
+slot; focused projections skip that full-inventory proof.
+Unknown fields, duplicate identities, and live specializations that do not
+match the complete declared identity fail closed; primitive, extension,
+profile, and type literals do not appear in the planner's control flow.
+Ordinary Cargo builds retain the authored wrapper choice.
 Rust candidate calls use backend-owned concrete type, trait, const-argument, and
 unsafe spelling; all authored expectations pass before any samples are timed or
 written. The Rust runtime validates the exact sample inventory and applies the
@@ -549,8 +661,12 @@ the resulting typed plans instead of combining unordered compile targets in
 one crate. Separate Rust evidence preserves every raw report gap plus exact
 profile manifest, candidate ID/body hash, policy eligibility, and
 compiler-rendered mapping hashes. Aggregate shape counts are explanatory
-inventory, not the Rust ratchet identity. Value-test tags do not control
-benchmark admission.
+inventory, not the Rust ratchet identity. The public maintenance façade
+([maintenance/benchmark_coverage.py](src/tslc/maintenance/benchmark_coverage.py))
+owns CLI orchestration; frozen records, audit joins, and baseline serialization
+live in `benchmark_coverage_model.py`, `benchmark_coverage_audit.py`, and
+`benchmark_coverage_baseline.py`. Value-test tags do not control benchmark
+admission.
 Workload semantics are resolved in
 [benchmark/scenarios.py](src/tslc/benchmark/scenarios.py) before rendering:
 each typed scenario and correctness case validates its own structural and
@@ -631,7 +747,8 @@ AVX-512/NEON/SVE code runs on hardware that lacks it.
 
 - Big picture / rules: [README.md](README.md), [CHARTER.md](CHARTER.md).
 - The body model: [ir/segments.py](src/tslc/ir/segments.py),
-  [ir/scan.py](src/tslc/ir/scan.py).
-- Orchestration: [pipeline.py](src/tslc/pipeline.py).
+  [ir/scan.py](src/tslc/ir/scan.py), and [ir/cursor.py](src/tslc/ir/cursor.py).
+- Orchestration and request ownership: [pipeline.py](src/tslc/pipeline.py) and
+  [pipeline_request.py](src/tslc/pipeline_request.py).
 - A real primitive with all the moving parts:
   [`tsldata/primitives/arithmetic/fundamental.tsl`](../tsldata/primitives/arithmetic/fundamental.tsl).

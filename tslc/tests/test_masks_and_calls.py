@@ -44,7 +44,7 @@ def _lowering_for_body(catalog, machine_profiles, body):
         .select_profile(catalog, machine_profiles["avx2"], "add", ("si32",))
         .selected
         if selected.extension.name == "avx2"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
     selected = replace(
         slot,
@@ -364,7 +364,7 @@ def test_call_bracket_args_require_exact_generic_param_references(
             .select_profile(catalog, machine_profiles["avx2"], "add", ("si32",))
             .selected
             if selected.extension.name == "avx2"
-            and selected.primitive.attributes.get("mask") is None
+            and selected.primitive.mask_mode is None
         )
         slot = replace(
             slot,

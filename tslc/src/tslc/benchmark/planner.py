@@ -21,7 +21,7 @@ from tslc.benchmark.correctness import (
 )
 from tslc.benchmark.identity import (
     benchmark_slot_identity_hash,
-    implementation_body_hash,
+    implementation_choice_body_hash,
     specialization_key,
     specialization_stable_id,
 )
@@ -196,6 +196,9 @@ class BenchmarkPlanner:
                                 for feature in emitted_profile.profile.features
                             )
                         )
+                    ),
+                    feature_detection_strategy=_feature_detection_strategy(
+                        emitted_profile, backend_id
                     ),
                 )
             )
@@ -447,12 +450,15 @@ class BenchmarkPlanner:
         if not correctness:
             return None, "no authored expected-value case covers this specialization", True
         candidates = (
-            BenchmarkCandidate("default", implementation_body_hash(spec.body_text)),
+            BenchmarkCandidate(
+                "default", implementation_choice_body_hash(spec)
+            ),
             *(
                 BenchmarkCandidate(
-                    variant.name, implementation_body_hash(variant.body_text)
+                    variant_name,
+                    implementation_choice_body_hash(spec, variant_name),
                 )
-                for variant in spec.variant_bodies
+                for variant_name in spec.variant_names
             ),
         )
         return (
@@ -552,7 +558,16 @@ def _common_unsupported_reason(
         return "only fixed-width hardware vectors are benchmarked"
     if not extension.default_test_target:
         return "extension is not enabled as a native value-test target"
-    if extension.header_group_for_backend(backend_id) is not None:
+    from tslc.backend.registry import backend_capability
+
+    try:
+        capability = backend_capability(backend_id)
+    except ValueError:
+        capability = None
+    if (
+        capability is not None
+        and capability.extension_header_group(extension) is not None
+    ):
         return "opt-in header-group extensions are not supported by benchmark planning"
     return None
 
@@ -618,7 +633,7 @@ def _source_primitive(
             shape is not None
             and shape.result_kind == spec.result_kind
             and shape.param_kinds == spec.param_kinds
-            and primitive.attributes.get("mask") == spec.mask_policy
+            and primitive.mask_mode == spec.mask_policy
         ):
             return primitive
     return None
@@ -640,6 +655,9 @@ def _manifest_hash(
             ),
             "compile_modes": sorted(profile.profile.compile_modes),
             f"{backend_id}_flags": profile.profile.flags_for_backend(backend_id),
+            "feature_detection_strategy": _feature_detection_strategy(
+                profile, backend_id
+            ),
         },
         "candidate_sets": [
             {
@@ -666,6 +684,14 @@ def _manifest_hash(
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _feature_detection_strategy(
+    profile: EmittedProfile,
+    backend_id: str,
+) -> str | None:
+    family = profile.profile_family
+    return None if family is None else family.backend(backend_id).detection
 
 
 def _specialization_sort_key(spec: LoweredSpecialization) -> tuple[object, ...]:

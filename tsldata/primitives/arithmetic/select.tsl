@@ -22,9 +22,12 @@ prim<v:=(v,v)> max(vec_a, vec_b):
     - {tags [edge], type "si32", case {inputs [[-1, -5, 0, 2147483647, -2147483648, 100, -100, 42], [-2, -4, -1, 0, 1, -200, 200, 0]], expected [-1, -4, 0, 2147483647, 1, 100, 200, 42]}}
     - {tags [edge], extension "wasm128", type "si64", case {inputs [[-5, 9223372036854775807], [-3, -9223372036854775808]], expected [-3, 9223372036854775807]}}
     - {tags [edge], extension "wasm128", type "ui64", case {inputs [[0, 18446744073709551615], [1, 18446744073709551614]], expected [1, 18446744073709551615]}}
+    - {tags [edge, rvv], extension "rvv", type "si64", case {inputs [[-5, 9223372036854775807], [-3, -9223372036854775808]], expected [-3, 9223372036854775807]}}
+    - {tags [edge, rvv], extension "rvv", type "ui64", case {inputs [[0, 18446744073709551615], [1, 18446744073709551614]], expected [1, 18446744073709551615]}}
     - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]], expected [16, 15, 14, 13, 12, 11, 10, 9, 9, 10, 11, 12, 13, 14, 15, 16]}}
     - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [0.5, -3.0, 4.0, -4.0]], expected [1.0, -2.0, 4.0, -4.0]}}
     - {tags [edge], type "f64", case {inputs [[INFINITY, "-INFINITY"], [1.0, 2.0]], expected [INFINITY, 2.0]}}
+    - {tags [nan, ordered, rvv], extension "rvv", type "f32", case {inputs [[NAN, 1.0, NAN, 3.0], [0.0, NAN, NAN, 4.0]], expected [NAN, 1.0, NAN, 4.0]}}
   impls:
     clang_v128:
       ?i?:
@@ -203,6 +206,55 @@ prim<v:=(v,v)> max(vec_a, vec_b):
                 )
               );
             """
+    rvv:
+      si?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmax, build[infix="vv", infix_sep="_"]>(
+                vec_a,
+                vec_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ui?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmaxu, build[infix="vv", infix_sep="_"]>(
+                vec_a,
+                vec_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec]>(
+                call<primitive=less_than[Vec]>(vec_a, vec_b),
+                vec_b,
+                vec_a
+              )
+            );
+          """
 
 prim<v:=(v,v)> min(vec_a, vec_b):
   brief_description "Selects the lane-wise minimum of two vector registers."
@@ -226,9 +278,12 @@ prim<v:=(v,v)> min(vec_a, vec_b):
     - {tags [edge], type "si32", case {inputs [[-1, -5, 0, 2147483647, -2147483648, 100, -100, 42], [-2, -4, -1, 0, 1, -200, 200, 0]], expected [-2, -5, -1, 0, -2147483648, -200, -100, 0]}}
     - {tags [edge], extension "wasm128", type "si64", case {inputs [[-5, 9223372036854775807], [-3, -9223372036854775808]], expected [-5, -9223372036854775808]}}
     - {tags [edge], extension "wasm128", type "ui64", case {inputs [[0, 18446744073709551615], [1, 18446744073709551614]], expected [0, 18446744073709551614]}}
+    - {tags [edge, rvv], extension "rvv", type "si64", case {inputs [[-5, 9223372036854775807], [-3, -9223372036854775808]], expected [-5, -9223372036854775808]}}
+    - {tags [edge, rvv], extension "rvv", type "ui64", case {inputs [[0, 18446744073709551615], [1, 18446744073709551614]], expected [0, 18446744073709551614]}}
     - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1]}}
     - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [0.5, -3.0, 4.0, -4.0]], expected [0.5, -3.0, 3.5, -4.5]}}
     - {tags [edge], type "f64", case {inputs [[INFINITY, "-INFINITY"], [1.0, 2.0]], expected [1.0, "-INFINITY"]}}
+    - {tags [nan, ordered, rvv], extension "rvv", type "f32", case {inputs [[NAN, 1.0, NAN, 3.0], [0.0, NAN, NAN, 4.0]], expected [0.0, NAN, NAN, 3.0]}}
   impls:
     clang_v128:
       ?i?:
@@ -407,3 +462,52 @@ prim<v:=(v,v)> min(vec_a, vec_b):
                 )
               );
             """
+    rvv:
+      si?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmin, build[infix="vv", infix_sep="_"]>(
+                vec_a,
+                vec_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ui?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vminu, build[infix="vv", infix_sep="_"]>(
+                vec_a,
+                vec_b,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec]>(
+                call<primitive=less_than[Vec]>(vec_a, vec_b),
+                vec_a,
+                vec_b
+              )
+            );
+          """

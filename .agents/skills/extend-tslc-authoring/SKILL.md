@@ -18,7 +18,10 @@ description: Add or change compiler-owned authoring and LSP capabilities in tslc
 3. Identify the canonical typed compiler owner for every displayed or returned
    fact. Reuse public catalog, selector, region/query registry, lowering, or
    diagnostic projections; extend the owner when a fact is missing instead of
-   recreating it in authoring or TypeScript code.
+   recreating it in authoring or TypeScript code. Keep catalog-index records and
+   queries in `catalog_index_model.py`, semantic occurrence construction in
+   `catalog_occurrences.py`, hover presentation in `catalog_hover.py`, and the
+   `catalog_index.py` façade focused on building/caching snapshots.
 4. Keep ordinary live features pure and snapshot-based. They may parse and
    validate overlays but must not load render assets, lower specializations,
    write projects, or invoke toolchains. Profile-aware views consume the

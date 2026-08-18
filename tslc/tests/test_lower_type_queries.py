@@ -65,7 +65,7 @@ def test_oneapi_exact_lane_mask_policy_lowers_lane_bitmask_operations(
         for s in Selector()
         .select_profile(catalog, machine_profiles["skylake-oneapi"], "less_than", ("si32",))
         .selected
-        if s.primitive.attributes.get("mask") is None
+        if s.primitive.mask_mode is None
     }
     slot = slots[("si32", "oneapi_fpga")]
 
@@ -101,8 +101,6 @@ def test_fixed_non_x86_extension_requires_register_metadata(backend_id: str) -> 
         name="tiny_arm",
         isa_name="tiny_arm",
         family="arm",
-        compose_prefix={},
-        compose_suffix_by_type={},
         backend_supported={"cpp": True, "rust": True},
         vector_bits=128,
     )

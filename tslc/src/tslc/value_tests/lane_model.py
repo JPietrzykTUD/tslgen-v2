@@ -24,9 +24,11 @@ per shape.
 
 Tiling caveat (scalable only): the scalable model tiles the authored fixed-length pattern
 across the runtime lane count with ``i % authored_lanes``. That identity holds *only for
-lane-local (elementwise) ops* — output lane ``i`` must depend solely on input lane ``i``. A
-cross-lane op (reduce, shuffle, compress, conflict, iota) must not be routed through a tiled
-scalable case; the case planners gate this on the corpus-declared ``cross_lane`` fact (see
+lane-local (elementwise) ops* — output lane ``i`` must depend solely on input lane ``i``.
+Compile-time indexed-lane cases use a distinct typed expectation: tile the input, then replace
+the one global runtime lane named by the index. Other cross-lane ops (reduce, shuffle,
+compress, conflict, iota) must not be routed through a tiled scalable case; the case planners
+gate this on the corpus-declared ``cross_lane`` fact (see
 ``_case_scalable_common.tiling_is_safe``), never here.
 """
 
@@ -36,7 +38,7 @@ from abc import ABC, abstractmethod
 
 from tslc.catalog.model import TestComparison
 from tslc.value_tests.lane_math import runtime_tile_index
-from tslc.value_tests.literals import cpp_literal_list, token_truthy
+from tslc.value_tests.literals import cpp_literal, cpp_literal_list, token_truthy
 from tslc.value_tests.model import ValueTestCasePlan
 from tslc.value_tests.render_cpp_helpers import (
     append_call_args,
@@ -143,6 +145,7 @@ class _ScalableLaneModel(LaneModel):
         args: list[str] = []
         vector_index = 0
         mask_index = 0
+        scalar_index = 0
         for kind in case.invocation.param_kinds:
             if kind == "v":
                 args.append(append_runtime_vector_input(lines, case, vector_index))
@@ -154,6 +157,13 @@ class _ScalableLaneModel(LaneModel):
                 )
                 args.append(f"m{mask_index}")
                 mask_index += 1
+            elif kind == "sImm":
+                continue
+            elif kind == "s":
+                value = cpp_literal(case.inputs.scalars[scalar_index], case.type_tag)
+                lines.append(f"  {case.base_spelling} s{scalar_index} = {value};")
+                args.append(f"s{scalar_index}")
+                scalar_index += 1
             else:
                 raise ValueError(
                     f"scalable value test does not support argument kind {kind!r}"
@@ -182,8 +192,34 @@ class _ScalableLaneModel(LaneModel):
                 f"{{{expected}}};",
                 f"  std::vector<{case.base_spelling}> expected(lanes);",
                 f"  std::vector<{case.base_spelling}> actual(lanes);",
+            ]
+        )
+        if case.expectation.scalable_layout == "indexed_lane":
+            index = case.index
+            if (
+                index is None
+                or index.value is None
+                or len(case.inputs.vectors) != 1
+            ):
+                raise ValueError(
+                    "indexed-lane scalable expectation requires one vector input "
+                    "and an index value"
+                )
+            lines.extend(
+                [
+                    f"  for (std::size_t i = 0; i < lanes; ++i) expected[i] = "
+                    f"authored0[{runtime_tile_index('i', case.lanes)}];",
+                    f"  if ({index.value} < lanes) "
+                    f"expected[{index.value}] = authored_expected[{index.value}];",
+                ]
+            )
+        else:
+            lines.append(
                 f"  for (std::size_t i = 0; i < lanes; ++i) expected[i] = "
-                f"authored_expected[{runtime_tile_index('i', case.lanes)}];",
+                f"authored_expected[{runtime_tile_index('i', case.lanes)}];"
+            )
+        lines.extend(
+            [
                 f"  typename Vec::register_type result = {call};",
                 f"  tsl::{scalable.store_name}<Vec, false>(actual.data(), result);",
                 f"  return tsl::test::{check}<{case.base_spelling}>("
@@ -221,6 +257,10 @@ def render_value_case(case: ValueTestCasePlan) -> str:
     template_args = ["Vec"]
     if "vidx" in case.invocation.param_kinds:
         template_args.append("Indices")
+    if case.index is not None and case.index.value is not None:
+        template_args.append(case.index.value)
+    if case.invocation.immediate is not None:
+        template_args.append(case.invocation.immediate)
     template_args.extend(case.invocation.generic_defaults)
     call = f"tsl::{case.call_name}<{', '.join(template_args)}>({', '.join(args)})"
     model.append_result_check(lines, case, call)

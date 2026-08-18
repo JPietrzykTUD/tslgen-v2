@@ -264,6 +264,19 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
         _authoring((_value("format"),)),
     ),
     TsilRegionDescriptor(
+        "address",
+        "Take a typed address or mutable borrow.",
+        (
+            "address<of>(expr)",
+            "address<borrow_mut>(expr)",
+        ),
+        _authoring(
+            (_value("of"),),
+            (_value("borrow_mut"),),
+        ),
+        shell_validator="address_selector",
+    ),
+    TsilRegionDescriptor(
         "cast",
         "Render a backend-specific cast.",
         (

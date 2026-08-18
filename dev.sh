@@ -11,7 +11,7 @@ ${self}: steerable task runner for the tslc generator and its maintenance toolin
 Modes:
   ./${self} generate   generate + format the C++/Rust project               (no compiler needed)
   ./${self} build      generate + build-verify both backends                [default]
-  ./${self} test       generate + build + run the value tests (SDE / qemu-aarch64 / Wasmtime when present)
+  ./${self} test       generate + build + run the value tests (SDE / qemu-aarch64 / qemu-riscv64 / Wasmtime when present)
   ./${self} document   generate + format + build C++/Rust API docs
   ./${self} document-site
                        rebuild only the docs website from existing generated docs/data
@@ -51,7 +51,7 @@ generate/build/test and authoring tools drive the unified \`python -m tslc\`
 surface; document-site rebuilds the website from an existing output tree.
 
 Env knobs (build/test only): TSLC_OUTPUT_ROOT TSLC_SOURCES TSLC_MACHINE_PROFILES
-  TSLC_BACKENDS TSLC_SDE TSLC_QEMU_AARCH64 TSLC_WASMTIME TSLC_VERIFY_JOBS
+  TSLC_BACKENDS TSLC_SDE TSLC_QEMU_AARCH64 TSLC_QEMU_RISCV64 TSLC_WASMTIME TSLC_VERIFY_JOBS
   TSLC_SUMMARY_FILE
 Env knobs (document or TSLC_DOCUMENT=1): TSLC_DOXYGEN TSLC_SPHINX_BUILD TSLC_CARGO
   TSLC_NPM
@@ -91,7 +91,7 @@ has_cli_assignment() {
 
 if [[ "$mode" == "generate" ]] && { has_cli_flag --test || has_cli_flag --fuzz; }; then
   echo "ERROR: dev.sh generate does not accept --test or --fuzz." >&2
-  echo "Use './dev.sh test ...' so SDE/qemu-aarch64 paths are wired consistently." >&2
+  echo "Use './dev.sh test ...' so SDE/QEMU paths are wired consistently." >&2
   echo "For manual control, call 'python -m tslc.cli' directly with explicit --runner KIND=PATH options." >&2
   exit 2
 fi
@@ -124,6 +124,7 @@ effective_output_root="$(effective_cli_value --output-root "$output_root")"
 document_backends="$(effective_cli_value --backends "$backends")"
 sde="${TSLC_SDE:-/opt/intel-sde/sde64}"
 qemu="${TSLC_QEMU_AARCH64:-/usr/bin/qemu-aarch64}"
+qemu_riscv64="${TSLC_QEMU_RISCV64:-/usr/bin/qemu-riscv64}"
 wasmtime="${TSLC_WASMTIME:-/usr/local/bin/wasmtime}"
 doxygen="${TSLC_DOXYGEN:-doxygen}"
 sphinx_build="${TSLC_SPHINX_BUILD:-sphinx-build}"
@@ -148,7 +149,16 @@ case "$mode" in
   preview) exec python -m tslc preview "${extra_args[@]}" ;;
   analyze) exec python -m tslc analyze "${extra_args[@]}" ;;
   check)   exec python -m tslc check "${extra_args[@]}" ;;
-  doctor)  exec python -m tslc doctor "${extra_args[@]}" ;;
+  doctor)
+    doctor_args=("${extra_args[@]}")
+    if ! has_cli_assignment --runner; then
+      [[ -e "$sde" ]] && doctor_args+=(--runner "sde=$sde")
+      [[ -e "$qemu" ]] && doctor_args+=(--runner "qemu-aarch64=$qemu")
+      [[ -e "$qemu_riscv64" ]] && doctor_args+=(--runner "qemu-riscv64=$qemu_riscv64")
+      [[ -e "$wasmtime" ]] && doctor_args+=(--runner "wasmtime=$wasmtime")
+    fi
+    exec python -m tslc doctor "${doctor_args[@]}"
+    ;;
   list)    exec python -m tslc list "${extra_args[@]}" ;;
   show)    exec python -m tslc show "${extra_args[@]}" ;;
   audit)   exec python -m tslc audit metadata "${extra_args[@]}" ;;
@@ -229,6 +239,7 @@ if [[ "$mode" == "build" || "$mode" == "test" ]]; then
   if ! has_cli_assignment --runner; then
     [[ -e "$sde" ]] && doctor+=( --runner "sde=$sde" )
     [[ -e "$qemu" ]] && doctor+=( --runner "qemu-aarch64=$qemu" )
+    [[ -e "$qemu_riscv64" ]] && doctor+=( --runner "qemu-riscv64=$qemu_riscv64" )
     [[ -e "$wasmtime" ]] && doctor+=( --runner "wasmtime=$wasmtime" )
   fi
   "${doctor[@]}"
@@ -253,6 +264,7 @@ case "$mode" in
     if ! has_cli_assignment --runner; then
       [[ -e "$sde" ]] && cli+=( --runner "sde=$sde" )
       [[ -e "$qemu" ]] && cli+=( --runner "qemu-aarch64=$qemu" )
+      [[ -e "$qemu_riscv64" ]] && cli+=( --runner "qemu-riscv64=$qemu_riscv64" )
       [[ -e "$wasmtime" ]] && cli+=( --runner "wasmtime=$wasmtime" )
     fi
     ;;

@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
+from tslc.catalog.model import PrimitiveMaskMode
+
 if TYPE_CHECKING:
     from tslc.catalog.model import Catalog
     from tslc.lower.lowerer import LoweredSpecialization
@@ -17,7 +19,7 @@ class PrimitiveRequirement:
     """One source primitive form required by a backend helper feature."""
 
     source_name: str
-    mask_policy: str | None = None
+    mask_policy: PrimitiveMaskMode | None = None
 
     def is_satisfied_by(self, specialization: LoweredSpecialization) -> bool:
         return (
@@ -115,7 +117,7 @@ CPP_HELPER_MANIFEST = BackendHelperManifest(
             (
                 PrimitiveRequirement("load"),
                 PrimitiveRequirement("store"),
-                PrimitiveRequirement("store", "pass_through"),
+                PrimitiveRequirement("store", PrimitiveMaskMode.PASS_THROUGH),
                 PrimitiveRequirement("to_integral"),
                 PrimitiveRequirement("to_mask"),
                 PrimitiveRequirement("gather_narrow"),
@@ -133,7 +135,7 @@ RUST_HELPER_MANIFEST = BackendHelperManifest(
     (
         HelperFeature(
             "masked_store",
-            (PrimitiveRequirement("store", "pass_through"),),
+            (PrimitiveRequirement("store", PrimitiveMaskMode.PASS_THROUGH),),
         ),
         HelperFeature(
             "selected_load",

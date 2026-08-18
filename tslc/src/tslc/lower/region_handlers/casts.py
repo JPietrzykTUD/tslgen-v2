@@ -8,11 +8,34 @@ from tslc.ir.region_syntax import parse_cast_selector, segments_text, split_arg_
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lane_count import LaneCount
 from tslc.lower.context import LoweringSession
+from tslc.lower.region_safety import direct_region_safety
 from tslc.lower.object_representation import register_object_size
 from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _resolve_type_expression
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.target_text import RenderField
+
+
+class AddressLowerer:
+    """``address<of|borrow_mut>(expr)`` -> a backend address expression."""
+
+    keyword = "address"
+
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
+        args = split_arg_groups(region.body)
+        selector = region.selector_text.strip()
+        if selector not in {"of", "borrow_mut"} or len(args) != 1:
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-ADDRESS",
+                f"unsupported address form: {region.full_text!r}",
+                source=region.source,
+            )
+            return region.full_text
+        return context.env.backend.syntax.render_address(
+            render(args[0]), mutable=selector == "borrow_mut"
+        )
 
 
 class CastLowerer:
@@ -68,17 +91,6 @@ class CastLowerer:
                 render=render,
             )
 
-        if type_text.rstrip().endswith("*"):
-            context.effects.skip(
-                "TSL-LOWER-UNSUPPORTED-CAST",
-                (
-                    "legacy pointer cast syntax is unsupported; use "
-                    "cast<reinterpret, type=ptr|const_ptr>"
-                ),
-                source=region.source,
-            )
-            return region.full_text
-
         key = f"cast_{selector.variant}"
         if context.env.backend.templates.template(key) is None:
             context.effects.skip(
@@ -100,13 +112,7 @@ class CastLowerer:
             resolved[0], context, region
         ):
             return region.full_text
-        if selector.variant == "reinterpret":
-            # Value reinterpretation is deliberately distinct from a pointer
-            # cast and from the checked bitcast path. The implementation leaf
-            # owns the concrete pair; lowering records its unsafe boundary so
-            # Rust frames the generated call even if source safety metadata is
-            # accidentally incomplete.
-            context.effects.mark_internal_unsafe("value_reinterpretation")
+        context.effects.merge_safety(direct_region_safety(region))
         return context.env.backend.templates.render_template(
             key, type=resolved[1], expr=render(args[1])
         )
@@ -136,7 +142,7 @@ class CastLowerer:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-CAST",
                 f"unsupported pointer-cast operand form in {region.full_text!r}; "
-                "use a pointer-valued expression, &target, or &mut target",
+                "use a pointer-valued expression or address<of|borrow_mut>(target)",
                 source=region.source,
             )
             return region.full_text
@@ -200,45 +206,28 @@ def _valid_bitcast_target(
 def _classify_pointer_operand(
     group: tuple[Segment, ...], render: RenderBody
 ) -> PointerCastOperand | None:
-    """Classify the exact source form of a pointer-cast value operand.
+    """Classify pointer operands only from typed TSIL structure."""
 
-    A leading ``&`` / ``&mut`` in raw text is an address-of whose target is the
-    remainder of the operand; anything else is an already-pointer-valued
-    expression. Returns ``None`` for unsupported address forms (``&&x``, a bare
-    ``&``) so the caller diagnoses instead of guessing.
-    """
-
-    segments = list(group)
-    index = 0
-    while index < len(segments):
-        candidate = segments[index]
-        if not (isinstance(candidate, RawText) and not candidate.text.strip()):
-            break
-        index += 1
-    if index >= len(segments):
-        return None
-    first = segments[index]
-    if not isinstance(first, RawText) or not first.text.lstrip().startswith("&"):
-        return PointerCastOperand(
-            kind="pointer", target=render(tuple(segments[index:]))
-        )
-    text = first.text.lstrip()
-    if text.startswith("&&"):
-        return None
-    rest = text[1:].lstrip()
-    mutable = False
-    if rest.startswith("mut") and not (
-        len(rest) > 3 and (rest[3].isalnum() or rest[3] == "_")
-    ):
-        mutable = True
-        rest = rest[3:].lstrip()
-    remainder: tuple[Segment, ...]
-    if rest:
-        remainder = (RawText(rest, source=first.source), *segments[index + 1 :])
-    else:
-        remainder = tuple(segments[index + 1 :])
-    if not remainder:
-        return None
-    return PointerCastOperand(
-        kind="address_of", target=render(remainder), mutable_borrow=mutable
+    significant = tuple(
+        segment
+        for segment in group
+        if not (isinstance(segment, RawText) and not segment.text.strip())
     )
+    if not significant:
+        return None
+    if (
+        len(significant) == 1
+        and isinstance(significant[0], Region)
+        and significant[0].keyword == "address"
+    ):
+        address = significant[0]
+        args = split_arg_groups(address.body)
+        selector = address.selector_text.strip()
+        if selector not in {"of", "borrow_mut"} or len(args) != 1:
+            return None
+        return PointerCastOperand(
+            kind="address_of",
+            target=render(args[0]),
+            mutable_borrow=selector == "borrow_mut",
+        )
+    return PointerCastOperand(kind="pointer", target=render(group))

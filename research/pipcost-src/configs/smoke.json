@@ -1,0 +1,64 @@
+{
+  "compiler": "c++",
+  "manual_threshold": 0.1,
+  "materiality_threshold": 0.05,
+  "minimum_sample_ns": 100000,
+  "name": "smoke",
+  "profile": "avx2",
+  "repetitions": 1,
+  "run_seed": 104729,
+  "schema_version": 2,
+  "simd_lanes": 8,
+  "studies": [
+    {
+      "batch_rows": [
+        7,
+        64,
+        "full"
+      ],
+      "candidate_plans": [
+        "batch_native_mask",
+        "batch_integral_mask",
+        "batch_bitmask",
+        "batch_positions_u32",
+        "full_native_mask",
+        "full_integral_mask",
+        "full_bitmask",
+        "full_positions_u32"
+      ],
+      "conditional_selectivities": [
+        0.0,
+        0.5,
+        1.0
+      ],
+      "first_selectivities": [
+        1.0
+      ],
+      "name": "correctness-smoke",
+      "patterns": [
+        "random"
+      ],
+      "reference_plans": [
+        "fused_mask",
+        "scalar_autovec",
+        "scalar_no_vector"
+      ],
+      "rows": [
+        0,
+        1,
+        7,
+        8,
+        15,
+        16,
+        1003,
+        65536
+      ],
+      "seeds": [
+        17
+      ],
+      "split": "pilot"
+    }
+  ],
+  "tsl_ref": "v0.2.7",
+  "warmups": 1
+}

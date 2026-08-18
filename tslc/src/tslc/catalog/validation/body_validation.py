@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import re
-
 from collections.abc import Callable
 
-from tslc.syntax.access import source_span
+from tslc.catalog.model import PrimitiveMaskMode
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS, region_shell_validator
+from tslc.ir.query_syntax import is_tsil_type_expression_syntax
 from tslc.ir.region_syntax import (
     IntrinsicSelector,
     parse_call_selector,
@@ -20,6 +20,7 @@ from tslc.ir.region_syntax import (
 from tslc.ir.scan import find_malformed_regions, scan
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.ir.text import split_selector_terms, split_top_level
+from tslc.syntax.access import source_span
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedImplementationBodyEnvelope,
@@ -109,7 +110,30 @@ def _validate_call_region(
     region: Region,
     diagnostics: list[Diagnostic],
 ) -> None:
-    if parse_call_selector(region.selector_text) is not None:
+    parsed = parse_call_selector(region.selector_text)
+    if parsed is not None:
+        invalid_mask = next(
+            (
+                value
+                for key, value in parsed.attrs
+                if key == "mask"
+                and value not in {mode.value for mode in PrimitiveMaskMode}
+            ),
+            None,
+        )
+        if invalid_mask is None:
+            return
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-BODY-BAD-CALL-MASK",
+                message=(
+                    f"primitive {primitive_name!r}: unknown call mask mode "
+                    f"{invalid_mask!r}"
+                ),
+                source=region.source,
+            )
+        )
         return
     diagnostics.append(
         diagnostic_at(
@@ -253,6 +277,28 @@ def _validate_var_region(
     )
 
 
+def _validate_address_region(
+    primitive_name: str,
+    region: Region,
+    diagnostics: list[Diagnostic],
+) -> None:
+    selector = region.selector_text.strip()
+    args = split_top_level(_segments_text(region.body))
+    if selector in {"of", "borrow_mut"} and len(args) == 1 and args[0].strip():
+        return
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-BODY-BAD-ADDRESS",
+            message=(
+                f"primitive {primitive_name!r}: address must be "
+                "`address<of|borrow_mut>(expr)`"
+            ),
+            source=region.source,
+        )
+    )
+
+
 def _validate_cast_region(
     primitive_name: str,
     region: Region,
@@ -294,6 +340,21 @@ def _validate_cast_region(
         return
 
     target_type = args[0].strip()
+    if not is_tsil_type_expression_syntax(target_type):
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-BODY-BAD-CAST",
+                message=(
+                    f"primitive {primitive_name!r}: cast target "
+                    f"{target_type!r} must be a TSIL type expression; "
+                    "pointer-ness belongs in the "
+                    "`cast<reinterpret, type=ptr|const_ptr>` selector"
+                ),
+                source=region.source,
+            )
+        )
+        return
     if selector.type_kind in {"ptr", "const_ptr"}:
         if selector.variant != "reinterpret":
             diagnostics.append(
@@ -307,35 +368,7 @@ def _validate_cast_region(
                     source=region.source,
                 )
             )
-        if target_type.rstrip().endswith("*"):
-            diagnostics.append(
-                diagnostic_at(
-                    severity="error",
-                    code="TSL-BODY-BAD-CAST",
-                    message=(
-                        f"primitive {primitive_name!r}: pointer cast type "
-                        "selectors own pointer-ness; omit trailing `*` from the "
-                        "target type"
-                    ),
-                    source=region.source,
-                )
-            )
         return
-
-    if target_type.rstrip().endswith("*"):
-        diagnostics.append(
-            diagnostic_at(
-                severity="error",
-                code="TSL-BODY-BAD-CAST",
-                message=(
-                    f"primitive {primitive_name!r}: pointer casts must use "
-                    "`cast<reinterpret, type=ptr|const_ptr>(Type, expr)` "
-                    "instead of a trailing `*` target type"
-                ),
-                source=region.source,
-            )
-        )
-
 
 def _validate_no_selector_region(
     primitive_name: str,
@@ -410,6 +443,7 @@ def _segments_text(segments: tuple[Segment, ...]) -> str:
 ShellValidator = Callable[[str, Region, list[Diagnostic]], None]
 
 _SHELL_VALIDATORS: dict[str, ShellValidator] = {
+    "address_selector": _validate_address_region,
     "array_set": _validate_array_region,
     "call_selector": _validate_call_region,
     "cast_selector": _validate_cast_region,

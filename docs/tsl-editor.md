@@ -210,7 +210,9 @@ kind/detail metadata.
 
 Completion inside simple and scoped `requires [...]` lists offers target-feature
 tokens from the configured machine profiles and catalog requirements, rather
-than implementation type groups. At an implementation extension/type mapping,
+than implementation type groups. In the expanded requirement form it offers
+`target_features` and `compiler`, then registered backend IDs and that
+backend's compiler capabilities. At an implementation extension/type mapping,
 completion offers the mapping's metadata keys rather than datatypes. For a
 temporarily malformed line, the server combines the active-line prefix with the
 last valid parsed enclosing block and does not reconstruct nesting from

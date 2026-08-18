@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from tslc.catalog.model import Extension
+from tslc.catalog.model import Extension, PrimitiveMaskMode
 from tslc.ir.region_syntax import (
     parse_call_selector,
     parse_generic_param_reference,
@@ -103,13 +103,25 @@ class CallLowerer:
         attrs = {
             key: self._resolve_attr_value(value, context) for key, value in parsed.attrs
         }
+        mask_text = attrs.get("mask")
+        try:
+            mask_mode = (
+                None if mask_text is None else PrimitiveMaskMode(mask_text)
+            )
+        except ValueError:
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-CALL-MASK",
+                f"unsupported call mask mode {mask_text!r}",
+                source=region.source,
+            )
+            return region.full_text
         context.effects.record_call_dependency(
             CallDependencyOrigin(
                 resolve_lowered_call_dependency(
                     parsed,
                     context,
                     self._evaluator,
-                    mask_policy=attrs.get("mask"),
+                    mask_policy=mask_mode,
                 ),
                 context.env.dependency_origin,
             )
@@ -118,8 +130,8 @@ class CallLowerer:
         # A `attrs[mask=…]` call to a policy-split name targets its `_mask`/`_maskz` split (the
         # render rename); single-form callees (`select`) aren't in the set and stay bare.
         call_name = name
-        if attrs.get("mask") and name in context.env.policy_split_names:
-            call_name = f"{name}{context.env.support.mask_suffix(attrs['mask'])}"
+        if mask_mode is not None and name in context.env.policy_split_names:
+            call_name = f"{name}{context.env.support.mask_suffix(mask_mode)}"
         # Forwarding the caller's compile-time immediate targets an `_imm` wrapper only for
         # callees whose emitted callable family actually splits runtime and `sImm` forms. Pure
         # `sImm` callees such as `insert` and `extract` keep their authored name.

@@ -85,6 +85,12 @@ def load_project_config(path: Path | str | None = None) -> ProjectConfig | None:
             compiler=_optional_table_string(selected, raw, "compiler", backend_id),
             target=_optional_table_string(selected, raw, "target", backend_id),
             linker=_optional_table_string(selected, raw, "linker", backend_id),
+            compiler_capabilities=_optional_table_string_list(
+                selected,
+                raw,
+                "capabilities",
+                str(backend_id),
+            ),
         )
     runners = root.get("runners", {})
     if not isinstance(runners, dict) or not all(
@@ -188,6 +194,25 @@ def _optional_table_string(
             f"{path}: tslc.toolchains.{backend_id}.{key} must be a non-empty string"
         )
     return value
+
+
+def _optional_table_string_list(
+    path: Path, table: dict[str, object], key: str, backend_id: str
+) -> tuple[str, ...]:
+    value = table.get(key)
+    if value is None:
+        return ()
+    if not (
+        isinstance(value, list)
+        and all(
+            isinstance(item, str) and item.strip()
+            for item in value
+        )
+    ):
+        raise ValueError(
+            f"{path}: tslc.toolchains.{backend_id}.{key} must be a string array"
+        )
+    return tuple(value)
 
 
 def _optional_string_list(table: dict[str, object], key: str) -> tuple[str, ...]:

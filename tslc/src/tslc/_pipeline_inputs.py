@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Protocol
 
 from tslc.authoring import check_documents
+from tslc.backend.capability import (
+    BackendPolicyInputs,
+    EMPTY_BACKEND_POLICY_INPUTS,
+)
+from tslc.backend.registry import load_backend_policy_inputs
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
 from tslc.compiler_assets import (
@@ -37,6 +42,9 @@ class _InputRequest(Protocol):
     @property
     def render_artifacts(self) -> bool: ...
 
+    @property
+    def load_policy_inputs(self) -> bool: ...
+
 
 @dataclass(frozen=True, slots=True)
 class CatalogInputs:
@@ -51,6 +59,7 @@ class _PipelineInputs:
     catalog: Catalog
     machine_profiles: Mapping[str, MachineProfile]
     render_assets: RenderAssets | None
+    policy_inputs: BackendPolicyInputs
     split_names: frozenset[str]
     imm_split_names: frozenset[str]
     test_harness: HarnessPrimitiveNames
@@ -77,6 +86,11 @@ def _load_inputs(request: _InputRequest) -> tuple[_PipelineInputs | None, list[D
     diagnostics.extend(profile_result.diagnostics)
     if has_errors(diagnostics):
         return None, diagnostics
+    policy_inputs = (
+        load_backend_policy_inputs(request.backends)
+        if request.render_artifacts or request.load_policy_inputs
+        else EMPTY_BACKEND_POLICY_INPUTS
+    )
     return (
         _PipelineInputs(
             catalog=catalog,
@@ -84,12 +98,14 @@ def _load_inputs(request: _InputRequest) -> tuple[_PipelineInputs | None, list[D
             render_assets=(
                 load_default_render_assets() if request.render_artifacts else None
             ),
+            policy_inputs=policy_inputs,
             split_names=split_names,
             imm_split_names=imm_split_names,
             test_harness=test_harness,
             input_digest=_combine_input_digests(
                 catalog_inputs.source_digest,
                 profile_result.digest,
+                policy_inputs.input_digest,
             ),
         ),
         diagnostics,
@@ -125,10 +141,15 @@ def load_catalog_inputs(
     return CatalogInputs(checked.catalog, digest.hexdigest()), diagnostics
 
 
-def _combine_input_digests(source_digest: str, profile_digest: str | None) -> str:
+def _combine_input_digests(
+    source_digest: str,
+    profile_digest: str | None,
+    policy_digest: str,
+) -> str:
     digest = sha256()
     digest.update(f"sources:{source_digest}\n".encode("ascii"))
     digest.update(f"profiles:{profile_digest or 'unavailable'}\n".encode("ascii"))
+    digest.update(f"backend-policy:{policy_digest}\n".encode("ascii"))
     return digest.hexdigest()
 
 

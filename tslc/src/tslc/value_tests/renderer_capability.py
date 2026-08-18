@@ -10,7 +10,6 @@ from tslc.value_tests.model import (
     DEFAULT_VALUE_TEST_CASE_KINDS,
     ValueTestBackendSupport,
     ValueTestCasePlan,
-    ValueTestProfileCaseExclusion,
 )
 
 ValueTestCaseRenderer = Callable[[ValueTestCasePlan], str]
@@ -23,7 +22,7 @@ class ValueTestRendererCapability:
     supports_differential: bool = False
     overload_inference_placeholders: int = 0
     isolated_case_kinds: frozenset[str] = frozenset()
-    profile_case_exclusions: tuple[ValueTestProfileCaseExclusion, ...] = ()
+    unobservable_runtime_failure_reason: str | None = None
 
     def __post_init__(self) -> None:
         if not self.backend_id:
@@ -37,6 +36,11 @@ class ValueTestRendererCapability:
             raise ValueError(
                 "value-test overload inference placeholders must be non-negative"
             )
+        if self.unobservable_runtime_failure_reason == "":
+            raise ValueError(
+                "value-test runtime-failure observation reason cannot be empty"
+            )
+
         normalized = {
             kind: renderer
             for kind, renderer in sorted(self.case_renderers.items())
@@ -69,36 +73,12 @@ class ValueTestRendererCapability:
                 f"value-test renderer capability {self.backend_id!r} "
                 f"uses unregistered case kind(s) {names}"
             )
-        exclusions = tuple(self.profile_case_exclusions)
-        exclusion_keys = [
-            (exclusion.profile_family, exclusion.case_kind)
-            for exclusion in exclusions
-        ]
-        if len(exclusion_keys) != len(set(exclusion_keys)):
-            raise ValueError(
-                f"value-test renderer capability {self.backend_id!r} contains "
-                "duplicate profile case exclusions"
-            )
-        unsupported_exclusion_kinds = {
-            exclusion.case_kind
-            for exclusion in exclusions
-            if exclusion.case_kind not in set(normalized) | set(isolated)
-        }
-        if unsupported_exclusion_kinds:
-            names = ", ".join(
-                repr(kind) for kind in sorted(unsupported_exclusion_kinds)
-            )
-            raise ValueError(
-                f"value-test renderer capability {self.backend_id!r} excludes "
-                f"undeclared case kind(s) {names}"
-            )
         object.__setattr__(
             self,
             "case_renderers",
             MappingProxyType(normalized),
         )
         object.__setattr__(self, "isolated_case_kinds", isolated)
-        object.__setattr__(self, "profile_case_exclusions", exclusions)
 
     @property
     def case_kinds(self) -> frozenset[str]:
@@ -110,7 +90,7 @@ class ValueTestRendererCapability:
             case_kinds=self.case_kinds,
             supports_differential=self.supports_differential,
             overload_inference_placeholders=self.overload_inference_placeholders,
-            profile_case_exclusions=self.profile_case_exclusions,
+            unobservable_runtime_failure_reason=self.unobservable_runtime_failure_reason,
         )
 
     def render_case(self, case: ValueTestCasePlan) -> str:

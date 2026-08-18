@@ -107,6 +107,8 @@ def test_static_selection_fallback_preserves_supported_lane_counts(
     assert not fallback_one.uses_sized_vector
     assert not fallback_four.uses_hardware
     assert not fallback_eight.uses_hardware
+    assert rust_static_plan.fallback_module.metadata_profile_name == "target_fallback"
+    assert rust_static_plan.fallback_module.metadata_profile_family == "fallback"
     fallback_primitives = dict(
         rust_static_plan.fallback_module.primitive_specializations
     )

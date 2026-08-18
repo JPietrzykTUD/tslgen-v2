@@ -9,8 +9,7 @@ headers/modules with a top-level dispatch.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Literal
 
 from tslc._pipeline_closure import (
@@ -24,7 +23,7 @@ from tslc._pipeline_closure import (
 from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
 from tslc._pipeline_lowering_cache import _LoweringCache
 from tslc.backend.emitted_profile import EmittedProfile
-from tslc.backend.registry import backend_capabilities, registered_backend_ids
+from tslc.backend.registry import backend_capabilities
 from tslc.benchmark.model import BenchmarkProjectPlan
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
@@ -32,8 +31,12 @@ from tslc.catalog.model import (
     RESULT_DIM_EXTENSION,
     Catalog,
     Extension,
+    PrimitiveMaskMode,
 )
-from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
+from tslc.catalog.scalar_types import (
+    DEFAULT_SCALAR_TYPE_TAGS,
+    SCALAR_TYPE_ORDER,
+)
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
@@ -50,8 +53,15 @@ from tslc.lower.lowerer import (
     LoweringResult,
 )
 from tslc.output.artifacts import ArtifactSet
+from tslc.pipeline_request import (
+    BackendCompilerCapabilitySet,
+    BackendProfileScope,
+    GenerationMode,
+    GenerationRequest,
+    backend_profile_scope_diagnostics,
+    compiler_capability_diagnostics,
+)
 from tslc.render.project import RenderedProject, render_project
-from tslc.project_render import DEFAULT_PROJECT_RENDER_CONFIG, ProjectRenderConfig
 from tslc.select.selector import (
     SelectedImplementation,
     Selector,
@@ -62,55 +72,8 @@ from tslc.value_tests import (
     ValueTestProjectPlan,
 )
 
-GenerationMode = Literal["partial", "strict"]
 SkipStatus = Literal["coverage_gap", "policy_deferred"]
 _TYPE_ORDER = SCALAR_TYPE_ORDER
-
-
-def _default_backend_ids() -> tuple[str, ...]:
-    """Resolve registry defaults when a request is created, not at import time."""
-
-    return registered_backend_ids()
-
-
-@dataclass(frozen=True, slots=True)
-class BackendProfileScope:
-    """Restrict one requested backend to a subset of requested machine profiles."""
-
-    backend_id: str
-    profiles: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class GenerationRequest:
-    source_paths: tuple[Path, ...]
-    machine_profiles_path: Path
-    primitives: tuple[str, ...] | None
-    profiles: tuple[str, ...] | None
-    type_tags: tuple[str, ...]
-    extensions: tuple[str, ...] | None = None
-    backends: tuple[str, ...] = field(default_factory=_default_backend_ids)
-    backend_profile_scopes: tuple[BackendProfileScope, ...] = ()
-    mode: GenerationMode = "partial"
-    # Pull the value-test harness primitives (vector<->array round-trip and mask normalization)
-    # into the dependency closure so the generated differential tests can build a hardware
-    # register from a lane array and read its result back. Off for ordinary generation.
-    test_harness: bool = False
-    # Report authored value-test cases that could not be planned for a backend/profile. Off for
-    # ordinary generation because source data often includes broader test intent than the current
-    # backend test harness supports.
-    value_test_warnings: bool = False
-    # Emit differential-fuzz value tests: a runtime PRNG loop comparing each hardware
-    # specialization against the generic scalar reference over many random inputs. Opt-in (adds
-    # build/run cost); requires the test harness so the generated code can round-trip registers.
-    value_test_fuzz: bool = False
-    # Authoring checks reuse selection and lowering but stop before test planning,
-    # benchmarking, render-asset loading, and artifact rendering.
-    render_artifacts: bool = True
-    # Explicit concrete-analysis commands may retain the lowered call graph.
-    # Ordinary checking/generation discards it after closure and propagation.
-    collect_lowering_trace: bool = False
-    render_config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,7 +86,7 @@ class CoverageEntry:
     source_primitive_name: str = ""
     result_kind: str = ""
     param_kinds: tuple[str, ...] = ()
-    mask_policy: str | None = None
+    mask_policy: PrimitiveMaskMode | None = None
     axis: tuple[tuple[str, str], ...] = ()
     variant_names: tuple[str, ...] = ()
 
@@ -143,7 +106,7 @@ class SkippedEntry:
     source_primitive_name: str = ""
     result_kind: str = ""
     param_kinds: tuple[str, ...] = ()
-    mask_policy: str | None = None
+    mask_policy: PrimitiveMaskMode | None = None
     axis: tuple[tuple[str, str], ...] = ()
     variant_names: tuple[str, ...] = ()
 
@@ -218,12 +181,27 @@ class _GenerationSession:
             scope.backend_id: frozenset(scope.profiles)
             for scope in request.backend_profile_scopes
         }
+        self.compiler_capabilities = {
+            item.backend_id: item.capabilities
+            for item in request.backend_compiler_capabilities
+        }
         self.lowering_trace_slots: list[LoweringTraceSlot] = []
 
     def run(self) -> GenerationResult:
-        scope_diagnostics = self._backend_profile_scope_diagnostics()
-        self.diagnostics.extend(scope_diagnostics)
-        if has_errors(scope_diagnostics):
+        request_diagnostics = (
+            *backend_profile_scope_diagnostics(
+                self.request,
+                self.backends,
+                self.inputs.machine_profiles,
+                _expand_requested_profiles(
+                    self.request.profiles,
+                    self.inputs.machine_profiles,
+                ),
+            ),
+            *compiler_capability_diagnostics(self.request, self.backends),
+        )
+        self.diagnostics.extend(request_diagnostics)
+        if has_errors(request_diagnostics):
             return _result_without_artifacts(
                 self.diagnostics, self.coverage, self.skipped
             )
@@ -251,11 +229,23 @@ class _GenerationSession:
         )
         backend_diagnostics: list[Diagnostic] = []
         for capability in self.backends:
-            backend_diagnostics.extend(
-                capability.validate_profiles(
-                    self._profiles_for_backend(emitted_profiles, capability.backend_id)
-                )
+            profiles_for_backend = self._profiles_for_backend(
+                emitted_profiles, capability.backend_id
             )
+            backend_diagnostics.extend(
+                capability.validate_profiles(profiles_for_backend)
+            )
+            if (
+                _request_has_complete_backend_inventory(
+                    self.request, capability.backend_id
+                )
+                and capability.backend_id in self.inputs.policy_inputs.values
+            ):
+                backend_diagnostics.extend(
+                    capability.validate_policy_inventory(
+                        profiles_for_backend, self.inputs.policy_inputs
+                    )
+                )
         self.diagnostics.extend(backend_diagnostics)
 
         if has_errors(backend_diagnostics):
@@ -307,6 +297,7 @@ class _GenerationSession:
                         self.inputs.catalog,
                         self._profiles_for_backend(emitted_profiles, capability.backend_id),
                         value_tests,
+                        self.inputs.policy_inputs,
                     )
                 )
                 is not None
@@ -331,6 +322,7 @@ class _GenerationSession:
                 benchmarks,
                 assets=self.inputs.render_assets,
                 config=self.request.render_config,
+                policy_inputs=self.inputs.policy_inputs,
             )
             if self.emitted_profiles
             else None
@@ -354,7 +346,12 @@ class _GenerationSession:
                 capability.backend_id,
                 profile.profile.name,
                 capability.specializations(profile),
-                profile.profile.family,
+                (
+                    profile.profile_family is None
+                    or profile.profile_family.backend(
+                        capability.backend_id
+                    ).runtime_failure_observable
+                ),
             )
             for profile in profiles
             for capability in self.backends
@@ -365,75 +362,6 @@ class _GenerationSession:
             tuple(capability.value_test_support() for capability in self.backends),
             fuzz=self.request.value_test_fuzz,
         ).plan(inputs)
-
-    def _backend_profile_scope_diagnostics(self) -> tuple[Diagnostic, ...]:
-        requested_backends = frozenset(
-            capability.backend_id for capability in self.backends
-        )
-        requested_profiles = frozenset(
-            _expand_requested_profiles(
-                self.request.profiles,
-                self.inputs.machine_profiles,
-            )
-        )
-        seen: set[str] = set()
-        diagnostics: list[Diagnostic] = []
-        for scope in self.request.backend_profile_scopes:
-            if scope.backend_id in seen:
-                diagnostics.append(
-                    Diagnostic(
-                        severity="error",
-                        code="TSL-PIPELINE-DUPLICATE-BACKEND-PROFILE-SCOPE",
-                        message=(
-                            "backend profile scope repeats backend "
-                            f"{scope.backend_id!r}"
-                        ),
-                    )
-                )
-            seen.add(scope.backend_id)
-            if scope.backend_id not in requested_backends:
-                diagnostics.append(
-                    Diagnostic(
-                        severity="error",
-                        code="TSL-PIPELINE-UNREQUESTED-BACKEND-PROFILE-SCOPE",
-                        message=(
-                            f"backend profile scope names {scope.backend_id!r}, which "
-                            "is not a requested backend"
-                        ),
-                    )
-                )
-            if not scope.profiles:
-                diagnostics.append(
-                    Diagnostic(
-                        severity="error",
-                        code="TSL-PIPELINE-EMPTY-BACKEND-PROFILE-SCOPE",
-                        message=f"backend {scope.backend_id!r} profile scope is empty",
-                    )
-                )
-            for profile_name in sorted(set(scope.profiles)):
-                if profile_name not in self.inputs.machine_profiles:
-                    diagnostics.append(
-                        Diagnostic(
-                            severity="error",
-                            code="TSL-PIPELINE-UNKNOWN-BACKEND-PROFILE",
-                            message=(
-                                f"backend {scope.backend_id!r} profile scope names "
-                                f"unknown machine profile {profile_name!r}"
-                            ),
-                        )
-                    )
-                elif profile_name not in requested_profiles:
-                    diagnostics.append(
-                        Diagnostic(
-                            severity="error",
-                            code="TSL-PIPELINE-OUT-OF-SCOPE-BACKEND-PROFILE",
-                            message=(
-                                f"backend {scope.backend_id!r} profile {profile_name!r} "
-                                "is not in the requested profile set"
-                            ),
-                        )
-                    )
-        return tuple(diagnostics)
 
     @staticmethod
     def _profiles_for_backend(
@@ -457,11 +385,28 @@ class _GenerationSession:
         )
 
     def _generate_profile(self, profile_name: str, profile: MachineProfile) -> None:
-        active_backends = tuple(
+        requested_backends = tuple(
             capability
             for capability in self.backends
             if self._backend_includes_profile(capability.backend_id, profile_name)
         )
+        active_backends = tuple(
+            capability
+            for capability in requested_backends
+            if profile.supports_backend(capability.backend_id)
+        )
+        for capability in requested_backends:
+            if not profile.supports_backend(capability.backend_id):
+                self.diagnostics.append(
+                    Diagnostic(
+                        severity="info",
+                        code="TSL-PIPELINE-UNSUPPORTED-PROFILE-BACKEND",
+                        message=(
+                            f"machine profile {profile_name!r} does not support "
+                            f"backend {capability.backend_id!r}; skipped"
+                        ),
+                    )
+                )
         if not active_backends:
             return
         # Profile-scoped dependency closure: start from the requested primitives and pull in only
@@ -477,9 +422,9 @@ class _GenerationSession:
             (primitive, self.type_tags, all_backend_ids, self.request.extensions)
             for primitive in _requested_primitives(self.request, self.inputs.catalog)
         ]
-        if self.request.test_harness:
-            worklist.extend(
-                (name, self.type_tags, all_backend_ids, None)
+        harness_primitives = (
+            tuple(
+                name
                 for name in (
                     self.inputs.test_harness.from_array,
                     self.inputs.test_harness.to_array,
@@ -489,6 +434,14 @@ class _GenerationSession:
                     self.inputs.test_harness.store,
                 )
                 if name is not None
+            )
+            if self.request.test_harness
+            else ()
+        )
+        if harness_primitives:
+            worklist.extend(
+                (name, self.type_tags, all_backend_ids, None)
+                for name in harness_primitives
             )
         if self.request.render_artifacts or self.request.extensions is None:
             for capability in active_backends:
@@ -521,6 +474,22 @@ class _GenerationSession:
                 for type_tag in remaining_types:
                     processed.setdefault((primitive, type_tag, scope), set()).add(backend)
                 lowered_specs.extend(primitive_slots)
+                for slot in primitive_slots:
+                    target = slot.spec.target
+                    if target is None:
+                        continue
+                    for harness_primitive in harness_primitives:
+                        if slot.backend not in processed.get(
+                            (harness_primitive, target.base_tag, None), set()
+                        ):
+                            worklist.append(
+                                (
+                                    harness_primitive,
+                                    (target.base_tag,),
+                                    frozenset({slot.backend}),
+                                    None,
+                                )
+                            )
                 for (
                     dependency_primitive,
                     dependency_type,
@@ -561,6 +530,9 @@ class _GenerationSession:
                     emitted=id(slot) not in pruned_ids,
                     unresolved_callee=slot.unresolved_callee,
                     selection_required_features=slot.selection_required_features,
+                    selection_required_compiler_capabilities=(
+                        slot.selection_required_compiler_capabilities
+                    ),
                     selector_source=slot.selector_source,
                 )
                 for slot in lowered_specs
@@ -615,6 +587,7 @@ class _GenerationSession:
                 primitive,
                 type_tags,
                 backend_id=backend,
+                compiler_capabilities=self.compiler_capabilities.get(backend),
             )
             self.diagnostics.extend(selection.diagnostics)
             for slot in selection.selected:
@@ -650,6 +623,10 @@ class _GenerationSession:
                         callees=callees,
                         callee_origins=callee_origins,
                         selection_required_features=slot.required_features,
+                        selection_required_compiler_capabilities=(
+                            slot.required_compiler_capabilities
+                        ),
+                        compiler_alternative_rank=slot.compiler_alternative_rank,
                         selector_source=slot.implementation.selector_source,
                     )
                 )
@@ -720,23 +697,43 @@ class _GenerationSession:
         lowered_specs: list["_LoweredSlot"],
         pruned: list["_LoweredSlot"],
     ) -> None:
-        self.coverage.extend(
-            CoverageEntry(
-                profile=profile_name,
-                backend=slot.backend,
-                primitive=slot.spec.primitive_name,
-                extension=slot.spec.extension_name,
-                type_tag=slot.spec.type_tag,
-                source_primitive_name=slot.spec.source_primitive_name,
-                result_kind=slot.spec.result_kind,
-                param_kinds=slot.spec.param_kinds,
-                mask_policy=slot.spec.mask_policy,
-                axis=slot.spec.axis,
-                variant_names=slot.spec.variant_names,
+        pruned_ids = {id(slot) for slot in pruned}
+        seen_alternatives: set[tuple[object, ...]] = set()
+        for slot in lowered_specs:
+            if id(slot) in pruned_ids:
+                continue
+            if slot.compiler_alternative_rank is not None:
+                target = slot.spec.target
+                key = (
+                    slot.backend,
+                    slot.spec.primitive_name,
+                    slot.spec.extension_name,
+                    slot.spec.type_tag,
+                    slot.spec.param_kinds,
+                    slot.spec.mask_policy,
+                    slot.spec.axis,
+                    None if target is None else target.base_tag,
+                    None if target is None else target.extension_isa,
+                    slot.spec.lane_parameter,
+                )
+                if key in seen_alternatives:
+                    continue
+                seen_alternatives.add(key)
+            self.coverage.append(
+                CoverageEntry(
+                    profile=profile_name,
+                    backend=slot.backend,
+                    primitive=slot.spec.primitive_name,
+                    extension=slot.spec.extension_name,
+                    type_tag=slot.spec.type_tag,
+                    source_primitive_name=slot.spec.source_primitive_name,
+                    result_kind=slot.spec.result_kind,
+                    param_kinds=slot.spec.param_kinds,
+                    mask_policy=slot.spec.mask_policy,
+                    axis=slot.spec.axis,
+                    variant_names=slot.spec.variant_names,
+                )
             )
-            for slot in lowered_specs
-            if slot not in pruned
-        )
 
 
 def _dependency_discovery_requests(
@@ -847,7 +844,7 @@ def _lowering_skipped_entry(
         source_primitive_name=slot.primitive.name,
         result_kind="" if shape is None else shape.result_kind,
         param_kinds=() if shape is None else shape.param_kinds,
-        mask_policy=slot.primitive.attributes.get("mask"),
+        mask_policy=slot.primitive.mask_mode,
         axis=tuple(
             (key, slot.primitive.attributes[key])
             for key in sorted(slot.primitive.attributes)
@@ -967,6 +964,25 @@ def _trace_slot_key(slot: LoweringTraceSlot) -> tuple[object, ...]:
         source.path.as_posix() if source is not None else "",
         source.line if source is not None else 0,
         source.column if source is not None else 0,
+    )
+
+
+def _request_has_complete_backend_inventory(
+    request: GenerationRequest, backend_id: str
+) -> bool:
+    return (
+        request.primitives is None
+        and request.profiles is None
+        and request.extensions is None
+        and frozenset(request.type_tags) == frozenset(DEFAULT_SCALAR_TYPE_TAGS)
+        and all(
+            scope.backend_id != backend_id
+            for scope in request.backend_profile_scopes
+        )
+        and all(
+            item.backend_id != backend_id
+            for item in request.backend_compiler_capabilities
+        )
     )
 
 

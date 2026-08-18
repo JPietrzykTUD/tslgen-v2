@@ -87,6 +87,11 @@ _REGION_FACTS = (
     ),
     ("io", "Format vector output.", ("io<format>(out, array, modifier)",)),
     (
+        "address",
+        "Take a typed address or mutable borrow.",
+        ("address<of>(expr)", "address<borrow_mut>(expr)"),
+    ),
+    (
         "cast",
         "Render a backend-specific cast.",
         (
@@ -188,8 +193,6 @@ def _catalog_and_definitions(
                 name="wide",
                 isa_name="wide",
                 family="test",
-                compose_prefix={},
-                compose_suffix_by_type={},
                 backend_supported={"rust": False, "cpp": True},
                 inherits="base",
                 active_when=ExtensionActivation(
@@ -204,8 +207,6 @@ def _catalog_and_definitions(
                 name="minimal",
                 isa_name="minimal",
                 family="",
-                compose_prefix={},
-                compose_suffix_by_type={},
             ),
         },
         type_spellings={},

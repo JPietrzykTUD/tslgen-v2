@@ -4,13 +4,18 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
+from tslc.backend.cpp_compiler_capabilities import (
+    CppCompilerCapability,
+    cpp_extension_compiler_capabilities,
+    cpp_extension_header_group,
+)
 from tslc.backend.emitted_profile import EmittedProfile, used_vector_type_specs
 from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.target_capability import (
-    cpp_x86_register_helper,
-    is_x86_register_extension,
+    cpp_width_indexed_register_helper,
+    is_width_indexed_register_extension,
 )
-from tslc.catalog.model import BackendCompileGuard, Extension
+from tslc.catalog.model import Extension
 from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.target_text import TemplateApplication
@@ -23,20 +28,14 @@ _CPP_COMPILER_BUILTIN_MASK_POLICY_NAMES = {
 }
 
 
-def cpp_header_group(extension: Extension | None) -> str | None:
-    return None if extension is None else extension.header_group_for_backend("cpp")
-
-
 def cpp_extension_availability_condition(extension: Extension | None) -> str | None:
-    """Optional compiler capability needed for one extension's declarations."""
+    """Optional backend-owned compiler capabilities for one extension."""
 
-    if extension is None:
-        return None
-    metadata = extension.metadata.backend.get("cpp")
-    if metadata is None or not metadata.compiler_features:
+    capabilities = cpp_extension_compiler_capabilities(extension)
+    if not capabilities:
         return None
     return " && ".join(
-        f"__has_feature({feature})" for feature in sorted(metadata.compiler_features)
+        capability.condition_macro for capability in capabilities
     )
 
 
@@ -56,7 +55,10 @@ def _cpp_includes(
         '#include "tsl_primitives.hpp"',
         '#include "tsl_dataparallel.hpp"',
     ]
-    if any(is_x86_register_extension(extensions.get(ext)) for ext in emitted_exts):
+    if any(
+        is_width_indexed_register_extension(extensions.get(ext))
+        for ext in emitted_exts
+    ):
         lines.append('#include "tsl_x86_traits.hpp"')
     headers = sorted(
         {
@@ -81,29 +83,24 @@ def cpp_profiles_support_algorithm(profiles: tuple[EmittedProfile, ...]) -> bool
     )
 
 
-def cpp_compile_guard_condition(guards: Sequence[BackendCompileGuard]) -> str:
-    """The C++ preprocessor condition proving every compile guard is satisfied."""
+def cpp_compiler_capability_condition(guards: Sequence[CppCompilerCapability]) -> str:
+    """The C++ preprocessor condition proving every capability is available."""
 
     return " && ".join(
-        f"defined({guard.macro}) && {guard.macro} == {guard.equals}"
-        for guard in guards
+        f"({guard.preprocessor_probe})" for guard in guards
     )
 
 
-def cpp_compile_guard_diagnostic(guard: BackendCompileGuard) -> str:
-    """The author-facing message emitted when one compile guard is unsatisfied."""
+def cpp_compiler_capability_diagnostic(guard: CppCompilerCapability) -> str:
+    """The author-facing message emitted when a capability is unavailable."""
 
-    if guard.diagnostic:
-        return guard.diagnostic
-    if guard.hint_flag:
-        return f"TSL profile requires {guard.hint_flag}"
-    return f"TSL profile requires {guard.macro} == {guard.equals}"
+    return guard.diagnostic
 
 
 def _cpp_registration(ext: str, extension: Extension | None) -> str:
     """A C++ extension tag + `simd<T, ext>` register/mask-type wiring for one ISA ext."""
 
-    helper = cpp_x86_register_helper(extension)
+    helper = cpp_width_indexed_register_helper(extension)
     bits = extension.vector_bits if extension is not None else None
     assert helper is not None and bits is not None, (
         f"C++ profile validation missed unsupported x86 extension {ext!r}"
@@ -147,7 +144,7 @@ def _cpp_native_registration(
         ext
         for ext, type_tag, _base in used_vector_type_specs(by_primitive)
         if (extension := extensions.get(ext)) is not None
-        and not is_x86_register_extension(extension)
+        and not is_width_indexed_register_extension(extension)
         and extension.direct_vector_register_type("cpp", type_tag) is not None
     }
     for ext in sorted(emitted):
@@ -159,7 +156,7 @@ def _cpp_native_registration(
         )
     for ext, type_tag, base in used_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
-        if extension is None or is_x86_register_extension(extension):
+        if extension is None or is_width_indexed_register_extension(extension):
             continue
         register = extension.direct_vector_register_type("cpp", type_tag)
         if register is None:
@@ -209,7 +206,10 @@ def _cpp_sized_registration(
         extension = extensions.get(ext)
         if (
             extension is None
-            or ext == "generic"
+            or (
+                extension.is_unconditional_implementation_fallback
+                and DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
+            )
             or not DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
         ):
             continue
@@ -354,20 +354,26 @@ def _cpp_inferred_simd_registrations(
     return "".join(lines)
 
 
-def _cpp_compiler_builtin_fixed_registrations(
+def _cpp_overlay_fixed_registrations(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
     header_group: str,
 ) -> str:
-    """Expose an explicit fixed-lane policy for one compiler-builtin overlay."""
+    """Expose an explicit fixed-lane policy for one opt-in header overlay."""
 
     candidates: dict[tuple[str, str, int], tuple[tuple[int, str], str]] = {}
     for ext, type_tag, base in used_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
+        metadata = (
+            None
+            if extension is None
+            else extension.metadata.backend.get("cpp")
+        )
         if (
             extension is None
-            or extension.family != "compiler_builtin"
-            or extension.header_group_for_backend("cpp") != header_group
+            or metadata is None
+            or metadata.participates_in_dataparallel_inference
+            or cpp_extension_header_group(extension) != header_group
             or extension.vector_bits_kind != "fixed"
             or extension.direct_vector_register_type("cpp", type_tag) is None
         ):
@@ -423,7 +429,7 @@ def _cpp_compiler_builtin_fixed_registrations(
 def _cpp_extension_register_is_available(extension: Extension, type_tag: str) -> bool:
     if extension.vector_bits <= 0 and not DEFAULT_SUPPORT_POLICY.uses_scalable_vector(extension):
         return True
-    return is_x86_register_extension(extension) or (
+    return is_width_indexed_register_extension(extension) or (
         extension.direct_vector_register_type("cpp", type_tag) is not None
     )
 
@@ -463,6 +469,8 @@ def _cpp_mask_type(
     kind = extension.mask_policy.kind
     if kind == "native_predicate":
         return extension.mask_policy.spelling("cpp") or register
+    if kind == "native_predicate_by_type":
+        return extension.mask_policy.spelling_for_type("cpp", type_tag) or register
     if kind == "native_predicate_by_lanes":
         lanes = vector_bits // scalar_bit_width_or_default(type_tag)
         concrete = extension.mask_policy.spelling_for_lanes("cpp", max(8, lanes))

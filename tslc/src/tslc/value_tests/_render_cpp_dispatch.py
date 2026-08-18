@@ -9,7 +9,6 @@ from tslc.value_tests.lane_model import (
 )
 from tslc.value_tests.model import (
     ValueTestCasePlan,
-    ValueTestProfileCaseExclusion,
 )
 from tslc.value_tests._render_cpp_core import (
     _array_to_vector,
@@ -20,6 +19,8 @@ from tslc.value_tests._render_cpp_core import (
     _mask_to_vector,
     _reduction,
     _runtime_failure,
+    _scalable_mask_count,
+    _scalable_runtime_failure,
     _scalar_result,
     _scalar_vector,
     _status_pointer,
@@ -35,6 +36,7 @@ from tslc.value_tests._render_cpp_conversion import (
     _load_convert,
     _lane_convert,
     _repr_cast,
+    _scalable_repr_cast,
     _target_imask,
 )
 from tslc.value_tests._render_cpp_memory import (
@@ -49,6 +51,8 @@ from tslc.value_tests._render_cpp_memory import (
     _pointer_free,
     _pointer_lifetime,
     _scalable_mask_store,
+    _scalable_masked_pointer_load,
+    _scalable_masked_pointer_store,
     _scalar_pointer_load,
     _store,
     _stream,
@@ -62,15 +66,9 @@ CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
     backend_id="cpp",
     supports_differential=True,
     isolated_case_kinds=frozenset({"compile_failure"}),
-    profile_case_exclusions=(
-        ValueTestProfileCaseExclusion(
-            profile_family="wasm32",
-            case_kind="runtime_failure",
-            reason=(
-                "the generated wasm32 C++ toolchain does not provide the exception "
-                "unwinding required to observe the runtime-failure marker"
-            ),
-        ),
+    unobservable_runtime_failure_reason=(
+        "the generated C++ toolchain does not provide the exception unwinding "
+        "required to observe the runtime-failure marker"
     ),
     case_renderers={
         "array_to_vector": _array_to_vector,
@@ -108,13 +106,21 @@ CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "scalar_result": _scalar_result,
         "scalar_vector": _scalar_vector,
         "scalable_golden": render_value_case,
+        "scalable_immediate": render_value_case,
+        "scalable_repr_cast": _scalable_repr_cast,
+        "scalable_scalar_vector": render_value_case,
         "scalable_mask_constant": render_mask_case,
         "scalable_mask_conversion": render_mask_conversion,
+        "scalable_mask_count": _scalable_mask_count,
         "scalable_mask_logic": render_mask_case,
         "scalable_mask_result": render_mask_case,
+        "scalable_runtime_failure": _scalable_runtime_failure,
         "scalable_mask_store": _scalable_mask_store,
+        "scalable_masked_pointer_load": _scalable_masked_pointer_load,
+        "scalable_masked_pointer_store": _scalable_masked_pointer_store,
         "scalable_masked_mask_result": render_mask_case,
         "scalable_masked": render_value_case,
+        "scalable_masked_immediate": render_value_case,
         "store": _store,
         "target_imask": _target_imask,
         "status_pointer": _status_pointer,

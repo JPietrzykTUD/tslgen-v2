@@ -5,6 +5,7 @@ from __future__ import annotations
 from tslc.ir.region_syntax import parse_var_selector, segments_text, split_arg_groups
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower.context import LoweringSession, VectorValue
+from tslc.lower.region_safety import direct_region_safety
 from tslc.lower.queries import QueryEvaluator, TypeValue
 from tslc.lower.region_handlers.common import _resolve_type_expression
 from tslc.lower.region_handlers.protocol import RenderBody
@@ -169,7 +170,7 @@ class VarLowerer:
                 source=region.source,
             )
             return region.full_text
-        context.effects.mark_internal_unsafe("raw_memory")
+        context.effects.merge_safety(direct_region_safety(region))
         resolved_type = _resolve_type_expression(
             segments_text(groups[0]),
             context,

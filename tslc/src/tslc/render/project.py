@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tslc.backend.capability import (
+    BackendPolicyInputs,
+    EMPTY_BACKEND_POLICY_INPUTS,
+)
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.registry import backend_capabilities
 from tslc.benchmark.model import BenchmarkProjectPlan, EMPTY_BENCHMARK_PROJECT_PLAN
@@ -37,6 +41,7 @@ def render_project(
     *,
     assets: RenderAssets,
     config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG,
+    policy_inputs: BackendPolicyInputs = EMPTY_BACKEND_POLICY_INPUTS,
 ) -> RenderedProject:
     ordered = tuple(sorted(profiles, key=lambda profile: profile.profile.name))
     artifacts: list[Artifact] = []
@@ -51,7 +56,12 @@ def render_project(
         )
         artifacts.extend(
             driver.render_artifacts(
-                backend_profiles, value_tests, benchmarks, assets, config
+                backend_profiles,
+                value_tests,
+                benchmarks,
+                assets,
+                config,
+                policy_inputs,
             )
         )
         verify_backends.append(driver.verify_backend(backend_profiles, value_tests))

@@ -1005,21 +1005,29 @@ def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridg
         to_integral_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert to_integral is not None
-    assert "if (mask[0] != 0)" in to_integral.body_text
-    assert (
-        "result |= (static_cast<typename Vec::imask_type>(1)) << 0;"
-        in to_integral.body_text
+    assert to_integral.required_compiler_capabilities == frozenset(
+        {"ext_vector_boolean_mask_bridge"}
     )
+    assert "__builtin_convertvector(mask, BoolMaskT)" in to_integral.body_text
+    assert "::tsl::bit_cast<typename Vec::imask_type>(packed)" in (
+        to_integral.body_text
+    )
+    assert "mask[0]" not in to_integral.body_text
 
     to_mask_slot = _by_key(catalog, profile, "to_mask")[("f32", "clang_v256")]
     to_mask = Lowerer().lower(
         to_mask_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert to_mask is not None
-    assert "typename Vec::mask_type result = static_cast<typename Vec::mask_type>(0);" in (
+    assert to_mask.required_compiler_capabilities == frozenset(
+        {"ext_vector_boolean_mask_bridge"}
+    )
+    assert "::tsl::detail::helpers::imask_low_bits(8)" in to_mask.body_text
+    assert "::tsl::bit_cast<BoolMaskT>(normalized)" in to_mask.body_text
+    assert "-__builtin_convertvector(packed, typename Vec::mask_type)" in (
         to_mask.body_text
     )
-    assert "result[0] = -1;" in to_mask.body_text
+    assert "result[0] = -1;" not in to_mask.body_text
 
     bool_equal_slot = _by_key(catalog, profile, "equal")[("f32", "clang_v256_bool")]
     bool_equal = Lowerer().lower(
@@ -1035,7 +1043,14 @@ def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridg
         bool_to_integral_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert bool_to_integral is not None
-    assert "if (mask[0])" in bool_to_integral.body_text
+    assert bool_to_integral.required_compiler_capabilities == frozenset(
+        {"ext_vector_boolean_mask_bridge"}
+    )
+    assert "__builtin_convertvector" not in bool_to_integral.body_text
+    assert "::tsl::bit_cast<typename Vec::imask_type>(mask)" in (
+        bool_to_integral.body_text
+    )
+    assert "mask[0]" not in bool_to_integral.body_text
 
     bool_to_mask_slot = _by_key(catalog, profile, "to_mask")[
         ("f32", "clang_v256_bool")
@@ -1044,8 +1059,17 @@ def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridg
         bool_to_mask_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert bool_to_mask is not None
-    assert "static_cast<typename Vec::mask_type>(false)" in bool_to_mask.body_text
-    assert "result[0] = true;" in bool_to_mask.body_text
+    assert bool_to_mask.required_compiler_capabilities == frozenset(
+        {"ext_vector_boolean_mask_bridge"}
+    )
+    assert "__builtin_convertvector" not in bool_to_mask.body_text
+    assert "::tsl::detail::helpers::imask_low_bits(8)" in (
+        bool_to_mask.body_text
+    )
+    assert "::tsl::bit_cast<typename Vec::mask_type>(normalized)" in (
+        bool_to_mask.body_text
+    )
+    assert "result[0] = true;" not in bool_to_mask.body_text
 
     bool_to_vector_slot = _by_key(catalog, profile, "to_vector")[
         ("f32", "clang_v256_bool")

@@ -566,7 +566,7 @@ prim<usize:=s> lzc_scalar(data):
           tsil """
                let<type>(UnsignedT, base::unsigned_of(base::in));
                var<infer>(bits, cast<static>(UnsignedT, 0));
-               mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data), value(type::size_bytes(base::in))) ;
+               mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(bits)), cast<reinterpret, type=const_ptr>(void, address<of>(data)), value(type::size_bytes(base::in))) ;
                complete(cast<static>(scalar::size, helper<clz>(bits))) ;
             """
     oneapi_fpga:
@@ -621,6 +621,9 @@ prim<v:=v> lzc(data):
     - {tags [basic, float], type "f32", case {inputs [[0.0, -0.0, 1.0, -1.0]], expected [32.0, 0.0, 2.0, 0.0]}}
     - {tags [basic, float], type "f64", case {inputs [[1.0, -1.0]], expected [2.0, 0.0]}}
     - {tags [edge, float], type "f64", case {inputs [[0.0, -0.0]], expected [64.0, 0.0]}}
+    - {tags [clang, edge], extension "clang_v128", type "ui32", case {inputs [[0, 1, 2147483648, 4294967295]], expected [32, 31, 0, 0]}}
+    - {tags [clang, edge], extension "clang_v256", type "ui32", case {inputs [[0, 1, 2, 3, 4, 8, 2147483648, 4294967295]], expected [32, 31, 30, 30, 29, 28, 0, 0]}}
+    - {tags [clang, edge], extension "clang_v512", type "ui32", case {inputs [[0, 1, 2, 3, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 1073741824, 2147483648, 4294967295]], expected [32, 31, 30, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 1, 0, 0]}}
   impls:
     [avx512, avx2_vl, sse_vl]:
       [?i32, ?i64]:
@@ -653,7 +656,11 @@ prim<v:=v> lzc(data):
           """
     clang_v128:
       ?i?:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [elementwise_clzg]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -666,6 +673,42 @@ prim<v:=v> lzc(data):
                 cast<static>(base::in, value(type::size_bits(base::in)))
               )
             ));
+          """
+    clang_v128:
+      ?i?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
+            var<infer>(bits, call<primitive=reinterpret[Vec, UVec]>(data));
+            bits = call<primitive=binary_or[UVec]>(bits, call<primitive=shift_right[UVec, false]>(bits, 1));
+            bits = call<primitive=binary_or[UVec]>(bits, call<primitive=shift_right[UVec, false]>(bits, 2));
+            bits = call<primitive=binary_or[UVec]>(bits, call<primitive=shift_right[UVec, false]>(bits, 4));
+            if<generation>(
+              value(type::same_size(base::in, ui16)) ||
+              value(type::same_size(base::in, ui32)) ||
+              value(type::same_size(base::in, ui64))
+            ) {
+              bits = call<primitive=binary_or[UVec]>(bits, call<primitive=shift_right[UVec, false]>(bits, 8));
+            }
+            if<generation>(
+              value(type::same_size(base::in, ui32)) ||
+              value(type::same_size(base::in, ui64))
+            ) {
+              bits = call<primitive=binary_or[UVec]>(bits, call<primitive=shift_right[UVec, false]>(bits, 16));
+            }
+            if<generation>(value(type::same_size(base::in, ui64))) {
+              bits = call<primitive=binary_or[UVec]>(bits, call<primitive=shift_right[UVec, false]>(bits, 32));
+            }
+            var<const_infer>(leading_zeros, call<primitive=popcnt[UVec]>(
+              call<primitive=inv[UVec]>(bits)
+            ));
+            complete(call<primitive=reinterpret[UVec, Vec]>(leading_zeros));
           """
       f?:
         requires []

@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, Mapping
 from typing import get_args
 
-from tslc.catalog.model import ImaskPolicyKind, MaskPolicyKind, VectorBitsKind
+from tslc.catalog.model import (
+    ImaskPolicyKind,
+    IntrinsicNameOrder,
+    MaskPolicyKind,
+    VectorBitsKind,
+)
+from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
 from tslc.catalog.target_families import TargetFamilyCatalog
 from tslc.catalog.validation._schema_common import (
+    KNOWN_BOOLEAN_VALUES,
     diagnose_duplicate_fields,
     invalid_enum,
     validate_backend_key_fields,
@@ -32,7 +39,6 @@ KNOWN_EXTENSION_FIELDS = frozenset(
         "inherits",
         "integral_mask_type_policy",
         "intrinsic_compose",
-        "intrinsic_style",
         "mask_type_policy",
         "native_sort_order",
         "runtime_lane_count",
@@ -50,31 +56,33 @@ KNOWN_EXTENSION_FIELDS = frozenset(
         "vector_register_types",
     }
 )
+OBSOLETE_EXTENSION_FIELDS = frozenset({"intrinsic_style"})
 KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
     {
         "arch_module",
-        "compile_guards",
-        "compiler_features",
-        "compiler_ids",
+        "compiler_capabilities",
         "dataparallel_inference",
-        "header_group",
         "headers",
         "supported",
         "type_name",
     }
 )
 KNOWN_MASK_POLICY_FIELDS = frozenset(
-    {"kind", "backend_spelling", "backend_spelling_by_lanes"}
+    {
+        "kind",
+        "backend_spelling",
+        "backend_spelling_by_lanes",
+        "backend_spelling_by_type",
+    }
 )
 KNOWN_IMASK_POLICY_FIELDS = frozenset({"kind"})
-KNOWN_INTRINSIC_COMPOSE_FIELDS = frozenset({"prefix", "suffix"})
+KNOWN_INTRINSIC_COMPOSE_FIELDS = frozenset(
+    {"order", "prefix", "require_explicit_suffix", "suffix"}
+)
 KNOWN_INTRINSIC_SUFFIX_FIELDS = frozenset({"by_type"})
 KNOWN_ACTIVE_WHEN_FIELDS = frozenset({"target_features", "compile_modes"})
 KNOWN_SIZE_PARAMETER_FIELDS = frozenset({"name"})
 KNOWN_VECTOR_REGISTER_POLICY_FIELDS = frozenset({"kind"})
-KNOWN_COMPILE_GUARD_FIELDS = frozenset(
-    {"macro", "equals", "hint_flag", "diagnostic"}
-)
 KNOWN_TEST_FILTER_FIELDS = frozenset({"exclude_templates"})
 # Derived from the typed catalog kinds so the validator cannot drift from the model.
 KNOWN_MASK_POLICY_KINDS: frozenset[str] = frozenset(get_args(MaskPolicyKind))
@@ -87,7 +95,13 @@ KNOWN_VECTOR_BITS_SPELLINGS: frozenset[str] = frozenset(
 
 
 def known_extension_fields(backend_ids: Iterable[str] = ()) -> frozenset[str]:
-    return KNOWN_EXTENSION_FIELDS | frozenset(backend_ids)
+    # Obsolete forms remain recognized only so validation can give a targeted
+    # migration diagnostic. They are never promoted or offered by authoring.
+    return (
+        KNOWN_EXTENSION_FIELDS
+        | OBSOLETE_EXTENSION_FIELDS
+        | frozenset(backend_ids)
+    )
 
 
 def validate_extension_block(
@@ -95,8 +109,24 @@ def validate_extension_block(
     backend_ids: Collection[str],
     diagnostics: list[Diagnostic],
     target_families: TargetFamilyCatalog,
+    compiler_capabilities: Mapping[str, Collection[str]] | None = None,
 ) -> None:
     fields = {field.key.text: field for field in declaration.fields}
+    obsolete_style = fields.get("intrinsic_style")
+    if obsolete_style is not None:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-OBSOLETE-INTRINSIC-STYLE",
+                message=(
+                    "extension field 'intrinsic_style' is obsolete; declare semantic "
+                    "name composition under intrinsic_compose using order "
+                    "'base_suffix' or 'suffix_base' and "
+                    "require_explicit_suffix when needed"
+                ),
+                source=source_span(obsolete_style.source),
+            )
+        )
     family = field_text(fields.get("family")) or ""
     if (
         family
@@ -173,6 +203,28 @@ def validate_extension_block(
                 diagnostics,
                 owner="intrinsic suffix",
             )
+        order_field = child(compose, "order")
+        order = field_text(order_field)
+        known_orders = tuple(item.value for item in IntrinsicNameOrder)
+        if order is not None and order not in known_orders:
+            invalid_enum(
+                diagnostics,
+                order_field,
+                f"intrinsic_compose order {order!r}",
+                known_orders,
+            )
+        require_field = child(compose, "require_explicit_suffix")
+        require = field_text(require_field)
+        if require is not None and require not in KNOWN_BOOLEAN_VALUES:
+            invalid_enum(
+                diagnostics,
+                require_field,
+                (
+                    "intrinsic_compose require_explicit_suffix value "
+                    f"{require!r}"
+                ),
+                sorted(KNOWN_BOOLEAN_VALUES),
+            )
     active_when = fields.get("active_when")
     if active_when is not None:
         validate_known_fields(
@@ -232,11 +284,45 @@ def validate_extension_block(
             diagnostics,
             label=f"extension backend {backend_id} field",
         )
-        _validate_compile_guards(
-            child(backend, "compile_guards"),
-            diagnostics,
-            backend_id,
-        )
+        capability_field = child(backend, "compiler_capabilities")
+        if capability_field is not None:
+            known = (compiler_capabilities or {}).get(backend_id)
+            if not isinstance(capability_field.value, ParsedTslListValue):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-MALFORMED-EXTENSION-CAPABILITIES",
+                        message=(
+                            f"extension backend {backend_id!r} compiler_capabilities "
+                            "must be a list"
+                        ),
+                        source=source_span(capability_field.source),
+                    )
+                )
+            else:
+                for item in capability_field.value.items:
+                    if not isinstance(item, ParsedTslScalarValue):
+                        diagnostics.append(
+                            diagnostic_at(
+                                severity="error",
+                                code="TSL-CATALOG-MALFORMED-EXTENSION-CAPABILITIES",
+                                message="extension compiler capabilities must be names",
+                                source=source_span(item.source),
+                            )
+                        )
+                    elif known is not None and item.text not in known:
+                        diagnostics.append(
+                            diagnostic_at(
+                                severity="error",
+                                code="TSL-CATALOG-UNKNOWN-COMPILER-CAPABILITY",
+                                message=(
+                                    f"extension backend {backend_id!r} uses unknown "
+                                    f"compiler capability {item.text!r}; expected one of: "
+                                    f"{', '.join(sorted(known)) or '(none)'}"
+                                ),
+                                source=source_span(item.source),
+                            )
+                        )
         inference_field = child(backend, "dataparallel_inference")
         inference = field_text(inference_field)
         if inference is not None and inference not in {"true", "false"}:
@@ -275,45 +361,6 @@ def validate_extension_block(
                 diagnostics,
                 owner=backend_map_name,
             )
-
-
-def _validate_compile_guards(
-    field: ParsedTslField | None,
-    diagnostics: list[Diagnostic],
-    backend_id: str,
-) -> None:
-    if field is None:
-        return
-    diagnose_duplicate_fields(
-        children(field),
-        diagnostics,
-        label=f"{backend_id} compile guard",
-    )
-    for guard in children(field):
-        validate_known_fields(
-            children(guard),
-            KNOWN_COMPILE_GUARD_FIELDS,
-            diagnostics,
-            owner=f"{backend_id} compile guard {guard.key.text!r}",
-        )
-        diagnose_duplicate_fields(
-            children(guard),
-            diagnostics,
-            label=f"{backend_id} compile guard {guard.key.text!r} field",
-        )
-        for required in ("macro", "equals"):
-            if field_text(child(guard, required)) is None:
-                diagnostics.append(
-                    diagnostic_at(
-                        severity="error",
-                        code="TSL-CATALOG-MALFORMED-COMPILE-GUARD",
-                        message=(
-                            f"{backend_id} compile guard {guard.key.text!r} "
-                            f"requires scalar field {required!r}"
-                        ),
-                        source=source_span(guard.source),
-                    )
-                )
 
 
 def _validate_active_target_features(
@@ -380,6 +427,46 @@ def _validate_mask_policy_backend_maps(
             diagnostics,
             owner="mask_type_policy backend_spelling",
         )
+    by_type = child(field, "backend_spelling_by_type")
+    if by_type is not None:
+        diagnose_duplicate_fields(
+            children(by_type),
+            diagnostics,
+            label="mask_type_policy backend_spelling_by_type field",
+        )
+        validate_backend_key_fields(
+            children(by_type),
+            backend_ids,
+            diagnostics,
+            owner="mask_type_policy backend_spelling_by_type",
+        )
+        for backend in children(by_type):
+            diagnose_duplicate_fields(
+                children(backend),
+                diagnostics,
+                label=f"mask_type_policy {backend.key.text!r} type field",
+            )
+            for type_field in children(backend):
+                if type_field.key.text not in KNOWN_SCALAR_TYPE_TAGS:
+                    invalid_enum(
+                        diagnostics,
+                        type_field,
+                        "mask_type_policy scalar type",
+                        sorted(KNOWN_SCALAR_TYPE_TAGS),
+                    )
+                if not field_text(type_field):
+                    diagnostics.append(
+                        diagnostic_at(
+                            severity="error",
+                            code="TSL-CATALOG-EXTENSION-MALFORMED-MASK-TYPE",
+                            message=(
+                                "mask_type_policy backend_spelling_by_type "
+                                "values must be non-empty strings"
+                            ),
+                            source=source_span(type_field.source),
+                        )
+                    )
+
     by_lanes = child(field, "backend_spelling_by_lanes")
     if by_lanes is None:
         return

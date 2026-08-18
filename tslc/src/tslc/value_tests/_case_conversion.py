@@ -6,6 +6,7 @@ from tslc.catalog.arithmetic import ArithmeticGuarantee, ArithmeticOperandRole
 from tslc.catalog.model import Catalog, Primitive, TestCase
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.value_tests.case_helpers import (
     args_match as _args_match,
     base_spelling as _base_spelling,
@@ -259,6 +260,8 @@ def lane_convert_case(
     case: TestCase,
     specs: tuple[LoweredSpecialization, ...],
     harness: HarnessPrimitiveNames,
+    catalog: Catalog,
+    backend_id: str,
 ) -> ValueTestCasePlan | None:
     if case.expected_rule is not None or case.lanes is None:
         return None
@@ -276,7 +279,14 @@ def lane_convert_case(
     )
     if target_param is None or target_param.base_type_binding_spelling is None:
         return None
-    if case.extension is not None and not harness.round_trip_ready:
+    target_extension = (
+        _unconditional_sized_fallback_extension(catalog, backend_id)
+        if case.extension is not None
+        else None
+    )
+    if case.extension is not None and (
+        not harness.round_trip_ready or target_extension is None
+    ):
         return None
     vector_inputs = _vector_inputs(case)
     if (
@@ -306,7 +316,7 @@ def lane_convert_case(
         representation=(
             ValueTestRepresentation(
                 source_extension=match.extension_name,
-                target_extension="generic",
+                target_extension=target_extension,
                 from_array_name=harness.from_array,
                 to_array_name=harness.to_array,
             )
@@ -314,6 +324,20 @@ def lane_convert_case(
             else None
         ),
     )
+
+
+def _unconditional_sized_fallback_extension(
+    catalog: Catalog, backend_id: str
+) -> str | None:
+    candidates = tuple(
+        extension.name
+        for extension in catalog.extensions.values()
+        if extension.supports_backend(backend_id)
+        and extension.is_unconditional_implementation_fallback
+        and DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
+    )
+    return candidates[0] if len(candidates) == 1 else None
+
 
 def extension_repr_case(
     kind: str,

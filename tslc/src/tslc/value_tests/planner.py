@@ -11,6 +11,7 @@ from tslc.lower.lowerer import LoweredSpecialization
 from tslc.lower.lowerer import varying_positions
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 from tslc.value_tests._case_conversion import FUZZ_ITERATIONS
+from tslc.value_tests._case_scalable import scalable_runtime_failure_cases
 from tslc.value_tests._pattern_base import (
     ValueTestCaseContext,
     ValueTestFuzzContext,
@@ -51,7 +52,7 @@ class ValueTestBackendProfileInput:
     backend_id: str
     profile_name: str
     specializations: Mapping[str, tuple[LoweredSpecialization, ...]]
-    profile_family: str = ""
+    observes_runtime_failures: bool = True
 
 
 class ValueTestPlanner:
@@ -131,7 +132,7 @@ class ValueTestPlanner:
                     fuzz_supported, fuzz_drops = self._supported_cases(
                         fuzz_planned,
                         backend,
-                        profile.profile_family,
+                        profile.observes_runtime_failures,
                         profile.specializations,
                         diagnostics,
                     )
@@ -179,7 +180,19 @@ class ValueTestPlanner:
                         plan = runtime_failure_case(
                             emitted_name, index, test_case, specs
                         )
-                        planned = (plan,) if plan is not None else ()
+                        planned_cases = [plan] if plan is not None else []
+                        planned_cases.extend(
+                            scalable_runtime_failure_cases(
+                                emitted_name,
+                                index,
+                                test_case,
+                                specs,
+                                self._catalog,
+                                harness,
+                                backend,
+                            )
+                        )
+                        planned = tuple(planned_cases)
                     elif test_case.role == "compile_failure":
                         plan = compile_failure_case(
                             emitted_name, index, test_case, specs
@@ -203,7 +216,7 @@ class ValueTestPlanner:
                     supported, drops = self._supported_cases(
                         planned,
                         backend,
-                        profile.profile_family,
+                        profile.observes_runtime_failures,
                         profile.specializations,
                         diagnostics,
                     )
@@ -277,7 +290,7 @@ class ValueTestPlanner:
         self,
         cases: tuple[ValueTestCasePlan, ...],
         backend: ValueTestBackendSupport,
-        profile_family: str,
+        observes_runtime_failures: bool,
         specializations: Mapping[str, tuple[LoweredSpecialization, ...]],
         diagnostics: list[Diagnostic],
     ) -> tuple[tuple[ValueTestCasePlan, ...], tuple[ValueTestCaseDrop, ...]]:
@@ -294,13 +307,19 @@ class ValueTestPlanner:
                 )
                 drops.append(ValueTestCaseDrop(case, cause))
                 continue
-            exclusion = backend.exclusion_for(profile_family, case.kind)
-            if exclusion is not None:
+            requirements = DEFAULT_VALUE_TEST_CASE_REQUIREMENTS[case.kind]
+            if (
+                requirements.requires_runtime_failure_observation
+                and not observes_runtime_failures
+            ):
                 drops.append(
                     ValueTestCaseDrop(
                         case,
                         "profile_unsupported",
-                        detail=exclusion.reason,
+                        detail=(
+                            backend.unobservable_runtime_failure_reason
+                            or "the generated target cannot observe runtime failures"
+                        ),
                     )
                 )
                 continue
@@ -342,12 +361,21 @@ class ValueTestPlanner:
                 extension_names.add(case.representation.source_extension)
             if case.representation.target_extension is not None:
                 extension_names.add(case.representation.target_extension)
+        from tslc.backend.registry import backend_capability
+
+        try:
+            capability = backend_capability(backend_id)
+        except ValueError:
+            capability = None
         groups = {
-            metadata.header_group
+            group
             for name in extension_names
             if (extension := self._catalog.extensions.get(name)) is not None
-            if (metadata := extension.metadata.backend.get(backend_id)) is not None
-            if metadata.header_group is not None
+            for group in (
+                ()
+                if capability is None
+                else capability.extension_header_groups(extension)
+            )
         }
         if len(groups) > 1:
             extensions = tuple(
@@ -379,21 +407,23 @@ class ValueTestPlanner:
                     f"{sorted(groups)} through extensions {sorted(extension_names)}"
                 ),
             )
-        compiler_features = tuple(
+        compiler_capabilities = tuple(
             sorted(
                 {
-                    feature
+                    capability_id
                     for name in extension_names
                     if (extension := self._catalog.extensions.get(name)) is not None
-                    if (metadata := extension.metadata.backend.get(backend_id)) is not None
-                    for feature in metadata.compiler_features
+                    if (
+                        metadata := extension.metadata.backend.get(backend_id)
+                    ) is not None
+                    for capability_id in metadata.compiler_capabilities
                 }
             )
         )
         return replace(
             case,
             header_group=next(iter(groups), None),
-            required_compiler_features=compiler_features,
+            required_compiler_capabilities=compiler_capabilities,
         )
 
 

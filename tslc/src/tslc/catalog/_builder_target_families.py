@@ -51,6 +51,9 @@ def _build_target_families(fields: list[ParsedTslField]) -> TargetFamilyCatalog:
                 index_vector_register=_bool_field(
                     _child(entry, "index_vector_register"), default=False
                 ),
+                width_indexed_registers=_bool_field(
+                    _child(entry, "width_indexed_registers"), default=False
+                ),
                 documentation_family=_field_text(
                     _child(entry, "documentation_family")
                 ),
@@ -123,6 +126,19 @@ def _build_backend_profile_families(
             target=_field_text(_child(entry, "target")),
             linker=_field_text(_child(entry, "linker")),
             detection=_field_text(_child(entry, "detection")),
+            compiler_role=_field_text(_child(entry, "compiler_role")),
+            cmake_system_name=_field_text(_child(entry, "cmake_system_name")),
+            cmake_system_processor=_field_text(
+                _child(entry, "cmake_system_processor")
+            ),
+            pass_target_to_compiler=_bool_field(
+                _child(entry, "pass_target_to_compiler"),
+                default=True,
+            ),
+            runtime_failure_observable=_bool_field(
+                _child(entry, "runtime_failure_observable"),
+                default=True,
+            ),
             source=_source_span(entry.source),
         )
         for entry in _children(field)

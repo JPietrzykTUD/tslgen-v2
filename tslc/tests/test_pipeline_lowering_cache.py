@@ -90,6 +90,9 @@ def test_lowering_cache_reuses_exact_result_and_separates_every_key_axis(
         replace(selected, extension=replace(selected.extension)),
         replace(selected, type_tag="ui32"),
         replace(selected, required_features=frozenset({"unit_feature"})),
+        replace(
+            selected, required_compiler_capabilities=frozenset({"unit_capability"})
+        ),
         replace(selected, to_target="ui32"),
         replace(selected, concrete_lanes=7),
         replace(

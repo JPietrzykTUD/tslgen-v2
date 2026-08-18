@@ -2,17 +2,25 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from typing import get_args
 
-from tslc.catalog.model import GenericParamKind, RESULT_DIMENSIONS, RESULT_DIM_VECTOR
-from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS
+from tslc.catalog.model import (
+    GenericParamKind,
+    PrimitiveCastMode,
+    PrimitiveMaskMode,
+    PrimitiveValueMode,
+    RESULT_DIMENSIONS,
+    RESULT_DIM_VECTOR,
+)
+from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS, PointerMutability
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.param_types import (
     BASE_WIDTH_RELATIONS,
     base_width_relation_text,
     parse_base_width_constraint,
     parse_param_type_condition,
+    parse_param_type_expression,
     unquote_key,
 )
 from tslc.catalog.validation._schema_common import (
@@ -77,12 +85,12 @@ KNOWN_PRIMITIVE_FIELDS = frozenset(
 KNOWN_PRIMITIVE_ATTRIBUTES = {
     "aligned": frozenset({"true", "false", "*"}),
     "arg_count": frozenset({"return_vector_length"}),
-    "cast": frozenset({"reinterpret", "convert"}),
+    "cast": frozenset(mode.value for mode in PrimitiveCastMode),
     "direction": frozenset({"up", "down"}),
-    "mask": frozenset({"zero", "pass_through"}),
+    "mask": frozenset(mode.value for mode in PrimitiveMaskMode),
     "op": frozenset({"pack", "expand", "keep"}),
     "packed": frozenset({"true", "false", "*"}),
-    "value": frozenset({"zero", "undef", "all"}),
+    "value": frozenset(mode.value for mode in PrimitiveValueMode),
 }
 
 
@@ -91,6 +99,7 @@ def validate_primitive(
     backend_ids: Collection[str],
     diagnostics: list[Diagnostic],
     known_target_features: Collection[str] = (),
+    known_compiler_capabilities: Mapping[str, Collection[str]] | None = None,
 ) -> None:
     fields = tuple(field.field for field in declaration.fields)
     validate_known_fields(
@@ -118,7 +127,12 @@ def validate_primitive(
     _validate_return_type(declaration, diagnostics)
     validate_benchmarks(declaration, diagnostics)
     validate_tests(declaration, diagnostics)
-    validate_requires(declaration, diagnostics, known_target_features)
+    validate_requires(
+        declaration,
+        diagnostics,
+        known_target_features,
+        known_compiler_capabilities,
+    )
 
 
 def _validate_overload(
@@ -460,6 +474,12 @@ def _validate_param_types(
     diagnostics: list[Diagnostic],
 ) -> None:
     attributes = {attribute.key.text: attribute for attribute in declaration.attributes}
+    shape = parse_signature(declaration.signature)
+    parameter_kinds = (
+        {}
+        if shape is None
+        else dict(zip(declaration.parameters, shape.param_kinds, strict=False))
+    )
     seen: set[tuple[str, str, str]] = set()
     for field in declaration.fields_by_name("param_types"):
         diagnose_duplicate_fields(
@@ -467,6 +487,17 @@ def _validate_param_types(
         )
         for parameter in children(field.field):
             parameter_name = parameter.key.text
+            signature_kind = parameter_kinds.get(parameter_name)
+            kind_capability = (
+                None
+                if signature_kind is None
+                else DEFAULT_SIGNATURE_KINDS.by_kind.get(signature_kind)
+            )
+            pointer_kind = (
+                None
+                if kind_capability is None
+                else kind_capability.pointer_mutability
+            )
             if parameter_name not in declaration.parameters:
                 diagnostics.append(
                     diagnostic_at(
@@ -475,6 +506,19 @@ def _validate_param_types(
                         message=(
                             f"primitive {declaration.name!r} param_types references "
                             f"unknown parameter {parameter_name!r}"
+                        ),
+                        source=source_span(parameter.source),
+                    )
+                )
+            elif pointer_kind is None:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-PARAM-TYPES-NON-POINTER-PARAM",
+                        message=(
+                            f"primitive {declaration.name!r} param_types parameter "
+                            f"{parameter_name!r} has non-pointer signature kind "
+                            f"{signature_kind!r}"
                         ),
                         source=source_span(parameter.source),
                     )
@@ -496,6 +540,13 @@ def _validate_param_types(
                     )
                     continue
                 attribute_name, attribute_value = parsed
+                _validate_param_type_expression(
+                    declaration,
+                    parameter_name,
+                    entry,
+                    pointer_kind,
+                    diagnostics,
+                )
                 if attribute_name is None:
                     identity = (parameter_name, "", "")
                     if identity in seen:
@@ -511,18 +562,6 @@ def _validate_param_types(
                             )
                         )
                     seen.add(identity)
-                    if not field_text(entry):
-                        diagnostics.append(
-                            diagnostic_at(
-                                severity="error",
-                                code="TSL-CATALOG-PARAM-TYPES-MISSING-TYPE",
-                                message=(
-                                    f"primitive {declaration.name!r} param_types rule for "
-                                    f"parameter {parameter_name!r} has no type expression"
-                                ),
-                                source=source_span(entry.source),
-                            )
-                        )
                     continue
                 attribute = attributes.get(attribute_name)
                 if attribute is None:
@@ -564,18 +603,62 @@ def _validate_param_types(
                         )
                     )
                 seen.add(identity)
-                if not field_text(entry):
-                    diagnostics.append(
-                        diagnostic_at(
-                            severity="error",
-                            code="TSL-CATALOG-PARAM-TYPES-MISSING-TYPE",
-                            message=(
-                                f"primitive {declaration.name!r} param_types rule for "
-                                f"parameter {parameter_name!r} has no type expression"
-                            ),
-                            source=source_span(entry.source),
-                        )
-                    )
+
+
+def _validate_param_type_expression(
+    declaration: ParsedPrimitiveDeclaration,
+    parameter_name: str,
+    entry: ParsedTslField,
+    expected_pointer_kind: PointerMutability | None,
+    diagnostics: list[Diagnostic],
+) -> None:
+    type_text = field_text(entry)
+    if not type_text:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-PARAM-TYPES-MISSING-TYPE",
+                message=(
+                    f"primitive {declaration.name!r} param_types rule for "
+                    f"parameter {parameter_name!r} has no type expression"
+                ),
+                source=source_span(entry.source),
+            )
+        )
+        return
+    parsed = parse_param_type_expression(type_text)
+    if parsed is None:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-PARAM-TYPES-MALFORMED-TYPE",
+                message=(
+                    f"param_types expression {type_text!r} must use exactly "
+                    "cptr(<TSIL type expression>) or ptr(<TSIL type expression>)"
+                ),
+                source=source_span(entry.source),
+            )
+        )
+        return
+    if (
+        expected_pointer_kind is not None
+        and parsed.pointer_kind != expected_pointer_kind
+    ):
+        expected_wrapper = (
+            "cptr" if expected_pointer_kind == "const" else "ptr"
+        )
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-PARAM-TYPES-POINTER-KIND-MISMATCH",
+                message=(
+                    f"param_types rule for parameter {parameter_name!r} uses "
+                    f"{parsed.source_text!r}, but its signature requires "
+                    f"{expected_wrapper}(...)"
+                ),
+                source=source_span(entry.source),
+            )
+        )
 
 
 def _validate_return_type(

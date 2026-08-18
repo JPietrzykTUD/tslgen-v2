@@ -21,10 +21,10 @@ from tslc.target_text import RenderField, RenderText
 class PointerCastOperand:
     """The classified value operand of ``cast<reinterpret, type=ptr|const_ptr>``.
 
-    Lowering classifies the exact source form once: ``address_of`` is a leading
-    borrow/address-of (``&x`` / ``&mut x``) whose ``target`` is the borrowed
-    expression; ``pointer`` is an already-pointer-valued expression. Backends
-    spell the cast from this typed fact and never re-inspect rendered text.
+    Lowering classifies the typed TSIL form once: ``address_of`` comes from an
+    ``address<of|borrow_mut>`` region whose ``target`` is the addressed
+    expression; ``pointer`` is an opaque already-pointer-valued expression.
+    Backends spell the cast from this typed fact and never re-inspect rendered text.
     """
 
     kind: Literal["address_of", "pointer"]
@@ -108,6 +108,9 @@ class BackendSyntaxDialect(Protocol):
         arg_generics: int = 0,
         vec_override: RenderField | None = None,
         extra_args: tuple[RenderField, ...] = (),
+    ) -> RenderText: ...
+    def render_address(
+        self, target: RenderField, *, mutable: bool = False
     ) -> RenderText: ...
     def render_pointer_cast(
         self, inner: RenderField, *, is_const: bool, operand: PointerCastOperand

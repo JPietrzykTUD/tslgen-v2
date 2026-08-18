@@ -254,6 +254,14 @@ class _RustSyntax:
             )
         )
 
+    def render_address(
+        self, target: RenderField, *, mutable: bool = False
+    ) -> RenderText:
+        macro = "addr_of_mut!" if mutable else "addr_of!"
+        return render_sequence(
+            (literal_text(f"core::ptr::{macro}("), target, literal_text(")"))
+        )
+
     def render_pointer_cast(
         self, inner: RenderField, *, is_const: bool, operand: PointerCastOperand
     ) -> RenderText:
@@ -262,7 +270,7 @@ class _RustSyntax:
         if inner == "void":
             inner = "u8"
         if operand.kind == "address_of":
-            macro = "addr_of!" if is_const else "addr_of_mut!"
+            macro = "addr_of_mut!" if operand.mutable_borrow else "addr_of!"
             return render_sequence(
                 (
                     literal_text(f"core::ptr::{macro}("),

@@ -21,6 +21,7 @@ from tslc.output.verify import (
 from tslc.output.verify_model import BackendToolchain
 from tslc.output.writer import ArtifactWriteMode, ArtifactWriteReport, ArtifactWriter
 from tslc.pipeline import (
+    BackendCompilerCapabilitySet,
     BackendProfileScope,
     GenerationMode,
     GenerationRequest,
@@ -40,6 +41,7 @@ def generate_project(
     primitives: Iterable[str] | None = None,
     profiles: Iterable[str] | None = None,
     backend_profiles: Mapping[str, Iterable[str]] | None = None,
+    compiler_capabilities: Mapping[str, Iterable[str]] | None = None,
     type_tags: Iterable[str] = _ARITH_TYPE_TAGS,
     extensions: Iterable[str] | None = None,
     backends: Iterable[str] | None = None,
@@ -59,6 +61,11 @@ def generate_project(
     ``profiles=None`` means every loaded machine profile.
     ``backend_profiles`` optionally restricts individual requested backends within
     that global profile set; omitted backends retain every requested profile.
+    ``compiler_capabilities`` fixes specialization selection to an explicit
+    backend-owned capability set for focused or pinned-toolchain workflows.
+    When omitted, ordinary generation retains compiler-gated optimizations over
+    unconditional fallbacks so the generated package can probe the downstream
+    compiler.
     ``primitives=None`` means every primitive in the loaded catalog.
     """
 
@@ -79,6 +86,15 @@ def generate_project(
             )
             for backend_id, profile_names in sorted(
                 (backend_profiles or {}).items()
+            )
+        ),
+        backend_compiler_capabilities=tuple(
+            BackendCompilerCapabilitySet(
+                backend_id=backend_id,
+                capabilities=frozenset(capabilities),
+            )
+            for backend_id, capabilities in sorted(
+                (compiler_capabilities or {}).items()
             )
         ),
         mode=generation_mode,

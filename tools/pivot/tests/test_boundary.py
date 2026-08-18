@@ -23,7 +23,10 @@ _EXPECTED_COMPILER_IMPORTS = (
     ("tslc._pipeline_inputs", ("load_catalog_inputs",)),
     ("tslc.api", ("write_artifacts",)),
     ("tslc.backend.cpp_profile", ("cpp_dataparallel_fixed_lane_count",)),
-    ("tslc.backend.registry", ("create_backend_dialect",)),
+    (
+        "tslc.backend.registry",
+        ("create_backend_dialect", "registered_compiler_capabilities"),
+    ),
     (
         "tslc.backend.rust_algorithm",
         ("rust_dataparallel_fixed_lane_count", "rust_fixed_vector_spelling"),
@@ -38,7 +41,7 @@ _EXPECTED_COMPILER_IMPORTS = (
         "tslc.catalog.machine_profiles",
         ("MachineProfile", "load_machine_profiles_checked"),
     ),
-    ("tslc.catalog.model", ("BOOLEAN_WILDCARD_ATTRIBUTES", "Catalog")),
+    ("tslc.catalog.model", ("BOOLEAN_WILDCARD_ATTRIBUTES", "Catalog", "PrimitiveMaskMode")),
     (
         "tslc.catalog.scalar_types",
         (

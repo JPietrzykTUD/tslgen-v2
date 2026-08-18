@@ -5,13 +5,25 @@ from __future__ import annotations
 import ast
 import json
 from collections.abc import Iterable
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
 from tslc import api, pipeline
-from tslc.backend import cpp_profile
-from tslc.backend.capability import BackendCapability
+from tslc import pipeline_request
+from tslc.backend import (
+    cpp_build_policy,
+    cpp_profile,
+    cpp_verification,
+    rust_verification,
+)
+from tslc.backend.capability import (
+    BackendCapability,
+    CompilerCapability,
+    CompilerCapabilityRegistry,
+)
 from tslc.backend.cpp_capability import CPP_BACKEND
+from tslc.backend.cpp_compiler_capabilities import CPP_COMPILER_CAPABILITIES
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.helper_requirements import (
     CPP_HELPER_MANIFEST,
@@ -21,6 +33,7 @@ from tslc.backend.rust_capability import RUST_BACKEND
 from tslc.benchmark.model import EMPTY_BENCHMARK_PROJECT_PLAN
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
+from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.catalog.semantics import (
     OperandBinding,
     OperandRole,
@@ -40,7 +53,7 @@ from tslc.lower.lowerer import (
 )
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile
-from tslc.render import cpp_build, cpp_project
+from tslc.render import cpp_build, cpp_project, rust_project
 from tslc.render.project import render_project
 from tslc.select.selector import Selector
 from tslc.sources import SourceDocument
@@ -54,6 +67,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def test_pipeline_facade_keeps_input_and_closure_boundaries() -> None:
     assert pipeline.generate.__module__ == "tslc.pipeline"
+    assert pipeline.GenerationRequest.__module__ == "tslc.pipeline_request"
     assert pipeline._load_inputs.__module__ == "tslc._pipeline_inputs"
     assert pipeline._LoweringCache.__module__ == "tslc._pipeline_lowering_cache"
     assert pipeline._LoweredSlot.__module__ == "tslc._pipeline_closure"
@@ -64,7 +78,9 @@ def test_pipeline_facade_keeps_input_and_closure_boundaries() -> None:
 def test_backend_defaults_are_resolved_at_request_construction(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(pipeline, "registered_backend_ids", lambda: ("future",))
+    monkeypatch.setattr(
+        pipeline_request, "registered_backend_ids", lambda: ("future",)
+    )
 
     request = pipeline.GenerationRequest(
         source_paths=(),
@@ -77,6 +93,80 @@ def test_backend_defaults_are_resolved_at_request_construction(
     assert request.backends == ("future",)
 
 
+def test_full_backend_inventory_detection_rejects_focused_requests() -> None:
+    request = pipeline.GenerationRequest(
+        source_paths=(),
+        machine_profiles_path=Path("profiles.json"),
+        primitives=None,
+        profiles=None,
+        type_tags=DEFAULT_SCALAR_TYPE_TAGS,
+        backends=("rust",),
+    )
+
+    assert pipeline._request_has_complete_backend_inventory(request, "rust")
+    assert pipeline._request_has_complete_backend_inventory(
+        replace(
+            request,
+            backend_profile_scopes=(
+                pipeline.BackendProfileScope("cpp", ("scalar",)),
+            ),
+        ),
+        "rust",
+    )
+    focused_requests = (
+        replace(request, primitives=("mul",)),
+        replace(request, profiles=("sse2",)),
+        replace(request, extensions=("sse",)),
+        replace(request, type_tags=("si8",)),
+        replace(
+            request,
+            backend_profile_scopes=(
+                pipeline.BackendProfileScope("rust", ("sse2",)),
+            ),
+        ),
+        replace(
+            request,
+            backend_compiler_capabilities=(
+                pipeline.BackendCompilerCapabilitySet(
+                    "rust", frozenset({"synthetic"})
+                ),
+            ),
+        ),
+    )
+    assert all(
+        not pipeline._request_has_complete_backend_inventory(item, "rust")
+        for item in focused_requests
+    )
+
+
+def test_compiler_capability_vocabulary_is_backend_generic(monkeypatch) -> None:
+    from tslc.backend import registry
+
+    capability = CompilerCapability("future_feature")
+    future = BackendCapability(
+        backend_id="future",
+        root_path="future",
+        artifact_media_type="text/future",
+        dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
+        artifact_renderer=_empty_backend_artifacts,
+        verify_profiles=lambda profiles: (),
+        value_test_support_factory=lambda: None,  # type: ignore[return-value]
+        verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
+        toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
+        documentation_formatter_factory=_FakeDocumentationFormatter,
+        compiler_capabilities=CompilerCapabilityRegistry((capability,)),
+    )
+    monkeypatch.setattr(registry, "BACKEND_CAPABILITIES", (future,))
+    monkeypatch.setattr(registry, "_BY_ID", {"future": future})
+
+    assert future.compiler_capability("future_feature") is capability
+    assert registry.registered_compiler_capabilities() == {
+        "future": frozenset({"future_feature"})
+    }
+    assert CPP_BACKEND.compiler_capabilities is CPP_COMPILER_CAPABILITIES
+
+
 def test_public_api_resolves_omitted_backends_for_each_call(monkeypatch) -> None:
     captured: list[pipeline.GenerationRequest] = []
 
@@ -86,6 +176,30 @@ def test_public_api_resolves_omitted_backends_for_each_call(monkeypatch) -> None
     api.generate_project((), machine_profiles_path=Path("profiles.json"))
 
     assert captured[0].backends == ("future",)
+
+
+def test_public_api_promotes_compiler_capabilities_to_typed_sets(
+    monkeypatch,
+) -> None:
+    captured: list[pipeline.GenerationRequest] = []
+
+    monkeypatch.setattr(api, "generate", lambda request: captured.append(request))
+
+    api.generate_project(
+        (),
+        machine_profiles_path=Path("profiles.json"),
+        backends=("cpp",),
+        compiler_capabilities={
+            "cpp": ("elementwise_clzg", "elementwise_clzg"),
+        },
+    )
+
+    assert captured[0].backend_compiler_capabilities == (
+        pipeline.BackendCompilerCapabilitySet(
+            "cpp",
+            frozenset({"elementwise_clzg"}),
+        ),
+    )
 
 
 def test_public_api_promotes_backend_profiles_to_typed_scopes(monkeypatch) -> None:
@@ -125,7 +239,23 @@ def test_pipeline_uses_lowering_owned_policy_code_and_one_slot_sort_key() -> Non
 def test_cpp_project_renderer_has_focused_owned_modules() -> None:
     assert cpp_project.cpp_artifacts.__module__ == "tslc.render.cpp_project"
     assert cpp_profile._cpp_registration.__module__ == "tslc.backend.cpp_profile"
-    assert cpp_build.cpp_flags.__module__ == "tslc.render.cpp_build"
+    assert (
+        cpp_build_policy.cpp_profile_flags.__module__
+        == "tslc.backend.cpp_build_policy"
+    )
+
+
+def test_verification_projection_is_backend_owned() -> None:
+    assert (
+        cpp_verification.cpp_verify_profile.__module__
+        == "tslc.backend.cpp_verification"
+    )
+    assert (
+        rust_verification.rust_verify_profile.__module__
+        == "tslc.backend.rust_verification"
+    )
+    assert not hasattr(cpp_build, "cpp_verify_profile")
+    assert not hasattr(rust_project, "rust_verify_profile")
 
 
 def test_render_assets_have_one_packaged_source_of_truth() -> None:
@@ -324,8 +454,8 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
 def test_backend_capability_owns_optional_benchmark_planning(catalog) -> None:
     calls: list[str] = []
 
-    def plan_benchmarks(catalog, profiles, value_tests):  # noqa: ANN001
-        del catalog, profiles, value_tests
+    def plan_benchmarks(catalog, profiles, value_tests, policy_inputs):  # noqa: ANN001
+        del catalog, profiles, value_tests, policy_inputs
         calls.append("future")
         return EMPTY_BENCHMARK_PROJECT_PLAN
 
@@ -383,8 +513,9 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
         assets: RenderAssets,
         media_type: str,
         config: object,
+        policy_inputs: object,
     ) -> list[Artifact]:
-        del profiles, value_tests, benchmarks, assets, config
+        del profiles, value_tests, benchmarks, assets, config, policy_inputs
         return [Artifact("fake/lib.fake", "fake\n", media_type)]
 
     fake = BackendCapability(
@@ -455,8 +586,9 @@ def test_render_project_filters_profiles_by_backend_membership(monkeypatch) -> N
         assets: RenderAssets,
         media_type: str,
         config: object,
+        policy_inputs: object,
     ) -> list[Artifact]:
-        del value_tests, benchmarks, assets, media_type, config
+        del value_tests, benchmarks, assets, media_type, config, policy_inputs
         received["render"] = tuple(profile.profile.name for profile in profiles)
         return []
 
@@ -616,6 +748,26 @@ prim<v:=v> id(data):
             linker="fake-ld",
         ),
     )
+
+
+def test_rvv_is_additive_without_generic_compiler_name_branches() -> None:
+    package = _REPO_ROOT / "tslc/src/tslc"
+    paths = [package / "pipeline.py"]
+    paths.extend(
+        path
+        for subtree in ("catalog", "select", "lower", "backend", "render")
+        for path in sorted((package / subtree).rglob("*.py"))
+    )
+    offenders = []
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        offenders.extend(
+            f"{path}:{node.lineno}"
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and node.value == "rvv"
+        )
+
+    assert offenders == []
 
 
 def test_lowerer_imports_region_handlers_directly() -> None:
@@ -878,8 +1030,9 @@ def _empty_backend_artifacts(
     assets: RenderAssets,
     media_type: str,
     config: object,
+    policy_inputs: object,
 ) -> list[Artifact]:
-    del profiles, value_tests, benchmarks, assets, media_type, config
+    del profiles, value_tests, benchmarks, assets, media_type, config, policy_inputs
     return []
 
 

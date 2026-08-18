@@ -11,6 +11,11 @@ from rust_api_test_support import (
     _plan,
     _spec,
 )
+from tslc.backend.rust_api_core import (
+    RUST_FACADE_CORE_CALL_FORMS,
+    RUST_FACADE_CORE_INVENTORY,
+    RustFacadeCoreInventory,
+)
 from tslc.backend.rust_api_model import (
     RustFacadeCoreDelegate,
     RustFacadeInvocation,
@@ -243,6 +248,31 @@ def test_fallback_mapping_without_an_emitted_owner_is_rejected() -> None:
     assert {item.code for item in error.value.diagnostics} == {
         "TSL-BACKEND-RUST-FACADE-MISSING-FALLBACK-OWNER"
     }
+
+
+def test_core_inventory_joins_semantics_and_emitted_calls() -> None:
+    synthetic_requirement = replace(
+        RUST_FACADE_CORE_INVENTORY.requirements[0],
+        role="synthetic_core_role",
+    )
+    with pytest.raises(ValueError, match="missing call forms: synthetic_core_role"):
+        RustFacadeCoreInventory(
+            (*RUST_FACADE_CORE_INVENTORY.requirements, synthetic_requirement),
+            RUST_FACADE_CORE_CALL_FORMS,
+        )
+
+    synthetic_call = replace(
+        RUST_FACADE_CORE_CALL_FORMS[0],
+        role="synthetic_core_call",
+        delegate_role="synthetic_core_role",
+    )
+    extended = RustFacadeCoreInventory(
+        (*RUST_FACADE_CORE_INVENTORY.requirements, synthetic_requirement),
+        (*RUST_FACADE_CORE_CALL_FORMS, synthetic_call),
+    )
+
+    assert extended.delegate_roles[-1] == "synthetic_core_role"
+    assert extended.emitted_roles[-1] == "synthetic_core_call"
 
 
 def test_core_store_and_lane_insertion_render_from_finalized_invocations() -> None:

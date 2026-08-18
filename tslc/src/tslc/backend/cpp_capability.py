@@ -7,23 +7,25 @@ from typing import TYPE_CHECKING
 from tslc.backend.capability import (
     BackendCapability,
     BackendDocumentationFormatter,
+    BackendPolicyInputs,
     DocumentationSiteInput,
     GeneratedDocumentationBuilder,
     GeneratedDocumentationSpec,
     GeneratedFormatSpec,
 )
 from tslc.backend.cpp_translation import CppBackendDialect
+from tslc.backend.cpp_compiler_capabilities import CPP_COMPILER_CAPABILITIES
 from tslc.backend.cpp import CppBackend
 from tslc.benchmark.planner import BenchmarkPlanner
 from tslc.benchmark.render_cpp import cpp_benchmark_artifacts
 from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
+from tslc.backend.cpp_verification import cpp_verify_profile, cpp_verify_profiles
 from tslc.backend.cpp_validation import validate_cpp_profiles
 from tslc.catalog.model import Catalog
 from tslc.output._verify_cpp import (
     create_cpp_verify_driver as _create_cpp_verify_driver,
 )
 from tslc.output._verify_cpp_config import cpp_toolchain_commands
-from tslc.render.cpp_build import cpp_verify_profile, cpp_verify_profiles
 from tslc.render.cpp_project import cpp_artifacts
 from tslc.render.documentation_formatters import CPP_DOCUMENTATION_FORMATTER
 from tslc.render.tests_project import cpp_test_artifacts
@@ -77,7 +79,9 @@ def cpp_benchmark_plan(
     catalog: Catalog,
     profiles: tuple[EmittedProfile, ...],
     value_tests: ValueTestProjectPlan,
+    policy_inputs: BackendPolicyInputs,
 ) -> BenchmarkProjectPlan:
+    del policy_inputs
     return BenchmarkPlanner(catalog, backend_id="cpp").plan(profiles, value_tests)
 
 
@@ -98,10 +102,11 @@ def cpp_backend_artifacts(
     assets: RenderAssets,
     media_type: str,
     config: ProjectRenderConfig,
+    policy_inputs: BackendPolicyInputs,
 ) -> list[Artifact]:
     """Render the complete C++ artifact set from one fact snapshot."""
 
-    del config
+    del config, policy_inputs
     return [
         *cpp_project_artifacts(profiles, assets, media_type, value_tests),
         *cpp_value_test_artifacts(value_tests, assets, media_type),
@@ -126,8 +131,9 @@ def cpp_primitive_preview(
     profile: EmittedProfile,
     primitive_name: str,
     specializations: tuple[LoweredSpecialization, ...],
+    policy_inputs: BackendPolicyInputs,
 ) -> str:
-    del profile
+    del profile, policy_inputs
     return CppBackend().render_primitive(primitive_name, specializations)
 
 
@@ -159,6 +165,7 @@ CPP_BACKEND = BackendCapability(
         output_path="cpp/docs/doxygen/xml",
         site_input=DocumentationSiteInput.DOXYGEN_XML,
     ),
+    compiler_capabilities=CPP_COMPILER_CAPABILITIES,
 )
 
 

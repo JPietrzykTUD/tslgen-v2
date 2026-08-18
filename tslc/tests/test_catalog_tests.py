@@ -124,7 +124,7 @@ def test_param_type_rules_are_promoted(catalog: Catalog) -> None:
         and rule.attribute_value == "false"
     )
 
-    assert "base::unsigned_of" in packed_false.type_expr
+    assert "base::unsigned_of" in packed_false.type_expr.pointee_expr
     assert packed_false.source is not None
 
     gather_narrow = _first(catalog, "gather_narrow", masked=False)
@@ -135,7 +135,7 @@ def test_param_type_rules_are_promoted(catalog: Catalog) -> None:
     )
     assert index_ptr.attribute_name is None
     assert index_ptr.attribute_value is None
-    assert "base::generic(IndicesType)" in index_ptr.type_expr
+    assert "base::generic(IndicesType)" in index_ptr.type_expr.pointee_expr
 
 
 # --- structural validation ---------------------------------------------------
@@ -173,15 +173,15 @@ def test_param_type_rules_are_validated() -> None:
         "prim<v:=ptr>[packed=*] id(ptr):\n"
         "  param_types:\n"
         "    missing:\n"
-        '      "if packed=true" "type(base::in) *"\n'
+        '      "if packed=true" "ptr(type(base::in))"\n'
         "    ptr:\n"
-        '      default "type(base::in) *"\n'
+        '      default "ptr(type(base::in))"\n'
         '      default "type(base::in) const*"\n'
-        '      "if unknown=true" "type(base::in) *"\n'
-        '      "when packed=true" "type(base::in) *"\n'
-        '      "if packed=maybe" "type(base::in) *"\n'
-        '      "if packed=false" "type(base::in) *"\n'
-        '      "if packed=false" "type(base::in) const*"\n'
+        '      "if unknown=true" "ptr(type(base::in))"\n'
+        '      "when packed=true" "ptr(type(base::in))"\n'
+        '      "if packed=maybe" "ptr(type(base::in))"\n'
+        '      "if packed=false" "ptr(type(base::in))"\n'
+        '      "if packed=false" "ptr(type(base::in))"\n'
         '      "if packed=true" ""\n'
         "  impls:\n"
         "    scalar:\n"
@@ -196,6 +196,28 @@ def test_param_type_rules_are_validated() -> None:
     assert "TSL-CATALOG-INVALID-ENUM" in codes
     assert "TSL-CATALOG-PARAM-TYPES-DUPLICATE-RULE" in codes
     assert "TSL-CATALOG-PARAM-TYPES-MISSING-TYPE" in codes
+    assert "TSL-CATALOG-PARAM-TYPES-MALFORMED-TYPE" in codes
+
+
+def test_param_type_wrappers_match_pointer_signature_kinds() -> None:
+    codes = _diagnostics_for_source(
+        "prim<v:=(v,cptr)> bad(data, source):\n"
+        "  param_types:\n"
+        "    data:\n"
+        '      default "ptr(type(base::in))"\n'
+        "    source:\n"
+        '      default "ptr(type(base::in))"\n'
+        '      "if aligned=true" "pointer(type(base::in))"\n'
+        "  impls:\n"
+        "    scalar:\n"
+        "      anyint:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+
+    assert "TSL-CATALOG-PARAM-TYPES-NON-POINTER-PARAM" in codes
+    assert "TSL-CATALOG-PARAM-TYPES-POINTER-KIND-MISMATCH" in codes
+    assert "TSL-CATALOG-PARAM-TYPES-MALFORMED-TYPE" in codes
 
 
 def test_unknown_test_field_is_diagnosed() -> None:

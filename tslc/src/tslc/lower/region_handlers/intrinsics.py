@@ -5,6 +5,7 @@ from __future__ import annotations
 from tslc.ir.region_syntax import IntrinsicSelector, split_arg_groups
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
+from tslc.lower.region_safety import direct_region_safety
 from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.target_text import RenderField, literal_text, render_sequence, render_text
@@ -21,7 +22,7 @@ class IntrinLowerer:
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        context.effects.mark_internal_unsafe("intrinsic")
+        context.effects.merge_safety(direct_region_safety(region))
         selector = IntrinsicSelector.parse(region.selector_text)
         if selector.name is None:
             context.effects.skip(
@@ -72,14 +73,15 @@ class IntrinLowerer:
         if context.effects.unsupported or context.effects.has_errors:
             return region.full_text
         if (
-            context.env.extension.intrinsic_style == "wasm"
+            context.env.extension.intrinsic_composition.require_explicit_suffix
             and suffix is None
             and selector.get("suffix") is None
         ):
             context.effects.skip(
-                "TSL-LOWER-WASM-INTRIN-MISSING-LANE-SUFFIX",
-                "wasm intrin<..., build> requires a lane-shape suffix; "
-                'use an explicit suffix="" for untyped v128 intrinsics',
+                "TSL-LOWER-INTRIN-MISSING-EXPLICIT-SUFFIX",
+                f"extension {context.env.extension.name!r} requires a suffix "
+                "for intrin<..., build>; "
+                'use an explicit suffix="" when the intrinsic has no typed suffix',
                 source=region.source,
             )
             return region.full_text

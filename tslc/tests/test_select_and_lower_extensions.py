@@ -309,7 +309,7 @@ def test_mul_avx512_unsigned_uses_low_product_intrinsic(
         )
         .selected
         if selected.extension.name == "avx512"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     cpp = Lowerer().lower(
@@ -348,7 +348,7 @@ def test_x86_byte_mul_composes_word_primitives_in_register(
         .select_profile(catalog, machine_profiles[profile], "mul", ("ui8",))
         .selected
         if selected.extension.name == extension
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
     cpp = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
@@ -481,7 +481,7 @@ def test_x86_wide_integer_mul_stays_in_registers(
         .select_profile(catalog, machine_profiles[profile], "mul", (type_tag,))
         .selected
         if selected.extension.name == extension
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
     cpp = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
@@ -515,7 +515,7 @@ def test_neon_horizontal_reductions_use_across_vector_intrinsics(
         .select_profile(catalog, machine_profiles["neon"], primitive, (type_tag,))
         .selected
         if selected.extension.name == "neon"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
         and len(selected.primitive.parameters) == 1
     )
 
@@ -555,7 +555,7 @@ def test_neon_horizontal_64_composes_two_lane_extractions(
         .select_profile(catalog, machine_profiles["neon"], primitive, (type_tag,))
         .selected
         if selected.extension.name == "neon"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
         and len(selected.primitive.parameters) == 1
     )
 
@@ -652,7 +652,7 @@ def test_neon_popcnt_uses_widening_pairwise_intrinsics(
         .select_profile(catalog, machine_profiles["neon"], "popcnt", (type_tag,))
         .selected
         if selected.extension.name == "neon"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):
@@ -686,7 +686,7 @@ def test_wasm_popcnt_uses_unsigned_pairwise_widening(
         )
         .selected
         if selected.extension.name == "wasm128"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):
@@ -724,7 +724,7 @@ def test_x86_popcnt_without_vpopcnt_uses_vector_swar(
         .select_profile(catalog, machine_profiles[profile], "popcnt", (type_tag,))
         .selected
         if selected.extension.name == extension
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):
@@ -758,7 +758,7 @@ def test_x86_byte_popcnt_uses_ssse3_nibble_lookup(
         .select_profile(catalog, machine_profiles[profile], "popcnt", (type_tag,))
         .selected
         if selected.extension.name == extension
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
 
     for backend_id in ("cpp", "rust"):
@@ -781,7 +781,7 @@ def test_sse2_byte_popcnt_uses_word_swar_without_ssse3(
         .select_profile(catalog, machine_profiles["sse2"], "popcnt", ("ui8",))
         .selected
         if selected.extension.name == "sse"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
     cpp = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
@@ -805,7 +805,7 @@ def test_avx_popcnt_composes_two_sse_halves(
             .select_profile(catalog, machine_profiles["avx"], "popcnt", (type_tag,))
             .selected
             if selected.extension.name == "avx2"
-            and selected.primitive.attributes.get("mask") is None
+            and selected.primitive.mask_mode is None
         )
         cpp = Lowerer().lower(
             slot, catalog, create_backend_dialect(catalog, "cpp")

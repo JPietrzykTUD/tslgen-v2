@@ -16,41 +16,35 @@ this file.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
-from enum import StrEnum
-from types import MappingProxyType
+from dataclasses import replace
 
 from tslc.backend import translation_common
 from tslc.backend.translation import BackendDialect
-from tslc.catalog.arithmetic import (
-    ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER,
-    ArithmeticGuarantee,
-    ArithmeticOperandRole,
-)
+from tslc.catalog.arithmetic import ArithmeticGuarantee, ArithmeticOperandRole
 from tslc.catalog.memory import resolve_memory_alignment
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     Catalog,
     ImmediateParam,
-    ImplementationSafety,
     Primitive,
     RESULT_DIM_VECTOR,
 )
-from tslc.catalog.param_types import parse_param_type_expression
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS, scalar_bit_width_or_default
 from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
-from tslc.documentation import PrimitiveDocumentation, primitive_documentation
-from tslc.ir.region_syntax import parse_call_selector
+from tslc.documentation import primitive_documentation
 from tslc.ir.scan import scan
-from tslc.ir.segments import Region, Segment
-from tslc.lower.body_rendering import ExpressionRenderer, body_context, render_body
+from tslc.ir.segments import Segment
+from tslc.lower.body_rendering import body_context, render_body
 from tslc.lower.context import (
     LaneListParameter,
     LoweringEnv,
     LoweringScope,
     LoweringSession,
+)
+from tslc.lower.catalog_facts import (
+    LowererCatalogFacts as _LowererCatalogFacts,
+    type_param_bounds as _type_param_bounds,
 )
 from tslc.lower._diagnostics import (
     implementation_source as _implementation_source,
@@ -58,229 +52,34 @@ from tslc.lower._diagnostics import (
     lowering_skip_diagnostic,
     primitive_signature_source as _primitive_signature_source,
 )
-from tslc.lower.dependencies import (
-    CallDependencyOrigin,
-    origin_sort_key,
-    symbolic_call_dependency_error,
-)
+from tslc.lower.dependencies import origin_sort_key, symbolic_call_dependency_error
 from tslc.lower.region_handlers import (
     DEFAULT_REGION_LOWERERS,
     RegionLowerer,
 )
-from tslc.lower.implementation_state import (
-    ImplementationState,
+from tslc.lower.implementation_state import ImplementationState
+from tslc.lower.model import (
+    LoweredArithmeticPrecondition,
+    LoweredArithmeticPreconditionKind,
+    LoweredImplementationVariant,
+    LoweredSpecialization,
+    LoweredTypeParam,
+    LoweringResult,
 )
 from tslc.lower.primitive_semantics import (
     LoweredMemoryAlignment,
     LoweredPrimitiveSemantics,
 )
-from tslc.lower.target_vectors import TargetVector, resolve_target_vector
-from tslc.target_text import (
-    LoweredBody,
-    render_text,
+from tslc.lower.param_types import (
+    effective_param_types,
+    param_type_overrides as _param_type_overrides,
 )
+from tslc.lower.target_vectors import TargetVector, resolve_target_vector
+from tslc.target_text import LoweredBody
 from tslc.select.selector import SelectedImplementation
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
-from tslc.support_policy_views import immediate_split_names, policy_split_names
 
 POLICY_DEFERRED_SIGNATURE_CODE = "TSL-LOWER-POLICY-DEFERRED-SIGNATURE"
-
-
-@dataclass(frozen=True, slots=True)
-class LoweredTypeParam:
-    """A free SIMD type parameter carried to backend rendering."""
-
-    name: str
-    bounds: tuple[str, ...] = ()
-    base_type_constraints: tuple[str, ...] = ()
-    specialize_base: bool = False
-    base_type_binding: str | None = None
-    base_type_binding_spelling: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class LoweredImplementationVariant:
-    """One lowered alternative body for the selected implementation leaf."""
-
-    name: str
-    body: LoweredBody
-    implementation_state: ImplementationState = ImplementationState.UNKNOWN
-    safety: ImplementationSafety = field(default_factory=ImplementationSafety)
-
-    @property
-    def body_text(self) -> str:
-        return self.body.render()
-
-
-class LoweredArithmeticPreconditionKind(StrEnum):
-    """Closed arithmetic preconditions derived during lowering."""
-
-    INTEGER_IMMEDIATE_NONZERO = "integer_immediate_nonzero"
-
-
-@dataclass(frozen=True, slots=True)
-class LoweredArithmeticPrecondition:
-    """A backend-neutral well-formedness requirement for one specialization."""
-
-    kind: LoweredArithmeticPreconditionKind
-    parameter_name: str
-    lane_bit_width: int
-
-    def __post_init__(self) -> None:
-        if not self.parameter_name:
-            raise ValueError("arithmetic precondition requires a parameter name")
-        if self.lane_bit_width not in {8, 16, 32, 64}:
-            raise ValueError(
-                "arithmetic precondition requires a supported integer lane width"
-            )
-
-    @property
-    def marker(self) -> str:
-        if self.kind is LoweredArithmeticPreconditionKind.INTEGER_IMMEDIATE_NONZERO:
-            return ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER
-        raise AssertionError(f"unhandled arithmetic precondition {self.kind!r}")
-
-
-@dataclass(frozen=True, slots=True)
-class LoweredSpecialization:
-    """One `<primitive, extension, type>` body, ready for the backend to wrap in a
-    template specialization (C++) / trait impl (Rust). Signature types are *not*
-    concrete here — the backend expresses them via the ``simd<>`` member types
-    (`Vec::register_type` / `Vec::base_type`); only the body is concrete."""
-
-    backend_id: str
-    primitive_name: str
-    source_primitive_name: str
-    extension_name: str  # the simd<> extension tag, e.g. "avx2"
-    type_tag: str
-    base_type_spelling: str  # the simd<> base-type arg, e.g. "int32_t" / "i32"
-    register_spelling: str  # the concrete register type for this specialization
-    result_kind: str  # "v" | "s"
-    param_names: tuple[str, ...]
-    param_kinds: tuple[str, ...]
-    body: LoweredBody
-    # Finalized language-neutral declaration facts. This record crosses the
-    # catalog/lowering boundary so backends never need to reopen the catalog or
-    # infer semantics from names, signatures, documentation, or target text.
-    primitive_semantics: LoweredPrimitiveSemantics = field(
-        default_factory=LoweredPrimitiveSemantics
-    )
-    # Support-policy-owned overload identity for each parameter. Carrying these tokens through
-    # lowering keeps backend grouping independent from the process-wide default policy.
-    param_identity_tokens: tuple[str, ...] = ()
-    # Backend-spelled public/apply parameter type overrides from unconditional
-    # `param_types: name: default "..."` rules. Each position is either the
-    # override type or None, matching `param_names`/`param_kinds`.
-    param_type_overrides: tuple[str | None, ...] = ()
-    vector_spelling: str | None = None  # concrete backend vector spelling for this spec
-    index_register_spelling: str | None = None  # concrete si32 register for `vidx`
-    native_register_spelling: str | None = None  # source-declared native register, if any
-    uses_sized_vector: bool = False
-    lane_parameter: str | None = None
-    # Boolean-wildcard attribute axis (name, concrete value), e.g. (("aligned","false"),).
-    # Each becomes a `bool` template parameter (C++) / const generic (Rust) so the
-    # `[aligned=*]`-expanded variants coexist as distinct callables.
-    axis: tuple[tuple[str, str], ...] = ()
-    # An `sImm` compile-time immediate operand as (name, backend type spelling), e.g.
-    # ("factor", "std::uint32_t"). Emitted as a C++ non-type template param / Rust const
-    # generic (NOT a runtime arg); None when the signature has no `sImm`.
-    immediate: tuple[str, str] | None = None
-    arithmetic_preconditions: tuple[LoweredArithmeticPrecondition, ...] = ()
-    # Free template params from a `generic_params` block, as (name, type, default), e.g.
-    # (("PreserveSign", "bool", "true"),). Emitted as C++ non-type template params (with the
-    # default) / Rust const generics (no default); bodies reference them symbolically.
-    generic_params: tuple[tuple[str, str, str], ...] = ()
-    # Free SIMD *type* params from a `generic_params {kind simd_type}` block (gather's
-    # `IndicesType`), as (name, bound-primitive-names). Emitted as a C++ `class` template param /
-    # Rust `NAME: SimdVector + <Bound>Impl…` generic, threaded through trait/impl/wrapper like the
-    # representation-change `ToVec`. The bound names are the primitives the body calls on the param
-    # (`to_array[IndicesType]` -> `to_array`); the Rust backend maps each to its `…Impl` trait.
-    type_params: tuple[LoweredTypeParam, ...] = ()
-    # A `return_type: vector: Name` result projects through this `kind simd_type`
-    # parameter. Unlike `target`, this is not a concrete representation selector axis.
-    result_vector_param: str | None = None
-    # True when register_type == base_type for this extension (scalar/generic). Lets the
-    # backend dedup overload `apply`s that collapse to the same type (a `v` and an `s`
-    # parameter are distinct on SIMD but identical here).
-    register_is_base: bool = False
-    # The TARGET vector of a representation-change primitive, or None for ordinary primitives.
-    # When set, the backend emits it as a SECOND type parameter (keyed per source+target) and
-    # projects the result kind through that vector. See :class:`TargetVector`.
-    target: "TargetVector | None" = None
-    # The `[mask=…]` policy of a masked variant (`"zero"`/`"pass_through"`), or None for an
-    # unmasked spec. Survives lowering (the boolean `axis` does not carry it) so pruning can match
-    # callees per-policy and the render rename can split a dual name to `<name>_mask`/`_maskz`.
-    mask_policy: str | None = None
-    # First-class lane-list parameters (`lanes<s>`) selected for this specialization.
-    lane_list_params: tuple[LaneListParameter, ...] = ()
-    # Feature flags required by this body, including call-graph propagation after
-    # dependency pruning.
-    required_features: frozenset[str] = frozenset()
-    call_dependency_origins: tuple[CallDependencyOrigin, ...] = ()
-    implementation_state: ImplementationState = ImplementationState.UNKNOWN
-    safety: ImplementationSafety = field(default_factory=ImplementationSafety)
-    variant_bodies: tuple[LoweredImplementationVariant, ...] = ()
-    documentation: PrimitiveDocumentation = field(default_factory=PrimitiveDocumentation)
-    source: SourceSpan | None = None
-
-    @property
-    def body_text(self) -> str:
-        return self.body.render()
-
-    @property
-    def variant_names(self) -> tuple[str, ...]:
-        """Stable authored identities of the lowered alternative bodies."""
-
-        return tuple(variant.name for variant in self.variant_bodies)
-
-    @property
-    def effective_param_type_overrides(self) -> tuple[str | None, ...]:
-        if len(self.param_type_overrides) == len(self.param_kinds):
-            return self.param_type_overrides
-        return (None,) * len(self.param_kinds)
-
-
-@dataclass(frozen=True, slots=True)
-class LoweringResult:
-    specialization: LoweredSpecialization | None
-    diagnostics: tuple[Diagnostic, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class _LowererCatalogFacts:
-    primitive_axes: MappingProxyType[str, tuple[str, ...]]
-    primitive_arg_generics: MappingProxyType[str, int]
-    primitive_caller_unsafe: MappingProxyType[str, bool]
-    primitive_borrowed_arg_positions: MappingProxyType[str, tuple[int, ...]]
-    primitive_type_param_bounds: MappingProxyType[
-        tuple[str, str, int], tuple[str, ...]
-    ]
-    policy_split_names: frozenset[str]
-    immediate_split_names: frozenset[str]
-
-    @classmethod
-    def build(
-        cls,
-        catalog: Catalog,
-        support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
-    ) -> "_LowererCatalogFacts":
-        return cls(
-            primitive_axes=MappingProxyType(_primitive_axes(catalog)),
-            primitive_arg_generics=MappingProxyType(
-                _primitive_arg_generics(catalog, support)
-            ),
-            primitive_caller_unsafe=MappingProxyType(
-                _primitive_caller_unsafe(catalog, support)
-            ),
-            primitive_borrowed_arg_positions=MappingProxyType(
-                _primitive_borrowed_arg_positions(catalog, support)
-            ),
-            primitive_type_param_bounds=MappingProxyType(
-                _primitive_type_param_bounds(catalog)
-            ),
-            policy_split_names=policy_split_names(catalog, support),
-            immediate_split_names=immediate_split_names(catalog, support),
-        )
 
 
 class Lowerer:
@@ -702,9 +501,12 @@ class Lowerer:
             # a source capability, not a vector_bits shortcut.
             register_is_base=self._support.register_is_base(context.env.extension),
             target=target,
-            mask_policy=selected.primitive.attributes.get("mask"),
+            mask_policy=selected.primitive.mask_mode,
             lane_list_params=tuple(context.env.lane_list_params.values()),
             required_features=selected.required_features,
+            required_compiler_capabilities=(
+                selected.required_compiler_capabilities
+            ),
             call_dependency_origins=ordered_dependency_origins,
             implementation_state=default_body.implementation_state,
             safety=effective_safety,
@@ -850,225 +652,6 @@ def _resolve_immediate(
     )
 
 
-def _type_param_bounds(
-    body: str | tuple[Segment, ...],
-    type_param_name: str,
-    forwarded_bounds: Mapping[tuple[str, str, int], tuple[str, ...]] | None = None,
-    forwarded_extension: str | None = None,
-) -> tuple[str, ...]:
-    """The primitive names a body calls *on* a free SIMD type param (`primitive=NAME[<param>]`).
-    Each is a trait the type param must satisfy in Rust (`to_array[IndicesType]` ->
-    `IndicesType: To_arrayImpl`); C++ templates are duck-typed and ignore them. Derived from the
-    TSIL segment stream and the shared call selector parser so neither backend needs to know which
-    primitives a body invokes — the Rust backend only maps a recorded name to its trait spelling.
-
-    A type parameter forwarded as an extra generic argument also inherits the
-    callee parameter's catalog-derived bounds. For example,
-    `permute_lanes[Vec, IndicesType]` carries the `to_array` requirement of the
-    indexed permutation implementation into its caller.
-    """
-
-    segments = scan(body) if isinstance(body, str) else body
-    return tuple(
-        sorted(
-            _type_param_bound_names(
-                segments,
-                type_param_name,
-                forwarded_bounds or {},
-                forwarded_extension,
-            )
-        )
-    )
-
-
-def _type_param_bound_names(
-    segments: tuple[Segment, ...] | None,
-    type_param_name: str,
-    forwarded_bounds: Mapping[tuple[str, str, int], tuple[str, ...]],
-    forwarded_extension: str | None,
-) -> frozenset[str]:
-    if segments is None:
-        return frozenset()
-    names: set[str] = set()
-    for segment in segments:
-        if not isinstance(segment, Region):
-            continue
-        if segment.keyword == "call":
-            parsed = parse_call_selector(segment.selector_text)
-            if (
-                parsed is not None
-                and not parsed.primitive_ref.startswith("@")
-                and parsed.type_args
-                and parsed.type_args[0].strip() == type_param_name
-            ):
-                names.add(parsed.primitive_ref)
-            if parsed is not None and not parsed.primitive_ref.startswith("@"):
-                for index, argument in enumerate(parsed.type_args[1:]):
-                    if argument.strip() == type_param_name:
-                        names.update(
-                            forwarded_bounds.get(
-                                (
-                                    forwarded_extension or "",
-                                    parsed.primitive_ref,
-                                    index,
-                                ),
-                                (),
-                            )
-                        )
-        for child in segment.child_sequences():
-            names.update(
-                _type_param_bound_names(
-                    child,
-                    type_param_name,
-                    forwarded_bounds,
-                    forwarded_extension,
-                )
-            )
-    return frozenset(names)
-
-
-def _primitive_type_param_bounds(
-    catalog: Catalog,
-) -> dict[tuple[str, str, int], tuple[str, ...]]:
-    """Direct Rust bounds for each extension's SIMD generic argument slots."""
-
-    direct: dict[tuple[str, str, int], set[str]] = {}
-    for primitive in catalog.primitives:
-        extra_offset = (
-            1
-            if primitive.result_target is not None
-            and primitive.result_target[0] != RESULT_DIM_VECTOR
-            else 0
-        )
-        type_params = tuple(
-            param for param in primitive.generic_params if param.kind == "simd_type"
-        )
-        for index, param in enumerate(type_params):
-            for implementation in primitive.implementations:
-                key = (
-                    implementation.extension,
-                    primitive.name,
-                    extra_offset + index,
-                )
-                bounds = direct.setdefault(key, set())
-                bodies = (
-                    implementation.body_text,
-                    *(variant.body_text for variant in implementation.variants),
-                )
-                for body in bodies:
-                    bounds.update(_type_param_bounds(body, param.name))
-
-    collected: dict[tuple[str, str, int], set[str]] = {}
-    for extension_name in catalog.extensions:
-        chain = catalog.extension_chain(extension_name)
-        for (implementation_extension, primitive_name, index), bounds in direct.items():
-            if implementation_extension not in chain:
-                continue
-            collected.setdefault(
-                (extension_name, primitive_name, index),
-                set(),
-            ).update(bounds)
-    return {
-        key: tuple(sorted(bounds))
-        for key, bounds in sorted(collected.items())
-    }
-
-
-def _primitive_axes(catalog: Catalog) -> dict[str, tuple[str, ...]]:
-    """Each primitive's boolean-wildcard axis keys, keyed by name — so a call to it can
-    pass the axis value its wrapper requires. All variants of a name share these keys."""
-
-    axes: dict[str, tuple[str, ...]] = {}
-    for primitive in catalog.primitives:
-        axes[primitive.name] = tuple(
-            sorted(k for k in primitive.attributes if k in BOOLEAN_WILDCARD_ATTRIBUTES)
-        )
-    return axes
-
-
-def _primitive_arg_generics(
-    catalog: Catalog,
-    support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
-) -> dict[str, int]:
-    """Each emitted callable's count of overload-dispatch generic params.
-
-    Mask-policy and immediate forms can share an authored primitive name while
-    rendering as distinct callables. Count varying parameter positions only
-    within those emitted families so Rust calls do not receive inference
-    placeholders for overloads that have already been split by name.
-    """
-
-    by_name: dict[str, list[tuple[str, ...]]] = {}
-    policy_names = policy_split_names(catalog, support)
-    immediate_names = immediate_split_names(catalog, support)
-    for primitive in catalog.primitives:
-        shape = parse_signature(primitive.signature)
-        if shape is None:
-            continue
-        name = primitive.name
-        mask_policy = primitive.attributes.get("mask")
-        if mask_policy is not None and name in policy_names:
-            name = f"{name}{support.mask_suffix(mask_policy)}"
-        if primitive.name in immediate_names and support.has_immediate_operand(shape):
-            name = f"{name}_imm"
-        by_name.setdefault(name, []).append(shape.param_kinds)
-    counts: dict[str, int] = {}
-    for name, kinds in by_name.items():
-        arity = len(kinds[0])
-        same = [k for k in kinds if len(k) == arity]
-        counts[name] = sum(
-            1 for i in range(arity) if len({k[i] for k in same}) > 1
-        )
-    return counts
-
-
-def _primitive_caller_unsafe(
-    catalog: Catalog,
-    support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
-) -> dict[str, bool]:
-    """Whether a primitive's emitted Rust wrapper requires an unsafe call.
-
-    Rust wrappers are grouped per primitive name and become unsafe if any emitted
-    specialization exposes a caller contract. This catalog view mirrors that
-    public wrapper contract for call-site lowering.
-    """
-
-    values: dict[str, bool] = {}
-    for primitive in catalog.primitives:
-        shape = parse_signature(primitive.signature)
-        inferred = shape is not None and support.requires_unsafe_frame(shape)
-        authored = any(
-            implementation.safety.caller_unsafe
-            for implementation in primitive.implementations
-        )
-        values[primitive.name] = values.get(primitive.name, False) or inferred or authored
-    return values
-
-
-def _primitive_borrowed_arg_positions(
-    catalog: Catalog,
-    support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
-) -> dict[str, tuple[int, ...]]:
-    """Callee argument positions that Rust passes by read-only borrow.
-
-    This is a catalog view over signature kinds, not a primitive-name rule. C++ can
-    bind these same arguments through `const&` without changing call spelling.
-    """
-
-    positions_by_name: dict[str, set[int]] = {}
-    for primitive in catalog.primitives:
-        shape = parse_signature(primitive.signature)
-        if shape is None:
-            continue
-        for index, kind in enumerate(shape.param_kinds):
-            if support.is_borrowed_parameter_kind(kind):
-                positions_by_name.setdefault(primitive.name, set()).add(index)
-    return {
-        name: tuple(sorted(positions))
-        for name, positions in sorted(positions_by_name.items())
-    }
-
-
 def varying_positions(specs: tuple[LoweredSpecialization, ...]) -> tuple[int, ...]:
     """Parameter positions whose kind differs across a primitive's signatures — the
     dispatch points of an overload (e.g. store's `(ptr,v)`/`(ptr,s)` vary at position 1).
@@ -1093,85 +676,6 @@ def _lowered_memory_alignment(
         if resolved is None
         else LoweredMemoryAlignment(axis_name=resolved[0], mode=resolved[1])
     )
-
-
-def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
-    """A per-position type token for overload dedup. `v` and `s` map to the same token
-    where register_type == base_type (scalar/generic), so colliding overloads merge."""
-
-    identity_tokens = spec.param_identity_tokens or tuple(
-        DEFAULT_SUPPORT_POLICY.overload_identity_token(
-            kind,
-            register_is_base=spec.register_is_base,
-        )
-        for kind in spec.param_kinds
-    )
-    return tuple(
-        (
-            override
-            if override is not None
-            else identity
-        )
-        for identity, override in zip(
-            identity_tokens, spec.effective_param_type_overrides
-        )
-    )
-
-
-def _param_type_overrides(
-    selected: SelectedImplementation,
-    parameters: tuple[str, ...],
-    context: LoweringSession,
-    region_lowerers: tuple[RegionLowerer, ...],
-) -> tuple[str | None, ...]:
-    primitive = selected.primitive
-    overrides: list[str | None] = []
-    renderer = ExpressionRenderer(context, selected, region_lowerers)
-    for parameter_name in parameters:
-        rule = next(
-            (
-                rule
-                for rule in primitive.param_type_rules
-                if rule.parameter_name == parameter_name
-                and rule.attribute_name is None
-            ),
-            None,
-        )
-        if rule is None:
-            overrides.append(None)
-            continue
-        text = _render_param_type_expr(rule.type_expr, context, renderer, rule.source)
-        if not text:
-            context.effects.skip(
-                "TSL-LOWER-UNSUPPORTED-PARAM-TYPE",
-                f"could not resolve param_types default for {parameter_name!r}",
-                source=rule.source,
-            )
-            overrides.append(None)
-            continue
-        overrides.append(text)
-    return tuple(overrides)
-
-
-def _render_param_type_expr(
-    type_expr: str,
-    context: LoweringSession,
-    renderer: ExpressionRenderer,
-    source: SourceSpan | None,
-) -> str:
-    expr = parse_param_type_expression(type_expr)
-    value = render_text(renderer.render(scan(expr.value_expr, source=source))).strip()
-    if not value:
-        return ""
-    rendered = context.env.backend.syntax.render_param_type(
-        value,
-        is_pointer=expr.is_pointer,
-        is_const=bool(expr.pointer_const),
-    )
-    text = render_text(rendered).strip()
-    if not text:
-        return ""
-    return text
 
 
 def _error(code: str, message: str, *, source: SourceSpan | None = None) -> LoweringResult:

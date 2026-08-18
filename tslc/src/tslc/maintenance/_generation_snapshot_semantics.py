@@ -108,6 +108,7 @@ def serialize_generation_semantics(
                         "manifest_hash": profile.manifest_hash,
                         "profile_family": profile.profile_family,
                         "backend_feature_spellings": profile.backend_feature_spellings,
+                        "feature_detection_strategy": profile.feature_detection_strategy,
                         "candidate_sets": [
                             {
                                 "stable_id": item.stable_id,
@@ -262,6 +263,11 @@ def _serialize_verify_profile(profile: VerifyProfile) -> dict[str, object]:
         "target_features": profile.target_features,
         "target": profile.target,
         "linker": profile.linker,
+        "compiler_role": profile.compiler_role,
+        "cmake_system_name": profile.cmake_system_name,
+        "cmake_system_processor": profile.cmake_system_processor,
+        "pass_target_to_compiler": profile.pass_target_to_compiler,
+        "preflight_headers": profile.preflight_headers,
         "runner": _serialize_verify_runner(profile.runner),
         "compile_failures": tuple(
             {
@@ -311,7 +317,7 @@ def _serialize_value_test_case(case: ValueTestCasePlan) -> dict[str, object]:
         "scalable": _serialize_value_test_scalable(case.scalable),
         "differential": _serialize_value_test_differential(case.differential),
         "header_group": case.header_group,
-        "required_compiler_features": case.required_compiler_features,
+        "required_compiler_capabilities": case.required_compiler_capabilities,
     }
 
 
@@ -329,6 +335,7 @@ def _serialize_value_test_expectation(value: ValueTestExpectation) -> dict[str, 
         "values": value.values,
         "text": value.text,
         "comparison": value.comparison.value,
+        "scalable_layout": value.scalable_layout,
     }
 
 

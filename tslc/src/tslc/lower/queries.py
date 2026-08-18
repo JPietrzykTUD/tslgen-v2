@@ -4,7 +4,8 @@ Queries are nested ``head(arg)`` forms used inside TSIL bodies and intrinsic
 modifiers. The public module intentionally owns only the evaluator and default
 registry; query vocabularies live in focused namespace modules:
 
-- ``_query_model``: typed values, parsed terms, parser, and function protocol;
+- ``ir.query_syntax``: syntax-only parsed terms and parser;
+- ``_query_model``: typed values and function protocol;
 - ``_query_core``: base/type/value/intrinsic/primitive query functions;
 - ``_query_vector``: vector/register/mask/generic query functions;
 - ``_query_leaf``: source-level bare identifier resolution.
@@ -12,6 +13,7 @@ registry; query vocabularies live in focused namespace modules:
 
 from __future__ import annotations
 
+from tslc.ir.query_syntax import QueryParser, QueryTerm
 from tslc.lower._query_core import (
     AttributeQuery,
     BaseInQuery,
@@ -33,8 +35,6 @@ from tslc.lower._query_model import (
     BoolValue,
     ObjectSize,
     QueryFunction,
-    QueryParser,
-    QueryTerm,
     QueryValue,
     SimdTypeParameterValue,
     TextValue,

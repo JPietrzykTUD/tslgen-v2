@@ -23,6 +23,7 @@ from tslc.catalog.overloads import (
 )
 from tslc.catalog.semantics import PrimitiveSemanticContract
 from tslc.catalog.shift import PrimitiveShiftContract
+from tslc.catalog.signature_kinds import PointerMutability
 from tslc.catalog.target_families import (
     ExtensionFamilyCapability,
     TargetFamilyCatalog,
@@ -61,6 +62,28 @@ TestCaseRole = Literal[
 ]
 
 
+class PrimitiveCastMode(StrEnum):
+    """Source-declared representation relation for conversion primitives."""
+
+    CONVERT = "convert"
+    REINTERPRET = "reinterpret"
+
+
+class PrimitiveMaskMode(StrEnum):
+    """Source-declared behavior for inactive lanes of a masked primitive."""
+
+    PASS_THROUGH = "pass_through"
+    ZERO = "zero"
+
+
+class PrimitiveValueMode(StrEnum):
+    """Source-declared result initialization/definedness semantics."""
+
+    ALL = "all"
+    UNDEFINED = "undef"
+    ZERO = "zero"
+
+
 class TestComparison(StrEnum):
     """How authored expected lane values are compared to generated results."""
 
@@ -81,6 +104,7 @@ MaskPolicyKind = Literal[
     "exact_lane_bitmask",
     "lane_bitmask",
     "native_predicate",
+    "native_predicate_by_type",
     "native_predicate_by_lanes",
 ]
 ImaskPolicyKind = Literal["lane_bitmask", "same_as_mask_type", "unsigned_scalar"]
@@ -92,9 +116,16 @@ VectorBitsKind = Literal["fixed", "sized", "scalable", ""]
 
 
 @dataclass(frozen=True, slots=True)
+class CompilerCapabilityRequirement:
+    """Compiler capabilities required from one generated backend."""
+
+    backend_id: str
+    capabilities: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
 class RequirementClause:
-    """One `requires` clause: a feature-flag set, optionally scoped to an extension
-    and/or a type-group.
+    """One `requires` clause, optionally scoped to an extension/type-group.
 
     A simple ``requires [avx, avx2]`` is one clause with ``extension=None`` and
     ``type_group=None`` (applies to every extension and type). A nested ``requires:``
@@ -102,10 +133,14 @@ class RequirementClause:
     type-group (avx512's ``idqword [avx512f]`` -> ``type_group="idqword"``), or both
     (two-level ``avx512: idqword [...]`` -> ``extension="avx512", type_group="idqword"``).
     A clause applies to a body only when its extension scope matches the body's own
-    extension (or is unscoped).
+    extension (or is unscoped). ``flags`` are target-machine features.
+    ``compiler`` is a backend-scoped compiler-capability requirement; it is
+    intentionally independent of target features so selection never treats
+    compiler support as hardware support.
     """
 
-    flags: frozenset[str]
+    flags: frozenset[str] = frozenset()
+    compiler: tuple[CompilerCapabilityRequirement, ...] = ()
     type_group: str | None = None
     extension: str | None = None
 
@@ -231,6 +266,11 @@ class Primitive:
     # (aligned/packed) is expanded by the builder into concrete-value copies, so here the
     # value is always concrete. `attribute_keys` is kept for the masked-variant filter.
     attributes: Mapping[str, str] = field(default_factory=dict)
+    # Semantic meanings promoted once from the source attribute spelling.
+    cast_mode: PrimitiveCastMode | None = field(init=False, default=None)
+    mask_mode: PrimitiveMaskMode | None = field(init=False, default=None)
+    value_mode: PrimitiveValueMode | None = field(init=False, default=None)
+
     # Pointer parameter layout rules from a `param_types:` block. Conditional
     # rules are source-owned facts about what an abstract pointer parameter
     # points to under a concrete attribute value; consumers such as value-test
@@ -292,6 +332,24 @@ class Primitive:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "attributes", _freeze_mapping(self.attributes))
+        declared_cast = self.attributes.get("cast")
+        declared_mask = self.attributes.get("mask")
+        declared_value = self.attributes.get("value")
+        object.__setattr__(
+            self,
+            "cast_mode",
+            None if declared_cast is None else PrimitiveCastMode(declared_cast),
+        )
+        object.__setattr__(
+            self,
+            "mask_mode",
+            None if declared_mask is None else PrimitiveMaskMode(declared_mask),
+        )
+        object.__setattr__(
+            self,
+            "value_mode",
+            None if declared_value is None else PrimitiveValueMode(declared_value),
+        )
 
     def immediate_param(self, name: str) -> "ImmediateParam | None":
         """The `params:` metadata for the `sImm` parameter `name`, or None."""
@@ -358,13 +416,30 @@ class GenericParamBaseWidthConstraint:
 
 
 @dataclass(frozen=True, slots=True)
+class ParamTypeExpression:
+    """One target-neutral pointer wrapper around a TSIL type expression."""
+
+    pointer_kind: PointerMutability
+    pointee_expr: str
+
+    def __post_init__(self) -> None:
+        if not self.pointee_expr.strip():
+            raise ValueError("param_types pointee expressions must not be empty")
+
+    @property
+    def source_text(self) -> str:
+        wrapper = "cptr" if self.pointer_kind == "const" else "ptr"
+        return f"{wrapper}({self.pointee_expr})"
+
+
+@dataclass(frozen=True, slots=True)
 class ParamTypeRule:
     """One `param_types:` rule for a primitive parameter."""
 
     parameter_name: str
     attribute_name: str | None
     attribute_value: str | None
-    type_expr: str
+    type_expr: ParamTypeExpression
     source: SourceSpan | None = None
 
 
@@ -453,6 +528,8 @@ class MaskPolicy:
       name a lane-parameterized type such as ``ac_int<LANES, false>``.
     - ``"native_predicate"`` (scalable SVE): the mask is one backend-native predicate
       spelling declared directly by backend id.
+    - ``"native_predicate_by_type"`` (scalable RVV): the mask is one backend-native
+      predicate spelling per scalar type.
     - ``"native_predicate_by_lanes"`` (avx512 and the ``_vl`` variants): the mask is a
       native predicate keyed by lane count; spellings are backend-keyed so a new backend
       extends source data without changing this model.
@@ -460,6 +537,9 @@ class MaskPolicy:
 
     kind: MaskPolicyKind = "lane_bitmask"
     backend_spelling: Mapping[str, str] = field(default_factory=dict)
+    backend_spelling_by_type: Mapping[str, Mapping[str, str]] = field(
+        default_factory=dict
+    )
     backend_spelling_by_lanes: Mapping[str, Mapping[int, str]] = field(default_factory=dict)
     source: SourceSpan | None = None
 
@@ -471,12 +551,20 @@ class MaskPolicy:
         )
         object.__setattr__(
             self,
+            "backend_spelling_by_type",
+            _freeze_nested_mapping(self.backend_spelling_by_type),
+        )
+        object.__setattr__(
+            self,
             "backend_spelling_by_lanes",
             _freeze_nested_mapping(self.backend_spelling_by_lanes),
         )
 
     def spelling(self, backend_id: str) -> str | None:
         return self.backend_spelling.get(backend_id)
+
+    def spelling_for_type(self, backend_id: str, type_tag: str) -> str | None:
+        return self.backend_spelling_by_type.get(backend_id, {}).get(type_tag)
 
     def spelling_for_lanes(self, backend_id: str, lanes: int) -> str | None:
         return self.backend_spelling_by_lanes.get(backend_id, {}).get(lanes)
@@ -503,31 +591,15 @@ class ImaskPolicy:
 
 
 @dataclass(frozen=True, slots=True)
-class BackendCompileGuard:
-    """Backend compile-time condition required by an extension's declarations."""
-
-    name: str
-    macro: str
-    equals: str
-    hint_flag: str | None = None
-    diagnostic: str | None = None
-    source: SourceSpan | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class BackendExtensionMetadata:
-    """Backend-specific extension facts consumed by code generation or validation."""
+    """Backend-specific semantic requirements and target projection facts.
 
-    compile_guards: tuple[BackendCompileGuard, ...] = ()
-    # Optional generated-header group. Extensions in a named group are emitted in
-    # a dedicated opt-in header instead of the profile's default header.
-    header_group: str | None = None
-    # CMake compiler IDs that expose this opt-in header group.
-    compiler_ids: tuple[str, ...] = ()
-    # Optional compiler feature-test names required by this extension. The
-    # backend owns their concrete preprocessor spelling and guards only the
-    # declarations/cases that need them.
-    compiler_features: tuple[str, ...] = ()
+    Compiler families, header grouping, concrete macros, and probes are resolved
+    from these capability IDs by the registered backend. They deliberately do
+    not enter the backend-neutral catalog model.
+    """
+
+    compiler_capabilities: tuple[str, ...] = ()
     # None inherits/defaults to true. Compiler-vector overlays set this false so
     # dataparallel::native/fixed<N> continue to resolve to the hardware substrate.
     dataparallel_inference: bool | None = None
@@ -535,12 +607,10 @@ class BackendExtensionMetadata:
     arch_module: str | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "compile_guards", tuple(self.compile_guards))
-        object.__setattr__(self, "compiler_ids", tuple(self.compiler_ids))
         object.__setattr__(
             self,
-            "compiler_features",
-            tuple(sorted(set(self.compiler_features))),
+            "compiler_capabilities",
+            tuple(sorted(set(self.compiler_capabilities))),
         )
 
     @property
@@ -582,6 +652,35 @@ class ExtensionActivation:
         )
 
 
+class IntrinsicNameOrder(StrEnum):
+    """Order of the semantic base and optional type suffix in an intrinsic."""
+
+    BASE_SUFFIX = "base_suffix"
+    SUFFIX_BASE = "suffix_base"
+
+
+@dataclass(frozen=True, slots=True)
+class IntrinsicComposition:
+    """Source-owned intrinsic fragments and language-neutral composition rules."""
+
+    prefix_by_backend: Mapping[str, str] = field(default_factory=dict)
+    suffix_by_type: Mapping[str, str] = field(default_factory=dict)
+    order: IntrinsicNameOrder = IntrinsicNameOrder.BASE_SUFFIX
+    require_explicit_suffix: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "prefix_by_backend",
+            _freeze_mapping(self.prefix_by_backend),
+        )
+        object.__setattr__(
+            self,
+            "suffix_by_type",
+            _freeze_mapping(self.suffix_by_type),
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class Extension:
     """Target extension metadata needed for backend translation.
@@ -594,9 +693,10 @@ class Extension:
 
     name: str  # internal identity = TSL block name (e.g. "avx2_vl"); drives selection
     isa_name: str  # emitted tag = `extension_name` (e.g. "avx2"); `_vl` is internal only
-    family: str  # "x86" | "arm" | "scalar" | … — picks the Rust core::arch module
-    compose_prefix: Mapping[str, str]  # backend_id -> intrinsic prefix
-    compose_suffix_by_type: Mapping[str, str]  # type tag -> suffix fragment
+    family: str  # source-named extension-family routing key
+    intrinsic_composition: IntrinsicComposition = field(
+        default_factory=IntrinsicComposition
+    )
     family_capability: ExtensionFamilyCapability = field(
         default_factory=lambda: ExtensionFamilyCapability("")
     )
@@ -607,7 +707,6 @@ class Extension:
     # backend_id -> whether this extension is emittable for that backend. Missing entries are
     # unsupported; inherited extensions receive parent entries during catalog promotion.
     backend_supported: Mapping[str, bool] = field(default_factory=dict)
-    intrinsic_style: str = ""
     inherits: str | None = None  # extension this one borrows impls/metadata from
     active_when: ExtensionActivation = field(default_factory=ExtensionActivation)
     supersedes: frozenset[str] = frozenset()
@@ -638,13 +737,19 @@ class Extension:
     unroll_variants: bool = False
     source: SourceSpan | None = None
 
+    @property
+    def compose_prefix(self) -> Mapping[str, str]:
+        """Read-only projection of the typed intrinsic composition."""
+
+        return self.intrinsic_composition.prefix_by_backend
+
+    @property
+    def compose_suffix_by_type(self) -> Mapping[str, str]:
+        """Read-only projection of the typed intrinsic composition."""
+
+        return self.intrinsic_composition.suffix_by_type
+
     def __post_init__(self) -> None:
-        object.__setattr__(self, "compose_prefix", _freeze_mapping(self.compose_prefix))
-        object.__setattr__(
-            self,
-            "compose_suffix_by_type",
-            _freeze_mapping(self.compose_suffix_by_type),
-        )
         object.__setattr__(
             self,
             "vector_register_types",
@@ -722,11 +827,6 @@ class Extension:
 
     def headers_for_backend(self, backend_id: str) -> tuple[str, ...]:
         return self.backend_headers.get(backend_id, ())
-
-    def header_group_for_backend(self, backend_id: str) -> str | None:
-        metadata = self.metadata.backend.get(backend_id)
-        return None if metadata is None else metadata.header_group
-
 
 @dataclass(frozen=True, slots=True)
 class Catalog:

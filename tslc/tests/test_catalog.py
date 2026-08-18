@@ -6,13 +6,21 @@ from pathlib import Path
 
 import pytest
 
+from tslc.backend.cpp_compiler_capabilities import (
+    cpp_extension_compiler_ids,
+    cpp_extension_header_group,
+)
 from tslc.catalog import builder as builder_module
 from tslc.catalog._builder_extensions import _build_extension
 from tslc.catalog._builder_implementations import _implementations_from_entries
 from tslc.catalog._builder_primitives import _build_primitives
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import Catalog, TargetConstraint
+from tslc.catalog.model import (
+    Catalog,
+    PrimitiveValueMode,
+    TargetConstraint,
+)
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
@@ -217,11 +225,9 @@ def test_extension_inheritance_activation_and_supersession(catalog: Catalog) -> 
     assert sve512.active_when.compile_modes == frozenset({"sve_vector_bits_512"})
     assert sve512.supersedes == frozenset({"sve"})
     assert catalog.extension_chain("sve512") == ("sve512", "sve")
-    compile_guards = sve512.metadata.backend["cpp"].compile_guards
-    assert len(compile_guards) == 1
-    assert compile_guards[0].name == "sve_vector_bits"
-    assert compile_guards[0].macro == "__ARM_FEATURE_SVE_BITS"
-    assert compile_guards[0].equals == "512"
+    assert sve512.metadata.backend["cpp"].compiler_capabilities == (
+        "sve_vector_bits_512",
+    )
 
     oneapi = catalog.extensions["oneapi_fpga"]
     assert oneapi.active_when.target_features == frozenset()
@@ -232,7 +238,6 @@ def test_extension_inheritance_activation_and_supersession(catalog: Catalog) -> 
     assert oneapi.headers_for_backend("cpp") == (
         "sycl/ext/intel/ac_types/ac_int.hpp",
     )
-    assert compile_guards[0].hint_flag == "-msve-vector-bits=512"
     assert (
         sve512.direct_vector_register_type("cpp", "si32")
         == "svint32_t __attribute__((arm_sve_vector_bits(512)))"
@@ -305,6 +310,7 @@ def test_boolean_wildcard_attributes_expand_to_concrete_variants() -> None:
     }
     assert len(variants) == 4
     assert all(p.attributes["value"] == "zero" for p in variants)
+    assert all(p.value_mode is PrimitiveValueMode.ZERO for p in variants)
     bodies = {
         tuple(impl.body_text for impl in p.implementations) for p in variants
     }
@@ -437,6 +443,11 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
         {"oneapi_fpga"}
     )
     assert machine_profiles["skylake-oneapi"].auto_detect_gate == "oneapi_fpga"
+    assert (
+        machine_profiles["skylake-oneapi"].compiler_role_for_backend("cpp")
+        == "oneapi-cpp"
+    )
+    assert machine_profiles["scalar"].default_build_fallback
     assert machine_profiles["wasm32-simd128"].family == "wasm32"
     assert machine_profiles["wasm32-simd128"].features == frozenset({"simd128"})
     assert machine_profiles["wasm32-simd128"].flags_for_backend("cpp") == ()
@@ -557,11 +568,10 @@ def test_clang_vector_extensions_are_cpp_opt_in_overlays(catalog: Catalog) -> No
         assert not extension.supports_backend("rust")
         assert extension.mask_policy.kind == "comparison_lane_vector"
         metadata = extension.metadata.backend["cpp"]
-        assert metadata.header_group == "clang"
-        assert metadata.compiler_ids == ("Clang", "AppleClang")
-        assert not metadata.compiler_features
+        assert metadata.compiler_capabilities == ("clang_vector_types",)
+        assert cpp_extension_header_group(extension) == "clang"
+        assert cpp_extension_compiler_ids(extension) == ("AppleClang", "Clang")
         assert not metadata.participates_in_dataparallel_inference
-        assert metadata.compile_guards[0].macro == "__clang__"
 
     for width in (128, 256, 512):
         extension = catalog.extensions[f"clang_v{width}_bool"]
@@ -572,9 +582,12 @@ def test_clang_vector_extensions_are_cpp_opt_in_overlays(catalog: Catalog) -> No
         assert extension.mask_policy.kind == "boolean_lane_vector"
         assert extension.imask_policy.kind == "lane_bitmask"
         metadata = extension.metadata.backend["cpp"]
-        assert metadata.header_group == "clang"
-        assert metadata.compiler_ids == ("Clang", "AppleClang")
-        assert metadata.compiler_features == ("ext_vector_type_boolean",)
+        assert metadata.compiler_capabilities == (
+            "clang_vector_types",
+            "ext_vector_type_boolean",
+        )
+        assert cpp_extension_header_group(extension) == "clang"
+        assert cpp_extension_compiler_ids(extension) == ("AppleClang", "Clang")
         assert not metadata.participates_in_dataparallel_inference
 
 

@@ -106,6 +106,7 @@ def specialization_context(
             primitive.name,
             DEFAULT_SCALAR_TYPE_TAGS,
             backend_id=backend,
+            compiler_capabilities=None,
         )
         slots.update(
             SpecializationSlot(

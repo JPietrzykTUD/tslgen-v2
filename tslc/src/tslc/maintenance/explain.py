@@ -9,7 +9,7 @@ question has a precise, sourced answer instead of one collapsed skip string.
 It prints four sections:
 
   1. SELECTION   which implementation body won the slot, the ranked candidate field with the
-                 four principled keys, the decisive tiebreak over the runner-up, and — when no
+                 five principled keys, the decisive tiebreak over the runner-up, and — when no
                  body is usable — why each on-chain candidate was rejected (or why the extension
                  is not emitted for the profile at all).
   2. BODY        the scanned TSIL segment tree (RawText vs Region keyword islands).
@@ -34,6 +34,7 @@ from collections.abc import Collection, Sequence
 from pathlib import Path
 
 from tslc._pipeline_closure import dependency_label
+from tslc._cli_options import split_csv
 from tslc.api import _expand_sources
 from tslc.backend.registry import create_backend_dialect, registered_backend_ids
 from tslc.catalog.machine_profiles import MachineProfile
@@ -50,6 +51,7 @@ from tslc.lower.dependencies import (
 )
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.pipeline import (
+    BackendCompilerCapabilitySet,
     GenerationRequest,
     GenerationResult,
     _generate_loaded,
@@ -73,6 +75,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile", required=True, help="machine profile name, e.g. avx2")
     parser.add_argument("--type", required=True, dest="type_tag", help="scalar type tag, e.g. si32")
     parser.add_argument("--backend", default="cpp", choices=registered_backend_ids())
+    parser.add_argument(
+        "--compiler-capabilities",
+        default=None,
+        help="comma-separated exact compiler capabilities; omit for automatic "
+        "portable selection, or pass an empty value for none",
+    )
     parser.add_argument(
         "--extension",
         default=None,
@@ -107,6 +115,11 @@ def main(argv: list[str] | None = None) -> int:
         profile=args.profile,
         type_tag=args.type_tag,
         backend=args.backend,
+        compiler_capabilities=(
+            None
+            if args.compiler_capabilities is None
+            else frozenset(split_csv(args.compiler_capabilities))
+        ),
         extension=args.extension,
         to_target=args.to_target,
     )
@@ -124,6 +137,7 @@ def explain(
     backend: str,
     extension: str | None = None,
     to_target: str | None = None,
+    compiler_capabilities: frozenset[str] | None = None,
 ) -> str:
     """Return the human-readable explanation for the requested slot (the testable core)."""
 
@@ -134,6 +148,11 @@ def explain(
         profiles=(profile,),
         type_tags=(type_tag,),
         backends=(backend,),
+        backend_compiler_capabilities=(
+            ()
+            if compiler_capabilities is None
+            else (BackendCompilerCapabilitySet(backend, compiler_capabilities),)
+        ),
         render_artifacts=False,
     )
     inputs, diagnostics = _load_inputs(request)
@@ -158,6 +177,14 @@ def explain(
         f"extension={extension or '*'} to_target={to_target or '*'}"
     )
     out.line(f"  profile target features: {_format_flags(machine_profile.features)}")
+    out.line(
+        "  compiler capabilities: "
+        + (
+            "automatic"
+            if compiler_capabilities is None
+            else _format_flags(compiler_capabilities)
+        )
+    )
     if machine_profile.compile_modes:
         out.line(f"  profile compile modes: {_format_flags(machine_profile.compile_modes)}")
     out.blank()
@@ -169,6 +196,7 @@ def explain(
         primitive,
         (type_tag,),
         backend_id=backend,
+        compiler_capabilities=compiler_capabilities,
     )
     for warning in selection.diagnostics:
         out.line(f"  selection note [{warning.code}]: {warning.message}")
@@ -193,7 +221,8 @@ def explain(
     if selected_slots:
         for slot in selected_slots:
             _explain_selected_slot(
-                out, selector, catalog, machine_profile, backend, slot, verdicts
+                out, selector, catalog, machine_profile, backend, compiler_capabilities,
+                slot, verdicts
             )
     else:
         _explain_no_slot(
@@ -201,6 +230,8 @@ def explain(
             selector,
             catalog,
             machine_profile,
+            backend,
+            compiler_capabilities,
             primitive,
             type_tag,
             to_target,
@@ -220,12 +251,16 @@ def _explain_selected_slot(
     catalog: Catalog,
     machine_profile: MachineProfile,
     backend: str,
+    compiler_capabilities: frozenset[str] | None,
     slot: SelectedImplementation,
     verdicts: "_PipelineVerdicts",
 ) -> None:
     extension_tag = slot.extension.isa_name
     target_suffix = f" -> {slot.to_target}" if slot.to_target is not None else ""
-    attrs = "".join(f" [{key}={value}]" for key, value in sorted(slot.primitive.attributes.items()))
+    attrs = "".join(
+        f" [{key}={value}]"
+        for key, value in sorted(slot.primitive.attributes.items())
+    )
     out.rule(
         f"{slot.primitive.name}<{extension_tag}, {slot.type_tag}{target_suffix}>{attrs}"
     )
@@ -239,6 +274,8 @@ def _explain_selected_slot(
         extension_tag,
         slot.type_tag,
         slot.to_target,
+        backend_id=backend,
+        compiler_capabilities=compiler_capabilities,
     )
     _print_ranking(out, evaluation)
     out.blank()
@@ -294,8 +331,8 @@ def _print_ranking(out: "_Writer", evaluation: CandidateEvaluation) -> None:
         _print_rejections(out, evaluation)
         return
     out.line(
-        "    ranked candidates "
-        "(winner first; keys = distance, specificity, target_features, order):"
+        "    ranked candidates (winner first; keys = distance, specificity, "
+        "target_features, compiler_capabilities, order):"
     )
     for index, candidate in enumerate(ranked):
         marker = "==>" if index == 0 else "   "
@@ -303,8 +340,11 @@ def _print_ranking(out: "_Writer", evaluation: CandidateEvaluation) -> None:
         out.line(
             f"    {marker} #{index} {impl.extension}:{impl.type_group}  "
             f"keys=(dist={candidate.distance}, spec={candidate.specificity}, "
-            f"target_features={candidate.flag_count}, order={candidate.source_order})  "
-            f"requires={_format_flags(candidate.required_features)}"
+            f"target_features={candidate.flag_count}, "
+            f"compiler_capabilities={candidate.compiler_capability_count}, "
+            f"order={candidate.source_order})  "
+            f"target_requires={_format_flags(candidate.required_features)}  "
+            f"compiler_requires={_format_flags(candidate.required_compiler_capabilities)}"
         )
         out.line(f"          {_format_source(impl.selector_source or impl.source)}")
     if len(ranked) >= 2:
@@ -326,12 +366,15 @@ def _decisive_tiebreak(
         win = getattr(winner, attribute)
         lose = getattr(runner_up, attribute)
         if win != lose:
-            better = "more" if attribute == "flag_count" else "lower"
+            more_wins = attribute in {"flag_count", "compiler_capability_count"}
+            better = "more" if more_wins else "lower"
+            operator = ">" if more_wins else "<"
             return (
                 f"won on {attribute} ({description}): "
-                f"winner {win} {'>' if attribute == 'flag_count' else '<'} {lose} "
+                f"winner {win} {operator} {lose} "
                 f"[{better} wins]"
             )
+
     return "winner and runner-up tie on every key (selection is arbitrary)"
 
 
@@ -349,6 +392,8 @@ def _explain_no_slot(
     selector: Selector,
     catalog: Catalog,
     machine_profile: MachineProfile,
+    backend: str,
+    compiler_capabilities: frozenset[str] | None,
     primitive: str,
     type_tag: str,
     to_target: str | None,
@@ -381,7 +426,14 @@ def _explain_no_slot(
             out.line(f"    {extension_tag!r}: unknown extension")
             continue
         evaluation = selector.evaluate_candidates(
-            catalog, machine_profile, primitive_obj, extension_tag, type_tag, to_target
+            catalog,
+            machine_profile,
+            primitive_obj,
+            extension_tag,
+            type_tag,
+            to_target,
+            backend_id=backend,
+            compiler_capabilities=compiler_capabilities,
         )
         out.line(f"    {extension_tag}: no body selected. Candidate rejections:")
         if evaluation.rejected:
@@ -406,7 +458,11 @@ def _print_specialization(out: "_Writer", spec: LoweredSpecialization) -> None:
     if spec.target is not None:
         out.line(f"      target vec : {spec.target}")
     if spec.required_features:
-        out.line(f"      requires   : {_format_flags(spec.required_features)}")
+        out.line(f"      target req : {_format_flags(spec.required_features)}")
+    if spec.required_compiler_capabilities:
+        out.line(
+            f"      compiler req: {_format_flags(spec.required_compiler_capabilities)}"
+        )
     safety = spec.safety
     if safety.internal_unsafe or safety.caller_unsafe:
         out.line(

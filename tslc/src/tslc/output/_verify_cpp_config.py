@@ -7,7 +7,7 @@ from pathlib import Path
 import shlex
 import shutil
 
-from tslc.output._verify_runners import runner_prefix
+from tslc.output._verify_runners import is_cmake_cross_emulator, runner_prefix
 from tslc.output.verify_model import (
     BuildCommandEnvironment,
     BuildVerifierConfig,
@@ -18,6 +18,7 @@ from tslc.output.verify_model import (
 
 _AARCH64_GNU_CPP_COMPILER = "aarch64-linux-gnu-g++"
 _AARCH64_GNU_CPP_DRIVER_PREFIXES = ("aarch64-linux-gnu-",)
+_CPP_COMPILER_ROLE_DEFAULTS = {"oneapi-cpp": "icpx"}
 
 
 def cpp_target(profile: VerifyProfile, config: BuildVerifierConfig) -> str | None:
@@ -42,7 +43,10 @@ def cmake_cross_emulator(
     profile: VerifyProfile,
     config: BuildVerifierConfig,
 ) -> tuple[str, ...]:
-    if profile.runner is None or profile.runner.kind != "qemu-aarch64":
+    if (
+        profile.runner is None
+        or not is_cmake_cross_emulator(profile.runner.kind)
+    ):
         return ()
     return runner_prefix(profile, config)
 
@@ -61,10 +65,14 @@ def effective_cpp_compiler(
         _is_wasm_cpp_target(candidate, config) for candidate in backend.profiles
     ):
         return (config.tool_path("wasi-cpp") or "clang++",)
-    if backend is not None and backend.profiles and all(
-        _needs_oneapi_cpp_compiler(candidate) for candidate in backend.profiles
-    ):
-        return (config.tool_path("oneapi-cpp") or "icpx",)
+    compiler_roles = {
+        candidate.compiler_role
+        for candidate in (() if backend is None else backend.profiles)
+    }
+    if len(compiler_roles) == 1 and None not in compiler_roles:
+        role = next(iter(compiler_roles))
+        assert role is not None
+        return (_compiler_for_role(role, config),)
     if backend is not None and backend.profiles and all(
         _is_default_aarch64_gnu_cpp_target(candidate, config)
         for candidate in backend.profiles
@@ -83,6 +91,8 @@ def _effective_cpp_compiler_for_profile(
     config: BuildVerifierConfig,
     profile: VerifyProfile,
 ) -> tuple[str, ...]:
+    if profile.compiler_role is not None:
+        return (_compiler_for_role(profile.compiler_role, config),)
     if _is_wasm_cpp_target(profile, config):
         return (config.tool_path("wasi-cpp") or "clang++",)
     if _is_default_aarch64_gnu_cpp_target(profile, config):
@@ -91,8 +101,6 @@ def _effective_cpp_compiler_for_profile(
             return compiler
     if cpp_target(profile, config) is not None:
         return ("clang++",)
-    if _needs_oneapi_cpp_compiler(profile):
-        return (config.tool_path("oneapi-cpp") or "icpx",)
     if (
         config.run_value_tests
         and config.runner_path("sde") is not None
@@ -145,8 +153,12 @@ def cpp_compiler_accepts_explicit_target(compiler: tuple[str, ...]) -> bool:
     return not executable.startswith(_AARCH64_GNU_CPP_DRIVER_PREFIXES)
 
 
-def _needs_oneapi_cpp_compiler(profile: VerifyProfile) -> bool:
-    return "oneapi_fpga" in profile.compile_modes
+def _compiler_for_role(role: str, config: BuildVerifierConfig) -> str:
+    return (
+        config.tool_path(role)
+        or _CPP_COMPILER_ROLE_DEFAULTS.get(role)
+        or role
+    )
 
 
 def _ambient_cpp_compiler() -> tuple[str, ...]:

@@ -4,6 +4,7 @@ ARG ZIG_VERSION=0.16.0
 ARG ZIG_ARCH=x86_64-linux
 ARG WASI_SDK_VERSION=33
 ARG WASMTIME_VERSION=45.0.2
+ARG LLVM_APT_VERSION=22
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV ONEAPI_ROOT=/opt/intel/oneapi
@@ -21,6 +22,26 @@ RUN apt-get update -y && \
     python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip setuptools wheel && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Ubuntu 26.04 ships Clang 21. Keep that fallback compiler and add a native
+# Clang 22 from LLVM's signed repository for compiler-capability probes whose
+# positive path first appears in Clang 22. WASI SDK's Clang targets wasm32 and
+# cannot exercise the native generated-value binaries used by this gate.
+RUN set -eux; \
+    curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
+      -o /tmp/llvm-snapshot.gpg.key; \
+    gpg --batch --yes --dearmor \
+      --output /usr/share/keyrings/apt.llvm.org.gpg \
+      /tmp/llvm-snapshot.gpg.key; \
+    echo "deb [signed-by=/usr/share/keyrings/apt.llvm.org.gpg] https://apt.llvm.org/resolute/ llvm-toolchain-resolute-${LLVM_APT_VERSION} main" \
+      > /etc/apt/sources.list.d/apt.llvm.org.list; \
+    apt-get update -y; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      "clang-${LLVM_APT_VERSION}"; \
+    /usr/bin/clang++-21 --version; \
+    "/usr/bin/clang++-${LLVM_APT_VERSION}" --version; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/* /tmp/llvm-snapshot.gpg.key
 
 # Install Zig
 RUN set -eux; \

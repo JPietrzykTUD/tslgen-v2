@@ -37,6 +37,7 @@ from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
 from tslc.catalog.arithmetic import ArithmeticGuarantee, ArithmeticOperandRole
 from tslc.catalog.conversion import LaneCountRelation
 from tslc.catalog.memory import MemoryAccess
+from tslc.catalog.model import PrimitiveMaskMode
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.diagnostics import Diagnostic
@@ -276,9 +277,9 @@ def _public_name(
             )
     if key.immediate is not None or "sImm" in key.param_kinds:
         name = _append_component(name, "_imm")
-    if key.mask_policy == "pass_through":
+    if key.mask_policy == PrimitiveMaskMode.PASS_THROUGH:
         name = _append_component(name, "_masked")
-    elif key.mask_policy == "zero":
+    elif key.mask_policy == PrimitiveMaskMode.ZERO:
         name = _append_component(name, "_masked_zero")
     elif key.mask_policy is not None:
         return None, _diagnostic(

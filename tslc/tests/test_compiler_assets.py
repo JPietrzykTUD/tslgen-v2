@@ -9,6 +9,7 @@ import pytest
 from rust_project_test_support import render_rust_artifacts_for_test
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_package import RustPackageConfig
+from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
 from tslc.backend.rust_static_selection import plan_rust_static_selection
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
@@ -21,6 +22,8 @@ from tslc.compiler_assets import (
 from tslc.sources import SourceDocument
 from tslc.syntax.ast import ParsedTslScalarValue
 from tslc.syntax.parser import TslParser
+
+RUST_POLICY_MANIFEST = load_rust_policy_manifest()
 
 
 def test_render_assets_freeze_and_fill_templates() -> None:
@@ -35,7 +38,6 @@ def test_render_assets_freeze_and_fill_templates() -> None:
         assets.text("missing.txt")
     with pytest.raises(TypeError):
         assets.files["plain.txt"] = "changed"  # type: ignore[index]
-
 
 def test_parser_consumes_injected_grammar() -> None:
     document = SourceDocument(
@@ -55,7 +57,6 @@ def test_parser_consumes_injected_grammar() -> None:
     assert parsed.diagnostics == ()
     assert parsed.documents[0].primitives[0].name == "id"
 
-
 def test_boolean_tokens_do_not_capture_identifier_prefixes() -> None:
     document = SourceDocument(
         Path("boolean_identifier_prefix.tsl"),
@@ -73,7 +74,6 @@ def test_boolean_tokens_do_not_capture_identifier_prefixes() -> None:
     enabled = primitive.fields_by_name("enabled")[0].field.value
     assert isinstance(enabled, ParsedTslScalarValue)
     assert enabled.text == "true"
-
 
 def test_rust_project_renderer_consumes_injected_assets() -> None:
     assets = RenderAssets(
@@ -123,7 +123,9 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
             (),
             assets,
             media_type="text/rust",
-            selection_plan=plan_rust_policy_selection(()),
+            selection_plan=plan_rust_policy_selection(
+                (), RUST_POLICY_MANIFEST
+            ),
             static_selection_plan=plan_rust_static_selection(()),
         )
     }
@@ -155,7 +157,6 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
     assert 'runtime-dispatch = ["std"]' in rendered["rust/Cargo.toml"]
     assert "[[bench]]" not in rendered["rust/Cargo.toml"]
 
-
 def test_rust_project_renderer_uses_typed_release_metadata() -> None:
     package = RustPackageConfig(
         name="custom-tsl",
@@ -173,7 +174,9 @@ def test_rust_project_renderer_uses_typed_release_metadata() -> None:
             (),
             load_default_render_assets(),
             media_type="text/rust",
-            selection_plan=plan_rust_policy_selection(()),
+            selection_plan=plan_rust_policy_selection(
+                (), RUST_POLICY_MANIFEST
+            ),
             static_selection_plan=plan_rust_static_selection(()),
             package_config=package,
         )
@@ -236,7 +239,6 @@ def test_rust_package_config_rejects_invalid_metadata(
     with pytest.raises(ValueError):
         RustPackageConfig(**metadata)
 
-
 def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
     profiles = tuple(
         EmittedProfile(
@@ -253,7 +255,9 @@ def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
             profiles,
             load_default_render_assets(),
             media_type="text/rust",
-            selection_plan=plan_rust_policy_selection(profiles),
+            selection_plan=plan_rust_policy_selection(
+                profiles, RUST_POLICY_MANIFEST
+            ),
             static_selection_plan=plan_rust_static_selection(profiles),
         )
     }
@@ -288,7 +292,6 @@ def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
             f"pub mod tsl_variant_bench_{profile_slug};"
         ) in lib
 
-
 def test_rust_algorithm_facade_wrappers_are_static_render_asset() -> None:
     assets = load_default_render_assets()
 
@@ -296,7 +299,6 @@ def test_rust_algorithm_facade_wrappers_are_static_render_asset() -> None:
 
     assert "pub fn transform_unary<Policy, Op, T>" in wrappers
     assert "crate::tsl_algorithm::transform_unary::<Profile, Policy, Op, T>" in wrappers
-
 
 def test_rust_algorithm_reserved_name_manifest_matches_static_asset() -> None:
     wrappers = load_default_render_assets().text("rust_algo_wrappers.rs")
@@ -309,7 +311,6 @@ def test_rust_algorithm_reserved_name_manifest_matches_static_asset() -> None:
     )
 
     assert public_names == RUST_ALGORITHM_RESERVED_NAMES
-
 
 def test_package_resource_reads_stay_in_compiler_asset_boundary() -> None:
     package_root = Path(__file__).resolve().parents[1] / "src" / "tslc"

@@ -232,6 +232,14 @@ def _generation_parser(
         help="backend compiler command override; repeat for multiple backends",
     )
     parser.add_argument(
+        "--compiler-capabilities",
+        action="append",
+        default=[],
+        metavar="BACKEND=CAPABILITY,...",
+        help="force compiler capabilities during generation; repeat for multiple backends",
+    )
+
+    parser.add_argument(
         "--target",
         action="append",
         default=[],
@@ -288,6 +296,9 @@ def _generation_command_settings(
         parse_assignments(args.compiler, "--compiler"),
         parse_assignments(args.target, "--target"),
         parse_assignments(args.linker, "--linker"),
+        parse_assignments(
+            args.compiler_capabilities, "--compiler-capabilities"
+        ),
     )
     backend_profiles = {
         backend_id: split_csv(value)

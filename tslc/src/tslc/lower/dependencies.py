@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 
-from tslc.catalog.model import RESULT_DIM_VECTOR
+from tslc.catalog.model import RESULT_DIM_VECTOR, PrimitiveMaskMode
 from tslc.ir.region_syntax import ParsedCallSelector
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import QueryEvaluator, TypeValue
@@ -38,7 +38,7 @@ type CallVectorReference = VectorIdentity | GenericVectorReference
 @dataclass(frozen=True, slots=True)
 class CallDependency:
     primitive: str
-    mask_policy: str | None
+    mask_policy: PrimitiveMaskMode | None
     source: CallVectorReference
     target: CallVectorReference | None = None
 
@@ -56,7 +56,7 @@ def resolve_lowered_call_dependency(
     context: LoweringSession,
     evaluator: QueryEvaluator,
     *,
-    mask_policy: str | None,
+    mask_policy: PrimitiveMaskMode | None,
 ) -> CallDependency:
     """Resolve one successfully lowered ``call`` to source vector identities."""
 

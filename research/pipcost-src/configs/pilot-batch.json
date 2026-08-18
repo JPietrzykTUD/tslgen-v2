@@ -1,0 +1,56 @@
+{
+  "compiler": "c++",
+  "manual_threshold": 0.1,
+  "materiality_threshold": 0.05,
+  "minimum_sample_ns": 20000000,
+  "name": "pilot-batch",
+  "profile": "avx2",
+  "repetitions": 9,
+  "run_seed": 49979687,
+  "schema_version": 2,
+  "simd_lanes": 8,
+  "studies": [
+    {
+      "batch_rows": [
+        1024,
+        4096,
+        16384,
+        65536,
+        262144,
+        "full"
+      ],
+      "candidate_plans": [
+        "fused_mask",
+        "batch_native_mask",
+        "full_native_mask"
+      ],
+      "conditional_selectivities": [
+        0.02,
+        0.1,
+        0.5,
+        0.9
+      ],
+      "first_selectivities": [
+        1.0
+      ],
+      "name": "batch-pilot",
+      "patterns": [
+        "random"
+      ],
+      "reference_plans": [
+        "scalar_autovec",
+        "scalar_no_vector"
+      ],
+      "rows": [
+        4194304
+      ],
+      "seeds": [
+        109,
+        113
+      ],
+      "split": "pilot"
+    }
+  ],
+  "tsl_ref": "v0.2.7",
+  "warmups": 2
+}

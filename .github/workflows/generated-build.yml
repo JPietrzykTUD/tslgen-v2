@@ -134,6 +134,80 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  generated-clang-overlay:
+    name: Generated Clang overlay build and values
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - ci-image
+
+    env:
+      TSLC_CI_IMAGE: ${{ needs['ci-image'].outputs.image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-clang-overlay/docker-pull.log" \
+            docker pull "${TSLC_CI_IMAGE}"
+
+      - name: Verify generated Clang overlay toolchain
+        run: |
+          bash supplementary/ci/run_tslc_ci_container.sh \
+            -- \
+            bash -lc '
+              set -e
+              for required_tool in \
+                /usr/bin/clang++-21 \
+                /usr/bin/clang++-22 \
+                /opt/intel-sde/sde64
+              do
+                if [[ ! -x "${required_tool}" ]]; then
+                  echo "missing executable required by the Clang overlay gate: ${required_tool}" >&2
+                  exit 1
+                fi
+                if [[ "${required_tool}" == /usr/bin/clang++-* ]]; then
+                  "${required_tool}" --version | sed -n "1p"
+                else
+                  echo "found ${required_tool}"
+                fi
+              done
+            '
+
+      - name: Build and execute generated Clang overlay paths
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-clang-overlay/tests.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -- \
+              bash -lc '
+                set -e
+                trap "rm -rf tslctmp/pytest" EXIT
+                PYTHONPATH=tslc/src python -m pytest -q \
+                  --run-generated-builds \
+                  tslc/tests/test_build_verify.py::test_clang_vector_overlay_builds_and_runs_through_opt_in_target \
+                  tslc/tests/test_value_tests.py::test_clang_lzc_value_tests_build_and_pass
+              '
+
+      - name: Upload generated Clang overlay logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-logs-generated-clang-overlay
+          path: tslctmp/ci-logs/generated-clang-overlay
+          if-no-files-found: ignore
+          retention-days: 14
+
   generated-benchmarks:
     name: Generated benchmarks (x86 policy and ARM smoke)
     runs-on: ubuntu-latest

@@ -122,6 +122,7 @@ jobs:
               -e TSLC_SUMMARY_FILE="./${summary_file}" \
               -e TSLC_SDE="/opt/intel-sde/sde64" \
               -e TSLC_QEMU_AARCH64="/usr/bin/qemu-aarch64" \
+              -e TSLC_QEMU_RISCV64="/usr/bin/qemu-riscv64" \
               -e TSLC_WASMTIME="/usr/local/bin/wasmtime" \
               -- \
               bash -lc '
@@ -131,6 +132,12 @@ jobs:
                   --backends "${TSLC_BACKENDS}" \
                   --profiles "${TSLC_PROFILES}" \
                   --output-root "${TSLC_CI_OUTPUT}"
+                if [[ ",${TSLC_PROFILES}," == *,rvv,* && "${TSLC_BACKENDS}" == "cpp" ]]; then
+                  timeout --signal=KILL 60s /usr/bin/qemu-riscv64 \
+                    -L /usr/riscv64-linux-gnu \
+                    -cpu "max,v=true,vext_spec=v1.0,vlen=256,elen=64" \
+                    "${TSLC_CI_OUTPUT}/cpp/build/rvv/tsl_values"
+                fi
               '
 
       - name: Append generated value-test summary
