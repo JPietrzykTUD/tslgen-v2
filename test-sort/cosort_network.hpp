@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 #include <vector>
 
 #include <tsl.hpp>
@@ -160,20 +161,34 @@ class TslPartitionReplayStep {
   using DataSimdStyle = SimdStyle;
   using register_type = typename DataSimdStyle::register_type;
   using mask_type = typename DataSimdStyle::mask_type;
+  using imask_type = typename DataSimdStyle::imask_type;
   using reg_param = typename tsl::reg_param<DataSimdStyle>::type;
   static constexpr std::size_t lane_count = DataSimdStyle::lane_count_v;
 
-  static auto low_lane_mask(std::size_t count) {
-    // Integer mask with the low `count` lanes set: take the all-lanes mask and
-    // shift the surplus high lanes out. Requires to_integral(mask_true) to report
-    // exactly lane_count bits, which holds as of TSL v0.2.4 (earlier releases
-    // over-reported for sub-native widths, e.g. 0xff for a 4-lane vector).
+  // Integral mask with the low `count` lanes set: take the all-lanes mask and
+  // shift the surplus high lanes out. Requires to_integral(mask_true) to report
+  // exactly lane_count bits, which holds as of TSL v0.2.4 (earlier releases
+  // over-reported for sub-native widths, e.g. 0xff for a 4-lane vector).
+  static auto low_lane_imask(std::size_t count) -> imask_type {
     auto const full_mask = tsl::to_integral<DataSimdStyle>(tsl::mask_true<DataSimdStyle>());
     return tsl::shift_right_imask<DataSimdStyle>(full_mask, lane_count - count);
   }
 
-  static auto lane_mask(std::size_t offset, std::size_t count) {
-    return tsl::shift_left_imask<DataSimdStyle>(low_lane_mask(count), offset);
+  // Converting back to mask_type is not cosmetic. For an intrinsic extension the
+  // two coincide -- both are a k-register -- so passing the integral form to
+  // compress/expand happens to work. For the clang vector extensions mask_type is
+  // a per-lane boolean vector while imask_type is a small integer, and passing the
+  // integer converts to an all-true splat: the mask silently stops selecting and
+  // every compress/expand becomes the identity. That produced correct leaves and a
+  // wrong partition on clang_v128/256/512 until the conversion was made explicit.
+  static auto low_lane_mask(std::size_t count) -> mask_type {
+    return tsl::to_mask<DataSimdStyle>(low_lane_imask(count));
+  }
+
+  static auto lane_mask(std::size_t offset, std::size_t count) -> mask_type {
+    return tsl::to_mask<DataSimdStyle>(
+      tsl::shift_left_imask<DataSimdStyle>(low_lane_imask(count), offset)
+    );
   }
 
   // Concatenates three compacted groups into one register. Both insertion masks
@@ -244,6 +259,9 @@ class TslPartitionReplayStep {
     auto const swap_mask = low_lane_mask(swappable_count);
     plan.carry_l_select_mask = tsl::mask_binary_xor<DataSimdStyle>(swap_mask, low_lane_mask(bad_l_count));
     plan.carry_r_select_mask = tsl::mask_binary_xor<DataSimdStyle>(swap_mask, low_lane_mask(bad_r_count));
+    static_assert(std::is_same_v<decltype(swap_mask), mask_type const>,
+                  "lane masks must be mask_type: an integral mask converts to an "
+                  "all-true splat on extensions whose mask is a boolean vector");
     // Left write is [swapped-in bad_r | good_l | carry_l], right write is
     // [carry_r | swapped-in bad_l | good_r].
     plan.write_l_good_mask = lane_mask(swappable_count, good_l_count);
