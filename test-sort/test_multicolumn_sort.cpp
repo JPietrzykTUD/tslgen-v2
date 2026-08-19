@@ -706,7 +706,7 @@ void test_discovery_fallback_and_last_column_scan() {
     columns,
     orders,
     TslRunDiscoveryKind::INCREMENTAL,
-    "two-way/incremental-falls-back-to-post"
+    "two-way/incremental"
   );
 
   auto one_column = make_random_columns<std::uint32_t>(1, 513, 0xaaaaULL, 4);

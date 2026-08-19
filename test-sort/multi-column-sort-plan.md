@@ -41,8 +41,17 @@ As of 2026-07-23, Slices 1 through 7 are implemented in `test-sort`:
 - optional quicksort-partition offload, so one active range can be sorted by
   more than one worker.
 
-The Slice 8 two-way-incremental gate is closed. Representative local `u32`,
-16-lane measurements showed that the two conditions did not coincide:
+Slice 8, two-way incremental discovery, is implemented: `sort_impl` carries the
+start of the equal run overlapping a fragment's open left edge, which covers the
+chains of consecutive pivots that duplicate-heavy two-way input produces. It is
+correct -- emitted spans match a full-range scan exactly, with no duplicates -- and
+it does not pay: it saves no scanning at all, because the scan-volume win belongs to
+three-way's pivot-equal bands rather than to incrementality, and it measured about
+4% slower than post-sort two-way. See `benchmarks/benchmark-final.md`.
+
+The original gate reasoning below stands as the record of why it was deferred.
+Representative local `u32`, 16-lane measurements showed that the two conditions did
+not coincide:
 
 - On uniform L2-sized input, two-way network sorting was competitive
   (`14.90 ms` versus `15.12 ms` for post-sort three-way), but incremental

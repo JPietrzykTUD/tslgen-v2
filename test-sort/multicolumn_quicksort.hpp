@@ -395,6 +395,9 @@ class TslMultiColumnQuickSorter {
     std::size_t count,
     TslLazyPivotRng & rng,
     std::size_t absolute_begin,
+    // Start of the maximal equal run overlapping this range's left edge when that
+    // edge is open; equal to `absolute_begin` when it is closed.
+    std::size_t open_begin,
     EqualBandSink & equal_band_sink,
     LeafSink & leaf_sink,
     RangeSink & range_sink
@@ -455,13 +458,58 @@ class TslMultiColumnQuickSorter {
         }
       }
 
+      // Boundary state of the two children. A three-way partition closes every
+      // boundary it creates -- the equal band lies strictly between the two sides --
+      // which is why three-way incremental discovery needs no bookkeeping. A
+      // two-way partition leaves
+      //
+      //   [ strictly before pivot ] [ pivot ] [ not before pivot ]
+      //
+      // so the left part's right boundary is closed by the pivot while the right
+      // part's left boundary is open: a maximal run may span the pivot and the head
+      // of the right part. Right boundaries are always closed -- the root's is, a
+      // left part's is the pivot, a right part inherits it -- so only the left edge
+      // needs tracking.
+      //
+      // One bit does not suffice. On duplicate-heavy input two-way peels one copy per
+      // level with an empty left part, so a run of k equal values becomes a chain of
+      // k consecutive pivots, and widening a fragment by one element would cover only
+      // the nearest. Carrying the *start* of the run that overlaps the left edge
+      // covers a chain of any length: everything in [open_begin, absolute_begin) is
+      // equal and already final, so a fragment reporting from there finds a maximal
+      // run.
+      //
+      // A range handed to another worker re-enters as a root with a closed left edge,
+      // so the open run travels with it: the range is offered from the run's start.
+      // Those extra elements are final and no other worker writes them, and a range
+      // beginning with its own minimum keeps it there, so the offer is
+      // self-contained.
+      constexpr bool two_way = PartitionKind == TslPartitionKind::TWO_WAY;
+      auto right_open_begin = absolute_begin + right_begin;
+      auto left_open_begin = absolute_begin;
+      if constexpr (two_way) {
+        left_open_begin = open_begin;
+        right_open_begin = absolute_begin + left_count;   // the pivot's position
+        if (left_count == 0 && open_begin < absolute_begin) {
+          // The left part is empty, so the pivot sits immediately right of the open
+          // run. Reading keys[-1] is safe: it is inside the column and final.
+          if (keys[-1] == keys[0]) {
+            right_open_begin = open_begin;                // the chain continues
+          } else if (ReportCompletion && absolute_begin - open_begin >= 2) {
+            // The chain ends here: a complete all-equal range that no fragment of
+            // this subtree would otherwise cover.
+            leaf_sink(open_begin, absolute_begin);
+          }
+        }
+      }
+
       column_pointers right_columns{};
       for (std::size_t column = 0; column < payload_count; ++column) {
         right_columns[column] = columns[column] + right_begin;
       }
       auto * const right_keys = keys + right_begin;
       if (left_count < right_count) {
-        if (!range_sink(absolute_begin, absolute_begin + left_count)) {
+        if (!range_sink(left_open_begin, absolute_begin + left_count)) {
           sort_impl<Order, ReportCompletion>(
             keys,
             columns,
@@ -469,6 +517,7 @@ class TslMultiColumnQuickSorter {
             left_count,
             rng,
             absolute_begin,
+            left_open_begin,
             equal_band_sink,
             leaf_sink,
             range_sink
@@ -478,8 +527,9 @@ class TslMultiColumnQuickSorter {
         columns = right_columns;
         count = right_count;
         absolute_begin += right_begin;
+        open_begin = right_open_begin;
       } else {
-        if (!range_sink(absolute_begin + right_begin, absolute_begin + count)) {
+        if (!range_sink(right_open_begin, absolute_begin + count)) {
           sort_impl<Order, ReportCompletion>(
             right_keys,
             right_columns,
@@ -487,12 +537,14 @@ class TslMultiColumnQuickSorter {
             right_count,
             rng,
             absolute_begin + right_begin,
+            right_open_begin,
             equal_band_sink,
             leaf_sink,
             range_sink
           );
         }
         count = left_count;
+        open_begin = left_open_begin;
       }
     }
 
@@ -500,8 +552,13 @@ class TslMultiColumnQuickSorter {
       leaf<Order>(keys, columns, payload_count, count);
     }
     if constexpr (ReportCompletion) {
-      if (count != 0) {
-        leaf_sink(absolute_begin, absolute_begin + count);
+      // Reporting from `open_begin` makes every reported range closed on both sides,
+      // so the runs a consumer finds in it are maximal. An empty fragment reports
+      // nothing: its open run either continues into the sibling pivot, whose range
+      // covers it, or was already reported where the chain ended.
+      auto const report_end = absolute_begin + count;
+      if (count != 0 && report_end - open_begin >= 2) {
+        leaf_sink(open_begin, report_end);
       }
     }
   }
@@ -540,6 +597,7 @@ class TslMultiColumnQuickSorter {
         count,
         rng,
         absolute_begin,
+        absolute_begin,  // the root of a column sort is closed on both sides
         equal_band_sink,
         leaf_sink,
         range_sink
@@ -551,6 +609,7 @@ class TslMultiColumnQuickSorter {
         payload_count,
         count,
         rng,
+        absolute_begin,
         absolute_begin,
         equal_band_sink,
         leaf_sink,
@@ -597,10 +656,7 @@ class TslMultiColumnQuickSorter {
     auto no_leaf = [](std::size_t, std::size_t) {};
     auto no_range = keep_range_local();
 
-    if constexpr (
-      Discovery == TslRunDiscoveryKind::INCREMENTAL
-      && PartitionKind == TslPartitionKind::THREE_WAY
-    ) {
+    if constexpr (Discovery == TslRunDiscoveryKind::INCREMENTAL) {
       if (active_column + 1 == column_count) {
         sort_active_range<false>(
           columns[active_column].data + begin,
@@ -747,16 +803,16 @@ class TslMultiColumnQuickSorter {
     auto no_leaf = [](std::size_t, std::size_t) {};
 
     // A partition subrange may be finished by a different worker only when this
-    // task owes nothing to its complete range. Three-way incremental discovery
-    // qualifies because every maximal equal run lies wholly inside one leaf or
-    // one pivot-equal band, so each partition reports self-contained work no
-    // matter which worker sorts it. A final column qualifies because no column
+    // task owes nothing to its complete range. Incremental discovery qualifies for
+    // either partition kind: three-way closes every boundary it creates, and
+    // two-way hands an open left edge to the receiving worker by widening the
+    // offered range to include the pivot, so each partition reports self-contained
+    // work no matter who sorts it. A final column qualifies because no column
     // follows it. Post-sort discovery over a non-final column does not: its RLE
     // scan needs the whole sorted range, and an equal run may cross a partition
     // boundary, so those partitions stay on this worker.
     constexpr bool discovery_is_partition_local =
-      Discovery == TslRunDiscoveryKind::INCREMENTAL
-      && PartitionKind == TslPartitionKind::THREE_WAY;
+      Discovery == TslRunDiscoveryKind::INCREMENTAL;
     auto offload_range = [&](std::size_t range_begin, std::size_t range_end) {
       if (!discovery_is_partition_local && task.column + 1 != column_count) {
         return false;
@@ -770,10 +826,7 @@ class TslMultiColumnQuickSorter {
       return true;
     };
 
-    if constexpr (
-      Discovery == TslRunDiscoveryKind::INCREMENTAL
-      && PartitionKind == TslPartitionKind::THREE_WAY
-    ) {
+    if constexpr (Discovery == TslRunDiscoveryKind::INCREMENTAL) {
       if (task.column + 1 == column_count) {
         sort_active_range<false>(
           columns[task.column].data + task.begin,
@@ -981,10 +1034,10 @@ class TslMultiColumnQuickSorter {
     EqualBandSink & equal_band_sink,
     LeafSink & leaf_sink
   ) const {
-    static_assert(
-      PartitionKind == TslPartitionKind::THREE_WAY,
-      "completion events require three-way partitioning"
-    );
+    // Both partition kinds report completion. Three-way emits pivot-equal bands
+    // directly and closes every boundary; two-way emits none and instead widens a
+    // fragment whose left edge is open, so a consumer sees closed ranges either
+    // way.
     if (payload_count > MaxColumns) {
       throw std::invalid_argument("payload column count exceeds MaxColumns");
     }
@@ -1046,10 +1099,7 @@ class TslMultiColumnQuickSorter {
     if (column_count == 0 || row_count < 2) {
       return;
     }
-    if (
-      discovery == TslRunDiscoveryKind::INCREMENTAL
-      && PartitionKind == TslPartitionKind::THREE_WAY
-    ) {
+    if (discovery == TslRunDiscoveryKind::INCREMENTAL) {
       sort_columns_impl<TslRunDiscoveryKind::INCREMENTAL>(
         columns,
         column_count,
@@ -1173,10 +1223,7 @@ class TslMultiColumnQuickSorter {
           }
         };
       };
-      if (
-        discovery == TslRunDiscoveryKind::INCREMENTAL
-        && PartitionKind == TslPartitionKind::THREE_WAY
-      ) {
+      if (discovery == TslRunDiscoveryKind::INCREMENTAL) {
         process_parallel_task<TslRunDiscoveryKind::INCREMENTAL>(
           columns,
           column_count,
