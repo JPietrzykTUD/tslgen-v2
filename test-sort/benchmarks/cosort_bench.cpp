@@ -16,7 +16,7 @@
  * measured under: both are template parameters of the sorter.
  *
  *   COSORT_STAGE       screen | tune | characterize | attribute  (default screen)
- *   COSORT_STYLES      intr,clang                 which implementation families
+ *   COSORT_STYLES      intr,clang,clang_bool      which implementation families
  *   COSORT_WIDTHS      128,256,512                register widths in bits
  *   COSORT_ELEMENTS    4,8                        element widths in bytes
  *   COSORT_SHAPES      dataset id prefixes, e.g. unique_last_g64; empty = all
@@ -91,6 +91,35 @@ template <class DataType, std::size_t Width> struct tsl_simd_for<DataType, TslSt
 constexpr bool tsl_clang_style_available = false;
 #endif
 
+#if defined(TSL_COSORT_HAVE_CLANG_BOOL_STYLE)
+template <class DataType> struct tsl_simd_for<DataType, TslStyle::ClangBoolMask, 128> {
+  using type = tsl::simd<DataType, tsl::clang_v128_bool>;
+};
+template <class DataType> struct tsl_simd_for<DataType, TslStyle::ClangBoolMask, 256> {
+  using type = tsl::simd<DataType, tsl::clang_v256_bool>;
+};
+template <class DataType> struct tsl_simd_for<DataType, TslStyle::ClangBoolMask, 512> {
+  using type = tsl::simd<DataType, tsl::clang_v512_bool>;
+};
+constexpr bool tsl_clang_bool_style_available = true;
+#else
+// `clang_v*_bool` additionally needs the ext_vector_type boolean extension, which
+// is a separate capability from the elementwise builtins, so it gets its own probe.
+template <class DataType, std::size_t Width> struct tsl_simd_for<DataType, TslStyle::ClangBoolMask, Width> {
+  using type = tsl::simd<DataType, tsl::avx512>;  // never registered; keeps the table total
+};
+constexpr bool tsl_clang_bool_style_available = false;
+#endif
+
+constexpr auto tsl_style_available(TslStyle style) -> bool {
+  switch (style) {
+    case TslStyle::Intrinsics: return true;
+    case TslStyle::ClangBuiltin: return tsl_clang_style_available;
+    case TslStyle::ClangBoolMask: return tsl_clang_bool_style_available;
+  }
+  return false;
+}
+
 // --- environment ------------------------------------------------------------
 
 auto env_text(char const * name, std::string fallback) -> std::string {
@@ -132,7 +161,7 @@ auto load_plan() -> TslStagePlan {
   if (auto const * value = std::getenv("COSORT_STYLES")) {
     plan.styles.clear();
     for (auto const & token : split_list(value)) {
-      plan.styles.push_back(token == "clang" ? TslStyle::ClangBuiltin : TslStyle::Intrinsics);
+      plan.styles.push_back(tsl_style_from_name(token));
     }
   }
   plan.widths = env_numeric_list<std::size_t>("COSORT_WIDTHS", plan.widths);
@@ -392,7 +421,7 @@ struct Registrar {
         return false;
       }
     }
-    if (variant.style == TslStyle::ClangBuiltin && !tsl_clang_style_available) {
+    if (!tsl_style_available(variant.style)) {
       drops.drop(TslDropReason::StyleUnavailable);
       return false;
     }
@@ -509,6 +538,7 @@ void register_type(Registrar & registrar, char const * type_name) {
   };
   if (has(TslStyle::Intrinsics)) register_style<DataType, TslStyle::Intrinsics>(registrar, type_name);
   if (has(TslStyle::ClangBuiltin)) register_style<DataType, TslStyle::ClangBuiltin>(registrar, type_name);
+  if (has(TslStyle::ClangBoolMask)) register_style<DataType, TslStyle::ClangBoolMask>(registrar, type_name);
 
   // The scalar baseline every speedup divides by: no SIMD implementation, so no
   // style and no lane count apply to it.
@@ -549,12 +579,16 @@ int main(int argc, char ** argv) try {
   registrar.keep_variants = split_list(env_text("COSORT_VARIANTS", ""));
 
   std::fprintf(stderr,
-    "stage=%s  caches: L1=%lluKiB L2=%lluKiB LLC=%lluKiB  clang style %s\n",
+    "stage=%s  caches: L1=%lluKiB L2=%lluKiB LLC=%lluKiB\n",
     tsl_stage_name(registrar.plan.stage),
     static_cast<unsigned long long>(caches.l1 / 1024),
     static_cast<unsigned long long>(caches.l2 / 1024),
-    static_cast<unsigned long long>(caches.llc / 1024),
-    tsl_clang_style_available ? "available" : "unavailable in this build");
+    static_cast<unsigned long long>(caches.llc / 1024));
+  std::fprintf(stderr, "styles compiled in:");
+  for (auto style : {TslStyle::Intrinsics, TslStyle::ClangBuiltin, TslStyle::ClangBoolMask}) {
+    if (tsl_style_available(style)) std::fprintf(stderr, " %s", tsl_style_name(style));
+  }
+  std::fprintf(stderr, "\n");
 
   std::fprintf(stderr, "detectors compiled in:");
   for (auto backend : tsl_compiled_detectors()) {

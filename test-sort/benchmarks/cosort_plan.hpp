@@ -33,7 +33,12 @@
 #include "multicolumn_quicksort.hpp"
 
 enum class TslExecution { Serial, Parallel, DeepParallel };
-enum class TslStyle { Intrinsics, ClangBuiltin };
+// Two clang implementation families, distinguished by mask representation:
+// `clang_v*` masks are lane-wide compare results, `clang_v*_bool` masks are
+// packed boolean vectors that lower to a k-register like the intrinsic families.
+// Both use the same builtins for everything else, so the pair isolates the cost
+// of the mask representation alone.
+enum class TslStyle { Intrinsics, ClangBuiltin, ClangBoolMask };
 enum class TslStage { Screen, Tune, Characterize, Attribute };
 
 inline auto tsl_execution_prefix(TslExecution execution) -> char const * {
@@ -46,7 +51,18 @@ inline auto tsl_execution_prefix(TslExecution execution) -> char const * {
 }
 
 inline auto tsl_style_name(TslStyle style) -> char const * {
-  return style == TslStyle::Intrinsics ? "intr" : "clang";
+  switch (style) {
+    case TslStyle::Intrinsics: return "intr";
+    case TslStyle::ClangBuiltin: return "clang";
+    case TslStyle::ClangBoolMask: return "clang_bool";
+  }
+  return "intr";
+}
+
+inline auto tsl_style_from_name(std::string const & name) -> TslStyle {
+  if (name == "clang") return TslStyle::ClangBuiltin;
+  if (name == "clang_bool") return TslStyle::ClangBoolMask;
+  return TslStyle::Intrinsics;
 }
 
 inline auto tsl_stage_name(TslStage stage) -> char const * {
@@ -153,7 +169,7 @@ inline auto tsl_all_variants(std::vector<TslStyle> const & styles,
 enum class TslDropReason {
   StageVariant,        // the stage does not ask this variant family
   StageAxis,           // the stage does not ask this axis value
-  StyleUnavailable,    // the clang family needs a clang build of a new enough clang
+  StyleUnavailable,    // a clang family needs a clang build of a new enough clang
   QuadraticTwoWay,     // two-way on a low-cardinality key above the size cap
   DetectorInapplicable,// non-scalar detector where no discovery happens
   DetectorUnavailable, // backend not compiled into this binary
@@ -296,7 +312,9 @@ inline auto tsl_default_plan(TslStage stage) -> TslStagePlan {
       break;
     case TslStage::Attribute:
       plan.shapes = tsl_attribute_shapes();
-      plan.styles = {TslStyle::Intrinsics, TslStyle::ClangBuiltin};
+      plan.styles = {
+        TslStyle::Intrinsics, TslStyle::ClangBuiltin, TslStyle::ClangBoolMask
+      };
       plan.widths = {128, 256, 512};
       plan.size_levels = {1, 3};
       break;

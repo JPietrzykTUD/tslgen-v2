@@ -262,11 +262,39 @@ if(ENABLE_COSORT_BENCH AND ENABLE_GBENCH)
     endif()
   endif()
 
+  # `clang_v*_bool` differs from `clang_v*` only in mask representation -- packed
+  # boolean vectors instead of lane-wide compare results -- and needs the
+  # ext_vector_type boolean extension, a capability independent of the elementwise
+  # builtins above, so it is probed and reported separately.
+  set(_cosort_clang_bool_style OFF)
+  if(_cosort_clang_style)
+    check_cxx_source_compiles(
+      "typedef bool mask16 __attribute__((ext_vector_type(16)));
+       int main() { mask16 m = {}; m[3] = true; return m[3] ? 0 : 1; }"
+      TSL_COSORT_HAVE_EXT_VECTOR_TYPE_BOOLEAN
+    )
+    if(TSL_COSORT_HAVE_EXT_VECTOR_TYPE_BOOLEAN)
+      set(_cosort_clang_bool_style ON)
+    endif()
+  endif()
+
   if(_cosort_clang_style)
     target_compile_definitions(
       cosort_bench PRIVATE TSL_ENABLE_CLANG TSL_COSORT_HAVE_CLANG_STYLE=1
     )
     message(STATUS "cosort_bench: clang implementation family enabled")
+    if(_cosort_clang_bool_style)
+      target_compile_definitions(
+        cosort_bench PRIVATE TSL_COSORT_HAVE_CLANG_BOOL_STYLE=1
+      )
+      message(STATUS "cosort_bench: clang packed-boolean-mask family enabled")
+    else()
+      message(
+        STATUS
+        "cosort_bench: clang packed-boolean-mask family disabled -- this clang "
+        "lacks the ext_vector_type boolean extension"
+      )
+    endif()
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     message(
       STATUS

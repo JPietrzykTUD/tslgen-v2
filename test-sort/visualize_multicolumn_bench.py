@@ -67,9 +67,10 @@ ORDER_ORDER = ["asc", "desc", "alternating"]
 # Reference, then the scalar detector, then the accelerated ones in increasing
 # distance from the CPU, so a detector comparison reads left to right.
 RLE_ORDER = ["na", "scalar", "dml_sw", "dsa_hw", "dml_sw_async", "dsa_hw_async"]
-# Implementation family. `intr` uses the target's intrinsics, `clang` the clang
-# vector builtins, whose compress/expand/permute are emulated rather than native.
-STYLE_ORDER = ["na", "intr", "clang"]
+# Implementation family. `intr` uses the target's intrinsics; `clang` and
+# `clang_bool` use the clang vector builtins and differ only in how a mask is
+# represented -- a lane-wide compare result versus a packed boolean vector.
+STYLE_ORDER = ["na", "intr", "clang", "clang_bool"]
 DIMENSIONS = [
     "algo",
     "dtype",

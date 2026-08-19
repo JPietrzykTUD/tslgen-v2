@@ -24,9 +24,10 @@ A variant is one compiled sorter configuration. The algorithmic part is
 is implemented and registered:
 
 ```text
-24 algorithm configurations x 2 styles (intr, clang) x 3 widths (128, 256, 512)
-  = 144 sorter configurations, plus the width- and style-independent baseline
-  = 145
+24 algorithm configurations x 3 styles (intr, clang, clang_bool) x 3 widths
+  (128, 256, 512)
+  = 216 sorter configurations, plus the width- and style-independent baseline
+  = 217
 ```
 
 The 25 names `cosort_bench` registers, at one (style, width):
@@ -139,8 +140,9 @@ different binary and is not part of this plan.
 | partition threshold | `partitions=` | scalar per process, `deep_parallel_` only | `COSORT_PARTITION_THRESHOLD` |
 
 Style and width appear in a name as `style=` and `lanes=` but are variant
-dimensions, not axes. `style=` is mandatory because `avx512` and `clang_v512` have
-the same lane count and would otherwise produce identical names.
+dimensions, not axes. `style=` is mandatory because `avx512`, `clang_v512` and
+`clang_v512_bool` have the same lane count and would otherwise produce identical
+names.
 
 A full benchmark name:
 
@@ -163,7 +165,7 @@ Each stage pins the axes its question does not need. Counts are measured with
 | `screen` | which variants are viable at all? | 276 | 24 quadratic two-way |
 | `tune` | what worker count and thresholds make the survivors fastest? | 86 | 8 out of variant set, 16 quadratic two-way |
 | `characterize` | the numbers that get published | 5,712 unrestricted | 288 quadratic two-way |
-| `attribute` | what do the native SIMD primitives buy? | 126 | 120 out of variant set, 24 quadratic two-way |
+| `attribute` | what do the native SIMD primitives and the mask representation buy? | 186 | 180 out of variant set, 36 quadratic two-way |
 
 **`screen`** — all 25 names at one point per axis: u32, 512-bit intrinsics, `asc`,
 `cols=3`, L2 and LLC, six representative shapes. 25 × 6 × 2 = 300 less 24 two-way
@@ -189,13 +191,27 @@ With four algorithms: 40 dataset parameter sets × 3 sizes × 2 element widths �
 cases, plus targeted slices for lanes (72), direction (36) and column count (96).
 
 **`attribute`** — the style experiment, deliberately separate: 4 algorithm
-configurations (2way|3way × ins|net, serial post-sort) × 2 styles × 3 widths × 3
-shapes × 2 sizes. Its answer is predictable, which is the point: it quantifies what
-TSL's native `compress`/`expand`/`permute_lanes` are worth, and it is the
-portability result, because on a target without a native compress the fallback is
-what you get.
+configurations (2way|3way × ins|net, serial post-sort) × 3 styles × 3 widths × 3
+shapes × 2 sizes. It answers two questions that the other stages hold fixed.
 
-Whole programme: roughly 2,000 measured cases, one to two hours, against ~84,000
+*What does a native primitive buy?* As of `v0.2.8` the clang families reach the
+hardware `compress`/`expand`, so what remains emulated on that path is
+`permute_lanes`, a per-lane scalar loop used only by the bitonic leaf. The stage
+therefore separates cleanly: on the `ins` leaf the clang families land within a few
+percent of the intrinsic one, and the `net` leaf isolates the cost of one emulated
+primitive. That is also the portability result, because on a target whose profile
+lacks a native permute the fallback is what you get.
+
+*What does the mask representation buy?* `clang_v*` and `clang_v*_bool` differ only
+in the type of a mask — a lane-wide compare result versus a packed boolean vector
+that lowers to a k-register — so the pair is a controlled experiment, and the answer
+turns out to depend on width rather than being uniform. Two effects compete: the
+bitonic leaf keeps one recorded exchange mask per comparator, 80 of them, which is
+5,120 B of stack for `clang_v512` against 160 B for `clang_v512_bool`; against that,
+a packed mask on a narrow vector has to be converted to and from the compare result
+the 128-bit instructions produce.
+
+Whole programme: roughly 2,100 measured cases, one to two hours, against ~126,000
 for the full Cartesian product. Completeness of the *questions* is the goal, not
 completeness of the product.
 
