@@ -349,6 +349,201 @@ def test_clang_compress_expand_use_direct_vector_lanes(
     assert "from_array" not in lowered.body_text
     assert "for " not in lowered.body_text
 
+
+@pytest.mark.parametrize(
+    (
+        "profile",
+        "extension",
+        "type_tag",
+        "index_type",
+        "fixed_isa",
+        "width",
+        "lane_bits",
+        "features",
+    ),
+    [
+        (
+            "avx2",
+            "clang_v256",
+            "si32",
+            "ui32",
+            "avx2",
+            256,
+            32,
+            {"avx", "avx2"},
+        ),
+        (
+            "skylake",
+            "clang_v128",
+            "f64",
+            "si64",
+            "sse",
+            128,
+            64,
+            {"avx512f", "avx512vl", "sse", "sse2"},
+        ),
+        (
+            "skylake",
+            "clang_v256",
+            "ui16",
+            "si16",
+            "avx2",
+            256,
+            16,
+            {"avx", "avx512f", "avx512vl", "avx512bw"},
+        ),
+        (
+            "skylake",
+            "clang_v512",
+            "f32",
+            "ui32",
+            "avx512",
+            512,
+            32,
+            {"avx512f"},
+        ),
+        (
+            "icelake_rockerlake",
+            "clang_v512",
+            "ui8",
+            "si8",
+            "avx512",
+            512,
+            8,
+            {"avx512f", "avx512vbmi"},
+        ),
+        (
+            "skylake",
+            "clang_v128_bool",
+            "f64",
+            "si64",
+            "sse",
+            128,
+            64,
+            {"avx512f", "avx512vl", "sse", "sse2"},
+        ),
+        (
+            "avx2",
+            "clang_v256_bool",
+            "si32",
+            "ui32",
+            "avx2",
+            256,
+            32,
+            {"avx", "avx2"},
+        ),
+        (
+            "icelake_rockerlake",
+            "clang_v512_bool",
+            "ui8",
+            "si8",
+            "avx512",
+            512,
+            8,
+            {"avx512f", "avx512vbmi"},
+        ),
+    ],
+)
+def test_clang_runtime_permute_delegates_to_fixed_native_leaf(
+    catalog: Catalog,
+    machine_profiles,
+    profile: str,
+    extension: str,
+    type_tag: str,
+    index_type: str,
+    fixed_isa: str,
+    width: int,
+    lane_bits: int,
+    features: set[str],
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile],
+            "permute_lanes",
+            (type_tag,),
+            backend_id="cpp",
+        )
+        .selected
+        if selected.extension.name == extension
+        and any(
+            binding.param_name == "IndicesType" and binding.base_tag == index_type
+            for binding in selected.simd_type_base_bindings
+        )
+    )
+
+    assert slot.implementation.extension == extension
+    assert slot.implementation.type_group == "[?i8, ?i16, dword, qword]"
+    assert slot.fixed_fallback_extension is not None
+    assert slot.fixed_fallback_extension.isa_name == fixed_isa
+    assert slot.required_features == frozenset(features)
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert lowered.body_text.count(f"fixed<{width // lane_bits}>") >= 2
+    assert "::tsl::permute_lanes<" in lowered.body_text
+    assert "::tsl::bit_cast<" in lowered.body_text
+    assert "[0]" not in lowered.body_text
+    assert {
+        (origin.dependency.primitive, origin.dependency.source.extension_isa)
+        for origin in lowered.call_dependency_origins
+    } == {("permute_lanes", fixed_isa)}
+
+
+@pytest.mark.parametrize(
+    ("profile", "extension", "type_tag", "index_type"),
+    [
+        ("avx2", "clang_v128", "si32", "ui32"),
+        ("avx2", "clang_v512", "si32", "ui32"),
+        ("skylake", "clang_v256", "ui8", "si8"),
+        ("avx2", "clang_v128_bool", "si32", "ui32"),
+        ("avx2", "clang_v512_bool", "si32", "ui32"),
+        ("skylake", "clang_v256_bool", "ui8", "si8"),
+    ],
+)
+def test_clang_runtime_permute_keeps_direct_lane_fallback_without_native_leaf(
+    catalog: Catalog,
+    machine_profiles,
+    profile: str,
+    extension: str,
+    type_tag: str,
+    index_type: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile],
+            "permute_lanes",
+            (type_tag,),
+            backend_id="cpp",
+        )
+        .selected
+        if selected.extension.name == extension
+        and any(
+            binding.param_name == "IndicesType" and binding.base_tag == index_type
+            for binding in selected.simd_type_base_bindings
+        )
+    )
+
+    assert slot.implementation.extension == extension
+    assert slot.implementation.type_group == "arith"
+    assert slot.required_features == frozenset()
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert "result[i] = data[source]" in lowered.body_text
+    assert "::tsl::permute_lanes<" not in lowered.body_text
+    assert "fixed<" not in lowered.body_text
+
 def test_clang_conflict_unrolls_direct_vector_lanes(
     catalog: Catalog,
     machine_profiles,

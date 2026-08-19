@@ -62,8 +62,10 @@ def test_terminal_query_leaves_close_the_completion_path(leaf: str) -> None:
 
 def test_query_argument_kinds_filter_roots_and_invalid_paths_stop() -> None:
     type_argument = _labels("base::signed_of(")
+    fixed_base_argument = _labels("vector::fixed(")
 
     assert {"base", "scalar", "type", "value"} <= type_argument
+    assert {"base", "scalar", "type", "value"} <= fixed_base_argument
     assert {"generic", "intrin", "primitive", "register"}.isdisjoint(type_argument)
     assert _labels("vector::bogus") == set()
     assert _labels("base:bogus") == set()

@@ -22,6 +22,7 @@ from tslc.lower.context import (
     LoweringScope,
     LoweringSession,
     SimdTypeParameterValue,
+    VectorSpellingPolicy,
     VectorValue,
 )
 from tslc.lower.lowerer import Lowerer
@@ -322,6 +323,30 @@ def test_query_evaluator_returns_source_identities_for_type_and_vector_terms(cat
     assert ev.evaluate(
         "type(vector::as_extension(sse, ToBase))", ctx
     ) is None
+
+
+def test_fixed_vector_query_can_rebase_the_exact_width_facade(
+    catalog: Catalog,
+) -> None:
+    ctx = LoweringSession(
+        env=LoweringEnv(
+            catalog=catalog,
+            backend=create_backend_dialect(catalog, "cpp"),
+            extension=catalog.extensions["clang_v256"],
+            type_tag="si32",
+            fixed_fallback_extension=catalog.extensions["avx2"],
+        ),
+        scope=LoweringScope(type_symbols={"IndexBase": "ui32"}),
+    )
+
+    assert QueryEvaluator().evaluate(
+        "vector::fixed(IndexBase)", ctx
+    ) == VectorValue(
+        base_tag="ui32",
+        extension_isa="avx2",
+        lanes=8,
+        spelling_policy=VectorSpellingPolicy.FIXED_FACADE,
+    )
 
 
 def test_simd_type_generic_params_are_queryable_by_authored_name(

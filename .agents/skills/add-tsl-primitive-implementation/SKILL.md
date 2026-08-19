@@ -26,7 +26,22 @@ description: Add, complete, or refactor a specialization of an existing TSL prim
    abstraction requires it. Keep every other unsupported combination explicit
    rather than pretending it works.
 4. Choose the implementation strategy in this priority order:
-   - A direct hardware intrinsic leaf when one intrinsic exactly implements the complete primitive contract for the concrete extension/type/backend.
+   - A direct exact leaf when one operation implements the complete primitive
+     contract for the concrete extension/type/backend: a hardware intrinsic for
+     a hardware extension, or a compiler-capability-gated builtin for a
+     compiler-vector overlay.
+   - For the fixed-width C++ compiler-vector overlays (`clang_v128`,
+     `clang_v256`, `clang_v512`, and their `_bool` mask-policy variants), use
+     an exact compiler builtin under the first rule when one is available.
+     Otherwise, always prefer a feature-gated call through the selector's
+     exact-width `vector::fixed` hardware facade when that hardware primitive
+     has a native leaf. Keep an overlay-owned lane/generic body as the final
+     fallback for profiles without that native leaf. Declare all affected
+     widths and mask-policy identities explicitly: do not rely on extension
+     inheritance, because a wider or alternate-mask overlay could otherwise
+     select a narrower ancestor's satisfied native requirements. Preserve any
+     independently typed vector operand with `vector::fixed(Base)` before the
+     semantic primitive call.
    - Otherwise, decompose the implementation into independently meaningful, target-independent semantic operations. Call an existing TSL primitive for every such operation, preserving signedness, floating behavior, masks, lanes, safety, undefined-behavior rules, immediates, and attributes. Do not reproduce that primitive's intrinsic implementation in the parent body.
    - When a required semantic operation is absent, search for aliases and near-duplicates, then propose it as a precursor primitive. Specify its observable contract, signature, attributes, tests, dependency direction, and candidate semantic names; obtain the approval required by step 6; add, implement, and verify it before returning to the requested specialization.
    - A documented target-local intrinsic sequence only for irreducible mechanics that cannot be represented honestly by existing primitives and do not define a useful independent TSL operation. Keep the sequence in the primitive that owns those semantics, state why no semantic primitive fits, and keep each exact intrinsic use at the lowest possible leaf. Do not create a public primitive solely to hide an ISA-specific recipe.
@@ -45,6 +60,11 @@ description: Add, complete, or refactor a specialization of an existing TSL prim
 
 - Complete supported coverage is the target; unsupported coverage must remain explicit, deterministic, and explainable.
 - Prefer an exact intrinsic at a semantic leaf, but do not use an intrinsic unless its semantics match the TSL primitive contract.
+- For each fixed-width Clang overlay and `_bool` variant, verify the ordered
+  choice directly: capability-gated exact builtin, otherwise feature-gated
+  exact-width native facade, otherwise an overlay-owned portable fallback.
+  Include selection provenance plus generated Clang value evidence for both
+  comparison-vector and Boolean-vector mask policies.
 - Primitive composition must go through `call<...>` or other typed TSIL regions, not raw target-language rewrites.
 - Do not duplicate the intrinsic implementation of an operation that already has a suitable TSL primitive.
 - Do not create one primitive per intrinsic. Promote independently meaningful target-independent operations; keep representation shuffles, lane plumbing, and mask packing local when they have no honest standalone contract.

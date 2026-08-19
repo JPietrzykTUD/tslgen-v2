@@ -62,6 +62,23 @@ def _vector_value_from_extension(
     )
 
 
+def _fixed_facade_value(
+    base_tag: str, context: LoweringSession
+) -> VectorValue | None:
+    extension = context.env.fixed_fallback_extension
+    if extension is None:
+        context.effects.skip(
+            "TSL-LOWER-NO-FIXED-FALLBACK",
+            f"extension {context.env.extension.name!r} has no emitted "
+            "hardware-backed fixed-width fallback for this primitive and type",
+        )
+        return None
+    return replace(
+        _vector_value_from_extension(base_tag, extension, context.env.support),
+        spelling_policy=VectorSpellingPolicy.FIXED_FACADE,
+    )
+
+
 def _catalog_extension(extension_name: str, context: LoweringSession) -> Extension | None:
     catalog = context.env.catalog
     extension = catalog.extensions.get(extension_name)
@@ -301,35 +318,31 @@ class AsExtensionQuery:
 
 
 class FixedFacadeQuery:
-    """``vector::fixed`` -> the profile's exact-width hardware facade.
+    """``vector::fixed([base])`` -> the profile's exact-width hardware facade.
+
+    With no argument it keeps the current base; a type argument rebases the facade.
 
     The backend-scoped selector records the concrete extension used for
     dependency closure; the active dialect spells its public facade.
     """
 
     head = "vector::fixed"
-    descriptor = query_function("vector")
+    descriptor = query_function(
+        "vector",
+        arguments=(query_argument("type"),),
+        min_arguments=0,
+    )
 
     def apply(
         self, args: tuple[QueryValue, ...], context: LoweringSession
     ) -> QueryValue | None:
-        if args:
+        if not args:
+            base_tag = context.env.type_tag
+        elif len(args) == 1 and isinstance(args[0], TypeValue):
+            base_tag = args[0].type_tag
+        else:
             return None
-        extension = context.env.fixed_fallback_extension
-        if extension is None:
-            context.effects.skip(
-                "TSL-LOWER-NO-FIXED-FALLBACK",
-                f"extension {context.env.extension.name!r} has no emitted "
-                "hardware-backed fixed-width fallback for this primitive and type",
-            )
-            return None
-        value = _vector_value_from_extension(
-            context.env.type_tag, extension, context.env.support
-        )
-        return replace(
-            value,
-            spelling_policy=VectorSpellingPolicy.FIXED_FACADE,
-        )
+        return _fixed_facade_value(base_tag, context)
 
 
 class AsBaseQuery:
