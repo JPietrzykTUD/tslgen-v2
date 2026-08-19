@@ -1,4 +1,4 @@
-name: Generated Value Tests
+name: Generated Build and Values
 
 on:
   pull_request:
@@ -19,27 +19,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    name: Determine CI scope
+    uses: ./.github/workflows/ci-scope.yml
+
   ci-image:
     name: Build CI image
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    needs:
+      - scope
+    if: needs.scope.outputs.generated_profiles == 'true' || needs.scope.outputs.clang_overlay == 'true' || needs.scope.outputs.benchmarks == 'true'
+    concurrency:
+      group: tslc-ci-image-${{ needs.scope.outputs.ci_image }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
-    outputs:
-      image: ${{ steps.image.outputs.image }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
-
-      - name: Compute image tag
-        id: image
-        run: |
-          repo="${GITHUB_REPOSITORY,,}"
-          owner="${repo%%/*}"
-          name="${repo#*/}"
-          echo "image=ghcr.io/${owner}/${name}-tslc-ci:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -51,13 +51,17 @@ jobs:
       - name: Build and push CI image
         uses: ./.github/actions/build-ci-image
         with:
-          image: ${{ steps.image.outputs.image }}
+          image: ${{ needs.scope.outputs.ci_image }}
           load: "false"
           push: "true"
+          reuse-existing: "true"
 
   profile-shards:
     name: Compute profile shards
     runs-on: ubuntu-latest
+    needs:
+      - scope
+    if: needs.scope.outputs.generated_profiles == 'true'
     outputs:
       profile_shards: ${{ steps.shards.outputs.profile_shards }}
 
@@ -75,12 +79,14 @@ jobs:
           echo "profile_shards=${profile_shards}" >> "$GITHUB_OUTPUT"
 
   generated-value-tests:
-    name: Generated value tests (${{ matrix.profile_shard.name }})
+    name: Generated build and values (${{ matrix.profile_shard.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 120
     needs:
+      - scope
       - ci-image
       - profile-shards
+    if: needs.scope.outputs.generated_profiles == 'true'
 
     strategy:
       fail-fast: false
@@ -88,7 +94,7 @@ jobs:
         profile_shard: ${{ fromJson(needs['profile-shards'].outputs.profile_shards) }}
 
     env:
-      TSLC_CI_IMAGE: ${{ needs['ci-image'].outputs.image }}
+      TSLC_CI_IMAGE: ${{ needs.scope.outputs.ci_image }}
 
     steps:
       - name: Check out repository
@@ -155,3 +161,166 @@ jobs:
           path: tslctmp/ci-logs/generated-values-${{ matrix.profile_shard.name }}
           if-no-files-found: ignore
           retention-days: 14
+
+  generated-clang-overlay:
+    name: Generated Clang overlay build and values
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - scope
+      - ci-image
+    if: needs.scope.outputs.clang_overlay == 'true'
+
+    env:
+      TSLC_CI_IMAGE: ${{ needs.scope.outputs.ci_image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-clang-overlay/docker-pull.log" \
+            docker pull "${TSLC_CI_IMAGE}"
+
+      - name: Verify generated Clang overlay toolchain
+        run: |
+          bash supplementary/ci/run_tslc_ci_container.sh \
+            -- \
+            bash -lc '
+              set -e
+              for required_tool in \
+                /usr/bin/clang++ \
+                /opt/intel-sde/sde64
+              do
+                if [[ ! -x "${required_tool}" ]]; then
+                  echo "missing executable required by the Clang overlay gate: ${required_tool}" >&2
+                  exit 1
+                fi
+                if [[ "${required_tool}" == /usr/bin/clang++ ]]; then
+                  "${required_tool}" --version | sed -n "1p"
+                else
+                  echo "found ${required_tool}"
+                fi
+              done
+            '
+
+      - name: Build and execute generated Clang overlay paths
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-clang-overlay/tests.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -- \
+              bash -lc '
+                set -e
+                trap "rm -rf tslctmp/pytest" EXIT
+                PYTHONPATH=tslc/src python -m pytest -q \
+                  --run-generated-builds \
+                  tslc/tests/test_build_verify.py::test_clang_vector_overlay_builds_and_runs_through_opt_in_target
+              '
+
+      - name: Upload generated Clang overlay logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-logs-generated-clang-overlay
+          path: tslctmp/ci-logs/generated-clang-overlay
+          if-no-files-found: ignore
+          retention-days: 14
+
+  generated-benchmarks:
+    name: Generated benchmarks (x86 policy and ARM smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - scope
+      - ci-image
+    if: needs.scope.outputs.benchmarks == 'true'
+
+    env:
+      TSLC_CI_IMAGE: ${{ needs.scope.outputs.ci_image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-benchmarks/docker-pull.log" \
+            docker pull "${TSLC_CI_IMAGE}"
+
+      - name: Build and execute generated benchmark paths
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-benchmarks/tests.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -e TSLC_QEMU_AARCH64="/usr/bin/qemu-aarch64" \
+              -- \
+              bash -lc '
+                set -e
+                trap "rm -rf tslctmp/pytest" EXIT
+                # Keep generated Rust crates in separate pytest processes so
+                # module-scoped render results are released before the next
+                # rustc benchmark build starts.
+                for test_target in \
+                  tslc/tests/test_benchmark_variants.py \
+                  tslc/tests/test_rust_benchmark_rendering.py::test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop \
+                  tslc/tests/test_rust_benchmark_rendering.py::test_generated_rust_avx2_reductions_run_report_only_and_have_hot_loop \
+                  tslc/tests/test_rust_benchmark_rendering.py::test_generated_rust_benchmark_builds_runs_and_has_hot_loop_evidence \
+                  tslc/tests/test_rust_policy_consumption.py::test_generated_rust_policy_is_applied_fail_closed_and_invalidated
+                do
+                  PYTHONPATH=tslc/src python -m pytest -q \
+                    --run-generated-builds \
+                    -m generated_build \
+                    "${test_target}"
+                done
+              '
+
+      - name: Upload generated benchmark logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-logs-generated-benchmarks
+          path: tslctmp/ci-logs/generated-benchmarks
+          if-no-files-found: ignore
+          retention-days: 14
+
+  required-generated:
+    name: Required generated CI
+    runs-on: ubuntu-latest
+    needs:
+      - scope
+      - ci-image
+      - profile-shards
+      - generated-clang-overlay
+      - generated-benchmarks
+      - generated-value-tests
+    if: always()
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Verify selected jobs passed
+        run: |
+          bash .github/scripts/require_ci_results.sh \
+            scope true "${{ needs.scope.result }}" \
+            ci-image "${{ needs.scope.outputs.generated_profiles == 'true' || needs.scope.outputs.clang_overlay == 'true' || needs.scope.outputs.benchmarks == 'true' }}" "${{ needs['ci-image'].result }}" \
+            profile-shards "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['profile-shards'].result }}" \
+            generated-value-tests "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['generated-value-tests'].result }}" \
+            generated-clang-overlay "${{ needs.scope.outputs.clang_overlay }}" "${{ needs['generated-clang-overlay'].result }}" \
+            generated-benchmarks "${{ needs.scope.outputs.benchmarks }}" "${{ needs['generated-benchmarks'].result }}"

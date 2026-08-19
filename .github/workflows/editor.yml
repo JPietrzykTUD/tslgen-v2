@@ -2,6 +2,7 @@ name: TSL Editor
 
 on:
   pull_request:
+  merge_group:
   push:
     branches:
       - main
@@ -17,10 +18,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    name: Determine CI scope
+    uses: ./.github/workflows/ci-scope.yml
+
   editor-tests:
     name: Client, LSP, and VSIX
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs:
+      - scope
+    if: needs.scope.outputs.editor_tests == 'true'
 
     steps:
       - name: Check out repository
@@ -75,6 +83,9 @@ jobs:
     name: Runtime ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
+    needs:
+      - scope
+    if: needs.scope.outputs.editor_runtime == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -140,6 +151,24 @@ jobs:
             tslctmp/tsl-language-support-${{ matrix.target }}.vsix.sha256
           if-no-files-found: error
           retention-days: 14
+
+  required-editor:
+    name: Required editor CI
+    runs-on: ubuntu-latest
+    needs:
+      - scope
+      - editor-tests
+      - runtime-packages
+    if: always()
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Verify selected jobs passed
+        run: |
+          bash .github/scripts/require_ci_results.sh \
+            scope true "${{ needs.scope.result }}" \
+            editor-tests "${{ needs.scope.outputs.editor_tests }}" "${{ needs['editor-tests'].result }}" \
+            runtime-packages "${{ needs.scope.outputs.editor_runtime }}" "${{ needs['runtime-packages'].result }}"
 
   publish-runtime-packages:
     name: Publish VSIX release assets

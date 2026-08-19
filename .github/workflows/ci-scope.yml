@@ -1,0 +1,75 @@
+name: CI Scope
+
+on:
+  workflow_call:
+    outputs:
+      python_tests:
+        value: ${{ jobs.scope.outputs.python_tests }}
+      python_full:
+        value: ${{ jobs.scope.outputs.python_full }}
+      python_type_check:
+        value: ${{ jobs.scope.outputs.python_type_check }}
+      pivot:
+        value: ${{ jobs.scope.outputs.pivot }}
+      coverage:
+        value: ${{ jobs.scope.outputs.coverage }}
+      editor_tests:
+        value: ${{ jobs.scope.outputs.editor_tests }}
+      editor_runtime:
+        value: ${{ jobs.scope.outputs.editor_runtime }}
+      generated_profiles:
+        value: ${{ jobs.scope.outputs.generated_profiles }}
+      clang_overlay:
+        value: ${{ jobs.scope.outputs.clang_overlay }}
+      benchmarks:
+        value: ${{ jobs.scope.outputs.benchmarks }}
+      package:
+        value: ${{ jobs.scope.outputs.package }}
+      docs:
+        value: ${{ jobs.scope.outputs.docs }}
+      changed_python_tests:
+        value: ${{ jobs.scope.outputs.changed_python_tests }}
+      ci_image:
+        value: ${{ jobs.scope.outputs.ci_image }}
+
+permissions:
+  contents: read
+
+jobs:
+  scope:
+    name: Classify changes
+    runs-on: ubuntu-latest
+    outputs:
+      python_tests: ${{ steps.scope.outputs.python_tests }}
+      python_full: ${{ steps.scope.outputs.python_full }}
+      python_type_check: ${{ steps.scope.outputs.python_type_check }}
+      pivot: ${{ steps.scope.outputs.pivot }}
+      coverage: ${{ steps.scope.outputs.coverage }}
+      editor_tests: ${{ steps.scope.outputs.editor_tests }}
+      editor_runtime: ${{ steps.scope.outputs.editor_runtime }}
+      generated_profiles: ${{ steps.scope.outputs.generated_profiles }}
+      clang_overlay: ${{ steps.scope.outputs.clang_overlay }}
+      benchmarks: ${{ steps.scope.outputs.benchmarks }}
+      package: ${{ steps.scope.outputs.package }}
+      docs: ${{ steps.scope.outputs.docs }}
+      changed_python_tests: ${{ steps.scope.outputs.changed_python_tests }}
+      ci_image: ${{ steps.scope.outputs.ci_image }}
+
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: scope
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || '' }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+        run: |
+          python3 .github/scripts/ci_scope.py \
+            --event "${{ github.event_name }}" \
+            --base "${CI_BASE_SHA}" \
+            --head "${CI_HEAD_SHA}" \
+            --ref-type "${{ github.ref_type }}" \
+            --repository "${GITHUB_REPOSITORY}"
