@@ -132,17 +132,30 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
         if case.call_name in {"compress", "expand"}
         and case.differential is not None
         and case.differential.hardware_extension
-        in {"clang_v128", "clang_v256", "clang_v512"}
+        in {
+            "clang_v128",
+            "clang_v256",
+            "clang_v512",
+            "clang_v128_bool",
+            "clang_v256_bool",
+            "clang_v512_bool",
+        }
     }
     assert {
         (profile, primitive, type_tag, extension)
         for profile, type_tag, extension in (
             ("skylake", "ui8", "clang_v128"),
+            ("skylake", "ui8", "clang_v128_bool"),
             ("skylake", "ui32", "clang_v256"),
+            ("skylake", "ui32", "clang_v256_bool"),
             ("skylake", "ui32", "clang_v512"),
+            ("skylake", "ui32", "clang_v512_bool"),
             ("skylake", "f32", "clang_v128"),
+            ("skylake", "f32", "clang_v128_bool"),
             ("icelake_rockerlake", "ui8", "clang_v128"),
+            ("icelake_rockerlake", "ui8", "clang_v128_bool"),
             ("icelake_rockerlake", "ui32", "clang_v512"),
+            ("icelake_rockerlake", "ui32", "clang_v512_bool"),
         )
         for primitive in ("compress", "expand")
     } <= clang_cases

@@ -357,6 +357,9 @@ def test_clang_compress_expand_use_direct_vector_lanes(
         ("clang_v128", "sse", 128),
         ("clang_v256", "avx2", 256),
         ("clang_v512", "avx512", 512),
+        ("clang_v128_bool", "sse", 128),
+        ("clang_v256_bool", "avx2", 256),
+        ("clang_v512_bool", "avx512", 512),
     ],
 )
 @pytest.mark.parametrize(
@@ -421,7 +424,17 @@ def test_clang_compress_expand_delegate_to_fixed_native_avx512_leaf(
 
 
 @pytest.mark.parametrize("primitive", ["compress", "expand"])
-@pytest.mark.parametrize("extension", ["clang_v128", "clang_v256", "clang_v512"])
+@pytest.mark.parametrize(
+    "extension",
+    [
+        "clang_v128",
+        "clang_v256",
+        "clang_v512",
+        "clang_v128_bool",
+        "clang_v256_bool",
+        "clang_v512_bool",
+    ],
+)
 def test_clang_compress_expand_keep_direct_lane_fallback_without_vbmi2(
     catalog: Catalog,
     machine_profiles,
