@@ -68,13 +68,18 @@
  * A complete name looks like:
  *
  * ```text
- * deep_parallel_incremental_3way_net/u32/lanes=16/dist=low_entropy/
+ * deep_parallel_incremental_3way_net/u32/style=intr/lanes=16/dist=low_entropy/
  * order=alternating/cols=3/size=L2/workers=4/threshold=4096/
  * partitions=16384/real_time
  * ```
  *
  * The trailing `partitions=` component appears only for `deep_parallel_`
  * targets.
+ *
+ * `style=` names the TSL implementation family: `intr` for intrinsics, `clang`
+ * for the clang-builtin extensions, `na` for the scalar baseline. It is required
+ * because `tsl::avx512` and `tsl::clang_v512` carry the same lane count, so
+ * `lanes=` alone cannot tell two such builds apart.
  *
  * The executable registers `u32` at 4/8/16 fixed SIMD lanes and `u64` at
  * 2/4/8 lanes. Size labels are detected from the host cache hierarchy and
@@ -227,6 +232,19 @@ enum algorithm_kind {
   DEEP_PARALLEL_INCREMENTAL_THREEWAY_INSERTION,
   DEEP_PARALLEL_INCREMENTAL_THREEWAY_NETWORK,
 };
+
+/// Which TSL implementation family the SIMD variants were compiled against.
+///
+/// `tsl::avx512` and `tsl::clang_v512` have the same lane count for a given
+/// element type, so `lanes=` alone cannot distinguish an intrinsic build from a
+/// clang-builtin one and two different variants would collide in the JSON. The
+/// component is therefore emitted unconditionally; a sweep recorded before it
+/// existed was necessarily intrinsic.
+///
+/// The clang family additionally requires a clang build: its profile header opens
+/// with `#if defined(__clang__)`, so `tsl::clang_v*` does not exist under GCC.
+/// Registrations that instantiate that family pass their own style name.
+constexpr char const * tsl_style_name = "intr";
 
 /// Two-way cases withheld as quadratic; reported so the gap is never silent.
 /// Registration is single threaded, so a plain counter is sufficient.
@@ -843,6 +861,7 @@ void bm_std(
 auto benchmark_name(
   char const * algorithm,
   char const * type_name,
+  char const * style,
   std::string const & lanes,
   int distribution,
   int direction,
@@ -854,6 +873,7 @@ auto benchmark_name(
 ) -> std::string {
   return std::string{algorithm}
     + "/" + type_name
+    + "/style=" + style
     + "/lanes=" + lanes
     + "/dist=" + distribution_name(distribution)
     + "/order=" + direction_name(direction)
@@ -907,6 +927,7 @@ void register_lane(
               benchmark_name(
                 name,
                 type_name,
+                tsl_style_name,
                 lanes,
                 distribution,
                 direction,
@@ -1319,6 +1340,7 @@ void register_std(
             benchmark_name(
               "std_lex_argsort",
               type_name,
+              "na",
               "na",
               distribution,
               direction,

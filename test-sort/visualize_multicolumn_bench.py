@@ -67,11 +67,15 @@ ORDER_ORDER = ["asc", "desc", "alternating"]
 # Reference, then the scalar detector, then the accelerated ones in increasing
 # distance from the CPU, so a detector comparison reads left to right.
 RLE_ORDER = ["na", "scalar", "dml_sw", "dsa_hw", "dml_sw_async", "dsa_hw_async"]
+# Implementation family. `intr` uses the target's intrinsics, `clang` the clang
+# vector builtins, whose compress/expand/permute are emulated rather than native.
+STYLE_ORDER = ["na", "intr", "clang"]
 DIMENSIONS = [
     "algo",
     "dtype",
     "dist",
     "order",
+    "style",
     "lanes",
     "cols",
     "size",
@@ -89,6 +93,7 @@ DIMENSION_LABELS = {
     "dtype": "data type",
     "dist": "distribution",
     "order": "sort directions",
+    "style": "implementation family",
     "lanes": "SIMD lanes",
     "cols": "sort columns",
     "size": "working-set size",
@@ -109,7 +114,7 @@ NOT_APPLICABLE = "na"
 # Categorical counterpart of the zeros in OPTIONAL_NUMERIC_DIMENSIONS: a row may
 # legitimately have no value on this axis. Such rows survive any pin on it, which
 # is what keeps the std::sort baseline on screen next to every detector.
-OPTIONAL_CATEGORICAL_DIMENSIONS = {"rle"}
+OPTIONAL_CATEGORICAL_DIMENSIONS = {"rle", "style"}
 METRICS = {
     "ns_per_row": "ns / row (lower is better)",
     "items_per_s": "rows / second (higher is better)",
@@ -229,6 +234,9 @@ def parse_benchmarks(raw: dict) -> tuple[pd.DataFrame, dict]:
             lanes=lanes,
             dist=dims.get("dist", "?"),
             order=dims.get("order", "asc"),
+            # Sweeps recorded before the style axis existed were all intrinsic,
+            # so defaulting to `intr` keeps them joinable with newer runs.
+            style=dims.get("style", "intr"),
             cols=_integer_value(dims.get("cols", b.get("cols", 0))),
             size=dims.get("size", "?"),
             workers=workers,
@@ -349,6 +357,7 @@ def dim_values(df: pd.DataFrame, dim: str) -> list:
         "algo": ALGO_ORDER,
         "order": ORDER_ORDER,
         "rle": RLE_ORDER,
+        "style": STYLE_ORDER,
     }.get(dim)
     if order:
         return sorted(

@@ -84,10 +84,23 @@ PHASE_FILTERS = {
 }
 PHASE_ORDER = ("baseline", "serial", "parallel", "deep")
 
-# The scalar baseline is registered once per data type, not per SIMD width, so
-# its names carry `lanes=na`. Narrowing a sweep to one width must not silently
-# drop it, so a lanes term is widened for that phase alone.
-LANES_TERM = re.compile(r"lanes=[^/]*")
+# The scalar baseline is registered once per data type, not per SIMD width and
+# not per implementation family, so its names carry `lanes=na` and `style=na`.
+# Narrowing a sweep to one width or one family must not silently drop it -- the
+# explorer needs the baseline for every speedup metric -- so both terms are
+# widened for that phase alone.
+#
+# Note for hand-written narrows: `style=` sits between the data type and `lanes=`
+# in a benchmark name, so a narrow must not hard-code that adjacency. Write
+# `u32.*lanes=16`, not `u32/lanes=16`.
+# One alternation applied in a single pass: substituting the terms one after
+# another would let the second pattern match the first one's replacement text,
+# because `[^/]*` is itself made of non-slash characters. The value is matched as
+# `[^/.]*` so it stops at a regex `.` as well as at a component boundary -- a
+# narrow is a regex over the whole name, so `style=intr.*lanes=16` must not have
+# its `style` term swallow everything up to `16`. No benchmark-name value
+# contains a dot, so this matches whole values exactly.
+BASELINE_RELAXED_TERMS = re.compile(r"(lanes|style)=[^/.]*")
 
 # Context fields that must agree for merged runs to be comparable. `mhz_per_cpu`
 # is deliberately absent: it is an instantaneous clock sample that differs
@@ -155,7 +168,7 @@ class Run:
         self.partition_threshold = partition_threshold
         pattern = PHASE_FILTERS[phase]
         if narrow and phase == "baseline":
-            narrow = LANES_TERM.sub("lanes=[^/]*", narrow)
+            narrow = BASELINE_RELAXED_TERMS.sub(r"\1=[^/]*", narrow)
         self.filter = f"{pattern}.*{narrow}" if narrow else pattern
 
     def label(self) -> str:
@@ -534,7 +547,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--narrow",
         default=None,
-        help="extra regex appended to each phase filter, e.g. 'u32/lanes=16'",
+        help="extra regex appended to each phase filter, e.g. 'u32.*lanes=16'. "
+             "Join components with '.*', not '/': a benchmark name may gain "
+             "components between the ones you name, and a filter that matches "
+             "nothing runs nothing without reporting it.",
     )
     run.add_argument("--min-time", default="0.2s", help="--benchmark_min_time")
     run.add_argument("--repetitions", type=int, default=1, help="--benchmark_repetitions")
