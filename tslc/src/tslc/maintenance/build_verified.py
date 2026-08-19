@@ -33,6 +33,8 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
         "test_clang_vector_overlay_builds_and_runs_through_opt_in_target": (
             "abs",
             "add",
+            "compress",
+            "expand",
             "select",
             "equal",
             "hadd",
