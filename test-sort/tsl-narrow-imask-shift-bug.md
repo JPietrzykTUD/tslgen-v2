@@ -4,8 +4,8 @@
 `SAPPHIRE_EMERALD_GRANITE_RAPIDS`.
 **Compiler:** clang 21, `-O2 -std=c++17` with the profile's full AVX-512 flag set.
 **Host:** AVX-512 (Sapphire-Rapids-class), BW/VBMI/VBMI2/VL present.
-**Status:** fixed in generated release `v0.2.5`; `v0.2.7` is also clean. See
-[Resolution](#resolution). `test-sort` pins `v0.2.7`.
+**Status:** fixed in generated release `v0.2.5`; `v0.2.7` and `v0.2.8` are also
+clean. See [Resolution](#resolution). `test-sort` pins `v0.2.8`.
 
 ## Summary
 
@@ -76,8 +76,8 @@ Re-verified 2026-08-18 on a Xeon w5-3425 with clang 21, profile
 `shift_right_imask(to_integral(mask_true), lane_count - count)` and
 `shift_left_imask(..., offset)` composition the partition uses — against integer
 mask arithmetic for u8/u16/u32/u64 at every `(offset, count)` with
-`offset + count <= lane_count`. `v0.2.4` fails every 8/16-bit case; `v0.2.5` and
-`v0.2.7` pass all 2965 combinations.
+`offset + count <= lane_count`. `v0.2.4` fails every 8/16-bit case; `v0.2.5`,
+`v0.2.7` and `v0.2.8` pass all 2965 combinations.
 
 ## Consumer note
 

@@ -4,7 +4,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <type_traits>
 #include <vector>
 
 #include <tsl.hpp>
@@ -175,12 +174,13 @@ class TslPartitionReplayStep {
   }
 
   // Converting back to mask_type is not cosmetic. For an intrinsic extension the
-  // two coincide -- both are a k-register -- so passing the integral form to
-  // compress/expand happens to work. For the clang vector extensions mask_type is
-  // a per-lane boolean vector while imask_type is a small integer, and passing the
-  // integer converts to an all-true splat: the mask silently stops selecting and
-  // every compress/expand becomes the identity. That produced correct leaves and a
-  // wrong partition on clang_v128/256/512 until the conversion was made explicit.
+  // two coincide -- both are a k-register -- so the integral form happens to work.
+  // For clang_v* mask_type is a lane-wide compare result and for clang_v*_bool a
+  // packed boolean vector, while imask_type stays a small integer; an integer
+  // argument then converts by splatting every lane true, so the mask silently
+  // stops selecting and each compress/expand becomes the identity. TSL's mask
+  // parameters are not deduced, so nothing in the primitive signature can reject
+  // that -- to_mask is the conversion the API expects the caller to make.
   static auto low_lane_mask(std::size_t count) -> mask_type {
     return tsl::to_mask<DataSimdStyle>(low_lane_imask(count));
   }
@@ -259,9 +259,6 @@ class TslPartitionReplayStep {
     auto const swap_mask = low_lane_mask(swappable_count);
     plan.carry_l_select_mask = tsl::mask_binary_xor<DataSimdStyle>(swap_mask, low_lane_mask(bad_l_count));
     plan.carry_r_select_mask = tsl::mask_binary_xor<DataSimdStyle>(swap_mask, low_lane_mask(bad_r_count));
-    static_assert(std::is_same_v<decltype(swap_mask), mask_type const>,
-                  "lane masks must be mask_type: an integral mask converts to an "
-                  "all-true splat on extensions whose mask is a boolean vector");
     // Left write is [swapped-in bad_r | good_l | carry_l], right write is
     // [carry_r | swapped-in bad_l | good_r].
     plan.write_l_good_mask = lane_mask(swappable_count, good_l_count);

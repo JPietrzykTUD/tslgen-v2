@@ -13,6 +13,7 @@ kept only for the reasoning behind these decisions.
 | Correctness is `memcmp` against the reference image | with every column a sort key the sorted image is unique however an unstable sort breaks ties, so the comparison is exact and names the first differing row | implemented |
 | Registration goes through per-family predicates, selected by `COSORT_STAGE` | the full product is unrunnable and mostly redundant; each stage answers one question and reports what it dropped | implemented |
 | clang 22 for everything | required by the generated clang profile header (`__builtin_elementwise_clzg`); the intrinsic families build with it too | implemented |
+| Generated TSL release `v0.2.8` | earlier releases emulate `compress`/`expand` for the clang families with a per-lane scalar loop, which made the style comparison a measurement of that emulation rather than of the mask representation | implemented |
 | Register width and implementation style are *variant* dimensions | both are template parameters of the sorter, not conditions it runs under | implemented |
 | `rle=` is an axis of the one binary, with per-machine backends | the detector parameterizes a sort call; a host has DSA or IAA, and `rle=` records which produced a row | implemented |
 
