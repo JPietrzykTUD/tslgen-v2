@@ -265,5 +265,36 @@ if(TSL_COSORT_ENABLE_DSA)
   endif()
 endif()
 
+# --- Synthetic dataset catalog ----------------------------------------------
+# Standalone C++17: the generator and its verifier describe the datasets of
+# description_datasets.md and need neither TSL nor a SIMD host. The default
+# output directory is the committed source path so that running the binary from
+# any build tree writes to the same place; --out overrides it.
+option(TSL_COSORT_BUILD_DATAGEN "Build the synthetic dataset generator and verifier" ON)
+
+if(TSL_COSORT_BUILD_DATAGEN)
+  foreach(_datagen_target generate_datasets verify_datasets)
+    add_executable(${_datagen_target} datagen/${_datagen_target}.cpp)
+    target_compile_features(${_datagen_target} PRIVATE cxx_std_17)
+    target_include_directories(${_datagen_target} PRIVATE datagen)
+    target_compile_definitions(
+      ${_datagen_target}
+      PRIVATE TSL_DATASET_DEFAULT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+    )
+  endforeach()
+
+  # Reference sorted images: the exact oracle the benchmark memcmps against.
+  # Shares only the container and manifest readers with the generator, never the
+  # sorting implementation under test.
+  add_executable(reference benchmarks/reference.cpp)
+  target_compile_features(reference PRIVATE cxx_std_17)
+  target_include_directories(reference PRIVATE datagen)
+  target_link_libraries(reference PRIVATE Threads::Threads)
+  target_compile_definitions(
+    reference
+    PRIVATE TSL_DATASET_DEFAULT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+  )
+endif()
+
 add_test(NAME test_sort COMMAND test_sort)
 add_test(NAME test_multicolumn_sort COMMAND test_multicolumn_sort)
