@@ -257,7 +257,14 @@ class _DocumentTransformer:
             self._parse_impl_selector(child, selector_path)
             for child in field.children
             if child.key.text
-            not in {"requires", "implementation", "safety", "unroll_variants", "variants"}
+            not in {
+                "requires",
+                "implementation",
+                "prefer_fixed_native",
+                "safety",
+                "unroll_variants",
+                "variants",
+            }
         )
         return ParsedImplementationSelectorEntry(
             selector=field.key,

@@ -29,9 +29,13 @@ prim<v:=(v,v)> max(vec_a, vec_b):
     - {tags [edge], type "f64", case {inputs [[INFINITY, "-INFINITY"], [1.0, 2.0]], expected [INFINITY, 2.0]}}
     - {tags [nan, ordered, rvv], extension "rvv", type "f32", case {inputs [[NAN, 1.0, NAN, 3.0], [0.0, NAN, NAN, 4.0]], expected [NAN, 1.0, NAN, 4.0]}}
   impls:
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [elementwise_max]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -149,12 +153,18 @@ prim<v:=(v,v)> max(vec_a, vec_b):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<max, build>(vec_a, vec_b));"
-    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl]
@@ -285,9 +295,13 @@ prim<v:=(v,v)> min(vec_a, vec_b):
     - {tags [edge], type "f64", case {inputs [[INFINITY, "-INFINITY"], [1.0, 2.0]], expected [1.0, "-INFINITY"]}}
     - {tags [nan, ordered, rvv], extension "rvv", type "f32", case {inputs [[NAN, 1.0, NAN, 3.0], [0.0, NAN, NAN, 4.0]], expected [0.0, NAN, NAN, 3.0]}}
   impls:
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [elementwise_min]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -405,12 +419,18 @@ prim<v:=(v,v)> min(vec_a, vec_b):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<min, build>(vec_a, vec_b));"
-    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl]

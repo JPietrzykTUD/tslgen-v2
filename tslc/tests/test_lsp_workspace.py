@@ -354,8 +354,9 @@ def test_implementation_context_only_offers_slots_where_that_body_wins(
         line
         for line, text in enumerate(lines, 1)
         if text.strip() == (
-            "[scalar, generic, clang_v128, oneapi_fpga, avx512, avx2_vl, "
-            "avx2, sse_vl, sse, neon, sve]:"
+            "[scalar, generic, clang_v128, clang_v256, clang_v512, "
+            "clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, "
+            "avx512, avx2_vl, avx2, sse_vl, sse, neon, sve]:"
         )
     )
     implementation_line = next(
@@ -393,10 +394,20 @@ def test_implementation_context_only_offers_slots_where_that_body_wins(
         and slot.type_tag == "si8"
         for slot in context.slots
     )
-    assert not any(
-        slot.extension == "clang_v128" and slot.type_tag == "si8"
+    assert {
+        slot.extension
         for slot in context.slots
-    )
+        if slot.profile == "avx2"
+        and slot.type_tag == "si8"
+        and slot.extension.startswith("clang_v")
+    } == {
+        "clang_v128",
+        "clang_v256",
+        "clang_v512",
+        "clang_v128_bool",
+        "clang_v256_bool",
+        "clang_v512_bool",
+    }
 
 
 def test_implementation_context_distinguishes_profile_from_rendered_extension(
@@ -442,7 +453,14 @@ def test_implementation_context_distinguishes_profile_from_rendered_extension(
         if slot.profile == "sve"
         and slot.extension in context.contextual_extensions
         and slot.type_tag in context.contextual_types
-    } == {"clang_v128"}
+    } == {
+        "clang_v128",
+        "clang_v256",
+        "clang_v512",
+        "clang_v128_bool",
+        "clang_v256_bool",
+        "clang_v512_bool",
+    }
 
 
 def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
@@ -701,9 +719,14 @@ def test_primitive_explorer_keeps_authored_candidates_and_splits_resolved_callab
         ("s:=v", ("vec",)),
         ("s:=(m,v)", ("mask", "vec")),
     }
-    assert all(len(slot.implementations) == 1 for slot in hmax_slots)
+    assert {slot.signature: len(slot.implementations) for slot in hmax_slots} == {
+        "s:=v": 2,
+        "s:=(m,v)": 1,
+    }
     assert all(
-        slot.implementations[0].signature == slot.signature for slot in hmax_slots
+        implementation.signature == slot.signature
+        for slot in hmax_slots
+        for implementation in slot.implementations
     )
 
     add = primitive_explorer(

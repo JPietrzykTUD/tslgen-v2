@@ -33,10 +33,16 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
     - {tags [basic], type "f64", case {inputs [[1.0, 2.0], 0], expected "0000000000000000000000000000000000000000000000000000000000000010|0000000000000000000000000000000000000000000000000000000000000001|\n"}}
     - {tags [edge], type "f64", case {inputs [[0.0, 255.0], 0], expected "0000000000000000000000000000000000000000000000000000000011111111|0000000000000000000000000000000000000000000000000000000000000000|\n"}}
   impls:
-    [clang_v128, avx512, avx2, sse, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2, sse, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse2]

@@ -162,46 +162,9 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               }
               complete(result);
             """
-    # Delegate compiler vectors to the profile's exact-width hardware leaf only
-    # when that leaf owns a native register-compress instruction. The arith body
-    # below remains the direct-lane fallback for every other profile/type slot.
-    [clang_v128, clang_v256, clang_v512]:
-      [idqword, bword, f?]:
-        requires:
-          clang_v128:
-            idqword [avx512f, avx512vl, sse2]
-            bword [avx512_vbmi2, avx512f, avx512vl, sse2]
-            f? [avx512f, avx512vl, sse]
-          clang_v256:
-            idqword [avx512f, avx512vl, avx]
-            bword [avx512_vbmi2, avx512f, avx512vl, avx]
-            f? [avx512f, avx512vl, avx]
-          clang_v512:
-            idqword [avx512f]
-            bword [avx512_vbmi2, avx512f]
-            f? [avx512f]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            let<type>(FixedVec, vector::fixed);
-            var<const_infer>(fixed_mask, call<primitive=to_mask[FixedVec]>(
-              call<primitive=to_integral[Vec]>(mask)
-            ));
-            var<const_infer>(fixed_data, cast<bitcast>(
-              register::generic(FixedVec),
-              data
-            ));
-            var<const_infer>(fixed_result, call<primitive=@self[FixedVec]>(
-              fixed_mask,
-              fixed_data
-            ));
-            complete(cast<bitcast>(vector::register, fixed_result));
-          """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -503,50 +466,9 @@ prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
               }
               complete(result);
             """
-    # As above, use the exact-width native expand leaf where the profile has
-    # one, retaining the direct-lane body for all other compiler-vector slots.
-    [clang_v128, clang_v256, clang_v512]:
-      [idqword, bword, f?]:
-        requires:
-          clang_v128:
-            idqword [avx512f, avx512vl, sse, sse2]
-            bword [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
-            f? [avx512f, avx512vl, sse, sse2]
-          clang_v256:
-            idqword [avx512f, avx512vl, avx]
-            bword [avx512_vbmi2, avx512f, avx512vl, avx]
-            f? [avx512f, avx512vl, avx]
-          clang_v512:
-            idqword [avx512f]
-            bword [avx512_vbmi2, avx512f]
-            f? [avx512f]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            let<type>(FixedVec, vector::fixed);
-            var<const_infer>(fixed_mask, call<primitive=to_mask[FixedVec]>(
-              call<primitive=to_integral[Vec]>(mask)
-            ));
-            var<const_infer>(fixed_keep, cast<bitcast>(
-              register::generic(FixedVec),
-              to_keep
-            ));
-            var<const_infer>(fixed_data, cast<bitcast>(
-              register::generic(FixedVec),
-              to_expand
-            ));
-            var<const_infer>(fixed_result, call<primitive=@self[FixedVec]>(
-              fixed_mask,
-              fixed_keep,
-              fixed_data
-            ));
-            complete(cast<bitcast>(vector::register, fixed_result));
-          """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false

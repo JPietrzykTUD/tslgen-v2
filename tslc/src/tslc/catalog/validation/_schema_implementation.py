@@ -25,10 +25,24 @@ KNOWN_VARIANT_SAFETY_FIELDS = frozenset({"internal_unsafe", "reasons"})
 KNOWN_VARIANT_FIELDS = frozenset({"safety", "tsil", "tsl"})
 _VARIANT_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 KNOWN_SELECTOR_METADATA_FIELDS = frozenset(
-    {"implementation", "requires", "safety", "unroll_variants", "variants"}
+    {
+        "implementation",
+        "prefer_fixed_native",
+        "requires",
+        "safety",
+        "unroll_variants",
+        "variants",
+    }
 )
 KNOWN_TARGET_CONSTRAINT_FIELDS = frozenset(
-    {"family", "width", "safety", "implementation", "variants"}
+    {
+        "family",
+        "width",
+        "safety",
+        "implementation",
+        "prefer_fixed_native",
+        "variants",
+    }
 )
 KNOWN_TARGET_FAMILY_RELATIONS = frozenset({"same_as"})
 KNOWN_TARGET_WIDTH_RELATIONS = frozenset(
@@ -57,7 +71,16 @@ def validate_implementation_safety(
             label="implementation safety block",
         )
         for field in entry.fields:
-            if field.key.text == "safety":
+            if field.key.text == "prefer_fixed_native":
+                value = field_text(field)
+                if value not in KNOWN_BOOLEAN_VALUES:
+                    invalid_enum(
+                        diagnostics,
+                        field,
+                        f"implementation prefer_fixed_native value {value!r}",
+                        sorted(KNOWN_BOOLEAN_VALUES),
+                    )
+            elif field.key.text == "safety":
                 _validate_safety_field(field, diagnostics)
             elif field.key.text == "implementation":
                 _validate_implementation_body_field(field, diagnostics)

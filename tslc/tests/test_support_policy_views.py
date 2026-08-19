@@ -11,6 +11,7 @@ from tslc.catalog.model import (
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.support_policy_views import (
     concrete_target_candidates,
+    explicit_mask_split_names,
     immediate_split_names,
     is_maskable_primitive,
     policy_split_names,
@@ -29,6 +30,8 @@ def test_views_classify_maskable_and_immediate_splits(catalog: Catalog) -> None:
     assert "gather" in policy_split_names(catalog, policy)
     assert {"shift_left", "shift_right"} <= immediate_split_names(catalog, policy)
     assert "insert" not in immediate_split_names(catalog, policy)
+    assert "hadd" in explicit_mask_split_names(catalog)
+    assert "add" not in explicit_mask_split_names(catalog)
 
 
 def test_views_select_callable_variants(catalog: Catalog) -> None:

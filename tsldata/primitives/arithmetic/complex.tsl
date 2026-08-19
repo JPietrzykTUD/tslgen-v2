@@ -53,8 +53,9 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons []
         implementation:
           tsil "complete(op<mul>(factor1, factor2));"
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -588,11 +589,17 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, clang_v128, oneapi_fpga, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           wasm128 [simd128]
         safety:
@@ -773,11 +780,17 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
             }
             complete(factor1);
           """
-    [generic, clang_v128, oneapi_fpga, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           wasm128 [simd128]
         safety:
@@ -980,8 +993,9 @@ prim<v:=(v,v)> div(dividend, divisor):
           reasons []
         implementation:
           tsil "complete(helper<arith_div>(dividend, divisor));"
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       f?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -990,6 +1004,7 @@ prim<v:=(v,v)> div(dividend, divisor):
         implementation:
           tsil "complete(dividend / divisor);"
       ?i?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -1333,11 +1348,17 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, clang_v128, oneapi_fpga, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           wasm128 [simd128]
         safety:
@@ -1557,11 +1578,17 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
             }
             complete(dividend);
           """
-    [generic, clang_v128, oneapi_fpga, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           wasm128 [simd128]
         safety:
@@ -1746,12 +1773,18 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
     - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 5], expected [5, 10, 15, 20, 25, 30, 35, 40]}}
     - {tags [zero], type "ui16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, wasm128, sve, rvv]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon, wasm128, sve, rvv]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx]
@@ -1795,12 +1828,18 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
     - {tags [maskz, basic, rvv], extension "rvv", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [0, 6, 0, 12]}}
     - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], 2], expected [0.0, -4.0, 0.0, -8.0]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128, rvv]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128, rvv]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx]
@@ -1845,12 +1884,18 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
     - {tags [mask, basic, rvv], extension "rvv", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [1, 6, 3, 12]}}
     - {tags [mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], 2], expected [1.0, -4.0, 3.0, -8.0]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128, rvv]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128, rvv]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx]
@@ -2403,8 +2448,9 @@ prim<v:=(v,v)> mod(dividend, divisor):
             }
             complete(result);
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -2419,13 +2465,33 @@ prim<v:=(v,v)> mod(dividend, divisor):
             complete(result);
           """
       f?:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [elementwise_fmod]
         safety:
           internal_unsafe true
           caller_unsafe false
           reasons [compiler_builtin, intrinsic]
         implementation:
           tsil "complete(intrin<__builtin_elementwise_fmod>(dividend, divisor));"
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
+      f?:
+        prefer_fixed_native true
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = helper<arith_rem>(dividend[i], divisor[i]);
+            }
+            complete(result);
+          """
 prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
   brief_description "Computes the lane-wise remainder for active lanes and writes zero to inactive mask lanes."
   detailed_description """
@@ -2481,8 +2547,9 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
+    [avx512, avx2, sse, sve, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           avx512 [avx512f]
           avx2 [avx]
@@ -2490,6 +2557,11 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
           sve [sve]
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -2596,8 +2668,9 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
             }
             complete(dividend);
           """
-    [avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
+    [avx512, avx2, sse, sve, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           avx512 [avx512f]
           avx2 [avx]
@@ -2605,6 +2678,11 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
           sve [sve]
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -2701,12 +2779,18 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
     - {role "compile_failure", tags [failure, zero_immediate], type "si32", case {inputs [[10, -9, 8, -7], 0], failure "integer_zero_divisor"}}
     - {role "compile_failure", tags [failure, narrowed_zero], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 256], failure "integer_zero_divisor"}}
   impls:
-    [scalar, generic, clang_v128, avx512, avx2, sse, sve, wasm128, rvv]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2, sse, sve, wasm128, rvv]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]
@@ -2769,8 +2853,9 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
     - {tags [maskz, float, rvv], extension "rvv", type "f64", case {inputs [2, [5.5, -7.0], 2], expected [0.0, -1.0]}}
     - {role "compile_failure", tags [maskz, failure, all_inactive, zero_immediate], type "si32", case {inputs [0, [10, -9, 8, -7], 0], failure "integer_zero_divisor"}}
   impls:
-    [scalar, avx512, avx2, sse, sve, generic, clang_v128, wasm128, rvv]:
+    [scalar, avx512, avx2, sse, sve, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128, rvv]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           avx512 [avx512f]
@@ -2779,6 +2864,11 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
           sve [sve]
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
           rvv [v]
         safety:
@@ -2838,8 +2928,9 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
     - {tags [mask, float, rvv], extension "rvv", type "f64", case {inputs [2, [5.5, -7.0], 2], expected [5.5, -1.0]}}
     - {role "compile_failure", tags [mask, failure, all_inactive, zero_immediate], type "si32", case {inputs [0, [10, -9, 8, -7], 0], failure "integer_zero_divisor"}}
   impls:
-    [scalar, avx512, avx2, sse, sve, generic, clang_v128, wasm128, rvv]:
+    [scalar, avx512, avx2, sse, sve, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128, rvv]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           avx512 [avx512f]
@@ -2848,6 +2939,11 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
           sve [sve]
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
           rvv [v]
         safety:

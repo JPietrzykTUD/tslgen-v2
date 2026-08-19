@@ -67,8 +67,9 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
               *ptr_add_mut(ptr, idx) = data[idx];
             }
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -451,8 +452,9 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
               );
             }
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -603,10 +605,16 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
     - {tags [scalar, edge], attrs [aligned=false], type "f64", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
   # avx512 omits this to avoid duplicates when scalar equals mask.
   impls:
-    [clang_v128,avx2,sse,neon,scalar,generic,oneapi_fpga,wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool,avx2,sse,neon,scalar,generic,oneapi_fpga,wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx2 []
           sse []
           neon []
@@ -745,10 +753,16 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
               complete(intrin<mask_storeu, build>(ptr, mask, data));
             }
           """
-    [clang_v128, avx2, sse, neon, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx2, sse, neon, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx2 [avx2]
           sse  [sse2]
           neon [neon]

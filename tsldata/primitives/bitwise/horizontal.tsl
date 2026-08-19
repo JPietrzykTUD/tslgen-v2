@@ -34,9 +34,13 @@ prim<s:=v> hand(vec):
     - {tags [avx2], extension "avx2", type "si64", lane_count 4, case {inputs [[-1, -1, -1, 15]], expected 15}}
     - {tags [avx2], extension "avx2", type "ui64", lane_count 4, case {inputs [[15, 7, 3, 1]], expected 1}}
   impls:
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [reduce_and]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -44,7 +48,11 @@ prim<s:=v> hand(vec):
         implementation:
           tsil "complete(intrin<__builtin_reduce_and>(vec));"
       f?:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [reduce_and]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -304,10 +312,17 @@ prim<s:=v> hand(vec):
           reasons []
         implementation:
           tsil "complete(vec);"
-    [generic, oneapi_fpga]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       ?i?:
+        prefer_fixed_native true
         requires:
           generic []
+          clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
         safety:
           internal_unsafe false
@@ -330,10 +345,17 @@ prim<s:=v> hand(vec):
           reasons []
         implementation:
           tsil "complete(vec);"
-    [generic, oneapi_fpga]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       f?:
+        prefer_fixed_native true
         requires:
           generic []
+          clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
         safety:
           internal_unsafe true
@@ -399,9 +421,13 @@ prim<s:=v> hor(vec):
     - {tags [avx2], extension "avx2", type "si64", lane_count 4, case {inputs [[1, 2, 4, 8]], expected 15}}
     - {tags [avx2], extension "avx2", type "ui64", lane_count 4, case {inputs [[1, 2, 4, 8]], expected 15}}
   impls:
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [reduce_or]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -409,7 +435,11 @@ prim<s:=v> hor(vec):
         implementation:
           tsil "complete(intrin<__builtin_reduce_or>(vec));"
       f?:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [reduce_or]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -657,10 +687,17 @@ prim<s:=v> hor(vec):
           reasons []
         implementation:
           tsil "complete(vec);"
-    [generic, oneapi_fpga]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       ?i?:
+        prefer_fixed_native true
         requires:
           generic []
+          clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
         safety:
           internal_unsafe false
@@ -683,10 +720,17 @@ prim<s:=v> hor(vec):
           reasons []
         implementation:
           tsil "complete(vec);"
-    [generic, oneapi_fpga]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       f?:
+        prefer_fixed_native true
         requires:
           generic []
+          clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
         safety:
           internal_unsafe true
@@ -803,10 +847,16 @@ prim<s:=(m,v)> hand(mask, vec):
             }
             complete(cast<static>(base::in, intrin<mask_reduce_and, build[suffix=base::signed_of(base::in)]>(mask, vec)));
           """
-    [clang_v128, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128]:
       ?i?:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512:
             bword [avx512bw, avx512f]
             idqword [avx512f]
@@ -839,8 +889,14 @@ prim<s:=(m,v)> hand(mask, vec):
             ));
           """
       f?:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           avx2 [avx2]
@@ -1122,10 +1178,16 @@ prim<s:=(m,v)> hor(mask, vec):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(base::in, intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
-    [clang_v128, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128]:
       ?i?:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512:
             bword [avx512bw, avx512f]
             idqword [avx512f]
@@ -1151,8 +1213,14 @@ prim<s:=(m,v)> hor(mask, vec):
             ));
           """
       f?:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           avx2 [avx2]

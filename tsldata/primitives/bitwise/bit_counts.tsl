@@ -64,9 +64,13 @@ prim<v:=v> popcnt(data):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<popcnt, build[suffix=base::signed_of(base::in)]>(data));"
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [elementwise_popcount]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -496,10 +500,17 @@ prim<v:=v> popcnt(data):
               }
                complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
-    [generic, oneapi_fpga]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       ?i?:
+        prefer_fixed_native true
         requires:
           generic []
+          clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
         safety:
           internal_unsafe false
@@ -539,12 +550,18 @@ prim<usize:=s> lzc_scalar(data):
     - {tags [basic], type "ui32", lane_count 8, case {inputs [16], expected 27}}
     - {tags [edge], type "ui32", lane_count 8, case {inputs [0], expected 32}}
   impls:
-    [scalar, generic, clang_v128, wasm128]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
       ?i?:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -553,10 +570,16 @@ prim<usize:=s> lzc_scalar(data):
         implementation:
           tsil "complete(cast<static>(scalar::size, helper<clz>(data)));"
       f?:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe true
@@ -654,7 +677,7 @@ prim<v:=v> lzc(data):
             var<const_infer>(counts, call<primitive=@self[UVec]>(bits));
             complete(call<primitive=cast[UVec, base::in]>(counts));
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
         requires:
           target_features []
@@ -674,8 +697,9 @@ prim<v:=v> lzc(data):
               )
             ));
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -711,6 +735,7 @@ prim<v:=v> lzc(data):
             complete(call<primitive=reinterpret[UVec, Vec]>(leading_zeros));
           """
       f?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -1255,10 +1280,16 @@ prim<v:=v> lzc(data):
           reasons []
         implementation:
           tsil "complete(cast<static>(base::in, call<primitive=lzc_scalar[vector::as_extension(scalar)]>(data)));"
-    [clang_v128, generic]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, generic]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           generic []
         safety:
           internal_unsafe false
@@ -1305,10 +1336,16 @@ prim<usize:=m> lzc_imask(value):
     - {tags [basic], type "ui32", expected_rule "lzc", lane_count 8, case {inputs [8], expected 60}}
     - {tags [edge], type "ui32", expected_rule "lzc", lane_count 8, case {inputs [0], expected 64}}
   impls:
-    [clang_v128, avx512, avx2, sse, neon, scalar, generic, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2, sse, neon, scalar, generic, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]
@@ -1349,10 +1386,16 @@ prim<usize:=m> tzc(value):
     - {tags [basic], type "ui32", expected_rule "tzc", lane_count 8, case {inputs [8], expected 3}}
     - {tags [edge], type "ui32", expected_rule "tzc", lane_count 8, case {inputs [0], expected 64}}
   impls:
-    [clang_v128, avx512, avx2, sse, neon, scalar, generic, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2, sse, neon, scalar, generic, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]

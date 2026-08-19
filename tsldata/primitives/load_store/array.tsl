@@ -175,8 +175,9 @@ prim<s[]:=v> to_array(a):
           reasons []
         implementation:
           tsil "complete(a);"
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -254,8 +255,9 @@ prim<v:=s[]> from_array(data):
           tsil """
             complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -656,11 +658,17 @@ prim<s:=v[idx]> extract_value(a):
             ));
             complete(intrin<svlastb, build>(index_lane, a));
           """
-    [generic, clang_v128, oneapi_fpga]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
         safety:
           internal_unsafe false
@@ -745,11 +753,17 @@ prim<v:=(v,s)> insert_value(a, value):
             array<set>(lanes, Index, value);
             complete(call<primitive=from_array[Vec]>(lanes));
           """
-    [generic, clang_v128, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128, sve]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128, sve]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx, avx512f, avx512vl]
           avx2 [avx]
@@ -811,11 +825,17 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           reasons []
         implementation:
           tsil "complete(data);"
-    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
           avx512 [avx512f]
@@ -876,11 +896,17 @@ prim<v:=(v,usize,s)> insert_value_at(data, index, value):
           reasons []
         implementation:
           tsil "complete(value);"
-    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
           avx512 [avx512f]

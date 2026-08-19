@@ -16,7 +16,7 @@ from tslc.catalog.model import (
     Primitive,
     PrimitiveCastMode,
 )
-from tslc.catalog.signatures import parse_signature
+from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 
 
@@ -68,6 +68,38 @@ def policy_split_names(
         )
         if len(forms) > 1:
             names.add(name)
+    return frozenset(names)
+
+
+def explicit_mask_split_names(
+    catalog: Catalog,
+    support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
+) -> frozenset[str]:
+    """Names whose callable family mixes leading-mask and other arities."""
+
+    names: set[str] = set()
+    policy_names = policy_split_names(catalog, support)
+    for name in {primitive.name for primitive in catalog.primitives}:
+        groups: dict[str, list[SignatureShape]] = {}
+        for primitive in catalog.primitives_named(name, unmasked=False):
+            shape = parse_signature(primitive.signature)
+            if shape is None:
+                continue
+            emitted_name = name
+            mask_policy = primitive.mask_mode
+            if mask_policy is not None and name in policy_names:
+                emitted_name = f"{name}{support.mask_suffix(mask_policy)}"
+            groups.setdefault(emitted_name, []).append(shape)
+        for shapes in groups.values():
+            arities = {len(shape.param_kinds) for shape in shapes}
+            if len(arities) <= 1:
+                continue
+            if any(
+                shape.param_kinds and shape.param_kinds[0] == "m"
+                for shape in shapes
+            ):
+                names.add(name)
+                break
     return frozenset(names)
 
 
@@ -186,6 +218,7 @@ def concrete_target_candidates(
 
 __all__ = (
     "concrete_target_candidates",
+    "explicit_mask_split_names",
     "immediate_split_names",
     "is_maskable_primitive",
     "policy_split_names",

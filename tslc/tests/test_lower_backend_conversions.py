@@ -76,7 +76,13 @@ def test_clang_same_width_cast_uses_builtin_convertvector(
     slot = next(
         selected
         for selected in Selector()
-        .select_profile(catalog, machine_profiles["avx2"], "cast", ("f32",))
+        .select_profile(
+            catalog,
+            machine_profiles["avx2"],
+            "cast",
+            ("f32",),
+            backend_id="cpp",
+        )
         .selected
         if selected.extension.name == "clang_v256"
         and selected.to_target == "si32"

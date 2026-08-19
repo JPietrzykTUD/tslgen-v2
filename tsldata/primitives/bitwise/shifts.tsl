@@ -49,8 +49,9 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     - {tags [imm, neon], extension "neon", type "f32", case {inputs [[1.40129846e-45, 1.40129846e-45, 1.40129846e-45, 1.40129846e-45], 1], expected [2.80259693e-45, 2.80259693e-45, 2.80259693e-45, 2.80259693e-45]}}
     - {tags [imm, neon], extension "neon", type "f64", case {inputs [[5e-324, 5e-324], 1], expected [1e-323, 1e-323]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -483,11 +484,17 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
     - {tags [mask, passthrough, imm, zero], type "si64", case {inputs [0, [1, 2], 1], expected [1, 2]}}
     - {tags [mask, passthrough, imm, all], type "si64", case {inputs [3, [1, 2], 1], expected [2, 4]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -653,8 +660,9 @@ prim<v:=(v,s)> shift_left(data, shift):
     - {tags [basic], type "f32", case {inputs [[1.40129846e-45, 1.40129846e-45, 1.40129846e-45, 1.40129846e-45], 1], expected [2.80259693e-45, 2.80259693e-45, 2.80259693e-45, 2.80259693e-45]}}
     - {tags [basic], type "f64", case {inputs [[5e-324, 5e-324], 1], expected [1e-323, 1e-323]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -1152,8 +1160,9 @@ prim<v:=(v,v)> shift_left(data, shift):
               var<const_infer>(ures, ua << cast<static>(base::unsigned_of(base::in), shift));
               complete(call<primitive=reinterpret[Vec<base::unsigned_of(base::in)>, Vec]>(ures));
             """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -1827,8 +1836,9 @@ prim<v:=(v,sImm)> shift_right(data, shift):
                 complete(call<primitive=reinterpret[Vec<base::signed_of(base::in)>, Vec]>(ures));
               }
             """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -1849,6 +1859,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
               }
             """
       f?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -2546,12 +2557,18 @@ prim<v:=(v,s)> shift_left_wrapping(data, shift):
     - {tags [negative_count, word], type "si16", case {inputs [[1, 2, -1, -32768, 32767, -2, 16384, -16384], -1], expected [-32768, 0, -32768, 0, -32768, 0, 0, 0]}}
     - {tags [very_large], type "ui64", case {inputs [[1, 2], 18446744073709551615], expected [9223372036854775808, 0]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, rvv, wasm128]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, rvv, wasm128]:
       ?i?:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
           avx512 [avx512f]
@@ -2612,12 +2629,18 @@ prim<v:=(v,v)> shift_left_wrapping(data, shift):
     - {tags [mixed, edge], type "ui8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [0, 1, 7, 8, 9, 15, 16, 17, 255, 254, 253, 252, 251, 250, 249, 248]], expected [1, 2, 128, 1, 2, 128, 1, 2, 128, 64, 32, 16, 8, 4, 2, 1]}}
     - {tags [mixed, negative_count], type "si8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [0, 1, 7, -1, -2, -8, -9, -128, 127, 126, 125, 124, 123, 122, 121, 120]], expected [1, 2, -128, -128, 64, 1, -128, 1, -128, 64, 32, 16, 8, 4, 2, 1]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, rvv, wasm128]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, rvv, wasm128]:
       ?i?:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
           avx512 [avx512f]
@@ -2690,12 +2713,18 @@ prim<v:=(v,s)> shift_right_wrapping(data, shift):
     - {tags [negative_count, word], type "si16", case {inputs [[-32768, -1, 32767, 16384, -16384, 1, -2, 2], -1], expected [-1, -1, 0, 0, -1, 0, -1, 0]}}
     - {tags [very_large], type "ui64", case {inputs [[18446744073709551615, 9223372036854775808], 18446744073709551615], expected [1, 1]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, rvv, wasm128]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, rvv, wasm128]:
       ?i?:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
           avx512 [avx512f]
@@ -2759,12 +2788,18 @@ prim<v:=(v,v)> shift_right_wrapping(data, shift):
     - {tags [mixed, edge], type "ui8", case {inputs [[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255], [0, 1, 7, 8, 9, 15, 16, 17, 255, 254, 253, 252, 251, 250, 249, 248]], expected [255, 127, 1, 255, 127, 1, 255, 127, 1, 3, 7, 15, 31, 63, 127, 255]}}
     - {tags [mixed, negative_count], type "si8", case {inputs [[-128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128, -128], [0, 1, 7, -1, -2, -8, -9, -128, 127, 126, 125, 124, 123, 122, 121, 120]], expected [-128, -64, -1, -1, -2, -128, -1, -128, -1, -2, -4, -8, -16, -32, -64, -128]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, rvv, wasm128]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, rvv, wasm128]:
       ?i?:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
           avx512 [avx512f]
@@ -2916,8 +2951,9 @@ prim<v:=(v,s)> shift_right(data, shift):
                 complete(call<primitive=reinterpret[SVec, Vec]>(shifted));
               }
             """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -2938,6 +2974,7 @@ prim<v:=(v,s)> shift_right(data, shift):
               }
             """
       f?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -4014,8 +4051,9 @@ prim<v:=(v,v)> shift_right(data, shift):
                 complete(call<primitive=reinterpret[SVec, Vec]>(shifted));
               }
             """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -4051,6 +4089,7 @@ prim<v:=(v,v)> shift_right(data, shift):
               }
             """
       f?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true

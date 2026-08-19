@@ -213,8 +213,9 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
               }
             }
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -458,8 +459,9 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
               }
                complete(call<primitive=from_array[Vec]>(data_array));
             """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -1276,8 +1278,9 @@ prim<v:=cptr+> load_convert_up(ptr):
                    var<const_infer>(loaded, call<primitive=load[Vec], attrs[aligned=false]>(ptr));
                    complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[OutVec]>(), loaded));
                 """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true

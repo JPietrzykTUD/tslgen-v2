@@ -17,10 +17,16 @@ prim<m:=()>[value=zero] mask_false():
     - {tags [false], extension "sve", type "ui32", lane_count 16, case {inputs [], expected 0}}
     - {tags [false], extension "rvv", type "ui32", lane_count 4, case {inputs [], expected 0}}
   impls:
-    [clang_v128, avx512, avx2_vl, sse_vl]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, sse_vl]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
@@ -158,10 +164,16 @@ prim<m:=()>[value=all] mask_true():
     - {tags [true], extension "sve", type "ui32", lane_count 16, case {inputs [], expected 65535}}
     - {tags [true], extension "rvv", type "ui32", lane_count 4, case {inputs [], expected 15}}
   impls:
-    [clang_v128, avx512, avx2_vl, sse_vl]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, sse_vl]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]

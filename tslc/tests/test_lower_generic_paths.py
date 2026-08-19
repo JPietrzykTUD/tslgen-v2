@@ -996,7 +996,11 @@ def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridg
         equal_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert equal is not None
-    assert "return left == right;" in equal.body_text
+    assert "::tsl::equal<::tsl::dataparallel::simd_for_t<" in equal.body_text
+    assert "::tsl::to_integral<::tsl::dataparallel::simd_for_t<" in (
+        equal.body_text
+    )
+    assert "::tsl::to_mask<tsl::simd<float, tsl::clang_v256>>" in equal.body_text
 
     to_integral_slot = _by_key(catalog, profile, "to_integral")[
         ("f32", "clang_v256")
@@ -1034,7 +1038,13 @@ def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridg
         bool_equal_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert bool_equal is not None
-    assert "return left == right;" in bool_equal.body_text
+    assert "::tsl::equal<::tsl::dataparallel::simd_for_t<" in bool_equal.body_text
+    assert "::tsl::to_integral<::tsl::dataparallel::simd_for_t<" in (
+        bool_equal.body_text
+    )
+    assert "::tsl::to_mask<tsl::simd<float, tsl::clang_v256_bool>>" in (
+        bool_equal.body_text
+    )
 
     bool_to_integral_slot = _by_key(catalog, profile, "to_integral")[
         ("f32", "clang_v256_bool")

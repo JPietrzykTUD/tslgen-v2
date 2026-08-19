@@ -37,6 +37,50 @@ def test_knl_masked_small_reductions_use_sse_quarter_composition(
         assert "to_array" not in lowered.body_text
         assert "for " not in lowered.body_text
 
+
+@pytest.mark.parametrize(
+    ("extension", "type_tag"),
+    (
+        ("clang_v512", "si32"),
+        ("clang_v512_bool", "f32"),
+    ),
+)
+def test_clang_masked_hadd_delegates_to_fixed_native_mask_callable(
+    catalog: Catalog,
+    machine_profiles,
+    extension: str,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["icelake_rockerlake"],
+            "hadd",
+            (type_tag,),
+            backend_id="cpp",
+        )
+        .selected
+        if selected.extension.name == extension
+        and selected.primitive.signature == "s:=(m,v)"
+    )
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert (
+        "return ::tsl::hadd_mask<::tsl::dataparallel::simd_for_t<"
+        in lowered.body_text
+    )
+    assert (
+        "return ::tsl::hadd<::tsl::dataparallel::simd_for_t<"
+        not in lowered.body_text
+    )
+
+
 @pytest.mark.parametrize("primitive", ["hmax", "hmin"])
 @pytest.mark.parametrize("type_tag", ["ui8", "si32", "f32", "f64"])
 def test_clang_masked_extrema_unroll_direct_lane_access(
@@ -475,10 +519,11 @@ def test_clang_runtime_permute_delegates_to_fixed_native_leaf(
     )
 
     assert slot.implementation.extension == extension
-    assert slot.implementation.type_group == "[?i8, ?i16, dword, qword]"
-    assert slot.fixed_fallback_extension is not None
-    assert slot.fixed_fallback_extension.isa_name == fixed_isa
-    assert slot.required_features == frozenset(features)
+    assert slot.implementation.type_group == "arith"
+    assert slot.implementation.prefer_fixed_native
+    assert slot.fixed_native_fallback_extension is not None
+    assert slot.fixed_native_fallback_extension.isa_name == fixed_isa
+    assert slot.required_features == frozenset()
 
     lowered = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
@@ -534,6 +579,8 @@ def test_clang_runtime_permute_keeps_direct_lane_fallback_without_native_leaf(
 
     assert slot.implementation.extension == extension
     assert slot.implementation.type_group == "arith"
+    assert slot.implementation.prefer_fixed_native
+    assert slot.fixed_native_fallback_extension is None
     assert slot.required_features == frozenset()
     lowered = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
@@ -589,11 +636,11 @@ def test_clang_compress_expand_delegate_to_fixed_native_avx512_leaf(
         if selected.extension.name == extension
     )
 
-    assert slot.implementation.type_group == "[idqword, bword, f?]"
-    assert slot.fixed_fallback_extension is not None
-    assert slot.fixed_fallback_extension.isa_name == fixed_isa
-    assert "avx512f" in slot.required_features
-    assert ("avx512_vbmi2" in slot.required_features) == (type_tag == "ui8")
+    assert slot.implementation.type_group == "arith"
+    assert slot.implementation.prefer_fixed_native
+    assert slot.fixed_native_fallback_extension is not None
+    assert slot.fixed_native_fallback_extension.isa_name == fixed_isa
+    assert slot.required_features == frozenset()
 
     lowered = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
@@ -601,7 +648,8 @@ def test_clang_compress_expand_delegate_to_fixed_native_avx512_leaf(
 
     assert lowered is not None
     assert f"fixed<{width // lane_bits}>" in lowered.body_text
-    assert "::tsl::to_integral<Vec>(mask)" in lowered.body_text
+    assert "::tsl::to_integral<" in lowered.body_text
+    assert f"tsl::{extension}" in lowered.body_text
     assert "::tsl::to_mask<" in lowered.body_text
     assert f"::tsl::{primitive}<" in lowered.body_text
     assert "::tsl::bit_cast<" in lowered.body_text
@@ -650,6 +698,8 @@ def test_clang_compress_expand_keep_direct_lane_fallback_without_vbmi2(
     )
 
     assert slot.implementation.type_group == "arith"
+    assert slot.implementation.prefer_fixed_native
+    assert slot.fixed_native_fallback_extension is None
     assert slot.required_features == frozenset()
     lowered = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
@@ -940,3 +990,77 @@ def test_clang_repr_chunk_operations_use_direct_vector_lanes(
     assert "to_array" not in cpp.body_text
     assert "from_array" not in cpp.body_text
     assert "for " not in cpp.body_text
+
+
+@pytest.mark.parametrize(
+    (
+        "profile",
+        "primitive",
+        "signature",
+        "extension",
+        "fixed_isa",
+        "source_lanes",
+    ),
+    [
+        (
+            "avx2",
+            "gather",
+            "v:=(cptr,vidx,sImm)",
+            "clang_v256",
+            "avx2",
+            8,
+        ),
+        (
+            "icelake_rockerlake",
+            "scatter",
+            "void:=(ptr,vidx,v,sImm)",
+            "clang_v512",
+            "avx512",
+            16,
+        ),
+    ],
+)
+def test_clang_generic_index_memory_ops_delegate_to_fixed_native_leaf(
+    catalog: Catalog,
+    machine_profiles,
+    profile: str,
+    primitive: str,
+    signature: str,
+    extension: str,
+    fixed_isa: str,
+    source_lanes: int,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile],
+            primitive,
+            ("si32",),
+            backend_id="cpp",
+            compiler_capabilities=frozenset(),
+        )
+        .selected
+        if selected.extension.name == extension
+        and selected.primitive.signature == signature
+    )
+
+    assert slot.implementation.prefer_fixed_native
+    assert slot.fixed_native_fallback_extension is not None
+    assert slot.fixed_native_fallback_extension.isa_name == fixed_isa
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert f"fixed<{source_lanes}>" in lowered.body_text
+    assert "fixed<IndicesType::lane_count_v>" in lowered.body_text
+    assert f"::tsl::{primitive}<" in lowered.body_text
+    assert ", scale, N>" in lowered.body_text
+    assert "[0]" not in lowered.body_text
+    assert {
+        (origin.dependency.primitive, origin.dependency.source.extension_isa)
+        for origin in lowered.call_dependency_origins
+    } == {(primitive, fixed_isa)}

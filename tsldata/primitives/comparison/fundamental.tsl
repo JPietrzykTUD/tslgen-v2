@@ -43,11 +43,17 @@ prim<m:=(v,v)> equal(left, right):
     - {tags [edge], type "f64", case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, NAN]}}
     - {tags [nan, mixed], type "f64", case {inputs [[NAN, 1.0], [0.0, 1.0]], expected [0.0, NAN]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -384,11 +390,17 @@ prim<m:=(v,v)> nequal(left, right):
     - {tags [edge], type "f64", case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [NAN, 0.0]}}
     - {tags [nan, mixed], type "f64", case {inputs [[NAN, 1.0], [0.0, 2.0]], expected [NAN, NAN]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -702,11 +714,17 @@ prim<m:=(v,v)> less_than(left, right):
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
     - {tags [edge], type "f64", case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, 0.0]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1206,11 +1224,17 @@ prim<m:=(v,v)> greater_than(left, right):
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
     - {tags [edge], type "f64", case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, 0.0]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1530,11 +1554,17 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [NAN, NAN]}}
     - {tags [edge], type "f64", case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, NAN]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1985,11 +2015,17 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [NAN, NAN]}}
     - {tags [edge], type "f64", case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, NAN]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2282,11 +2318,17 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
     - {tags [equal, mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, NAN, 0.0, NAN]}}
     - {tags [equal, mask, nan, edge], type "f32", case {inputs [6, [NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, 0.0]}}
   impls:
-    [scalar, clang_v128, generic, oneapi_fpga, wasm128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, generic, oneapi_fpga, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           generic []
           oneapi_fpga []
           wasm128 [simd128]
@@ -2473,11 +2515,17 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
     - {tags [nequal, mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, 0.0, 3.5, 0.0]], expected [0.0, NAN, 0.0, NAN]}}
     - {tags [nequal, mask, nan, edge], type "f32", case {inputs [11, [NAN, 0.0, -0.0, INFINITY], [NAN, 1.0, -0.0, 0.0]], expected [NAN, NAN, 0.0, NAN]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2708,11 +2756,17 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
     - {tags [less, than, mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [0.0, -1.0, 3.5, 0.0]], expected [0.0, NAN, 0.0, NAN]}}
     - {tags [less, than, mask, nan, edge], type "f32", case {inputs [11, [NAN, 0.0, -0.0, INFINITY], [NAN, 1.0, -0.0, 0.0]], expected [0.0, NAN, 0.0, 0.0]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2943,11 +2997,17 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
     - {tags [greater, than, mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -3.0, 3.5, -5.0]], expected [0.0, NAN, 0.0, NAN]}}
     - {tags [greater, than, mask, nan, edge], type "f32", case {inputs [11, [NAN, 1.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, 0.0, 0.0]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -3178,11 +3238,17 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
     - {tags [less, than, or, equal, mask, basic], type "f32", case {inputs [5, [1.0, -2.0, 3.5, -4.5], [1.0, -3.0, 3.5, -5.0]], expected [NAN, 0.0, NAN, 0.0]}}
     - {tags [less, than, or, equal, mask, nan, edge], type "f32", case {inputs [14, [NAN, 0.0, -0.0, INFINITY], [NAN, 1.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, NAN]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -3413,11 +3479,17 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
     - {tags [mask, basic], type "f32", case {inputs [5, [1.0, -2.0, 3.5, -4.5], [1.0, -1.0, 3.5, 0.0]], expected [NAN, 0.0, NAN, 0.0]}}
     - {tags [mask, nan, edge], type "f32", case {inputs [14, [NAN, 1.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, NAN]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
         safety:
           internal_unsafe false
           caller_unsafe false

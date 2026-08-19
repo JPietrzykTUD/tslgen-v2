@@ -192,8 +192,9 @@ prim<v:=s> set1(value):
           reasons []
         implementation:
           tsil "complete(value);"
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -256,10 +257,16 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
     - {tags [masked, set1, basic], type "f64", case {inputs [2, [1.0, -2.0], -2.25], expected [1.0, -2.25]}}
     - {tags [masked, set1, edge], type "f64", case {inputs [3, [1.0, -2.0], -2.25], expected [-2.25, -2.25]}}
   impls:
-    [clang_v128, avx512, avx2, sse, neon, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2, sse, neon, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -372,8 +379,9 @@ prim<v:=()>[value=zero] set_zero():
           reasons []
         implementation:
           tsil "complete(cast<static>(base::in, 0));"
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -511,8 +519,9 @@ prim<v:=()>[value=undef] set_undef():
               var<typed>(base::in, result, value(uninit::scalar));
               complete(result);
             """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -754,8 +763,9 @@ prim<v:=(lanes<s>)> set(values):
               )
             );
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false

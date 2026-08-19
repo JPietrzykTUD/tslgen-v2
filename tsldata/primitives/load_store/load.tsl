@@ -66,8 +66,9 @@ prim<v:=cptr>[aligned=*] load(ptr):
               }
               complete(reg);
             """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -412,10 +413,16 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
               );
             }
           """
-    [clang_v128, avx2, sse, neon, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx2, sse, neon, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx2 [avx]
           sse [sse, sse2]
           neon [neon]
@@ -702,10 +709,16 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
               );
             }
           """
-    [clang_v128, avx2, sse, neon, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx2, sse, neon, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx2 [avx]
           sse [sse, sse2]
           neon [neon]
@@ -904,8 +917,9 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               );
             }
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -1095,12 +1109,18 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
     - {tags [scalar, basic], type "f64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
     - {tags [scalar, edge], type "f64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
   impls:
-    [scalar, generic, clang_v128, avx512, avx2, sse, neon, sve, oneapi_fpga, wasm128]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2, sse, neon, sve, oneapi_fpga, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]

@@ -37,9 +37,13 @@ prim<s:=v> hadd(vec):
     - {tags [neon, direct], extension "neon", type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 36}}
     - {tags [neon, direct], extension "neon", type "ui32", case {inputs [[1, 2, 3, 4]], expected 10}}
   impls:
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [reduce_add]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -58,8 +62,24 @@ prim<s:=v> hadd(vec):
           reasons [compiler_builtin]
         implementation:
           tsil "complete(__builtin_reduce_in_order_fadd(vec, cast<static>(base::in, 0)));"
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
+      ?i?:
+        prefer_fixed_native true
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              result = helper<arith_add>(result, vec[value(i)]);
+            }
+            complete(result);
+          """
       f?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -442,9 +462,13 @@ prim<s:=v> hmax(vec):
     - {tags [avx2], extension "avx2", type "si64", lane_count 4, case {inputs [[-2, -1, 0, 1]], expected 1}}
     - {tags [avx2], extension "avx2", type "ui64", lane_count 4, case {inputs [[0, 1, 2, 3]], expected 3}}
   impls:
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [reduce_max]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -731,10 +755,17 @@ prim<s:=v> hmax(vec):
           reasons []
         implementation:
           tsil "complete(vec);"
-    [generic, oneapi_fpga]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
+          clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
         safety:
           internal_unsafe false
@@ -790,9 +821,13 @@ prim<s:=v> hmin(vec):
     - {tags [avx2], extension "avx2", type "si64", lane_count 4, case {inputs [[-2, -1, 0, 1]], expected -2}}
     - {tags [avx2], extension "avx2", type "ui64", lane_count 4, case {inputs [[0, 1, 2, 3]], expected 0}}
   impls:
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [reduce_min]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -1079,11 +1114,17 @@ prim<s:=v> hmin(vec):
           reasons []
         implementation:
           tsil "complete(vec);"
-    [generic, clang_v128, oneapi_fpga]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
         safety:
           internal_unsafe false
@@ -1171,8 +1212,9 @@ prim<s:=(m,v)> hadd(mask, vec):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(base::in, intrin<mask_reduce_add, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -1330,11 +1372,17 @@ prim<s:=(m,v)> hadd(mask, vec):
             }
             complete(cast<static>(base::in, 0));
           """
-    [generic, clang_v128, oneapi_fpga]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
         safety:
           internal_unsafe false
@@ -1543,8 +1591,9 @@ prim<s:=(m,v)> hmax(mask, vec):
             }
             complete(result);
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -1796,11 +1845,17 @@ prim<s:=(m,v)> hmax(mask, vec):
             }
             complete(cast<static>(base::in, 0));
           """
-    [generic, clang_v128, oneapi_fpga]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
         safety:
           internal_unsafe false
@@ -2015,8 +2070,9 @@ prim<s:=(m,v)> hmin(mask, vec):
             }
             complete(result);
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -2268,11 +2324,17 @@ prim<s:=(m,v)> hmin(mask, vec):
             }
             complete(cast<static>(base::in, 0));
           """
-    [generic, clang_v128, oneapi_fpga]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
         safety:
           internal_unsafe false

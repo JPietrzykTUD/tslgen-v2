@@ -2009,6 +2009,36 @@ def test_compiler_capability_requires_are_promoted_separately_from_target_featur
     )
 
 
+def test_prefer_fixed_native_is_promoted_as_typed_implementation_metadata() -> None:
+    catalog, diagnostics = _catalog_and_diagnostics(
+        _base_source().replace(
+            "        implementation:\n",
+            "        prefer_fixed_native true\n"
+            "        implementation:\n",
+        )
+    )
+
+    assert diagnostics == ()
+    assert catalog.primitive("id").implementations[0].prefer_fixed_native
+
+
+def test_invalid_prefer_fixed_native_value_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "        implementation:\n",
+            "        prefer_fixed_native sometimes\n"
+            "        implementation:\n",
+        )
+    )
+
+    diagnostic = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-INVALID-ENUM"
+    )
+    assert "prefer_fixed_native" in diagnostic.message
+
+
 @pytest.mark.parametrize(
     ("backend", "capability", "code"),
     [

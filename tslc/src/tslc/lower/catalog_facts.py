@@ -16,7 +16,11 @@ from tslc.ir.region_syntax import parse_call_selector
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region, Segment
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
-from tslc.support_policy_views import immediate_split_names, policy_split_names
+from tslc.support_policy_views import (
+    explicit_mask_split_names,
+    immediate_split_names,
+    policy_split_names,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +33,7 @@ class LowererCatalogFacts:
         tuple[str, str, int], tuple[str, ...]
     ]
     policy_split_names: frozenset[str]
+    explicit_mask_split_names: frozenset[str]
     immediate_split_names: frozenset[str]
 
     @classmethod
@@ -52,6 +57,7 @@ class LowererCatalogFacts:
                 _primitive_type_param_bounds(catalog)
             ),
             policy_split_names=policy_split_names(catalog, support),
+            explicit_mask_split_names=explicit_mask_split_names(catalog, support),
             immediate_split_names=immediate_split_names(catalog, support),
         )
 
@@ -187,6 +193,7 @@ def _primitive_arg_generics(
 ) -> dict[str, int]:
     by_name: dict[str, list[tuple[str, ...]]] = {}
     policy_names = policy_split_names(catalog, support)
+    explicit_mask_names = explicit_mask_split_names(catalog, support)
     immediate_names = immediate_split_names(catalog, support)
     for primitive in catalog.primitives:
         shape = parse_signature(primitive.signature)
@@ -196,6 +203,12 @@ def _primitive_arg_generics(
         mask_policy = primitive.mask_mode
         if mask_policy is not None and name in policy_names:
             name = f"{name}{support.mask_suffix(mask_policy)}"
+        if (
+            primitive.name in explicit_mask_names
+            and shape.param_kinds
+            and shape.param_kinds[0] == "m"
+        ):
+            name = f"{name}_mask"
         if primitive.name in immediate_names and support.has_immediate_operand(shape):
             name = f"{name}_imm"
         by_name.setdefault(name, []).append(shape.param_kinds)

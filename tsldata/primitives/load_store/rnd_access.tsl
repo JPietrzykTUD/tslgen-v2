@@ -481,8 +481,9 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
             var<const_infer>(loaded, call<primitive=load[Vec], attrs[aligned=false]>(result));
             complete(loaded);
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -716,8 +717,9 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       [bword, dword]:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -861,8 +863,9 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
     - {tags [basic], type "si32", index_type "si64", scale 4, case {inputs [[-10, -20, -30, -40], [1, 2, 3, 0]], expected [-20, -30, -40, -10]}}
     - {tags [basic], type "f32", index_type "si64", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [2, 0, 3, 1]], expected [3.5, 1.0, -4.5, -2.0]}}
   impls:
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       [bword, dword]:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -1278,8 +1281,9 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
               }
             }
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -1835,8 +1839,9 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
               }
             """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true
@@ -2211,8 +2216,9 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               }
             }
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe true

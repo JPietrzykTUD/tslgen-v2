@@ -39,7 +39,9 @@ class BackendTypeDialect(Protocol):
     def sized_vector_spelling(
         self, base_spelling: str, extension_name: str, lanes: int | str
     ) -> str: ...
-    def fixed_vector_spelling(self, base_spelling: str, lanes: int) -> str | None: ...
+    def fixed_vector_spelling(
+        self, base_spelling: str, lanes: int | str
+    ) -> str | None: ...
     def target_register_spelling(
         self,
         base_tag: str,

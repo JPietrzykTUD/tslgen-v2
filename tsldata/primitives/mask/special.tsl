@@ -24,10 +24,16 @@ prim<im:=(im,usize)> test_imask(mask, position):
     - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 0], expected 0}}
     - {tags [out_of_range], extension "avx512", type "ui64", lane_count 8, case {inputs [255, 8], expected 0}}
   impls:
-    [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneapi_fpga, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneapi_fpga, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
@@ -81,12 +87,18 @@ prim<m:=(m,usize,usize)> set_mask_lane(mask, index, value):
     - {tags [sse2, set], extension "sse", type "ui64", lane_count 2, case {inputs [0, 1, 1], expected 2}}
     - {tags [sse2, set], extension "sse", type "f64", lane_count 2, case {inputs [0, 1, 1], expected 2}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, neon, sve, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
           avx512 [avx512f]
@@ -161,10 +173,16 @@ prim<im:=(im,im,usize)> overlay_imask(mask_a, mask_b, position):
     - {tags [preserve], extension "avx512", type "ui64", lane_count 8, case {inputs [15, 0, 0], expected 15}}
     - {tags [out_of_range], extension "avx512", type "ui64", lane_count 8, case {inputs [15, 255, 8], expected 15}}
   impls:
-    [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneapi_fpga, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneapi_fpga, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
@@ -210,10 +228,15 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
     - {tags [extension_clipped], extension "sse", type "ui32", to_extension "avx2", case {inputs [0, 15, 6], expected 192}}
     - {tags [clang], extension "clang_v128", type "ui32", to_extension "clang_v256", case {inputs [255, 0, 2], expected 195}}
   impls:
-    [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128]:
       qword:
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
@@ -223,6 +246,7 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
           wasm128 [simd128]
         ToBase:
           bword:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -236,6 +260,7 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
                   ));
                 """
           dword:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -251,6 +276,11 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
       dword:
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
@@ -260,6 +290,7 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
           wasm128 [simd128]
         ToBase:
           bword:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -275,6 +306,11 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
       ?i16:
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
@@ -284,6 +320,7 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
           wasm128 [simd128]
         ToBase:
           ?i8:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -310,16 +347,22 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
   return_type:
     extension: ToExtension
   impls:
-    [clang_v128, avx2_vl, sse_vl, avx2, sse]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx2_vl, sse_vl, avx2, sse]:
       arith:
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
           avx2 [avx2]
           sse [sse2]
         ToExtension:
           where:
+            prefer_fixed_native true
             family same_as
             width larger_than
             safety:
@@ -357,10 +400,15 @@ prim<im:=(im,usize)> extract_imask(data, position):
     - {tags [extension_clipped], extension "avx2", type "ui32", to_extension "sse", case {inputs [192, 6], expected 3}}
     - {tags [clang], extension "clang_v256", type "ui32", to_extension "clang_v128", case {inputs [176, 4], expected 11}}
   impls:
-    [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128]:
       ?i8:
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
@@ -370,6 +418,7 @@ prim<im:=(im,usize)> extract_imask(data, position):
           wasm128 [simd128]
         ToBase:
           ?i16:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -383,6 +432,7 @@ prim<im:=(im,usize)> extract_imask(data, position):
                   ));
                 """
           dqword:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -398,6 +448,11 @@ prim<im:=(im,usize)> extract_imask(data, position):
       ?i16:
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
@@ -407,6 +462,7 @@ prim<im:=(im,usize)> extract_imask(data, position):
           wasm128 [simd128]
         ToBase:
           dqword:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -422,6 +478,11 @@ prim<im:=(im,usize)> extract_imask(data, position):
       dword:
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
@@ -431,6 +492,7 @@ prim<im:=(im,usize)> extract_imask(data, position):
           wasm128 [simd128]
         ToBase:
           qword:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -457,15 +519,21 @@ prim<im:=(im,usize)> extract_imask(data, position):
   return_type:
     extension: ToExtension
   impls:
-    [clang_v128, avx512, avx2_vl, avx2]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, avx2]:
       arith:
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           avx2 [avx2]
         ToExtension:
           where:
+            prefer_fixed_native true
             family same_as
             width smaller_than
             safety:

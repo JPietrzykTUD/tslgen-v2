@@ -37,6 +37,7 @@ def _implementations_from_entries(
     target_name: str | None = None,
     inherited: tuple[RequirementClause, ...] = (),
     inherited_unroll: bool | None = None,
+    inherited_prefer_fixed_native: bool = False,
     inherited_safety: ImplementationSafety | None = None,
 ) -> list[Implementation]:
     implementations: list[Implementation] = []
@@ -47,6 +48,10 @@ def _implementations_from_entries(
         unroll = _entry_unroll_variants(entry)
         if unroll is None:
             unroll = inherited_unroll
+        prefer_fixed_native = (
+            inherited_prefer_fixed_native
+            or _entry_prefer_fixed_native(entry)
+        )
         safety = parent_safety.merge(_entry_safety(entry))
         for envelope in entry.body_envelopes:
             head = envelope.selector_path[0] if envelope.selector_path else ""
@@ -65,6 +70,7 @@ def _implementations_from_entries(
                         to_target_group=to_target_group,
                         target_constraint=_target_constraint(entry, target_name),
                         unroll_variants=unroll,
+                        prefer_fixed_native=prefer_fixed_native,
                         safety=safety,
                         variants=_variants(entry.variants),
                         source=_source_span(envelope.envelope_source),
@@ -79,6 +85,7 @@ def _implementations_from_entries(
                 target_name,
                 requirements,
                 unroll,
+                prefer_fixed_native,
                 safety,
             )
         )
@@ -94,6 +101,17 @@ def _entry_unroll_variants(
         if field.key.text == "unroll_variants":
             return (_field_text(field) or "").lower() == "true"
     return None
+
+
+def _entry_prefer_fixed_native(
+    entry: ParsedImplementationSelectorEntry,
+) -> bool:
+    """Whether this selector explicitly opts into exact-width native delegation."""
+
+    return any(
+        field.key.text == "prefer_fixed_native" and _bool_field(field)
+        for field in entry.fields
+    )
 
 
 def _entry_safety(entry: ParsedImplementationSelectorEntry) -> ImplementationSafety:
