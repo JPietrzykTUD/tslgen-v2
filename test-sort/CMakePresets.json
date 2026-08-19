@@ -1,0 +1,55 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 20, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "clang",
+      "displayName": "clang 22, release, no accelerator",
+      "description": "Baseline for every host. clang 22 is required for the clang implementation family (tsl::clang_v*), whose profile header needs __builtin_elementwise_clzg.",
+      "binaryDir": "${sourceParentDir}/tslctmp/test-sort-${presetName}",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang-22",
+        "CMAKE_CXX_COMPILER": "clang++-22",
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENABLE_VQSORT_BENCHMARK": "OFF"
+      }
+    },
+    {
+      "name": "dsa",
+      "inherits": "clang",
+      "displayName": "clang 22 + Intel DSA detector backends",
+      "description": "For a host with DSA. DML is fetched and built in-tree; both compilers are pinned because DML enables the C language and would otherwise take whatever CC names. Needs uuid-dev for DML's hardware dispatcher. Set DML_ROOT to consume a pre-built DML instead.",
+      "cacheVariables": {
+        "TSL_COSORT_ENABLE_DSA": "ON"
+      }
+    },
+    {
+      "name": "iaa",
+      "inherits": "clang",
+      "displayName": "clang 22 + Intel IAA detector backends",
+      "description": "For a host with IAA. Expects test-sort/iaa_run_detector.hpp to provide TslIaaRunDetector<T> and TslIaaAsyncRunDetector<T>; the contract is documented in benchmarks/cosort_detectors.hpp.",
+      "cacheVariables": {
+        "TSL_COSORT_ENABLE_IAA": "ON",
+        "QPL_ROOT": "$env{QPL_ROOT}"
+      }
+    },
+    {
+      "name": "gcc",
+      "displayName": "GCC, release, no accelerator",
+      "description": "Kept because the clang implementation family is unavailable here, so a GCC build measures only the intrinsic styles.",
+      "binaryDir": "${sourceParentDir}/tslctmp/test-sort-${presetName}",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENABLE_VQSORT_BENCHMARK": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "clang", "configurePreset": "clang", "targets": ["cosort_bench", "reference", "generate_datasets", "verify_datasets"] },
+    { "name": "dsa", "configurePreset": "dsa", "targets": ["cosort_bench", "test_dsa_run_detector"] },
+    { "name": "iaa", "configurePreset": "iaa", "targets": ["cosort_bench"] },
+    { "name": "gcc", "configurePreset": "gcc", "targets": ["cosort_bench"] }
+  ]
+}

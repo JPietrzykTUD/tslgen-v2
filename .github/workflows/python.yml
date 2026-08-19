@@ -2,6 +2,7 @@ name: Python Logic
 
 on:
   pull_request:
+  merge_group:
   push:
     branches:
       - main
@@ -17,10 +18,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    name: Determine CI scope
+    uses: ./.github/workflows/ci-scope.yml
+
   python-type-check:
     name: Python type check
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs:
+      - scope
+    if: needs.scope.outputs.python_type_check == 'true'
 
     steps:
       - name: Check out repository
@@ -49,6 +57,9 @@ jobs:
     name: PIVOT tool tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs:
+      - scope
+    if: needs.scope.outputs.pivot == 'true'
 
     steps:
       - name: Check out repository
@@ -134,6 +145,9 @@ jobs:
     name: Compute Python test shards
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    needs:
+      - scope
+    if: needs.scope.outputs.python_tests == 'true'
     outputs:
       python_test_shards: ${{ steps.shards.outputs.python_test_shards }}
 
@@ -143,8 +157,19 @@ jobs:
 
       - name: Compute Python test shards
         id: shards
+        env:
+          CI_PYTHON_FULL: ${{ needs.scope.outputs.python_full }}
+          CI_CHANGED_PYTHON_TESTS: ${{ needs.scope.outputs.changed_python_tests }}
         run: |
-          python_test_shards="$(python3 .github/scripts/python_test_shards.py)"
+          if [[ "${CI_PYTHON_FULL}" == "true" ]]; then
+            python_test_shards="$(python3 .github/scripts/python_test_shards.py)"
+          else
+            python_test_shards="$(
+              python3 .github/scripts/python_test_shards.py \
+                --count 1 \
+                --paths-json "${CI_CHANGED_PYTHON_TESTS}"
+            )"
+          fi
           echo "python_test_shards=${python_test_shards}" >> "$GITHUB_OUTPUT"
 
   python-tests:
@@ -152,7 +177,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs:
+      - scope
       - python-test-shards
+    if: needs.scope.outputs.python_tests == 'true'
 
     strategy:
       fail-fast: false
@@ -184,6 +211,8 @@ jobs:
             '
 
       - name: Run Python test suite
+        env:
+          CI_PYTHON_TEST_PATHS: ${{ matrix.python_test_shard.paths_json }}
         run: |
           bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/python-${{ matrix.python_test_shard.name }}/tests.log" \
@@ -192,7 +221,7 @@ jobs:
               mkdir -p tslctmp
               trap "rm -rf tslctmp/pytest" EXIT
               python -m compileall -q tslc/src/tslc
-              python -m pytest -q ${{ matrix.python_test_shard.paths }}
+              python -c "import json, os, subprocess, sys; raise SystemExit(subprocess.call((sys.executable, \"-m\", \"pytest\", \"-q\", *json.loads(os.environ[\"CI_PYTHON_TEST_PATHS\"]))))"
             '
 
       - name: Upload Python test logs
@@ -203,3 +232,25 @@ jobs:
           path: tslctmp/ci-logs/python-${{ matrix.python_test_shard.name }}
           if-no-files-found: ignore
           retention-days: 14
+
+  required-python:
+    name: Required Python CI
+    runs-on: ubuntu-latest
+    needs:
+      - scope
+      - python-type-check
+      - pivot-tests
+      - python-test-shards
+      - python-tests
+    if: always()
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Verify selected jobs passed
+        run: |
+          bash .github/scripts/require_ci_results.sh \
+            scope true "${{ needs.scope.result }}" \
+            python-type-check "${{ needs.scope.outputs.python_type_check }}" "${{ needs['python-type-check'].result }}" \
+            pivot-tests "${{ needs.scope.outputs.pivot }}" "${{ needs['pivot-tests'].result }}" \
+            python-test-shards "${{ needs.scope.outputs.python_tests }}" "${{ needs['python-test-shards'].result }}" \
+            python-tests "${{ needs.scope.outputs.python_tests }}" "${{ needs['python-tests'].result }}"

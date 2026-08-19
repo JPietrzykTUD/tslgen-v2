@@ -21,7 +21,7 @@ set(
   CACHE PATH
   "Path to a local generated TSL output root, or to its cpp directory"
 )
-set(TSL_RELEASE_VERSION "v0.2.5" CACHE STRING "Generated TSL release tag")
+set(TSL_RELEASE_VERSION "v0.2.8" CACHE STRING "Generated TSL release tag")
 set(
   TSL_RELEASE_ARCHIVE_URL
   # "https://github.com/JPietrzykTUD/tslgen-v2/releases/download/${TSL_RELEASE_VERSION}/tsl-generated-1daeecdd39aa2b02a1bb60697d67fe6ae70b23cc.tar.gz"
@@ -201,11 +201,265 @@ if(ENABLE_GBENCH)
   )
   FetchContent_MakeAvailable(googlebenchmark)
 
+  # Google Benchmark compiles itself with -pedantic-errors, and clang 22 classes
+  # its `__COUNTER__` preprocessor test as a C2y extension, which that flag turns
+  # into an error. Silence the one diagnostic on the dependency rather than
+  # relaxing its warning policy or patching a fetched source tree.
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag("-Wno-c2y-extensions" TSL_HAVE_WNO_C2Y_EXTENSIONS)
+    if(TSL_HAVE_WNO_C2Y_EXTENSIONS)
+      foreach(_gbench_target benchmark benchmark_main)
+        if(TARGET ${_gbench_target})
+          target_compile_options(${_gbench_target} PRIVATE -Wno-c2y-extensions)
+        endif()
+      endforeach()
+    endif()
+  endif()
+
   add_executable(benchmark_multicolumn_gbench benchmark_multicolumn_gbench.cpp)
   target_compile_features(benchmark_multicolumn_gbench PRIVATE cxx_std_17)
   target_link_libraries(
     benchmark_multicolumn_gbench
     PRIVATE tsl::tsl benchmark::benchmark Threads::Threads
+  )
+endif()
+
+# --- Staged multi-column co-sort benchmark ----------------------------------
+# benchmarks/ replaces the flat benchmark matrix with a staged one: data comes
+# from the in-memory dataset generator, correctness is a byte comparison against
+# the reference image, and COSORT_STAGE selects which variant families are
+# registered. See benchmarks/benchmark.md.
+option(ENABLE_COSORT_BENCH "Build the staged multi-column co-sort benchmark" ON)
+
+if(ENABLE_COSORT_BENCH AND ENABLE_GBENCH)
+  add_executable(cosort_bench benchmarks/cosort_bench.cpp)
+  target_compile_features(cosort_bench PRIVATE cxx_std_17)
+  target_include_directories(
+    cosort_bench PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/datagen"
+    "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks"
+  )
+  target_link_libraries(
+    cosort_bench PRIVATE tsl::tsl benchmark::benchmark Threads::Threads
+  )
+
+  # The clang implementation family lives in a profile header guarded by
+  # `__clang__` whose bodies call elementwise builtins that older clangs lack, and
+  # an unknown builtin is a parse error rather than an instantiation error, so the
+  # capability must be probed rather than assumed. The style axis stays in the
+  # variant model either way: the binary reports what it could not measure.
+  set(_cosort_clang_style OFF)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    include(CheckCXXSourceCompiles)
+    check_cxx_source_compiles(
+      "int main() { unsigned value = 1u; return (int) __builtin_elementwise_clzg(value); }"
+      TSL_COSORT_HAVE_ELEMENTWISE_CLZG
+    )
+    if(TSL_COSORT_HAVE_ELEMENTWISE_CLZG)
+      set(_cosort_clang_style ON)
+    endif()
+  endif()
+
+  # `clang_v*_bool` differs from `clang_v*` only in mask representation -- packed
+  # boolean vectors instead of lane-wide compare results -- and needs the
+  # ext_vector_type boolean extension, a capability independent of the elementwise
+  # builtins above, so it is probed and reported separately.
+  set(_cosort_clang_bool_style OFF)
+  if(_cosort_clang_style)
+    check_cxx_source_compiles(
+      "typedef bool mask16 __attribute__((ext_vector_type(16)));
+       int main() { mask16 m = {}; m[3] = true; return m[3] ? 0 : 1; }"
+      TSL_COSORT_HAVE_EXT_VECTOR_TYPE_BOOLEAN
+    )
+    if(TSL_COSORT_HAVE_EXT_VECTOR_TYPE_BOOLEAN)
+      set(_cosort_clang_bool_style ON)
+    endif()
+  endif()
+
+  if(_cosort_clang_style)
+    target_compile_definitions(
+      cosort_bench PRIVATE TSL_ENABLE_CLANG TSL_COSORT_HAVE_CLANG_STYLE=1
+    )
+    message(STATUS "cosort_bench: clang implementation family enabled")
+    if(_cosort_clang_bool_style)
+      target_compile_definitions(
+        cosort_bench PRIVATE TSL_COSORT_HAVE_CLANG_BOOL_STYLE=1
+      )
+      message(STATUS "cosort_bench: clang packed-boolean-mask family enabled")
+    else()
+      message(
+        STATUS
+        "cosort_bench: clang packed-boolean-mask family disabled -- this clang "
+        "lacks the ext_vector_type boolean extension"
+      )
+    endif()
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    message(
+      STATUS
+      "cosort_bench: clang implementation family disabled -- this clang lacks "
+      "__builtin_elementwise_clzg, which the generated clang profile needs "
+      "(clang 22 or newer)"
+    )
+  else()
+    message(
+      STATUS
+      "cosort_bench: clang implementation family disabled -- it requires clang, "
+      "compiler is ${CMAKE_CXX_COMPILER_ID}"
+    )
+  endif()
+endif()
+
+# --- Intel DSA (DML) run detector -------------------------------------------
+# Off by default: the default build and test run must not require DML or DSA
+# hardware. When on, the detector targets are built and the accelerator is
+# additionally selectable at runtime (scalar / DML software path / DSA
+# hardware), so one binary can compare all three.
+option(TSL_COSORT_ENABLE_DSA "Build the Intel DSA (DML) run-length detector targets" OFF)
+set(DML_ROOT "" CACHE PATH "Pre-built Intel DML install prefix (empty = fetch from GitHub)")
+set(DML_GIT_TAG "v1.2.0" CACHE STRING "Intel DML tag to fetch when DML_ROOT is unset")
+
+# Intel IAA (QPL) run detector. Independent of the DSA option: a host has one
+# accelerator or the other, and `rle=` records which produced a result.
+option(TSL_COSORT_ENABLE_IAA "Build the Intel IAA (QPL) run-length detector backend" OFF)
+set(QPL_ROOT "" CACHE PATH "Pre-built Intel QPL install prefix")
+
+if(TSL_COSORT_ENABLE_IAA)
+  if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/iaa_run_detector.hpp")
+    message(
+      FATAL_ERROR
+      "TSL_COSORT_ENABLE_IAA needs test-sort/iaa_run_detector.hpp, providing "
+      "TslIaaRunDetector<T> and TslIaaAsyncRunDetector<T>. The contract is "
+      "documented at the top of benchmarks/cosort_detectors.hpp."
+    )
+  endif()
+  find_package(QPL REQUIRED CONFIG
+               HINTS "${QPL_ROOT}" "${QPL_ROOT}/lib/cmake/QPL" "${QPL_ROOT}/lib64/cmake/QPL")
+  if(TARGET cosort_bench)
+    target_compile_definitions(cosort_bench PRIVATE TSL_COSORT_HAVE_IAA=1)
+    target_link_libraries(cosort_bench PRIVATE QPL::qpl)
+    message(STATUS "cosort_bench: IAA detector backends enabled")
+  endif()
+endif()
+
+if(TSL_COSORT_ENABLE_DSA)
+  # DML ships a C core under its C++ facade.
+  enable_language(C)
+
+  # DML's hardware dispatcher includes <uuid/uuid.h>, and it fails deep inside the
+  # fetched tree rather than here if the header is absent. Say so up front.
+  include(CheckIncludeFile)
+  check_include_file("uuid/uuid.h" TSL_HAVE_UUID_HEADER)
+  if(NOT TSL_HAVE_UUID_HEADER)
+    message(
+      FATAL_ERROR
+      "TSL_COSORT_ENABLE_DSA needs <uuid/uuid.h> for DML's hardware dispatcher. "
+      "Install uuid-dev (Debian/Ubuntu) or libuuid-devel (Fedora/RHEL)."
+    )
+  endif()
+
+  # DML's AVX-512 kernels compile with -march=skylake-avx512. `enable_language(C)`
+  # picks the C compiler from the environment, which is not necessarily the one
+  # this project was configured with -- a CC of `zig cc`, for instance, parses that
+  # flag as arch `skylake` plus an unknown feature `avx512` and fails deep inside
+  # the fetched tree. Check the flag here and name the compiler that rejected it.
+  if(NOT DML_ROOT)
+    include(CheckCCompilerFlag)
+    check_c_compiler_flag("-march=skylake-avx512" TSL_C_ACCEPTS_SKYLAKE_AVX512)
+    if(NOT TSL_C_ACCEPTS_SKYLAKE_AVX512)
+      message(
+        FATAL_ERROR
+        "Building DML from source needs a C compiler that accepts "
+        "-march=skylake-avx512, and ${CMAKE_C_COMPILER} does not. Pass "
+        "-DCMAKE_C_COMPILER=<clang|gcc> (the CC environment variable may be "
+        "selecting something else), or use a pre-built DML via -DDML_ROOT=<prefix>."
+      )
+    endif()
+  endif()
+
+  if(DML_ROOT)
+    message(STATUS "DML: using local installation at ${DML_ROOT}")
+    find_package(DML REQUIRED CONFIG
+                 HINTS "${DML_ROOT}" "${DML_ROOT}/lib/cmake/DML" "${DML_ROOT}/lib64/cmake/DML")
+    set(_dsa_link_targets DML::dml)
+  else()
+    message(STATUS "DML: fetching ${DML_GIT_TAG} from github.com/intel/DML")
+    set(DML_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(DML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+      DML
+      GIT_REPOSITORY https://github.com/intel/DML.git
+      GIT_TAG "${DML_GIT_TAG}"
+      GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(DML)
+    set(_dsa_link_targets dml)
+  endif()
+
+  # The staged benchmark gains the DSA backends of the `rle=` axis.
+  if(TARGET cosort_bench)
+    # TSL_COSORT_ENABLE_DSA is what the detector headers themselves gate on;
+    # TSL_COSORT_HAVE_DSA is what the benchmark's backend registry reads.
+    target_compile_definitions(
+      cosort_bench PRIVATE TSL_COSORT_ENABLE_DSA=1 TSL_COSORT_HAVE_DSA=1
+    )
+    target_link_libraries(cosort_bench PRIVATE ${_dsa_link_targets})
+    message(STATUS "cosort_bench: DSA detector backends enabled")
+  endif()
+
+  add_executable(test_dsa_run_detector test_dsa_run_detector.cpp)
+  target_compile_features(test_dsa_run_detector PRIVATE cxx_std_17)
+  target_compile_definitions(test_dsa_run_detector PRIVATE TSL_COSORT_ENABLE_DSA=1)
+  target_link_libraries(test_dsa_run_detector PRIVATE tsl::tsl ${_dsa_link_targets})
+  add_test(NAME test_dsa_run_detector COMMAND test_dsa_run_detector)
+
+  add_executable(benchmark_dsa_run_detector benchmark_dsa_run_detector.cpp)
+  target_compile_features(benchmark_dsa_run_detector PRIVATE cxx_std_17)
+  target_compile_definitions(benchmark_dsa_run_detector PRIVATE TSL_COSORT_ENABLE_DSA=1)
+  target_link_libraries(benchmark_dsa_run_detector PRIVATE tsl::tsl ${_dsa_link_targets})
+
+  # The full co-sort with the RLE backend as the registered axis. Needs Google
+  # Benchmark, so it follows ENABLE_GBENCH.
+  if(ENABLE_GBENCH)
+    add_executable(benchmark_dsa_cosort benchmark_dsa_cosort.cpp)
+    target_compile_features(benchmark_dsa_cosort PRIVATE cxx_std_17)
+    target_compile_definitions(benchmark_dsa_cosort PRIVATE TSL_COSORT_ENABLE_DSA=1)
+    target_link_libraries(
+      benchmark_dsa_cosort
+      PRIVATE tsl::tsl benchmark::benchmark Threads::Threads ${_dsa_link_targets}
+    )
+  endif()
+endif()
+
+# --- Synthetic dataset catalog ----------------------------------------------
+# Standalone C++17: the generator and its verifier describe the datasets of
+# description_datasets.md and need neither TSL nor a SIMD host. The default
+# output directory is the committed source path so that running the binary from
+# any build tree writes to the same place; --out overrides it.
+option(TSL_COSORT_BUILD_DATAGEN "Build the synthetic dataset generator and verifier" ON)
+
+if(TSL_COSORT_BUILD_DATAGEN)
+  foreach(_datagen_target generate_datasets verify_datasets)
+    add_executable(${_datagen_target} datagen/${_datagen_target}.cpp)
+    target_compile_features(${_datagen_target} PRIVATE cxx_std_17)
+    target_include_directories(${_datagen_target} PRIVATE datagen)
+    target_compile_definitions(
+      ${_datagen_target}
+      PRIVATE TSL_DATASET_DEFAULT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+    )
+  endforeach()
+
+  # Reference sorted images: the exact oracle the benchmark memcmps against.
+  # Shares only the container and manifest readers with the generator, never the
+  # sorting implementation under test.
+  add_executable(reference benchmarks/reference.cpp)
+  target_compile_features(reference PRIVATE cxx_std_17)
+  target_include_directories(reference PRIVATE datagen)
+  target_link_libraries(reference PRIVATE Threads::Threads)
+  target_compile_definitions(
+    reference
+    PRIVATE TSL_DATASET_DEFAULT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
   )
 endif()
 

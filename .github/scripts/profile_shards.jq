@@ -1,6 +1,10 @@
 # Convert machine_profiles.json into a GitHub Actions matrix axis.
 
-def cpp_profile_chunk_size: 6;
+def cpp_profile_chunk_size($name):
+  if ($name | endswith("-oneapi-fpga"))
+  then 3
+  else 6
+  end;
 def rust_profile_chunk_size: 1;
 
 def chunks($n):
@@ -28,7 +32,7 @@ def backend_profile_shards($name; $profiles):
     "cpp";
     $name;
     [$profiles[] | select(supports_backend("cpp"))];
-    cpp_profile_chunk_size
+    cpp_profile_chunk_size($name)
   ),
   profile_shards(
     "rust";

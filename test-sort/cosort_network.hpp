@@ -23,7 +23,7 @@ enum class TslPartitionMode { BEFORE_PIVOT, EQUAL_TO };
 // the evolving key state, so the columns cannot be held resident in lockstep for
 // a runtime column count. Instead the keys are sorted once while the per-
 // comparator exchange mask is recorded; each payload column then replays those
-// recorded masks with one blend pair per comparator. This decouples the column
+// recorded masks with one select pair per comparator. This decouples the column
 // count from register pressure -- only the keys and one column are resident at a
 // time -- so the number of columns can come from a std::vector at runtime.
 //
@@ -100,8 +100,8 @@ class TslCoSortNetwork {
           auto const partner = wire ^ stride;
           if (partner > wire) {
             auto const exchange = recorded[comparator++];
-            auto const pay_wire = tsl::blend<DataSimdStyle>(exchange, pay[wire], pay[partner]);
-            auto const pay_partner = tsl::blend<DataSimdStyle>(exchange, pay[partner], pay[wire]);
+            auto const pay_wire = tsl::select<DataSimdStyle>(exchange, pay[partner], pay[wire]);
+            auto const pay_partner = tsl::select<DataSimdStyle>(exchange, pay[wire], pay[partner]);
             pay[wire] = pay_wire;
             pay[partner] = pay_partner;
           }
@@ -160,34 +160,49 @@ class TslPartitionReplayStep {
   using DataSimdStyle = SimdStyle;
   using register_type = typename DataSimdStyle::register_type;
   using mask_type = typename DataSimdStyle::mask_type;
+  using imask_type = typename DataSimdStyle::imask_type;
   using reg_param = typename tsl::reg_param<DataSimdStyle>::type;
   static constexpr std::size_t lane_count = DataSimdStyle::lane_count_v;
 
-  static auto low_lane_mask(std::size_t count) {
-    // Integer mask with the low `count` lanes set: take the all-lanes mask and
-    // shift the surplus high lanes out. Requires to_integral(mask_true) to report
-    // exactly lane_count bits, which holds as of TSL v0.2.4 (earlier releases
-    // over-reported for sub-native widths, e.g. 0xff for a 4-lane vector).
+  // Integral mask with the low `count` lanes set: take the all-lanes mask and
+  // shift the surplus high lanes out. Requires to_integral(mask_true) to report
+  // exactly lane_count bits, which holds as of TSL v0.2.4 (earlier releases
+  // over-reported for sub-native widths, e.g. 0xff for a 4-lane vector).
+  static auto low_lane_imask(std::size_t count) -> imask_type {
     auto const full_mask = tsl::to_integral<DataSimdStyle>(tsl::mask_true<DataSimdStyle>());
     return tsl::shift_right_imask<DataSimdStyle>(full_mask, lane_count - count);
   }
 
-  static auto lane_mask(std::size_t offset, std::size_t count) {
-    return tsl::shift_left_imask<DataSimdStyle>(low_lane_mask(count), offset);
+  // Converting back to mask_type is not cosmetic. For an intrinsic extension the
+  // two coincide -- both are a k-register -- so the integral form happens to work.
+  // For clang_v* mask_type is a lane-wide compare result and for clang_v*_bool a
+  // packed boolean vector, while imask_type stays a small integer; an integer
+  // argument then converts by splatting every lane true, so the mask silently
+  // stops selecting and each compress/expand becomes the identity. TSL's mask
+  // parameters are not deduced, so nothing in the primitive signature can reject
+  // that -- to_mask is the conversion the API expects the caller to make.
+  static auto low_lane_mask(std::size_t count) -> mask_type {
+    return tsl::to_mask<DataSimdStyle>(low_lane_imask(count));
   }
 
+  static auto lane_mask(std::size_t offset, std::size_t count) -> mask_type {
+    return tsl::to_mask<DataSimdStyle>(
+      tsl::shift_left_imask<DataSimdStyle>(low_lane_imask(count), offset)
+    );
+  }
+
+  // Concatenates three compacted groups into one register. Both insertion masks
+  // follow from the group sizes, which come from the keys, so the plan builds
+  // them once instead of every column rebuilding them from counts.
   static auto expand_three_compacted_groups(
     reg_param first_vec,
-    std::size_t first_count,
     reg_param second_vec,
-    std::size_t second_count,
+    mask_type second_mask,
     reg_param third_vec,
-    std::size_t third_count
+    mask_type third_mask
   ) -> register_type {
-    auto result = first_vec;
-    result = tsl::expand<DataSimdStyle>(lane_mask(first_count, second_count), result, second_vec);
-    result = tsl::expand<DataSimdStyle>(lane_mask(first_count + second_count, third_count), result, third_vec);
-    return result;
+    auto const result = tsl::expand<DataSimdStyle>(second_mask, first_vec, second_vec);
+    return tsl::expand<DataSimdStyle>(third_mask, result, third_vec);
   }
 
   // Everything the stitch needs, derived from the keys alone.
@@ -198,11 +213,13 @@ class TslPartitionReplayStep {
     mask_type good_r_mask;
     mask_type carry_l_select_mask;
     mask_type carry_r_select_mask;
-    std::size_t swappable_lanes_count;
-    std::size_t carry_l_count;
-    std::size_t carry_r_count;
-    std::size_t good_l_count;
-    std::size_t good_r_count;
+    // Where each expand inserts its group: the second and third group of the
+    // left write, then of the right write. Masks rather than counts because no
+    // consumer needs the counts themselves.
+    mask_type write_l_good_mask;
+    mask_type write_l_carry_mask;
+    mask_type write_r_swap_mask;
+    mask_type write_r_good_mask;
   };
 
   template <
@@ -234,14 +251,20 @@ class TslPartitionReplayStep {
     plan.good_r_mask = tsl::mask_binary_not<DataSimdStyle>(plan.bad_r_mask);
     auto const bad_l_count = tsl::mask_population_count<DataSimdStyle>(plan.bad_l_mask);
     auto const bad_r_count = tsl::mask_population_count<DataSimdStyle>(plan.bad_r_mask);
-    plan.swappable_lanes_count = std::min(bad_l_count, bad_r_count);
-    plan.carry_l_count = bad_l_count - plan.swappable_lanes_count;
-    plan.carry_r_count = bad_r_count - plan.swappable_lanes_count;
-    plan.good_l_count = lane_count - bad_l_count;
-    plan.good_r_count = lane_count - bad_r_count;
-    auto const swap_mask = low_lane_mask(plan.swappable_lanes_count);
+    auto const swappable_count = std::min(bad_l_count, bad_r_count);
+    auto const carry_l_count = bad_l_count - swappable_count;
+    auto const carry_r_count = bad_r_count - swappable_count;
+    auto const good_l_count = lane_count - bad_l_count;
+    auto const good_r_count = lane_count - bad_r_count;
+    auto const swap_mask = low_lane_mask(swappable_count);
     plan.carry_l_select_mask = tsl::mask_binary_xor<DataSimdStyle>(swap_mask, low_lane_mask(bad_l_count));
     plan.carry_r_select_mask = tsl::mask_binary_xor<DataSimdStyle>(swap_mask, low_lane_mask(bad_r_count));
+    // Left write is [swapped-in bad_r | good_l | carry_l], right write is
+    // [carry_r | swapped-in bad_l | good_r].
+    plan.write_l_good_mask = lane_mask(swappable_count, good_l_count);
+    plan.write_l_carry_mask = lane_mask(swappable_count + good_l_count, carry_l_count);
+    plan.write_r_swap_mask = lane_mask(carry_r_count, swappable_count);
+    plan.write_r_good_mask = lane_mask(carry_r_count + swappable_count, good_r_count);
     return plan;
   }
 
@@ -260,10 +283,10 @@ class TslPartitionReplayStep {
     auto const compact_carry_l = tsl::compress<DataSimdStyle>(plan.carry_l_select_mask, compact_bad_l);
     auto const compact_carry_r = tsl::compress<DataSimdStyle>(plan.carry_r_select_mask, compact_bad_r);
     write_l = expand_three_compacted_groups(
-      compact_bad_r, plan.swappable_lanes_count, compact_good_l, plan.good_l_count, compact_carry_l, plan.carry_l_count
+      compact_bad_r, compact_good_l, plan.write_l_good_mask, compact_carry_l, plan.write_l_carry_mask
     );
     write_r = expand_three_compacted_groups(
-      compact_carry_r, plan.carry_r_count, compact_bad_l, plan.swappable_lanes_count, compact_good_r, plan.good_r_count
+      compact_carry_r, compact_bad_l, plan.write_r_swap_mask, compact_good_r, plan.write_r_good_mask
     );
   }
 

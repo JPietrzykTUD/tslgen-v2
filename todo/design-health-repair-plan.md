@@ -126,7 +126,7 @@ architecture description agrees with generated Cargo behavior.
 Expected files:
 
 - `tslc/tests/test_rust_policy_consumption.py`;
-- `.github/workflows/generated-build.yml`;
+- `.github/workflows/generated-values.yml`;
 - `tslc/DESCRIPTION.md`;
 - `tslc/src/tslc/backend/assets/tsl_benchmark_self_test.rs`, only if its
   synthetic feature record is stale.

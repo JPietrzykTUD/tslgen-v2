@@ -100,7 +100,11 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
         if backend == "rust":
             assert all(len(profiles) == 1 for profiles in backend_shards.values())
         else:
-            assert all(len(profiles) <= 6 for profiles in backend_shards.values())
+            assert all(
+                len(profiles)
+                <= (3 if name.startswith("cpp-x86-oneapi-fpga-") else 6)
+                for name, profiles in backend_shards.items()
+            )
 
     assert {
         name: profiles
@@ -164,12 +168,13 @@ def test_package_and_docs_generate_a_supported_distributable_profile_set() -> No
     package_workflow = Path(".github/workflows/generated-package.yml").read_text(
         encoding="utf-8"
     )
-    docs_workflow = Path(".github/workflows/docs.yml").read_text(encoding="utf-8")
     assert _DISTRIBUTABLE_GENERATOR in package_workflow
-    assert _DISTRIBUTABLE_GENERATOR in docs_workflow
+    assert package_workflow.count(_DISTRIBUTABLE_GENERATOR) == 1
+    assert not Path(".github/workflows/docs.yml").exists()
     assert "./dev.sh generate --backends cpp,rust" not in package_workflow
-    assert "./dev.sh document" not in docs_workflow
-    assert "python -m tslc.maintenance.documentation" in docs_workflow
+    assert "./dev.sh document" not in package_workflow
+    assert "python -m tslc.maintenance.documentation" in package_workflow
+    assert "Download generated package" in package_workflow
 
     consumer_verifier = Path(
         "supplementary/ci/verify_generated_consumers.sh"
@@ -241,8 +246,13 @@ def _expected_exhaustive_shards(
         )
         for group_name, group_profiles in groups:
             names = tuple(str(profile["name"]) for profile in group_profiles)
-            for index, start in enumerate(range(0, len(names), chunk_size)):
+            effective_chunk_size = (
+                3
+                if backend == "cpp" and group_name.endswith("-oneapi-fpga")
+                else chunk_size
+            )
+            for index, start in enumerate(range(0, len(names), effective_chunk_size)):
                 expected[f"{backend}-{group_name}-{index}"] = names[
-                    start : start + chunk_size
+                    start : start + effective_chunk_size
                 ]
     return expected

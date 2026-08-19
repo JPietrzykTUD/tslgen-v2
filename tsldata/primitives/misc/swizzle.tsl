@@ -463,6 +463,7 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
         rust literal_match
   tests:
     - {tags [basic], type "si32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 27], expected [3, 2, 1, 0, 7, 6, 5, 4]}}
+    - {tags [clang, wide, reverse], extension "clang_v512", type "si32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 27], expected [3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12]}}
     - {tags [repeat], type "ui64", case {inputs [[10, 20, 30, 40], 0], expected [10, 10, 10, 10]}}
     - {tags [float], type "f32", case {inputs [[1.0, 2.0, 3.0, 4.0], 78], expected [3.0, 4.0, 1.0, 2.0]}}
     - {tags [short_vector], type "f64", case {inputs [[-2.0, 3.0], 255], expected [3.0, 3.0]}}
@@ -883,6 +884,8 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
         width(self::base) == width(base::in)
   tests:
     - {tags [basic], type "si32", index_type "ui32", case {inputs [[10, 20, 30, 40, 50, 60, 70, 80], [7, 0, 9, 2, 11, 4, 13, 6]], expected [80, 10, 20, 30, 40, 50, 60, 70]}}
+    - {tags [clang, wide, reverse], extension "clang_v512", type "si32", index_type "ui32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]], expected [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]}}
+    - {tags [clang, bool_mask, wide, reverse], extension "clang_v512_bool", type "si32", index_type "ui32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]], expected [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]}}
     - {tags [signed_index], type "ui64", index_type "si64", case {inputs [[10, 20, 30, 40], [-1, -2, 4, 5]], expected [40, 30, 10, 20]}}
     - {tags [float_data], type "f32", index_type "ui32", case {inputs [[1.0, 2.0, 3.0, 4.0], [3, 2, 1, 0]], expected [4.0, 3.0, 2.0, 1.0]}}
     - {tags [short_vector], type "f64", index_type "si64", case {inputs [[-2.0, 9.0], [-1, 2]], expected [9.0, -2.0]}}
@@ -1179,11 +1182,75 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
-    [generic, clang_v128, oneapi_fpga]:
+    # Delegate compiler vectors to the profile's exact-width hardware leaf only
+    # where that leaf has a native runtime-index permutation. The arith body
+    # below remains the direct-lane fallback for every other profile/type slot.
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
+      [?i8, ?i16, dword, qword]:
+        requires:
+          clang_v128:
+            ?i8 [avx512f, avx512vl, avx512vbmi, sse, sse2]
+            ?i16 [avx512f, avx512vl, avx512bw, sse, sse2]
+            dword [avx512f, avx512vl, sse, sse2]
+            qword [avx512f, avx512vl, sse, sse2]
+          clang_v256:
+            ?i8 [avx, avx512f, avx512vl, avx512vbmi]
+            ?i16 [avx, avx512f, avx512vl, avx512bw]
+            dword [avx, avx2]
+            qword [avx, avx512f, avx512vl]
+          clang_v512:
+            ?i8 [avx512f, avx512vbmi]
+            ?i16 [avx512f, avx512bw]
+            dword [avx512f]
+            qword [avx512f]
+          clang_v128_bool:
+            ?i8 [avx512f, avx512vl, avx512vbmi, sse, sse2]
+            ?i16 [avx512f, avx512vl, avx512bw, sse, sse2]
+            dword [avx512f, avx512vl, sse, sse2]
+            qword [avx512f, avx512vl, sse, sse2]
+          clang_v256_bool:
+            ?i8 [avx, avx512f, avx512vl, avx512vbmi]
+            ?i16 [avx, avx512f, avx512vl, avx512bw]
+            dword [avx, avx2]
+            qword [avx, avx512f, avx512vl]
+          clang_v512_bool:
+            ?i8 [avx512f, avx512vbmi]
+            ?i16 [avx512f, avx512bw]
+            dword [avx512f]
+            qword [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(FixedVec, vector::fixed);
+            let<type>(IndexBase, base::generic(IndicesType));
+            let<type>(FixedIndices, vector::fixed(IndexBase));
+            var<const_infer>(fixed_data, cast<bitcast>(
+              register::generic(FixedVec),
+              data
+            ));
+            var<const_infer>(fixed_indexes, cast<bitcast>(
+              register::generic(FixedIndices),
+              indexes
+            ));
+            var<const_infer>(fixed_result, call<primitive=@self[FixedVec, FixedIndices]>(
+              fixed_data,
+              fixed_indexes
+            ));
+            complete(cast<bitcast>(vector::register, fixed_result));
+          """
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       arith:
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
         safety:
           internal_unsafe false

@@ -15,3 +15,6 @@ node_modules/
 .vscode-test/
 editors/vscode-tsl/dist/
 editors/vscode-tsl/server/
+
+# Generated dataset catalog (see test-sort/datagen).
+test-sort/data/
