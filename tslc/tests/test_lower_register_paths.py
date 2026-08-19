@@ -349,6 +349,111 @@ def test_clang_compress_expand_use_direct_vector_lanes(
     assert "from_array" not in lowered.body_text
     assert "for " not in lowered.body_text
 
+
+@pytest.mark.parametrize("primitive", ["compress", "expand"])
+@pytest.mark.parametrize(
+    ("extension", "fixed_isa", "width"),
+    [
+        ("clang_v128", "sse", 128),
+        ("clang_v256", "avx2", 256),
+        ("clang_v512", "avx512", 512),
+    ],
+)
+@pytest.mark.parametrize(
+    ("profile", "type_tag", "lane_bits"),
+    [
+        ("skylake", "ui32", 32),
+        ("skylake", "f32", 32),
+        ("icelake_rockerlake", "ui8", 8),
+    ],
+)
+def test_clang_compress_expand_delegate_to_fixed_native_avx512_leaf(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    extension: str,
+    fixed_isa: str,
+    width: int,
+    profile: str,
+    type_tag: str,
+    lane_bits: int,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile],
+            primitive,
+            (type_tag,),
+            backend_id="cpp",
+        )
+        .selected
+        if selected.extension.name == extension
+    )
+
+    assert slot.implementation.type_group == "[idqword, bword, f?]"
+    assert slot.fixed_fallback_extension is not None
+    assert slot.fixed_fallback_extension.isa_name == fixed_isa
+    assert "avx512f" in slot.required_features
+    assert ("avx512_vbmi2" in slot.required_features) == (type_tag == "ui8")
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert f"fixed<{width // lane_bits}>" in lowered.body_text
+    assert "::tsl::to_integral<Vec>(mask)" in lowered.body_text
+    assert "::tsl::to_mask<" in lowered.body_text
+    assert f"::tsl::{primitive}<" in lowered.body_text
+    assert "::tsl::bit_cast<" in lowered.body_text
+    assert "[0]" not in lowered.body_text
+    dependencies = {
+        (origin.dependency.primitive, origin.dependency.source.extension_isa)
+        for origin in lowered.call_dependency_origins
+    }
+    assert dependencies == {
+        (primitive, fixed_isa),
+        ("to_integral", extension),
+        ("to_mask", fixed_isa),
+    }
+
+
+@pytest.mark.parametrize("primitive", ["compress", "expand"])
+@pytest.mark.parametrize("extension", ["clang_v128", "clang_v256", "clang_v512"])
+def test_clang_compress_expand_keep_direct_lane_fallback_without_vbmi2(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    extension: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["skylake"],
+            primitive,
+            ("ui8",),
+            backend_id="cpp",
+        )
+        .selected
+        if selected.extension.name == extension
+    )
+
+    assert slot.implementation.type_group == "arith"
+    assert slot.required_features == frozenset()
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert "[0]" in lowered.body_text
+    assert "fixed<" not in lowered.body_text
+    assert "for " not in lowered.body_text
+
+
 def test_clang_conflict_unrolls_direct_vector_lanes(
     catalog: Catalog,
     machine_profiles,

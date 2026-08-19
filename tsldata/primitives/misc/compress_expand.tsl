@@ -28,6 +28,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
     - {tags [edge], type "si16", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
     - {tags [basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8]], expected [2, 4, 6, 8, 0, 0, 0, 0]}}
     - {tags [edge], type "ui32", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [wide, sparse], type "ui32", case {inputs [33825, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 6, 11, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
     - {tags [basic], type "si32", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-2, -4, -6, -8, 0, 0, 0, 0]}}
     - {tags [edge], type "si32", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
     - {tags [basic], type "ui64", case {inputs [10, [1, 2, 3, 4]], expected [2, 4, 0, 0]}}
@@ -161,6 +162,44 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               }
               complete(result);
             """
+    # Delegate compiler vectors to the profile's exact-width hardware leaf only
+    # when that leaf owns a native register-compress instruction. The arith body
+    # below remains the direct-lane fallback for every other profile/type slot.
+    [clang_v128, clang_v256, clang_v512]:
+      [idqword, bword, f?]:
+        requires:
+          clang_v128:
+            idqword [avx512f, avx512vl, sse2]
+            bword [avx512_vbmi2, avx512f, avx512vl, sse2]
+            f? [avx512f, avx512vl, sse]
+          clang_v256:
+            idqword [avx512f, avx512vl, avx]
+            bword [avx512_vbmi2, avx512f, avx512vl, avx]
+            f? [avx512f, avx512vl, avx]
+          clang_v512:
+            idqword [avx512f]
+            bword [avx512_vbmi2, avx512f]
+            f? [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(FixedVec, vector::fixed);
+            var<const_infer>(fixed_mask, call<primitive=to_mask[FixedVec]>(
+              call<primitive=to_integral[Vec]>(mask)
+            ));
+            var<const_infer>(fixed_data, cast<bitcast>(
+              register::generic(FixedVec),
+              data
+            ));
+            var<const_infer>(fixed_result, call<primitive=@self[FixedVec]>(
+              fixed_mask,
+              fixed_data
+            ));
+            complete(cast<bitcast>(vector::register, fixed_result));
+          """
     clang_v128:
       arith:
         requires []
@@ -270,6 +309,7 @@ prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
     - {tags [zero], type "si16", case {inputs [0, [-101, -102, -103, -104, -105, -106, -107, -108], [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-101, -102, -103, -104, -105, -106, -107, -108]}}
     - {tags [basic], type "ui32", case {inputs [170, [101, 102, 103, 104, 105, 106, 107, 108], [2, 4, 6, 8, 201, 202, 203, 204]], expected [101, 2, 103, 4, 105, 6, 107, 8]}}
     - {tags [zero], type "ui32", case {inputs [0, [101, 102, 103, 104, 105, 106, 107, 108], [1, 2, 3, 4, 5, 6, 7, 8]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
+    - {tags [wide, sparse], type "ui32", case {inputs [33825, [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116], [1, 2, 3, 4, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212]], expected [1, 102, 103, 104, 105, 2, 107, 108, 109, 110, 3, 112, 113, 114, 115, 4]}}
     - {tags [basic], type "si32", case {inputs [170, [-101, -102, -103, -104, -105, -106, -107, -108], [-2, -4, -6, -8, -201, -202, -203, -204]], expected [-101, -2, -103, -4, -105, -6, -107, -8]}}
     - {tags [zero], type "si32", case {inputs [0, [-101, -102, -103, -104, -105, -106, -107, -108], [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-101, -102, -103, -104, -105, -106, -107, -108]}}
     - {tags [basic], type "ui64", case {inputs [10, [101, 102, 103, 104], [2, 4, 201, 202]], expected [101, 2, 103, 4]}}
@@ -463,6 +503,48 @@ prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
               }
               complete(result);
             """
+    # As above, use the exact-width native expand leaf where the profile has
+    # one, retaining the direct-lane body for all other compiler-vector slots.
+    [clang_v128, clang_v256, clang_v512]:
+      [idqword, bword, f?]:
+        requires:
+          clang_v128:
+            idqword [avx512f, avx512vl, sse, sse2]
+            bword [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
+            f? [avx512f, avx512vl, sse, sse2]
+          clang_v256:
+            idqword [avx512f, avx512vl, avx]
+            bword [avx512_vbmi2, avx512f, avx512vl, avx]
+            f? [avx512f, avx512vl, avx]
+          clang_v512:
+            idqword [avx512f]
+            bword [avx512_vbmi2, avx512f]
+            f? [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(FixedVec, vector::fixed);
+            var<const_infer>(fixed_mask, call<primitive=to_mask[FixedVec]>(
+              call<primitive=to_integral[Vec]>(mask)
+            ));
+            var<const_infer>(fixed_keep, cast<bitcast>(
+              register::generic(FixedVec),
+              to_keep
+            ));
+            var<const_infer>(fixed_data, cast<bitcast>(
+              register::generic(FixedVec),
+              to_expand
+            ));
+            var<const_infer>(fixed_result, call<primitive=@self[FixedVec]>(
+              fixed_mask,
+              fixed_keep,
+              fixed_data
+            ));
+            complete(cast<bitcast>(vector::register, fixed_result));
+          """
     clang_v128:
       arith:
         requires []

@@ -19,6 +19,7 @@ from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.diagnostics import has_errors
 from tslc.maintenance.build_verified import BUILD_VERIFIED_PRIMITIVE_SETS
 from tslc.output.verify_model import (
+    BackendToolchain,
     VerifyBackend,
     VerifyCompileFailure,
     VerifyProfile,
@@ -104,17 +105,48 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
     clangxx = _native_clangxx()
-    if shutil.which("cmake") is None or clangxx is None:
-        pytest.skip("native clang++ and cmake are required")
+    sde = Path("/opt/intel-sde/sde64")
+    if shutil.which("cmake") is None or clangxx is None or not sde.exists():
+        pytest.skip("native clang++, cmake, and Intel SDE are required")
 
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=_build_verified("test_clang_vector_overlay_builds_and_runs_through_opt_in_target"),
-        profiles=["sse2"],
+        profiles=["sse2", "skylake", "icelake_rockerlake"],
+        type_tags=("si32", "ui8", "ui32", "f32", "f64"),
         backends=["cpp"],
+        test_harness=True,
     )
     assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    clang_cases = {
+        (
+            profile.profile_name,
+            case.call_name,
+            case.type_tag,
+            case.differential.hardware_extension,
+        )
+        for profile in result.rendered.value_tests.profiles_for("cpp")
+        for case in profile.cases
+        if case.call_name in {"compress", "expand"}
+        and case.differential is not None
+        and case.differential.hardware_extension
+        in {"clang_v128", "clang_v256", "clang_v512"}
+    }
+    assert {
+        (profile, primitive, type_tag, extension)
+        for profile, type_tag, extension in (
+            ("skylake", "ui8", "clang_v128"),
+            ("skylake", "ui32", "clang_v256"),
+            ("skylake", "ui32", "clang_v512"),
+            ("skylake", "f32", "clang_v128"),
+            ("icelake_rockerlake", "ui8", "clang_v128"),
+            ("icelake_rockerlake", "ui32", "clang_v512"),
+        )
+        for primitive in ("compress", "expand")
+    } <= clang_cases
+
     generated = tmp_path / "generated"
     write_report = write_artifacts(result.artifacts, generated)
     assert not has_errors(write_report.diagnostics), write_report.diagnostics
@@ -280,6 +312,30 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
         text=True,
     )
     assert executed.returncode == 0, executed.stderr + executed.stdout
+
+    report = verify_project(
+        generated,
+        result.rendered.verify,
+        toolchains={
+            "cpp": BackendToolchain.create(compiler=str(clangxx)),
+        },
+        runner_paths={"sde": str(sde)},
+        run_value_tests=True,
+    )
+    assert report.skipped == (), report.skipped
+    assert report.diagnostics == (), report.diagnostics
+    test_commands = tuple(
+        command
+        for command in report.commands
+        if command.command.backend_id == "cpp"
+        and command.command.step == "test"
+    )
+    assert {command.command.profile_name for command in test_commands} == {
+        "sse2",
+        "skylake",
+        "icelake_rockerlake",
+    }
+    assert all("values_clang" in command.stdout for command in test_commands)
 
 
 def test_rust_target_feature_body_builds_with_typed_vector_owner(
