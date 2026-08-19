@@ -46,7 +46,11 @@ Before submission, interview and workshop representatives from:
 
 The needs analysis must show that existing benchmark repositories, artefact
 archives, CI systems, and performance databases do not already provide the
-required combination.
+required combination. It must record current workflows, failed hand-offs,
+candidate contributors, plausible usage volumes, interoperability
+requirements, and services that should be integrated instead of duplicated.
+Representative users from more than one scientific community must test the
+prototype.
 
 ## Service concept
 
@@ -75,6 +79,10 @@ infrastructure's private ontology or control admissibility.
 - establish independent governance and an advisory structure;
 - choose a durable host/operator.
 
+Gate: stop if demand is local to the TSL team, if an existing service can meet
+the need through modest integration, or if no institution accepts post-grant
+operational responsibility.
+
 ### Phase II — Technical prototype
 
 - define open schemas and APIs;
@@ -87,7 +95,8 @@ infrastructure's private ontology or control admissibility.
 
 - run contribution calls and onboarding;
 - provide training and reusable workflows;
-- measure adoption, interoperability, and curation cost;
+- measure adoption, successful independent replays, time-to-onboard,
+  interoperability, curation cost, and user satisfaction;
 - establish cross-site maintainer and reviewer roles.
 
 ### Phase IV — Establishment and transfer
@@ -115,6 +124,23 @@ service around one project.
 | Technical/organisational/skills dimensions | Open schemas/APIs, governance/operation, and training |
 | Sustainability | Named operator, service model, governance, and exit plan |
 | No single-project capture | Multiple independent evidence producers and governing stakeholders |
+
+## Required consortium
+
+At minimum, preparation requires:
+
+- a DFG-eligible research PI for VLEN-Decode;
+- a non-profit German computing centre, library, research data centre, or
+  comparable information-infrastructure organisation willing to operate the
+  observatory;
+- several independent compiler, systems, HPC, and database user groups;
+- providers of heterogeneous execution resources;
+- expertise in metadata, software preservation, service security, training,
+  and long-term governance;
+- links to relevant national infrastructure initiatives.
+
+Documented workflows, contributed pilot data, and named operational
+responsibilities are stronger evidence than generic letters of interest.
 
 ## No-go conditions
 

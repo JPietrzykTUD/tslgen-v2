@@ -95,6 +95,9 @@ service is scarce.
 - obtain owner participation or the required access commitment;
 - separate all work and costs from the ongoing CHORYS grant.
 
+Decision gate: no bid without a complete rights chain and a result that is
+already achieved.
+
 ### WP2 — Market evidence
 
 - conduct structured interviews with qualified buyers and users;
@@ -103,6 +106,10 @@ service is scarce.
 - choose one beachhead and document buyer, procurement, certification, and
   support requirements;
 - test pricing and route-to-market assumptions.
+
+One beachhead is mandatory. Internal benchmark results cannot replace
+external customer workloads, integration experience, or buying-process
+evidence.
 
 ### WP3 — Productised demonstrator
 

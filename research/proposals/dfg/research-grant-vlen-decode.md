@@ -56,6 +56,10 @@ Subquestions:
 The project remains scientifically useful if H1 fails, provided it produces a
 controlled map of where portability breaks.
 
+It should stop or be redesigned if the pilot finds no stable
+standards-compliant kernel, no measurable difference among U, S, and N, or
+prior work already answers the same question on comparable hardware.
+
 ## Experimental design
 
 Start with a narrow, standards-compliant slice: fixed-width integer data,
@@ -112,10 +116,13 @@ Milestone: semantic equivalence across all supported vector lengths and inputs.
 ### WP3 — Native oracles and experiments, months 12–26
 
 - implement or adapt expert N baselines;
-- measure throughput, latency, energy, code size, and compiler sensitivity;
+- measure throughput, latency, energy, code size, compiler sensitivity, and
+  relevant hardware counters;
 - use factorial and ablation experiments to separate vector-length and
   capability effects;
-- publish reproducible evidence packages.
+
+Milestone: a public evidence package sufficient to reproduce every reported
+comparison.
 
 ### WP4 — Model and transfer, months 23–36
 

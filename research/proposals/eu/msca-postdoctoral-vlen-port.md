@@ -1,129 +1,195 @@
 # VLEN-PORT: Portable Columnar Decoding Across Scalable Vector Lengths
 
-Instrument: **MSCA Postdoctoral Fellowships 2026**
+Instrument: **Marie Skłodowska-Curie Actions Postdoctoral Fellowships 2026**
 
-Deadline: **9 September 2026, 17:00 Brussels time**
+Proposed form: **European Postdoctoral Fellowship, 24 months**
 
-Proposed fellowship: **European Postdoctoral Fellowship, normally 12–24 months**
+Status on 19 August 2026: **Open**
 
-Recommendation: **Submit in 2026 only if a named eligible fellow and host are
-already working together; otherwise prepare for the 2027 call**
+Deadline: **9 September 2026, 17:00 CEST**
 
-## Proposal summary
+Recommendation: **Submit in 2026 only if an eligible fellow and host are already paired; otherwise prepare for 2027**
 
-VLEN-PORT will train a postdoctoral researcher at the intersection of data
-systems, RISC-V/Arm scalable vectors, research compilers, and reproducible
-performance engineering. The fellow will develop and evaluate a
-vector-length-agnostic decoder for a narrow standards-compliant columnar format
-slice, compare it with capability-conditioned and native implementations on
-real RVV and SVE hardware, and publish semantic, performance, and energy
-evidence.
+The MSCA overview marks its timeline and budget as indicative/TBC. The live
+Funding & Tenders topic is the controlling source and should be checked again
+before submission.
 
-The host contributes TSL, generated verification, and CHORYS-linked RISC-V
-expertise. The fellow contributes a clearly identified complementary skill—for
-example columnar-format semantics, formal testing, performance modelling, or
-scalable-vector optimisation. A secondment with an industrial RISC-V,
-database, cloud, or accelerator partner connects the scientific work to career
-development and transfer.
+## Proposal in one paragraph
 
-## Research question
+VLEN-PORT will train a postdoctoral researcher at the intersection of database
+systems, compiler semantics, and scalable-vector architecture while answering a
+focused research question: can one standards-compliant Parquet integer decoder
+remain efficient across runtime vector lengths on Arm SVE and RISC-V Vector, or
+does it need a small set of capability-conditioned stages? The fellow will
+construct a scalar executable specification, implement universal and
+target-oracle variants, generate cross-profile differential tests, and measure
+performance and energy on real hardware. A short external secondment with a
+data-engine, compiler, or architecture partner will test transfer beyond the
+host. The host contributes typed compilation, reproducibility, and
+high-performance systems methods; the fellow must bring complementary expertise
+such as columnar formats, scalable-vector programming, or experimental data
+systems. The output is both new portability evidence and a researcher able to
+bridge semantics, architectures, and open research software.
 
-Can one standards-compliant decoding decomposition remain semantically stable
-and efficient across runtime vector lengths, and which explicit capabilities
-are required when it cannot?
+## Research question and objectives
 
-Objectives:
+Scalable-vector ISAs make lane count a runtime property. This helps binary
+portability but leaves an algorithm-design question: which decoder stages can
+remain vector-length agnostic, and which depend on predicate, permute,
+compaction, or memory capabilities?
 
-1. build a scalar executable specification and adversarial corpus;
-2. implement universal, capability-conditioned, and native decoder variants;
-3. validate correctness across RVV/SVE vector lengths;
-4. measure performance and energy on real hardware;
-5. derive an explanatory portability model;
-6. transfer methods between fellow, host, and secondment partner.
+VLEN-PORT has four objectives:
 
-## Work plan
+1. define a narrow, standards-compliant Parquet integer-decoding slice and
+   executable scalar oracle;
+2. implement universal, capability-conditioned, and native-oracle variants for
+   SVE, RVV, and a fixed-width SIMD baseline;
+3. explain performance cliffs across vector lengths, compilers, and data
+   distributions using controlled real-hardware experiments;
+4. release reusable semantic cases, differential tests, benchmark protocols,
+   and research artefacts while building the fellow's independent profile.
 
-### WP1 — Semantics and development plan
+## Method and work plan
 
-Freeze the decoder slice, prior art, reference semantics, training objectives,
-supervision plan, and open-science/data-management approach.
+### WP1 — Semantics, state of the art, and individual development plan (months 1–4)
 
-### WP2 — Implementations and verification
+- Complete the format/algorithm prior-art review with host and external mentor.
+- Freeze the selected encoding, null, tail, and malformed-input semantics.
+- Build the scalar oracle and adversarial/property-based corpus.
+- Agree a career-development plan, training objectives, open-science protocol,
+  and hardware-access schedule.
 
-Develop U/S/N variants, reusable typed capabilities, differential tests, and
-reproducible toolchain/platform records.
+### WP2 — Scalable-vector implementations and verification (months 3–11)
 
-### WP3 — Experiments and model
+- Develop one vector-length-agnostic decoder and expert-reviewed target
+  baselines.
+- Introduce only reusable typed semantics needed by the experiment.
+- Generate differential value tests over vector lengths and input classes.
+- Use emulation only to widen functional coverage; obtain performance data on
+  physical SVE and RVV systems.
 
-Measure real RVV/SVE/fixed-width systems; perform ablations; explain
-vector-length and capability effects; validate on a held-out configuration.
+### WP3 — Performance, energy, and explanatory model (months 9–18)
 
-### WP4 — Transfer and dissemination
+- Measure throughput, latency distributions, energy, code size, and relevant
+  hardware counters across controlled datasets and toolchains.
+- Separate vector-length effects from individual capability and compiler
+  effects through ablations.
+- Test whether a small capability-conditioned strategy reduces
+  native-normalised regret on a held-out configuration.
 
-Complete the secondment, release artefacts, deliver tutorials, submit
-publications, and execute the fellow's career-development plan.
+### WP4 — Transfer, secondment, and dissemination (months 16–24)
 
-## Training and two-way transfer
+- Validate the method with an external data-engine, compiler-vendor, or
+  architecture partner.
+- Publish the positive or negative portability result and open evidence package.
+- Deliver a tutorial on reproducible scalable-vector experiments and a plan for
+  the fellow's next independent funding step.
 
-The proposal must be designed around the named fellow. Candidate training:
+## Training and two-way knowledge transfer
 
-- RVV/SVE programming and computer-architecture measurement;
-- typed compiler/source-data methods;
-- database/columnar semantics;
-- property-based and differential testing;
-- energy methodology and statistics;
-- open-source governance and research-software leadership;
-- grant writing, supervision, teaching, and industry communication.
+MSCA evaluates researcher development, mobility, supervision, and impact as
+well as scientific quality. The exact transfer depends on the named fellow.
+A credible pairing would look like this:
 
-The fellow must bring expertise that the host genuinely lacks. A proposal where
-the researcher merely implements the host's backlog is not competitive.
+| Host contributes | Fellow contributes |
+| --- | --- |
+| Typed compiler pipelines and semantic lowering | Standards-based columnar processing or scalable-vector expertise |
+| Generated correctness/value testing | Independent native implementations and domain datasets |
+| Reproducible benchmark and coverage methods | New research network and application perspective |
+| C++/Rust and multi-profile generation | Complementary toolchain, database, or architecture practice |
+| Research software governance and open artefacts | Training material and external transfer route |
 
-## CHORYS connection
+The individual plan should add training in scientific leadership, supervision,
+grant writing, responsible research, intellectual property/open-source choices,
+statistics, energy measurement, and public communication. An intersectoral
+secondment is useful only when the partner provides real format, compiler, or
+hardware expertise.
+
+## Role and readiness of `tslc`/`tsldata`
+
+The project can reuse typed primitives, extension facts, machine profiles,
+generated value tests, and deterministic C++ output. Current SVE and RVV
+profiles lower apparatus risk, while existing gaps create a focused training
+and research opportunity.
+
+The proposal should not claim current cross-language scalable-vector parity or
+performance validation. Rust is not presently an active SVE/RVV route, QEMU is
+not performance evidence, and benchmark-shape coverage remains incomplete.
+The fellow should add only capabilities needed for the scientific decoder
+slice, not promise general completion of every backend.
+
+## Relationship to CHORYS
 
 CHORYS supplies a credible RISC-V near-data context, consortium relationships,
-and the team's stated TSL/RISC-V work. VLEN-PORT must define its own research,
-training, secondment, staff effort, and outputs. Internal grant records should
-establish what is CHORYS background/result and what becomes fellowship
-foreground.
+and the team's stated TSL/RISC-V integration work. VLEN-PORT must define its
+own fellow-led research, training, secondment, staff effort, costs, and
+outputs. Internal grant records should establish which assets are
+pre-existing background, which are CHORYS results, and which work becomes new
+fellowship foreground. Do not submit if those tasks or costs overlap.
 
-## MSCA fit
+## Why this fits MSCA Postdoctoral Fellowships
 
-| Evaluation dimension | Response |
+| MSCA characteristic | VLEN-PORT response |
 | --- | --- |
-| Excellence | Focused, falsifiable scalable-vector research question |
-| Researcher-host match | Explicit complementary expertise and two-way transfer |
-| Impact | Career development, open evidence, industry secondment, European RISC-V skills |
-| Implementation | Bounded 24-month plan, real hardware, milestones, risk gates |
-| Mobility and internationality | Must be demonstrated for the named researcher |
+| Excellent individual research project | A bounded, falsifiable question with standards-based semantics and real-hardware evaluation |
+| Mobility and knowledge transfer | A fellow brings complementary architecture/database expertise into the host and transfers typed verification back out |
+| Training and career development | Cross-disciplinary technical, open-science, leadership, and grant-development programme |
+| Intersectoral/international exposure | Targeted secondment and external hardware/data-engine collaboration |
+| Wider impact and reusable outputs | Open decoder semantics, conformance corpus, measurements, and training material |
+
+The fellowship narrative must be written around the named researcher. A
+generic person profile inserted after the science is designed will be weak.
 
 ## Eligibility and timing gates
 
-The fellowship is a joint researcher-host application. Apply the official
-doctoral-degree, research-experience, nationality/residence, and mobility rules
-to the specific person. The 2026 deadline is too close for speculative
-matchmaking as of 19 August 2026.
+For the 2026 call, the official MSCA guidance requires the researcher to:
 
-Do not submit in 2026 without:
+- hold a PhD by the call deadline (including a successfully defended thesis
+  where the degree has not yet formally been awarded);
+- normally have no more than eight years of full-time-equivalent research
+  experience after the PhD, with the call's specified exclusions;
+- satisfy the mobility rule—normally not having resided or carried out the main
+  activity in the host country for more than 12 months in the 36 months before
+  the deadline.
 
-- a named eligible fellow;
-- completed mobility screening;
-- committed host and supervisor;
-- hardware and secondment access;
-- a mature first draft and institutional submission schedule.
+The researcher and host apply jointly. European Fellowships normally last
+12–24 months. Exact nationality, long-term-residence, career-break, and Global
+Fellowship rules must be checked for the named researcher.
 
-## Immediate actions
+With only three weeks remaining on the assessment date, the 2026 call is a
+no-go unless the fellow, supervisor, host research office, hardware access, and
+core preliminary work already exist. The official call calendar lists the next
+Postdoctoral Fellowships call opening on 7 April 2027 and closing on 8 September
+2027; recheck those dates when the call documents are published.
 
-1. Decide whether a mature fellow-host pair already exists.
-2. Run eligibility and mobility checks with the research office.
-3. Define the fellow's unique expertise and two-way transfer.
-4. Obtain a secondment commitment and real hardware access.
-5. Run a minimal decoding pilot.
-6. If these are not already advanced, target the announced 2027 call.
+## Main risks and mitigations
 
-## Sources
+| Risk | Mitigation |
+| --- | --- |
+| Project reads as host software maintenance | Lead with the fellow's scientific question, training, mobility, and independent trajectory |
+| Hardware access fails | Secure written SVE/RVV access before submission and narrow energy claims to measurable systems |
+| Scope is too broad for 24 months | Freeze one encoding family and one held-out capability test |
+| Host and fellow knowledge overlap completely | Choose a genuinely complementary fellow and specify bidirectional transfer |
+| 2026 preparation is rushed | Move intact concept to 2027 instead of submitting an underdeveloped application |
 
-- [MSCA Postdoctoral Fellowships 2026](https://marie-sklodowska-curie-actions.ec.europa.eu/funding/msca-postdoctoral-fellowships-2026)
-- [MSCA Postdoctoral Fellowships 2027](https://marie-sklodowska-curie-actions.ec.europa.eu/funding/msca-postdoctoral-fellowships-2027)
+## Immediate next steps
+
+1. Name the fellow and host supervisor; run the official mobility and
+   post-PhD-experience calculation with the research office.
+2. Define what knowledge travels in each direction and who supplies SVE/RVV
+   hardware.
+3. Select the exact encoding and run one universal/native pilot.
+4. Obtain an external secondment commitment only if its training contribution
+   is concrete.
+5. Make a hard 2026/2027 go/no-go decision immediately.
+
+## Official and local sources
+
+- [MSCA Postdoctoral Fellowships 2026 call](https://marie-sklodowska-curie-actions.ec.europa.eu/funding/msca-postdoctoral-fellowships-2026)
+- [MSCA Postdoctoral Fellowships 2027 call](https://marie-sklodowska-curie-actions.ec.europa.eu/funding/msca-postdoctoral-fellowships-2027)
+- [Six steps to prepare an MSCA Postdoctoral Fellowship](https://marie-sklodowska-curie-actions.ec.europa.eu/actions/postdoctoral-fellowships/6-steps-to-prepare-your-application-postdoctoral-fellowships-call)
 - [CHORYS project record](https://cordis.europa.eu/project/id/101189551)
-- [RVV extension definition](../../../tsldata/extensions/extension.tsl)
-- [Machine profiles](../../../supplementary/buildsystem/machine_profiles.json)
+- [Local database research assessment](../../database-research-meta-study.md)
+- [Local RVV extension definition](../../../tsldata/extensions/extension.tsl)
+- [Local machine profiles](../../../supplementary/buildsystem/machine_profiles.json)
+- [Local benchmark-shape inventory](../../../coverage/benchmark-shape-inventory.md)

@@ -1,174 +1,235 @@
 # VECTRA-DN: Verified, Energy-Aware, Cross-Architecture Data Systems
 
-Instrument: **MSCA Doctoral Networks 2026**
+Instrument: **Marie Skłodowska-Curie Actions Doctoral Networks 2026**
 
-Deadline: **24 November 2026, 17:00 Brussels time**
+Proposed form: **Standard Doctoral Network with strong industrial participation**
 
-Recommendation: **Pursue only with an established multi-country
-academic/industrial network and an integrated training vision**
+Status on 19 August 2026: **Open**
 
-## Proposal summary
+Deadline: **24 November 2026, 17:00 CET**
 
-VECTRA-DN will train a European cohort to design data-processing systems that
-remain semantically correct, efficient, and energy-aware across heterogeneous
-hardware. The network connects database systems, compilers, RISC-V and Arm
-scalable vectors, accelerators, formal/testing methods, energy measurement, and
-open research software.
+Call budget: **EUR 593.034 million**
 
-Doctoral projects share typed kernel semantics, generated evidence, common
-datasets, real target platforms, and cross-partner demonstrators. Each project
-has a distinct research question and secondment plan; the network is not a
-collection of unrelated compiler implementation tasks.
+Recommendation: **Develop only with an existing European training consortium and named recruiting beneficiaries**
 
-CHORYS provides an initial RISC-V near-data ecosystem and industrial/academic
-relationships. VECTRA-DN expands this into long-term researcher training and
-cross-architecture science with new doctoral projects.
+The MSCA overview marks the timeline and budget as indicative/TBC. The live
+Funding & Tenders topic is the controlling source and should be checked again
+before submission.
 
-## Training need
+## Proposal in one paragraph
 
-European hardware diversity is increasing while software stacks often conflate
-semantic meaning, target-specific schedules, compiler behaviour, and benchmark
-claims. Researchers need to understand all four and communicate across
-academic and industrial boundaries.
+VECTRA-DN will train a European cohort of researchers to make data-processing
+software correct, efficient, and energy-aware across rapidly changing CPUs,
+GPUs, and reconfigurable accelerators. The network's shared scientific question
+is how typed semantic contracts, target-owned schedules, generated differential
+tests, and calibrated measurements can replace the fragile choice between one
+slow portable implementation and many unverified native versions. Interlocking
+doctoral projects will cover scalable-vector algorithms, GPU/FPGA scheduling,
+cross-language verification, energy evidence, standards-based columnar
+decoding, and reproducible heterogeneous experimentation. Universities,
+research centres, hardware/compiler organisations, data-engine companies, and
+infrastructure providers will co-supervise and exchange candidates. `tslc` and
+`tsldata` are one common teaching and experimentation platform, not the network's
+product or mandatory architecture.
 
-Graduates should be able to:
+## Training need and scientific theme
 
-- formalise observable kernel semantics;
-- design capability-based portable algorithms;
-- optimise on real architectures without corrupting shared meaning;
-- generate and interpret correctness/performance evidence;
-- measure energy with defensible boundaries;
-- build sustainable open research software;
-- translate results into standards, products, and reproducible publications.
+New doctoral researchers in performance-critical data systems are often
+trained in only one layer: algorithm, compiler, architecture, verification, or
+application. Heterogeneous portability fails at the boundaries among those
+layers. VECTRA-DN will train researchers to state semantic invariants, expose
+target mechanisms, design fair native baselines, measure energy and
+performance, and publish reproducible evidence.
+
+The unifying research question is:
+
+> How can a data-processing operation preserve one testable meaning across
+> architecture classes while making scheduling, memory, and energy trade-offs
+> explicit and empirically accountable?
+
+This theme is broad enough for distinct doctorates but narrow enough for shared
+methods, artefacts, datasets, and secondments.
 
 ## Research objectives
 
-1. Define typed semantic contracts for recurring data kernels.
-2. Explain portability boundaries across fixed/scalable vectors and
-   accelerators.
-3. Develop generated differential and adversarial verification.
-4. Connect performance and energy evidence to algorithms and hardware facts.
-5. Validate methods in database, near-data, cloud/edge, or scientific-data
-   demonstrators.
-6. establish transferable open-research-software practices.
+1. Create typed semantic contracts for selected data-processing operations and
+   define where target strategy begins.
+2. Develop scalable-vector, SIMT, and spatial implementations with independently
+   reviewed native oracles.
+3. Generate differential, metamorphic, and standards-conformance evidence
+   across languages and targets.
+4. Establish comparable performance and energy protocols from kernel through
+   data movement and runtime.
+5. Apply the methods to standards-based columnar processing and one AI/data
+   pipeline domain.
+6. Train candidates in open research software, reproducibility, responsible
+   research, entrepreneurship, communication, and cross-sector collaboration.
 
 ## Illustrative doctoral projects
 
-| DC | Research focus | Likely secondment |
+The final projects must be co-designed around the expertise and facilities of
+actual beneficiaries. A coherent initial portfolio is:
+
+| Project | Research focus | Natural secondment |
 | --- | --- | --- |
 | DC1 | Capability model for RVV/SVE kernel portability | RISC-V IP or Arm/HPC partner |
 | DC2 | Standards-compliant columnar decoding across vector lengths | Database/analytics company |
-| DC3 | Generated semantic and differential verification | Formal methods or compiler group |
-| DC4 | Evidence-aware compiler selection and lowering | Toolchain/vendor partner |
+| DC3 | Generated semantic, differential, and metamorphic verification | Formal-methods or compiler group |
+| DC4 | Evidence-aware compiler selection and lowering | Toolchain or vendor partner |
 | DC5 | Near-data processing on open RISC-V accelerators | CHORYS hardware partner |
-| DC6 | GPU/accelerator native-oracle comparison | Accelerator vendor/lab |
-| DC7 | End-to-end energy attribution for data kernels | Energy/HPC centre |
-| DC8 | Workload and dataset representativeness | Cloud/vertical owner |
-| DC9 | Sustainable research-software and evidence governance | Infrastructure/RSE partner |
+| DC6 | GPU/accelerator native-oracle comparison | Accelerator vendor or laboratory |
+| DC7 | End-to-end energy attribution for data kernels | Measurement or HPC centre |
+| DC8 | Workload and dataset representativeness | Cloud or vertical owner |
+| DC9 | Sustainable research-software and evidence governance | Infrastructure or RSE partner |
 
-The final number and projects must follow the call and consortium's supervision
-capacity.
+This is an illustrative nine-project design, not a commitment. Every doctoral
+project needs a distinct hypothesis, independent publication path, primary and
+secondary supervision, dataset/hardware access, and concrete contribution to
+at least one shared network demonstrator.
 
-## Shared methodology
+## Shared methodology and demonstrators
 
-Every doctoral project should use:
+Candidates will use a common three-level experimental ladder:
 
-- explicit reference semantics;
-- architecture-independent and native baselines;
-- shared adversarial datasets;
-- versioned compiler/hardware provenance;
-- preregistered measurement boundaries where appropriate;
-- negative-result reporting;
-- common reproducibility reviews.
+- universal implementation;
+- mechanism- or capability-conditioned implementation;
+- expert native oracle.
 
-TSL may provide one shared apparatus, but projects must also engage independent
-frameworks and baselines so the network does not become vendor-locked to the
-host repository.
+They will share semantic references, adversarial datasets, measurement
+protocols, and provenance requirements. Network demonstrators could include a
+standard columnar decoding pipeline and a federated data-preparation pipeline,
+chosen because they connect multiple doctoral projects without making every
+thesis dependent on one codebase.
+
+Primary research measures include correctness coverage, native-normalised
+performance and energy regret, compiler/hardware sensitivity, target-specific
+semantic duplication, and change amplification when a new operation or target
+is added.
 
 ## Training programme
 
 ### Network schools
 
-- scalable and heterogeneous architecture;
-- data systems and columnar execution;
-- compiler construction and typed intermediate representations;
-- verification and property-based testing;
-- performance statistics and energy measurement;
-- open science, licensing, standards, and research-software sustainability;
-- entrepreneurship, communication, supervision, and responsible innovation.
+- semantics, type systems, and executable specifications;
+- SIMD, scalable vectors, SIMT, FPGA pipelines, and memory systems;
+- generated testing, formal and differential verification;
+- experimental design, statistics, benchmarking, and energy measurement;
+- databases, columnar formats, AI data pipelines, and standards;
+- open science, FAIR research software, security, ethics, and reproducibility;
+- project leadership, grant writing, innovation, IP/licensing, teaching, and
+  public communication.
 
-### Mobility
+### Learning by mobility
 
-Each doctoral candidate should have academically justified secondments across
-sectors or disciplines. Industrial placements must contribute training and
-research rather than inexpensive implementation labour.
+Each candidate should have a secondment that supplies a capability unavailable
+at the recruiting host: real hardware, a production data engine, compiler
+internals, formal verification, calibrated energy measurement, or research
+infrastructure operation. Exchanges must serve the individual research and
+career plan rather than satisfy a mobility spreadsheet.
 
 ### Cohort integration
 
-Use shared challenges, code/evidence reviews, annual schools, reproducibility
-sprints, peer mentoring, and joint demonstrators.
+Cross-project replication pairs will reproduce another candidate's result on a
+different target or toolchain. Annual “portability clinics” will invite external
+users to bring a failing kernel and jointly classify whether the failure is
+semantic, scheduling, toolchain, or measurement related. Candidates will also
+maintain an evidence and negative-results catalogue.
+
+## Role and limitations of `tslc`/`tsldata`
+
+The repository provides an inspectable shared sandbox for typed primitives,
+target profiles, recursive TSIL regions, deterministic C++/Rust generation,
+generated tests, and coverage analysis. It is suitable for teaching how facts
+move from source data to selected and lowered artefacts.
+
+It must not become compulsory infrastructure for every thesis. GPU and FPGA
+work currently exceeds the validated compiler product; those candidates need
+expert partners and may use separate experimental adapters. The current source
+corpus has incomplete backend and benchmark coverage. Those limitations are
+valuable teaching material only when stated openly, not repackaged as completed
+cross-architecture capability.
 
 ## CHORYS connection and boundary
 
-CHORYS can seed RISC-V platforms, use cases, supervisors, and industry
-relationships. The DN must not duplicate its work or present existing
-beneficiaries as committed without agreement. Build a matrix of CHORYS
-background/results, new doctoral foreground, supervisors, secondments,
-equipment, and costs.
+CHORYS can seed RISC-V platforms, use cases, supervisors, and industrial and
+academic relationships. It does not make existing beneficiaries committed to
+this network, and it cannot fund the same doctoral work. Before submission,
+build a matrix of CHORYS background/results, new doctoral foreground,
+supervisors, secondments, equipment, staff effort, costs, and outputs.
 
-## Instrument fit
+Each doctorate must retain an independent hypothesis and publication path;
+the network may use CHORYS assets without turning its work plan into a
+continuation of the CHORYS engineering backlog.
 
-| DN expectation | VECTRA-DN response |
+## Why this fits MSCA Doctoral Networks
+
+| MSCA objective | VECTRA-DN response |
 | --- | --- |
-| Excellent doctoral training | Integrated technical, transferable, and career curriculum |
-| International/intersectoral mobility | Academic/industry secondments and joint supervision |
-| Coherent research programme | Shared portability/evidence questions and methodology |
-| Impact on researchers | Skills spanning semantics, hardware, measurement, and open software |
-| European capacity | RISC-V and heterogeneous-computing talent pipeline |
-| Implementation | Common governance, supervision quality, risk management, and demonstrators |
+| High-quality doctoral training | Integrated technical, transferable-skill, open-science, and leadership curriculum |
+| International, interdisciplinary, intersectoral mobility | Joint supervision and capability-driven secondments across universities, infrastructure, and industry |
+| Excellent individual research | Distinct, falsifiable projects connected by a common methodology rather than a software backlog |
+| Sustainable collaboration | Shared schools, demonstrators, evidence practices, supervision, and future curricula |
+| Researcher employability | Training spans formal reasoning, performance engineering, data systems, hardware, reproducibility, and communication |
 
-## Consortium requirements
+The network should remain a standard DN unless actual partners support the
+additional Industrial or Joint Doctorate rules. In particular, an Industrial
+Doctorate requires joint academic/non-academic supervision and candidates to
+spend at least half their fellowship in the non-academic sector.
 
-At least three independent legal entities in three different EU Member States
-or Horizon Europe Associated Countries are normally required, including at
-least one Member State entity. Every beneficiary recruits at least one doctoral
-candidate.
+## Consortium and eligibility gates
 
-A credible network needs:
+The official 2026 preparation guidance requires at least three independent
+legal entities in three different EU Member States or Horizon Europe Associated
+Countries, with at least one beneficiary in an EU Member State. All
+beneficiaries must recruit at least one doctoral candidate. Recruited
+researchers must not hold a PhD at recruitment, may be of any nationality, must
+be enrolled in a doctoral programme, and normally may not have resided or
+carried out their main activity in the recruiting country for more than 12 of
+the previous 36 months. Standard appointments may run 3–36 months.
 
-- database/data-systems groups;
-- compiler and formal/testing expertise;
-- RVV/SVE and accelerator hardware access;
-- industrial RISC-V, cloud, database, or tooling partners;
-- energy measurement expertise;
-- professional doctoral training and project management;
-- committed supervisors with balanced workloads.
+A merely eligible consortium is not competitive. A plausible network needs:
 
-## No-go conditions
+- several academic beneficiaries with complementary supervision;
+- at least two meaningful non-academic partners in compiler/hardware/data
+  systems or research infrastructure;
+- committed real CPU/GPU/FPGA access;
+- a professional network manager and experienced MSCA coordinator;
+- balanced candidate distribution, recruitment strategy, and contingency
+  plans;
+- explicit inclusion, supervision-quality, mental-health, open-science, ethics,
+  IP, and career-development practices.
 
-Do not submit if:
+## Risks and no-go conditions
 
-- the consortium is assembled only around funding availability;
-- doctoral projects are one software backlog split into theses;
-- secondments are nominal;
-- supervision commitments or hardware access are missing;
-- the network lacks a coherent shared methodology;
-- CHORYS work and doctoral foreground cannot be separated.
+| Risk | Mitigation / gate |
+| --- | --- |
+| Projects are one compiler roadmap split nine ways | Require an independent hypothesis and external method/partner for every doctorate |
+| Training is an afterthought | Co-design curriculum, supervision, secondments, and career plans before freezing research tasks |
+| Hardware claims are aspirational | Obtain named facilities, access conditions, and expert supervisors in the proposal |
+| Network is too technically homogeneous | Add database, verification, energy, infrastructure, and industry partners with real ownership |
+| Coordination capacity is missing | Do not coordinate without experienced EU project support; join another DN as beneficiary instead |
+| CHORYS work and doctoral foreground overlap | Maintain the boundary matrix and remove any duplicate task, effort, cost, or output |
 
-## Immediate actions
+## Immediate next steps
 
-1. Confirm an experienced DN coordinator.
-2. Map CHORYS and external partners to research/training gaps.
-3. Co-design each doctoral project, supervisor pair, and secondment.
-4. Obtain letters/commitments and verify beneficiary capacity.
-5. Build the training, recruitment, governance, gender/equality, open-science,
-   and risk plans.
-6. Recheck the live call forms and country rules.
+1. Circulate a two-page network concept to potential beneficiaries in at least
+   three eligible countries.
+2. Replace the illustrative DC table with projects co-authored by the proposed
+   primary and secondary supervisors.
+3. Map every candidate to recruitment host, doctoral enrolment, secondment,
+   hardware/data, training outcomes, and contingency supervisor.
+4. Name an experienced coordinator and begin the implementation, impact,
+   recruitment, and supervision sections in parallel with the science.
+5. Stop the 2026 attempt if core beneficiaries are not committed early enough
+   for institutional and budget review.
 
-## Sources
+## Official and local sources
 
-- [MSCA Doctoral Networks 2026](https://marie-sklodowska-curie-actions.ec.europa.eu/funding/msca-doctoral-networks-2026)
-- [Doctoral Networks application guidance](https://marie-sklodowska-curie-actions.ec.europa.eu/actions/doctoral-networks/6-steps-to-prepare-your-application-doctoral-networks-call)
+- [MSCA Doctoral Networks 2026 call](https://marie-sklodowska-curie-actions.ec.europa.eu/funding/msca-doctoral-networks-2026)
+- [MSCA announcement that the 2026 call opened](https://marie-sklodowska-curie-actions.ec.europa.eu/whats-new/news/doctoral-networks-2026-call-opens-for-submission)
+- [Six steps to prepare an MSCA Doctoral Network](https://marie-sklodowska-curie-actions.ec.europa.eu/actions/doctoral-networks/6-steps-to-prepare-your-application-doctoral-networks-call)
 - [CHORYS project record](https://cordis.europa.eu/project/id/101189551)
-- [Primitive coverage inventory](../../../coverage/primitive-coverage-inventory.md)
-- [Benchmark-shape inventory](../../../coverage/benchmark-shape-inventory.md)
+- [Local accelerator-portability frontier](../../accelerator-portability-frontier.md)
+- [Local compiler description](../../../tslc/DESCRIPTION.md)
+- [Local coverage inventory](../../../coverage/primitive-coverage-inventory.md)
+- [Local benchmark-shape inventory](../../../coverage/benchmark-shape-inventory.md)

@@ -17,6 +17,10 @@ the Funding & Tenders Portal before submission.
 | 4 | [VLEN-PORT](msca-postdoctoral-vlen-port.md) | MSCA Postdoctoral Fellowships 2026 | 9 September 2026 | Named eligible fellow plus host; viable only if already paired |
 | 5 | [VECTRA-DN](msca-doctoral-network-vectra.md) | MSCA Doctoral Networks 2026 | 24 November 2026 | Beneficiary or coordinator in an established network |
 
+The MSCA overview pages currently mark the 2026 dates and budgets as
+indicative/TBC. The dates above are planning dates, not a substitute for the
+live Funding & Tenders topic and published call documents.
+
 The ranking answers which route can build most directly on CHORYS. It does not
 rank scientific prestige. RVV-READY is the most literal continuation because
 the call funds market validation of achieved Cluster 4 results. RV-CONTINUUM is
@@ -98,6 +102,21 @@ Networks require an integrated European training programme, recruited doctoral
 candidates, secondments, supervision, and durable academic/industrial
 relationships.
 
+## Opportunities screened out or deferred
+
+- **EIC Pathfinder Open 2026** closed on 12 May 2026; reassess a 2027 route
+  only after the official work programme is published.
+- **HORIZON-CL4-2027-05-DATA-09** targets whole data-centre resource
+  management at high TRL; the present project is too narrow and immature to
+  anchor it.
+- **HORIZON-CL4-2027-04-DATA-08** is at most a technology-provider route if a
+  deployment-ready component and vertical-led telco-cloud-edge consortium
+  exist; its TRL 6–8 and large pilot scope make it weaker than DATA-03.
+- **HORIZON-CL4-2027-01-MAT-PROD-61** follows specified industrial research
+  agendas that do not naturally fit TSL/RISC-V.
+- Monitor the 2027 Chips JU work programme instead of inventing a match to a
+  closed or restricted topic.
+
 ## Double-funding boundary
 
 CHORYS remains active until the end of 2028. For every successor proposal,
@@ -136,6 +155,10 @@ deliverable as new foreground.
 - [Cluster 4 work programme](https://ec.europa.eu/info/funding-tenders/opportunities/docs/2021-2027/horizon/wp-call/2026-2027/wp-7-digital-industry-and-space_horizon-2026-2027_en.pdf)
 - [Horizon Europe General Annexes](https://ec.europa.eu/info/funding-tenders/opportunities/docs/2021-2027/horizon/wp-call/2026-2027/wp-15-general-annexes_horizon-2026-2027_en.pdf)
 - [Funding & Tenders Portal](https://ec.europa.eu/info/funding-tenders/opportunities/portal/)
+- [ERC Starting Grant](https://erc.europa.eu/apply-grant/starting-grant)
+- [ERC Consolidator Grant](https://erc.europa.eu/apply-grant/consolidator-grant)
+- [MSCA Postdoctoral Fellowships 2026](https://marie-sklodowska-curie-actions.ec.europa.eu/funding/msca-postdoctoral-fellowships-2026)
+- [MSCA Doctoral Networks 2026](https://marie-sklodowska-curie-actions.ec.europa.eu/funding/msca-doctoral-networks-2026)
 - [RVV extension definition](../../../tsldata/extensions/extension.tsl)
 - [Target-family definition](../../../tsldata/detail/target_families.tsl)
 - [Machine profiles](../../../supplementary/buildsystem/machine_profiles.json)

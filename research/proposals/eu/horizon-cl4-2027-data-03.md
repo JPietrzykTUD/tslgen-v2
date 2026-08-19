@@ -224,6 +224,19 @@ Beyond the CHORYS seed, recruit:
 Check all country and control restrictions in the live topic and General
 Annexes.
 
+## Main risks and mitigations
+
+| Risk | Mitigation or no-go rule |
+| --- | --- |
+| Double funding or rebadging CHORYS | Maintain task, effort, cost, deliverable, and result separation reviewed by both coordinators and grants offices |
+| The project becomes RISC-V-led rather than outcome-led | Make federation, energy, trust, and cross-sector outcomes primary; treat RVV as an enabling architecture |
+| The consortium lacks a mature federated platform or verticals | Add proven partners before proposal writing; do not use nominal advisory partners |
+| Hardware diversity becomes a device list | Select mechanisms and devices tied to use-case needs and expert native baselines |
+| Energy claims compare incompatible sensors or boundaries | Use one calibration, boundary, uncertainty, and reporting protocol |
+| Two demonstrators are nominal | Require data owners, starting prototypes, sites, KPIs, and adoption authority |
+| The semantic layer duplicates ML frameworks | Limit it to high-value data kernels and integrate through stable adapters |
+| TRL progression is implausible | Admit only components with documented starting maturity and integration plans |
+
 ## No-go conditions
 
 Do not bid without:

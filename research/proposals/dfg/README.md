@@ -68,9 +68,20 @@ Prospective applicants should contact the DFG before submission.
 A Research Software Infrastructures proposal must serve communities across
 sites with durable technical, organisational, governance, and skills
 structures. It cannot merely finance the roadmap of one repository. The
-published deadline rule yields 31 August 2026 and 1 March 2027 as the next
-dates; the August date is only realistic if the needs analysis and consortium
-already exist.
+June 2026 KoFI announcement says that the two coordinated proposals may be
+submitted at any time. Do not infer a KoFI deadline from the generic recurring
+LIS deadline rule; confirm the current forms, portal procedure, and review
+timetable with the DFG before planning submission.
+
+## Opportunities screened out at this stage
+
+- No directly matching thematic DFG call or Priority Programme was identified
+  in the 2026 screening. A new Priority Programme would require a substantially
+  broader German research community and is not an immediate route.
+- A standalone Research Software Infrastructures proposal whose real purpose
+  is to maintain or extend `tslc` falls outside the programme logic.
+- Instrumentation programmes do not fit unless a separate, justified hardware
+  facility is itself required by the research.
 
 ## Recommendations
 
