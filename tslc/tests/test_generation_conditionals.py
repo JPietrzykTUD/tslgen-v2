@@ -17,6 +17,13 @@ import pytest
 from tslc.api import generate_project
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
+from tslc.ir.query_syntax import (
+    QueryParser,
+    _QUERY_PARSE_CACHE_SIZE,
+    _cached_parse_query,
+)
+from tslc.ir.region_syntax import segments_text
+from tslc.lower._query_model import ObjectSize
 from tslc.lower.context import (
     LoweringEnv,
     LoweringScope,
@@ -26,13 +33,6 @@ from tslc.lower.context import (
     VectorValue,
 )
 from tslc.lower.lowerer import Lowerer
-from tslc.lower._query_model import (
-    _QUERY_PARSE_CACHE_SIZE,
-    _cached_parse_query,
-    ObjectSize,
-    QueryParser,
-)
-from tslc.ir.region_syntax import segments_text
 from tslc.lower.region_handlers.casts import CastLowerer
 from tslc.lower.region_handlers.control import IfLowerer
 from tslc.lower.queries import (
@@ -218,9 +218,8 @@ def test_lowering_rejects_legacy_pointer_cast_instead_of_repairing_it(
 
     assert rendered == region.full_text
     assert [diagnostic.code for diagnostic in context.effects.diagnostics] == [
-        "TSL-LOWER-UNSUPPORTED-CAST"
+        "TSL-LOWER-UNRESOLVED-CAST-TYPE"
     ]
-    assert "type=ptr|const_ptr" in context.effects.diagnostics[0].message
 
 
 def test_safe_bitcast_rejects_a_known_size_mismatch(catalog: Catalog) -> None:

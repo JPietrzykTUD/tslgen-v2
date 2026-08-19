@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, Protocol
 
 from tslc.catalog.signatures import parse_signature
@@ -30,9 +29,6 @@ class _ImplementationStateRecorder(Protocol):
     def mark_composition(self) -> None: ...
     def mark_fallback(self) -> None: ...
     def mark_unknown(self) -> None: ...
-
-
-_IDENTIFIER = re.compile(r"^[A-Za-z_]\w*$")
 
 
 def infer_direct_implementation_state(
@@ -119,7 +115,7 @@ def direct_return_is_native(
 
     if region.keyword != "complete":
         return False
-    symbol = _bare_return_symbol(region)
+    symbol = _returned_primitive_parameter(region, selected)
     if symbol is None:
         return False
     shape = parse_signature(selected.primitive.signature)
@@ -135,13 +131,16 @@ def direct_return_is_native(
     return _representations_match(shape.result_kind, param_kind, selected)
 
 
-def _bare_return_symbol(region: Region) -> str | None:
+def _returned_primitive_parameter(
+    region: Region,
+    selected: "SelectedImplementation",
+) -> str | None:
+    """Recognize the canonical ``complete(parameter)`` identity form only."""
+
     if len(region.body) != 1 or not isinstance(region.body[0], RawText):
         return None
-    text = region.body[0].text.strip()
-    if not _IDENTIFIER.fullmatch(text):
-        return None
-    return text
+    candidate = region.body[0].text.strip()
+    return candidate if candidate in selected.primitive.parameters else None
 
 
 def _representations_match(

@@ -17,6 +17,7 @@ from tslc.backend import (
     rust_static_selection,
     rust_validation,
 )
+from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.compiler_assets import RenderAssets
 from tslc.diagnostics import has_errors
 from tslc.render.rust_benchmark_layout import plan_rust_benchmark_layout
@@ -24,6 +25,8 @@ from tslc.render.rust_policy_consumption import (
     EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN,
 )
 from tslc.render.rust_project import _rust_artifacts
+
+RUST_POLICY_MANIFEST = load_rust_policy_manifest()
 
 
 def test_artifact_pass_plans_once_and_renderer_consumes_frozen_plans(
@@ -90,7 +93,9 @@ def test_artifact_pass_plans_once_and_renderer_consumes_frozen_plans(
     )
 
     profiles = result.emitted_profiles
-    selection = rust_policy_selection.plan_rust_policy_selection(profiles)
+    selection = rust_policy_selection.plan_rust_policy_selection(
+        profiles, RUST_POLICY_MANIFEST
+    )
     static = rust_static_selection.plan_rust_static_selection(profiles)
     facade = rust_api_planner.plan_rust_facade(profiles, static)
     dispatch = rust_dispatch.plan_rust_dispatch(
@@ -139,7 +144,6 @@ def test_artifact_pass_plans_once_and_renderer_consumes_frozen_plans(
     )
 
     assert first == second
-
 
 def test_trusted_rust_project_renderer_has_one_production_caller() -> None:
     source_root = Path(__file__).parents[1] / "src" / "tslc"

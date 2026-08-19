@@ -15,6 +15,7 @@ from tslc.catalog.model import (
     Catalog,
     Extension,
     ExtensionMetadata,
+    ParamTypeExpression,
     ParamTypeRule,
     Primitive,
     TestComparison as CaseComparison,
@@ -55,7 +56,6 @@ from tslc.value_tests.model import (
     ValueTestInputs,
     ValueTestInvocation,
     ValueTestMemory,
-    ValueTestProfileCaseExclusion,
     ValueTestProfilePlan,
     ValueTestProjectPlan,
     ValueTestRepresentation,
@@ -130,6 +130,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
             values=values.pop("expected", ()),
             text=values.pop("text_expected", None),
             comparison=values.pop("comparison", CaseComparison.VALUE),
+            scalable_layout=values.pop("scalable_expected_layout", "tiled"),
         ),
         invocation=ValueTestInvocation(
             result_kind=values.pop("result_kind", None),
@@ -184,7 +185,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
         ),
         failure=values.pop("failure", None),
         header_group=values.pop("header_group", None),
-        required_compiler_features=values.pop("required_compiler_features", ()),
+        required_compiler_capabilities=values.pop("required_compiler_capabilities", ()),
     )
     assert not values, f"unhandled fixture fields: {sorted(values)}"
     return plan
@@ -295,7 +296,75 @@ def test_runtime_failure_cases_plan_and_render_for_both_backends(
     assert 'Some("TSL_ARITH_INTEGER_ZERO_DIVISOR")' in rust_source
 
 
-def test_runtime_failure_cases_report_wasm_profile_capability_exclusions() -> None:
+def test_scalable_runtime_failure_materializes_vector_and_mask_inputs(
+    render_assets: RenderAssets,
+) -> None:
+    primitive = Primitive(
+        "div",
+        "v:=(m,v,v)",
+        ("mask", "dividend", "divisor"),
+        ("mask",),
+        (),
+        attributes={"mask": "zero"},
+        tests=(
+            TslTestCase(
+                name="active_zero",
+                type_tag="si32",
+                tags=("failure",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("mask", mask_bits="10"),
+                    TslTestArg("vector", values=("8", "-9", "10", "-12")),
+                    TslTestArg("vector", values=("2", "0", "-2", "4")),
+                ),
+                expected=(),
+                role="runtime_failure",
+                failure=FailureReason.INTEGER_ZERO_DIVISOR,
+            ),
+        ),
+    )
+    spec = _spec(
+        "div_maskz",
+        "div",
+        param_kinds=("m", "v", "v"),
+        mask_policy="zero",
+        extension_name="sve",
+        uses_sized_vector=False,
+        lane_parameter=None,
+    )
+    catalog = Catalog(
+        primitives=(primitive, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp", "sve", {"div_maskz": (spec,)}
+            ),
+        )
+    )
+
+    assert not plan.diagnostics
+    assert [case.kind for case in plan.profiles[0].cases] == [
+        "runtime_failure",
+        "scalable_runtime_failure",
+    ]
+    scalable = plan.profiles[0].cases[1]
+    assert scalable.scalable is not None
+    assert scalable.scalable.mask_bits == (10,)
+    source = render_cpp_values_runner(plan.profiles[0], render_assets)
+    assert "using Vec = tsl::simd<std::int32_t, tsl::sve>;" in source
+    assert "tsl::load<Vec, false>(in0.data())" in source
+    assert "make_mask<tsl::simd<std::int32_t, tsl::sve>>(10ull, 4, lanes)" in source
+    assert "tsl::div_maskz<Vec>(m0, v0, v1)" in source
+    assert "catch (const std::domain_error& error)" in source
+
+
+def test_runtime_failure_cases_report_unobservable_profile_capability() -> None:
     primitive = Primitive(
         "div",
         "v:=(v,v)",
@@ -332,10 +401,10 @@ def test_runtime_failure_cases_report_wasm_profile_capability_exclusions() -> No
     ).plan(
         (
             ValueTestBackendProfileInput(
-                "cpp", "wasm32-simd128", {"div": (cpp_spec,)}, "wasm32"
+                "cpp", "wasm32-simd128", {"div": (cpp_spec,)}, False
             ),
             ValueTestBackendProfileInput(
-                "rust", "wasm32-simd128", {"div": (rust_spec,)}, "wasm32"
+                "rust", "wasm32-simd128", {"div": (rust_spec,)}, False
             ),
         )
     )
@@ -1234,7 +1303,7 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
     )
     set_mask = Primitive(
         "set_mask_lane",
-        "m:=(m,usize,im)",
+        "m:=(m,usize,usize)",
         ("mask", "index", "value"),
         (),
         (),
@@ -1247,7 +1316,7 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
                 inputs=(
                     TslTestArg("mask", mask_bits="5"),
                     TslTestArg("scalar", scalar="3"),
-                    TslTestArg("mask", mask_bits="1"),
+                    TslTestArg("scalar", scalar="1"),
                 ),
                 expected=("13",),
             ),
@@ -1274,7 +1343,7 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
                 "set_mask_lane",
                 "set_mask_lane",
                 result_kind="m",
-                param_kinds=("m", "usize", "im"),
+                param_kinds=("m", "usize", "usize"),
             ),
         ),
     }
@@ -1291,6 +1360,53 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
         ("set_mask_lane", "mask_result"),
     ]
     assert {entry.status for entry in plan.coverage} == {"emitted"}
+
+
+def test_runtime_mask_mutation_rejects_integral_mask_value_operand() -> None:
+    primitive = Primitive(
+        "set_mask_lane",
+        "m:=(m,usize,im)",
+        ("mask", "index", "value"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="set_mask_last",
+                type_tag="si32",
+                tags=("last",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("mask", mask_bits="5"),
+                    TslTestArg("scalar", scalar="3"),
+                    TslTestArg("mask", mask_bits="1"),
+                ),
+                expected=("13",),
+            ),
+        ),
+    )
+    spec = _spec(
+        "set_mask_lane",
+        "set_mask_lane",
+        result_kind="m",
+        param_kinds=("m", "usize", "im"),
+    )
+    plan = ValueTestPlanner(
+        _catalog(primitive, *_harness_primitives()),
+        (CPP_VALUE_TEST_SUPPORT,),
+    ).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp",
+                "unit",
+                {"set_mask_lane": (spec,)},
+            ),
+        )
+    )
+
+    assert plan.profiles_for("cpp")[0].cases == ()
+    assert len(plan.coverage) == 1
+    assert plan.coverage[0].status == "authored_unplanned"
+    assert plan.coverage[0].reason == "no value-test pattern accepted the authored case shape"
 
 
 def test_simple_shape_patterns_are_not_ordered_by_first_overload() -> None:
@@ -1442,7 +1558,7 @@ def test_pointer_layout_planning_consumes_param_types() -> None:
                 parameter_name="ptr",
                 attribute_name="packed",
                 attribute_value="false",
-                type_expr="type(base::in) *",
+                type_expr=ParamTypeExpression("mutable", "type(base::in)"),
             ),
         ),
         tests=(
@@ -1534,10 +1650,19 @@ def test_packed_mask_store_plan_keeps_honest_result_kind(
 
 
 def test_pointer_layout_scalar_resolver_uses_param_type_expression_parser() -> None:
-    assert scalar_type_tag_from_expr("type(base::in) *", "si32") == "si32"
     assert (
         scalar_type_tag_from_expr(
-            "type(base::unsigned_of(type(base::in))) const*",
+            ParamTypeExpression("mutable", "type(base::in)"),
+            "si32",
+        )
+        == "si32"
+    )
+    assert (
+        scalar_type_tag_from_expr(
+            ParamTypeExpression(
+                "const",
+                "type(base::unsigned_of(type(base::in)))",
+            ),
             "si32",
         )
         == "ui32"
@@ -1557,7 +1682,10 @@ def test_pointer_layout_warning_names_unsupported_param_types_expression() -> No
                 parameter_name="ptr",
                 attribute_name="packed",
                 attribute_value="false",
-                type_expr="type(vector::imask) *",
+                type_expr=ParamTypeExpression(
+                    "mutable",
+                    "type(vector::imask)",
+                ),
             ),
         ),
         tests=(
@@ -1591,7 +1719,7 @@ def test_pointer_layout_warning_names_unsupported_param_types_expression() -> No
         if diagnostic.code == "TSL-VALUE-TEST-UNSUPPORTED-CASE"
     )
     assert "unsupported param_types layout expression" in warning.message
-    assert "type(vector::imask) *" in warning.message
+    assert "ptr(type(vector::imask))" in warning.message
 
 
 def test_planner_warns_for_each_unsupported_authored_case() -> None:
@@ -1762,15 +1890,16 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         result_kind="v",
         param_kinds=("v", "v"),
         header_group="clang",
-        required_compiler_features=("ext_vector_type_boolean",),
+        required_compiler_capabilities=("ext_vector_type_boolean",),
     )
     guarded_source = render_cpp_values_runner(
         ValueTestProfilePlan("cpp", "unit-profile", (guarded_cpp_case,)),
         render_assets,
     )
     assert guarded_source.count("#if defined(TSL_ENABLE_CLANG)") == 2
-    assert guarded_source.count("#if defined(__has_feature)") == 2
-    assert guarded_source.count("#  if __has_feature(ext_vector_type_boolean)") == 2
+    assert guarded_source.count(
+        "#if TSL_COMPILER_HAS_EXT_VECTOR_TYPE_BOOLEAN"
+    ) == 2
 
     cpp_indexed_case = ValueTestCasePlan(
         kind="indexed_load",
@@ -2724,10 +2853,14 @@ def test_opt_in_clang_overlays_get_guarded_differential_targets(
     comparison_cases = tuple(case for case in clang_cases if case not in bool_cases)
     assert bool_cases
     assert all(
-        case.required_compiler_features == ("ext_vector_type_boolean",)
+        case.required_compiler_capabilities
+        == ("clang_vector_types", "ext_vector_type_boolean")
         for case in bool_cases
     )
-    assert all(not case.required_compiler_features for case in comparison_cases)
+    assert all(
+        case.required_compiler_capabilities == ("clang_vector_types",)
+        for case in comparison_cases
+    )
 
     values_source = next(
         artifact.content
@@ -2735,11 +2868,24 @@ def test_opt_in_clang_overlays_get_guarded_differential_targets(
         if artifact.logical_path == "cpp/tests/values_avx2.cpp"
     )
     assert "#if defined(TSL_ENABLE_CLANG)" in values_source
-    assert "#  if __has_feature(ext_vector_type_boolean)" in values_source
+    assert "#if TSL_COMPILER_HAS_EXT_VECTOR_TYPE_BOOLEAN" in values_source
     assert "using Hw = tsl::simd<int32_t, tsl::clang_v256>;" in values_source
 
 
-def test_incompatible_value_test_header_groups_are_diagnosed() -> None:
+def test_incompatible_value_test_header_groups_are_diagnosed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _BackendCapability:
+        def extension_header_groups(
+            self, extension: Extension
+        ) -> tuple[str, ...]:
+            metadata = extension.metadata.backend.get("cpp")
+            return () if metadata is None else metadata.compiler_capabilities
+
+    monkeypatch.setattr(
+        "tslc.backend.registry.backend_capability",
+        lambda backend_id: _BackendCapability(),
+    )
     first = Extension(
         "first",
         "first",
@@ -2749,7 +2895,7 @@ def test_incompatible_value_test_header_groups_are_diagnosed() -> None:
         backend_supported={"cpp": True},
         metadata=ExtensionMetadata(
             backend={
-                "cpp": BackendExtensionMetadata(header_group="first_group")
+                "cpp": BackendExtensionMetadata(compiler_capabilities=("first_group",))
             }
         ),
         source=SourceSpan(Path("extensions.tsl"), 10, 1, 10, 6),
@@ -2763,7 +2909,7 @@ def test_incompatible_value_test_header_groups_are_diagnosed() -> None:
         backend_supported={"cpp": True},
         metadata=ExtensionMetadata(
             backend={
-                "cpp": BackendExtensionMetadata(header_group="second_group")
+                "cpp": BackendExtensionMetadata(compiler_capabilities=("second_group",))
             }
         ),
         source=SourceSpan(Path("extensions.tsl"), 20, 1, 20, 7),
@@ -2883,6 +3029,175 @@ def _scalable_test_extension() -> Extension:
     )
 
 
+def test_scalable_immediate_cases_plan_and_render_runtime_lanes(
+    render_assets: RenderAssets,
+) -> None:
+    unmasked = Primitive(
+        "mul_imm",
+        "v:=(v,sImm)",
+        ("data", "factor"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="mul_imm_sve",
+                type_tag="si32",
+                tags=("sve",),
+                lanes=4,
+                extension="sve",
+                inputs=(
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("scalar", scalar="3"),
+                ),
+                expected=("3", "6", "9", "12"),
+            ),
+        ),
+    )
+    masked = Primitive(
+        "mul_imm",
+        "v:=(m,v,sImm)",
+        ("mask", "data", "factor"),
+        ("mask",),
+        (),
+        attributes={"mask": "zero"},
+        tests=(
+            TslTestCase(
+                name="mul_imm_maskz_sve",
+                type_tag="si32",
+                tags=("sve",),
+                lanes=4,
+                extension="sve",
+                inputs=(
+                    TslTestArg("mask", mask_bits="10"),
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("scalar", scalar="3"),
+                ),
+                expected=("0", "6", "0", "12"),
+            ),
+        ),
+    )
+    specs = {
+        "mul_imm": (
+            _spec(
+                "mul_imm",
+                "mul_imm",
+                param_kinds=("v", "sImm"),
+                immediate=("factor", "std::uint32_t"),
+                extension_name="sve",
+                uses_sized_vector=False,
+                lane_parameter=None,
+            ),
+        ),
+        "mul_imm_maskz": (
+            _spec(
+                "mul_imm_maskz",
+                "mul_imm",
+                param_kinds=("m", "v", "sImm"),
+                immediate=("factor", "std::uint32_t"),
+                mask_policy="zero",
+                extension_name="sve",
+                uses_sized_vector=False,
+                lane_parameter=None,
+            ),
+        ),
+    }
+    catalog = Catalog(
+        primitives=(unmasked, masked, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (ValueTestBackendProfileInput("cpp", "sve", specs),)
+    )
+
+    assert not plan.diagnostics
+    scalable = tuple(
+        case for case in plan.profiles[0].cases if case.scalable is not None
+    )
+    assert [case.kind for case in scalable] == [
+        "scalable_immediate",
+        "scalable_masked_immediate",
+    ]
+    assert all(case.invocation.immediate == "3" for case in scalable)
+    assert scalable[1].scalable is not None
+    assert scalable[1].scalable.mask_bits == (10,)
+
+    source = render_cpp_values_runner(plan.profiles[0], render_assets)
+    assert "tsl::load<Vec, false>(in0.data())" in source
+    assert "tsl::mul_imm<Vec, 3>(v0)" in source
+    assert "tsl::mul_imm_maskz<Vec, 3>(" in source
+    assert "make_mask<tsl::simd<std::int32_t, tsl::sve>>(10ull, 4, lanes)" in source
+    assert "authored_expected[i % 4]" in source
+
+def test_scalable_indexed_lane_uses_one_runtime_lane() -> None:
+    insert_value = Primitive(
+        "insert_value",
+        "v:=(v,s)",
+        ("data", "value"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="insert_lane_3",
+                type_tag="si32",
+                tags=("sve",),
+                lanes=4,
+                extension="sve",
+                index=3,
+                inputs=(
+                    TslTestArg("vector", values=("1", "-2", "3", "-4")),
+                    TslTestArg("scalar", scalar="-99"),
+                ),
+                expected=("1", "-2", "3", "-99"),
+            ),
+        ),
+    )
+    spec = replace(
+        _spec(
+            "insert_value",
+            "insert_value",
+            param_kinds=("v", "s"),
+            extension_name="sve",
+            uses_sized_vector=False,
+            lane_parameter=None,
+        ),
+        generic_params=(("Index", "std::size_t", "0"),),
+    )
+    catalog = Catalog(
+        primitives=(insert_value, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp", "sve", {"insert_value": (spec,)}
+            ),
+        )
+    )
+
+    assert not plan.diagnostics
+    case = next(
+        case for case in plan.profiles[0].cases if case.scalable is not None
+    )
+    assert case.kind == "scalable_scalar_vector"
+    assert case.index == ValueTestIndex(value="3")
+    assert case.invocation.generic_defaults == ()
+    assert case.expectation.scalable_layout == "indexed_lane"
+
+    source = CPP_VALUE_TEST_RENDERER.render_case(case)
+    assert "tsl::insert_value<Vec, 3>(v0, s0)" in source
+    assert "expected[i] = authored0[i % 4];" in source
+    assert "if (3 < lanes) expected[3] = authored_expected[3];" in source
+    assert "authored_expected[i % 4]" not in source
+
+
 def test_scalable_plan_facts_stay_backend_neutral_for_sve_case() -> None:
     # Planned scalable facts carry raw extension templates, integer mask bits, and the
     # unquoted authored case name. The C++ renderer alone spells `tsl::simd<...>`,
@@ -2994,6 +3309,118 @@ def test_scalable_plan_facts_stay_backend_neutral_for_sve_case() -> None:
     assert "{vec}" in logic.scalable.mask_from_bits_template
     assert logic.scalable.mask_check_template is not None
     assert "{expected_bits}" in logic.scalable.mask_check_template
+
+
+def test_scalable_mask_count_uses_runtime_tiled_oracle(
+    render_assets: RenderAssets,
+) -> None:
+    count = Primitive(
+        "mask_count",
+        "usize:=m",
+        ("mask",),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="mask_count_si32_sve_basic",
+                type_tag="si32",
+                tags=("basic",),
+                lanes=4,
+                extension="sve",
+                expected_rule="popcnt",
+                inputs=(TslTestArg("mask", mask_bits="10"),),
+                expected=("2",),
+            ),
+        ),
+    )
+    catalog = Catalog(
+        primitives=(count, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+    specs = {
+        "mask_count": (
+            _spec(
+                "mask_count",
+                "mask_count",
+                param_kinds=("m",),
+                result_kind="usize",
+                extension_name="sve",
+                uses_sized_vector=False,
+                lane_parameter=None,
+            ),
+        ),
+    }
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (ValueTestBackendProfileInput("cpp", "sve", specs),)
+    )
+
+    assert not plan.diagnostics
+    assert plan.coverage[0].status == "emitted"
+    assert plan.coverage[0].case_kind == "scalable_mask_count"
+    case = plan.profiles[0].cases[0]
+    assert case.kind == "scalable_mask_count"
+    assert case.scalable is not None
+    assert case.scalable.mask_bits == (10,)
+
+    source = render_cpp_values_runner(plan.profiles[0], render_assets)
+    assert "using Vec = tsl::simd<std::int32_t, tsl::sve>;" in source
+    assert "make_mask<tsl::simd<std::int32_t, tsl::sve>>(10ull, 4, lanes)" in source
+    assert "auto result = tsl::mask_count<Vec>(mask);" in source
+    assert "(authored_mask >> (i % 4)) & 1ull" in source
+    assert "check_scalar<std::size_t>" in source
+
+
+def test_scalable_mask_count_rejects_mismatched_authored_oracle() -> None:
+    count = Primitive(
+        "mask_count",
+        "usize:=m",
+        ("mask",),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="bad_count",
+                type_tag="si32",
+                tags=("bad",),
+                lanes=4,
+                extension="sve",
+                expected_rule="popcnt",
+                inputs=(TslTestArg("mask", mask_bits="10"),),
+                expected=("3",),
+            ),
+        ),
+    )
+    catalog = Catalog(
+        primitives=(count, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+    specs = {
+        "mask_count": (
+            _spec(
+                "mask_count",
+                "mask_count",
+                param_kinds=("m",),
+                result_kind="usize",
+                extension_name="sve",
+                uses_sized_vector=False,
+                lane_parameter=None,
+            ),
+        ),
+    }
+
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (ValueTestBackendProfileInput("cpp", "sve", specs),)
+    )
+
+    assert plan.profiles[0].cases == ()
+    assert plan.coverage[0].status == "authored_unplanned"
+    assert "matching authored-lane count" in plan.coverage[0].reason
 
 
 def test_scalable_only_case_reports_backend_unsupported_without_scalable_kinds() -> None:
@@ -3164,6 +3591,20 @@ def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog(
             axis_args=("true",),
         ),
         ValueTestCasePlan(
+            "masked_pointer_load",
+            "test_load_mask",
+            "load_mask",
+            "load_mask",
+            "ui32",
+            "u32",
+            4,
+            vector_inputs=(("1", "2", "3", "4"), ("10", "20", "30", "40")),
+            expected=("1", "20", "3", "40"),
+            mask_inputs=("5",),
+            axis_args=("false",),
+            buffer_offset=1,
+        ),
+        ValueTestCasePlan(
             "masked_pointer_store",
             "test_compress_store",
             "compress_store",
@@ -3332,6 +3773,10 @@ def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog(
     assert "load_scalar::<Vec, false>(buf.as_ptr().add(1))" in source
     assert "load_mask_repr::<Vec, false, false>(" in source
     assert "expand_load::<Vec, true>(mask, buf.as_ptr())" in source
+    assert "let mut buf: [u32; 5] = [Default::default(); 5];" in source
+    assert "for i in 0..4 { buf[1 + i] = in0[i]; }" in source
+    assert "let mut v1: <Vec as SimdVector>::RegisterType = Default::default();" in source
+    assert "load_mask::<Vec, false>(mask, buf.as_ptr().add(1), v1)" in source
     assert "compress_store::<Vec, true>(" in source
     assert "memory_cp::<Vec>(" in source
     assert "let ptr = allocate(64usize);" in source
@@ -3544,16 +3989,12 @@ def test_value_test_renderer_rejects_unregistered_case_kind() -> None:
         )
 
 
-def test_value_test_renderer_rejects_exclusion_for_undeclared_case_kind() -> None:
-    with pytest.raises(ValueError, match="excludes undeclared case kind"):
+def test_value_test_renderer_rejects_empty_runtime_failure_reason() -> None:
+    with pytest.raises(ValueError, match="observation reason cannot be empty"):
         ValueTestRendererCapability(
             backend_id="unit",
             case_renderers={"generic_golden": lambda case: ""},
-            profile_case_exclusions=(
-                ValueTestProfileCaseExclusion(
-                    "wasm32", "runtime_failure", "unobservable failure"
-                ),
-            ),
+            unobservable_runtime_failure_reason="",
         )
 
 

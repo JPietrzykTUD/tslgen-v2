@@ -2,7 +2,8 @@
   "generic": [
     {
       "name": "scalar",
-      "target_features": "NOSIMD-INVALID"
+      "target_features": "NOSIMD-INVALID",
+      "default_build_fallback": true
     }
   ],
   "x86": [
@@ -50,6 +51,7 @@
       "name": "skylake-oneapi",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw",
       "compile_modes": "oneapi_fpga",
+      "backend_compiler_roles": {"cpp": "oneapi-cpp"},
       "auto_detect_gate": "oneapi_fpga",
       "runner": {"kind": "sde", "profile": "skx"}
     },
@@ -67,6 +69,7 @@
       "name": "cascadelake-oneapi",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni",
       "compile_modes": "oneapi_fpga",
+      "backend_compiler_roles": {"cpp": "oneapi-cpp"},
       "auto_detect_gate": "oneapi_fpga",
       "runner": {"kind": "sde", "profile": "clx"}
     },
@@ -79,6 +82,7 @@
       "name": "cooperlake-oneapi",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni avx512_bf16",
       "compile_modes": "oneapi_fpga",
+      "backend_compiler_roles": {"cpp": "oneapi-cpp"},
       "auto_detect_gate": "oneapi_fpga",
       "runner": {"kind": "sde", "profile": "cpx"}
     },
@@ -92,6 +96,7 @@
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
       "runner": {"kind": "sde", "profile": "icl"},
       "compile_modes": "oneapi_fpga",
+      "backend_compiler_roles": {"cpp": "oneapi-cpp"},
       "auto_detect_gate": "oneapi_fpga"
     },
     {
@@ -114,6 +119,7 @@
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_fp16",
       "runner": {"kind": "sde", "profile": "spr"},
       "compile_modes": "oneapi_fpga",
+      "backend_compiler_roles": {"cpp": "oneapi-cpp"},
       "auto_detect_gate": "oneapi_fpga"
     },
     {
@@ -155,6 +161,24 @@
       "compile_modes": "sve_vector_bits_512",
       "backend_flags": {"cpp": ["-mcpu=a64fx", "-msve-vector-bits=512"]},
       "runner": {"kind": "qemu-aarch64", "profile": "a64fx"}
+    }
+  ],
+  "riscv": [
+    {
+      "name": "rvv",
+      "target_features": "v",
+      "backend_flags": {
+        "cpp": [
+          "-march=rv64imafdcv",
+          "-mabi=lp64d",
+          "-mrvv-vector-bits=scalable"
+        ]
+      },
+      "supported_backends": ["cpp"],
+      "runner": {
+        "kind": "qemu-riscv64",
+        "profile": "max,v=true,vext_spec=v1.0,vlen=128,elen=64"
+      }
     }
   ],
   "wasm32": [

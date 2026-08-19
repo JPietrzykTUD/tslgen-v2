@@ -197,7 +197,11 @@ def masked_pointer_load_case(
         return None
     vector_inputs = _vector_inputs(case)
     mask_inputs = _maskish_inputs(case)
-    if len(vector_inputs) != 1 or len(mask_inputs) != 1:
+    expected_vector_inputs = 1 + specs[0].param_kinds.count("v")
+    if (
+        len(vector_inputs) != expected_vector_inputs
+        or len(mask_inputs) != 1
+    ):
         return None
     return _plan(
         "masked_pointer_load",

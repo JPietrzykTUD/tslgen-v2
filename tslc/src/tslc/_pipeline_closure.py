@@ -14,6 +14,7 @@ from tslc.lower.dependencies import (
     VectorIdentity,
     dependency_sort_key,
     is_concrete_call_dependency,
+    origin_sort_key,
     vector_reference_label,
 )
 from tslc.lower.implementation_state import combine_implementation_states
@@ -31,6 +32,8 @@ class _LoweredSlot:
     # ``spec.required_features``; the declared set and the authored selector
     # entry stay available so analyses can attribute the transitive delta.
     selection_required_features: frozenset[str] = frozenset()
+    selection_required_compiler_capabilities: frozenset[str] = frozenset()
+    compiler_alternative_rank: int | None = None
     selector_source: SourceSpan | None = None
 
 
@@ -49,6 +52,7 @@ class LoweringTraceSlot:
     # call-graph propagation; the delta against
     # ``specialization.required_features`` is what dependency closure added.
     selection_required_features: frozenset[str] = frozenset()
+    selection_required_compiler_capabilities: frozenset[str] = frozenset()
     # The authored selector entry that produced this specialization, if any.
     selector_source: SourceSpan | None = None
 
@@ -68,11 +72,25 @@ type _SlotKey = tuple[
     VectorIdentity,
     VectorIdentity | None,
 ]
+type _TypeParamFact = tuple[
+    str,
+    tuple[str, ...],
+    tuple[str, ...],
+    bool,
+    str | None,
+    str | None,
+]
 type _CallFactKey = tuple[
     _SlotKey,
     tuple[str, ...],
     tuple[str, str] | None,
     tuple[tuple[str, str, str], ...],
+]
+type _CompilerAlternativeKey = tuple[
+    _CallFactKey,
+    tuple[tuple[str, str], ...],
+    tuple[_TypeParamFact, ...],
+    str | None,
 ]
 
 
@@ -111,6 +129,12 @@ def _prune_unresolved(
         dependency_items.append(items)
         for _dependency, dependency_key in items:
             dependents.setdefault(dependency_key, []).append(index)
+    compiler_groups: dict[_CompilerAlternativeKey, list[int]] = {}
+    for index, slot in enumerate(slots):
+        if slot.compiler_alternative_rank is None:
+            continue
+        key = _compiler_alternative_key(slot, split_names)
+        compiler_groups.setdefault(key, []).append(index)
 
     invalid = [False] * len(slots)
     candidates = list(range(len(slots)))
@@ -139,6 +163,25 @@ def _prune_unresolved(
             )
             invalid[index] = True
             removed.append(index)
+        for group_indices in compiler_groups.values():
+            fallback_index = next(
+                (
+                    index
+                    for index in group_indices
+                    if not slots[index].spec.required_compiler_capabilities
+                ),
+                None,
+            )
+            if fallback_index is None or not invalid[fallback_index]:
+                continue
+            for index in group_indices:
+                if invalid[index]:
+                    continue
+                slots[index].unresolved_callee = (
+                    slots[fallback_index].unresolved_callee
+                )
+                invalid[index] = True
+                removed.append(index)
 
         if not removed:
             break
@@ -161,19 +204,89 @@ def _prune_unresolved(
     live_slots = [slot for index, slot in enumerate(slots) if not invalid[index]]
     # Full generation retains earlier profiles while closing the next one, so
     # release pruning indexes before constructing the propagation graph.
-    del available, candidates, dependency_items, dependents, slot_keys
+    del available, candidates, compiler_groups
+    del dependency_items, dependents, slot_keys
     _propagate_transitive_call_facts(live_slots, split_names)
 
     grouped: dict[str, dict[str, list[LoweredSpecialization]]] = {}
-    pruned: list[_LoweredSlot] = []
-    for index, slot in enumerate(slots):
-        if not invalid[index]:
-            grouped.setdefault(slot.backend, {}).setdefault(
-                slot.spec.primitive_name, []
-            ).append(slot.spec)
-        else:
-            pruned.append(slot)
+    for slot in _merge_compiler_alternative_slots(live_slots, split_names):
+        grouped.setdefault(slot.backend, {}).setdefault(
+            slot.spec.primitive_name, []
+        ).append(slot.spec)
+    pruned = [
+        slot
+        for index, slot in enumerate(slots)
+        if invalid[index]
+    ]
     return grouped, pruned
+
+
+def _merge_compiler_alternative_slots(
+    slots: list[_LoweredSlot],
+    split_names: frozenset[str],
+) -> list[_LoweredSlot]:
+    """Collapse auto-selected compiler branches into one logical slot."""
+
+    by_key: dict[_CompilerAlternativeKey, list[_LoweredSlot]] = {}
+    for slot in slots:
+        if slot.compiler_alternative_rank is None:
+            continue
+        key = _compiler_alternative_key(slot, split_names)
+        by_key.setdefault(key, []).append(slot)
+
+    merged: dict[_CompilerAlternativeKey, _LoweredSlot] = {}
+    for key, candidates in by_key.items():
+        if not any(
+            not candidate.spec.required_compiler_capabilities
+            for candidate in candidates
+        ):
+            continue
+
+        ranked = sorted(
+            candidates,
+            key=lambda item: item.compiler_alternative_rank or 0,
+        )
+        canonical = ranked[-1]
+        if len(ranked) > 1:
+            origins = tuple(
+                sorted(
+                    {
+                        origin
+                        for candidate in ranked
+                        for origin in candidate.callee_origins
+                    },
+                    key=origin_sort_key,
+                )
+            )
+            canonical.spec = replace(
+                canonical.spec,
+                compiler_alternatives=tuple(
+                    candidate.spec for candidate in ranked[:-1]
+                ),
+                call_dependency_origins=origins,
+            )
+            canonical.callees = frozenset(
+                dependency
+                for candidate in ranked
+                for dependency in candidate.callees
+            )
+            canonical.callee_origins = origins
+        merged[key] = canonical
+
+    emitted: list[_LoweredSlot] = []
+    seen: set[_CompilerAlternativeKey] = set()
+    for slot in slots:
+        if slot.compiler_alternative_rank is None:
+            emitted.append(slot)
+            continue
+        key = _compiler_alternative_key(slot, split_names)
+        if key not in merged:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        emitted.append(merged[key])
+    return emitted
 
 
 def _profile_with_required_features(
@@ -335,14 +448,27 @@ def _propagate_transitive_call_facts(
             safety.append(slot.spec.safety)
             features.append(slot.spec.required_features)
             states.append(slot.spec.implementation_state)
-        else:
-            # Match the previous fact-map construction when duplicate lowered
-            # body identities occur: the last slot supplies the direct facts.
+        elif slot.compiler_alternative_rank is None:
+            # Preserve established last-body facts for ordinary duplicate
+            # lowered identities such as scalar overload collapses.
             safety[fact_id] = slot.spec.safety
             features[fact_id] = slot.spec.required_features
             states[fact_id] = slot.spec.implementation_state
+        else:
+            # Compiler alternatives are one logical callable for conservative
+            # safety, target-feature, and implementation-state propagation.
+            safety[fact_id] = safety[fact_id].merge(slot.spec.safety)
+            features[fact_id] = (
+                features[fact_id] | slot.spec.required_features
+            )
+            states[fact_id] = combine_implementation_states(
+                (states[fact_id], slot.spec.implementation_state)
+            )
         slot_fact_ids.append(fact_id)
     fact_count = len(fact_ids)
+    branch_compiler_capabilities = _propagate_compiler_capabilities_per_branch(
+        slots, split_names
+    )
     del fact_ids, fact_keys
 
     dependency_targets: dict[_SlotKey, list[int]] = {}
@@ -401,13 +527,17 @@ def _propagate_transitive_call_facts(
                 queue.append(caller_id)
                 queued[caller_id] = True
 
-    for slot, fact_id in zip(slots, slot_fact_ids, strict=True):
+    for slot, fact_id, propagated_compiler_capabilities in zip(
+        slots, slot_fact_ids, branch_compiler_capabilities, strict=True
+    ):
         propagated_safety = safety[fact_id]
         propagated_features = features[fact_id]
         propagated_state = states[fact_id]
         if (
             propagated_safety == slot.spec.safety
             and propagated_features == slot.spec.required_features
+            and propagated_compiler_capabilities
+            == slot.spec.required_compiler_capabilities
             and propagated_state == slot.spec.implementation_state
         ):
             continue
@@ -415,8 +545,74 @@ def _propagate_transitive_call_facts(
             slot.spec,
             safety=propagated_safety,
             required_features=propagated_features,
+            required_compiler_capabilities=(
+                propagated_compiler_capabilities
+            ),
             implementation_state=propagated_state,
         )
+
+
+def _propagate_compiler_capabilities_per_branch(
+    slots: list[_LoweredSlot],
+    split_names: frozenset[str],
+) -> tuple[frozenset[str], ...]:
+    """Propagate capability requirements without conflating alternative bodies."""
+
+    slot_keys = tuple(_slot_key(slot, split_names) for slot in slots)
+    target_groups: dict[
+        _SlotKey,
+        dict[_CallFactKey, list[int]],
+    ] = {}
+    for index, (slot, slot_key) in enumerate(
+        zip(slots, slot_keys, strict=True)
+    ):
+        fact_key = _call_fact_key_from_slot_key(slot, slot_key)
+        target_groups.setdefault(slot_key, {}).setdefault(
+            fact_key, []
+        ).append(index)
+
+    dependencies: list[tuple[tuple[int, ...], ...]] = []
+    for slot in slots:
+        groups: list[tuple[int, ...]] = []
+        seen: set[tuple[int, ...]] = set()
+        for dependency in sorted(slot.callees, key=dependency_sort_key):
+            dependency_key = _dependency_key(slot, dependency, split_names)
+            if dependency_key is None:
+                continue
+            for indices in target_groups.get(dependency_key, {}).values():
+                group = tuple(indices)
+                if group in seen:
+                    continue
+                seen.add(group)
+                groups.append(group)
+        dependencies.append(tuple(groups))
+
+    direct = tuple(
+        slot.spec.required_compiler_capabilities for slot in slots
+    )
+    propagated = direct
+    while True:
+        updated: list[frozenset[str]] = []
+        for index, dependency_groups in enumerate(dependencies):
+            inherited: set[str] = set()
+            for targets in dependency_groups:
+                if any(
+                    slots[target].compiler_alternative_rank is not None
+                    for target in targets
+                ):
+                    shared = set(propagated[targets[0]])
+                    for target in targets[1:]:
+                        shared.intersection_update(propagated[target])
+                    inherited.update(shared)
+                else:
+                    # Match ordinary duplicate lowered identities: the last
+                    # body supplies the callable's facts.
+                    inherited.update(propagated[targets[-1]])
+            updated.append(direct[index] | inherited)
+        result = tuple(updated)
+        if result == propagated:
+            return result
+        propagated = result
 
 
 def _call_fact_key_from_slot_key(
@@ -431,4 +627,36 @@ def _call_fact_key_from_slot_key(
         spec.param_kinds,
         spec.immediate,
         spec.generic_params,
+    )
+
+
+def _compiler_alternative_key(
+    slot: _LoweredSlot,
+    split_names: frozenset[str],
+) -> _CompilerAlternativeKey:
+    spec = slot.spec
+    return (
+        _call_fact_key_from_slot_key(
+            slot,
+            _slot_key(slot, split_names),
+        ),
+        spec.axis,
+        _type_param_facts(spec),
+        spec.lane_parameter,
+    )
+
+
+def _type_param_facts(
+    spec: LoweredSpecialization,
+) -> tuple[_TypeParamFact, ...]:
+    return tuple(
+        (
+            parameter.name,
+            parameter.bounds,
+            parameter.base_type_constraints,
+            parameter.specialize_base,
+            parameter.base_type_binding,
+            parameter.base_type_binding_spelling,
+        )
+        for parameter in spec.type_params
     )

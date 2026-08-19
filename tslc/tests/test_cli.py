@@ -579,6 +579,49 @@ def _core_settings(**overrides: object) -> GenerationCommandSettings:
     return GenerationCommandSettings(**settings)
 
 
+def test_generation_command_forwards_toolchain_compiler_capabilities(
+    capsys,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_generate(source_paths, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            diagnostics=(),
+            coverage=(),
+            artifacts=SimpleNamespace(artifacts=()),
+            rendered=None,
+        )
+
+    def fail_write(*_args, **_kwargs):
+        raise AssertionError("generation without output_root must not write")
+
+    def fail_verify(*_args, **_kwargs):
+        raise AssertionError("generation-only runs must not verify")
+
+    rc = run_generation_command(
+        _core_settings(
+            toolchains={
+                "cpp": BackendToolchain.create(
+                    compiler_capabilities=("elementwise_clzg",),
+                )
+            },
+        ),
+        GenerationPipeline(
+            generate=fake_generate,
+            write=fail_write,
+            verify=fail_verify,
+        ),
+    )
+
+    capsys.readouterr()
+    assert rc == 0
+    assert captured["compiler_capabilities"] == {
+        "cpp": ("elementwise_clzg",),
+    }
+
+
+
 def test_generation_command_core_writes_artifacts_and_summary_once(
     tmp_path, capsys
 ) -> None:
@@ -732,7 +775,11 @@ def test_parse_assignments_rejects_malformed_and_repeated_names() -> None:
 
 def test_merge_toolchains_overlays_overrides_onto_configured_base() -> None:
     configured = {
-        "rust": BackendToolchain.create(compiler="cargo", target="x86_64-unknown-linux-gnu")
+        "rust": BackendToolchain.create(
+            compiler="cargo",
+            target="x86_64-unknown-linux-gnu",
+            compiler_capabilities=("rust_capability",),
+        )
     }
 
     merged = merge_toolchains(
@@ -740,12 +787,19 @@ def test_merge_toolchains_overlays_overrides_onto_configured_base() -> None:
         {"cpp": "clang++"},
         {"rust": "aarch64-unknown-linux-musl"},
         {"rust": "rust-lld"},
+        {"cpp": "elementwise_clzg"},
     )
 
     assert merged["cpp"].compiler == ("clang++",)
+    assert merged["cpp"].compiler_capabilities == (
+        "elementwise_clzg",
+    )
     assert merged["rust"].compiler == ("cargo",)
     assert merged["rust"].target == "aarch64-unknown-linux-musl"
     assert merged["rust"].linker == "rust-lld"
+    assert merged["rust"].compiler_capabilities == (
+        "rust_capability",
+    )
     assert configured["rust"].target == "x86_64-unknown-linux-gnu"
 
 

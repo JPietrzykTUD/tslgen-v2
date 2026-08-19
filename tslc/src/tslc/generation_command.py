@@ -85,6 +85,14 @@ def run_generation_command(
         "value_test_fuzz": settings.fuzz,
         "rust_package": settings.rust_package,
     }
+    compiler_capabilities = {
+        backend_id: toolchain.compiler_capabilities
+        for backend_id in settings.backends
+        if (toolchain := settings.toolchains.get(backend_id)) is not None
+        and toolchain.compiler_capabilities
+    }
+    if compiler_capabilities:
+        generate_kwargs["compiler_capabilities"] = compiler_capabilities
     if settings.profiles is not None:
         generate_kwargs["profiles"] = list(settings.profiles)
     if settings.backend_profiles:

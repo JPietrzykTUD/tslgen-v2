@@ -1,7 +1,6 @@
 extension avx512:
   extension_name "avx512"
   family "x86"
-  intrinsic_style "x86"
   vector_bits 512
   native_sort_order 500
   default_test_target true
@@ -57,7 +56,6 @@ extension avx512:
 extension avx2:
   extension_name "avx2"
   family "x86"
-  intrinsic_style "x86"
   vector_bits 256
   native_sort_order 300
   default_test_target true
@@ -132,7 +130,6 @@ extension avx2_vl:
 extension wasm128:
   extension_name "wasm128"
   family "wasm"
-  intrinsic_style "wasm"
   vector_bits 128
   native_sort_order 800
   default_test_target true
@@ -175,6 +172,8 @@ extension wasm128:
       cpp "v128_t"
       rust "core::arch::wasm32::v128"
   intrinsic_compose:
+    order "suffix_base"
+    require_explicit_suffix true
     prefix:
       cpp "wasm_"
       rust "core::arch::wasm32::"
@@ -198,7 +197,6 @@ extension wasm128:
 extension sse:
   extension_name "sse"
   family "x86"
-  intrinsic_style "x86"
   vector_bits 128
   native_sort_order 100
   default_test_target true
@@ -271,7 +269,6 @@ extension sse_vl:
 extension cuda:
   extension_name "cuda"
   family "cuda"
-  intrinsic_style "cuda"
   default_test_target false
   cpp:
     supported true
@@ -282,7 +279,6 @@ extension oneapi_fpga:
   extension_name "oneapi_fpga"
   inherits "generic"
   family "generic_like"
-  intrinsic_style "generic"
   vector_bits "sized"
   native_sort_order 0
   active_when:
@@ -310,7 +306,6 @@ extension oneapi_fpga_rtl:
 extension neon:
   extension_name "neon"
   family "arm"
-  intrinsic_style "arm"
   vector_bits 128
   native_sort_order 600
   default_test_target true
@@ -379,7 +374,6 @@ extension sve:
   extension_name "sve"
   family "arm"
   documentation_width "SVE"
-  intrinsic_style "arm"
   vector_bits "scalable"
   native_sort_order 700
   runtime_lane_count:
@@ -441,6 +435,82 @@ extension sve:
   integral_mask_type_policy:
     kind "same_as_mask_type"
 
+extension rvv:
+  extension_name "rvv"
+  family "rvv"
+  documentation_width "RVV"
+  vector_bits "scalable"
+  native_sort_order 750
+  runtime_lane_count:
+    cpp "__riscv_vlenb() / sizeof({base_type})"
+  default_test_target true
+  test_runtime_lanes:
+    cpp "__riscv_vlenb() / sizeof({base_type})"
+  test_mask_from_bits:
+    cpp "::tsl::test::mask_from_bits<{vec}>({mask_bits}, {authored_lanes}, {lanes})"
+  test_mask_check:
+    cpp "::tsl::test::check_mask_bits<{vec}>({case_name}, {mask}, {expected_bits}, {authored_lanes}, {lanes})"
+  test_support_headers:
+    cpp ["tsl_test_rvv.hpp"]
+  cpp:
+    supported true
+    headers ["riscv_vector.h"]
+    compiler_capabilities [riscv_vector]
+  rust:
+    supported false
+  vector_register_types:
+    si8:
+      cpp "vint8m1_t"
+    ui8:
+      cpp "vuint8m1_t"
+    si16:
+      cpp "vint16m1_t"
+    ui16:
+      cpp "vuint16m1_t"
+    si32:
+      cpp "vint32m1_t"
+    ui32:
+      cpp "vuint32m1_t"
+    si64:
+      cpp "vint64m1_t"
+    ui64:
+      cpp "vuint64m1_t"
+    f32:
+      cpp "vfloat32m1_t"
+    f64:
+      cpp "vfloat64m1_t"
+  intrinsic_compose:
+    prefix:
+      cpp "__riscv_"
+    suffix:
+      by_type:
+        f32 "f32m1"
+        f64 "f64m1"
+        si8 "i8m1"
+        si16 "i16m1"
+        si32 "i32m1"
+        si64 "i64m1"
+        ui8 "u8m1"
+        ui16 "u16m1"
+        ui32 "u32m1"
+        ui64 "u64m1"
+  mask_type_policy:
+    kind "native_predicate_by_type"
+    backend_spelling_by_type:
+      cpp:
+        si8 "vbool8_t"
+        ui8 "vbool8_t"
+        si16 "vbool16_t"
+        ui16 "vbool16_t"
+        si32 "vbool32_t"
+        ui32 "vbool32_t"
+        f32 "vbool32_t"
+        si64 "vbool64_t"
+        ui64 "vbool64_t"
+        f64 "vbool64_t"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
+
 # Fixed-width SVE variants reuse scalable SVE primitive bodies through `inherits`,
 # but `supersedes ["sve"]` makes each fixed profile emit one SVE model instead
 # of both scalable and fixed SVE. The fixed width is a compiler mode, not a
@@ -459,12 +529,7 @@ extension sve128:
   supersedes ["sve"]
   default_test_target true
   cpp:
-    compile_guards:
-      sve_vector_bits:
-        macro "__ARM_FEATURE_SVE_BITS"
-        equals 128
-        hint_flag "-msve-vector-bits=128"
-        diagnostic "TSL sve128 profile requires -msve-vector-bits=128"
+    compiler_capabilities [sve_vector_bits_128]
   vector_register_types:
     si8:
       cpp "svint8_t __attribute__((arm_sve_vector_bits(128)))"
@@ -504,12 +569,7 @@ extension sve256:
   supersedes ["sve"]
   default_test_target true
   cpp:
-    compile_guards:
-      sve_vector_bits:
-        macro "__ARM_FEATURE_SVE_BITS"
-        equals 256
-        hint_flag "-msve-vector-bits=256"
-        diagnostic "TSL sve256 profile requires -msve-vector-bits=256"
+    compiler_capabilities [sve_vector_bits_256]
   vector_register_types:
     si8:
       cpp "svint8_t __attribute__((arm_sve_vector_bits(256)))"
@@ -549,12 +609,7 @@ extension sve512:
   supersedes ["sve"]
   default_test_target true
   cpp:
-    compile_guards:
-      sve_vector_bits:
-        macro "__ARM_FEATURE_SVE_BITS"
-        equals 512
-        hint_flag "-msve-vector-bits=512"
-        diagnostic "TSL sve512 profile requires -msve-vector-bits=512"
+    compiler_capabilities [sve_vector_bits_512]
   vector_register_types:
     si8:
       cpp "svint8_t __attribute__((arm_sve_vector_bits(512)))"
@@ -586,7 +641,6 @@ extension sve512:
 extension scalar:
   extension_name "scalar"
   family "scalar"
-  intrinsic_style "scalar"
   vector_bits 0
   native_sort_order 0
   default_test_target false
@@ -614,20 +668,13 @@ extension clang_v128:
   extension_name "clang_v128"
   inherits "generic"
   family "compiler_builtin"
-  intrinsic_style "compiler_builtin"
   vector_bits 128
   native_sort_order 0
   default_test_target true
   cpp:
     supported true
-    header_group "clang"
-    compiler_ids [Clang, AppleClang]
+    compiler_capabilities [clang_vector_types]
     dataparallel_inference false
-    compile_guards:
-      clang_compiler:
-        macro "__clang__"
-        equals 1
-        diagnostic "TSL Clang vector extensions require clang++"
   rust:
     supported false
   vector_register_types:
@@ -721,7 +768,7 @@ extension clang_v128_bool:
   native_sort_order 10
   default_test_target true
   cpp:
-    compiler_features [ext_vector_type_boolean]
+    compiler_capabilities [ext_vector_type_boolean]
   mask_type_policy:
     kind "boolean_lane_vector"
 
@@ -731,7 +778,7 @@ extension clang_v256_bool:
   native_sort_order 10
   default_test_target true
   cpp:
-    compiler_features [ext_vector_type_boolean]
+    compiler_capabilities [ext_vector_type_boolean]
   mask_type_policy:
     kind "boolean_lane_vector"
 
@@ -741,14 +788,13 @@ extension clang_v512_bool:
   native_sort_order 10
   default_test_target true
   cpp:
-    compiler_features [ext_vector_type_boolean]
+    compiler_capabilities [ext_vector_type_boolean]
   mask_type_policy:
     kind "boolean_lane_vector"
 
 extension generic:
   extension_name "generic"
   family "generic_like"
-  intrinsic_style "generic"
   vector_bits "sized"
   native_sort_order 0
   default_test_target true

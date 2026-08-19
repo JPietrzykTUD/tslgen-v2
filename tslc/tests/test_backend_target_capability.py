@@ -4,11 +4,11 @@ from dataclasses import replace
 
 from tslc.backend.emitted_profile import used_vector_type_specs
 from tslc.backend.target_capability import (
-    cpp_x86_register_helper,
-    is_x86_register_extension,
+    cpp_width_indexed_register_helper,
+    is_width_indexed_register_extension,
     rust_arch_module,
     rust_extension_tag,
-    x86_register_bits,
+    width_indexed_register_bits,
 )
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
@@ -59,20 +59,29 @@ def test_all_existing_feature_spellings_are_preserved(catalog: Catalog) -> None:
         )
 
 
-def test_x86_register_capabilities_derive_from_extension_facts(
+def test_width_indexed_register_capabilities_derive_from_family_role(
     catalog: Catalog,
 ) -> None:
     avx2 = catalog.extensions["avx2"]
     neon = catalog.extensions["neon"]
-    custom = replace(avx2, name="x86_demo", isa_name="x86_demo")
+    custom = replace(
+        avx2,
+        name="width_demo",
+        isa_name="width_demo",
+        family="renamed_width_family",
+        family_capability=replace(
+            avx2.family_capability,
+            name="renamed_width_family",
+        ),
+    )
 
-    assert is_x86_register_extension(avx2)
-    assert not is_x86_register_extension(neon)
-    assert x86_register_bits(avx2) == 256
-    assert cpp_x86_register_helper(avx2) == "reg256"
-    assert cpp_x86_register_helper(custom) == "reg256"
-    rendered = _cpp_registration("x86_demo", custom)
-    assert "struct x86_demo" in rendered
+    assert is_width_indexed_register_extension(avx2)
+    assert not is_width_indexed_register_extension(neon)
+    assert width_indexed_register_bits(avx2) == 256
+    assert cpp_width_indexed_register_helper(avx2) == "reg256"
+    assert cpp_width_indexed_register_helper(custom) == "reg256"
+    rendered = _cpp_registration("width_demo", custom)
+    assert "struct width_demo" in rendered
     assert (
         "static constexpr std::size_t lane_count_v = 256 / (sizeof(T) * 8);"
         in rendered

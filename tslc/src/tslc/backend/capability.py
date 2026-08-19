@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, replace
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import TYPE_CHECKING, Protocol
+from hashlib import sha256
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
 
 from tslc.backend.helper_requirements import (
     BackendHelperManifest,
@@ -45,7 +47,12 @@ ToolchainCommandsResolver = Callable[
     ["VerifyProfile", "BuildVerifierConfig"], "ToolchainCommands"
 ]
 BenchmarkPlanBuilder = Callable[
-    ["Catalog", tuple["EmittedProfile", ...], "ValueTestProjectPlan"],
+    [
+        "Catalog",
+        tuple["EmittedProfile", ...],
+        "ValueTestProjectPlan",
+        "BackendPolicyInputs",
+    ],
     "BenchmarkProjectPlan",
 ]
 ClosureSeedProjector = Callable[["Catalog"], tuple[str, ...]]
@@ -57,6 +64,7 @@ BackendArtifactRenderer = Callable[
         "RenderAssets",
         str,
         "ProjectRenderConfig",
+        "BackendPolicyInputs",
     ],
     list["Artifact"],
 ]
@@ -64,9 +72,75 @@ DocumentationFormatterFactory = Callable[[], "BackendDocumentationFormatter"]
 ValueTestSupportFactory = Callable[[], "ValueTestBackendSupport"]
 VerifyDriverFactory = Callable[[], "VerifyBackendDriver"]
 ProfileValidator = Callable[[tuple["EmittedProfile", ...]], tuple["Diagnostic", ...]]
-PrimitivePreviewRenderer = Callable[
-    ["EmittedProfile", str, tuple["LoweredSpecialization", ...]], str
+PolicyInventoryValidator = Callable[
+    [tuple["EmittedProfile", ...], "BackendPolicyInputs"],
+    tuple["Diagnostic", ...],
 ]
+PrimitivePreviewRenderer = Callable[
+    [
+        "EmittedProfile",
+        str,
+        tuple["LoweredSpecialization", ...],
+        "BackendPolicyInputs",
+    ],
+    str,
+]
+
+
+class BackendPolicyInput:
+    """One backend-owned, parsed compiler input in a generation snapshot."""
+
+    __slots__ = ()
+
+    def snapshot_digest(self) -> str:
+        """Return the SHA-256 digest of the loaded source input."""
+
+        raise NotImplementedError
+
+
+_BackendPolicyT = TypeVar("_BackendPolicyT", bound=BackendPolicyInput)
+
+
+@dataclass(frozen=True, slots=True)
+class BackendPolicyInputs:
+    """Frozen backend-policy inputs loaded before planning or rendering."""
+
+    values: Mapping[str, BackendPolicyInput] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "values",
+            MappingProxyType(dict(sorted(self.values.items()))),
+        )
+
+    def require(
+        self,
+        backend_id: str,
+        expected_type: type[_BackendPolicyT],
+    ) -> _BackendPolicyT:
+        value = self.values.get(backend_id)
+        if not isinstance(value, expected_type):
+            raise ValueError(
+                f"backend {backend_id!r} requires a loaded "
+                f"{expected_type.__name__} policy input"
+            )
+        return value
+
+    @property
+    def input_digest(self) -> str:
+        """Fingerprint the complete, backend-keyed policy-input snapshot."""
+
+        digest = sha256()
+        for backend_id, value in self.values.items():
+            digest.update(backend_id.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(value.snapshot_digest().encode("ascii"))
+            digest.update(b"\0")
+        return digest.hexdigest()
+
+
+EMPTY_BACKEND_POLICY_INPUTS = BackendPolicyInputs()
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +189,14 @@ def _no_profile_diagnostics(
     return ()
 
 
+def _no_policy_inventory_diagnostics(
+    profiles: tuple[EmittedProfile, ...],
+    policy_inputs: BackendPolicyInputs,
+) -> tuple[Diagnostic, ...]:
+    del profiles, policy_inputs
+    return ()
+
+
 def _no_additional_closure_seeds(catalog: Catalog) -> tuple[str, ...]:
     del catalog
     return ()
@@ -124,9 +206,106 @@ def _unsupported_primitive_preview(
     profile: EmittedProfile,
     primitive_name: str,
     specializations: tuple[LoweredSpecialization, ...],
+    policy_inputs: BackendPolicyInputs,
 ) -> str:
-    del profile, primitive_name, specializations
+    del profile, primitive_name, specializations, policy_inputs
     raise ValueError("this backend does not support specialization preview")
+
+
+@dataclass(frozen=True, slots=True)
+class CompilerCapability:
+    """One backend-owned compiler fact used by source semantic requirements."""
+
+    capability_id: str
+    header_group: str | None = field(default=None, kw_only=True)
+    compiler_ids: tuple[str, ...] = field(default=(), kw_only=True)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "compiler_ids", tuple(self.compiler_ids))
+
+
+_CompilerCapabilityT = TypeVar(
+    "_CompilerCapabilityT", bound=CompilerCapability, covariant=True
+)
+
+
+class CompilerCapabilityRegistry(Generic[_CompilerCapabilityT]):
+    """One immutable owner for a backend's compiler-capability vocabulary."""
+
+    __slots__ = ("_capabilities", "_by_id")
+
+    def __init__(self, capabilities: Iterable[_CompilerCapabilityT] = ()) -> None:
+        ordered = tuple(capabilities)
+        by_id: dict[str, _CompilerCapabilityT] = {}
+        duplicates: set[str] = set()
+        for capability in ordered:
+            if capability.capability_id in by_id:
+                duplicates.add(capability.capability_id)
+            by_id[capability.capability_id] = capability
+        if duplicates:
+            raise ValueError(
+                "duplicate compiler capability IDs: "
+                + ", ".join(sorted(duplicates))
+            )
+        self._capabilities = ordered
+        self._by_id = MappingProxyType(by_id)
+
+    def __iter__(self) -> Iterator[_CompilerCapabilityT]:
+        return iter(self._capabilities)
+
+    def __len__(self) -> int:
+        return len(self._capabilities)
+
+    @property
+    def capability_ids(self) -> frozenset[str]:
+        return frozenset(self._by_id)
+
+    def get(self, capability_id: str) -> _CompilerCapabilityT | None:
+        return self._by_id.get(capability_id)
+
+    def require(self, capability_id: str) -> _CompilerCapabilityT:
+        return self._by_id[capability_id]
+
+    def known(
+        self, capability_ids: Iterable[str]
+    ) -> tuple[_CompilerCapabilityT, ...]:
+        return tuple(
+            capability
+            for capability_id in capability_ids
+            if (capability := self.get(capability_id)) is not None
+        )
+
+    def require_all(
+        self, capability_ids: Iterable[str]
+    ) -> tuple[_CompilerCapabilityT, ...]:
+        return tuple(self.require(capability_id) for capability_id in capability_ids)
+
+    def header_groups(self, capability_ids: Iterable[str]) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                {
+                    capability.header_group
+                    for capability in self.known(capability_ids)
+                    if capability.header_group is not None
+                }
+            )
+        )
+
+    def compiler_ids(self, capability_ids: Iterable[str]) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                {
+                    compiler_id
+                    for capability in self.known(capability_ids)
+                    for compiler_id in capability.compiler_ids
+                }
+            )
+        )
+
+
+EMPTY_COMPILER_CAPABILITY_REGISTRY: CompilerCapabilityRegistry[
+    CompilerCapability
+] = CompilerCapabilityRegistry()
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,14 +322,63 @@ class BackendCapability:
     toolchain_commands: ToolchainCommandsResolver
     documentation_formatter_factory: DocumentationFormatterFactory
     benchmark_plan_builder: BenchmarkPlanBuilder | None = None
+    policy_input_loader: Callable[[], BackendPolicyInput] | None = None
     helper_manifest: BackendHelperManifest = EMPTY_HELPER_MANIFEST
     additional_closure_seeds: ClosureSeedProjector = _no_additional_closure_seeds
     profile_validator: ProfileValidator = _no_profile_diagnostics
+    policy_inventory_validator: PolicyInventoryValidator = (
+        _no_policy_inventory_diagnostics
+    )
     primitive_preview_renderer: PrimitivePreviewRenderer = (
         _unsupported_primitive_preview
     )
     generated_format: GeneratedFormatSpec | None = None
     generated_documentation: GeneratedDocumentationSpec | None = None
+    compiler_capabilities: CompilerCapabilityRegistry[CompilerCapability] = (
+        EMPTY_COMPILER_CAPABILITY_REGISTRY
+    )
+
+    def load_policy_input(self) -> BackendPolicyInput | None:
+        if self.policy_input_loader is None:
+            return None
+        return self.policy_input_loader()
+
+    def compiler_capability(self, capability_id: str) -> CompilerCapability | None:
+        return self.compiler_capabilities.get(capability_id)
+
+    def extension_compiler_capabilities(
+        self, extension: Extension | None
+    ) -> tuple[CompilerCapability, ...]:
+        if extension is None:
+            return ()
+        metadata = extension.metadata.backend.get(self.backend_id)
+        if metadata is None:
+            return ()
+        return self.compiler_capabilities.known(metadata.compiler_capabilities)
+
+    def extension_header_groups(self, extension: Extension | None) -> tuple[str, ...]:
+        if extension is None:
+            return ()
+        metadata = extension.metadata.backend.get(self.backend_id)
+        if metadata is None:
+            return ()
+        return self.compiler_capabilities.header_groups(
+            metadata.compiler_capabilities
+        )
+
+    def extension_header_group(self, extension: Extension | None) -> str | None:
+        groups = self.extension_header_groups(extension)
+        return groups[0] if len(groups) == 1 else None
+
+    def extension_compiler_ids(self, extension: Extension | None) -> tuple[str, ...]:
+        if extension is None:
+            return ()
+        metadata = extension.metadata.backend.get(self.backend_id)
+        if metadata is None:
+            return ()
+        return self.compiler_capabilities.compiler_ids(
+            metadata.compiler_capabilities
+        )
 
     def create_dialect(self, catalog: Catalog) -> BackendDialect:
         return self.dialect_factory(catalog)
@@ -165,6 +393,7 @@ class BackendCapability:
         benchmarks: BenchmarkProjectPlan,
         assets: RenderAssets,
         config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG,
+        policy_inputs: BackendPolicyInputs = EMPTY_BACKEND_POLICY_INPUTS,
     ) -> list[Artifact]:
         """Render the backend's complete artifact set from one fact snapshot."""
 
@@ -175,6 +404,7 @@ class BackendCapability:
             assets,
             self.artifact_media_type,
             config,
+            policy_inputs,
         )
 
     def plan_benchmarks(
@@ -182,10 +412,13 @@ class BackendCapability:
         catalog: Catalog,
         profiles: tuple[EmittedProfile, ...],
         value_tests: ValueTestProjectPlan,
+        policy_inputs: BackendPolicyInputs = EMPTY_BACKEND_POLICY_INPUTS,
     ) -> BenchmarkProjectPlan | None:
         if self.benchmark_plan_builder is None:
             return None
-        return self.benchmark_plan_builder(catalog, profiles, value_tests)
+        return self.benchmark_plan_builder(
+            catalog, profiles, value_tests, policy_inputs
+        )
 
     def documentation_formatter(self) -> BackendDocumentationFormatter:
         return self.documentation_formatter_factory()
@@ -257,14 +490,22 @@ class BackendCapability:
     ) -> tuple[Diagnostic, ...]:
         return self.profile_validator(profiles)
 
+    def validate_policy_inventory(
+        self,
+        profiles: tuple[EmittedProfile, ...],
+        policy_inputs: BackendPolicyInputs,
+    ) -> tuple[Diagnostic, ...]:
+        return self.policy_inventory_validator(profiles, policy_inputs)
+
     def render_primitive_preview(
         self,
         profile: EmittedProfile,
         primitive_name: str,
         specializations: tuple[LoweredSpecialization, ...],
+        policy_inputs: BackendPolicyInputs = EMPTY_BACKEND_POLICY_INPUTS,
     ) -> str:
         return self.primitive_preview_renderer(
-            profile, primitive_name, specializations
+            profile, primitive_name, specializations, policy_inputs
         )
 
 
@@ -272,6 +513,9 @@ __all__ = [
     "BackendArtifactRenderer",
     "BackendCapability",
     "BackendDocumentationFormatter",
+    "BackendPolicyInput",
+    "BackendPolicyInputs",
+    "EMPTY_BACKEND_POLICY_INPUTS",
     "DocumentationSiteInput",
     "DocumentationSpec",
     "GeneratedDocumentationBuilder",

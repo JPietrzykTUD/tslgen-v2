@@ -340,6 +340,9 @@ class LoweringEffects:
             ImplementationSafety(internal_unsafe=True, reasons=frozenset({reason}))
         )
 
+    def merge_safety(self, safety: ImplementationSafety) -> None:
+        self.safety = self.safety.merge(safety)
+
     def mark_caller_unsafe(self, reason: str) -> None:
         self.safety = self.safety.merge(
             ImplementationSafety(

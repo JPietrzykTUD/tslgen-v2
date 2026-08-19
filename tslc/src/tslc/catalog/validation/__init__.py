@@ -8,7 +8,7 @@ lost after promotion (duplicates, unknown fields, malformed ``requires`` maps).
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable, Mapping
 
 from tslc.catalog.model import Catalog
 from tslc.catalog.validation.body_validation import validate_body_regions
@@ -36,6 +36,7 @@ def validate_catalog(
     *,
     required_backends: Iterable[str] | None = None,
     supported_backends: Iterable[str] | None = None,
+    compiler_capabilities: Mapping[str, Collection[str]] | None = None,
 ) -> tuple[Diagnostic, ...]:
     """Validate parsed/catalog data and return structured diagnostics."""
 
@@ -66,6 +67,11 @@ def validate_catalog(
     )
     validate_scalable_runtime_lane_counts(catalog, backends, diagnostics, parsed)
     if parsed is not None:
-        validate_parsed_documents(parsed, diagnostics, catalog.target_families)
+        validate_parsed_documents(
+            parsed,
+            diagnostics,
+            catalog.target_families,
+            compiler_capabilities,
+        )
         validate_body_regions(parsed, diagnostics)
     return sort_diagnostics(diagnostics)

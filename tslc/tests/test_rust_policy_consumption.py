@@ -24,6 +24,7 @@ from tslc.backend.rust_policy_consumption import (
     plan_rust_policy_coverage,
     plan_rust_policy_consumption,
 )
+from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_selection import (
     RustPolicySelection,
     RustPolicySelectionPlan,
@@ -33,6 +34,9 @@ from tslc.backend.rust_policy_selection import (
 from tslc.benchmark.model import BenchmarkProfilePlan, BenchmarkProjectPlan
 from tslc.diagnostics import has_errors
 from tslc.pipeline import GenerationResult
+
+
+RUST_POLICY_MANIFEST = load_rust_policy_manifest()
 
 
 @pytest.fixture(scope="module")
@@ -60,7 +64,9 @@ def rust_policy_inputs(
 ) -> tuple[BenchmarkProfilePlan, RustPolicySelectionProfile]:
     result = rust_policy_project
     benchmark = result.rendered.benchmarks.profile("rust", "sse2")
-    selection = plan_rust_policy_selection(result.emitted_profiles).profile("sse2")
+    selection = plan_rust_policy_selection(
+        result.emitted_profiles, RUST_POLICY_MANIFEST
+    ).profile("sse2")
     assert benchmark is not None
     assert selection is not None
     return benchmark, selection

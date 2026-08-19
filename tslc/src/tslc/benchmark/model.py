@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar, Literal
 
+from tslc.catalog.model import PrimitiveMaskMode
 from tslc.diagnostics import Diagnostic
 from tslc.lower.lowerer import LoweredSpecialization
 
@@ -820,7 +821,7 @@ class BenchmarkCoverageEntry:
     type_tag: str
     result_kind: str
     param_kinds: tuple[str, ...]
-    mask_policy: str | None
+    mask_policy: PrimitiveMaskMode | None
     axis: tuple[tuple[str, str], ...]
     variant_names: tuple[str, ...]
     slot_hash: str
@@ -836,6 +837,7 @@ class BenchmarkProfilePlan:
     manifest_hash: str
     profile_family: str
     backend_feature_spellings: tuple[str, ...]
+    feature_detection_strategy: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

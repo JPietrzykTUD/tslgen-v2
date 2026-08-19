@@ -59,11 +59,6 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
 
     with machine_profiles_path.open("r", encoding="utf-8") as handle:
         source = json.load(handle)
-    all_profiles = [
-        profile["name"]
-        for family_profiles in source.values()
-        for profile in family_profiles
-    ]
     oneapi_profiles = {
         profile["name"]
         for family_profiles in source.values()
@@ -81,13 +76,19 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
         emitted_profiles = [
             profile for profiles in backend_shards.values() for profile in profiles
         ]
+        supported_profiles = [
+            profile["name"]
+            for family_profiles in source.values()
+            for profile in family_profiles
+            if _supports_backend(profile, backend)
+        ]
         oneapi_shard_profiles = {
             profile
             for name, profiles in backend_shards.items()
             if "-oneapi-fpga-" in name
             for profile in profiles
         }
-        assert sorted(emitted_profiles) == sorted(all_profiles)
+        assert sorted(emitted_profiles) == sorted(supported_profiles)
         assert len(emitted_profiles) == len(set(emitted_profiles))
         assert f"{backend}-x86-oneapi-fpga-0" in backend_shards
         assert oneapi_shard_profiles == oneapi_profiles
@@ -123,12 +124,35 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
         for profile in shard["profiles"].split(",")
         if profile
     )
+    rust_supported_profiles = [
+        profile["name"]
+        for family_profiles in source.values()
+        for profile in family_profiles
+        if _supports_backend(profile, "rust")
+    ]
     assert rust_profile_counts == Counter(
         {
             profile: 2 if profile in _RUST_COEXISTENCE_PROFILES else 1
-            for profile in all_profiles
+            for profile in rust_supported_profiles
         }
     )
+
+    assert [
+        shard for shard in exhaustive_shards if "rvv" in shard["profiles"].split(",")
+    ] == [
+        {
+            "backend": "cpp",
+            "name": "cpp-riscv-0",
+            "profiles": "rvv",
+        }
+    ]
+
+    values_workflow = Path(".github/workflows/generated-values.yml").read_text(
+        encoding="utf-8"
+    )
+    assert 'TSLC_QEMU_RISCV64="/usr/bin/qemu-riscv64"' in values_workflow
+    assert "vlen=256,elen=64" in values_workflow
+    assert "timeout --signal=KILL 60s /usr/bin/qemu-riscv64" in values_workflow
 
 
 def test_package_and_docs_generate_a_supported_distributable_profile_set() -> None:
@@ -176,6 +200,12 @@ def test_rust_examples_use_static_profile_selection_api() -> None:
     assert "BlendImpl" not in readme
 
 
+def _supports_backend(profile: dict[str, object], backend: str) -> bool:
+    supported = profile.get("supported_backends", ["cpp", "rust"])
+    assert isinstance(supported, list)
+    return backend in supported
+
+
 def _expected_exhaustive_shards(
     source: dict[str, list[dict[str, object]]],
     *,
@@ -187,7 +217,12 @@ def _expected_exhaustive_shards(
         groups: list[tuple[str, list[dict[str, object]]]] = [
             (
                 family,
-                [profile for profile in profiles if not profile.get("auto_detect_gate")],
+                [
+                    profile
+                    for profile in profiles
+                    if not profile.get("auto_detect_gate")
+                    and _supports_backend(profile, backend)
+                ],
             )
         ]
         gates = sorted(
@@ -204,6 +239,7 @@ def _expected_exhaustive_shards(
                     profile
                     for profile in profiles
                     if profile.get("auto_detect_gate") == gate
+                    and _supports_backend(profile, backend)
                 ],
             )
             for gate in gates

@@ -30,14 +30,12 @@ from tslc.backend.emitted_profile import (
 from tslc.backend.rust_names import rust_primitive_tag_name
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.target_capability import rust_arch_module
-from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.benchmark.planner import BENCHMARK_PROTOCOL_VERSION
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
-from tslc.output.verify_model import VerifyProfile, VerifyRunner
 from tslc.render._common import slug, text
 from tslc.render.rust_benchmark_layout import (
     RustBenchmarkLayoutPlan,
@@ -315,8 +313,12 @@ def _rust_artifacts(
         ),
         profile_metadata=assets.fill(
             "rust_profile_metadata.rs.tmpl",
-            profile_name=json.dumps("target_fallback"),
-            profile_family=json.dumps("generic"),
+            profile_name=json.dumps(
+                static_selection_plan.fallback_module.metadata_profile_name
+            ),
+            profile_family=json.dumps(
+                static_selection_plan.fallback_module.metadata_profile_family
+            ),
         ).rstrip(),
         registrations=rust_registrations(
             fallback_by_primitive, fallback_extensions
@@ -419,63 +421,6 @@ def _rust_valid_bit_pattern_impls(profiles: Sequence[EmittedProfile]) -> str:
     return "\n".join(lines)
 
 
-def rust_verify_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[VerifyProfile, ...]:
-    return tuple(
-        rust_verify_profile(emitted_profile.profile, emitted_profile.profile_family)
-        for emitted_profile in profiles
-    )
-
-
-def rust_verify_profile(
-    profile: MachineProfile,
-    capability: ProfileFamilyCapability | None = None,
-) -> VerifyProfile:
-    """Project a source machine profile into verifier-owned Rust facts."""
-
-    return VerifyProfile(
-        profile_name=slug(profile.name),
-        file_stem=slug(profile.name),
-        family=profile.family,
-        native_without_runner=(
-            capability.native_without_runner if capability is not None else False
-        ),
-        compile_modes=profile.compile_modes,
-        target_features=rust_target_features(profile, capability),
-        target=rust_target(profile, capability),
-        linker=rust_linker(profile, capability),
-        runner=_verify_runner(profile),
-    )
-
-
-def rust_target_features(
-    profile: MachineProfile,
-    capability: ProfileFamilyCapability | None = None,
-) -> tuple[str, ...]:
-    capability = capability or ProfileFamilyCapability(profile.family)
-    if not capability.backend("rust").feature_flags:
-        return ()
-    return tuple(
-        f"+{profile.feature_spelling(feature, 'rust')}"
-        for feature in sorted(profile.features)
-    )
-
-
-def rust_target(
-    profile: MachineProfile,
-    capability: ProfileFamilyCapability | None = None,
-) -> str | None:
-    capability = capability or ProfileFamilyCapability(profile.family)
-    return capability.backend("rust").target
-
-
-def rust_linker(
-    profile: MachineProfile,
-    capability: ProfileFamilyCapability | None = None,
-) -> str | None:
-    capability = capability or ProfileFamilyCapability(profile.family)
-    return capability.backend("rust").linker
-
-
 def _rust_arch_use(
     emitted_exts: Sequence[str],
     extensions: Mapping[str, Extension],
@@ -493,16 +438,6 @@ def _rust_arch_use(
         *(f"use core::arch::{module}::*;" for module in sorted(modules)),
     ]
     return "\n".join(lines) + "\n"
-
-
-def _verify_runner(profile: MachineProfile) -> VerifyRunner | None:
-    if profile.runner is None:
-        return None
-    return VerifyRunner(
-        kind=profile.runner.kind,
-        profile=profile.runner.profile,
-        args=profile.runner.args,
-    )
 
 
 def _rust_lib(
@@ -679,6 +614,7 @@ def _rust_build_policy_profiles(
         (
             "tsl_rust_variant_policy::GeneratedProfile {",
             f"    name: {json.dumps(entry.profile.profile_name)},",
+            f"    family: {json.dumps(entry.profile.profile_family)},",
             "    target_arch: "
             f"{json.dumps(entry.static_selection.requirement.target_arch)},",
             "    target_features: &["

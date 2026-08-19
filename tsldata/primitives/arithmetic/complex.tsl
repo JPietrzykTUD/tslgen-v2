@@ -37,6 +37,8 @@ prim<v:=(v,v)> mul(factor1, factor2):
     - {tags [edge], extension "avx512", type "si64", case {inputs [[0, -1, 1, 0, -2, 2, 0, -3], [0, -1, 1, 0, -2, 2, 0, -3]], expected [0, 1, 1, 0, 4, 4, 0, 9]}}
     - {tags [basic, neon], extension "neon", type "ui64", case {inputs [[18446744073709551615, 4294967297], [2, 4294967295]], expected [18446744073709551614, 18446744073709551615]}}
     - {tags [edge, neon], extension "neon", type "si64", case {inputs [[-1, -9223372036854775808], [2, -1]], expected [-2, -9223372036854775808]}}
+    - {tags [basic, rvv], extension "rvv", type "ui64", case {inputs [[18446744073709551615, 4294967297], [2, 4294967295]], expected [18446744073709551614, 18446744073709551615]}}
+    - {tags [edge, rvv], extension "rvv", type "si64", case {inputs [[-1, -9223372036854775808], [2, -1]], expected [-2, -9223372036854775808]}}
     - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 12.25, 20.25]}}
     - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, 0.0, INFINITY, INFINITY]}}
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, 4.0]}}
@@ -511,6 +513,39 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svmul, build[post=x]>(call<primitive=mask_true[Vec]>(), factor1, factor2));"
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vmul, build[infix="vv", infix_sep="_"]>(
+                factor1,
+                factor2,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vfmul, build[infix="vv", infix_sep="_"]>(
+                factor1,
+                factor2,
+                value(vector::runtime_length)
+              )
+            );
+          """
 prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
   arithmetic:
     operations [multiplication]
@@ -537,6 +572,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
   tests:
     - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 4.0, 0.0, 20.25]}}
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [0, 0, 0, -8]}}
+    - {tags [maskz, basic, rvv], extension "rvv", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [0, 0, 0, -8]}}
   impls:
     scalar:
       arith:
@@ -678,6 +714,23 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svmul, build[post=z]>(mask, factor1, factor2));"
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=mul[Vec]>(factor1, factor2),
+                call<primitive=set_zero[Vec]>()
+              )
+            );
+          """
 prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
   arithmetic:
     operations [multiplication]
@@ -704,6 +757,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
   tests:
     - {tags [mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 3.5, 20.25]}}
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [1, 0, 3, -8]}}
+    - {tags [mask, basic, rvv], extension "rvv", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [1, 0, 3, -8]}}
   impls:
     scalar:
       arith:
@@ -845,6 +899,23 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svmul, build[post=m]>(mask, factor1, factor2));"
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=mul[Vec]>(factor1, factor2),
+                factor1
+              )
+            );
+          """
 prim<v:=(v,v)> div(dividend, divisor):
   brief_description "Divides each dividend lane by the corresponding divisor lane."
   detailed_description """
@@ -1143,6 +1214,69 @@ prim<v:=(v,v)> div(dividend, divisor):
               divisor
             ));
           """
+    rvv:
+      si?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(zero_divisors, call<primitive=equal>(
+              divisor,
+              call<primitive=set_zero[Vec]>()
+            ));
+            if (call<primitive=mask_population_count[Vec]>(zero_divisors) != 0) {
+              helper<arith_zero_divisor_fail>();
+            }
+            complete(
+              intrin<vdiv, build[infix="vv", infix_sep="_"]>(
+                dividend,
+                divisor,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      ui?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(zero_divisors, call<primitive=equal>(
+              divisor,
+              call<primitive=set_zero[Vec]>()
+            ));
+            if (call<primitive=mask_population_count[Vec]>(zero_divisors) != 0) {
+              helper<arith_zero_divisor_fail>();
+            }
+            complete(
+              intrin<vdivu, build[infix="vv", infix_sep="_"]>(
+                dividend,
+                divisor,
+                value(vector::runtime_length)
+              )
+            );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vfdiv, build[infix="vv", infix_sep="_"]>(
+                dividend,
+                divisor,
+                value(vector::runtime_length)
+              )
+            );
+          """
 prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
   brief_description "Divides active dividend lanes by divisor lanes and writes zero to inactive mask lanes."
   detailed_description """
@@ -1181,6 +1315,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
     - {role "runtime_failure", tags [maskz, failure, active_zero], type "si32", case {inputs [10, [8, -9, 10, -12], [2, 0, -2, 4]], failure "integer_zero_divisor"}}
     - {tags [maskz, basic], type "f32", case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, -3.0, 0.0, -3.0]}}
     - {tags [maskz, zero], type "f32", case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [maskz, inactive_zero, rvv], extension "rvv", type "f32", case {inputs [10, [1.0, 8.0, -1.0, -12.0], [0.0, 2.0, 0.0, 4.0]], expected [0.0, 4.0, 0.0, -3.0]}}
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [8, -9, 10, -12], [2, 3, -2, 4]], expected [0, -3, 0, -3]}}
     - {tags [maskz, inactive_zero], type "si32", case {inputs [10, [-2147483648, -2147483648, 7, -7], [0, -1, 0, 3]], expected [0, -2147483648, 0, -2]}}
   impls:
@@ -1322,6 +1457,49 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
             }
             complete(intrin<svdiv, build[post=z]>(mask, dividend, divisor));
           """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(safe_dividend, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              dividend,
+              call<primitive=set_zero[Vec]>()
+            ));
+            var<const_infer>(safe_divisor, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              divisor,
+              call<primitive=set1[Vec]>(cast<static>(base::in, 1))
+            ));
+            complete(call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              call<primitive=div>(safe_dividend, safe_divisor),
+              call<primitive=set_zero[Vec]>()
+            ));
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vfdiv, build[infix="vv", infix_sep="_", post=mu]>(
+                mask,
+                call<primitive=set_zero[Vec]>(),
+                dividend,
+                divisor,
+                value(vector::runtime_length)
+              )
+            );
+          """
 prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
   brief_description "Divides active dividend lanes by divisor lanes and keeps the dividend lane where the mask is inactive."
   detailed_description """
@@ -1361,6 +1539,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
     - {role "runtime_failure", tags [mask, failure, active_zero], type "si32", case {inputs [10, [8, -9, 10, -12], [2, 0, -2, 4]], failure "integer_zero_divisor"}}
     - {tags [mask, basic], type "f32", case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -3.0, 10.0, -3.0]}}
     - {tags [mask, zero], type "f32", case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -9.0, 10.0, -12.0]}}
+    - {tags [mask, inactive_zero, rvv], extension "rvv", type "f32", case {inputs [10, [1.0, 8.0, -1.0, -12.0], [0.0, 2.0, 0.0, 4.0]], expected [1.0, 4.0, -1.0, -3.0]}}
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [8, -9, 10, -12], [2, 3, -2, 4]], expected [8, -3, 10, -3]}}
     - {tags [mask, inactive_zero], type "si32", case {inputs [10, [-2147483648, -2147483648, 7, -7], [0, -1, 0, 3]], expected [-2147483648, -2147483648, 7, -2]}}
   impls:
@@ -1502,6 +1681,49 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
             }
             complete(intrin<svdiv, build[post=m]>(mask, dividend, divisor));
           """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(safe_dividend, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              dividend,
+              call<primitive=set_zero[Vec]>()
+            ));
+            var<const_infer>(safe_divisor, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              divisor,
+              call<primitive=set1[Vec]>(cast<static>(base::in, 1))
+            ));
+            complete(call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              call<primitive=div>(safe_dividend, safe_divisor),
+              dividend
+            ));
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<vfdiv, build[infix="vv", infix_sep="_", post=mu]>(
+                mask,
+                dividend,
+                dividend,
+                divisor,
+                value(vector::runtime_length)
+              )
+            );
+          """
 prim<v:=(v,sImm)> mul_imm(data, factor):
   brief_description "Multiplies each vector lane by the compile-time scalar factor."
   detailed_description """
@@ -1518,12 +1740,13 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
     """
   tests:
     - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 3], expected [3, 6, 9, 12, 15, 18, 21, 24]}}
+    - {tags [basic, rvv], extension "rvv", type "si32", case {inputs [[1, 2, 3, 4], 3], expected [3, 6, 9, 12]}}
     - {tags [zero], type "si32", case {inputs [[-1, 0, 1, -2, 2, -3, 3, -4], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
     - {tags [neg], type "si32", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], -2], expected [-2, 4, -6, 8, -10, 12, -14, 16]}}
     - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 5], expected [5, 10, 15, 20, 25, 30, 35, 40]}}
     - {tags [zero], type "ui16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, wasm128, sve]:
+    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, wasm128, sve, rvv]:
       arith:
         requires:
           scalar []
@@ -1536,6 +1759,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           neon [neon]
           wasm128 [simd128]
           sve [sve]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1568,9 +1792,10 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
     """
   tests:
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [0, 6, 0, 12]}}
+    - {tags [maskz, basic, rvv], extension "rvv", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [0, 6, 0, 12]}}
     - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], 2], expected [0.0, -4.0, 0.0, -8.0]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128, rvv]:
       arith:
         requires:
           scalar []
@@ -1583,6 +1808,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
           neon [neon]
           sve [sve]
           wasm128 [simd128]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1616,9 +1842,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
     """
   tests:
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [1, 6, 3, 12]}}
+    - {tags [mask, basic, rvv], extension "rvv", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [1, 6, 3, 12]}}
     - {tags [mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], 2], expected [1.0, -4.0, 3.0, -8.0]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128, rvv]:
       arith:
         requires:
           scalar []
@@ -1631,6 +1858,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
           neon [neon]
           sve [sve]
           wasm128 [simd128]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2071,6 +2299,72 @@ prim<v:=(v,v)> mod(dividend, divisor):
             }
             complete(result);
           """
+    rvv:
+      si?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(zero_divisors, call<primitive=equal>(
+              divisor,
+              call<primitive=set_zero[Vec]>()
+            ));
+            if (call<primitive=mask_population_count[Vec]>(zero_divisors) != 0) {
+              helper<arith_zero_divisor_fail>();
+            }
+            complete(intrin<vrem, build[infix="vv", infix_sep="_"]>(
+              dividend,
+              divisor,
+              value(vector::runtime_length)
+            ));
+          """
+      ui?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(zero_divisors, call<primitive=equal>(
+              divisor,
+              call<primitive=set_zero[Vec]>()
+            ));
+            if (call<primitive=mask_population_count[Vec]>(zero_divisors) != 0) {
+              helper<arith_zero_divisor_fail>();
+            }
+            complete(intrin<vremu, build[infix="vv", infix_sep="_"]>(
+              dividend,
+              divisor,
+              value(vector::runtime_length)
+            ));
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, dividends, lanes);
+            var<runtime_array>(Base, divisors, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false]>(dividends, dividend);
+            call<primitive=store[Vec], attrs[aligned=false]>(divisors, divisor);
+            loop<backend>(i, 0, lanes, 1) {
+              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(
+                dividends[i],
+                divisors[i]
+              );
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+          """
     scalar:
       arith:
         requires []
@@ -2170,6 +2464,8 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
     - {role "runtime_failure", tags [maskz, failure, active_zero], type "si32", case {inputs [10, [10, -9, 8, -7], [3, 0, 5, 2]], failure "integer_zero_divisor"}}
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [0, -1, 0, -1]}}
     - {tags [maskz, inactive_zero], type "si32", case {inputs [10, [-2147483648, -2147483648, 7, -7], [0, -1, 0, -3]], expected [0, 0, 0, -1]}}
+    - {tags [maskz, float, rvv], extension "rvv", type "f32", case {inputs [10, [5.5, -5.5, 7.0, -7.0], [2.0, 2.0, 3.0, 3.0]], expected [0.0, -1.5, 0.0, -1.0]}}
+    - {tags [maskz, float, rvv], extension "rvv", type "f64", case {inputs [2, [5.5, -7.0], [2.0, 3.0]], expected [0.0, -1.0]}}
   impls:
     scalar:
       arith:
@@ -2219,6 +2515,31 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(safe_dividend, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              dividend,
+              call<primitive=set_zero[Vec]>()
+            ));
+            var<const_infer>(safe_divisor, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              divisor,
+              call<primitive=set1[Vec]>(cast<static>(base::in, 1))
+            ));
+            complete(call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              call<primitive=mod>(safe_dividend, safe_divisor),
+              call<primitive=set_zero[Vec]>()
+            ));
+          """
 prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
   brief_description "Computes the lane-wise remainder for active lanes and keeps the dividend lane where the mask is inactive."
   detailed_description """
@@ -2258,6 +2579,8 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
     - {role "runtime_failure", tags [mask, failure, active_zero], type "si32", case {inputs [10, [10, -9, 8, -7], [3, 0, 5, 2]], failure "integer_zero_divisor"}}
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [10, -1, 8, -1]}}
     - {tags [mask, inactive_zero], type "si32", case {inputs [10, [-2147483648, -2147483648, 7, -7], [0, -1, 0, -3]], expected [-2147483648, 0, 7, -1]}}
+    - {tags [mask, float, rvv], extension "rvv", type "f32", case {inputs [10, [5.5, -5.5, 7.0, -7.0], [2.0, 2.0, 3.0, 3.0]], expected [5.5, -1.5, 7.0, -1.0]}}
+    - {tags [mask, float, rvv], extension "rvv", type "f64", case {inputs [2, [5.5, -7.0], [2.0, 3.0]], expected [5.5, -1.0]}}
   impls:
     scalar:
       arith:
@@ -2307,6 +2630,31 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(safe_dividend, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              dividend,
+              call<primitive=set_zero[Vec]>()
+            ));
+            var<const_infer>(safe_divisor, call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              divisor,
+              call<primitive=set1[Vec]>(cast<static>(base::in, 1))
+            ));
+            complete(call<primitive=select[Vec], attrs[mask=pass_through]>(
+              mask,
+              call<primitive=mod>(safe_dividend, safe_divisor),
+              dividend
+            ));
+          """
 prim<v:=(v,sImm)> mod_imm(dividend, divisor):
   brief_description "Computes the lane-wise remainder of each dividend lane divided by the compile-time scalar divisor."
   detailed_description """
@@ -2341,17 +2689,19 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
     """
   tests:
     - {tags [basic], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 3], expected [1, 0, 2, -1, 0, -2, 1, 0]}}
+    - {tags [basic, rvv], extension "rvv", type "si32", case {inputs [[10, -9, 8, -7], 3], expected [1, 0, 2, -1]}}
     - {tags [edge, signs], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], -3], expected [1, 0, 2, -1, 0, -2, 1, 0]}}
     - {tags [edge, overflow], type "si32", case {inputs [[-2147483648, -7, 7, 0], -1], expected [0, 0, 0, 0]}}
     - {tags [one], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 1], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
     - {tags [basic, float], type "f32", case {inputs [[5.5, -5.5, 7.0, -7.0], 2], expected [1.5, -1.5, 1.0, -1.0]}}
+    - {tags [basic, float, rvv], extension "rvv", type "f64", case {inputs [[5.5, -7.0], 2], expected [1.5, -1.0]}}
     - {tags [edge, float, zero_immediate], type "f32", case {inputs [[5.5, -5.5, 0.0, -0.0], 0], expected [NAN, NAN, NAN, NAN]}}
     - {tags [basic], type "ui16", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], 5], expected [0, 4, 3, 2, 1, 0, 4, 3]}}
     - {tags [one], type "ui16", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], 1], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
     - {role "compile_failure", tags [failure, zero_immediate], type "si32", case {inputs [[10, -9, 8, -7], 0], failure "integer_zero_divisor"}}
     - {role "compile_failure", tags [failure, narrowed_zero], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 256], failure "integer_zero_divisor"}}
   impls:
-    [scalar, generic, clang_v128, avx512, avx2, sse, sve, wasm128]:
+    [scalar, generic, clang_v128, avx512, avx2, sse, sve, wasm128, rvv]:
       arith:
         requires:
           scalar []
@@ -2362,6 +2712,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
           sse [sse]
           sve [sve]
           wasm128 [simd128]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2413,9 +2764,12 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
     """
   tests:
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [0, 0, 0, -1]}}
+    - {tags [maskz, basic, rvv], extension "rvv", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [0, 0, 0, -1]}}
+    - {tags [maskz, float, rvv], extension "rvv", type "f32", case {inputs [10, [5.5, -5.5, 7.0, -7.0], 2], expected [0.0, -1.5, 0.0, -1.0]}}
+    - {tags [maskz, float, rvv], extension "rvv", type "f64", case {inputs [2, [5.5, -7.0], 2], expected [0.0, -1.0]}}
     - {role "compile_failure", tags [maskz, failure, all_inactive, zero_immediate], type "si32", case {inputs [0, [10, -9, 8, -7], 0], failure "integer_zero_divisor"}}
   impls:
-    [scalar, avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
+    [scalar, avx512, avx2, sse, sve, generic, clang_v128, wasm128, rvv]:
       arith:
         requires:
           scalar []
@@ -2426,6 +2780,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
           generic []
           clang_v128 []
           wasm128 [simd128]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2478,9 +2833,12 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
     """
   tests:
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [10, 0, 8, -1]}}
+    - {tags [mask, basic, rvv], extension "rvv", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [10, 0, 8, -1]}}
+    - {tags [mask, float, rvv], extension "rvv", type "f32", case {inputs [10, [5.5, -5.5, 7.0, -7.0], 2], expected [5.5, -1.5, 7.0, -1.0]}}
+    - {tags [mask, float, rvv], extension "rvv", type "f64", case {inputs [2, [5.5, -7.0], 2], expected [5.5, -1.0]}}
     - {role "compile_failure", tags [mask, failure, all_inactive, zero_immediate], type "si32", case {inputs [0, [10, -9, 8, -7], 0], failure "integer_zero_divisor"}}
   impls:
-    [scalar, avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
+    [scalar, avx512, avx2, sse, sve, generic, clang_v128, wasm128, rvv]:
       arith:
         requires:
           scalar []
@@ -2491,6 +2849,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
           generic []
           clang_v128 []
           wasm128 [simd128]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false

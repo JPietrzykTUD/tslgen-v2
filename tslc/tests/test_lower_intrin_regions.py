@@ -11,6 +11,25 @@ from _select_lower_backend_support import (
     Primitive,
     SelectedImplementation,
 )
+from tslc.catalog.model import IntrinsicComposition, IntrinsicNameOrder
+from tslc.backend.translation_common import compose_intrinsic_name
+
+
+def test_synthetic_suffix_first_composition_is_name_independent() -> None:
+    extension = Extension(
+        name="synthetic_suffix_first",
+        isa_name="synthetic_suffix_first",
+        family="synthetic",
+        intrinsic_composition=IntrinsicComposition(
+            prefix_by_backend={"cpp": "synthetic_"},
+            order=IntrinsicNameOrder.SUFFIX_BASE,
+        ),
+    )
+
+    assert (
+        compose_intrinsic_name("cpp", extension, "add", "i32x4")
+        == "synthetic_i32x4_add"
+    )
 
 
 def test_consumed_tsil_statement_terminators_render_once() -> None:
@@ -18,8 +37,6 @@ def test_consumed_tsil_statement_terminators_render_once() -> None:
         name="scalar",
         isa_name="scalar",
         family="scalar",
-        compose_prefix={},
-        compose_suffix_by_type={},
         backend_supported={"cpp": True},
     )
     impl = Implementation(
@@ -72,8 +89,6 @@ def test_intrin_build_supports_explicit_prefix_and_suffix() -> None:
         name="custom",
         isa_name="custom",
         family="x86",
-        compose_prefix={},
-        compose_suffix_by_type={},
         backend_supported={"cpp": True},
     )
     impl = Implementation(
@@ -112,25 +127,27 @@ def test_intrin_build_supports_explicit_prefix_and_suffix() -> None:
     assert cpp.body_text == "return _custom_foo_bar(a);"
 
 
-def test_wasm_intrin_build_requires_lane_suffix_for_typed_ops() -> None:
+def test_suffix_first_intrin_build_requires_declared_suffix() -> None:
     ext = Extension(
-        name="wasm128",
-        isa_name="wasm128",
-        family="wasm",
-        intrinsic_style="wasm",
-        compose_prefix={"cpp": "wasm_"},
-        compose_suffix_by_type={},
+        name="synthetic_suffix_first",
+        isa_name="synthetic_suffix_first",
+        family="synthetic",
+        intrinsic_composition=IntrinsicComposition(
+            prefix_by_backend={"cpp": "wasm_"},
+            order=IntrinsicNameOrder.SUFFIX_BASE,
+            require_explicit_suffix=True,
+        ),
         backend_supported={"cpp": True},
     )
     impl = Implementation(
-        ("wasm128", "ints"),
-        "wasm128",
+        ("synthetic_suffix_first", "ints"),
+        "synthetic_suffix_first",
         "ints",
         "complete(intrin<add, build>(a, b));",
         source_order=0,
     )
     prim = Primitive(
-        name="bad_wasm_intrin_build",
+        name="bad_suffix_first_intrin_build",
         signature="v:=(v,v)",
         parameters=("a", "b"),
         attribute_keys=(),
@@ -139,7 +156,7 @@ def test_wasm_intrin_build_requires_lane_suffix_for_typed_ops() -> None:
     catalog = Catalog(
         primitives=(prim,),
         type_groups={"ints": ("si32",)},
-        extensions={"wasm128": ext},
+        extensions={"synthetic_suffix_first": ext},
         type_spellings={"cpp": {"s32": "int32_t"}},
         translations={"cpp": {"complete": "return {value}"}},
     )
@@ -153,7 +170,10 @@ def test_wasm_intrin_build_requires_lane_suffix_for_typed_ops() -> None:
     lowered = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, "cpp"))
 
     assert lowered.specialization is None
-    assert lowered.diagnostics[0].code == "TSL-LOWER-WASM-INTRIN-MISSING-LANE-SUFFIX"
+    assert (
+        lowered.diagnostics[0].code
+        == "TSL-LOWER-INTRIN-MISSING-EXPLICIT-SUFFIX"
+    )
 
 
 def test_wasm_intrin_build_accepts_explicit_empty_suffix_for_v128_ops() -> None:
@@ -161,9 +181,11 @@ def test_wasm_intrin_build_accepts_explicit_empty_suffix_for_v128_ops() -> None:
         name="wasm128",
         isa_name="wasm128",
         family="wasm",
-        intrinsic_style="wasm",
-        compose_prefix={"cpp": "wasm_"},
-        compose_suffix_by_type={},
+        intrinsic_composition=IntrinsicComposition(
+            prefix_by_backend={"cpp": "wasm_"},
+            order=IntrinsicNameOrder.SUFFIX_BASE,
+            require_explicit_suffix=True,
+        ),
         backend_supported={"cpp": True},
     )
     impl = Implementation(
@@ -207,8 +229,10 @@ def test_intrin_build_suffix_and_infix_accept_type_values() -> None:
         name="custom",
         isa_name="custom",
         family="x86",
-        compose_prefix={"cpp": "_custom_"},
-        compose_suffix_by_type={"si32": "epi32"},
+        intrinsic_composition=IntrinsicComposition(
+            prefix_by_backend={"cpp": "_custom_"},
+            suffix_by_type={"si32": "epi32"},
+        ),
         backend_supported={"cpp": True},
     )
     impl = Implementation(
@@ -255,8 +279,10 @@ def test_intrin_build_appends_literal_post_fragment() -> None:
         name="custom",
         isa_name="custom",
         family="x86",
-        compose_prefix={"cpp": ""},
-        compose_suffix_by_type={"si32": "s32"},
+        intrinsic_composition=IntrinsicComposition(
+            prefix_by_backend={"cpp": ""},
+            suffix_by_type={"si32": "s32"},
+        ),
         backend_supported={"cpp": True},
     )
     impl = Implementation(
@@ -300,8 +326,10 @@ def test_intrin_build_prefix_remains_text_only() -> None:
         name="custom",
         isa_name="custom",
         family="x86",
-        compose_prefix={"cpp": "_custom_"},
-        compose_suffix_by_type={"si32": "epi32"},
+        intrinsic_composition=IntrinsicComposition(
+            prefix_by_backend={"cpp": "_custom_"},
+            suffix_by_type={"si32": "epi32"},
+        ),
         backend_supported={"cpp": True},
     )
     impl = Implementation(
@@ -343,8 +371,10 @@ def test_intrin_build_rejects_whitespace_separated_selector_terms() -> None:
         name="custom",
         isa_name="custom",
         family="x86",
-        compose_prefix={"cpp": "_custom_"},
-        compose_suffix_by_type={"si32": "epi32"},
+        intrinsic_composition=IntrinsicComposition(
+            prefix_by_backend={"cpp": "_custom_"},
+            suffix_by_type={"si32": "epi32"},
+        ),
         backend_supported={"cpp": True},
     )
     impl = Implementation(

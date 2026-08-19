@@ -44,17 +44,37 @@ readme = "README.md"
 compiler = "clang++"
 target = "aarch64-linux-gnu"
 linker = "ld.lld"
+capabilities = ["elementwise_clzg"]
 
 [tslc.runners]
 qemu-aarch64 = "/usr/bin/qemu-aarch64"
+qemu-riscv64 = "/usr/bin/qemu-riscv64"
 ```
 
 The Rust package table is optional as a whole; when present, it supplies the
 complete release metadata rendered into the generated Cargo package. Toolchain
-and runner tables are optional. CLI `--compiler`, `--target`, `--linker`, and
-`--runner` assignments override configured values. The repository configuration
-supplies only portable paths and backend defaults; keep host-specific overrides
-in an uncommitted configuration or pass them on the command line.
+and runner tables are optional. CLI `--compiler`, `--target`, `--linker`,
+`--compiler-capabilities cpp=elementwise_clzg`, and `--runner` assignments
+override configured values. Capability names are backend-owned facts, not
+compiler-version aliases.
+
+For distributable C++ output, omit `capabilities`. Ordinary generation retains
+a compiler-gated optimization together with its unconditional implementation.
+When a downstream project calls `FetchContent_MakeAvailable`, generated CMake
+compile-tests the registered construct with that project's C++ compiler and
+exports the result on the generated interface targets. The primitive header
+then selects the optimized or portable body with a local preprocessor branch.
+This is independent from `TSL_PROFILE`: profile selection controls hardware
+features, while the compile probe controls compiler support. A consumer that
+includes the generated headers without CMake gets a conservative
+`__has_builtin`-based default.
+
+Configured or command-line `capabilities` are an explicit forced-selection
+override for focused authoring checks or a pinned toolchain. If that selected
+body is unavailable, the generated header fails with the backend-owned
+diagnostic. The repository configuration supplies only portable paths and
+backend defaults; keep host-specific overrides in an uncommitted configuration
+or pass them on the command line.
 
 The original flat generation form remains supported for scripts:
 
@@ -182,6 +202,44 @@ tslc build --primitives add --profiles avx2 --backends cpp
 tslc test --primitives add --profiles avx2 --backends cpp
 ```
 
+### RISC-V V profile
+
+The `rvv` machine profile targets RV64 Linux with the ratified Vector Extension
+1.0, LP64D, and scalable LMUL=1 registers. It supports the C++17 backend only;
+Rust generation intentionally omits this profile because stable
+`core::arch::riscv64` does not expose RVV intrinsics. Vector length is runtime
+state: generated calls pass an explicit `vl`, and lane counts use
+`__riscv_vlenb() / sizeof(T)`. Do not model VLEN as separate fixed-width
+extensions.
+
+The complete catalog surface is selected and build verified for RVV with no
+coverage-gap or policy-deferred slots. Direct RVV intrinsics implement the
+native arithmetic, bitwise, comparison, mask, load/store, shift, conversion,
+and permutation operations. Operations without a ratified vector instruction,
+such as floating remainder, use typed scalable compositions or runtime-lane
+fallbacks while preserving the authored semantics. This includes all declared
+integer and floating LMUL=1 types, mask policies, conversions, reductions,
+permutations, and gather/scatter forms.
+
+The repository resolves the `riscv-cpp` tool role to
+`/usr/bin/riscv64-linux-gnu-g++`. Override that role in `[tslc.tools]` on hosts
+with a different cross-compiler path. `dev.sh doctor` and `dev.sh test` discover
+`qemu-riscv64` from `TSLC_QEMU_RISCV64` (default
+`/usr/bin/qemu-riscv64`):
+
+```bash
+./dev.sh doctor --profile rvv --backend cpp --run
+./dev.sh build --profiles rvv --backends cpp
+./dev.sh test --profiles rvv --backends cpp
+PYTHONPATH=tslc/src python -m tslc coverage inventory \
+  --profiles rvv --backends cpp --format text
+```
+
+The default runner uses QEMU’s `max` CPU with V 1.0 and VLEN 128. CI reruns
+the same generated value binary at VLEN 256 so the scalable contract is checked
+at two runtime widths. Missing cross-compilers, LP64D sysroots, or runners are
+reported by verifier preflight and remain skip-safe outside required CI.
+
 `generate` renders and writes the configured output tree. `build` additionally
 build-verifies it. `test` additionally emits, builds, and runs generated value
 tests. Generation remains pure until the explicit output write; compiler and
@@ -208,7 +266,6 @@ produce exit status 1.
 ```bash
 tslc preview --primitive add --profile avx2 --type si32 --backend cpp
 tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
-tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
 tslc explain --primitive add --profile avx2 --type si32 --backend cpp
 tslc inspect --stage lowered --primitive add --profile avx2 --type si32 --backend cpp
 tslc audit metadata
@@ -219,6 +276,13 @@ tslc coverage inventory --format json
 tslc coverage inventory --update
 tslc coverage inventory --check
 ```
+
+`explain` and the selection/lowered `inspect` stages default to the same
+automatic compiler-capability frontier as ordinary generation. Pass
+`--compiler-capabilities elementwise_clzg` to inspect a known toolchain, or
+`--compiler-capabilities ''` to inspect the exact no-capabilities fallback.
+Target-feature selection remains profile-owned in every mode.
+
 
 `preview` normally renders every emitted callable matching the concrete name
 and slot filters. Editor integrations can additionally pass

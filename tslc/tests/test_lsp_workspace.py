@@ -31,7 +31,12 @@ from tslc.lsp.positions import (
     source_position,
     span_to_range,
 )
-from tslc.lsp.primitive_explorer import PrimitiveExplorerCache, primitive_explorer
+from tslc.catalog.machine_profiles import MachineProfile
+from tslc.lsp.primitive_explorer import (
+    PrimitiveExplorerCache,
+    _selected_profile,
+    primitive_explorer,
+)
 from tslc.lsp.server import (
     _check_and_publish,
     _publish,
@@ -48,6 +53,26 @@ from tslc.syntax.parser import TslParser
 
 
 _COMPLETION_PATH = Path("tslctmp/lsp-completion.tsl").resolve()
+
+
+def test_primitive_explorer_fallback_is_profile_role_driven() -> None:
+    profiles = {
+        "alphabetic_first": MachineProfile(
+            name="alphabetic_first",
+            family="test",
+            features=frozenset(),
+            alternatives={},
+        ),
+        "renamed_base": MachineProfile(
+            name="renamed_base",
+            family="test",
+            features=frozenset(),
+            alternatives={},
+            default_build_fallback=True,
+        ),
+    }
+
+    assert _selected_profile(profiles, None, ()) == "renamed_base"
 
 
 def test_index_requests_wait_for_a_completed_initial_check() -> None:
@@ -325,10 +350,23 @@ def test_implementation_context_only_offers_slots_where_that_body_wins(
     assert snapshot.catalog is not None
     path = data_root / "primitives" / "arithmetic" / "select.tsl"
     lines = path.read_text(encoding="utf-8").splitlines()
+    extension_group_line = next(
+        line
+        for line, text in enumerate(lines, 1)
+        if text.strip() == (
+            "[scalar, generic, clang_v128, oneapi_fpga, avx512, avx2_vl, "
+            "avx2, sse_vl, sse, neon, sve]:"
+        )
+    )
+    implementation_line = next(
+        line
+        for line, text in enumerate(lines, 1)
+        if line > extension_group_line and text.strip() == "arith:"
+    )
     body_line = next(
         line
         for line, text in enumerate(lines, 1)
-        if line > 150 and text.strip() == "complete("
+        if line > implementation_line and text.strip() == "complete("
     )
 
     def unexpected_lowering(*args, **kwargs):
@@ -347,7 +385,7 @@ def test_implementation_context_only_offers_slots_where_that_body_wins(
 
     assert context.primitive == "max"
     assert context.implementation_source is not None
-    assert context.implementation_source.line == 150
+    assert context.implementation_source.line == implementation_line
     assert context.slots
     assert any(
         slot.profile == "avx2"
@@ -1141,3 +1179,61 @@ def test_unsaved_unknown_implementation_metadata_is_diagnosed(
 
     assert definitions
     assert all(location.uri.endswith("/store.tsl") for location in definitions)
+
+
+def test_compiler_capability_frontier_is_shared_by_context_and_explorer(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    assert snapshot.index is not None
+    path = data_root / "primitives" / "bitwise" / "bit_counts.tsl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    builtin_line = next(
+        line
+        for line, content in enumerate(lines, 1)
+        if "__builtin_elementwise_clzg" in content
+    )
+
+    context = specialization_context(
+        snapshot.catalog,
+        snapshot.parsed,
+        workspace.config.profiles,
+        backend="cpp",
+        path=path,
+        line=builtin_line,
+        column=lines[builtin_line - 1].index("__builtin_elementwise_clzg") + 1,
+    )
+
+    assert context.primitive == "lzc"
+    assert any(
+        slot.profile == "sse2"
+        and slot.extension == "clang_v128"
+        and slot.type_tag == "ui32"
+        for slot in context.slots
+    )
+
+    explorer = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        mode="resolved",
+        profile="sse2",
+        backend="cpp",
+        path=path,
+        selected_primitive="lzc",
+    )
+    slot = next(
+        item
+        for item in explorer.slots
+        if item.signature == "v:=v"
+        and item.attributes == ()
+        and item.extension == "clang_v128"
+        and item.type_tag == "ui32"
+    )
+
+    assert slot.status == "selected"
+    assert len(slot.implementations) == 2

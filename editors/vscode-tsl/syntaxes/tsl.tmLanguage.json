@@ -3,6 +3,7 @@
   "name": "TSL",
   "scopeName": "source.tsl",
   "x-tslc-region-keywords": [
+    "address",
     "array",
     "assume_aligned",
     "call",
@@ -149,7 +150,7 @@
       "patterns": [
         {
           "name": "support.function.tsil.tsl",
-          "match": "\\b(array|assume_aligned|call|cast|complete|helper|if|intrin|io|lanes|let|loop|mask|mem|op|select_expr|switch|type|value|var)\\b(?=\\s*(?:<|\\())"
+          "match": "\\b(address|array|assume_aligned|call|cast|complete|helper|if|intrin|io|lanes|let|loop|mask|mem|op|select_expr|switch|type|value|var)\\b(?=\\s*(?:<|\\())"
         }
       ]
     },

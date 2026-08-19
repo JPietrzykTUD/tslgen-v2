@@ -27,6 +27,15 @@ The admission key contains only the named profile and scenario family; live
 machine-profile facts remain owned by `MachineProfile` and flow into the
 manifest and native feature checks.
 
+The exact admissions and the one consumable pilot are declarative backend
+evidence in `tslc/src/tslc/backend/policy_assets/rust_policy.json`. The strict
+loader in `backend/rust_policy_manifest.py` rejects unknown fields, duplicates,
+invalid scenario families, and incomplete pilot identities. Selection matches
+the complete lowered specialization and ordered candidate inventory; a partial
+or stale entry therefore stays report-only or fails closed. Extending the pilot
+changes this manifest and its validation tests, not a primitive/extension/type
+branch in compiler code.
+
 Report-only summaries retain the reducer's observed candidate and improvement,
 but the corresponding policy decision remains the authored default. A profile
 with no consumable mapping does not advertise policy output and rejects
@@ -353,6 +362,12 @@ The audit checks:
 - correctness data exists;
 - a typed scenario exists;
 - emitted candidates match coverage identity.
+
+`maintenance/benchmark_coverage.py` is the stable CLI/import façade. Frozen
+records, the audit join, and deterministic baseline serialization live in
+`benchmark_coverage_model.py`, `benchmark_coverage_audit.py`, and
+`benchmark_coverage_baseline.py`; new reporting or storage behavior belongs in
+the corresponding focused module.
 
 The C++ gate retains `coverage/benchmark-baseline.json` and
 `coverage/benchmark-shape-inventory.md`. Its existing issue identities and

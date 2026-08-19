@@ -7,6 +7,8 @@ without lengthening one mixed validator file.
 
 from __future__ import annotations
 
+from collections.abc import Collection, Mapping
+
 from tslc.catalog.model import RESULT_DIMENSIONS
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.target_families import TargetFamilyCatalog
@@ -43,6 +45,7 @@ def validate_parsed_documents(
     parsed: OuterTslParseResult,
     diagnostics: list[Diagnostic],
     target_families: TargetFamilyCatalog = TargetFamilyCatalog(),
+    compiler_capabilities: Mapping[str, Collection[str]] | None = None,
 ) -> None:
     backend_ids = frozenset(
         declaration.name
@@ -70,6 +73,7 @@ def validate_parsed_documents(
                     backend_ids,
                     diagnostics,
                     target_families,
+                    compiler_capabilities,
                 )
                 if declaration.kind == "types":
                     type_group_fields.extend(declaration.fields)
@@ -80,6 +84,7 @@ def validate_parsed_documents(
                     backend_ids,
                     diagnostics,
                     target_families.target_feature_names,
+                    compiler_capabilities,
                 )
             elif (
                 isinstance(declaration, ParsedFieldDeclaration)
@@ -264,6 +269,7 @@ def _validate_block(
     backend_ids: frozenset[str],
     diagnostics: list[Diagnostic],
     target_families: TargetFamilyCatalog,
+    compiler_capabilities: Mapping[str, Collection[str]] | None,
 ) -> None:
     if declaration.kind == "extension":
         validate_known_fields(
@@ -278,6 +284,7 @@ def _validate_block(
             backend_ids,
             diagnostics,
             target_families,
+            compiler_capabilities,
         )
     elif declaration.kind == "types":
         for field in declaration.fields:

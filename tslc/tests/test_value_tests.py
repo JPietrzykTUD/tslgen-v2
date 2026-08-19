@@ -41,6 +41,109 @@ def _assert_value_tests_ran(report, *, backends: tuple[str, ...]) -> None:
     assert not missing, (missing, steps)
 
 
+@pytest.mark.parametrize(
+    ("clangxx", "expected_capability_value"),
+    (
+        (Path("/usr/bin/clang++-21"), ""),
+        (Path("/usr/bin/clang++-22"), "1"),
+    ),
+    ids=("clang21-fallback", "clang22-elementwise-clzg"),
+)
+def test_clang_lzc_value_tests_build_and_pass(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+    clangxx: Path,
+    expected_capability_value: str,
+) -> None:
+    sde = Path("/opt/intel-sde/sde64")
+    if not clangxx.is_file() or not sde.exists():
+        pytest.skip(
+            f"Clang lzc value gate needs {clangxx} and Intel SDE"
+        )
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["lzc"],
+        profiles=["sse2"],
+        backends=("cpp",),
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    clang_headers = "\n".join(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path.endswith("_clang.hpp")
+    )
+    assert "#if TSL_COMPILER_HAS_ELEMENTWISE_CLZG" in clang_headers
+    assert "__builtin_elementwise_clzg" in clang_headers
+    assert "binary_or<" in clang_headers
+    cmake = next(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path == "cpp/CMakeLists.txt"
+    )
+    assert "check_cxx_source_compiles" in cmake
+    assert "__builtin_elementwise_clzg" in cmake
+    assert (
+        "TSL_COMPILER_HAS_ELEMENTWISE_CLZG=$<BOOL:"
+        "${TSL_COMPILER_HAS_ELEMENTWISE_CLZG}>"
+    ) in cmake
+    clang_width_cases = {
+        case.case_name
+        for profile in result.rendered.value_tests.profiles
+        for case in profile.cases
+        if case.call_name == "lzc" and "_clang_v" in case.case_name
+    }
+    assert {
+        "lzc_ui32_clang_v128_clang_edge",
+        "lzc_ui32_clang_v256_clang_edge",
+        "lzc_ui32_clang_v512_clang_edge",
+    } <= clang_width_cases
+    clang_extensions = {
+        case.differential.hardware_extension
+        for profile in result.rendered.value_tests.profiles
+        for case in profile.cases
+        if case.call_name == "lzc"
+        and case.case_name in clang_width_cases
+        and case.differential is not None
+        and case.differential.hardware_extension.startswith("clang_v")
+    }
+    assert clang_extensions == {
+        "clang_v128",
+        "clang_v256",
+        "clang_v512",
+        "clang_v128_bool",
+        "clang_v256_bool",
+        "clang_v512_bool",
+    }
+
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        toolchains={
+            "cpp": BackendToolchain.create(compiler=str(clangxx))
+        },
+        runner_paths={"sde": str(sde)},
+        run_value_tests=True,
+    )
+    _assert_value_tests_ran(report, backends=("cpp",))
+    configure = next(
+        command
+        for command in report.commands
+        if command.command.backend_id == "cpp"
+        and command.command.step == "configure"
+    )
+    assert (
+        f"TSL compiler capability elementwise_clzg = {expected_capability_value}"
+        in configure.stdout
+    )
+
+
 def test_golden_value_tests_build_and_pass(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
@@ -563,6 +666,9 @@ def test_value_full_corpus_avx2_rust_parity_inventory_is_explicit(
             "insert_imask",
             "insert_imask_ui32_clang_v128_to_clang_v256_clang",
         ),
+        ("lzc", "lzc_ui32_clang_v128_clang_edge"),
+        ("lzc", "lzc_ui32_clang_v256_clang_edge"),
+        ("lzc", "lzc_ui32_clang_v512_clang_edge"),
         (
             "load_mask_repr",
             "load_mask_repr_ui32_clang_v256_aligned_false_packed_false_mask_clang_unpacked",
@@ -579,6 +685,26 @@ def test_value_full_corpus_avx2_rust_parity_inventory_is_explicit(
             "resize_up_zero",
             "resize_up_zero_si32_clang_v128_to_clang_v512_zero_clang",
         ),
+        (
+            "to_integral",
+            "to_integral_f64_clang_v128_bool_clang_boolean_edge",
+        ),
+        ("to_integral", "to_integral_f64_clang_v128_clang_edge"),
+        (
+            "to_integral",
+            "to_integral_ui8_clang_v512_bool_clang_boolean_wide_edge",
+        ),
+        ("to_integral", "to_integral_ui8_clang_v512_clang_wide_edge"),
+        (
+            "to_mask",
+            "to_mask_f64_clang_v128_bool_clang_boolean_padding_edge",
+        ),
+        ("to_mask", "to_mask_f64_clang_v128_clang_padding_edge"),
+        (
+            "to_mask",
+            "to_mask_ui8_clang_v512_bool_clang_boolean_wide_edge",
+        ),
+        ("to_mask", "to_mask_ui8_clang_v512_clang_wide_edge"),
     }
     assert all(
         len(entry.backend_statuses) == 1

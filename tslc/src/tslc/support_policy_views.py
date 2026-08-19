@@ -14,6 +14,7 @@ from tslc.catalog.model import (
     RESULT_DIM_VECTOR,
     Catalog,
     Primitive,
+    PrimitiveCastMode,
 )
 from tslc.catalog.signatures import parse_signature
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
@@ -160,7 +161,10 @@ def concrete_target_candidates(
                     if constraint.matches(source_extension, candidate)
                 )
         return tuple(sorted(t for t in targets if t in catalog.extensions))
-    if dim == RESULT_DIM_BASE and primitive.attributes.get("cast") == "reinterpret":
+    if (
+        dim == RESULT_DIM_BASE
+        and primitive.cast_mode is PrimitiveCastMode.REINTERPRET
+    ):
         extension = catalog.extensions.get(extension_name)
         # Scalar and lane-count-parametric vectors preserve their lane count
         # when rebased, so a different scalar width would change total

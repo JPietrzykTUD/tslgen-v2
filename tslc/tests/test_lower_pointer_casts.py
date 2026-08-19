@@ -1,4 +1,4 @@
-"""Pointer-cast operands are classified at lowering, not sniffed from rendered text."""
+"""Pointer-cast operands use typed TSIL address forms."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def test_rust_mutable_address_of_uses_addr_of_mut(
         catalog,
         machine_profiles,
         "rust",
-        "cast<reinterpret, type=ptr>(void, &mut buf)",
+        "cast<reinterpret, type=ptr>(void, address<borrow_mut>(buf))",
     )
 
     assert result.specialization is not None
@@ -57,23 +57,20 @@ def test_rust_mutable_address_of_uses_addr_of_mut(
     )
 
 
-def test_rust_spaced_mutable_borrow_is_classified_not_misrendered(
+def test_rust_address_of_is_classified_from_nested_region(
     catalog: Catalog, machine_profiles
 ) -> None:
     result = _lower_cast_body(
         catalog,
         machine_profiles,
         "rust",
-        "cast<reinterpret, type=ptr>(void, & mut buf)",
+        "cast<reinterpret, type=const_ptr>(void, address<of>(buf))",
     )
 
     assert result.specialization is not None
     assert (
-        "core::ptr::addr_of_mut!(buf).cast::<u8>()"
+        "core::ptr::addr_of!(buf).cast::<u8>()"
         in result.specialization.body_text
-    )
-    assert "mut buf)" not in result.specialization.body_text.replace(
-        "addr_of_mut!(buf)", ""
     )
 
 
@@ -84,7 +81,7 @@ def test_rust_parenthesized_address_of_keeps_target(
         catalog,
         machine_profiles,
         "rust",
-        "cast<reinterpret, type=const_ptr>(void, &(buf))",
+        "cast<reinterpret, type=const_ptr>(void, address<of>((buf)))",
     )
 
     assert result.specialization is not None
@@ -108,14 +105,14 @@ def test_rust_pointer_valued_expression_casts_directly(
     assert "buf_ptr as *mut u8" in result.specialization.body_text
 
 
-def test_unsupported_double_reference_is_a_structured_skip(
+def test_unsupported_address_selector_is_a_structured_skip(
     catalog: Catalog, machine_profiles
 ) -> None:
     result = _lower_cast_body(
         catalog,
         machine_profiles,
         "rust",
-        "cast<reinterpret, type=ptr>(void, &&buf)",
+        "cast<reinterpret, type=ptr>(void, address<double>(buf))",
     )
 
     assert result.specialization is None
@@ -132,7 +129,7 @@ def test_cpp_address_of_render_is_byte_stable(
         catalog,
         machine_profiles,
         "cpp",
-        "cast<reinterpret, type=const_ptr>(void, &buf)",
+        "cast<reinterpret, type=const_ptr>(void, address<of>(buf))",
     )
 
     assert result.specialization is not None

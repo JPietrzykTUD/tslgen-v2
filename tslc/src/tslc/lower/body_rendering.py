@@ -22,6 +22,7 @@ from tslc.lower.implementation_state import (
     record_rendered_region_state,
 )
 from tslc.lower.raw_text import render_raw_text
+from tslc.lower.region_safety import direct_region_safety
 from tslc.lower.region_handlers import (
     DEFAULT_REGION_LOWERERS,
     RegionLowerer,
@@ -175,6 +176,7 @@ class ExpressionRenderer:
             )
             self._context.effects.mark_unknown()
             return literal_text(segment.full_text)
+        self._context.effects.merge_safety(direct_region_safety(segment))
         record_rendered_region_state(
             self._context.effects,
             segment,

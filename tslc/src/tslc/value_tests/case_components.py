@@ -11,6 +11,7 @@ from tslc.catalog.model import TestComparison, TestFailureReason
 
 ExpectedArity = Literal["optional", "non_empty", "one", "lanes", "target_lanes"]
 InputArity = Literal["optional", "non_empty", "one"]
+ScalableExpectedLayout = Literal["tiled", "indexed_lane"]
 MemoryStorage = Literal["packed", "unpacked"]
 IndexStyle = Literal["register", "pointer"]
 ValueTestFailurePhase = Literal["runtime", "compile"]
@@ -52,6 +53,7 @@ class ValueTestCaseRequirements:
     required_facts: frozenset[ValueTestFact] = frozenset()
     vector_inputs_match_lanes: bool = False
     fuzz_case: bool = False
+    requires_runtime_failure_observation: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +85,13 @@ class ValueTestExpectation:
     values: tuple[str, ...] = ()
     text: str | None = None
     comparison: TestComparison = TestComparison.VALUE
+    scalable_layout: ScalableExpectedLayout = "tiled"
+
+    def __post_init__(self) -> None:
+        if self.scalable_layout not in {"tiled", "indexed_lane"}:
+            raise ValueError(
+                "value-test scalable expected layout must be 'tiled' or 'indexed_lane'"
+            )
 
 
 @dataclass(frozen=True, slots=True)

@@ -141,7 +141,9 @@ class IntrinPrefixQuery:
     ) -> QueryValue | None:
         if args:
             return None
-        fragment = context.env.extension.compose_prefix.get(context.env.backend.backend_id)
+        fragment = context.env.extension.intrinsic_composition.prefix_by_backend.get(
+            context.env.backend.backend_id
+        )
         return TextValue(fragment) if fragment is not None else None
 
 
@@ -159,13 +161,17 @@ class IntrinSuffixQuery:
         self, args: tuple[QueryValue, ...], context: LoweringSession
     ) -> QueryValue | None:
         if not args:
-            fragment = context.env.extension.compose_suffix_by_type.get(context.env.type_tag)
+            fragment = context.env.extension.intrinsic_composition.suffix_by_type.get(
+                context.env.type_tag
+            )
             return TextValue(fragment) if fragment is not None else None
         if len(args) != 1:
             return None
         arg = args[0]
         if isinstance(arg, TypeValue):
-            fragment = context.env.extension.compose_suffix_by_type.get(arg.type_tag)
+            fragment = context.env.extension.intrinsic_composition.suffix_by_type.get(
+                arg.type_tag
+            )
             return TextValue(fragment) if fragment is not None else None
         if isinstance(arg, TextValue):
             key = f"intrinsic_suffix_{arg.as_text()}_{context.env.extension.name}"

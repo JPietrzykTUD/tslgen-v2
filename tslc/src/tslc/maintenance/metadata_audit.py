@@ -23,6 +23,8 @@ from tslc.catalog.model import ImplementationSafety
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, format_diagnostic, has_errors
+from tslc.ir.scan import scan
+from tslc.lower.region_safety import direct_implementation_safety
 from tslc.pipeline import GenerationRequest, generate
 from tslc.sources import SourceDocument, SourceLoader, expand_source_paths
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
@@ -334,14 +336,9 @@ def _direct_safety_facts(
     entry: ParsedImplementationSelectorEntry,
 ) -> ImplementationSafety:
     safety = ImplementationSafety()
-    body_text = "\n".join(envelope.payload_text for envelope in entry.body_envelopes)
-    if "intrin<" in body_text:
+    for envelope in entry.body_envelopes:
         safety = safety.merge(
-            ImplementationSafety(internal_unsafe=True, reasons=frozenset({"intrinsic"}))
-        )
-    if "mem<" in body_text:
-        safety = safety.merge(
-            ImplementationSafety(internal_unsafe=True, reasons=frozenset({"raw_memory"}))
+            direct_implementation_safety(scan(envelope.payload_text))
         )
     shape = parse_signature(primitive.signature)
     if shape is not None and DEFAULT_SUPPORT_POLICY.requires_unsafe_frame(shape):

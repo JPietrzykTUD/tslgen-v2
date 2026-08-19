@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.model import Catalog, Primitive, PrimitiveMaskMode
 from tslc.catalog.scalar_types import normalize_scalar_tag
 from tslc.catalog.signatures import parse_signature
 from tslc.lower.lowerer import LoweredSpecialization
@@ -19,9 +19,14 @@ from tslc.value_tests._case_core import (
 )
 from tslc.value_tests._case_scalable import (
     scalable_golden_cases,
+    scalable_immediate_cases,
     scalable_masked_cases,
+    scalable_scalar_vector_cases,
 )
-from tslc.value_tests._case_scalable_masks import scalable_mask_result_cases
+from tslc.value_tests._case_scalable_masks import (
+    scalable_mask_count_cases,
+    scalable_mask_result_cases,
+)
 from tslc.value_tests._pattern_base import (
     _BasePattern,
     CasePlanBuilder,
@@ -135,7 +140,7 @@ class _MaskedPattern(_BasePattern):
         spec = specs[0]
         return (
             spec.result_kind == "v"
-            and spec.mask_policy in ("zero", "pass_through")
+            and spec.mask_policy in (PrimitiveMaskMode.ZERO, PrimitiveMaskMode.PASS_THROUGH)
             and spec.param_kinds.count("m") == 1
             and all(kind in ("m", "v", "vidx") for kind in spec.param_kinds)
             and spec.param_kinds.count("vidx") <= 1
@@ -161,7 +166,7 @@ class _MaskedPattern(_BasePattern):
         for primitive in catalog.primitives_named(source_name, unmasked=False):
             shape = parse_signature(primitive.signature)
             if (
-                primitive.attributes.get("mask") == spec.mask_policy
+                primitive.mask_mode == spec.mask_policy
                 and shape is not None
                 and shape.result_kind == spec.result_kind
                 and shape.param_kinds == spec.param_kinds
@@ -277,6 +282,18 @@ class _SimpleShapePattern(_BasePattern):
             specs,
         )
         plans = [plan] if plan is not None else []
+        if self.result_kind == "v" and "s" in self.param_kinds:
+            plans.extend(
+                scalable_scalar_vector_cases(
+                    context.emitted_name,
+                    context.index,
+                    context.case,
+                    specs,
+                    context.catalog,
+                    context.harness,
+                    context.backend,
+                )
+            )
         if (
             self.differential
             and context.backend.supports_differential
@@ -336,6 +353,58 @@ class _IndexedScalarPattern(_BasePattern):
         )
         return (plan,) if plan is not None else ()
 
+
+class _MaskCountPattern(_BasePattern):
+    def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
+        spec = specs[0]
+        return (
+            spec.result_kind == "usize"
+            and tuple(spec.param_kinds) == ("m",)
+            and spec.target is None
+            and spec.mask_policy is None
+            and spec.immediate is None
+            and not spec.axis
+            and not spec.generic_params
+            and not spec.type_params
+        )
+
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        plans: list[ValueTestCasePlan] = []
+        case_extension = (
+            context.catalog.extensions.get(context.case.extension)
+            if context.case.extension is not None
+            else None
+        )
+        if case_extension is None or case_extension.vector_bits_kind != "scalable":
+            fixed = scalar_result_case(
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+            )
+            if fixed is not None:
+                plans.append(fixed)
+        plans.extend(
+            scalable_mask_count_cases(
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
+            )
+        )
+        return tuple(plans)
+
+    def unplanned_reason(self, context: ValueTestCaseContext) -> str | None:
+        del context
+        return (
+            "scalable mask-count value tests require expected_rule 'popcnt', "
+            "one non-negative mask input, and its matching authored-lane count"
+        )
+
+
 class _MaskedScalarVectorPattern(_BasePattern):
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         spec = specs[0]
@@ -343,7 +412,7 @@ class _MaskedScalarVectorPattern(_BasePattern):
             spec.result_kind == "v"
             and tuple(spec.param_kinds) == ("m", "v", "s")
             and spec.target is None
-            and spec.mask_policy in {"zero", "pass_through"}
+            and spec.mask_policy in {PrimitiveMaskMode.ZERO, PrimitiveMaskMode.PASS_THROUGH}
             and spec.immediate is None
             and not spec.axis
             and not spec.generic_params
@@ -357,7 +426,7 @@ class _MaskedScalarVectorPattern(_BasePattern):
         spec: LoweredSpecialization,
     ) -> Primitive | None:
         for primitive in catalog.primitives_named(source_name, unmasked=False):
-            if primitive.attributes.get("mask") == spec.mask_policy:
+            if primitive.mask_mode == spec.mask_policy:
                 return primitive
         return None
 
@@ -368,7 +437,19 @@ class _MaskedScalarVectorPattern(_BasePattern):
             context.case,
             context.specs,
         )
-        return (plan,) if plan is not None else ()
+        plans = [plan] if plan is not None else []
+        plans.extend(
+            scalable_scalar_vector_cases(
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
+            )
+        )
+        return tuple(plans)
 
 @dataclass(frozen=True, slots=True)
 class _ImmediatePattern(_BasePattern):
@@ -386,7 +467,7 @@ class _ImmediatePattern(_BasePattern):
             )
             and spec.param_kinds.count("m") <= 1
             and spec.target is None
-            and spec.mask_policy in (None, "zero", "pass_through")
+            and spec.mask_policy in (None, PrimitiveMaskMode.ZERO, PrimitiveMaskMode.PASS_THROUGH)
             and not spec.axis
             and not spec.type_params
         )
@@ -403,7 +484,7 @@ class _ImmediatePattern(_BasePattern):
                 shape is not None
                 and shape.result_kind == spec.result_kind
                 and shape.param_kinds == spec.param_kinds
-                and primitive.attributes.get("mask") == spec.mask_policy
+                and primitive.mask_mode == spec.mask_policy
             ):
                 return primitive
         return None
@@ -416,6 +497,17 @@ class _ImmediatePattern(_BasePattern):
             context.specs,
         )
         plans = [plan] if plan is not None else []
+        plans.extend(
+            scalable_immediate_cases(
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
+            )
+        )
         if (
             context.backend.supports_differential
             and context.harness.round_trip_ready
@@ -439,6 +531,7 @@ __all__ = (
     "_VectorConstantPattern",
     "_SimpleShapePattern",
     "_IndexedScalarPattern",
+    "_MaskCountPattern",
     "_MaskedScalarVectorPattern",
     "_ImmediatePattern",
 )

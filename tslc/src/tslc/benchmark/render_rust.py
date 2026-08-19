@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 
+from tslc.backend.rust_benchmark_detection import (
+    rust_benchmark_detection_strategy,
+)
 from tslc.backend.rust_benchmark_context import (
     RUST_BENCHMARK_CODEGEN_CONTRACT,
     RUST_BENCHMARK_POLICY_SCHEMA_VERSION,
@@ -209,22 +212,29 @@ def _render_native_cpu_check(profile: BenchmarkProfilePlan) -> str:
     features = profile.backend_feature_spellings
     if not features:
         return "fn native_cpu_supported() -> bool { true }"
-    if profile.profile_family == "x86":
-        checks = " && ".join(
-            f"std::arch::is_x86_feature_detected!({rust_string_literal(feature)})"
-            for feature in features
+    strategy_id = profile.feature_detection_strategy
+    if strategy_id is None:
+        return "fn native_cpu_supported() -> bool { false }"
+    strategy = rust_benchmark_detection_strategy(strategy_id)
+    if strategy is None:
+        raise ValueError(
+            f"unsupported Rust benchmark detection strategy {strategy_id!r}"
         )
-        return f'''fn native_cpu_supported() -> bool {{
-    #[cfg(target_arch = "x86_64")]
+    checks = " && ".join(
+        f"{strategy.feature_macro}!({rust_string_literal(feature)})"
+        for feature in features
+    )
+    target_arch = rust_string_literal(strategy.target_arch)
+    return f'''fn native_cpu_supported() -> bool {{
+    #[cfg(target_arch = {target_arch})]
     {{
         {checks}
     }}
-    #[cfg(not(target_arch = "x86_64"))]
+    #[cfg(not(target_arch = {target_arch}))]
     {{
         false
     }}
 }}'''
-    return "fn native_cpu_supported() -> bool { false }"
 
 
 def _rust_profile_literal(profile_name: str) -> str:

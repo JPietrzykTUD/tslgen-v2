@@ -1,0 +1,94 @@
+{
+  "compiler": "c++",
+  "manual_threshold": 0.1,
+  "materiality_threshold": 0.05,
+  "minimum_sample_ns": 20000000,
+  "name": "pilot-representation-skylake",
+  "profile": "skylake",
+  "repetitions": 9,
+  "run_seed": 32452843,
+  "schema_version": 2,
+  "simd_lanes": 16,
+  "studies": [
+    {
+      "batch_rows": [
+        65536
+      ],
+      "candidate_plans": [
+        "batch_native_mask",
+        "batch_integral_mask",
+        "batch_bitmask",
+        "batch_positions_u32"
+      ],
+      "conditional_selectivities": [
+        0.01,
+        0.05,
+        0.1,
+        0.25,
+        0.5,
+        0.75,
+        0.95
+      ],
+      "first_selectivities": [
+        1.0
+      ],
+      "name": "pilot-representation-skylake-training",
+      "patterns": [
+        "random"
+      ],
+      "reference_plans": [
+        "fused_mask",
+        "scalar_autovec",
+        "scalar_no_vector"
+      ],
+      "rows": [
+        4194304
+      ],
+      "seeds": [
+        101,
+        103
+      ],
+      "split": "training"
+    },
+    {
+      "batch_rows": [
+        65536
+      ],
+      "candidate_plans": [
+        "batch_native_mask",
+        "batch_integral_mask",
+        "batch_bitmask",
+        "batch_positions_u32"
+      ],
+      "conditional_selectivities": [
+        0.02,
+        0.07,
+        0.15,
+        0.35,
+        0.65,
+        0.85
+      ],
+      "first_selectivities": [
+        1.0
+      ],
+      "name": "pilot-representation-skylake-held-out",
+      "patterns": [
+        "random"
+      ],
+      "reference_plans": [
+        "fused_mask",
+        "scalar_autovec",
+        "scalar_no_vector"
+      ],
+      "rows": [
+        4194304
+      ],
+      "seeds": [
+        107
+      ],
+      "split": "held_out"
+    }
+  ],
+  "tsl_ref": "v0.2.7",
+  "warmups": 2
+}

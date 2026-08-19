@@ -18,6 +18,7 @@ pub struct GeneratedTargetRequirement {
 #[derive(Clone, Copy, Debug)]
 pub struct GeneratedProfile {
     pub name: &'static str,
+    pub family: &'static str,
     pub target_arch: &'static str,
     pub target_features: &'static [&'static str],
     pub stronger_requirements: &'static [GeneratedTargetRequirement],

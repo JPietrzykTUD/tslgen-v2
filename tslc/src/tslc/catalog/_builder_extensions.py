@@ -9,13 +9,14 @@ from typing import cast
 
 from tslc.catalog._builder_common import _list_text_set, _opt_int
 from tslc.catalog.model import (
-    BackendCompileGuard,
     BackendExtensionMetadata,
     Extension,
     ExtensionActivation,
     ExtensionMetadata,
     ImaskPolicy,
     ImaskPolicyKind,
+    IntrinsicComposition,
+    IntrinsicNameOrder,
     MaskPolicy,
     MaskPolicyKind,
     VectorBitsKind,
@@ -42,15 +43,30 @@ def _resolve_extension_inheritance(
             return ext
         parent = resolve(ext.inherits, seen | {name})
         declared_fields = declared_fields_by_name.get(name, frozenset())
+        intrinsic_composition = IntrinsicComposition(
+            prefix_by_backend={
+                **parent.intrinsic_composition.prefix_by_backend,
+                **ext.intrinsic_composition.prefix_by_backend,
+            },
+            suffix_by_type={
+                **parent.intrinsic_composition.suffix_by_type,
+                **ext.intrinsic_composition.suffix_by_type,
+            },
+            order=(
+                ext.intrinsic_composition.order
+                if "intrinsic_compose.order" in declared_fields
+                else parent.intrinsic_composition.order
+            ),
+            require_explicit_suffix=(
+                ext.intrinsic_composition.require_explicit_suffix
+                if "intrinsic_compose.require_explicit_suffix" in declared_fields
+                else parent.intrinsic_composition.require_explicit_suffix
+            ),
+        )
         return replace(
             ext,
             family=ext.family or parent.family,
-            intrinsic_style=ext.intrinsic_style or parent.intrinsic_style,
-            compose_prefix={**parent.compose_prefix, **ext.compose_prefix},
-            compose_suffix_by_type={
-                **parent.compose_suffix_by_type,
-                **ext.compose_suffix_by_type,
-            },
+            intrinsic_composition=intrinsic_composition,
             vector_register_types=_merge_nested_string_maps(
                 parent.vector_register_types,
                 ext.vector_register_types,
@@ -86,8 +102,8 @@ def _resolve_extension_inheritance(
             vector_register_type_policy=(
                 ext.vector_register_type_policy or parent.vector_register_type_policy
             ),
-            # A sized extension inheriting another (oneapi_fpga inherits generic) shares its size
-            # ladder / unroll default unless it states its own.
+            # A sized extension inherits its parent's size ladder and unroll default
+            # unless it states its own.
             size_bits=ext.size_bits if "size_bits" in declared_fields else parent.size_bits,
             unroll_variants=(
                 ext.unroll_variants
@@ -118,7 +134,20 @@ def _resolve_extension_inheritance(
 
 
 def _declared_extension_fields(declaration: ParsedBlockDeclaration) -> frozenset[str]:
-    return frozenset(field.key.text for field in declaration.fields)
+    fields = {field.key.text for field in declaration.fields}
+    compose = next(
+        (
+            field
+            for field in declaration.fields
+            if field.key.text == "intrinsic_compose"
+        ),
+        None,
+    )
+    fields.update(
+        f"intrinsic_compose.{field.key.text}"
+        for field in _children(compose)
+    )
+    return frozenset(fields)
 
 
 def _build_extension(
@@ -134,30 +163,14 @@ def _build_extension(
     # Identity is the block name: `avx2` and `avx2_vl` are distinct extensions
     # (avx2-only hardware vs. avx512vl-present hardware) even though they share the
     # `extension_name` ISA spelling "avx2".
-    compose_prefix: dict[str, str] = {}
-    compose_suffix_by_type: dict[str, str] = {}
     compose = fields.get("intrinsic_compose")
-    if compose is not None:
-        prefix_field = _child(compose, "prefix")
-        if prefix_field is not None:
-            compose_prefix = {
-                bk.key.text: (_field_text(bk) or "") for bk in _children(prefix_field)
-            }
-        suffix_field = _child(compose, "suffix")
-        by_type = _child(suffix_field, "by_type") if suffix_field is not None else None
-        if by_type is not None:
-            compose_suffix_by_type = {
-                e.key.text: (_field_text(e) or "") for e in _children(by_type)
-            }
 
     name = declaration.name or ""
     return Extension(
         name=name,
         isa_name=_field_text(fields.get("extension_name")) or name,
         family=_field_text(fields.get("family")) or "",
-        intrinsic_style=_field_text(fields.get("intrinsic_style")) or "",
-        compose_prefix=compose_prefix,
-        compose_suffix_by_type=compose_suffix_by_type,
+        intrinsic_composition=_intrinsic_composition(compose),
         vector_register_types=_vector_register_types(fields.get("vector_register_types")),
         backend_headers=_backend_headers(fields, backend_ids),
         backend_supported=_backend_supported(fields, backend_ids),
@@ -189,6 +202,33 @@ def _build_extension(
         ),
         unroll_variants=(_field_text(fields.get("unroll_variants")) or "").lower() == "true",
         source=_source_span(declaration.source),
+    )
+
+
+def _intrinsic_composition(
+    field: ParsedTslField | None,
+) -> IntrinsicComposition:
+    prefix = _child(field, "prefix")
+    suffix = _child(_child(field, "suffix"), "by_type")
+    order_text = _field_text(_child(field, "order"))
+    order = (
+        IntrinsicNameOrder(order_text)
+        if order_text in {item.value for item in IntrinsicNameOrder}
+        else IntrinsicNameOrder.BASE_SUFFIX
+    )
+    return IntrinsicComposition(
+        prefix_by_backend={
+            entry.key.text: (_field_text(entry) or "")
+            for entry in _children(prefix)
+        },
+        suffix_by_type={
+            entry.key.text: (_field_text(entry) or "")
+            for entry in _children(suffix)
+        },
+        order=order,
+        require_explicit_suffix=bool(
+            _bool_text(_child(field, "require_explicit_suffix"))
+        ),
     )
 
 
@@ -251,10 +291,9 @@ def _backend_extension_metadata(
         if backend is None:
             continue
         metadata = BackendExtensionMetadata(
-            compile_guards=_backend_compile_guards(_child(backend, "compile_guards")),
-            header_group=_field_text(_child(backend, "header_group")),
-            compiler_ids=_list_text(_child(backend, "compiler_ids")),
-            compiler_features=_list_text(_child(backend, "compiler_features")),
+            compiler_capabilities=_list_text(
+                _child(backend, "compiler_capabilities")
+            ),
             dataparallel_inference=_bool_text(
                 _child(backend, "dataparallel_inference")
             ),
@@ -264,28 +303,6 @@ def _backend_extension_metadata(
         if metadata != BackendExtensionMetadata():
             result[backend_id] = metadata
     return result
-
-
-def _backend_compile_guards(
-    field: ParsedTslField | None,
-) -> tuple[BackendCompileGuard, ...]:
-    guards: list[BackendCompileGuard] = []
-    for guard in _children(field):
-        macro = _field_text(_child(guard, "macro"))
-        equals = _field_text(_child(guard, "equals"))
-        if macro is None or equals is None:
-            continue
-        guards.append(
-            BackendCompileGuard(
-                name=guard.key.text,
-                macro=macro,
-                equals=equals,
-                hint_flag=_field_text(_child(guard, "hint_flag")),
-                diagnostic=_field_text(_child(guard, "diagnostic")),
-                source=_source_span(guard.source),
-            )
-        )
-    return tuple(guards)
 
 
 def _backend_supported(
@@ -359,15 +376,10 @@ def _merge_backend_metadata(
     for backend_id, child_meta in child.items():
         parent_meta = merged.get(backend_id, BackendExtensionMetadata())
         merged[backend_id] = BackendExtensionMetadata(
-            compile_guards=_merge_backend_compile_guards(
-                parent_meta.compile_guards,
-                child_meta.compile_guards,
-            ),
-            header_group=child_meta.header_group or parent_meta.header_group,
-            compiler_ids=child_meta.compiler_ids or parent_meta.compiler_ids,
-            compiler_features=tuple(
+            compiler_capabilities=tuple(
                 dict.fromkeys(
-                    parent_meta.compiler_features + child_meta.compiler_features
+                    parent_meta.compiler_capabilities
+                    + child_meta.compiler_capabilities
                 )
             ),
             dataparallel_inference=(
@@ -381,16 +393,6 @@ def _merge_backend_metadata(
     return merged
 
 
-def _merge_backend_compile_guards(
-    parent: tuple[BackendCompileGuard, ...],
-    child: tuple[BackendCompileGuard, ...],
-) -> tuple[BackendCompileGuard, ...]:
-    guards = {guard.name: guard for guard in parent}
-    guards.update({guard.name: guard for guard in child})
-    return tuple(guards[name] for name in sorted(guards))
-
-
-
 def _mask_policy(field: ParsedTslField | None) -> MaskPolicy:
     """Promote a ``mask_type_policy`` block: its ``kind`` plus backend-owned native
     predicate spellings and lane-count maps."""
@@ -401,6 +403,9 @@ def _mask_policy(field: ParsedTslField | None) -> MaskPolicy:
     return MaskPolicy(
         kind=cast(MaskPolicyKind, _field_text(_child(field, "kind")) or "lane_bitmask"),
         backend_spelling=_backend_text_map(_child(field, "backend_spelling")),
+        backend_spelling_by_type=_backend_type_map(
+            _child(field, "backend_spelling_by_type")
+        ),
         backend_spelling_by_lanes=_backend_int_map(
             _child(field, "backend_spelling_by_lanes")
         ),
@@ -431,6 +436,13 @@ def _int_keyed_map(field: ParsedTslField | None) -> dict[int, str]:
             result[int(key)] = _field_text(entry) or ""
     return result
 
+
+
+def _backend_type_map(field: ParsedTslField | None) -> dict[str, dict[str, str]]:
+    return {
+        child.key.text: _backend_text_map(child)
+        for child in _children(field)
+    }
 
 
 def _backend_int_map(field: ParsedTslField | None) -> dict[str, dict[int, str]]:

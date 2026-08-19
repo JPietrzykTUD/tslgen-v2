@@ -32,14 +32,28 @@ def merge_toolchains(
     compilers: Mapping[str, str],
     targets: Mapping[str, str],
     linkers: Mapping[str, str],
+    compiler_capabilities: Mapping[str, str] | None = None,
 ) -> dict[str, BackendToolchain]:
-    """Overlay per-backend compiler/target/linker overrides onto configured toolchains."""
+    """Overlay per-backend toolchain and compiler capability overrides."""
+
+    capabilities = compiler_capabilities or {}
     merged = dict(configured)
-    for backend_id in sorted(compilers.keys() | targets.keys() | linkers.keys()):
+    overridden = (
+        compilers.keys()
+        | targets.keys()
+        | linkers.keys()
+        | capabilities.keys()
+    )
+    for backend_id in sorted(overridden):
         previous = merged.get(backend_id, BackendToolchain())
         merged[backend_id] = BackendToolchain.create(
             compiler=compilers.get(backend_id) or previous.compiler,
             target=targets.get(backend_id) or previous.target,
             linker=linkers.get(backend_id) or previous.linker,
+            compiler_capabilities=(
+                split_csv(capabilities[backend_id])
+                if backend_id in capabilities
+                else previous.compiler_capabilities
+            ),
         )
     return merged

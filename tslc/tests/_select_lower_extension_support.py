@@ -36,7 +36,7 @@ def _slots(catalog, profile, primitive):
 def _by_key(catalog, profile, primitive):
     result = {}
     for slot in _slots(catalog, profile, primitive):
-        if slot.primitive.attributes.get("mask") is not None:
+        if slot.primitive.mask_mode is not None:
             continue
         key = (slot.type_tag, slot.extension.name)
         current = result.get(key)
@@ -70,7 +70,7 @@ def _wasm_slot(catalog: Catalog, machine_profiles, primitive: str, type_tag: str
         )
         .selected
         if slot.extension.name == "wasm128"
-        and slot.primitive.attributes.get("mask") is None
+        and slot.primitive.mask_mode is None
     )
 
 

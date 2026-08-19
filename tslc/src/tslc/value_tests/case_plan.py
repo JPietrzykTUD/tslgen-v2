@@ -52,7 +52,7 @@ class ValueTestCasePlan:
     # Backend compiler capabilities required by this case. C++ renders these
     # through feature-test guards so an optional extension representation does
     # not disable other cases in the same header group.
-    required_compiler_features: tuple[str, ...] = ()
+    required_compiler_capabilities: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         self._validate_common_fields()
@@ -88,15 +88,15 @@ class ValueTestCasePlan:
             raise ValueError(
                 f"value-test case {self.function_name!r} header_group must be non-empty"
             )
-        if any(not feature for feature in self.required_compiler_features):
+        if any(not feature for feature in self.required_compiler_capabilities):
             raise ValueError(
-                f"value-test case {self.function_name!r} compiler features must be non-empty"
+                f"value-test case {self.function_name!r} compiler capabilities must be non-empty"
             )
-        if tuple(sorted(set(self.required_compiler_features))) != (
-            self.required_compiler_features
+        if tuple(sorted(set(self.required_compiler_capabilities))) != (
+            self.required_compiler_capabilities
         ):
             raise ValueError(
-                f"value-test case {self.function_name!r} compiler features must be "
+                f"value-test case {self.function_name!r} compiler capabilities must be "
                 "sorted and unique"
             )
 

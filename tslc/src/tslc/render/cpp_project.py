@@ -47,6 +47,7 @@ def cpp_artifacts(
             "cpp/include/tsl_primitives.hpp",
             assets.fill(
                 "cpp_primitive_tags.hpp.tmpl",
+                compiler_capability_defaults=model.compiler_capability_defaults,
                 declarations=(
                     f"\n{model.primitive_tag_declarations}"
                     if model.primitive_tag_declarations
@@ -128,7 +129,11 @@ def cpp_artifacts(
     artifacts.append(
         text(
             "cpp/CMakeLists.txt",
-            _cpp_cmakelists(profiles, assets, value_tests=value_tests),
+            _cpp_cmakelists(
+                model,
+                assets,
+                value_tests=value_tests,
+            ),
             media_type=media_type,
         )
     )

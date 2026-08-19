@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.model import Catalog, Primitive, PrimitiveMaskMode
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_core import (
     mask_logic_case,
@@ -32,7 +32,7 @@ class _MaskedMaskResultPattern(_BasePattern):
         spec = specs[0]
         return (
             spec.result_kind == "m"
-            and spec.mask_policy in ("zero", "pass_through")
+            and spec.mask_policy in (PrimitiveMaskMode.ZERO, PrimitiveMaskMode.PASS_THROUGH)
             and spec.param_kinds.count("m") == 1
             and all(kind in ("m", "v") for kind in spec.param_kinds)
             and spec.target is None
@@ -49,7 +49,7 @@ class _MaskedMaskResultPattern(_BasePattern):
         spec: LoweredSpecialization,
     ) -> Primitive | None:
         for primitive in catalog.primitives_named(source_name, unmasked=False):
-            if primitive.attributes.get("mask") == spec.mask_policy:
+            if primitive.mask_mode == spec.mask_policy:
                 return primitive
         return None
 

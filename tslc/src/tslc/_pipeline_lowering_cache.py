@@ -31,6 +31,7 @@ class _LoweringCacheKey:
     extension_identity: int
     type_tag: str
     required_features: frozenset[str]
+    required_compiler_capabilities: frozenset[str]
     to_target: str | None
     concrete_lanes: int | None
     simd_type_base_bindings: tuple[SimdTypeBaseBinding, ...]
@@ -118,6 +119,9 @@ class _LoweringCache:
             extension_identity=self._identities.identity(selected.extension),
             type_tag=selected.type_tag,
             required_features=selected.required_features,
+            required_compiler_capabilities=(
+                selected.required_compiler_capabilities
+            ),
             to_target=selected.to_target,
             concrete_lanes=selected.concrete_lanes,
             simd_type_base_bindings=selected.simd_type_base_bindings,

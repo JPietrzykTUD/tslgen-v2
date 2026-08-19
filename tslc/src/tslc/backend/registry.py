@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tslc.backend.capability import BackendCapability
+from tslc.backend.capability import (
+    BackendCapability,
+    BackendPolicyInputs,
+)
 from tslc.backend.cpp_capability import CPP_BACKEND
 from tslc.backend.rust_capability import RUST_BACKEND
 
@@ -41,8 +44,33 @@ def backend_capabilities(backend_ids: tuple[str, ...]) -> tuple[BackendCapabilit
     )
 
 
+def load_backend_policy_inputs(
+    backend_ids: tuple[str, ...],
+) -> BackendPolicyInputs:
+    """Load requested backend policy resources at the compiler input boundary."""
+
+    values = {
+        capability.backend_id: policy
+        for capability in backend_capabilities(backend_ids)
+        if (policy := capability.load_policy_input()) is not None
+    }
+    return BackendPolicyInputs(values)
+
+
 def registered_backend_ids() -> tuple[str, ...]:
     return tuple(sorted(_BY_ID))
+
+
+def registered_compiler_capabilities() -> dict[str, frozenset[str]]:
+    """Return the backend-owned compiler-capability vocabulary."""
+
+    return {
+        backend.backend_id: frozenset(
+            capability.capability_id
+            for capability in backend.compiler_capabilities
+        )
+        for backend in BACKEND_CAPABILITIES
+    }
 
 
 def supports_backend(backend_id: str) -> bool:
@@ -60,5 +88,7 @@ __all__ = [
     "backend_capability",
     "create_backend_dialect",
     "registered_backend_ids",
+    "load_backend_policy_inputs",
+    "registered_compiler_capabilities",
     "supports_backend",
 ]

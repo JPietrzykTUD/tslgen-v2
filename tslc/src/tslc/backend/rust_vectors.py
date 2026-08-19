@@ -139,7 +139,10 @@ def _record_sized_extension(
     extension = extensions.get(extension_name)
     if (
         extension is None
-        or extension_name == "generic"
+        or (
+            extension.is_unconditional_implementation_fallback
+            and DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
+        )
         or not uses_sized_vector
         or not DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
         or not extension.supports_backend("rust")
@@ -194,7 +197,6 @@ def _record_rust_vector(
     if (
         extension is None
         or uses_sized_vector
-        or extension.family in {"scalar", "generic_like"}
         or extension.vector_bits_kind != "fixed"
         or extension.vector_bits <= 0
         or not extension.supports_backend("rust")

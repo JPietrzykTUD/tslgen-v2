@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslc.backend.cpp_profile import cpp_dataparallel_fixed_lane_count
-from tslc.backend.registry import create_backend_dialect
+from tslc.backend.registry import (
+    create_backend_dialect,
+    registered_compiler_capabilities,
+)
 from tslc.backend.rust_algorithm import (
     rust_dataparallel_fixed_lane_count,
     rust_fixed_vector_spelling,
@@ -97,6 +100,12 @@ class PivotPlanner:
         self.catalog = catalog
         self.language = language
         self.selector = Selector()
+        # PIVOT exports one exact, lockstep compiler contract rather than a
+        # downstream-dispatched package. The backend's complete registered
+        # vocabulary preserves the most specialized compiler body and keeps
+        # automatic alternatives from becoming duplicate export candidates.
+        compiler_capabilities = registered_compiler_capabilities()
+        self._compiler_capabilities = compiler_capabilities[language.value]
         self.dialect: BackendDialect = create_backend_dialect(
             catalog, language.value
         )
@@ -171,6 +180,7 @@ class PivotPlanner:
                     primitive_name,
                     requested_types,
                     backend_id=self.language.value,
+                    compiler_capabilities=self._compiler_capabilities,
                 )
                 diagnostics.extend(selection.diagnostics)
                 selected_slots.extend(selection.selected)
@@ -422,6 +432,7 @@ class PivotPlanner:
                 dependency.primitive,
                 (dependency.source.base_tag,),
                 backend_id=self.language.value,
+                compiler_capabilities=self._compiler_capabilities,
             )
             selected = selection.selected
             self._callee_selections[selection_key] = selected
@@ -430,7 +441,7 @@ class PivotPlanner:
         for candidate in selected:
             if candidate.extension.isa_name != dependency.source.extension_isa:
                 continue
-            if candidate.primitive.attributes.get("mask") != dependency.mask_policy:
+            if candidate.primitive.mask_mode != dependency.mask_policy:
                 continue
             if len(candidate.primitive.parameters) != argument_count:
                 continue
@@ -777,7 +788,7 @@ def _target_matches(
 
 
 def _callable_name(slot: SelectedImplementation) -> str:
-    policy = slot.primitive.attributes.get("mask")
+    policy = slot.primitive.mask_mode
     return (
         slot.primitive.name
         if policy is None
@@ -803,7 +814,7 @@ def _slot_key(slot: SelectedImplementation) -> tuple[object, ...]:
         slot.extension.isa_name,
         slot.type_tag,
         slot.to_target,
-        slot.primitive.attributes.get("mask"),
+        slot.primitive.mask_mode,
         tuple(sorted(slot.primitive.attributes.items())),
         slot.implementation.extension,
         slot.implementation.source_order,

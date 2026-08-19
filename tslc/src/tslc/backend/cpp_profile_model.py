@@ -12,22 +12,39 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from tslc.backend.cpp_build_policy import (
+    CppCompilerOption,
+    cpp_profile_compile_options,
+    cpp_value_test_compile_options,
+)
+from tslc.backend.cpp_detection import (
+    CppProfileDetectionPlan,
+    cpp_profile_detection_candidates,
+    cpp_profile_detection_plan,
+)
+from tslc.backend.cpp_compiler_capabilities import (
+    cpp_compiler_capability_cmake_probes,
+    cpp_compiler_capability_compile_definitions,
+    cpp_compiler_capability_header_defaults,
+    cpp_extension_compiler_ids,
+    cpp_extension_header_group,
+    cpp_extensions_compiler_capabilities,
+    used_cpp_compiler_capability_ids,
+)
 from tslc.backend.cpp_profile import (
-    _cpp_compiler_builtin_fixed_registrations,
+    _cpp_overlay_fixed_registrations,
     _cpp_includes,
     _cpp_inferred_simd_registrations,
     _cpp_native_registration,
     _cpp_registration,
     _cpp_sized_registration,
-    cpp_compile_guard_condition,
-    cpp_compile_guard_diagnostic,
+    cpp_compiler_capability_condition,
+    cpp_compiler_capability_diagnostic,
     cpp_extension_availability_condition,
-    cpp_header_group,
     cpp_profiles_support_algorithm,
 )
-from tslc.backend.cpp_validation import resolve_cpp_compile_guards
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
-from tslc.backend.target_capability import is_x86_register_extension
+from tslc.backend.target_capability import is_width_indexed_register_extension
 from tslc.catalog.model import Extension
 from tslc.lower.lowerer import (
     LoweredArithmeticPreconditionKind,
@@ -96,6 +113,8 @@ class CppProfileHeader:
     """Decided content of one generated profile header and its smoke test."""
 
     header_group: str | None
+    compiler_ids: tuple[str, ...]
+    enable_macro: str | None
     includes: str | None
     registrations: str
     declarations: tuple[CppDeclaredPrimitive, ...]
@@ -111,6 +130,7 @@ class CppProfileRenderModel:
     profile_name: str
     profile_family: str
     headers: tuple[CppProfileHeader, ...]
+    compile_options: tuple[CppCompilerOption, ...]
 
     @property
     def base_header(self) -> CppProfileHeader:
@@ -127,8 +147,13 @@ class CppProjectRenderModel:
 
     profiles: tuple[CppProfileRenderModel, ...]
     primitive_tag_declarations: str
+    compiler_capability_defaults: str
     dispatch_header_groups: tuple[str, ...]
+    compiler_capability_probes: str
+    compiler_capability_definitions: tuple[str, ...]
+    value_test_compile_options: tuple[CppCompilerOption, ...]
     supports_algorithm: bool
+    profile_detection: CppProfileDetectionPlan
 
 
 def cpp_project_render_model(
@@ -136,6 +161,7 @@ def cpp_project_render_model(
 ) -> CppProjectRenderModel:
     """Decide every C++ profile-content fact from emitted backend profiles."""
 
+    capability_ids = used_cpp_compiler_capability_ids(profiles)
     tag_names = sorted(
         {
             primitive
@@ -148,17 +174,31 @@ def cpp_project_render_model(
         primitive_tag_declarations="\n".join(
             f"struct {name} {{}};" for name in tag_names
         ),
+        compiler_capability_defaults=(
+            cpp_compiler_capability_header_defaults(capability_ids)
+        ),
+        compiler_capability_probes=cpp_compiler_capability_cmake_probes(
+            capability_ids
+        ),
+        compiler_capability_definitions=(
+            cpp_compiler_capability_compile_definitions(capability_ids)
+        ),
         dispatch_header_groups=tuple(
             sorted(
                 {
                     group
                     for profile in profiles
                     for extension in profile.extensions.values()
-                    if (group := cpp_header_group(extension)) is not None
+                    if (group := cpp_extension_header_group(extension)) is not None
                 }
             )
         ),
+        value_test_compile_options=cpp_value_test_compile_options(),
         supports_algorithm=cpp_profiles_support_algorithm(profiles),
+        profile_detection=cpp_profile_detection_plan(
+            tuple(profile.profile for profile in profiles),
+            candidates=cpp_profile_detection_candidates(profiles),
+        ),
     )
 
 
@@ -174,7 +214,7 @@ def _cpp_profile_model(emitted_profile: EmittedProfile) -> CppProfileRenderModel
         {
             group
             for extension in emitted_profile.extensions.values()
-            if (group := cpp_header_group(extension)) is not None
+            if (group := cpp_extension_header_group(extension)) is not None
         }
     )
     for header_group in header_groups:
@@ -190,6 +230,9 @@ def _cpp_profile_model(emitted_profile: EmittedProfile) -> CppProfileRenderModel
         profile_name=emitted_profile.profile.name,
         profile_family=emitted_profile.profile.family,
         headers=tuple(headers),
+        compile_options=cpp_profile_compile_options(
+            emitted_profile.profile, emitted_profile.profile_family
+        ),
     )
 
 
@@ -202,7 +245,7 @@ def _cpp_base_header(
     x86_exts = [
         ext
         for ext in emitted_exts
-        if is_x86_register_extension(emitted_profile.extensions.get(ext))
+        if is_width_indexed_register_extension(emitted_profile.extensions.get(ext))
     ]
     registrations = "".join(
         _cpp_registration(ext, emitted_profile.extensions.get(ext))
@@ -215,6 +258,8 @@ def _cpp_base_header(
     )
     return CppProfileHeader(
         header_group=None,
+        compiler_ids=(),
+        enable_macro=None,
         includes=_cpp_includes(emitted_exts, emitted_profile.extensions),
         registrations=registrations,
         # The base header declares selectors/wrappers over EVERY specialization
@@ -224,7 +269,11 @@ def _cpp_base_header(
             for name in sorted(base)
         ),
         definition_groups=_cpp_definition_groups(base, emitted_profile.extensions),
-        guard=_cpp_profile_compile_guard(emitted_exts, emitted_profile.extensions),
+        guard=_cpp_profile_compile_guard(
+            emitted_exts,
+            emitted_profile.extensions,
+            header_group=None,
+        ),
         smoke=_cpp_smoke_instantiations(emitted_profile, base),
     )
 
@@ -236,13 +285,25 @@ def _cpp_overlay_header(
     header_group: str,
 ) -> CppProfileHeader:
     registrations = _cpp_native_registration(grouped, emitted_profile.extensions)
-    registrations += _cpp_compiler_builtin_fixed_registrations(
+    registrations += _cpp_overlay_fixed_registrations(
         grouped,
         emitted_profile.extensions,
         header_group,
     )
     return CppProfileHeader(
         header_group=header_group,
+        compiler_ids=tuple(
+            sorted(
+                {
+                    compiler_id
+                    for extension_name in used_extensions(grouped)
+                    for compiler_id in cpp_extension_compiler_ids(
+                        emitted_profile.extensions.get(extension_name)
+                    )
+                }
+            )
+        ),
+        enable_macro=f"TSL_ENABLE_{header_group.upper()}",
         includes=None,
         registrations=registrations,
         declarations=tuple(
@@ -256,6 +317,7 @@ def _cpp_overlay_header(
         guard=_cpp_profile_compile_guard(
             used_extensions(grouped),
             emitted_profile.extensions,
+            header_group=header_group,
         ),
         smoke=_cpp_smoke_instantiations(emitted_profile, grouped),
     )
@@ -264,14 +326,22 @@ def _cpp_overlay_header(
 def _cpp_profile_compile_guard(
     emitted_exts: tuple[str, ...],
     extensions: Mapping[str, Extension],
+    *,
+    header_group: str | None,
 ) -> CppProfileCompileGuard | None:
-    guards = resolve_cpp_compile_guards(emitted_exts, extensions).guards
+    guards = tuple(
+        capability
+        for capability in cpp_extensions_compiler_capabilities(
+            emitted_exts, extensions
+        )
+        if capability.header_group == header_group
+    )
     if not guards:
         return None
     return CppProfileCompileGuard(
-        condition=cpp_compile_guard_condition(guards),
+        condition=cpp_compiler_capability_condition(guards),
         diagnostic="; ".join(
-            cpp_compile_guard_diagnostic(guard) for guard in guards
+            cpp_compiler_capability_diagnostic(guard) for guard in guards
         ),
     )
 
@@ -280,7 +350,7 @@ def _cpp_definition_groups(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
 ) -> tuple[CppDefinitionGroup, ...]:
-    """Group each primitive's definitions under their compiler capability guard."""
+    """Group primitive definitions under target-extension conditions."""
 
     groups: list[CppDefinitionGroup] = []
     for name in sorted(by_primitive):
@@ -452,7 +522,7 @@ def _cpp_specializations_for_group(
         selected = tuple(
             specialization
             for specialization in specializations
-            if cpp_header_group(extensions.get(specialization.extension_name))
+            if cpp_extension_header_group(extensions.get(specialization.extension_name))
             == header_group
         )
         if selected:

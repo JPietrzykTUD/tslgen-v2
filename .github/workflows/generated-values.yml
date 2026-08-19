@@ -128,6 +128,7 @@ jobs:
               -e TSLC_SUMMARY_FILE="./${summary_file}" \
               -e TSLC_SDE="/opt/intel-sde/sde64" \
               -e TSLC_QEMU_AARCH64="/usr/bin/qemu-aarch64" \
+              -e TSLC_QEMU_RISCV64="/usr/bin/qemu-riscv64" \
               -e TSLC_WASMTIME="/usr/local/bin/wasmtime" \
               -- \
               bash -lc '
@@ -137,6 +138,12 @@ jobs:
                   --backends "${TSLC_BACKENDS}" \
                   --profiles "${TSLC_PROFILES}" \
                   --output-root "${TSLC_CI_OUTPUT}"
+                if [[ ",${TSLC_PROFILES}," == *,rvv,* && "${TSLC_BACKENDS}" == "cpp" ]]; then
+                  timeout --signal=KILL 60s /usr/bin/qemu-riscv64 \
+                    -L /usr/riscv64-linux-gnu \
+                    -cpu "max,v=true,vext_spec=v1.0,vlen=256,elen=64" \
+                    "${TSLC_CI_OUTPUT}/cpp/build/rvv/tsl_values"
+                fi
               '
 
       - name: Append generated value-test summary
@@ -198,14 +205,15 @@ jobs:
             bash -lc '
               set -e
               for required_tool in \
-                /usr/bin/clang++ \
+                /usr/bin/clang++-21 \
+                /usr/bin/clang++-22 \
                 /opt/intel-sde/sde64
               do
                 if [[ ! -x "${required_tool}" ]]; then
                   echo "missing executable required by the Clang overlay gate: ${required_tool}" >&2
                   exit 1
                 fi
-                if [[ "${required_tool}" == /usr/bin/clang++ ]]; then
+                if [[ "${required_tool}" == /usr/bin/clang++-* ]]; then
                   "${required_tool}" --version | sed -n "1p"
                 else
                   echo "found ${required_tool}"
@@ -224,7 +232,8 @@ jobs:
                 trap "rm -rf tslctmp/pytest" EXIT
                 PYTHONPATH=tslc/src python -m pytest -q \
                   --run-generated-builds \
-                  tslc/tests/test_build_verify.py::test_clang_vector_overlay_builds_and_runs_through_opt_in_target
+                  tslc/tests/test_build_verify.py::test_clang_vector_overlay_builds_and_runs_through_opt_in_target \
+                  tslc/tests/test_value_tests.py::test_clang_lzc_value_tests_build_and_pass
               '
 
       - name: Upload generated Clang overlay logs

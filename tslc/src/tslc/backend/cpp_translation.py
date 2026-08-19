@@ -208,6 +208,12 @@ class _CppSyntax:
             args=args,
         )
 
+    def render_address(
+        self, target: RenderField, *, mutable: bool = False
+    ) -> RenderText:
+        del mutable
+        return render_sequence((literal_text("&"), target))
+
     def render_pointer_cast(
         self, inner: RenderField, *, is_const: bool, operand: PointerCastOperand
     ) -> RenderText:

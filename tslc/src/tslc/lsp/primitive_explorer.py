@@ -409,6 +409,7 @@ def _resolved_primitive_slots(
         primitive_name,
         DEFAULT_SCALAR_TYPE_TAGS,
         backend_id=backend,
+        compiler_capabilities=None,
     )
     selected: dict[_ExplorerSlotKey, list[ExplorerImplementation]] = {}
     primitives_by_declaration = {
@@ -812,8 +813,15 @@ def _selected_profile(
                 -configured.index(name),
             ),
         )
-    if "scalar" in profiles:
-        return "scalar"
+    declared_fallbacks = tuple(
+        sorted(
+            name
+            for name, profile in profiles.items()
+            if profile.default_build_fallback
+        )
+    )
+    if len(declared_fallbacks) == 1:
+        return declared_fallbacks[0]
     return min(profiles, default="")
 
 

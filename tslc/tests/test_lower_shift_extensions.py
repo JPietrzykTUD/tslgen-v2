@@ -38,7 +38,7 @@ def test_x86_immediate_shift_left_avoids_array_fallback(
         .selected
         if selected.extension.name == extension
         and selected.primitive.signature == "v:=(v,sImm)"
-        and selected.primitive.attributes.get("mask") is None
+        and selected.primitive.mask_mode is None
     )
     cpp = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")

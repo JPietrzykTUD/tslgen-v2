@@ -197,6 +197,7 @@ def test_call_facts_propagate_bottom_up_recursively() -> None:
     leaf = _slot(
         "leaf",
         required_features=frozenset({"avx512f"}),
+        required_compiler_capabilities=frozenset({"elementwise_clzg"}),
         safety=ImplementationSafety(
             internal_unsafe=True,
             caller_unsafe=True,
@@ -233,6 +234,12 @@ def test_call_facts_propagate_bottom_up_recursively() -> None:
 
     assert middle.spec.required_features == frozenset({"avx2", "avx512f"})
     assert root.spec.required_features == frozenset({"avx2", "avx512f"})
+    assert middle.spec.required_compiler_capabilities == frozenset(
+        {"elementwise_clzg"}
+    )
+    assert root.spec.required_compiler_capabilities == frozenset(
+        {"elementwise_clzg"}
+    )
     assert middle.spec.safety.internal_unsafe is True
     assert root.spec.safety.internal_unsafe is True
     assert "unsafe_callee" in middle.spec.safety.reasons
@@ -240,6 +247,42 @@ def test_call_facts_propagate_bottom_up_recursively() -> None:
     assert middle.spec.body.requires_unsafe is False
     assert root.spec.body.requires_unsafe is False
 
+
+def test_compiler_capabilities_propagate_per_alternative_branch() -> None:
+    leaf_dependency = CallDependency(
+        primitive="leaf",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    caller_dependency = CallDependency(
+        primitive="caller",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    optimized = _slot(
+        "caller",
+        required_compiler_capabilities=frozenset({"optimized"}),
+        callees=frozenset({leaf_dependency}),
+    )
+    optimized.compiler_alternative_rank = 0
+    fallback = _slot("caller")
+    fallback.compiler_alternative_rank = 1
+    leaf = _slot(
+        "leaf",
+        required_compiler_capabilities=frozenset({"transitive"}),
+    )
+    root = _slot("root", callees=frozenset({caller_dependency}))
+
+    _propagate_transitive_call_facts(
+        [root, optimized, fallback, leaf],
+        frozenset(),
+    )
+
+    assert optimized.spec.required_compiler_capabilities == frozenset(
+        {"optimized", "transitive"}
+    )
+    assert fallback.spec.required_compiler_capabilities == frozenset()
+    assert root.spec.required_compiler_capabilities == frozenset()
 
 def test_call_facts_propagate_through_shared_leaf_diamond() -> None:
     leaf = _slot(
@@ -435,6 +478,61 @@ def test_pruned_variant_dependency_keeps_variant_origin() -> None:
         "but that specialization is not generated for this profile"
     )
 
+
+def test_compiler_optimization_is_not_emitted_without_live_fallback() -> None:
+    dependency = CallDependency(
+        primitive="missing",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    optimized = _slot(
+        "caller",
+        required_compiler_capabilities=frozenset({"elementwise_clzg"}),
+    )
+    optimized.compiler_alternative_rank = 0
+    fallback = _slot(
+        "caller",
+        callees=frozenset({dependency}),
+    )
+    fallback.compiler_alternative_rank = 1
+
+    grouped, pruned = _prune_unresolved(
+        [optimized, fallback],
+        frozenset(),
+    )
+
+    assert grouped == {}
+    assert pruned == [optimized, fallback]
+
+
+
+def test_missing_optimized_dependency_prunes_only_that_compiler_branch() -> None:
+    dependency = CallDependency(
+        primitive="missing",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    optimized = _slot(
+        "caller",
+        callees=frozenset({dependency}),
+        required_compiler_capabilities=frozenset({"elementwise_clzg"}),
+    )
+    optimized.compiler_alternative_rank = 0
+    fallback = _slot("caller")
+    fallback.compiler_alternative_rank = 1
+
+    grouped, pruned = _prune_unresolved(
+        [optimized, fallback],
+        frozenset(),
+    )
+
+    assert pruned == [optimized]
+    assert grouped == {
+        "rust": {
+            "caller": [fallback.spec],
+        }
+    }
+    assert fallback.spec.compiler_alternatives == ()
 
 def test_pruning_chooses_first_unresolved_dependency_deterministically() -> None:
     select = CallDependency(
@@ -983,6 +1081,7 @@ def _slot(
     body: str = "return data;",
     safety: ImplementationSafety = ImplementationSafety(),
     required_features: frozenset[str] = frozenset(),
+    required_compiler_capabilities: frozenset[str] = frozenset(),
     implementation_state: ImplementationState = ImplementationState.UNKNOWN,
     param_kinds: tuple[str, ...] = ("v",),
     immediate: tuple[str, str] | None = None,
@@ -996,6 +1095,7 @@ def _slot(
             body=body,
             safety=safety,
             required_features=required_features,
+            required_compiler_capabilities=required_compiler_capabilities,
             implementation_state=implementation_state,
             param_kinds=param_kinds,
             immediate=immediate,
@@ -1011,6 +1111,7 @@ def _spec(
     body: str | LoweredBody = "return data;",
     safety: ImplementationSafety = ImplementationSafety(),
     required_features: frozenset[str] = frozenset(),
+    required_compiler_capabilities: frozenset[str] = frozenset(),
     implementation_state: ImplementationState = ImplementationState.UNKNOWN,
     param_kinds: tuple[str, ...] = ("v",),
     immediate: tuple[str, str] | None = None,
@@ -1040,6 +1141,7 @@ def _spec(
         immediate=immediate,
         register_is_base=True,
         required_features=required_features,
+        required_compiler_capabilities=required_compiler_capabilities,
         implementation_state=implementation_state,
         safety=safety,
     )

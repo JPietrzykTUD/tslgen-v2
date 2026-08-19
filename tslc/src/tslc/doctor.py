@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Mapping
+from dataclasses import replace
 import json
 from pathlib import Path
 import shlex
@@ -15,7 +16,8 @@ from typing import Any
 from tslc._cli_options import merge_toolchains, parse_assignments, split_csv
 from tslc.authoring import check_catalog
 from tslc.backend.registry import backend_capabilities
-from tslc.catalog.machine_profiles import load_machine_profiles_checked
+from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
+from tslc.catalog.model import Catalog
 from tslc.diagnostics import has_errors
 from tslc.output.verify import run_subprocess_build_command
 from tslc.output.verify_model import (
@@ -190,11 +192,21 @@ def diagnose(
     work_root.mkdir(parents=True, exist_ok=True)
     for capability in backend_capabilities(backends):
         verify_profiles = tuple(
-            capability.verify_machine_profile(
-                profile,
-                checked.catalog.target_families.profile_family(profile.family),
+            replace(
+                projected,
+                preflight_headers=_profile_preflight_headers(
+                    checked.catalog, profile, capability.backend_id
+                ),
             )
             for profile in machine_profiles_by_name
+            if profile.supports_backend(capability.backend_id)
+            if (
+                projected := capability.verify_machine_profile(
+                    profile,
+                    checked.catalog.target_families.profile_family(profile.family),
+                )
+            )
+            is not None
         )
         backend = VerifyBackend(
             backend_id=capability.backend_id,
@@ -261,6 +273,29 @@ def diagnose(
         "diagnostics": diagnostics,
         "backends": backend_reports,
     }
+
+
+def _profile_preflight_headers(
+    catalog: Catalog,
+    profile: MachineProfile,
+    backend_id: str,
+) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                header
+                for extension in catalog.extensions.values()
+                if extension.supports_backend(backend_id)
+                if extension.family not in (
+                    catalog.target_families.universal_extension_families
+                )
+                if catalog.target_families.extension_targets_profile(
+                    extension.family, profile.family
+                )
+                for header in extension.headers_for_backend(backend_id)
+            }
+        )
+    )
 
 
 def _profile_report(

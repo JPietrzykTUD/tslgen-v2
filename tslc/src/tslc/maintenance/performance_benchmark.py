@@ -19,7 +19,7 @@ from tslc._pipeline_lowering_cache import _LoweringCacheInfo
 from tslc.api import _ARITH_TYPE_TAGS, _expand_sources
 from tslc.authoring import check_catalog
 from tslc.ir.scan import _cached_scan
-from tslc.lower._query_model import _cached_parse_query
+from tslc.ir.query_syntax import _cached_parse_query
 from tslc.maintenance import _repo_context
 from tslc.maintenance._repo_context import RepoContext
 from tslc.maintenance.generation_snapshot import input_manifest_digest

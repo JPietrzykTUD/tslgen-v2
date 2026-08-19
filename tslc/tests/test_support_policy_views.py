@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import (
+    Catalog,
+    PrimitiveCastMode,
+    PrimitiveMaskMode,
+    PrimitiveValueMode,
+)
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.support_policy_views import (
     concrete_target_candidates,
@@ -34,6 +39,11 @@ def test_views_select_callable_variants(catalog: Catalog) -> None:
 
     assert add_variants
     assert any("mask" in p.attributes for p in add_variants)
+    assert {p.mask_mode for p in add_variants} == {
+        None,
+        PrimitiveMaskMode.PASS_THROUGH,
+        PrimitiveMaskMode.ZERO,
+    }
     assert all(p.name == "add" for p in add_variants)
     assert gather_variants
     assert any("mask" in p.attributes for p in gather_variants)
@@ -43,6 +53,10 @@ def test_views_filter_representation_change_targets(catalog: Catalog) -> None:
     policy = DEFAULT_SUPPORT_POLICY
     reinterpret = catalog.primitives_named("reinterpret", unmasked=False)[0]
     extract = catalog.primitives_named("extract", unmasked=False)[0]
+    set_undef = catalog.primitives_named("set_undef", unmasked=False)[0]
+
+    assert reinterpret.cast_mode is PrimitiveCastMode.REINTERPRET
+    assert set_undef.value_mode is PrimitiveValueMode.UNDEFINED
 
     assert concrete_target_candidates(
         catalog, reinterpret, "avx2", "si32", policy

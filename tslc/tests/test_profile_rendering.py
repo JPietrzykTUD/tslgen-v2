@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 
 import pytest
 
 from tslc.api import generate_project
+from tslc.benchmark.identity import (
+    benchmark_slot_identity_hash,
+    implementation_body_hash,
+    implementation_choice_body_hash,
+)
+from tslc.backend.cpp_build_policy import cpp_profile_flags, cpp_profile_target
+from tslc.backend.cpp_detection import x86_profile_detection_source
+from tslc.backend.rust_verification import (
+    rust_linker,
+    rust_target,
+    rust_target_features,
+)
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.target_families import (
     BackendProfileFamily,
@@ -15,9 +28,8 @@ from tslc.catalog.target_families import (
     TargetFeatureCapability,
 )
 from tslc.diagnostics import has_errors
-from tslc.render.cpp_build import _x86_profile_detection_source, cpp_flags, cpp_target
+from tslc.lower.lowerer import LoweredImplementationVariant
 from tslc.render._common import slug
-from tslc.render.rust_project import rust_linker, rust_target, rust_target_features
 
 
 def _roots(result) -> set[str]:
@@ -70,6 +82,119 @@ def test_backend_selection_is_honored(data_root: Path, machine_profiles_path: Pa
     assert _roots(cpp_only) == {"cpp", "docs"}
     # verify description only covers the requested backend
     assert [b.backend_id for b in cpp_only.rendered.verify.backends] == ["cpp"]
+
+
+def test_unknown_requested_compiler_capability_is_diagnosed(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["lzc"],
+        profiles=["sse2"],
+        backends=["cpp"],
+        compiler_capabilities={"cpp": ("missing_capability",)},
+        render_artifacts=False,
+    )
+
+    assert "TSL-PIPELINE-UNKNOWN-COMPILER-CAPABILITY" in {
+        diagnostic.code for diagnostic in result.diagnostics
+    }
+
+
+def test_cpp_project_probes_and_retains_compiler_capability_alternatives(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["lzc", "to_integral", "to_mask"],
+        profiles=["sse2"],
+        type_tags=["ui32"],
+        backends=["cpp"],
+    )
+
+    assert not has_errors(result.diagnostics), result.diagnostics
+    specialization = next(
+        spec
+        for profile in result.emitted_profiles
+        for spec in profile.specializations("cpp")["lzc"]
+        if spec.extension_name == "clang_v128"
+        and spec.type_tag == "ui32"
+        and spec.mask_policy is None
+    )
+    assert specialization.required_compiler_capabilities == frozenset()
+    assert len(specialization.compiler_alternatives) == 1
+    assert specialization.compiler_alternatives[
+        0
+    ].required_compiler_capabilities == frozenset({"elementwise_clzg"})
+
+    fallback_only = replace(specialization, compiler_alternatives=())
+    assert benchmark_slot_identity_hash(
+        "sse2", specialization
+    ) != benchmark_slot_identity_hash("sse2", fallback_only)
+    assert implementation_choice_body_hash(
+        specialization
+    ) != implementation_body_hash(specialization.body_text)
+
+    capability_branch = specialization.compiler_alternatives[0]
+    branch_variant = LoweredImplementationVariant(
+        "capability_only",
+        capability_branch.body,
+        implementation_state=capability_branch.implementation_state,
+        safety=capability_branch.safety,
+    )
+    branch_with_variant = replace(
+        capability_branch,
+        variant_bodies=(branch_variant,),
+    )
+    specialization_with_variant = replace(
+        specialization,
+        compiler_alternatives=(branch_with_variant,),
+    )
+    assert specialization_with_variant.variant_names == ("capability_only",)
+    assert implementation_choice_body_hash(
+        specialization_with_variant, "capability_only"
+    ) != implementation_body_hash(branch_variant.body_text)
+
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in result.artifacts.artifacts
+    }
+    clang_header = artifacts["cpp/include/tsl_sse2_clang.hpp"]
+    assert "#if TSL_COMPILER_HAS_ELEMENTWISE_CLZG" in clang_header
+    assert "__builtin_elementwise_clzg" in clang_header
+    assert "#if TSL_COMPILER_HAS_EXT_VECTOR_BOOLEAN_MASK_BRIDGE" in clang_header
+    assert "__builtin_convertvector" in clang_header
+    assert "::tsl::detail::helpers::imask_low_bits" in clang_header
+    assert "#else" in clang_header
+    assert "if (mask[0] != 0)" in clang_header
+    assert "if (mask[0])" in clang_header
+    assert "binary_or<" in clang_header
+
+    primitive_tags = artifacts["cpp/include/tsl_primitives.hpp"]
+    assert "#ifndef __has_builtin" in primitive_tags
+    assert "#ifndef __has_feature" in primitive_tags
+    assert "__has_builtin(__builtin_elementwise_clzg)" in primitive_tags
+    assert "__has_feature(ext_vector_type_boolean)" in primitive_tags
+    assert "__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__" in primitive_tags
+
+    cmake = artifacts["cpp/CMakeLists.txt"]
+    assert "include(CheckCXXSourceCompiles)" in cmake
+    assert "check_cxx_source_compiles" in cmake
+    assert "__builtin_elementwise_clzg" in cmake
+    assert "using tsl_probe_boolean = bool" in cmake
+    assert "__builtin_convertvector" in cmake
+    assert (
+        "TSL_COMPILER_HAS_ELEMENTWISE_CLZG=$<BOOL:"
+        "${TSL_COMPILER_HAS_ELEMENTWISE_CLZG}>"
+    ) in cmake
+    assert (
+        "TSL_COMPILER_HAS_EXT_VECTOR_BOOLEAN_MASK_BRIDGE=$<BOOL:"
+        "${TSL_COMPILER_HAS_EXT_VECTOR_BOOLEAN_MASK_BRIDGE}>"
+    ) in cmake
 
 
 def test_rust_profile_module_is_compiled_only_for_its_target_contract(
@@ -147,10 +272,10 @@ def test_representative_project_shape_is_byte_stable(
         backends=["cpp", "rust"],
     )
     expected = {
-        "cpp/CMakeLists.txt": "afd9ccd8ea6feffdfe0fa38e44e5027b3e49b8206938b23415c59bf35c510b87",
+        "cpp/CMakeLists.txt": "a544ca7828628a83dcb9b6dcf22b1834a5d7f69cfce7184bfe6bcd0e4855b35e",
         "cpp/docs/input/tsl_api_docs.hpp": "25c8a21fafad064c394b933b6c5d27b6dc07aaf4a509150d9da7e87ff9f8027d",
         "cpp/include/tsl.hpp": "298cd47b4e1509cd59eb4100f7a0d82bcdbc6e5d9f4eedccb0a68ba0bf667e03",
-        "cpp/include/tsl_primitives.hpp": "f1b98a21c8d349dc049eb9bf0d1d651a32156196bad5aa7de1c409ef5cbf496c",
+        "cpp/include/tsl_primitives.hpp": "64d81e783ee0ab6618cbc45d100458eee1ab27e238fe5f8a9b4844299072ce92",
         "cpp/include/tsl_scalar.hpp": "a3d1b9f8fd299e4710f39f7e887380668a9c666311440d0d6eae281e2ba5cef5",
         "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
         "rust/Cargo.toml": "ec632691434d5f98f5bb2035539e9df258ec7fb252f84e5b4cb21a0aa2a144cc",
@@ -227,8 +352,12 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
         in overlay
     )
     assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v128_bool>;" in overlay
-    assert "#if __has_feature(ext_vector_type_boolean)" in overlay
-    assert "#if defined(__clang__) && __clang__ == 1" in overlay
+    assert overlay.startswith("#if (defined(__clang__))\n")
+    assert (
+        "#if TSL_COMPILER_HAS_CLANG_VECTOR_TYPES && "
+        "TSL_COMPILER_HAS_EXT_VECTOR_TYPE_BOOLEAN"
+        in overlay
+    )
     assert "return (left + right);" in overlay
     assert "return __builtin_reduce_add(vec);" in overlay
     assert "struct hadd_impl<tsl::simd<int32_t, tsl::clang_v512>>" in overlay
@@ -358,7 +487,10 @@ def test_feature_flag_spelling(data_root: Path, machine_profiles_path: Path) -> 
     assert "-mavx512_gfni" not in cmake
     assert "-mavx512_vnni" not in cmake
     assert 'add_library(tsl::zen4 ALIAS tsl_profile_zen4)' in cmake
-    assert "target_compile_definitions(tsl_profile_zen4 INTERFACE TSL_PROFILE_ZEN4)" in cmake
+    assert (
+        "target_compile_definitions(tsl_profile_zen4 INTERFACE TSL_PROFILE_ZEN4"
+        in cmake
+    )
     assert 'set(TSL_PROFILE "auto" CACHE STRING' in cmake
     assert 'add_library(tsl::tsl ALIAS tsl_generated)' in cmake
     assert "target_link_libraries(tsl_generated INTERFACE tsl_profile_${TSL_SELECTED_PROFILE})" in cmake
@@ -387,9 +519,9 @@ def test_cpp_auto_detection_uses_cpuid_for_unsupported_clang_builtins() -> None:
         feature_capabilities=capabilities,
     )
 
-    source = _x86_profile_detection_source(profile)
+    source = x86_profile_detection_source(profile)
 
-    assert cpp_flags(profile) == (
+    assert cpp_profile_flags(profile) == (
         "-mavx2",
         "-mavx512fp16",
         "-mvaes",
@@ -408,7 +540,7 @@ def test_cpp_auto_detection_uses_cpuid_for_unsupported_clang_builtins() -> None:
     assert '__builtin_cpu_supports("vaes")' not in source
     assert '__builtin_cpu_supports("avx512fp16")' not in source
 
-    source_without_rdrand = _x86_profile_detection_source(
+    source_without_rdrand = x86_profile_detection_source(
         MachineProfile("avx", "x86", frozenset({"avx"}), {})
     )
     assert '__builtin_cpu_supports("avx")' in source_without_rdrand
@@ -433,7 +565,8 @@ def test_oneapi_fpga_profiles_are_opt_in_for_cmake_auto_detection(
     assert '"auto-oneapi-fpga"' in cmake
     assert "TSL_AUTO_ONEAPI_FPGA" not in cmake
     assert 'elseif(_TSL_REQUESTED_PROFILE STREQUAL "auto-oneapi-fpga")' in cmake
-    assert '_tsl_detect_profile_gate("oneapi_fpga" _TSL_GATE_READY _TSL_GATE_REASON)' in cmake
+    assert "_tsl_detect_oneapi_fpga(_TSL_GATE_READY _TSL_GATE_REASON)" in cmake
+    assert "_tsl_detect_profile_gate" not in cmake
     assert "sycl-ls" in cmake
     assert "clinfo" in cmake
     assert "aocl list-devices" in cmake
@@ -451,6 +584,32 @@ def test_oneapi_fpga_profiles_are_opt_in_for_cmake_auto_detection(
     assert cmake.index("    check_cxx_source_runs", cmake.index(fpga_auto)) < cmake.index(
         oneapi_selection
     )
+
+
+def test_cpu_auto_detection_uses_declared_default_fallback(
+    data_root: Path, tmp_path: Path
+) -> None:
+    profiles = tmp_path / "machine_profiles.json"
+    profiles.write_text(
+        '{"generic": ['
+        '{"name": "scalar", "target_features": "NOSIMD-INVALID"}, '
+        '{"name": "portable", "target_features": "NOSIMD-INVALID", '
+        '"default_build_fallback": true}]}\n',
+        encoding="utf-8",
+    )
+
+    cmake = {
+        artifact.logical_path: artifact.content
+        for artifact in _gen(
+            data_root,
+            profiles,
+            primitives=["add"],
+            profiles=["scalar", "portable"],
+            backends=["cpp"],
+        ).artifacts.artifacts
+    }["cpp/CMakeLists.txt"]
+
+    assert 'set(TSL_SELECTED_PROFILE "portable")' in cmake
 
 
 def test_cpu_auto_detection_has_no_gated_profile_fallback(
@@ -490,8 +649,8 @@ def test_cpp_profile_flags_are_profile_family_owned() -> None:
         },
     )
 
-    assert cpp_flags(profile, capability) == ("-march=armv8-a+sve",)
-    assert cpp_target(profile, capability) == "aarch64-linux-gnu"
+    assert cpp_profile_flags(profile, capability) == ("-march=armv8-a+sve",)
+    assert cpp_profile_target(profile, capability) == "aarch64-linux-gnu"
 
 
 def test_rust_profile_toolchain_is_profile_family_owned() -> None:
@@ -638,7 +797,8 @@ def test_fixed_sve_profile_registers_guarded_static_cpp_simd_types(
     cmake = by_path["cpp/CMakeLists.txt"]
     dispatch = by_path["cpp/include/tsl.hpp"]
     assert cpp.startswith(
-        f"#if defined(__ARM_FEATURE_SVE_BITS) && __ARM_FEATURE_SVE_BITS == {width}\n"
+        f"#if (defined(__ARM_FEATURE_SVE_BITS) && "
+        f"(__ARM_FEATURE_SVE_BITS == {width}))\n"
     )
     assert (
         f'#  error "TSL {profile} profile requires -msve-vector-bits={width}"'
@@ -705,7 +865,10 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
     assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in cpp
     assert "return svadd_s32_x(::tsl::mask_true<Vec>(), left, right);" in cpp
     assert 'add_library(tsl::sve ALIAS tsl_profile_sve)' in cmake
-    assert "target_compile_definitions(tsl_profile_sve INTERFACE TSL_PROFILE_SVE)" in cmake
+    assert (
+        "target_compile_definitions(tsl_profile_sve INTERFACE TSL_PROFILE_SVE"
+        in cmake
+    )
     assert "target_compile_options(tsl_profile_sve INTERFACE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-mcpu=a64fx>)" in cmake
     assert any(
         case.kind == "scalable_golden"
@@ -886,3 +1049,611 @@ def test_sve_profile_plans_scalable_mask_store_values(
     assert "std::vector<uint32_t> actual(1 + lanes);" in values
     assert "tsl::store_mask_repr<Vec, false, false>(" in values
     assert "reinterpret_cast<typename Vec::base_type *>(actual.data() + 1), mask);" in values
+
+@pytest.fixture(scope="module")
+def rvv_project(data_root: Path, machine_profiles_path: Path):
+    return _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=[
+            "set1", "set_zero", "load", "store", "add", "sub", "mul",
+            "binary_and", "binary_or", "binary_xor",
+            "inv", "binary_andnot",
+            "max", "min", "neg", "abs", "div", "mod", "mul_imm", "mod_imm",
+        ],
+        profiles=["rvv"],
+        type_tags=[
+            "si8", "ui8", "si16", "ui16", "si32",
+            "ui32", "si64", "ui64", "f32", "f64",
+        ],
+        backends=["cpp", "rust"],
+    )
+
+
+def test_catalog_target_families_own_backend_runtime_capabilities(catalog) -> None:
+    x86 = catalog.target_families.profile_family("x86")
+    wasm = catalog.target_families.profile_family("wasm32")
+
+    assert x86 is not None
+    assert wasm is not None
+    assert x86.backend("rust").detection == "x86_builtin"
+    assert x86.backend("rust").runtime_failure_observable
+    assert not wasm.backend("cpp").runtime_failure_observable
+    assert not wasm.backend("rust").runtime_failure_observable
+
+
+def test_rvv_catalog_is_scalable_lmul1_cpp_only(catalog, machine_profiles) -> None:
+    extension = catalog.extensions["rvv"]
+    profile = machine_profiles["rvv"]
+    family = catalog.target_families.profile_family("riscv")
+
+    assert extension.family == "rvv"
+    assert extension.vector_bits_kind == "scalable"
+    assert extension.runtime_lane_count["cpp"] == (
+        "__riscv_vlenb() / sizeof({base_type})"
+    )
+    register_types = {
+        "si8": ("vint8m1_t", "i8m1"),
+        "ui8": ("vuint8m1_t", "u8m1"),
+        "si16": ("vint16m1_t", "i16m1"),
+        "ui16": ("vuint16m1_t", "u16m1"),
+        "si32": ("vint32m1_t", "i32m1"),
+        "ui32": ("vuint32m1_t", "u32m1"),
+        "si64": ("vint64m1_t", "i64m1"),
+        "ui64": ("vuint64m1_t", "u64m1"),
+        "f32": ("vfloat32m1_t", "f32m1"),
+        "f64": ("vfloat64m1_t", "f64m1"),
+    }
+    for type_tag, (register, suffix) in register_types.items():
+        assert extension.direct_vector_register_type("cpp", type_tag) == register
+        assert extension.compose_suffix_by_type[type_tag] == suffix
+    assert extension.mask_policy.kind == "native_predicate_by_type"
+    assert extension.mask_policy.spelling_for_type("cpp", "si32") == "vbool32_t"
+    assert extension.mask_policy.spelling_for_type("cpp", "f64") == "vbool64_t"
+    assert extension.supports_backend("cpp")
+    assert not extension.supports_backend("rust")
+    assert profile.supported_backends == frozenset({"cpp"})
+    assert profile.supports_backend("cpp")
+    assert not profile.supports_backend("rust")
+    assert family is not None
+    cpp = family.backend("cpp")
+    assert cpp.compiler_role == "riscv-cpp"
+    assert cpp.cmake_system_name == "Linux"
+    assert cpp.cmake_system_processor == "riscv64"
+    assert not cpp.pass_target_to_compiler
+
+
+def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
+    rvv_project,
+) -> None:
+    assert not has_errors(rvv_project.diagnostics), rvv_project.diagnostics
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    integer_types = {
+        "i8m1": 8,
+        "u8m1": 8,
+        "i16m1": 16,
+        "u16m1": 16,
+        "i32m1": 32,
+        "u32m1": 32,
+        "i64m1": 64,
+        "u64m1": 64,
+    }
+    for suffix, width in integer_types.items():
+        for stem in (
+            "vmv_v_x",
+            f"vle{width}_v",
+            f"vse{width}_v",
+            "vadd_vv",
+            "vand_vv",
+            "vor_vv",
+            "vnot_v",
+            "vxor_vv",
+            "vmul_vv",
+            "vsub_vv",
+        ):
+            assert f"__riscv_{stem}_{suffix}" in header
+        if suffix.startswith("i"):
+            assert f"__riscv_vneg_v_{suffix}" in header
+        else:
+            assert f"__riscv_vneg_v_{suffix}" not in header
+        division_stem = "vdivu_vv" if suffix.startswith("u") else "vdiv_vv"
+        assert f"__riscv_{division_stem}_{suffix}" in header
+        remainder_stem = "vremu_vv" if suffix.startswith("u") else "vrem_vv"
+        assert f"__riscv_{remainder_stem}_{suffix}" in header
+        extrema_stems = (
+            ("vmaxu_vv", "vminu_vv")
+            if suffix.startswith("u")
+            else ("vmax_vv", "vmin_vv")
+        )
+        for stem in extrema_stems:
+            assert f"__riscv_{stem}_{suffix}" in header
+        assert f"__riscv_vle{width}_v_{suffix}_mu" in header
+        assert f"__riscv_vse{width}_v_{suffix}_m" in header
+    for suffix, width in (("f32m1", 32), ("f64m1", 64)):
+        for stem in (
+            "vfmv_v_f",
+            f"vle{width}_v",
+            f"vse{width}_v",
+            "vfadd_vv",
+            "vfmul_vv",
+            "vfsub_vv",
+            "vfneg_v",
+            "vfabs_v",
+            "vfdiv_vv",
+        ):
+            assert f"__riscv_{stem}_{suffix}" in header
+        assert header.count(f"__riscv_vfdiv_vv_{suffix}") == 3
+        assert header.count(f"__riscv_vfdiv_vv_{suffix}_mu") == 2
+        assert f"__riscv_vle{width}_v_{suffix}_mu" in header
+        assert f"__riscv_vse{width}_v_{suffix}_m" in header
+        assert f"__riscv_vfmax_vv_{suffix}" not in header
+        assert f"__riscv_vfmin_vv_{suffix}" not in header
+    assert "return ::tsl::set1<Vec>(static_cast<int32_t>(0));" in header
+    assert "::tsl::add<Vec>(left, right),\n" in header
+    assert "::tsl::binary_and<Vec>(left, right),\n" in header
+    assert "::tsl::binary_or<Vec>(left, right),\n" in header
+    assert "::tsl::binary_xor<Vec>(left, right),\n" in header
+    assert "::tsl::inv<Vec>(left),\n" in header
+    assert "::tsl::binary_andnot<Vec>(left, right),\n" in header
+    assert "::tsl::less_than<Vec>(vec_a, vec_b),\n" in header
+    assert "::tsl::sub<Vec>(left, right),\n" in header
+    assert "::tsl::mul<Vec>(factor1, factor2),\n" in header
+    assert "::tsl::less_than<Vec>(data, zero)" in header
+    assert "::tsl::neg<Vec>(data),\n" in header
+    assert "::tsl::set_zero<Vec>()" in header
+    assert "std::vector<float> dividends_storage" in header
+    assert "std::vector<double> divisors_storage" in header
+    assert "::tsl::mod<tsl::simd<float, tsl::scalar>>" in header
+    assert "::tsl::mod<tsl::simd<double, tsl::scalar>>" in header
+    assert header.count("return ::tsl::select<Vec>(") >= 40
+
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    scalable_kinds = {
+        case.kind
+        for profile in rvv_project.rendered.value_tests.profiles_for("cpp")
+        for case in profile.cases
+        if case.scalable is not None
+        and case.scalable.source_extension == "rvv"
+    }
+    assert "scalable_masked_pointer_load" in scalable_kinds
+    assert "scalable_masked_pointer_store" in scalable_kinds
+    assert "test_scalable_rvv_load_maskz_load_ui32_mask_zero_alternating" in values
+    assert "test_scalable_rvv_load_mask_load_ui32_mask_merge_alternating" in values
+    assert "test_scalable_rvv_store_mask_store_ui8_store_basic" in values
+    assert "test_scalable_rvv_mul_ui64_rvv_basic_rvv" in values
+    assert "test_scalable_rvv_mul_si64_rvv_edge_rvv" in values
+    assert "test_scalable_rvv_mul_mask_mul_si32_rvv_mask_basic_rvv" in values
+    assert "test_scalable_rvv_mul_maskz_mul_si32_rvv_maskz_basic_rvv" in values
+    for operation in ("binary_and", "binary_or", "binary_xor"):
+        assert f"test_scalable_rvv_{operation}_ui64_rvv_edge_rvv" in values
+        assert (
+            f"test_scalable_rvv_{operation}_mask_{operation}_ui64_rvv_"
+            f"{operation}_mask_edge_rvv"
+        ) in values
+        assert (
+            f"test_scalable_rvv_{operation}_maskz_{operation}_ui64_rvv_"
+            f"{operation}_maskz_edge_rvv"
+        ) in values
+    assert "test_scalable_rvv_inv_ui64_edge" in values
+    assert "test_scalable_rvv_inv_mask_inv_ui64_rvv_mask_edge_rvv" in values
+    assert "test_scalable_rvv_inv_maskz_inv_ui64_rvv_maskz_edge_rvv" in values
+    assert "test_scalable_rvv_binary_andnot_ui64_rvv_edge_rvv" in values
+    assert (
+        "test_scalable_rvv_binary_andnot_mask_binary_andnot_ui64_rvv_"
+        "binary_andnot_mask_edge_rvv"
+    ) in values
+    assert (
+        "test_scalable_rvv_binary_andnot_maskz_binary_andnot_ui64_rvv_"
+        "binary_andnot_maskz_edge_rvv"
+    ) in values
+    for operation in ("max", "min"):
+        assert f"test_scalable_rvv_{operation}_si64_rvv_edge_rvv" in values
+        assert f"test_scalable_rvv_{operation}_ui64_rvv_edge_rvv" in values
+        assert (
+            f"test_scalable_rvv_{operation}_f32_rvv_nan_ordered_rvv"
+        ) in values
+    assert "test_scalable_rvv_neg_si64_signed_min_wrapping" in values
+    assert "test_scalable_rvv_neg_f32_float_sign_bits" in values
+    assert "test_scalable_rvv_abs_ui64_basic" in values
+    assert "test_scalable_rvv_abs_si64_signed_min" in values
+    assert "test_scalable_rvv_abs_f32_float_sign" in values
+    assert "test_scalable_rvv_div_f32_basic" in values
+    assert "test_scalable_rvv_div_si32_basic" in values
+    assert "test_scalable_rvv_div_si32_edge_overflow_signs" in values
+    assert "test_scalable_rvv_div_si32_failure_zero_divisor" in values
+    assert "test_scalable_rvv_div_si32_mask_failure_active_zero" in values
+    assert "test_scalable_rvv_div_si32_maskz_failure_active_zero" in values
+    assert "test_scalable_rvv_div_maskz_div_si32_maskz_inactive_zero" in values
+    assert "test_scalable_rvv_div_mask_div_si32_mask_inactive_zero" in values
+    assert "test_scalable_rvv_mod_si32_basic" in values
+    assert "test_scalable_rvv_mod_si32_edge_overflow" in values
+    assert "test_scalable_rvv_mod_si32_failure_zero_divisor" in values
+    assert "test_scalable_rvv_mod_si32_mask_failure_active_zero" in values
+    assert "test_scalable_rvv_mod_si32_maskz_failure_active_zero" in values
+    assert "test_scalable_rvv_mod_maskz_mod_si32_maskz_inactive_zero" in values
+    assert "test_scalable_rvv_mod_mask_mod_si32_mask_inactive_zero" in values
+    assert "test_scalable_rvv_mod_f32_basic_float" in values
+    assert "mod_f32_rvv_maskz_float_rvv" in values
+    assert "mod_f64_rvv_mask_float_rvv" in values
+    assert "test_scalable_rvv_mul_imm_si32_rvv_basic_rvv" in values
+    assert (
+        "test_scalable_rvv_mul_imm_maskz_mul_imm_si32_rvv_maskz_basic_rvv"
+        in values
+    )
+    assert (
+        "test_scalable_rvv_mul_imm_mask_mul_imm_si32_rvv_mask_basic_rvv"
+        in values
+    )
+    assert "test_scalable_rvv_mod_imm_si32_rvv_basic_rvv" in values
+    assert (
+        "test_scalable_rvv_mod_imm_maskz_mod_imm_si32_rvv_maskz_basic_rvv"
+        in values
+    )
+    assert (
+        "test_scalable_rvv_mod_imm_mask_mod_imm_si32_rvv_mask_basic_rvv"
+        in values
+    )
+    assert "test_scalable_rvv_mod_imm_f64_rvv_basic_float_rvv" in values
+    assert "mod_imm_f32_rvv_maskz_float_rvv" in values
+    assert "mod_imm_f64_rvv_mask_float_rvv" in values
+    assert (
+        "test_scalable_rvv_div_maskz_div_f32_rvv_"
+        "maskz_inactive_zero_rvv"
+    ) in values
+    assert (
+        "test_scalable_rvv_div_mask_div_f32_rvv_"
+        "mask_inactive_zero_rvv"
+    ) in values
+    assert "tsl::load_maskz<Vec, true>(mask, memory.data() + 0);" in values
+    assert "tsl::load_mask<Vec, true>(mask, memory.data() + 0, v1);" in values
+    assert "tsl::store_mask<Vec, true>(mask, actual.data() + 0, v0);" in values
+    assert "static constexpr bool has_static_lane_count_v = false;" in header
+    assert "__riscv_vlenb() / sizeof(int32_t)" in header
+    assert "__riscv_vlenb() / sizeof(uint32_t)" in header
+    assert "rust/src/tsl_rvv.rs" not in artifacts
+    assert rvv_project.emitted_profiles[0].supports_backend("cpp")
+    assert not rvv_project.emitted_profiles[0].supports_backend("rust")
+
+    cpp_verify = next(
+        backend for backend in rvv_project.rendered.verify.backends
+        if backend.backend_id == "cpp"
+    ).profiles[0]
+    assert cpp_verify.compiler_role == "riscv-cpp"
+    assert cpp_verify.cmake_system_name == "Linux"
+    assert cpp_verify.cmake_system_processor == "riscv64"
+    assert not cpp_verify.pass_target_to_compiler
+    assert cpp_verify.preflight_headers == ("riscv_vector.h",)
+
+@pytest.fixture(scope="module")
+def rvv_reinterpret_project(data_root: Path, machine_profiles_path: Path):
+    return _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["reinterpret", "cast"],
+        profiles=["rvv"],
+        type_tags=["si32", "ui32", "si64", "ui64", "f32", "f64"],
+        backends=["cpp"],
+    )
+
+
+def test_rvv_reinterpret_uses_runtime_lane_conversion_values(
+    rvv_reinterpret_project,
+) -> None:
+    assert not has_errors(
+        rvv_reinterpret_project.diagnostics
+    ), rvv_reinterpret_project.diagnostics
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_reinterpret_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    assert "__riscv_vreinterpret_v_i32m1_u32m1" in header
+    assert "__riscv_vreinterpret_v_i32m1_f32m1" in header
+    assert any(
+        case.kind == "scalable_repr_cast"
+        and case.scalable is not None
+        and case.scalable.source_extension == "rvv"
+        for profile in rvv_reinterpret_project.rendered.value_tests.profiles_for("cpp")
+        for case in profile.cases
+    )
+    assert "using ToVec = tsl::simd<uint32_t, tsl::rvv>;" in values
+    assert "tsl::reinterpret<Vec, ToVec>(v0)" in values
+    assert "tsl::store<ToVec, false>(actual.data(), result);" in values
+    assert "check_lanes_bitwise<uint32_t>" in values
+
+
+def test_rvv_reinterpret_narrow_type_filter_emits_target_store(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["reinterpret"],
+        profiles=["rvv"],
+        type_tags=["si32", "ui32"],
+        backends=["cpp"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in result.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    assert "using ToVec = tsl::simd<float, tsl::rvv>;" in values
+    assert "tsl::store<ToVec, false>(actual.data(), result);" in values
+    assert "struct store_impl<tsl::simd<float, tsl::rvv>, false>" in header
+
+
+def test_rvv_same_width_numeric_casts_use_value_comparisons(
+    rvv_reinterpret_project,
+) -> None:
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_reinterpret_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    for intrinsic in (
+        "__riscv_vfcvt_rtz_x_f_v_i32m1",
+        "__riscv_vfcvt_rtz_xu_f_v_u32m1",
+        "__riscv_vfcvt_rtz_x_f_v_i64m1",
+        "__riscv_vfcvt_rtz_xu_f_v_u64m1",
+        "__riscv_vfcvt_f_x_v_f32m1",
+        "__riscv_vfcvt_f_xu_v_f32m1",
+        "__riscv_vfcvt_f_x_v_f64m1",
+        "__riscv_vfcvt_f_xu_v_f64m1",
+    ):
+        assert intrinsic in header
+    assert "test_scalable_rvv_cast_cast_f32_rvv_to_ui32_basic_rvv" in values
+    assert "test_scalable_rvv_cast_cast_f64_rvv_to_si64_truncate_rvv" in values
+    assert 'check_lanes<uint32_t>("cast_f32_rvv_to_ui32_basic_rvv"' in values
+    assert "check_lanes_bitwise<uint32_t>" in values
+
+
+@pytest.fixture(scope="module")
+def rvv_immediate_shift_project(data_root: Path, machine_profiles_path: Path):
+    return _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=[
+            "shift_left",
+            "shift_right",
+            "shift_left_wrapping",
+            "shift_right_wrapping",
+        ],
+        profiles=["rvv"],
+        type_tags=["si8", "ui8"],
+        backends=["cpp"],
+    )
+
+
+def test_rvv_immediate_shifts_render_large_count_and_sign_policies(
+    rvv_immediate_shift_project,
+) -> None:
+    assert not has_errors(
+        rvv_immediate_shift_project.diagnostics
+    ), rvv_immediate_shift_project.diagnostics
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_immediate_shift_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    assert "__riscv_vsll_vx_i8m1" in header
+    assert "__riscv_vsll_vx_u8m1" in header
+    assert "__riscv_vsra_vx_i8m1" in header
+    assert "__riscv_vsrl_vx_u8m1" in header
+    assert "__riscv_vsrl_vx_i8m1" not in header
+    assert "if (static_cast<uint64_t>(shift) >= 8)" in header
+    assert "::tsl::binary_and<Vec>(" in header
+    assert "::tsl::shift_left_imm<Vec, shift>(data)" in header
+
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    assert "test_scalable_rvv_shift_left_si8_rvv_imm_large_count_rvv" in values
+    assert (
+        "test_scalable_rvv_shift_left_mask_shift_left_si8_rvv_"
+        "mask_passthrough_imm_large_count_rvv"
+    ) in values
+    assert "test_scalable_rvv_shift_right_si8_rvv_imm_large_count_rvv" in values
+
+
+def test_rvv_scalar_shifts_plan_runtime_lanes_and_wrapping(
+    rvv_immediate_shift_project,
+) -> None:
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_immediate_shift_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    assert any(
+        case.kind == "scalable_scalar_vector"
+        and case.scalable is not None
+        and case.scalable.source_extension == "rvv"
+        for profile in rvv_immediate_shift_project.rendered.value_tests.profiles_for(
+            "cpp"
+        )
+        for case in profile.cases
+    )
+    assert header.count("__riscv_vsll_vx_i8m1") >= 2
+    assert header.count("__riscv_vsra_vx_i8m1") >= 2
+    assert header.count("__riscv_vsrl_vx_u8m1") >= 2
+    assert "::tsl::shift_left<Vec>(" in header
+    assert "static_cast<int8_t>(effective)" in header
+    assert "::tsl::shift_right<Vec, true>(" in header
+    assert "test_scalable_rvv_shift_left_shift_left_si8_basic" in values
+    assert (
+        "test_scalable_rvv_shift_left_wrapping_"
+        "shift_left_wrapping_si8_negative_count"
+    ) in values
+    assert (
+        "test_scalable_rvv_shift_right_wrapping_"
+        "shift_right_wrapping_si8_negative_count"
+    ) in values
+
+
+def test_rvv_per_lane_shifts_guard_counts_and_wrap(
+    rvv_immediate_shift_project,
+) -> None:
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_immediate_shift_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    assert "__riscv_vsll_vv_i8m1" in header
+    assert "__riscv_vsra_vv_i8m1" in header
+    assert "__riscv_vsrl_vv_u8m1" in header
+    assert "__riscv_vmsltu_vv_u8m1_b8" in header
+    assert "::tsl::select<Vec>(valid, shifted" in header
+    assert "test_scalable_rvv_shift_left_si8_vector_byte_signed" in values
+    assert "test_scalable_rvv_shift_right_si8_vector_byte_signed" in values
+    assert (
+        "test_scalable_rvv_shift_left_wrapping_si8_mixed_negative_count"
+        in values
+    )
+    assert (
+        "test_scalable_rvv_shift_right_wrapping_si8_mixed_negative_count"
+        in values
+    )
+
+
+@pytest.fixture(scope="module")
+def rvv_float_shift_project(data_root: Path, machine_profiles_path: Path):
+    return _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["shift_left", "shift_right"],
+        profiles=["rvv"],
+        type_tags=["f32", "f64"],
+        backends=["cpp"],
+    )
+
+
+def test_rvv_float_shifts_use_same_width_integer_bit_patterns(
+    rvv_float_shift_project,
+) -> None:
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_float_shift_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+    assert "::tsl::reinterpret<Vec, tsl::simd<uint32_t, tsl::rvv>>(data)" in header
+    assert "::tsl::cast<Vec, tsl::simd<uint32_t, tsl::rvv>>(shift)" in header
+    assert (
+        "::tsl::shift_left_imm<tsl::simd<uint32_t, tsl::rvv>, shift>(bits)"
+        in header
+    )
+    assert (
+        "::tsl::shift_right_imm<tsl::simd<int64_t, tsl::rvv>, shift, true>(bits)"
+        in header
+    )
+    assert "::tsl::shift_right<tsl::simd<uint32_t, tsl::rvv>, false>" in header
+    assert "::tsl::shift_right<tsl::simd<int64_t, tsl::rvv>, true>" in header
+    assert "test_scalable_rvv_shift_left_shift_left_f32_basic" in values
+    assert "test_scalable_rvv_shift_left_shift_left_f64_basic" in values
+    assert "test_scalable_rvv_shift_right_shift_right_f32_preserve_sign" in values
+    assert "test_scalable_rvv_shift_right_shift_right_f64_preserve_sign" in values
+
+
+@pytest.fixture(scope="module")
+def rvv_mask_project(data_root: Path, machine_profiles_path: Path):
+    return _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=[
+            "mask_false",
+            "mask_true",
+            "mask_binary_and",
+            "mask_binary_or",
+            "mask_binary_xor",
+            "mask_binary_not",
+            "mask_population_count",
+            "equal",
+            "nequal",
+            "less_than",
+            "greater_than",
+            "less_than_or_equal",
+            "greater_than_or_equal",
+            "select",
+        ],
+        profiles=["rvv"],
+        type_tags=[
+            "si8",
+            "ui8",
+            "si16",
+            "ui16",
+            "si32",
+            "ui32",
+            "si64",
+            "ui64",
+            "f32",
+            "f64",
+        ],
+        backends=["cpp"],
+    )
+
+
+def test_rvv_native_masks_comparisons_and_select_render_exact_intrinsics(
+    rvv_mask_project,
+) -> None:
+    assert not has_errors(rvv_mask_project.diagnostics), rvv_mask_project.diagnostics
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in rvv_mask_project.artifacts.artifacts
+    }
+    header = artifacts["cpp/include/tsl_rvv.hpp"]
+    helper = artifacts["cpp/include/tsl_test_rvv.hpp"]
+    values = artifacts["cpp/tests/values_rvv.cpp"]
+
+    for width in (8, 16, 32, 64):
+        for stem in (
+            "vmclr_m",
+            "vmset_m",
+            "vmand_mm",
+            "vmor_mm",
+            "vmxor_mm",
+            "vmnot_m",
+        ):
+            assert f"__riscv_{stem}_b{width}" in header
+        assert f"__riscv_vcpop_m_b{width}" in header
+    integer_types = (
+        ("i8m1", 8, "vmslt", "vmsle"),
+        ("u8m1", 8, "vmsltu", "vmsleu"),
+        ("i16m1", 16, "vmslt", "vmsle"),
+        ("u16m1", 16, "vmsltu", "vmsleu"),
+        ("i32m1", 32, "vmslt", "vmsle"),
+        ("u32m1", 32, "vmsltu", "vmsleu"),
+        ("i64m1", 64, "vmslt", "vmsle"),
+        ("u64m1", 64, "vmsltu", "vmsleu"),
+    )
+    for suffix, width, less, less_equal in integer_types:
+        assert f"__riscv_vmseq_vv_{suffix}_b{width}" in header
+        assert f"__riscv_vmsne_vv_{suffix}_b{width}" in header
+        assert f"__riscv_{less}_vv_{suffix}_b{width}" in header
+        assert f"__riscv_{less_equal}_vv_{suffix}_b{width}" in header
+        assert f"__riscv_vmerge_vvm_{suffix}" in header
+    for suffix, width in (("f32m1", 32), ("f64m1", 64)):
+        for stem in ("vmfeq", "vmfne", "vmflt", "vmfle"):
+            assert f"__riscv_{stem}_vv_{suffix}_b{width}" in header
+        assert f"__riscv_vmerge_vvm_{suffix}" in header
+
+    assert "::tsl::less_than<Vec>(right, left)" in header
+    assert "::tsl::less_than_or_equal<Vec>(right, left)" in header
+    assert "#include \"tsl_test_rvv.hpp\"" in values
+    assert (
+        "::tsl::test::mask_from_bits<tsl::simd<uint32_t, tsl::rvv>>" in values
+    )
+    assert "::tsl::test::check_mask_bits<tsl::simd<float, tsl::rvv>>" in values
+    assert "__riscv_vid_v_u8m1" in helper
+    assert "__riscv_vcpop_m_b64" in helper
+    assert "test_scalable_rvv_mask_population_count_ui8_rvv_mask_popcnt_basic_rvv" in values
+    assert "test_scalable_rvv_mask_population_count_ui64_rvv_mask_popcnt_basic_rvv" in values

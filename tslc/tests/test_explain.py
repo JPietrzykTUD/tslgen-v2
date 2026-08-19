@@ -11,14 +11,21 @@ from tslc.select.selector import RankedCandidate, Selector
 
 
 def _candidate(
-    *, distance: int = 0, specificity: int = 1, flag_count: int = 0, source_order: int = 0
+    *,
+    distance: int = 0,
+    specificity: int = 1,
+    flag_count: int = 0,
+    compiler_capability_count: int = 0,
+    source_order: int = 0,
 ) -> RankedCandidate:
     return RankedCandidate(
         implementation=None,  # type: ignore[arg-type]  # not read by _decisive_tiebreak
         required_features=frozenset(),
+        required_compiler_capabilities=frozenset(),
         distance=distance,
         specificity=specificity,
         flag_count=flag_count,
+        compiler_capability_count=compiler_capability_count,
         source_order=source_order,
     )
 
@@ -141,6 +148,64 @@ def test_dependency_closure_marks_emitted_callee(
     assert "✓" in report  # the callee is emitted in the closure
 
 
+def test_lzc_explain_defaults_to_automatic_compiler_capability_frontier(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    report = _explain(
+        data_root,
+        machine_profiles_path,
+        primitive="lzc",
+        profile="sse2",
+        type_tag="ui32",
+        backend="cpp",
+        extension="clang_v128",
+    )
+
+    assert "compiler capabilities: automatic" in report
+    assert "__builtin_elementwise_clzg" in report
+    assert "binary_or<" in report
+
+
+def test_lzc_explain_accepts_an_exact_empty_compiler_capability_set(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    report = _explain(
+        data_root,
+        machine_profiles_path,
+        primitive="lzc",
+        profile="sse2",
+        type_tag="ui32",
+        backend="cpp",
+        extension="clang_v128",
+        compiler_capabilities=frozenset(),
+    )
+
+    assert "compiler capabilities: []" in report
+    assert "__builtin_elementwise_clzg" not in report
+    assert "binary_or<" in report
+
+
+def test_lzc_explain_selects_enabled_compiler_capability(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    report = _explain(
+        data_root,
+        machine_profiles_path,
+        primitive="lzc",
+        profile="sse2",
+        type_tag="ui32",
+        backend="cpp",
+        extension="clang_v128",
+        compiler_capabilities=frozenset({"elementwise_clzg"}),
+    )
+
+    assert "__builtin_elementwise_clzg" in report
+    assert "compiler req: [elementwise_clzg]" in report
+
+
 def test_explain_labels_generic_vector_dependencies_symbolically(
     data_root: Path,
     machine_profiles_path: Path,
@@ -221,6 +286,22 @@ def test_decisive_tiebreak_names_the_first_differing_key() -> None:
     runner = _candidate(distance=0, specificity=8, flag_count=1)
     message = _decisive_tiebreak(winner, runner)
     assert "won on flag_count" in message and "3 > 1" in message
+
+    # target features tie -> more required compiler capabilities wins
+    winner = _candidate(
+        distance=0,
+        specificity=8,
+        flag_count=1,
+        compiler_capability_count=2,
+    )
+    runner = _candidate(
+        distance=0,
+        specificity=8,
+        flag_count=1,
+        compiler_capability_count=1,
+    )
+    message = _decisive_tiebreak(winner, runner)
+    assert "won on compiler_capability_count" in message and "2 > 1" in message
 
     # all principled keys tie -> only source order, which is arbitrary
     winner = _candidate(distance=0, specificity=8, flag_count=1, source_order=2)

@@ -586,8 +586,6 @@ def _rust_algorithm_vector_is_mappable(
         return False
     if DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
         return False
-    if extension.family == "generic_like":
-        return False
     return extension.supports_backend("rust")
 
 
@@ -615,7 +613,7 @@ def rust_fixed_vector_spelling(base: str, lane_count: int) -> str:
 
 
 def _rust_algorithm_vector_type(extension: Extension, base: str) -> str:
-    if extension.family == "scalar":
+    if DEFAULT_SUPPORT_POLICY.register_is_base(extension):
         return f"Simd<{base}, Scalar>"
     return f"Simd<{base}, super::{rust_extension_tag(extension)}>"
 

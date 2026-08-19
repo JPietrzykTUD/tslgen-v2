@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from tslc.backend.registry import registered_compiler_capabilities
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import load_machine_profiles_checked
 from tslc.catalog.target_families import (
@@ -40,7 +41,12 @@ def _catalog_and_diagnostics(
     assert result.catalog is not None
     diagnostics = (
         *result.diagnostics,
-        *validate_catalog(result.catalog, parsed, required_backends=backends),
+        *validate_catalog(
+            result.catalog,
+            parsed,
+            required_backends=backends,
+            compiler_capabilities=registered_compiler_capabilities(),
+        ),
     )
     return result.catalog, diagnostics
 
@@ -1539,6 +1545,40 @@ def test_lscpu_flags_is_no_longer_an_extension_field() -> None:
     assert "lscpu_flags" in diagnostic.message
 
 
+def test_intrinsic_style_is_rejected_with_typed_composition_guidance() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension legacy:\n"
+            '  extension_name "legacy"\n'
+            '  family "scalar"\n'
+            '  intrinsic_style "wasm"\n'
+        )
+    )
+
+    diagnostic = next(
+        d
+        for d in diagnostics
+        if d.code == "TSL-CATALOG-OBSOLETE-INTRINSIC-STYLE"
+    )
+    assert "intrinsic_compose" in diagnostic.message
+    assert "suffix_base" in diagnostic.message
+
+
+def test_intrinsic_compose_closed_values_are_validated() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension malformed:\n"
+            '  extension_name "malformed"\n'
+            '  family "scalar"\n'
+            "  intrinsic_compose:\n"
+            '    order "middle"\n'
+            '    require_explicit_suffix "sometimes"\n'
+        )
+    )
+
+    assert sum(d.code == "TSL-CATALOG-INVALID-ENUM" for d in diagnostics) >= 2
+
+
 def test_unknown_extension_backend_metadata_fields_are_diagnosed() -> None:
     diagnostics = _diagnostics(
         _base_source(
@@ -1606,29 +1646,23 @@ def test_inert_extension_fields_are_rejected(fields: str, field_name: str) -> No
     assert any(field_name in diagnostic.message for diagnostic in unknown)
 
 
-def test_extension_backend_compile_guards_are_validated() -> None:
+def test_extension_backend_compiler_capabilities_are_validated() -> None:
     diagnostics = _diagnostics(
         _base_source(
             "extension guarded:\n"
             '  extension_name "guarded"\n'
             '  family "x86"\n'
-            "  active_when:\n"
-            "    target_features [sse]\n"
-            "    compile_modes [demo_mode]\n"
             "  cpp:\n"
             "    supported true\n"
-            "    compile_guards:\n"
-            "      demo:\n"
-            '        macro "TSL_DEMO"\n'
-            "        typo true\n"
-            "      broken:\n"
-            "        equals 1\n"
+            "    compiler_capabilities [missing_capability]\n"
         )
     )
 
-    codes = {diagnostic.code for diagnostic in diagnostics}
-    assert "TSL-CATALOG-UNKNOWN-FIELD" in codes
-    assert "TSL-CATALOG-MALFORMED-COMPILE-GUARD" in codes
+    assert any(
+        diagnostic.code == "TSL-CATALOG-UNKNOWN-COMPILER-CAPABILITY"
+        and "missing_capability" in diagnostic.message
+        for diagnostic in diagnostics
+    )
 
 
 def test_extension_backend_dataparallel_inference_is_boolean() -> None:
@@ -1639,7 +1673,6 @@ def test_extension_backend_dataparallel_inference_is_boolean() -> None:
             '  family "x86"\n'
             "  cpp:\n"
             "    supported true\n"
-            '    header_group "clang"\n'
             '    dataparallel_inference "sometimes"\n'
         )
     )
@@ -1683,6 +1716,9 @@ def test_invalid_enum_like_values_are_diagnosed() -> None:
         "    generic:\n"
         "      extension_families []\n"
         "      native_without_runner sometimes\n"
+        "      backends:\n"
+        "        cpp:\n"
+        "          runtime_failure_observable sometimes\n"
         "types:\n"
         "  ints {types [si32]}\n"
         "extension scalar:\n"
@@ -1707,6 +1743,7 @@ def test_invalid_enum_like_values_are_diagnosed() -> None:
     assert any("mask_type_policy" in message for message in messages)
     assert any("implementation_fallback" in message for message in messages)
     assert any("native_without_runner" in message for message in messages)
+    assert any("runtime_failure_observable" in message for message in messages)
 
 
 def test_target_family_data_makes_new_extension_family_additive() -> None:
@@ -1947,6 +1984,55 @@ def test_malformed_requires_shape_is_diagnosed() -> None:
     diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-MALFORMED-REQUIRES")
     assert "flag list" in diagnostic.message
 
+def test_compiler_capability_requires_are_promoted_separately_from_target_features() -> None:
+    catalog, diagnostics = _catalog_and_diagnostics(
+        _base_source().replace(
+            "        implementation:\n",
+            "        requires:\n"
+            "          target_features []\n"
+            "          compiler:\n"
+            "            cpp:\n"
+            "              capabilities [elementwise_clzg]\n"
+            "        implementation:\n",
+        )
+    )
+
+    assert diagnostics == ()
+    implementation = catalog.primitive("id").implementations[0]
+    compiler_clause = next(
+        clause for clause in implementation.requirements if clause.compiler
+    )
+    assert compiler_clause.flags == frozenset()
+    assert compiler_clause.compiler[0].backend_id == "cpp"
+    assert compiler_clause.compiler[0].capabilities == frozenset(
+        {"elementwise_clzg"}
+    )
+
+
+@pytest.mark.parametrize(
+    ("backend", "capability", "code"),
+    [
+        ("cpp", "missing_capability", "TSL-CATALOG-UNKNOWN-COMPILER-CAPABILITY"),
+        ("missing_backend", "elementwise_clzg", "TSL-CATALOG-UNKNOWN-COMPILER-BACKEND"),
+    ],
+)
+def test_unknown_compiler_requirement_is_diagnosed(
+    backend: str,
+    capability: str,
+    code: str,
+) -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "        implementation:\n",
+            "        requires:\n"
+            "          compiler:\n"
+            f"            {backend}:\n"
+            f"              capabilities [{capability}]\n"
+            "        implementation:\n",
+        )
+    )
+
+    assert code in {diagnostic.code for diagnostic in diagnostics}
 
 def test_malformed_call_body_region_is_diagnosed() -> None:
     diagnostics = _diagnostics(
@@ -1970,6 +2056,19 @@ def test_malformed_call_body_region_is_diagnosed() -> None:
     diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-CALL-SELECTOR")
     assert "malformed call selector" in diagnostic.message
 
+
+def test_unknown_call_mask_mode_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            '          tsil "complete(data);"\n',
+            '          tsil "complete(call<primitive=id, attrs[mask=merge]>(data));"\n',
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-BODY-BAD-CALL-MASK"
+    )
+    assert "unknown call mask mode 'merge'" in diagnostic.message
 
 def test_malformed_let_body_region_is_diagnosed() -> None:
     diagnostics = _diagnostics(
@@ -2210,6 +2309,23 @@ def test_malformed_tsil_region_shells_are_diagnosed(
     assert diagnostic.location is not None
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        "complete(address<unknown>(data));",
+        "complete(address<of>());",
+        "complete(address<borrow_mut>(data, data));",
+    ],
+)
+def test_malformed_address_body_region_is_diagnosed(body: str) -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace('tsil "complete(data);"', f'tsil "{body}"')
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-ADDRESS")
+    assert "address<of|borrow_mut>(expr)" in diagnostic.message
+
+
 def test_legacy_pointer_cast_shell_is_diagnosed() -> None:
     diagnostics = _diagnostics(
         "types:\n"
@@ -2230,6 +2346,7 @@ def test_legacy_pointer_cast_shell_is_diagnosed() -> None:
     )
 
     diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-CAST")
+    assert "must be a TSIL type expression" in diagnostic.message
     assert "cast<reinterpret, type=ptr|const_ptr>" in diagnostic.message
 
 
@@ -2390,6 +2507,35 @@ def test_machine_profile_backend_flags_are_validated(tmp_path: Path) -> None:
     assert "TSL-PROFILE-MALFORMED-FIELD" in {d.code for d in result.diagnostics}
 
 
+def test_machine_profile_compiler_roles_and_build_fallback_are_typed(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        "{\n"
+        '  "x86": [\n'
+        '    {"name": "first", "target_features": "sse", '
+        '"backend_compiler_roles": {"cpp": "oneapi-cpp"}, '
+        '"default_build_fallback": true},\n'
+        '    {"name": "second", "target_features": "sse", '
+        '"default_build_fallback": true, "auto_detect_gate": "fpga"}\n'
+        "  ]\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path)
+
+    assert result.profiles["first"].compiler_role_for_backend("cpp") == "oneapi-cpp"
+    assert result.profiles["first"].default_build_fallback
+    assert "TSL-PROFILE-MULTIPLE-BUILD-FALLBACKS" in {
+        diagnostic.code for diagnostic in result.diagnostics
+    }
+    assert "TSL-PROFILE-GATED-BUILD-FALLBACK" in {
+        diagnostic.code for diagnostic in result.diagnostics
+    }
+
+
 def test_machine_profile_auto_detect_gate_is_validated(tmp_path: Path) -> None:
     path = tmp_path / "machine_profiles.json"
     path.write_text(
@@ -2498,10 +2644,10 @@ def _param_types_catalog_and_diagnostics(condition_key: str):
         '  s32 {type "int32_t"}\n'
         "language rust:\n"
         '  s32 {type "i32"}\n'
-        "prim<v:=v>[aligned=*] id(data):\n"
+        "prim<v:=ptr>[aligned=*] id(data):\n"
         "  param_types:\n"
         "    data:\n"
-        f'      {condition_key} "type(base::in)"\n'
+        f'      {condition_key} "ptr(type(base::in))"\n'
         "  impls:\n"
         "    scalar:\n"
         "      ints:\n"
@@ -2582,9 +2728,48 @@ def test_validator_kind_sets_derive_from_typed_catalog_kinds() -> None:
         "exact_lane_bitmask",
         "lane_bitmask",
         "native_predicate",
+        "native_predicate_by_type",
         "native_predicate_by_lanes",
     }
     assert schema_extensions.KNOWN_IMASK_POLICY_KINDS == frozenset(
         get_args(model.ImaskPolicyKind)
     ) == {"lane_bitmask", "same_as_mask_type", "unsigned_scalar"}
     assert frozenset(get_args(model.TestArgKind)) == {"vector", "mask", "scalar"}
+
+
+def test_mask_spelling_by_type_rejects_unknown_scalar_tags() -> None:
+    diagnostics = _diagnostics(
+        "target_families:\n"
+        "  known_extension_families [scalar]\n"
+        "  universal_extension_families [scalar]\n"
+        "  profile_families:\n"
+        "    generic:\n"
+        "      extension_families []\n"
+        "      backends:\n"
+        "        cpp:\n"
+        "          feature_flags false\n"
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        "  extension_name \"scalar\"\n"
+        "  family \"scalar\"\n"
+        "  cpp:\n"
+        "    supported true\n"
+        "  mask_type_policy:\n"
+        "    kind \"native_predicate_by_type\"\n"
+        "    backend_spelling_by_type:\n"
+        "      cpp:\n"
+        "        typo \"bad_mask_t\"\n"
+        "language cpp:\n"
+        "  s32 {type \"int32_t\"}\n"
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        "          tsil \"complete(data);\"\n"
+    )
+
+    assert "TSL-CATALOG-INVALID-ENUM" in {
+        diagnostic.code for diagnostic in diagnostics
+    }

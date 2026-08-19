@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tslc.catalog.model import Catalog, Extension
+from tslc.catalog.model import Catalog, Extension, IntrinsicNameOrder
 from tslc.catalog.scalar_types import (
     normalize_scalar_tag,
 )
@@ -17,11 +17,11 @@ def scalar_spelling(catalog: Catalog, backend_id: str, type_tag: str) -> str | N
 
 
 def compose_prefix(backend_id: str, extension: Extension) -> str | None:
-    return extension.compose_prefix.get(backend_id)
+    return extension.intrinsic_composition.prefix_by_backend.get(backend_id)
 
 
 def default_suffix(extension: Extension, type_tag: str) -> str | None:
-    return extension.compose_suffix_by_type.get(type_tag)
+    return extension.intrinsic_composition.suffix_by_type.get(type_tag)
 
 
 def vector_register_type(
@@ -92,7 +92,10 @@ def compose_intrinsic_name(
     if actual_prefix is None:
         return None
     if suffix:
-        if extension.intrinsic_style == "wasm":
+        if (
+            extension.intrinsic_composition.order
+            is IntrinsicNameOrder.SUFFIX_BASE
+        ):
             return f"{actual_prefix}{suffix}_{base}"
         return f"{actual_prefix}{base}_{suffix}"
     return f"{actual_prefix}{base}"

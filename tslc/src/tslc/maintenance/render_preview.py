@@ -8,7 +8,10 @@ from pathlib import Path
 
 from tslc.api import _expand_sources
 from tslc.backend.emitted_profile import EmittedProfile
-from tslc.backend.registry import backend_capability, registered_backend_ids
+from tslc.backend.registry import (
+    backend_capability,
+    registered_backend_ids,
+)
 from tslc.diagnostics import (
     Diagnostic,
     SourceLocation,
@@ -103,6 +106,7 @@ def render_preview(
         extensions=(extension,) if extension is not None else None,
         backends=(backend,),
         render_artifacts=False,
+        load_policy_inputs=True,
     )
     inputs, load_diagnostics = _load_inputs(request)
     if inputs is None:
@@ -158,7 +162,10 @@ def render_preview(
         for emitted_name, specializations in matching:
             parts.append(
                 capability.render_primitive_preview(
-                    emitted, emitted_name, specializations
+                    emitted,
+                    emitted_name,
+                    specializations,
+                    inputs.policy_inputs,
                 ).rstrip()
             )
     except ValueError as exc:

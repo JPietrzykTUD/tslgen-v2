@@ -33,6 +33,7 @@ import sys
 from pathlib import Path
 
 from tslc.api import _ARITH_TYPE_TAGS, _expand_sources
+from tslc._cli_options import split_csv
 from tslc.backend.registry import create_backend_dialect, registered_backend_ids
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, Extension, Primitive
@@ -41,7 +42,11 @@ from tslc.ir.scan import scan
 from tslc.maintenance._segments_view import format_segment_tree, segment_to_json
 from tslc.maintenance import _repo_context
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
-from tslc.pipeline import GenerationRequest, _load_inputs
+from tslc.pipeline import (
+    BackendCompilerCapabilitySet,
+    GenerationRequest,
+    _load_inputs,
+)
 from tslc.select.selector import SelectedImplementation, Selector
 
 _STAGES = ("catalog", "segments", "selection", "lowered")
@@ -58,6 +63,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backend", default="cpp", choices=registered_backend_ids())
     parser.add_argument("--type", default=None, dest="type_tag", help="restrict to this type tag")
     parser.add_argument("--extension", default=None, help="restrict to this simd<> extension tag")
+    parser.add_argument(
+        "--compiler-capabilities",
+        default=None,
+        help="comma-separated exact compiler capabilities; omit for automatic "
+        "portable selection, or pass an empty value for none",
+    )
     parser.add_argument("--format", default="text", choices=("text", "json"))
     parser.add_argument(
         "--sources",
@@ -89,6 +100,11 @@ def main(argv: list[str] | None = None) -> int:
         backend=args.backend,
         type_tag=args.type_tag,
         extension=args.extension,
+        compiler_capabilities=(
+            None
+            if args.compiler_capabilities is None
+            else frozenset(split_csv(args.compiler_capabilities))
+        ),
     )
     if errors:
         for error in errors:
@@ -108,6 +124,7 @@ def run(
     backend: str,
     type_tag: str | None,
     extension: str | None,
+    compiler_capabilities: frozenset[str] | None = None,
 ) -> tuple[str, object, list[str]]:
     """Return ``(pretty_text, json_payload, errors)`` for the requested stage."""
 
@@ -118,6 +135,11 @@ def run(
         profiles=(profile,) if profile is not None else None,
         type_tags=(type_tag,) if type_tag is not None else _ARITH_TYPE_TAGS,
         backends=(backend,),
+        backend_compiler_capabilities=(
+            ()
+            if compiler_capabilities is None
+            else (BackendCompilerCapabilitySet(backend, compiler_capabilities),)
+        ),
     )
     inputs, diagnostics = _load_inputs(request)
     if inputs is None:
@@ -151,9 +173,16 @@ def run(
             primitive_names,
             types,
             extension,
+            compiler_capabilities,
         )
     return _dump_lowered(
-        catalog, machine_profile, backend, primitive_names, types, extension
+        catalog,
+        machine_profile,
+        backend,
+        primitive_names,
+        types,
+        extension,
+        compiler_capabilities,
     )
 
 
@@ -366,6 +395,7 @@ def _dump_selection(
     primitive_names: Sequence[str],
     types: tuple[str, ...],
     extension: str | None,
+    compiler_capabilities: frozenset[str] | None,
 ) -> tuple[str, object, list[str]]:
     selector = Selector()
     lines: list[str] = [f"# selection for profile {machine_profile.name}"]
@@ -377,13 +407,18 @@ def _dump_selection(
             name,
             types,
             backend_id=backend,
+            compiler_capabilities=compiler_capabilities,
         )
         for slot in selection.selected:
             if extension is not None and slot.extension.isa_name != extension:
                 continue
             lines.append("  " + _selection_line(slot))
             slots_json.append(_selection_json(slot))
-    return "\n".join(lines), {"stage": "selection", "profile": machine_profile.name, "slots": slots_json}, []
+    return (
+        "\n".join(lines),
+        {"stage": "selection", "profile": machine_profile.name, "slots": slots_json},
+        [],
+    )
 
 
 def _selection_line(slot: SelectedImplementation) -> str:
@@ -393,7 +428,8 @@ def _selection_line(slot: SelectedImplementation) -> str:
     return (
         f"{slot.primitive.name}<{slot.extension.isa_name}, {slot.type_tag}{target}>{attrs}  "
         f"body=[{impl.extension} / {impl.type_group}]  "
-        f"requires=[{', '.join(sorted(slot.required_features))}]  src={_src(impl.selector_source or impl.source)}"
+        f"target_features=[{', '.join(sorted(slot.required_features))}]  "
+        f"compiler_capabilities=[{', '.join(sorted(slot.required_compiler_capabilities))}]  src={_src(impl.selector_source or impl.source)}"
     )
 
 
@@ -408,6 +444,9 @@ def _selection_json(slot: SelectedImplementation) -> dict:
         "body": {"extension": impl.extension, "type_group": impl.type_group},
         "required_features": sorted(slot.required_features),
         "source": _src(impl.selector_source or impl.source),
+        "required_compiler_capabilities": sorted(
+            slot.required_compiler_capabilities
+        ),
     }
 
 
@@ -421,6 +460,7 @@ def _dump_lowered(
     primitive_names: Sequence[str],
     types: tuple[str, ...],
     extension: str | None,
+    compiler_capabilities: frozenset[str] | None,
 ) -> tuple[str, object, list[str]]:
     selector = Selector()
     lowerer = Lowerer()
@@ -434,21 +474,50 @@ def _dump_lowered(
             name,
             types,
             backend_id=backend,
+            compiler_capabilities=compiler_capabilities,
         )
         for slot in selection.selected:
             if extension is not None and slot.extension.isa_name != extension:
                 continue
-            segments = scan(slot.implementation.body_text, source=slot.implementation.body_source)
-            lowered = lowerer.lower(slot, catalog, dialect, body_segments=segments)
+            segments = scan(
+                slot.implementation.body_text,
+                source=slot.implementation.body_source,
+            )
+            lowered = lowerer.lower(
+                slot,
+                catalog,
+                dialect,
+                body_segments=segments,
+            )
             header = _slot_header(slot)
             if lowered.specialization is None:
-                reason = next((d.message for d in lowered.diagnostics), "unsupported body")
+                reason = next(
+                    (d.message for d in lowered.diagnostics),
+                    "unsupported body",
+                )
                 lines.append(f"  {header}: NOT lowered — {reason}")
-                specs_json.append({"slot": header, "lowered": False, "reason": reason})
+                specs_json.append(
+                    {"slot": header, "lowered": False, "reason": reason}
+                )
                 continue
             lines.extend(_lowered_text(header, lowered.specialization))
-            specs_json.append({"slot": header, "lowered": True, **_lowered_json(lowered.specialization)})
-    return "\n".join(lines), {"stage": "lowered", "profile": machine_profile.name, "backend": backend, "specializations": specs_json}, []
+            specs_json.append(
+                {
+                    "slot": header,
+                    "lowered": True,
+                    **_lowered_json(lowered.specialization),
+                }
+            )
+    return (
+        "\n".join(lines),
+        {
+            "stage": "lowered",
+            "profile": machine_profile.name,
+            "backend": backend,
+            "specializations": specs_json,
+        },
+        [],
+    )
 
 
 def _slot_header(slot: SelectedImplementation) -> str:
@@ -490,10 +559,18 @@ def _lowered_text(header: str, spec: LoweredSpecialization) -> list[str]:
     if spec.immediate is not None:
         lines.append(f"      immediate={spec.immediate}")
     if spec.required_features:
-        lines.append(f"      requires=[{', '.join(sorted(spec.required_features))}]")
+        lines.append(
+            f"      target_features=[{', '.join(sorted(spec.required_features))}]"
+        )
+    if spec.required_compiler_capabilities:
+        lines.append(
+            "      compiler_capabilities="
+            f"[{', '.join(sorted(spec.required_compiler_capabilities))}]"
+        )
     if spec.safety.internal_unsafe or spec.safety.caller_unsafe:
         lines.append(
-            f"      safety=internal:{spec.safety.internal_unsafe} caller:{spec.safety.caller_unsafe}"
+            f"      safety=internal:{spec.safety.internal_unsafe} "
+            f"caller:{spec.safety.caller_unsafe}"
         )
     body = spec.body_text.strip()
     lines.append("      body:")
@@ -512,6 +589,9 @@ def _lowered_json(spec: LoweredSpecialization) -> dict:
         "immediate": list(spec.immediate) if spec.immediate else None,
         "required_features": sorted(spec.required_features),
         "internal_unsafe": spec.safety.internal_unsafe,
+        "required_compiler_capabilities": sorted(
+            spec.required_compiler_capabilities
+        ),
         "caller_unsafe": spec.safety.caller_unsafe,
         "body": spec.body_text.strip(),
     }

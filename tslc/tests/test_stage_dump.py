@@ -21,6 +21,10 @@ def _run(stage: str, data_root: Path, machine_profiles_path: Path, **kwargs):
         backend=kwargs.get("backend", "cpp"),
         type_tag=kwargs.get("type_tag"),
         extension=kwargs.get("extension"),
+        compiler_capabilities=kwargs.get(
+            "compiler_capabilities",
+            None,
+        ),
     )
 
 
@@ -128,6 +132,46 @@ def test_selection_lists_slots_for_profile(
     assert "body=[avx2 / ?i?]" in text
 
 
+def test_selection_distinguishes_automatic_and_exact_empty_compiler_capabilities(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    _text, automatic, errors = _run(
+        "selection",
+        data_root,
+        machine_profiles_path,
+        profile="sse2",
+        backend="cpp",
+        primitive="lzc",
+        type_tag="ui32",
+        extension="clang_v128",
+    )
+
+    assert errors == []
+    assert [
+        slot["required_compiler_capabilities"]
+        for slot in automatic["slots"]
+    ] == [["elementwise_clzg"], []]
+
+    _text, exact_empty, errors = _run(
+        "selection",
+        data_root,
+        machine_profiles_path,
+        profile="sse2",
+        backend="cpp",
+        primitive="lzc",
+        type_tag="ui32",
+        extension="clang_v128",
+        compiler_capabilities=frozenset(),
+    )
+
+    assert errors == []
+    assert [
+        slot["required_compiler_capabilities"]
+        for slot in exact_empty["slots"]
+    ] == [[]]
+
+
 def test_selection_unknown_profile_errors(
     data_root: Path, machine_profiles_path: Path
 ) -> None:
@@ -191,6 +235,33 @@ def test_lowered_dumps_carried_primitive_semantics(
     assert semantics["operation"]["name"] == "shift_left"
     assert "overload=count_distribution:uniform  primary=true" in text
     assert "operation=shift_left" in text
+
+
+def test_lowered_projects_enabled_compiler_capability(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    text, payload, errors = _run(
+        "lowered",
+        data_root,
+        machine_profiles_path,
+        profile="sse2",
+        backend="cpp",
+        primitive="lzc",
+        type_tag="ui32",
+        extension="clang_v128",
+        compiler_capabilities=frozenset({"elementwise_clzg"}),
+    )
+
+    assert errors == []
+    spec = next(
+        item
+        for item in payload["specializations"]
+        if item["slot"].startswith("lzc<clang_v128")
+    )
+    assert spec["required_compiler_capabilities"] == ["elementwise_clzg"]
+    assert "__builtin_elementwise_clzg" in spec["body"]
+    assert "compiler_capabilities=[elementwise_clzg]" in text
 
 
 def test_lowered_rust_backend_differs(data_root: Path, machine_profiles_path: Path) -> None:

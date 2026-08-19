@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from tslc.backend.rust_api_core import (
+    RUST_FACADE_CORE_CALL_FORMS,
+    RUST_FACADE_CORE_INVENTORY,
+)
 from tslc.backend.rust_api_arms import (
     RustComprehensivePrivateImplementationArm,
     RustCuratedMethodImplementationArm,
@@ -637,9 +641,7 @@ def core_implementation_arms(
         ): delegate
         for delegate in delegates
     }
-    required_roles = tuple(
-        dict.fromkeys(form[1] for form in _CORE_CALL_FORMS)
-    )
+    required_roles = RUST_FACADE_CORE_INVENTORY.delegate_roles
     arms: list[RustFacadeCoreImplementationArm] = []
     for shape in shapes:
         for representation in shape.representations:
@@ -658,22 +660,15 @@ def core_implementation_arms(
                 continue
             calls = tuple(
                 _core_named_call(
-                    emitted_role,
-                    role_delegates[delegate_role],
+                    form.role,
+                    role_delegates[form.delegate_role],
                     representation,
-                    arguments,
-                    generics,
-                    argument_kind,
-                    result_kind,
+                    form.arguments,
+                    form.extra_generics,
+                    form.argument_kind,
+                    form.result_kind,
                 )
-                for (
-                    emitted_role,
-                    delegate_role,
-                    arguments,
-                    generics,
-                    argument_kind,
-                    result_kind,
-                ) in _CORE_CALL_FORMS
+                for form in RUST_FACADE_CORE_CALL_FORMS
             )
             arms.append(
                 RustFacadeCoreImplementationArm(
@@ -860,85 +855,6 @@ _ASSIGNMENT_TRAITS = {
     "core::ops::Shl": ("core::ops::ShlAssign", "shl_assign"),
     "core::ops::Shr": ("core::ops::ShrAssign", "shr_assign"),
 }
-_CORE_CALL_FORMS = (
-    ("vector_splat", "vector_splat", ("value",), (), None, None),
-    ("vector_from_array", "vector_from_array", ("&values",), (), None, None),
-    ("vector_to_array", "vector_to_array", ("value",), (), None, None),
-    ("vector_zero", "vector_zero", (), (), None, None),
-    ("extract_lane", "extract_lane", ("value", "index"), (), None, None),
-    (
-        "insert_lane",
-        "insert_lane",
-        ("value", "index", "lane"),
-        (),
-        None,
-        None,
-    ),
-    ("load", "load", ("source",), ("false",), None, None),
-    (
-        "store",
-        "store",
-        ("destination", "value"),
-        ("false", "_"),
-        None,
-        None,
-    ),
-    ("mask_false", "mask_false", (), (), None, None),
-    ("mask_true", "mask_true", (), (), None, None),
-    (
-        "mask_from_bitmask",
-        "mask_from_integral",
-        ("bits",),
-        (),
-        "im",
-        None,
-    ),
-    (
-        "mask_to_bitmask",
-        "mask_to_integral",
-        ("value",),
-        (),
-        None,
-        "im",
-    ),
-    (
-        "mask_to_integral_for_test",
-        "mask_to_integral",
-        ("value",),
-        (),
-        None,
-        None,
-    ),
-    (
-        "integral_mask_test",
-        "integral_mask_test",
-        ("bits", "index"),
-        (),
-        None,
-        None,
-    ),
-    (
-        "mask_set_lane",
-        "mask_set_lane",
-        ("value", "index", "if active { 1 } else { 0 }"),
-        (),
-        None,
-        None,
-    ),
-    (
-        "mask_population_count",
-        "mask_population_count",
-        ("value",),
-        (),
-        None,
-        None,
-    ),
-    ("mask_and", "mask_and", ("left", "right"), (), None, None),
-    ("mask_or", "mask_or", ("left", "right"), (), None, None),
-    ("mask_xor", "mask_xor", ("left", "right"), (), None, None),
-    ("mask_not", "mask_not", ("value",), (), None, None),
-)
-
 
 __all__ = (
     "core_implementation_arms",
