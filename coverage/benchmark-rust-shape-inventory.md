@@ -66,12 +66,12 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 | `v:=(m,v,v,vidx)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(m,v,vidx)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(s,s)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
-| `v:=(v)` | 1 | 1 | 17 | 17 | 320 | 2 | 0 | 2 | gap |
+| `v:=(v)` | 1 | 1 | 27 | 27 | 320 | 2 | 0 | 2 | gap |
 | `v:=(v,s)` | 5 | 2 | 2 | 2 | 12 | 0 | 0 | 0 | gap |
-| `v:=(v,sImm)` | 8 | 2 | 9 | 9 | 330 | 6 | 0 | 6 | gap |
+| `v:=(v,sImm)` | 8 | 2 | 14 | 14 | 330 | 6 | 0 | 6 | gap |
 | `v:=(v,usize,s)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(v,v)` | 16 | 7 | 31 | 31 | 1221 | 40 | 1 | 39 | gap |
-| `v:=(v,v,sImm)` | 1 | 1 | 11 | 11 | 390 | 0 | 0 | 0 | gap |
+| `v:=(v,v,sImm)` | 1 | 1 | 16 | 16 | 390 | 0 | 0 | 0 | gap |
 | `v:=(v,vidx)` | 1 | 1 | 9 | 9 | 818 | 0 | 0 | 0 | gap |
 | `v:=(v,vidx,v)` | 1 | 1 | 8 | 8 | 800 | 0 | 0 | 0 | gap |
 | `v:=(vt,v,sImm)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
