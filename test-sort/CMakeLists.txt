@@ -403,6 +403,15 @@ if(TSL_COSORT_ENABLE_IAA)
   # Runs the QPL software path only, so it needs no accelerator; pass `hw` by
   # hand on an IAA host to cover the hardware path.
   add_test(NAME test_iaa_run_detector COMMAND test_iaa_run_detector)
+
+  # Distinct-value frequencies over an unsorted range. Independent of the
+  # detector: iaa_distinct_frequencies.hpp needs only QPL, and its entry point
+  # takes a std::span, so this target asks for C++20.
+  add_executable(test_iaa_distinct_frequencies test_iaa_distinct_frequencies.cpp)
+  target_compile_features(test_iaa_distinct_frequencies PRIVATE cxx_std_20)
+  target_compile_definitions(test_iaa_distinct_frequencies PRIVATE TSL_COSORT_ENABLE_IAA=1)
+  target_link_libraries(test_iaa_distinct_frequencies PRIVATE ${_iaa_link_targets})
+  add_test(NAME test_iaa_distinct_frequencies COMMAND test_iaa_distinct_frequencies)
 endif()
 
 if(TSL_COSORT_ENABLE_DSA)
