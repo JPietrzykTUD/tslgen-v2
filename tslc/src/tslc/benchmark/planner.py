@@ -115,7 +115,7 @@ class BenchmarkPlanner:
                 for spec in sorted(
                     by_primitive[primitive_name], key=_specialization_sort_key
                 ):
-                    if not spec.variant_bodies:
+                    if not spec.variant_names:
                         continue
                     if profile_admission_reason is not None:
                         coverage.append(

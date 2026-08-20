@@ -39,7 +39,11 @@ def test_clang_vector_abs_uses_elementwise_builtin_and_keeps_fallback(
         selected
         for selected in Selector()
         .select_profile(
-            catalog, machine_profiles["avx2"], "abs", (type_tag,)
+            catalog,
+            machine_profiles["avx2"],
+            "abs",
+            (type_tag,),
+            backend_id="cpp",
         )
         .selected
         if selected.extension.name == extension_name
@@ -333,6 +337,7 @@ def test_align_right_lanes_prefers_native_cross_lane_operations(
             machine_profiles[profile_name],
             "align_right_lanes",
             (type_tag,),
+            backend_id="cpp",
         )
         .selected
         if selected.extension.name == extension_name
@@ -468,6 +473,7 @@ def test_immediate_permute_lanes_prefers_native_operations(
             machine_profiles[profile_name],
             "permute_lanes",
             (type_tag,),
+            backend_id="cpp",
         )
         .selected
         if selected.extension.name == extension_name

@@ -251,8 +251,9 @@ prim<v:=v> conflict(data):
               }
               complete(call<primitive=reinterpret[UVec, Vec]>(result));
             """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -426,10 +427,16 @@ prim<m:=(m,v)> conflict_free(mask, data):
     - {tags [basic], type "si64", lane_count 4, case {inputs [15, [-1, 2, -3, 4]], expected 15}}
     - {tags [edge], type "si64", lane_count 4, case {inputs [15, [-1, 2, -1, 2]], expected 3}}
   impls:
-    [clang_v128, scalar, generic, oneapi_fpga, avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, scalar, generic, oneapi_fpga, avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, wasm128]:
       ?i?:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           scalar []
           generic []
           oneapi_fpga []

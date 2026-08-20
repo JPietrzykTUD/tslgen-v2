@@ -230,6 +230,11 @@ class Implementation:
     # extension's ``size_bits`` (one concrete-lane specialization per size) instead of a single
     # ``LANES`` template — so stable Rust can spell the width-changed output type.
     unroll_variants: bool | None = None
+    # A compiler-vector body may remain the portable semantic fallback while
+    # asking lowering to prefer the selector-proven exact-width native leaf.
+    # The preference is source-authored; whether such a leaf exists is a typed
+    # per-profile selection fact.
+    prefer_fixed_native: bool = False
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
     variants: tuple[ImplementationVariant, ...] = ()
     source: SourceSpan | None = None

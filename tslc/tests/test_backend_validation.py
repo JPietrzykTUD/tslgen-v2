@@ -9,6 +9,7 @@ import pytest
 
 from tslc.backend.cpp_capability import CPP_BACKEND
 from tslc.backend.cpp_compiler_capabilities import (
+    cpp_compiler_capability,
     cpp_extensions_compiler_capabilities,
 )
 from tslc.backend.cpp_validation import validate_cpp_profiles
@@ -121,6 +122,30 @@ def test_extension_capability_resolution_is_backend_owned_and_deduplicated() -> 
         "clang_vector_types",
         "elementwise_clzg",
     )
+
+
+def test_cpp_clang_builtin_capabilities_use_has_builtin_probes() -> None:
+    builtins = {
+        "convertvector": "__builtin_convertvector",
+        "elementwise_abs": "__builtin_elementwise_abs",
+        "elementwise_fmod": "__builtin_elementwise_fmod",
+        "elementwise_max": "__builtin_elementwise_max",
+        "elementwise_min": "__builtin_elementwise_min",
+        "elementwise_popcount": "__builtin_elementwise_popcount",
+        "reduce_add": "__builtin_reduce_add",
+        "reduce_and": "__builtin_reduce_and",
+        "reduce_max": "__builtin_reduce_max",
+        "reduce_min": "__builtin_reduce_min",
+        "reduce_or": "__builtin_reduce_or",
+        "shufflevector": "__builtin_shufflevector",
+    }
+
+    for capability_id, builtin in builtins.items():
+        capability = cpp_compiler_capability(capability_id)
+        assert capability.condition_macro == (
+            f"TSL_COMPILER_HAS_{capability_id.upper()}"
+        )
+        assert capability.preprocessor_probe == f"__has_builtin({builtin})"
 
 
 def test_cpp_unknown_extension_compiler_capability_is_diagnosed() -> None:

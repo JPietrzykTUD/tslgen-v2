@@ -68,8 +68,9 @@ prim<v:=(v,v)> add(left, right):
             }
             complete(result);
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -255,11 +256,17 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
           wasm128 [simd128]
@@ -409,11 +416,17 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
             }
             complete(left);
           """
-    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
           wasm128 [simd128]
@@ -588,8 +601,9 @@ prim<v:=(v,v)> sub(left, right):
             }
             complete(result);
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -775,11 +789,17 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
           wasm128 [simd128]
@@ -925,11 +945,17 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
             }
             complete(left);
           """
-    [generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
           wasm128 [simd128]
@@ -1070,12 +1096,18 @@ prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
     - {tags [select, add, basic], type "si64", case {inputs [10, [-1, -2, -3, -4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [11, -2, 31, -4]}}
     - {tags [select, add, edge], type "si64", case {inputs [15, [-1, -2, -3, -4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [-1, -2, -3, -4]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
           avx512 [avx512f]
@@ -1181,10 +1213,16 @@ prim<v:=v> neg(data):
             }
             complete(result);
           """
-    [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
       si?:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512:
             [si8, si16] [avx512f, avx512bw]
             [si32, si64] [avx512f]
@@ -1215,8 +1253,14 @@ prim<v:=v> neg(data):
             complete(call<primitive=reinterpret[UVec, Vec]>(negated));
           """
       f?:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx512 [avx512f]
           avx2_vl [avx, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
@@ -1345,8 +1389,9 @@ prim<v:=(v)> abs(data):
             var<const_infer>(all_bits, cast<bitcast>(UBase, cast<static>(SBase, -1)));
             complete(cast<bitcast>(base::in, bits & (all_bits >> 1)));
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ui?:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -1364,7 +1409,11 @@ prim<v:=(v)> abs(data):
               complete(result);
             """
       [si?, f?]:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [elementwise_abs]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -1805,10 +1854,17 @@ prim<v:=(v)> abs(data):
               )
             );
           """
-    [generic, oneapi_fpga, oneapi_fpga_rtl]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
+          clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
         safety:

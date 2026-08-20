@@ -74,7 +74,9 @@ class _RustTypes:
         tag = rust_extension_tag(extension if extension is not None else extension_name)
         return f"Simd<{base_spelling}, {tag}<{lanes}>>"
 
-    def fixed_vector_spelling(self, base_spelling: str, lanes: int) -> None:
+    def fixed_vector_spelling(
+        self, base_spelling: str, lanes: int | str
+    ) -> None:
         del base_spelling, lanes
         # Compiler-builtin fixed facades are currently C++-only.
         return None

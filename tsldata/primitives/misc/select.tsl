@@ -57,8 +57,9 @@ prim<v:=(m,v,v)>[mask=pass_through] select(mask, true_values, false_values):
                 complete(false_values);
               }
             """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -368,10 +369,16 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
                 )
               );
             """
-    [clang_v128, avx2, sse, neon, sve, wasm128, generic, oneapi_fpga]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx2, sse, neon, sve, wasm128, generic, oneapi_fpga]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx2:
             ?i? [avx]
             f? [avx]
@@ -492,10 +499,16 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
                 )
               );
             """
-    [clang_v128, avx2, sse, neon, sve, wasm128, generic, oneapi_fpga]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx2, sse, neon, sve, wasm128, generic, oneapi_fpga]:
       arith:
+        prefer_fixed_native true
         requires:
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           avx2:
             ?i? [avx]
             f? [avx]

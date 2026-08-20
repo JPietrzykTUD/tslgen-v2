@@ -89,6 +89,11 @@ class SelectedImplementation:
     # Concrete profile extension behind a backend's fixed-width facade. This
     # stays typed for dependency closure while the backend renders the facade.
     fixed_fallback_extension: Extension | None = None
+    # The exact-width facade substrate only when its selected body is an
+    # intrinsic leaf. Source-authored compiler overlays use this stronger fact
+    # to prefer native hardware without mistaking a portable hardware body for
+    # a native implementation.
+    fixed_native_fallback_extension: Extension | None = None
     extension_family_capability: ExtensionFamilyCapability = (
         ExtensionFamilyCapability("")
     )
@@ -363,6 +368,22 @@ class Selector:
             if backend_id is not None
             else None
         )
+        native_fallback = (
+            self._fixed_width_fallback(
+                catalog,
+                profile,
+                primitive,
+                extension,
+                slot.type_tag,
+                slot.to_target,
+                emitted_extensions,
+                backend_id,
+                compiler_capabilities,
+                require_native=True,
+            )
+            if backend_id is not None
+            else None
+        )
         family = catalog.target_families.extension_family(extension.family)
         return tuple(
             SelectedImplementation(
@@ -383,6 +404,7 @@ class Selector:
                 concrete_lanes=lanes,
                 simd_type_base_bindings=bindings,
                 fixed_fallback_extension=fallback,
+                fixed_native_fallback_extension=native_fallback,
                 extension_family_capability=family,
             )
             for rank, best in enumerate(best_bodies)
@@ -405,6 +427,8 @@ class Selector:
         emitted_extensions: list[str],
         backend_id: str,
         compiler_capabilities: frozenset[str] | None,
+        *,
+        require_native: bool = False,
     ) -> Extension | None:
         """Best backend-emitted substrate for the source extension's exact width.
 
@@ -453,6 +477,10 @@ class Selector:
                 compiler_capabilities,
             ).ranked
             if not ranked:
+                continue
+            if require_native and "intrinsic" not in (
+                ranked[0].implementation.safety.reasons
+            ):
                 continue
             if compiler_capabilities is None and not any(
                 not candidate.required_compiler_capabilities

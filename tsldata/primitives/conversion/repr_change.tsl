@@ -168,11 +168,12 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
               tsil """
                   complete(intrin<_mm512_extractf64x2_pd>(data, index));
                 """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
         requires []
         ToExtension:
           where:
+            prefer_fixed_native true
             family same_as
             width smaller_than
             safety:
@@ -410,11 +411,12 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
               tsil """
                   complete(intrin<_mm512_insertf64x4>(orig, data, index));
                 """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
         requires []
         ToExtension:
           where:
+            prefer_fixed_native true
             family same_as
             width larger_than
             safety:
@@ -580,11 +582,12 @@ prim<v:=v> resize_down(data):
               reasons [intrinsic]
             implementation:
               tsil "complete(intrin<_mm512_castpd512_pd128>(data));"
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
         requires []
         ToExtension:
           where:
+            prefer_fixed_native true
             family same_as
             width smaller_than
             safety:
@@ -709,11 +712,12 @@ prim<v:=v>[value=undef] resize_up_undef(data):
               reasons [intrinsic]
             implementation:
               tsil "complete(intrin<_mm512_castpd256_pd512>(data));"
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
         requires []
         ToExtension:
           where:
+            prefer_fixed_native true
             family same_as
             width larger_than
             safety:
@@ -837,11 +841,12 @@ prim<v:=v>[value=zero] resize_up_zero(data):
               reasons [intrinsic]
             implementation:
               tsil "complete(intrin<_mm512_zextpd256_pd512>(data));"
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
         requires []
         ToExtension:
           where:
+            prefer_fixed_native true
             family same_as
             width larger_than
             safety:
@@ -908,11 +913,12 @@ prim<v:=(v,v)> concat(low, high):
                   var<infer>(result, call<primitive=resize_up_undef[Vec, OutVec]>(low));
                   complete(call<primitive=insert[Vec, OutVec, 1]>(result, high));
                 """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
         requires []
         ToExtension:
           where:
+            prefer_fixed_native true
             family same_as
             width twice_as_wide
             safety:
@@ -2077,8 +2083,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                     }
                   }
                 """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -3996,8 +4003,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                 }
                 complete(result);
               """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false

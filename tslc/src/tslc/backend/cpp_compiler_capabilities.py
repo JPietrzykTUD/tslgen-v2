@@ -26,6 +26,19 @@ class CppCompilerCapability(CompilerCapability):
     diagnostic: str
 
 
+def _builtin_capability(
+    capability_id: str, builtin: str
+) -> CppCompilerCapability:
+    macro_name = capability_id.upper()
+    return CppCompilerCapability(
+        capability_id=capability_id,
+        condition_macro=f"TSL_COMPILER_HAS_{macro_name}",
+        preprocessor_probe=f"__has_builtin({builtin})",
+        compile_probe_source=None,
+        diagnostic=f"compiler capability {capability_id} is unavailable",
+    )
+
+
 _CPP_COMPILER_CAPABILITIES = (
     CppCompilerCapability(
         capability_id="clang_vector_types",
@@ -67,6 +80,23 @@ _CPP_COMPILER_CAPABILITIES = (
             ),
         )
         for bits in (128, 256, 512)
+    ),
+    *(
+        _builtin_capability(capability_id, builtin)
+        for capability_id, builtin in (
+            ("convertvector", "__builtin_convertvector"),
+            ("elementwise_abs", "__builtin_elementwise_abs"),
+            ("elementwise_fmod", "__builtin_elementwise_fmod"),
+            ("elementwise_max", "__builtin_elementwise_max"),
+            ("elementwise_min", "__builtin_elementwise_min"),
+            ("elementwise_popcount", "__builtin_elementwise_popcount"),
+            ("reduce_add", "__builtin_reduce_add"),
+            ("reduce_and", "__builtin_reduce_and"),
+            ("reduce_max", "__builtin_reduce_max"),
+            ("reduce_min", "__builtin_reduce_min"),
+            ("reduce_or", "__builtin_reduce_or"),
+            ("shufflevector", "__builtin_shufflevector"),
+        )
     ),
     CppCompilerCapability(
         capability_id="reduce_in_order_fadd",

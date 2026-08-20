@@ -55,7 +55,7 @@ prim<im:=m> to_integral(mask):
     - {tags [wide, edge], extension "avx512", type "f64", case {inputs [255], expected 255}}
     - {tags [scalable, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690], expected 43690}}
   impls:
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512]:
       arith:
         requires:
           target_features []
@@ -103,7 +103,7 @@ prim<im:=m> to_integral(mask):
             );
             complete(::tsl::bit_cast<type(ImaskT)>(mask) & low_bits);
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
         requires []
         safety:
@@ -500,6 +500,7 @@ prim<v:=m> to_vector(mask):
   impls:
     [clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -515,8 +516,9 @@ prim<v:=m> to_vector(mask):
               )
             );
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512]:
       arith:
+        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -706,7 +708,7 @@ prim<m:=im> to_mask(mask):
     - {tags [clang, boolean, padding, edge], extension "clang_v128_bool", type "f64", lane_count 2, case {inputs [255], expected 3}}
     - {tags [clang, boolean, wide, edge], extension "clang_v512_bool", type "ui8", lane_count 64, case {inputs [9223372036854775809], expected 9223372036854775809}}
   impls:
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512]:
       arith:
         requires:
           target_features []
@@ -758,7 +760,7 @@ prim<m:=im> to_mask(mask):
             var<const_typed>(ImaskT, normalized, mask & low_bits);
             complete(::tsl::bit_cast<type(MaskT)>(normalized));
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
         requires []
         safety:

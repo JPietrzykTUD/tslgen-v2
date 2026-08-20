@@ -53,6 +53,7 @@ from tslc.lower._diagnostics import (
     primitive_signature_source as _primitive_signature_source,
 )
 from tslc.lower.dependencies import origin_sort_key, symbolic_call_dependency_error
+from tslc.lower.fixed_native import lower_preferred_fixed_native
 from tslc.lower.region_handlers import (
     DEFAULT_REGION_LOWERERS,
     RegionLowerer,
@@ -241,6 +242,9 @@ class Lowerer:
             type_tag=selected.type_tag,
             support=self._support,
             fixed_fallback_extension=selected.fixed_fallback_extension,
+            fixed_native_fallback_extension=(
+                selected.fixed_native_fallback_extension
+            ),
             attributes=dict(selected.primitive.attributes),
             primitive_axes=catalog_facts.primitive_axes,
             primitive_arg_generics=catalog_facts.primitive_arg_generics,
@@ -249,6 +253,9 @@ class Lowerer:
                 catalog_facts.primitive_borrowed_arg_positions
             ),
             policy_split_names=catalog_facts.policy_split_names,
+            explicit_mask_split_names=(
+                catalog_facts.explicit_mask_split_names
+            ),
             immediate_split_names=catalog_facts.immediate_split_names,
             current_primitive=selected.primitive.name,
             immediate_name=immediate_name,
@@ -302,13 +309,21 @@ class Lowerer:
             )
         )
 
-        default_body = render_body(
-            selected=selected,
-            shape=shape,
-            context=context,
-            segments=segments,
-            region_lowerers=self._region_lowerers,
+        default_body = lower_preferred_fixed_native(
+            selected,
+            shape,
+            context,
+            current_register_spelling=register_spelling,
+            target=target,
         )
+        if default_body is None:
+            default_body = render_body(
+                selected=selected,
+                shape=shape,
+                context=context,
+                segments=segments,
+                region_lowerers=self._region_lowerers,
+            )
         if default_body.rendered is None:
             return LoweringResult(
                 specialization=None,

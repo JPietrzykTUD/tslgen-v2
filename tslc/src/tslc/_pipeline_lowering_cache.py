@@ -36,6 +36,7 @@ class _LoweringCacheKey:
     concrete_lanes: int | None
     simd_type_base_bindings: tuple[SimdTypeBaseBinding, ...]
     fixed_fallback_extension_identity: int | None
+    fixed_native_fallback_extension_identity: int | None
     extension_family_capability: ExtensionFamilyCapability
 
 
@@ -129,6 +130,13 @@ class _LoweringCache:
                 None
                 if selected.fixed_fallback_extension is None
                 else self._identities.identity(selected.fixed_fallback_extension)
+            ),
+            fixed_native_fallback_extension_identity=(
+                None
+                if selected.fixed_native_fallback_extension is None
+                else self._identities.identity(
+                    selected.fixed_native_fallback_extension
+                )
             ),
             extension_family_capability=selected.extension_family_capability,
         )

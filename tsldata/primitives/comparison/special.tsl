@@ -45,11 +45,17 @@ prim<m:=v>[value=zero] unequal_zero(data):
           reasons []
         implementation:
           tsil "complete(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
-    [generic, clang_v128, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -161,11 +167,17 @@ prim<s:=(v,s)> count_matches(data, value):
           reasons []
         implementation:
           tsil "complete(cast<static>(base::in, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
-    [generic, clang_v128, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe false

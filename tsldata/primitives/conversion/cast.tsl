@@ -171,16 +171,22 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
                     complete(intrin<vreinterpret, build[infix=base::in, infix_sep="_v_", suffix=ToBase]>(data));
                   }
                 """
-    [generic, clang_v128, oneapi_fpga, scalar, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, scalar, wasm128]:
       arith:
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           scalar []
           wasm128 [simd128]
         ToBase:
           arith:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -1885,11 +1891,16 @@ prim<v:=v>[cast=convert] cast(data):
                     complete(intrin<vfcvt_f_xu, build[infix="v", infix_sep="_", suffix=ToBase]>(data, value(vector::runtime_length)));
                   }
                 """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i8:
         requires []
         ToBase:
           ?i8:
+            requires:
+              target_features []
+              compiler:
+                cpp:
+                  capabilities [convertvector]
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -1897,6 +1908,7 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil "complete(__builtin_convertvector(data, type(register::generic(ToType))));"
           arith:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -1915,6 +1927,7 @@ prim<v:=v>[cast=convert] cast(data):
         requires []
         ToBase:
           ?i8:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -1930,6 +1943,11 @@ prim<v:=v>[cast=convert] cast(data):
                 complete(result);
               """
           ?i16:
+            requires:
+              target_features []
+              compiler:
+                cpp:
+                  capabilities [convertvector]
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -1937,6 +1955,7 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil "complete(__builtin_convertvector(data, type(register::generic(ToType))));"
           arith:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -1955,6 +1974,7 @@ prim<v:=v>[cast=convert] cast(data):
         requires []
         ToBase:
           bword:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -1970,6 +1990,11 @@ prim<v:=v>[cast=convert] cast(data):
                 complete(result);
               """
           dword:
+            requires:
+              target_features []
+              compiler:
+                cpp:
+                  capabilities [convertvector]
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -1977,6 +2002,7 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil "complete(__builtin_convertvector(data, type(register::generic(ToType))));"
           arith:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -1995,6 +2021,11 @@ prim<v:=v>[cast=convert] cast(data):
         requires []
         ToBase:
           qword:
+            requires:
+              target_features []
+              compiler:
+                cpp:
+                  capabilities [convertvector]
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -2002,6 +2033,7 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil "complete(__builtin_convertvector(data, type(register::generic(ToType))));"
           arith:
+            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
@@ -2442,12 +2474,18 @@ prim<v:=v> convert_lanes(data):
     - {tags [generic_equivalence], type "si32", to_type "f64", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8]], expected [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0]}}
     - {tags [hardware], extension "avx2", type "si32", to_type "f64", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8]], expected [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0]}}
   impls:
-    [scalar, generic, clang_v128, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           scalar []
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
           avx512 [avx512f]

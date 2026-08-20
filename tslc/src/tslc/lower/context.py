@@ -101,6 +101,7 @@ class LoweringEnv:
     type_tag: str
     support: SupportPolicy = DEFAULT_SUPPORT_POLICY
     fixed_fallback_extension: Extension | None = None
+    fixed_native_fallback_extension: Extension | None = None
     # the name of the primitive currently being lowered, so a `@self[...]` call can recurse
     # into it for a different vector (e.g. generic delegating per-lane to scalar).
     current_primitive: str = ""
@@ -126,6 +127,9 @@ class LoweringEnv:
     # `call<…attrs[mask=…]>` to them is mangled to `<name>_mask`/`<name>_maskz` (matching the
     # render rename). Single-form callees (`select`) are absent → keep their bare names.
     policy_split_names: frozenset[str] = frozenset()
+    # names whose callable family mixes a leading-mask overload with another arity.
+    # The leading-mask form is emitted as `<name>_mask` for cross-backend parity.
+    explicit_mask_split_names: frozenset[str] = frozenset()
     # names whose callable family mixes runtime and compile-time immediate forms. Only these
     # names gain an `_imm` suffix when a caller forwards its own `sImm` as a const/template arg.
     immediate_split_names: frozenset[str] = frozenset()

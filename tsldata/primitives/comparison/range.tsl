@@ -29,11 +29,17 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
           reasons []
         implementation:
           tsil "complete((left <= x) && (x <= right));"
-    [generic, clang_v128, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -265,11 +271,17 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
           reasons []
         implementation:
           tsil "complete((left <= x) && (x < right));"
-    [generic, clang_v128, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -501,11 +513,17 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
           reasons []
         implementation:
           tsil "complete((left < x) && (x <= right));"
-    [generic, clang_v128, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -737,11 +755,17 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
           reasons []
         implementation:
           tsil "complete((left < x) && (x < right));"
-    [generic, clang_v128, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -983,11 +1007,17 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
               )
             );
           """
-    [generic, clang_v128, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -1229,11 +1259,17 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
               )
             );
           """
-    [generic, clang_v128, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -1475,11 +1511,17 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
               )
             );
           """
-    [generic, clang_v128, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -1721,11 +1763,17 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
               )
             );
           """
-    [generic, clang_v128, wasm128]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           wasm128 [simd128]
         safety:
           internal_unsafe false

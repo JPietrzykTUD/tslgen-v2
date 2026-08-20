@@ -674,6 +674,18 @@ def test_value_full_corpus_avx2_rust_parity_inventory_is_explicit(
             "load_mask_repr_ui32_clang_v256_aligned_false_packed_false_mask_clang_unpacked",
         ),
         (
+            "permute_lanes",
+            "permute_lanes_si32_clang_v512_bool_index_ui32_clang_bool_mask_wide_reverse",
+        ),
+        (
+            "permute_lanes",
+            "permute_lanes_si32_clang_v512_index_ui32_clang_wide_reverse",
+        ),
+        (
+            "permute_lanes",
+            "permute_lanes_si32_clang_v512_clang_wide_reverse",
+        ),
+        (
             "resize_down",
             "resize_down_si32_clang_v512_to_clang_v128_low_clang",
         ),

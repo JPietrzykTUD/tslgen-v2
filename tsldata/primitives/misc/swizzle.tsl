@@ -338,9 +338,13 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [shufflevector]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -369,10 +373,17 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               }
               complete(result);
             """
-    [generic, oneapi_fpga, oneapi_fpga_rtl]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
+          clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
         safety:
@@ -780,9 +791,13 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
-    clang_v128:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        requires []
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [shufflevector]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -812,11 +827,17 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
               }
               complete(result);
             """
-    [generic, oneapi_fpga, oneapi_fpga_rtl]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
         safety:
@@ -1182,67 +1203,9 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
-    # Delegate compiler vectors to the profile's exact-width hardware leaf only
-    # where that leaf has a native runtime-index permutation. The arith body
-    # below remains the direct-lane fallback for every other profile/type slot.
-    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
-      [?i8, ?i16, dword, qword]:
-        requires:
-          clang_v128:
-            ?i8 [avx512f, avx512vl, avx512vbmi, sse, sse2]
-            ?i16 [avx512f, avx512vl, avx512bw, sse, sse2]
-            dword [avx512f, avx512vl, sse, sse2]
-            qword [avx512f, avx512vl, sse, sse2]
-          clang_v256:
-            ?i8 [avx, avx512f, avx512vl, avx512vbmi]
-            ?i16 [avx, avx512f, avx512vl, avx512bw]
-            dword [avx, avx2]
-            qword [avx, avx512f, avx512vl]
-          clang_v512:
-            ?i8 [avx512f, avx512vbmi]
-            ?i16 [avx512f, avx512bw]
-            dword [avx512f]
-            qword [avx512f]
-          clang_v128_bool:
-            ?i8 [avx512f, avx512vl, avx512vbmi, sse, sse2]
-            ?i16 [avx512f, avx512vl, avx512bw, sse, sse2]
-            dword [avx512f, avx512vl, sse, sse2]
-            qword [avx512f, avx512vl, sse, sse2]
-          clang_v256_bool:
-            ?i8 [avx, avx512f, avx512vl, avx512vbmi]
-            ?i16 [avx, avx512f, avx512vl, avx512bw]
-            dword [avx, avx2]
-            qword [avx, avx512f, avx512vl]
-          clang_v512_bool:
-            ?i8 [avx512f, avx512vbmi]
-            ?i16 [avx512f, avx512bw]
-            dword [avx512f]
-            qword [avx512f]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            let<type>(FixedVec, vector::fixed);
-            let<type>(IndexBase, base::generic(IndicesType));
-            let<type>(FixedIndices, vector::fixed(IndexBase));
-            var<const_infer>(fixed_data, cast<bitcast>(
-              register::generic(FixedVec),
-              data
-            ));
-            var<const_infer>(fixed_indexes, cast<bitcast>(
-              register::generic(FixedIndices),
-              indexes
-            ));
-            var<const_infer>(fixed_result, call<primitive=@self[FixedVec, FixedIndices]>(
-              fixed_data,
-              fixed_indexes
-            ));
-            complete(cast<bitcast>(vector::register, fixed_result));
-          """
     [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
@@ -1416,8 +1379,9 @@ prim<v:=(m,v,v,vidx)>[mask=pass_through] permute_lanes(mask, src, data, indexes)
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<mask_permutevar, build[suffix=f32]>(src, mask, data, indexes));"
-    [avx512, avx2, sse, neon, sve, wasm128, generic, clang_v128, oneapi_fpga, scalar]:
+    [avx512, avx2, sse, neon, sve, wasm128, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, scalar]:
       arith:
+        prefer_fixed_native true
         requires:
           avx512 [avx512f]
           avx2 [avx]
@@ -1427,6 +1391,11 @@ prim<v:=(m,v,v,vidx)>[mask=pass_through] permute_lanes(mask, src, data, indexes)
           wasm128 [simd128]
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           scalar []
         safety:
@@ -1536,8 +1505,9 @@ prim<v:=(m,v,vidx)>[mask=zero] permute_lanes(mask, data, indexes):
               complete(intrin<maskz_permutex2var, build[suffix=base::signed_of(base::in)]>(mask, data, indexes, data));
             }
           """
-    [avx512, avx2, sse, neon, sve, wasm128, generic, clang_v128, oneapi_fpga, scalar]:
+    [avx512, avx2, sse, neon, sve, wasm128, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, scalar]:
       arith:
+        prefer_fixed_native true
         requires:
           avx512 [avx512f]
           avx2 [avx]
@@ -1547,6 +1517,11 @@ prim<v:=(m,v,vidx)>[mask=zero] permute_lanes(mask, data, indexes):
           wasm128 [simd128]
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           scalar []
         safety:
@@ -1851,11 +1826,17 @@ prim<v:=(v,vidx,v)> table_lookup(left, indexes, right):
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
-    [generic, clang_v128, oneapi_fpga]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       arith:
+        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
         safety:
           internal_unsafe false
