@@ -1011,12 +1011,14 @@ inline auto tsl_default_catalog(std::size_t rows, std::size_t columns, std::size
   add(TslShape::ClusteredRuns, {{"r", 64}}, "r64");
   add(TslShape::ReverseSorted, {}, "");
   // OrganPipe and Sawtooth are implemented above but deliberately absent from the
-  // default catalog: pivot selection samples three random indices, so these
-  // classic median-of-three killers carry no penalty here (measured faster than
-  // the plain shape with the same group structure), and each is an existing group
-  // structure plus an existing arrangement rather than new coverage. The legacy
-  // benchmark keeps its own organ-pipe generator, so comparability is unaffected.
-  // Add them back if a deterministic or strided pivot sampler appears.
+  // default catalog: each is an existing group structure plus an existing
+  // arrangement rather than new coverage, and neither is a pivot killer here.
+  // Pivot selection (../sort_helpers.hpp) takes the pseudomedian of nine
+  // samples, one per evenly spaced range with the offset inside each range
+  // drawn from the task seed, so it has neither the fixed positions organ-pipe
+  // data defeats nor a fixed stride a sawtooth period can align to. The legacy
+  // benchmark keeps its own organ-pipe generator, so comparability is
+  // unaffected.
   add(TslShape::DuplicatesAtPivot, {{"frac", 0.5}, {"c", 4096}}, "f50");
   add(TslShape::ExtremeValues, {{"g", 64}}, "g64");
   add(TslShape::PermutationLocal, {}, "");

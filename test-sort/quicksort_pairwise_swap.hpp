@@ -12,20 +12,7 @@
 
 #include <tsl.hpp>
 #include "bitonic_sort.hpp"
-
-
-template <typename DataType, typename IndexType>
-struct pivot_t {
-  IndexType idx;
-  DataType val;
-  constexpr pivot_t(IndexType idx, DataType const * data) : idx(idx), val(data[idx]) {}
-  friend bool operator<(pivot_t const & lhs, pivot_t const & rhs) {
-    return lhs.val < rhs.val;
-  }
-  friend bool operator>(pivot_t const & lhs, pivot_t const & rhs) {
-    return lhs.val > rhs.val;
-  }
-};
+#include "sort_helpers.hpp"
 
 
 struct TslPairWiseSwapQuickSortPartitionTrace {
@@ -72,17 +59,6 @@ struct TslPairWiseSwapQuickSortTrace {
 template <class DataType = std::uint32_t, class IndexType = std::size_t>
 class TslPairWiseSwapQuickSorter {
  private:
-  struct pivot_t {
-    IndexType idx;
-    DataType val;
-    constexpr pivot_t(IndexType idx, DataType const * data) : idx(idx), val(data[idx]) {}
-    friend bool operator<(pivot_t const & lhs, pivot_t const & rhs) {
-      return lhs.val < rhs.val;
-    }
-    friend bool operator>(pivot_t const & lhs, pivot_t const & rhs) {
-      return lhs.val > rhs.val;
-    }
-  };
   enum class advance_state {
     LEFT,
     RIGHT,
@@ -92,7 +68,7 @@ class TslPairWiseSwapQuickSorter {
     LESS_THAN_PIVOT,
     EQUAL_TO_PIVOT
   };
-  std::mt19937_64 rng;
+  TslPivotRng rng;
  public:
   TslPairWiseSwapQuickSorter() : rng(std::random_device{}()) {}
   explicit TslPairWiseSwapQuickSorter(std::uint64_t seed) : rng(seed) {}
@@ -119,24 +95,16 @@ class TslPairWiseSwapQuickSorter {
     }
   }
 
-  pivot_t get_pivot(DataType * data, std::size_t count) {
-    std::uniform_int_distribution<IndexType> pivot_dist(0, count - 1);
-    pivot_t pivot1(pivot_dist(rng), data);
-    pivot_t pivot2(pivot_dist(rng), data);
-    pivot_t pivot3(pivot_dist(rng), data);
-    pivot_t median = std::max(
-      std::min(pivot1, pivot2),
-      std::min(
-        std::max(pivot1, pivot2),
-        pivot3
-      )
-    );
-    std::swap(data[median.idx], data[count - 1]);
-    return median;
+  // Moves the chosen element to data[count - 1], where both partition modes
+  // expect it, and returns its value. The rule lives in sort_helpers.hpp.
+  auto get_pivot(DataType * data, std::size_t count) -> DataType {
+    auto const pivot_index = tsl_pivot_index_of(data, count, rng.next());
+    std::swap(data[pivot_index], data[count - 1]);
+    return data[count - 1];
   }
 
   template <bool TraceEnabled>
-  auto get_pivot_for_sort(DataType * data, std::size_t count, TslPairWiseSwapQuickSortTrace * trace) -> pivot_t {
+  auto get_pivot_for_sort(DataType * data, std::size_t count, TslPairWiseSwapQuickSortTrace * trace) -> DataType {
     if constexpr (TraceEnabled) {
       ++trace->pivot_calls;
       trace->pivot_elements += count;
@@ -439,19 +407,19 @@ class TslPairWiseSwapQuickSorter {
     }
 
     auto const pivot = get_pivot_for_sort<TraceEnabled>(data, count, trace);
-    auto const pivot_vec = tsl::set1<DataSimdStyle>(pivot.val);
+    auto const pivot_vec = tsl::set1<DataSimdStyle>(pivot);
     auto * less_end = quicksort_partition<DataSimdStyle, partition_mode::LESS_THAN_PIVOT, TraceEnabled>(
       data,
       data + count,
       pivot_vec,
-      pivot.val,
+      pivot,
       trace
     );
     auto * equal_end = quicksort_partition<DataSimdStyle, partition_mode::EQUAL_TO_PIVOT, TraceEnabled>(
       less_end,
       data + count,
       pivot_vec,
-      pivot.val,
+      pivot,
       trace
     );
 

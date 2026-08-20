@@ -41,6 +41,20 @@ enum class TslExecution { Serial, Parallel, DeepParallel };
 enum class TslStyle { Intrinsics, ClangBuiltin, ClangBoolMask };
 enum class TslStage { Screen, Tune, Characterize, Attribute };
 
+// How rows are moved. `Direct` permutes the key column and every payload column
+// in place. `Index` permutes only a row-index array and materializes the active
+// column through it per level (multicolumn_index_sort.hpp), so the columns stay
+// read-only and the moved bytes stop scaling with the column count.
+enum class TslMovement { Direct, Index };
+
+inline auto tsl_movement_name(TslMovement movement) -> char const * {
+  return movement == TslMovement::Index ? "index" : "direct";
+}
+
+inline auto tsl_movement_from_name(std::string const & name) -> TslMovement {
+  return name == "index" ? TslMovement::Index : TslMovement::Direct;
+}
+
 inline auto tsl_execution_prefix(TslExecution execution) -> char const * {
   switch (execution) {
     case TslExecution::Serial: return "";
@@ -93,6 +107,7 @@ struct TslVariant {
   TslLeafKind leaf = TslLeafKind::INSERTION;
   TslStyle style = TslStyle::Intrinsics;
   std::size_t width_bits = 512;
+  TslMovement movement = TslMovement::Direct;
 
   auto algorithm_name() const -> std::string {
     std::string name = tsl_execution_prefix(execution);
@@ -108,7 +123,14 @@ struct TslVariant {
   // three-way. Everything that enum did not have is appended -- the two two-way
   // deep-parallel variants as 17 and 18, the six incremental two-way variants as
   // 19 to 24 -- because inserting would renumber existing IDs.
+  // The indirect sorter reuses the algorithmic IDs offset by 100, so a `move=`
+  // pair stays recognizable as the same algorithm and no existing ID moves.
   auto algorithm_id() const -> int {
+    return base_algorithm_id() + (movement == TslMovement::Index ? 100 : 0);
+  }
+
+ private:
+  auto base_algorithm_id() const -> int {
     auto const post = discovery == TslRunDiscoveryKind::POST_SORT;
     auto const two = partition == TslPartitionKind::TWO_WAY;
     auto const ins = leaf == TslLeafKind::INSERTION;
@@ -132,16 +154,23 @@ struct TslVariant {
 // free because its equal band closes every boundary it creates, and two-way gets it
 // by carrying the start of the run that overlaps a fragment's open left edge, so a
 // fragment reports from there and the runs found in it are maximal.
-inline auto tsl_variant_is_implementable(TslVariant const &) -> bool {
+inline auto tsl_variant_is_implementable(TslVariant const & variant) -> bool {
+  // The indirect driver walks columns level by level on one thread; it has no
+  // executor, so the parallel executions have no indirect form yet.
+  if (variant.movement == TslMovement::Index) {
+    return variant.execution == TslExecution::Serial;
+  }
   return true;
 }
 
 // Every implementable variant, in a stable order.
 inline auto tsl_all_variants(std::vector<TslStyle> const & styles,
-                            std::vector<std::size_t> const & widths)
+                            std::vector<std::size_t> const & widths,
+                            std::vector<TslMovement> const & movements)
   -> std::vector<TslVariant> {
   std::vector<TslVariant> variants;
-  for (auto style : styles) {
+  for (auto movement : movements) {
+   for (auto style : styles) {
     for (auto width : widths) {
       for (auto execution : {TslExecution::Serial, TslExecution::Parallel,
                              TslExecution::DeepParallel}) {
@@ -149,7 +178,8 @@ inline auto tsl_all_variants(std::vector<TslStyle> const & styles,
                                TslRunDiscoveryKind::INCREMENTAL}) {
           for (auto partition : {TslPartitionKind::TWO_WAY, TslPartitionKind::THREE_WAY}) {
             for (auto leaf : {TslLeafKind::INSERTION, TslLeafKind::NETWORK}) {
-              TslVariant variant{execution, discovery, partition, leaf, style, width};
+              TslVariant variant{execution, discovery, partition, leaf,
+                                 style, width, movement};
               if (tsl_variant_is_implementable(variant)) {
                 variants.push_back(variant);
               }
@@ -158,6 +188,7 @@ inline auto tsl_all_variants(std::vector<TslStyle> const & styles,
         }
       }
     }
+   }
   }
   return variants;
 }
@@ -169,6 +200,7 @@ inline auto tsl_all_variants(std::vector<TslStyle> const & styles,
 enum class TslDropReason {
   StageVariant,        // the stage does not ask this variant family
   StageAxis,           // the stage does not ask this axis value
+  MovementUnsupported, // no indirect form of this execution yet
   StyleUnavailable,    // a clang family needs a clang build of a new enough clang
   QuadraticTwoWay,     // two-way on a low-cardinality key above the size cap
   DetectorInapplicable,// non-scalar detector where no discovery happens
@@ -181,6 +213,7 @@ inline auto tsl_drop_reason_name(TslDropReason reason) -> char const * {
   switch (reason) {
     case TslDropReason::StageVariant: return "not in this stage's variant set";
     case TslDropReason::StageAxis: return "not in this stage's axis set";
+    case TslDropReason::MovementUnsupported: return "no indirect form of this execution";
     case TslDropReason::StyleUnavailable: return "implementation style unavailable in this build";
     case TslDropReason::QuadraticTwoWay: return "two-way is quadratic on this key column";
     case TslDropReason::DetectorInapplicable: return "detector cannot engage here";
@@ -206,6 +239,7 @@ struct TslDropLog {
 struct TslStagePlan {
   TslStage stage = TslStage::Screen;
   std::vector<TslStyle> styles{TslStyle::Intrinsics};
+  std::vector<TslMovement> movements{TslMovement::Direct};
   std::vector<std::size_t> widths{512};
   std::vector<std::size_t> element_bytes{4};
   std::vector<std::string> shapes;          // dataset selectors, see cosort_case.hpp
@@ -235,7 +269,13 @@ struct TslStagePlan {
     if (backend == TslDetectorBackend::Scalar) {
       return true;
     }
-    return variant.execution != TslExecution::Serial
+    // The indirect driver reaches the detector from its serial path -- discovery
+    // runs on the materialized key buffer between levels -- but it never polls,
+    // so an asynchronous backend would not complete.
+    auto const has_seam = variant.movement == TslMovement::Index
+      ? !tsl_detector_is_async(backend)
+      : variant.execution != TslExecution::Serial;
+    return has_seam
         && column_count >= 2
         && size_level >= 2            // halfLLC and above
         && variant.width_bits == 512; // the detector does not depend on lane count

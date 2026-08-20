@@ -17,8 +17,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <random>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -30,37 +28,7 @@
 #include "equal_runs.hpp"
 #include "multicolumn_sort_types.hpp"
 #include "multicolumn_sort_tasks.hpp"
-
-
-// Deferred pivot generator.
-//
-// Only `get_pivot` reads the generator, and only a range above the leaf
-// threshold ever partitions, so a range that goes straight to its leaf never
-// needs one. Seeding `std::mt19937_64` eagerly per task therefore initialized
-// 2496 bytes of state (~400ns) for nothing on every small next-column task --
-// and low-cardinality inputs produce millions of those. Holding the seed and
-// materializing on first use keeps the generated sequence identical for any
-// range that does partition.
-//
-// Unsynchronized on purpose: like the generator it replaces, one instance is a
-// local of a single sort call and is only ever reached from that call's own
-// thread. A worker that takes over a partition receives a task descriptor and
-// seeds its own instance from task_seed. Do not promote this to a member or
-// share one across workers -- the check-then-emplace in get() would then race.
-class TslLazyPivotRng {
-  std::uint64_t seed_;
-  std::optional<std::mt19937_64> rng_;
-
- public:
-  explicit TslLazyPivotRng(std::uint64_t seed) : seed_(seed) {}
-
-  auto get() -> std::mt19937_64 & {
-    if (!rng_.has_value()) {
-      rng_.emplace(seed_);
-    }
-    return *rng_;
-  }
-};
+#include "sort_helpers.hpp"
 
 
 // True when a run detector participates in executor accounting, i.e. exposes
@@ -134,23 +102,16 @@ class TslMultiColumnLeashedSorter {
 
   std::uint64_t const seed_;
 
-  static auto mix_seed(std::uint64_t value) -> std::uint64_t {
-    value += 0x9e3779b97f4a7c15ULL;
-    value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
-    value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
-    return value ^ (value >> 31);
-  }
-
   auto task_seed(
     std::size_t column,
     std::size_t begin,
     std::size_t end
   ) const -> std::uint64_t {
     auto value = seed_;
-    value ^= mix_seed(static_cast<std::uint64_t>(column));
-    value ^= mix_seed(static_cast<std::uint64_t>(begin));
-    value ^= mix_seed(static_cast<std::uint64_t>(end));
-    return mix_seed(value);
+    value ^= tsl_pivot_mix(static_cast<std::uint64_t>(column));
+    value ^= tsl_pivot_mix(static_cast<std::uint64_t>(begin));
+    value ^= tsl_pivot_mix(static_cast<std::uint64_t>(end));
+    return tsl_pivot_mix(value);
   }
 
   template <TslSortOrder Order>
@@ -175,27 +136,23 @@ class TslMultiColumnLeashedSorter {
     }
   }
 
+  // Moves the chosen element to keys[count - 1], where partition expects it,
+  // and returns its value. The rule itself lives in sort_helpers.hpp.
   template <TslSortOrder Order>
   static auto get_pivot(
     DataType * keys,
     column_pointers const & columns,
     std::size_t payload_count,
     std::size_t count,
-    std::mt19937_64 & rng
+    std::uint64_t seed
   ) -> DataType {
-    auto const i0 = static_cast<std::size_t>(rng() % count);
-    auto const i1 = static_cast<std::size_t>(rng() % count);
-    auto const i2 = static_cast<std::size_t>(rng() % count);
-    auto const a = keys[i0];
-    auto const b = keys[i1];
-    auto const c = keys[i2];
-    std::size_t median_index;
-    if (before<Order>(a, b)) {
-      median_index = before<Order>(b, c) ? i1 : (before<Order>(a, c) ? i2 : i0);
-    } else {
-      median_index = before<Order>(a, c) ? i0 : (before<Order>(b, c) ? i2 : i1);
-    }
-    swap_all(keys, columns, payload_count, median_index, count - 1);
+    auto const pivot_index = tsl_pivot_index_of(
+      keys,
+      count,
+      seed,
+      [](DataType left, DataType right) { return before<Order>(left, right); }
+    );
+    swap_all(keys, columns, payload_count, pivot_index, count - 1);
     return keys[count - 1];
   }
 
@@ -687,7 +644,7 @@ class TslMultiColumnLeashedSorter {
     column_pointers columns,
     std::size_t payload_count,
     std::size_t count,
-    TslLazyPivotRng & rng,
+    TslPivotRng & rng,
     std::size_t absolute_begin,
     // Start of the maximal equal run overlapping this range's left edge when that
     // edge is open; equal to `absolute_begin` when it is closed.
@@ -698,7 +655,7 @@ class TslMultiColumnLeashedSorter {
   ) {
     while (count > leaf_threshold) {
       auto const pivot_value =
-        get_pivot<Order>(keys, columns, payload_count, count, rng.get());
+        get_pivot<Order>(keys, columns, payload_count, count, rng.next());
       std::size_t left_count;
       std::size_t right_begin;
       std::size_t right_count;
@@ -869,7 +826,7 @@ class TslMultiColumnLeashedSorter {
     std::size_t payload_count,
     std::size_t count,
     TslSortOrder order,
-    TslLazyPivotRng & rng,
+    TslPivotRng & rng,
     std::size_t absolute_begin,
     EqualBandSink & equal_band_sink,
     LeafSink & leaf_sink,
@@ -945,7 +902,7 @@ class TslMultiColumnLeashedSorter {
 
     auto const payload_count = column_count - active_column - 1;
     auto const payloads = payload_columns_for(columns, column_count, active_column, begin);
-    auto rng = TslLazyPivotRng(task_seed(active_column, begin, end));
+    auto rng = TslPivotRng(task_seed(active_column, begin, end));
     auto no_equal_band = [](std::size_t, std::size_t) {};
     auto no_leaf = [](std::size_t, std::size_t) {};
     auto no_range = keep_range_local();
@@ -1092,7 +1049,7 @@ class TslMultiColumnLeashedSorter {
       task.column,
       task.begin
     );
-    auto rng = TslLazyPivotRng(task_seed(task.column, task.begin, task.end));
+    auto rng = TslPivotRng(task_seed(task.column, task.begin, task.end));
     auto no_equal_band = [](std::size_t, std::size_t) {};
     auto no_leaf = [](std::size_t, std::size_t) {};
 
@@ -1284,7 +1241,7 @@ class TslMultiColumnLeashedSorter {
       }
       columns[column] = payload_columns[column];
     }
-    auto rng = TslLazyPivotRng(task_seed(0, 0, count));
+    auto rng = TslPivotRng(task_seed(0, 0, count));
     auto no_equal_band = [](std::size_t, std::size_t) {};
     auto no_leaf = [](std::size_t, std::size_t) {};
     auto no_range = keep_range_local();
@@ -1359,7 +1316,7 @@ class TslMultiColumnLeashedSorter {
       }
       columns[column] = payload_columns[column];
     }
-    auto rng = TslLazyPivotRng(task_seed(
+    auto rng = TslPivotRng(task_seed(
       0,
       absolute_begin,
       absolute_begin + count

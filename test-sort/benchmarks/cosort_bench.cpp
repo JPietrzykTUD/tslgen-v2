@@ -17,6 +17,7 @@
  *
  *   COSORT_STAGE       screen | tune | characterize | attribute  (default screen)
  *   COSORT_STYLES      intr,clang,clang_bool      which implementation families
+ *   COSORT_MOVEMENTS   direct,index               permute columns, or a row index
  *   COSORT_WIDTHS      128,256,512                register widths in bits
  *   COSORT_ELEMENTS    4,8                        element widths in bytes
  *   COSORT_SHAPES      dataset id prefixes, e.g. unique_last_g64; empty = all
@@ -47,6 +48,7 @@
 #include <benchmark/benchmark.h>
 
 #include "cosort_case.hpp"
+#include "multicolumn_index_sort.hpp"
 #include "cosort_detectors.hpp"
 #include "cosort_plan.hpp"
 #include "dataset_catalog.hpp"
@@ -164,6 +166,13 @@ auto load_plan() -> TslStagePlan {
       plan.styles.push_back(tsl_style_from_name(token));
     }
   }
+  if (auto const * value = std::getenv("COSORT_MOVEMENTS")) {
+    plan.movements.clear();
+    for (auto const & token : split_list(value)) {
+      plan.movements.push_back(tsl_movement_from_name(token));
+    }
+    if (plan.movements.empty()) plan.movements = {TslMovement::Direct};
+  }
   plan.widths = env_numeric_list<std::size_t>("COSORT_WIDTHS", plan.widths);
   plan.element_bytes = env_numeric_list<std::size_t>("COSORT_ELEMENTS", plan.element_bytes);
   plan.size_levels = env_numeric_list<std::size_t>("COSORT_SIZE_LEVELS", plan.size_levels);
@@ -219,10 +228,12 @@ auto case_name(
   TslStagePlan const & plan,
   TslDetectorBackend backend,
   bool parallel,
-  bool deep
+  bool deep,
+  TslMovement movement
 ) -> std::string {
   auto name = algorithm
     + "/" + type_name
+    + "/move=" + tsl_movement_name(movement)
     + "/style=" + style
     + "/lanes=" + lanes
     + "/shape=" + tsl_dataset_label(spec)
@@ -400,6 +411,63 @@ void run_baseline(
   publish(state, data.rows(), spec.columns, 0, sizeof(DataType), 0, nullptr, nullptr);
 }
 
+// The indirect body: the columns stay read-only and the sort produces a row
+// permutation, so the oracle is the value image the permutation selects.
+template <class DataType, TslStyle Style, std::size_t Width,
+          TslPartitionKind Partition, TslLeafKind Leaf>
+void run_index_case(
+  benchmark::State & state,
+  TslVariant variant,
+  TslDatasetSpec spec,
+  int direction,
+  TslDetectorBackend backend,
+  TslStagePlan plan
+) {
+  using Simd = typename tsl_simd_for<DataType, Style, Width>::type;
+  using Sorter = TslMultiColumnIndexSorter<DataType, Partition, Leaf, Simd>;
+
+  TslBenchCase<DataType> data(spec, direction_of(direction), plan.cache_bytes);
+  Sorter sorter(tsl_spec_seed(spec) ^ static_cast<std::uint64_t>(direction));
+  TslIndexSortMetrics metrics;
+
+  // Discovery runs between levels on the materialized key buffer, so the seam is
+  // available on this serial path -- unlike the direct serial driver, which calls
+  // the scalar scan directly. Asynchronous backends are excluded at registration.
+  tsl_with_detector<DataType>(backend, plan.detector_config, [&](auto & detector) {
+    if constexpr (tsl_detector_wants_executor<std::decay_t<decltype(detector)>>::value) {
+      state.SkipWithError("asynchronous detectors have no indirect form");
+    } else {
+      for (auto _ : state) {
+        sorter.sort_index(data.specs(), data.column_count(), data.index(), data.rows(),
+                          variant.discovery, detector, &metrics);
+        benchmark::DoNotOptimize(data.index());
+        benchmark::ClobberMemory();
+      }
+    }
+  });
+
+  if (auto const error = data.verify_index(); !error.empty()) {
+    state.SkipWithError(error.c_str());
+    return;
+  }
+
+  auto const iterations = std::max<std::int64_t>(state.iterations(), 1);
+  state.counters["materialized_per_row"] = data.rows() == 0
+    ? 0.0
+    : static_cast<double>(metrics.materialized_elements)
+      / static_cast<double>(iterations * static_cast<std::int64_t>(data.rows()));
+  state.counters["levels"] = static_cast<double>(metrics.levels) / static_cast<double>(iterations);
+  state.counters["ranges_sorted"] =
+    static_cast<double>(metrics.ranges_sorted) / static_cast<double>(iterations);
+  TslMultiColumnSortMetrics shared{};
+  shared.rle_values_scanned = metrics.rle_values_scanned / static_cast<std::size_t>(iterations);
+  shared.direct_equal_bands = metrics.direct_equal_bands / static_cast<std::size_t>(iterations);
+  shared.direct_equal_band_rows =
+    metrics.direct_equal_band_rows / static_cast<std::size_t>(iterations);
+  publish(state, data.rows(), data.column_count(), Simd::lane_count_v, sizeof(DataType),
+          variant.algorithm_id(), &shared, nullptr);
+}
+
 // --- registration -----------------------------------------------------------
 
 struct Registrar {
@@ -448,11 +516,16 @@ template <class DataType, TslStyle Style, std::size_t Width,
           TslPartitionKind Partition, TslLeafKind Leaf>
 void register_leaf(Registrar & registrar, char const * type_name) {
   auto const & plan = registrar.plan;
-  for (auto execution : {TslExecution::Serial, TslExecution::Parallel,
+  for (auto movement : plan.movements) {
+   for (auto execution : {TslExecution::Serial, TslExecution::Parallel,
                          TslExecution::DeepParallel}) {
     for (auto discovery : {TslRunDiscoveryKind::POST_SORT, TslRunDiscoveryKind::INCREMENTAL}) {
-      TslVariant const variant{execution, discovery, Partition, Leaf, Style, Width};
-      if (!tsl_variant_is_implementable(variant) || !registrar.wants(variant)) {
+      TslVariant const variant{execution, discovery, Partition, Leaf, Style, Width, movement};
+      if (!tsl_variant_is_implementable(variant)) {
+        registrar.drops.drop(TslDropReason::MovementUnsupported);
+        continue;
+      }
+      if (!registrar.wants(variant)) {
         continue;
       }
       for (auto level : plan.size_levels) {
@@ -491,16 +564,27 @@ void register_leaf(Registrar & registrar, char const * type_name) {
                 auto const name = case_name(
                   variant.algorithm_name(), type_name, tsl_style_name(Style),
                   std::to_string(tsl_simd_for<DataType, Style, Width>::type::lane_count_v),
-                  spec, direction, size, plan, backend, parallel, deep
+                  spec, direction, size, plan, backend, parallel, deep, movement
                 );
-                benchmark::RegisterBenchmark(
-                  name,
-                  [variant, spec, direction, backend, plan](benchmark::State & state) {
-                    run_case<DataType, Style, Width, Partition, Leaf>(
-                      state, variant, spec, direction, backend, plan
-                    );
-                  }
-                )->Unit(benchmark::kNanosecond)->UseRealTime();
+                if (movement == TslMovement::Index) {
+                  benchmark::RegisterBenchmark(
+                    name,
+                    [variant, spec, direction, backend, plan](benchmark::State & state) {
+                      run_index_case<DataType, Style, Width, Partition, Leaf>(
+                        state, variant, spec, direction, backend, plan
+                      );
+                    }
+                  )->Unit(benchmark::kNanosecond)->UseRealTime();
+                } else {
+                  benchmark::RegisterBenchmark(
+                    name,
+                    [variant, spec, direction, backend, plan](benchmark::State & state) {
+                      run_case<DataType, Style, Width, Partition, Leaf>(
+                        state, variant, spec, direction, backend, plan
+                      );
+                    }
+                  )->Unit(benchmark::kNanosecond)->UseRealTime();
+                }
                 ++registrar.registered;
               }
             }
@@ -508,6 +592,7 @@ void register_leaf(Registrar & registrar, char const * type_name) {
         }
       }
     }
+   }
   }
 }
 
@@ -555,7 +640,8 @@ void register_type(Registrar & registrar, char const * type_name) {
         for (auto direction : plan.directions) {
           auto const name = case_name("std_lex_argsort", type_name, "na", "na",
                                       spec, direction, size, plan,
-                                      TslDetectorBackend::Scalar, false, false);
+                                      TslDetectorBackend::Scalar, false, false,
+                                      TslMovement::Direct);
           benchmark::RegisterBenchmark(
             name,
             [spec, direction, plan](benchmark::State & state) {

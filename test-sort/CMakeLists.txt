@@ -168,6 +168,13 @@ add_executable(test_multicolumn_sort test_multicolumn_sort.cpp)
 target_compile_features(test_multicolumn_sort PRIVATE cxx_std_17)
 target_link_libraries(test_multicolumn_sort PRIVATE tsl::tsl Threads::Threads)
 
+# The indirect (index-permutation) sorter. Built without the accelerator options
+# it exercises the scalar detector; the IAA block below adds the QPL one, which
+# is what proves the detector seam applies to this driver too.
+add_executable(test_multicolumn_index_sort test_multicolumn_index_sort.cpp)
+target_compile_features(test_multicolumn_index_sort PRIVATE cxx_std_17)
+target_link_libraries(test_multicolumn_index_sort PRIVATE tsl::tsl Threads::Threads)
+
 add_executable(benchmark_quicksort_pairwise_swap benchmark_quicksort_pairwise_swap.cpp)
 target_compile_features(benchmark_quicksort_pairwise_swap PRIVATE cxx_std_17)
 target_link_libraries(benchmark_quicksort_pairwise_swap PRIVATE tsl::tsl)
@@ -465,3 +472,4 @@ endif()
 
 add_test(NAME test_sort COMMAND test_sort)
 add_test(NAME test_multicolumn_sort COMMAND test_multicolumn_sort)
+add_test(NAME test_multicolumn_index_sort COMMAND test_multicolumn_index_sort)

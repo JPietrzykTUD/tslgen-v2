@@ -172,6 +172,37 @@ class TslBenchCase {
   auto column_count() const -> std::size_t { return work_.size(); }
   auto rows() const -> std::size_t { return work_.empty() ? 0 : work_.front().size(); }
 
+  // Row-index buffer for the indirect sorter. Allocated on first use so the
+  // direct cases never pay for it; the sorter fills it with the identity itself.
+  auto index() -> DataType * {
+    if (index_.size() != rows()) {
+      index_.assign(rows(), 0);
+    }
+    return index_.data();
+  }
+
+  // Oracle for the indirect sorter, which leaves the columns alone and produces
+  // a permutation instead. The permutation is not unique -- tied rows may come
+  // out in any order -- so this compares the values it selects against the
+  // reference image, which is unique because every column is a sort key.
+  auto verify_index() const -> std::string {
+    if (index_.size() != rows()) {
+      return "index buffer was never produced";
+    }
+    for (std::size_t column = 0; column < work_.size(); ++column) {
+      auto const & source = work_[column];
+      auto const & expected = (*reference_)[column];
+      for (std::size_t row = 0; row < index_.size(); ++row) {
+        auto const selected = source[static_cast<std::size_t>(index_[row])];
+        if (selected != expected[row]) {
+          return "permutation selects the wrong value at column " + std::to_string(column)
+               + ", row " + std::to_string(row);
+        }
+      }
+    }
+    return {};
+  }
+
   // Exact oracle. Returns an empty string on success, else what differed.
   auto verify() const -> std::string {
     auto const [column, row] = tsl_first_difference(work_, *reference_);
@@ -194,6 +225,7 @@ class TslBenchCase {
   typename TslDatasetSource<DataType>::Handle pristine_;
   typename TslDatasetSource<DataType>::Handle reference_;
   std::vector<std::vector<DataType>> work_;
+  std::vector<DataType> index_;
   std::vector<TslSortOrder> orders_;
   std::vector<TslSortColumn<DataType>> specs_;
 };
