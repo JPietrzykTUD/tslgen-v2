@@ -40,10 +40,8 @@
 //
 //   -DTSL_COSORT_ENABLE_DSA=ON   Intel DSA via DML: dml_sw, dsa_hw and their
 //                                asynchronous forms. `dml_sw` needs no device.
-//   -DTSL_COSORT_ENABLE_IAA=ON   Intel IAA via QPL: expects iaa_run_detector.hpp
-//                                to provide TslIaaRunDetector<T> and, for the
-//                                asynchronous form, TslIaaAsyncRunDetector<T>,
-//                                both satisfying the contract above.
+//   -DTSL_COSORT_ENABLE_IAA=ON   Intel IAA via QPL: iaa_sw, iaa_hw and their
+//                                asynchronous forms. `iaa_sw` needs no device.
 //
 // `rle=` is always present in a benchmark name, so a result says which detector
 // produced it and rows from two differently-equipped machines never collide.
@@ -77,7 +75,9 @@ enum class TslDetectorBackend {
   DsaHardware,
   DmlSoftwareAsync,
   DsaHardwareAsync,
+  IaaSoftware,
   IaaHardware,
+  IaaSoftwareAsync,
   IaaHardwareAsync,
 };
 
@@ -88,7 +88,9 @@ inline auto tsl_detector_name(TslDetectorBackend backend) -> char const * {
     case TslDetectorBackend::DsaHardware: return "dsa_hw";
     case TslDetectorBackend::DmlSoftwareAsync: return "dml_sw_async";
     case TslDetectorBackend::DsaHardwareAsync: return "dsa_hw_async";
+    case TslDetectorBackend::IaaSoftware: return "iaa_sw";
     case TslDetectorBackend::IaaHardware: return "iaa_hw";
+    case TslDetectorBackend::IaaSoftwareAsync: return "iaa_sw_async";
     case TslDetectorBackend::IaaHardwareAsync: return "iaa_hw_async";
   }
   return "unknown";
@@ -98,7 +100,8 @@ inline auto tsl_detector_from_name(std::string const & name) -> TslDetectorBacke
   for (auto backend : {
     TslDetectorBackend::Scalar, TslDetectorBackend::DmlSoftware,
     TslDetectorBackend::DsaHardware, TslDetectorBackend::DmlSoftwareAsync,
-    TslDetectorBackend::DsaHardwareAsync, TslDetectorBackend::IaaHardware,
+    TslDetectorBackend::DsaHardwareAsync, TslDetectorBackend::IaaSoftware,
+    TslDetectorBackend::IaaHardware, TslDetectorBackend::IaaSoftwareAsync,
     TslDetectorBackend::IaaHardwareAsync,
   }) {
     if (name == tsl_detector_name(backend)) return backend;
@@ -111,6 +114,7 @@ inline auto tsl_detector_from_name(std::string const & name) -> TslDetectorBacke
 inline auto tsl_detector_is_async(TslDetectorBackend backend) -> bool {
   return backend == TslDetectorBackend::DmlSoftwareAsync
       || backend == TslDetectorBackend::DsaHardwareAsync
+      || backend == TslDetectorBackend::IaaSoftwareAsync
       || backend == TslDetectorBackend::IaaHardwareAsync;
 }
 
@@ -129,7 +133,9 @@ inline auto tsl_detector_compiled(TslDetectorBackend backend) -> bool {
 #else
       return false;
 #endif
+    case TslDetectorBackend::IaaSoftware:
     case TslDetectorBackend::IaaHardware:
+    case TslDetectorBackend::IaaSoftwareAsync:
     case TslDetectorBackend::IaaHardwareAsync:
 #if defined(TSL_COSORT_HAVE_IAA)
       return true;
@@ -145,7 +151,8 @@ inline auto tsl_compiled_detectors() -> std::vector<TslDetectorBackend> {
   for (auto backend : {
     TslDetectorBackend::Scalar, TslDetectorBackend::DmlSoftware,
     TslDetectorBackend::DsaHardware, TslDetectorBackend::DmlSoftwareAsync,
-    TslDetectorBackend::DsaHardwareAsync, TslDetectorBackend::IaaHardware,
+    TslDetectorBackend::DsaHardwareAsync, TslDetectorBackend::IaaSoftware,
+    TslDetectorBackend::IaaHardware, TslDetectorBackend::IaaSoftwareAsync,
     TslDetectorBackend::IaaHardwareAsync,
   }) {
     if (tsl_detector_compiled(backend)) backends.push_back(backend);
@@ -208,15 +215,21 @@ void tsl_with_detector(TslDetectorBackend backend, TslDetectorConfig const & con
     }
 #endif
 #if defined(TSL_COSORT_HAVE_IAA)
+    case TslDetectorBackend::IaaSoftware:
     case TslDetectorBackend::IaaHardware: {
-      TslIaaRunDetector<DataType> detector(
+      auto const hardware = backend == TslDetectorBackend::IaaHardware;
+      TslIaaDetectorFleet<DataType> detector(
+        hardware ? TslIaaPath::HARDWARE : TslIaaPath::SOFTWARE,
         config.workers, config.region_bytes, config.min_offload
       );
       body(detector);
       return;
     }
+    case TslDetectorBackend::IaaSoftwareAsync:
     case TslDetectorBackend::IaaHardwareAsync: {
+      auto const hardware = backend == TslDetectorBackend::IaaHardwareAsync;
       TslIaaAsyncRunDetector<DataType> detector(
+        hardware ? TslIaaPath::HARDWARE : TslIaaPath::SOFTWARE,
         config.slots, config.depth, config.region_bytes, config.min_offload
       );
       body(detector);

@@ -330,24 +330,79 @@ set(DML_GIT_TAG "v1.2.0" CACHE STRING "Intel DML tag to fetch when DML_ROOT is u
 # Intel IAA (QPL) run detector. Independent of the DSA option: a host has one
 # accelerator or the other, and `rle=` records which produced a result.
 option(TSL_COSORT_ENABLE_IAA "Build the Intel IAA (QPL) run-length detector backend" OFF)
-set(QPL_ROOT "" CACHE PATH "Pre-built Intel QPL install prefix")
+set(QPL_ROOT "" CACHE PATH "Pre-built Intel QPL install prefix (empty = fetch from GitHub)")
+set(QPL_GIT_TAG "v1.9.0" CACHE STRING "Intel QPL tag to fetch when QPL_ROOT is unset")
 
 if(TSL_COSORT_ENABLE_IAA)
   if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/iaa_run_detector.hpp")
     message(
       FATAL_ERROR
       "TSL_COSORT_ENABLE_IAA needs test-sort/iaa_run_detector.hpp, providing "
-      "TslIaaRunDetector<T> and TslIaaAsyncRunDetector<T>. The contract is "
-      "documented at the top of benchmarks/cosort_detectors.hpp."
+      "TslIaaRunDetector<T>, TslIaaDetectorFleet<T> and TslIaaAsyncRunDetector<T>. "
+      "The contract is documented at the top of benchmarks/cosort_detectors.hpp."
     )
   endif()
-  find_package(QPL REQUIRED CONFIG
-               HINTS "${QPL_ROOT}" "${QPL_ROOT}/lib/cmake/QPL" "${QPL_ROOT}/lib64/cmake/QPL")
+
+  if(QPL_ROOT)
+    message(STATUS "QPL: using local installation at ${QPL_ROOT}")
+    find_package(QPL REQUIRED CONFIG
+                 HINTS "${QPL_ROOT}" "${QPL_ROOT}/lib/cmake/QPL" "${QPL_ROOT}/lib64/cmake/QPL")
+    set(_iaa_link_targets QPL::qpl)
+  else()
+    # QPL bundles ISA-L assembly kernels, so a source build needs NASM. It fails
+    # deep inside the fetched tree rather than here if the assembler is absent.
+    find_program(TSL_NASM_EXECUTABLE nasm)
+    if(NOT TSL_NASM_EXECUTABLE)
+      message(
+        FATAL_ERROR
+        "Building QPL from source needs the nasm assembler for its bundled ISA-L "
+        "kernels. Install nasm, or pass -DQPL_ROOT=<prefix> to use a pre-built QPL."
+      )
+    endif()
+    message(STATUS "QPL: fetching ${QPL_GIT_TAG} from github.com/intel/qpl")
+    set(QPL_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(QPL_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    # QPL compiles its own sources with -Werror, and a compiler newer than the
+    # release diagnoses code the release considered clean -- clang 22, which this
+    # project requires, rejects QPL 1.9.0 over -Wunnecessary-virtual-specifier in
+    # its hardware dispatcher. Warnings in a fetched dependency are not this
+    # project's to fix, so its own switch turns them back into warnings.
+    set(QPL_TREAT_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+      QPL
+      GIT_REPOSITORY https://github.com/intel/qpl.git
+      GIT_TAG "${QPL_GIT_TAG}"
+      GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(QPL)
+    set(_iaa_link_targets qpl)
+  endif()
+
   if(TARGET cosort_bench)
-    target_compile_definitions(cosort_bench PRIVATE TSL_COSORT_HAVE_IAA=1)
-    target_link_libraries(cosort_bench PRIVATE QPL::qpl)
+    # TSL_COSORT_ENABLE_IAA is what the detector header itself gates on;
+    # TSL_COSORT_HAVE_IAA is what the benchmark's backend registry reads.
+    target_compile_definitions(
+      cosort_bench PRIVATE TSL_COSORT_ENABLE_IAA=1 TSL_COSORT_HAVE_IAA=1
+    )
+    target_link_libraries(cosort_bench PRIVATE ${_iaa_link_targets})
     message(STATUS "cosort_bench: IAA detector backends enabled")
   endif()
+
+  # Same test binary, now with the QPL detector compiled in: the index sorter's
+  # discovery runs on its materialized key buffer, so an accelerator backend
+  # applies with no indirection.
+  target_compile_definitions(test_multicolumn_index_sort PRIVATE TSL_COSORT_ENABLE_IAA=1)
+  target_link_libraries(test_multicolumn_index_sort PRIVATE ${_iaa_link_targets})
+
+  add_executable(test_iaa_run_detector test_iaa_run_detector.cpp)
+  target_compile_features(test_iaa_run_detector PRIVATE cxx_std_17)
+  target_compile_definitions(test_iaa_run_detector PRIVATE TSL_COSORT_ENABLE_IAA=1)
+  target_link_libraries(
+    test_iaa_run_detector PRIVATE tsl::tsl Threads::Threads ${_iaa_link_targets}
+  )
+  # Runs the QPL software path only, so it needs no accelerator; pass `hw` by
+  # hand on an IAA host to cover the hardware path.
+  add_test(NAME test_iaa_run_detector COMMAND test_iaa_run_detector)
 endif()
 
 if(TSL_COSORT_ENABLE_DSA)
