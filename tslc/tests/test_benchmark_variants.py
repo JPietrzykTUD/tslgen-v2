@@ -312,6 +312,24 @@ def bit_count_benchmark_result(data_root: Path, machine_profiles_path: Path):
 
 
 @pytest.fixture(scope="module")
+def compiler_alternative_benchmark_result(
+    data_root: Path,
+    machine_profiles_path: Path,
+):
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["abs"],
+        profiles=["avx2"],
+        type_tags=["si32"],
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    return result
+
+
+@pytest.fixture(scope="module")
 def division_benchmark_result(data_root: Path, machine_profiles_path: Path):
     result = generate_project(
         [data_root],
@@ -722,6 +740,46 @@ def test_bit_count_candidates_preserve_material_algorithm_alternatives(
             "throughput",
             "latency",
         }
+
+
+def test_compiler_alternative_variants_reach_benchmark_coverage(
+    compiler_alternative_benchmark_result,
+) -> None:
+    selected_slots = {
+        (
+            entry.profile,
+            entry.source_primitive_name,
+            entry.extension,
+            entry.type_tag,
+            entry.result_kind,
+            entry.param_kinds,
+            entry.variant_names,
+        )
+        for entry in compiler_alternative_benchmark_result.coverage
+        if (
+            entry.source_primitive_name == "abs"
+            and entry.extension.startswith("clang_v")
+            and entry.variant_names
+        )
+    }
+    planner_entries = {
+        (
+            entry.profile_name,
+            entry.source_primitive_name,
+            entry.extension_name,
+            entry.type_tag,
+            entry.result_kind,
+            entry.param_kinds,
+            entry.variant_names,
+        ): entry
+        for entry in compiler_alternative_benchmark_result.rendered.benchmarks.coverage
+    }
+
+    assert selected_slots
+    assert selected_slots <= planner_entries.keys()
+    assert {
+        planner_entries[slot].status for slot in selected_slots
+    } == {"unsupported"}
 
 
 def test_integer_division_candidates_use_nonzero_divisors(
