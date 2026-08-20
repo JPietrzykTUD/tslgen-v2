@@ -21,7 +21,7 @@ set(
   CACHE PATH
   "Path to a local generated TSL output root, or to its cpp directory"
 )
-set(TSL_RELEASE_VERSION "v0.2.8" CACHE STRING "Generated TSL release tag")
+set(TSL_RELEASE_VERSION "v0.2.9" CACHE STRING "Generated TSL release tag")
 set(
   TSL_RELEASE_ARCHIVE_URL
   # "https://github.com/JPietrzykTUD/tslgen-v2/releases/download/${TSL_RELEASE_VERSION}/tsl-generated-1daeecdd39aa2b02a1bb60697d67fe6ae70b23cc.tar.gz"
