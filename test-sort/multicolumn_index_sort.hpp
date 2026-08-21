@@ -58,16 +58,26 @@
 //     lane layout; a narrower or wider index would need the mask re-spacing the
 //     prototype's compress_store_index_array does. u32 keys cap a table at 2^32
 //     rows, which every configuration here is far below.
-//   * Synchronous detectors only. An asynchronous one needs a task executor to
-//     poll it, and this driver is serial; the static_assert below says so rather
-//     than deadlocking.
+//   * `sort_index` is serial and calls the detector on the calling thread.
+//     `sort_index_parallel` drives a task tree and calls it from workers, so it
+//     needs a detector safe for concurrent use -- a fleet or a stateless one --
+//     exactly as `sort_columns_parallel` does.
+//   * Synchronous detectors only, on both paths. An asynchronous one retains the
+//     emitting callable past the task that produced it, and the child-submitting
+//     emitters here are not yet self-contained; the static_assert says so rather
+//     than letting it dangle.
 //   * The output is a permutation, not a sorted image. Ties leave the index
 //     order unspecified (the partition is not stable), so a checker must compare
 //     the *values* the permutation selects, not the permutation itself.
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
+#include <condition_variable>
 #include <cstdint>
+#include <functional>
+#include <mutex>
+#include <thread>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -79,7 +89,37 @@
 
 #include "equal_runs.hpp"
 #include "multicolumn_quicksort.hpp"
+#include "multicolumn_sort_tasks.hpp"
 #include "multicolumn_sort_types.hpp"
+
+
+// Chunk of one range's materialize pass, the unit the parallel form hands out.
+struct TslIndexMaterializeChunk {
+  std::size_t begin = 0;
+  std::size_t end = 0;
+};
+
+// Below this a range's gather is not worth splitting: the chunk hand-off costs
+// more than the pass saves. Levels past the first have many small ranges, and
+// those are parallelized across ranges instead.
+inline constexpr std::size_t tsl_index_materialize_chunk = 64 * 1024;
+// A level holding one range has no ranges to spread, so its sort is split inside
+// the partition instead, through `TslMultiColumnQuickSorter::sort_key_parallel`.
+// Below this the split is not worth an executor.
+inline constexpr std::size_t tsl_index_parallel_range = 1u << 18;
+// Partition subranges smaller than this stay with the worker that made them.
+inline constexpr std::size_t tsl_index_partition_threshold = 16 * 1024;
+// A discovered range below this is finished by the worker that found it rather
+// than queued: re-entering a task costs more than the range does.
+//
+// Deliberately small, because the two failure modes are not symmetric. Queueing a
+// range that was too small to bother with costs a constant. Inlining one that was
+// large enough to share costs a whole level's parallelism -- every child of a
+// range is discovered by the *one* thread that sorted it, so if they all fall
+// under this threshold they all run on that thread. Measured on 4 Mi rows over 8
+// columns whose second level holds ranges of about a thousand rows: a threshold of
+// 1024 gives 1.99x on 8 workers, 256 gives 4.18x, 64 gives 4.31x.
+inline constexpr std::size_t tsl_index_inline_task = 256;
 
 
 struct TslIndexSortMetrics {
@@ -91,6 +131,9 @@ struct TslIndexSortMetrics {
   std::size_t direct_equal_bands = 0;      // bands the sort reported without a scan
   std::size_t direct_equal_band_rows = 0;
   std::size_t next_level_ranges = 0;       // tied ranges passed down, summed
+  std::size_t materialize_chunks = 0;      // parallel form: chunks handed out
+  std::size_t tasks = 0;                   // parallel form: task-tree nodes executed
+  std::size_t levels_split = 0;            // ranges split inside their partitions
 };
 
 
@@ -119,10 +162,39 @@ class TslMultiColumnIndexSorter {
 
   // One payload: the index. The key column is the materialized scratch buffer.
   using Sorter = TslMultiColumnQuickSorter<DataType, PartitionKind, LeafKind, 1, SimdStyle>;
+
   using register_type = typename SimdStyle::register_type;
   static constexpr std::size_t lane_count = SimdStyle::lane_count_v;
 
+  // One node of the parallel task tree. `materialized` says the range's values
+  // are already in `scratch_`, which is true for the root (a pre-pass filled
+  // column 0) and false for a child, which owns a new column.
+  struct index_task {
+    std::size_t column;
+    std::size_t begin;
+    std::size_t end;
+    bool materialized;
+  };
+
+  // Counters written from worker threads. Copied into the caller's struct once
+  // the tree has drained.
+  struct concurrent_index_metrics {
+    std::atomic<std::uint64_t> column_mask{0};
+    std::atomic<std::size_t> tasks{0};
+    std::atomic<std::size_t> ranges_sorted{0};
+    std::atomic<std::size_t> rows_sorted{0};
+    std::atomic<std::size_t> materialized_elements{0};
+    std::atomic<std::size_t> rle_values_scanned{0};
+    std::atomic<std::size_t> direct_equal_bands{0};
+    std::atomic<std::size_t> direct_equal_band_rows{0};
+    std::atomic<std::size_t> next_level_ranges{0};
+    std::atomic<std::size_t> materialize_chunks{0};
+    std::atomic<std::size_t> levels_split{0};
+  };
+
   Sorter sorter_;
+  std::size_t workers_ = 1;
+  std::size_t partition_threshold_ = tsl_index_partition_threshold;
   std::vector<DataType> scratch_;
   std::vector<TslRunSpan> ranges_;
   std::vector<TslRunSpan> next_ranges_;
@@ -151,17 +223,7 @@ class TslMultiColumnIndexSorter {
       "the index sort is serial and never polls: an asynchronous detector would "
       "never complete. Use a synchronous backend."
     );
-    if (columns == nullptr && column_count != 0) {
-      throw std::invalid_argument("column array is null");
-    }
-    if (row_count != 0 && index == nullptr) {
-      throw std::invalid_argument("index pointer is null");
-    }
-    for (std::size_t column = 0; column < column_count; ++column) {
-      if (columns[column].data == nullptr) {
-        throw std::invalid_argument("column " + std::to_string(column) + " has a null pointer");
-      }
-    }
+    validate_inputs(columns, column_count, index, row_count);
 
     // The identity the level-0 copy relies on.
     for (std::size_t row = 0; row < row_count; ++row) {
@@ -170,10 +232,6 @@ class TslMultiColumnIndexSorter {
     if (row_count < 2 || column_count == 0) {
       return;
     }
-    if (row_count > static_cast<std::size_t>(std::numeric_limits<DataType>::max())) {
-      throw std::invalid_argument("row count exceeds what the index element type can address");
-    }
-
     scratch_.resize(row_count);
     ranges_.clear();
     ranges_.push_back(TslRunSpan{0, row_count});
@@ -205,6 +263,134 @@ class TslMultiColumnIndexSorter {
     }
   }
 
+  // Same sort, driven as a task tree instead of a level loop. A task is one
+  // (column, range): it materializes the range, sorts it, and submits a child
+  // task per tied sub-range it discovers. Children run as soon as they exist, so
+  // there is no barrier between columns and a worker that finishes a small range
+  // does not wait for the largest one in its level.
+  //
+  // Two consequences for the caller:
+  //
+  //   * `detect_runs` is invoked from worker threads, so it must be safe for
+  //     concurrent use -- a fleet (`TslIaaDetectorFleet`, `TslDsaDetectorFleet`)
+  //     or a stateless detector. This is the same contract
+  //     `sort_columns_parallel` has, for the same reason.
+  //   * Column 0 is one range, so the tree has nothing to spread there. Its copy
+  //     is filled by a one-shot fan-out before the tree starts, and its sort is
+  //     split inside its partitions through `sort_key_parallel`.
+  template <class DetectRuns>
+  void sort_index_parallel(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    DataType * index,
+    std::size_t row_count,
+    TslRunDiscoveryKind discovery,
+    DetectRuns & detect_runs,
+    std::size_t worker_count,
+    std::size_t partition_threshold,
+    TslIndexSortMetrics * metrics = nullptr
+  ) {
+    static_assert(
+      !tsl_detector_wants_executor<DetectRuns>::value,
+      "an asynchronous detector retains the emitting callable past the task that "
+      "produced it, and this driver's child-submitting emitters are not yet "
+      "self-contained. Use a synchronous backend."
+    );
+    if (worker_count <= 1) {
+      sort_index(columns, column_count, index, row_count, discovery, detect_runs, metrics);
+      return;
+    }
+    validate_inputs(columns, column_count, index, row_count);
+    for (std::size_t row = 0; row < row_count; ++row) {
+      index[row] = static_cast<DataType>(row);
+    }
+    if (row_count < 2 || column_count == 0) {
+      return;
+    }
+    scratch_.resize(row_count);
+    workers_ = worker_count;
+    partition_threshold_ = partition_threshold != 0
+      ? partition_threshold
+      : tsl_index_partition_threshold;
+
+    concurrent_index_metrics shared;
+    auto * shared_metrics = metrics != nullptr ? &shared : nullptr;
+
+    // Column 0's fetch is a copy of the whole table, and the tree cannot spread
+    // it: the root task is the only task that exists yet. A one-shot executor
+    // does it first, which is all `TslTaskExecutor` supports and all that is
+    // needed. Only the copy -- a gather does not scale this way.
+    auto const chunk =
+      ((tsl_index_materialize_chunk + lane_count - 1) / lane_count) * lane_count;
+    if (row_count >= 2 * tsl_index_materialize_chunk) {
+      auto const * source = columns[0].data;
+      auto copy_worker = [this, source, chunk, row_count](
+        TslIndexMaterializeChunk const & piece, auto &
+      ) {
+        (void)chunk;
+        (void)row_count;
+        std::copy(source + piece.begin, source + piece.end, scratch_.data() + piece.begin);
+      };
+      TslTaskExecutor<TslIndexMaterializeChunk, decltype(copy_worker)> copier(
+        worker_count, copy_worker
+      );
+      for (std::size_t begin = 0; begin < row_count; begin += chunk) {
+        copier.submit(TslIndexMaterializeChunk{begin, std::min(begin + chunk, row_count)});
+        if (shared_metrics != nullptr) {
+          shared_metrics->materialize_chunks.fetch_add(1, std::memory_order_relaxed);
+        }
+      }
+      copier.wait();
+    } else {
+      std::copy(columns[0].data, columns[0].data + row_count, scratch_.data());
+    }
+    if (shared_metrics != nullptr) {
+      shared_metrics->materialized_elements.fetch_add(row_count, std::memory_order_relaxed);
+    }
+
+    auto worker = [&](index_task const & task, auto & executor) {
+      process_task(columns, column_count, index, task, discovery, detect_runs,
+                   executor, shared_metrics);
+    };
+    TslTaskExecutor<index_task, decltype(worker)> executor(worker_count, worker);
+    // The root's values are already in scratch_, so it does not fetch them again.
+    executor.submit(index_task{0, 0, row_count, true});
+    executor.wait();
+
+    if (metrics != nullptr) {
+      metrics->levels = static_cast<std::size_t>(
+        __builtin_popcountll(shared.column_mask.load(std::memory_order_relaxed))
+      );
+      metrics->ranges_sorted = shared.ranges_sorted.load(std::memory_order_relaxed);
+      metrics->rows_sorted = shared.rows_sorted.load(std::memory_order_relaxed);
+      metrics->materialized_elements =
+        shared.materialized_elements.load(std::memory_order_relaxed);
+      metrics->rle_values_scanned = shared.rle_values_scanned.load(std::memory_order_relaxed);
+      metrics->direct_equal_bands = shared.direct_equal_bands.load(std::memory_order_relaxed);
+      metrics->direct_equal_band_rows =
+        shared.direct_equal_band_rows.load(std::memory_order_relaxed);
+      metrics->next_level_ranges = shared.next_level_ranges.load(std::memory_order_relaxed);
+      metrics->materialize_chunks = shared.materialize_chunks.load(std::memory_order_relaxed);
+      metrics->levels_split = shared.levels_split.load(std::memory_order_relaxed);
+      metrics->tasks = shared.tasks.load(std::memory_order_relaxed);
+    }
+  }
+
+  template <class DetectRuns>
+  void sort_index_parallel(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    DataType * index,
+    std::size_t row_count,
+    TslRunDiscoveryKind discovery,
+    DetectRuns & detect_runs,
+    std::size_t worker_count,
+    TslIndexSortMetrics * metrics = nullptr
+  ) {
+    sort_index_parallel(columns, column_count, index, row_count, discovery, detect_runs,
+                        worker_count, tsl_index_partition_threshold, metrics);
+  }
+
   // Convenience overload: the scalar detector, for callers not exercising `rle=`.
   void sort_index(
     TslSortColumn<DataType> const * columns,
@@ -232,20 +418,160 @@ class TslMultiColumnIndexSorter {
     if (metrics != nullptr) {
       metrics->materialized_elements += count;
     }
+    materialize_chunk(column, index, range.begin, range.end, identity);
+  }
+
+  // One chunk of a gather pass. Chunks are cut on a lane boundary, so the vector
+  // body of every chunk is aligned to the same stride the serial pass uses and no
+  // chunk needs a scalar prologue.
+  void materialize_chunk(
+    DataType const * column,
+    DataType const * index,
+    std::size_t begin,
+    std::size_t end,
+    bool identity
+  ) {
     if (identity) {
-      std::copy(column + range.begin, column + range.end, scratch_.data() + range.begin);
+      std::copy(column + begin, column + end, scratch_.data() + begin);
       return;
     }
-    auto position = range.begin;
-    for (; position + lane_count <= range.end; position += lane_count) {
+    auto position = begin;
+    for (; position + lane_count <= end; position += lane_count) {
       auto const index_reg = tsl::load<SimdStyle, false>(index + position);
       auto const values = tsl::gather<
         SimdStyle, SimdStyle, static_cast<std::uint32_t>(sizeof(DataType))
       >(column, index_reg);
       tsl::store<SimdStyle, false>(scratch_.data() + position, values);
     }
-    for (; position < range.end; ++position) {
+    for (; position < end; ++position) {
       scratch_[position] = column[index[position]];
+    }
+  }
+
+  void validate_inputs(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    DataType const * index,
+    std::size_t row_count
+  ) const {
+    if (columns == nullptr && column_count != 0) {
+      throw std::invalid_argument("column array is null");
+    }
+    if (row_count != 0 && index == nullptr) {
+      throw std::invalid_argument("index pointer is null");
+    }
+    for (std::size_t column = 0; column < column_count; ++column) {
+      if (columns[column].data == nullptr) {
+        throw std::invalid_argument("column " + std::to_string(column) + " has a null pointer");
+      }
+    }
+    if (row_count > static_cast<std::size_t>(std::numeric_limits<DataType>::max())) {
+      throw std::invalid_argument("row count exceeds what the index element type can address");
+    }
+  }
+
+  // One node of the task tree: fetch this range's column values unless they are
+  // already in `scratch_`, sort it, and submit a child per tied sub-range. Column
+  // 0 additionally splits its own partitions, because while the root is the only
+  // task the tree has nothing to spread.
+  template <class DetectRuns, class Executor>
+  void process_task(
+    TslSortColumn<DataType> const * columns,
+    std::size_t column_count,
+    DataType * index,
+    index_task const & task,
+    TslRunDiscoveryKind discovery,
+    DetectRuns & detect_runs,
+    Executor & executor,
+    concurrent_index_metrics * metrics
+  ) {
+    auto const count = task.end - task.begin;
+    if (count < 2 || task.column >= column_count) {
+      return;
+    }
+    if (metrics != nullptr) {
+      metrics->tasks.fetch_add(1, std::memory_order_relaxed);
+      metrics->ranges_sorted.fetch_add(1, std::memory_order_relaxed);
+      metrics->rows_sorted.fetch_add(count, std::memory_order_relaxed);
+      metrics->column_mask.fetch_or(
+        std::uint64_t{1} << std::min<std::size_t>(task.column, 63),
+        std::memory_order_relaxed
+      );
+    }
+    if (!task.materialized) {
+      materialize_chunk(columns[task.column].data, index, task.begin, task.end, false);
+      if (metrics != nullptr) {
+        metrics->materialized_elements.fetch_add(count, std::memory_order_relaxed);
+      }
+    }
+
+    auto * keys = scratch_.data() + task.begin;
+    DataType * payload = index + task.begin;
+    DataType * const * payloads = &payload;
+    auto const order = columns[task.column].order;
+    auto const next_column = task.column + 1;
+    auto const split = task.column == 0 && count >= tsl_index_parallel_range;
+
+    auto emit_child = [&executor, metrics, next_column, column_count](TslRunSpan span) {
+      if (span.end - span.begin < 2 || next_column >= column_count) {
+        return;
+      }
+      if (metrics != nullptr) {
+        metrics->next_level_ranges.fetch_add(span.end - span.begin, std::memory_order_relaxed);
+      }
+      index_task child{next_column, span.begin, span.end, false};
+      if (span.end - span.begin < tsl_index_inline_task) {
+        executor.run_inline(child);
+      } else {
+        executor.submit(child);
+      }
+    };
+
+    if (discovery == TslRunDiscoveryKind::POST_SORT) {
+      if (split) {
+        auto no_band = [](std::size_t, std::size_t) {};
+        auto no_leaf = [](std::size_t, std::size_t) {};
+        sorter_.sort_key_parallel(keys, payloads, 1, count, order, task.begin,
+                                  workers_, 1, partition_threshold_, no_band, no_leaf);
+        if (metrics != nullptr) {
+          metrics->levels_split.fetch_add(1, std::memory_order_relaxed);
+        }
+      } else {
+        sorter_.sort_key(keys, payloads, 1, count, order);
+      }
+      if (metrics != nullptr) {
+        metrics->rle_values_scanned.fetch_add(count, std::memory_order_relaxed);
+      }
+      // Sound here and not inside a partition: the whole range is sorted by now,
+      // so no equal run can be split between two scans.
+      detect_runs(scratch_.data(), task.begin, task.end, emit_child);
+      return;
+    }
+
+    auto equal_band_sink = [&](std::size_t begin, std::size_t end) {
+      if (metrics != nullptr) {
+        metrics->direct_equal_bands.fetch_add(1, std::memory_order_relaxed);
+        metrics->direct_equal_band_rows.fetch_add(end - begin, std::memory_order_relaxed);
+      }
+      emit_child(TslRunSpan{begin, end});
+    };
+    auto leaf_sink = [&](std::size_t begin, std::size_t end) {
+      if (metrics != nullptr) {
+        metrics->rle_values_scanned.fetch_add(end - begin, std::memory_order_relaxed);
+      }
+      detect_runs(scratch_.data(), begin, end, emit_child);
+    };
+    if (split) {
+      sorter_.sort_key_parallel(keys, payloads, 1, count, order, task.begin,
+                                workers_, 1, partition_threshold_,
+                                equal_band_sink, leaf_sink);
+      if (metrics != nullptr) {
+        metrics->levels_split.fetch_add(1, std::memory_order_relaxed);
+      }
+    } else {
+      sorter_.sort_key_with_completion_events(
+        keys, payloads, 1, count, order, task.begin, equal_band_sink, leaf_sink
+      );
     }
   }
 
