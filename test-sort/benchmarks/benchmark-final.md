@@ -13,24 +13,33 @@ kept only for the reasoning behind these decisions.
 | Correctness is `memcmp` against the reference image | with every column a sort key the sorted image is unique however an unstable sort breaks ties, so the comparison is exact and names the first differing row | implemented |
 | Registration goes through per-family predicates, selected by `COSORT_STAGE` | the full product is unrunnable and mostly redundant; each stage answers one question and reports what it dropped | implemented |
 | clang 22 for everything | required by the generated clang profile header (`__builtin_elementwise_clzg`); the intrinsic families build with it too | implemented |
-| Generated TSL release `v0.2.8` | earlier releases emulate `compress`/`expand` for the clang families with a per-lane scalar loop, which made the style comparison a measurement of that emulation rather than of the mask representation | implemented |
+| Generated TSL release `v0.2.9` | `v0.2.8` gave the clang families a native `compress`/`expand`; `v0.2.9` adds the native runtime-index `permute_lanes` the bitonic leaf needs. Below either, the style axis measures TSL's scalar fallbacks rather than the styles | implemented |
 | Register width and implementation style are *variant* dimensions | both are template parameters of the sorter, not conditions it runs under | implemented |
 | `rle=` is an axis of the one binary, with per-machine backends | the detector parameterizes a sort call; a host has DSA or IAA, and `rle=` records which produced a row | implemented |
+| Row movement is a *variant* dimension, `move=` | the direct sorter permutes every column; the indirect one permutes a row index and materializes the active column per level. Same datasets, same discovery, same detectors -- so the question "does moving indices beat moving rows" is one axis rather than a second benchmark | implemented |
+| The indirect family is checked against the value image, not the permutation | its output is a permutation, and ties make that non-unique because the partition is not stable. The values it selects are unique, since every column is a sort key | implemented |
 
 ## Variant space
 
-A variant is one compiled sorter configuration. The algorithmic part is
-`execution × discovery × partition × leaf` = 3 × 2 × 2 × 2 = **24**, and every cell
-is implemented and registered:
+A variant is one compiled sorter configuration. For the direct sorter the
+algorithmic part is `execution × discovery × partition × leaf` = 3 × 2 × 2 × 2 =
+**24**, and every cell is implemented and registered. The indirect sorter shares
+`discovery × partition × leaf` = 8 and has the serial and parallel executions but
+not `deep_parallel_`, so it adds 16 rather than 24:
 
 ```text
-24 algorithm configurations x 3 styles (intr, clang, clang_bool) x 3 widths
-  (128, 256, 512)
-  = 216 sorter configurations, plus the width- and style-independent baseline
-  = 217
+direct    24 algorithm configurations
+indirect  16 algorithm configurations (no deep_parallel_)
+          40 x 3 styles (intr, clang, clang_bool) x 3 widths (128, 256, 512)
+           = 360 sorter configurations, plus the width- and style-independent
+             baseline
+           = 361
 ```
 
-The 25 names `cosort_bench` registers, at one (style, width):
+The 25 algorithm names `cosort_bench` registers, at one (style, width). The
+indirect family reuses the eight serial names and is distinguished by `move=`
+rather than by a name of its own, so a `move=direct`/`move=index` pair is the same
+algorithm on both sides of the comparison:
 
 ```text
 post_2way_ins                       post_2way_net
@@ -48,10 +57,134 @@ deep_parallel_incremental_3way_ins  deep_parallel_incremental_3way_net
 std_lex_argsort                     (scalar baseline, the normalizer)
 ```
 
+## The indirect family
+
+`multicolumn_index_sort.hpp` sorts a row-index permutation and leaves the columns
+`const`. Per level it gathers the active column through the index into a
+contiguous scratch buffer, sorts `(scratch, index)` with the shared stitch
+partition -- the index is the sorter's single payload column -- and discovers the
+equal runs that the next column has to break. Only rows inside a surviving range
+are materialized, so the gather work per level shrinks the way the direct
+sorter's payload set does; the `materialized_per_row` counter reports it.
+
+Three things it deliberately does not do, each dropped with a reason rather than
+omitted:
+
+* **No `deep_parallel_` form.** The driver is bulk-synchronous: it fans a level's
+  ranges out and barriers between levels. Splitting a *single* partition across
+  workers needs the task tree the direct sorter has, so `deep_parallel_` drops
+  with `no indirect form of this execution`.
+* **Synchronous detectors only.** Nothing polls, so an asynchronous backend would
+  never complete; a `static_assert` says so and registration excludes them.
+* **Index element type equals the data type**, because the stitch replays a key
+  mask on payload registers of the same style. A narrower index needs the mask
+  re-spacing that `TMP/tsl_sort`'s `compress_store_index_array` does.
+
+Its detector seam sits in a different place from the direct sorter's, and
+`detector_applies` encodes that: discovery runs between levels on the
+materialized key buffer, so `rle=` applies to the indirect **serial** path, where
+the direct serial path has no seam at all and only ever runs `rle=scalar`.
+
+### What the first measurements say
+
+The governing variable is not the column count -- it is **how early ties
+resolve**. At 8 columns, u32, L2, `post_3way_net`, `rle=scalar`:
+
+| shape | direct | index | ratio | materialized/row | levels |
+|---|---|---|---|---|---|
+| `unique_first` | 27.12 ms | **10.67 ms** | **0.39** | 1.0 | 1 |
+| `unique_last_g64` | 23.21 ms | 25.85 ms | 1.11 | 8.0 | 8 |
+| `low_cardinality_d4` | 28.20 ms | 33.86 ms | 1.20 | 8.0 | 8 |
+| `skewed_zipf_s1` | 324.99 ms | 366.06 ms | 1.13 | 7.9 | 8 |
+
+When column 0 is all-distinct the sort finishes in one level and never touches the
+other seven columns, where the direct sorter permutes all of them: 2.6x. When ties
+persist to the last column, the indirect form pays a materialize pass per level
+and gains nothing, losing 11-20%. A column-count sweep narrowed the ratio from
+1.42 at 2 columns to 1.02 at 8, but the catalog generates a different dataset per
+column count, so that is not a scaling curve and is not reported as one.
+
 `algo` IDs match the previous benchmark's enum so old JSON stays comparable, and
 everything that enum lacked is **appended** rather than inserted: the two two-way
 deep-parallel variants as 17 and 18, the six incremental two-way variants as 19 to
 24. Inserting would renumber existing IDs and invalidate recorded results.
+
+### Parallelising the indirect sorter
+
+The parallel form is a **task tree**, the same shape `sort_columns_parallel` uses.
+A task is one `(column, range)`: it fetches the range's column values into the
+scratch buffer, sorts it, and submits a child task per tied sub-range it
+discovers. Children run as soon as they exist, so there is no barrier between
+columns and a worker that finishes a small range never waits for the largest one
+beside it.
+
+Two consequences the caller carries:
+
+* **Discovery runs on worker threads**, so a detector must be safe for concurrent
+  use -- a fleet (`TslIaaDetectorFleet`, `TslDsaDetectorFleet`) or a stateless one.
+  This is the contract `sort_columns_parallel` already has, for the same reason.
+* **Asynchronous detectors are still excluded**, now for a different reason than
+  before: an asynchronous backend retains the emitting callable past the task that
+  produced it, and the child-submitting emitters here are not self-contained. A
+  `static_assert` says so.
+
+Column 0 is the exception the tree cannot help: while the root is the only task
+there is nothing to spread. Its fetch is a copy of the whole table, done by a
+one-shot fan-out before the tree starts, and its sort is split inside its own
+partitions through `TslMultiColumnQuickSorter::sort_key_parallel` -- a public entry
+that sorts one key range with its payloads across an executor and reports
+completion events, driving no column recursion of its own. It may offload
+partitions unconditionally, where `process_parallel_task` may not, precisely
+because it promises nothing about scanning the whole range: the caller scans
+afterwards, over the range as a whole.
+
+Medians of five, 4 Mi u32 rows over 8 columns, `post_3way_net`:
+
+| shape | 1 worker | 8 | 16 |
+|---|---|---|---|
+| one huge tie per level | 938 ms | 3.09x | 2.95x |
+| many small ties | 113 ms | 4.18x | 4.77x |
+
+In the harness, `low_cardinality_d4` at 8 columns and `halfLLC` goes from 193 ms
+serial to 49 ms on 8 workers -- **3.92x**.
+
+Three things were measured rather than assumed, and two of them overturned a
+design that looked obviously right.
+
+**Chunking the fetch pays only for the copy.** Splitting the per-level fetch
+across workers measured 1.00-1.01x on its own: the fetch is about 5% of the
+runtime, so Amdahl caps it there. It survives only as the one-shot pre-pass for
+column 0's copy, which is bandwidth-bound and scales. Chunking a *gather* -- what a
+deeper level does -- is latency-bound, was never faster than leaving it serial,
+and cost about 4% on the shape that has a huge tied range to fetch.
+
+**Splitting partitions helps at column 0 and nowhere else.** Applied to every
+level that happens to hold one range, it made one shape better and the other
+worse (2.52x to 2.22x). A deeper single-range level exists only under a maximal
+tie: its partition tree offers less to split, and a second executor's threads run
+while the tree's own workers sit idle. Column 0 alone was best on both shapes.
+
+**The inline threshold decides whether a level is parallel at all.** A discovered
+range below `tsl_index_inline_task` is finished by the worker that found it instead
+of being queued. Every child of a range is discovered by the *one* thread that
+sorted that range, so a threshold above the typical child size silently serialises
+the entire next level. On a shape whose second level holds ranges of about a
+thousand rows:
+
+| threshold | many small ties, 8 workers |
+|---|---|
+| 1024 | 1.99x |
+| 256 | 4.18x |
+| 64 | 4.31x |
+
+The two failure modes are not symmetric -- queueing a range that was too small
+costs a constant, inlining one that was large enough costs a level's parallelism --
+so the value is deliberately small at 256.
+
+Superseded on the way: an earlier bulk-synchronous form, with a parallel-for over
+each level's ranges and a barrier between levels, reached 2.76x and 4.30x on the
+same two shapes. The task tree beats it on both and deletes the mechanism, so the
+`TslIndexParallelFor` it needed is gone.
 
 ### How incremental two-way works
 
@@ -134,22 +267,25 @@ different binary and is not part of this plan.
 | sort columns | `cols=` | every column is a sort key | `COSORT_COLUMNS` |
 | working set | `size=` | L1, L2, halfLLC, LLC, 2xLLC, 16xLLC — bytes **per column** | `COSORT_SIZE_LEVELS` |
 | direction pattern | `order=` | asc, desc, alternating | `COSORT_DIRECTIONS` |
-| detector | `rle=` | scalar, plus whatever the build has | `COSORT_RLE` |
+| detector | `rle=` | scalar, plus whatever the build has: `dml_sw`/`dsa_hw` and `iaa_sw`/`iaa_hw`, each with an asynchronous form | `COSORT_RLE` |
 | workers | `workers=` | scalar per process | `COSORT_WORKERS` |
 | task threshold | `threshold=` | scalar per process | `COSORT_TASK_THRESHOLD` |
 | partition threshold | `partitions=` | scalar per process, `deep_parallel_` only | `COSORT_PARTITION_THRESHOLD` |
 
-Style and width appear in a name as `style=` and `lanes=` but are variant
-dimensions, not axes. `style=` is mandatory because `avx512`, `clang_v512` and
-`clang_v512_bool` have the same lane count and would otherwise produce identical
-names.
+Style, width and movement appear in a name as `style=`, `lanes=` and `move=` but
+are variant dimensions, not axes. `style=` is mandatory because `avx512`,
+`clang_v512` and `clang_v512_bool` have the same lane count and would otherwise
+produce identical names; `move=` is mandatory because the indirect family reuses
+the direct algorithm names. `COSORT_MOVEMENTS=direct,index` selects which
+movements a run registers, and `COSORT_VARIANTS` keeps filtering on the algorithm
+name alone, so it selects a `move=` pair rather than one side of it.
 
 A full benchmark name:
 
 ```text
-deep_parallel_incremental_3way_net/u32/style=intr/lanes=16/shape=unique_last_g64/
-sparams=g=64/order=asc/cols=3/size=LLC/stage=screen/rle=scalar/workers=12/
-threshold=4096/partitions=16384/real_time
+deep_parallel_incremental_3way_net/u32/move=direct/style=intr/lanes=16/
+shape=unique_last_g64/sparams=g=64/order=asc/cols=3/size=LLC/stage=screen/
+rle=scalar/workers=12/threshold=4096/partitions=16384/real_time
 ```
 
 Worker count and both thresholds are scalar per process, so a scaling curve over
@@ -162,14 +298,16 @@ Each stage pins the axes its question does not need. Counts are measured with
 
 | stage | question | registered | drops reported |
 |---|---|---|---|
-| `screen` | which variants are viable at all? | 276 | 24 quadratic two-way |
+| `screen` | which variants are viable at all? | 452 | 8 no indirect form, 40 quadratic two-way |
 | `tune` | what worker count and thresholds make the survivors fastest? | 86 | 8 out of variant set, 16 quadratic two-way |
 | `characterize` | the numbers that get published | 5,712 unrestricted | 288 quadratic two-way |
 | `attribute` | what do the native SIMD primitives and the mask representation buy? | 186 | 180 out of variant set, 36 quadratic two-way |
 
-**`screen`** — all 25 names at one point per axis: u32, 512-bit intrinsics, `asc`,
-`cols=3`, L2 and LLC, six representative shapes. 25 × 6 × 2 = 300 less 24 two-way
-cases on a low-cardinality key. Minutes, one process. Output: a dominance ranking.
+**`screen`** — all 25 direct names plus the sixteen indirect ones, at one point
+per axis: u32, 512-bit intrinsics, `asc`, `cols=3`, L2 and LLC, six representative
+shapes. (25 + 16) × 6 × 2 = 492 less the 40 two-way cases on a low-cardinality key.
+The 8 further drops are the indirect `deep_parallel_` cells, which do not exist.
+Minutes, one process. Output: a dominance ranking, and the first `move=` pairing.
 
 **`tune`** — the parallel survivors only, and **coordinate descent** over the three
 per-process axes rather than a grid, because they interact weakly: the thresholds
@@ -211,7 +349,7 @@ bitonic leaf keeps one recorded exchange mask per comparator, 80 of them, which 
 a packed mask on a narrow vector has to be converted to and from the compare result
 the 128-bit instructions produce.
 
-Whole programme: roughly 2,100 measured cases, one to two hours, against ~126,000
+Whole programme: roughly 2,200 measured cases, one to two hours, against ~168,000
 for the full Cartesian product. Completeness of the *questions* is the goal, not
 completeness of the product.
 
@@ -267,6 +405,26 @@ configure time naming the file.
 4. **`dsa_hw` fails on this host** with `DML_STATUS_BATCH_LIMITS_ERROR`, and so
    does the pre-existing `test_dsa_run_detector hw`, so the fault predates this
    harness. Until it is diagnosed a DSA host measures `scalar` and `dml_sw`.
-5. **The dangling IAA plan** — `multi-column-sort-plan.md` defers Slice 9 to
+5. **IAA is unverified on hardware.** `iaa_sw`/`iaa_hw` and their asynchronous
+   forms are implemented and the software path passes its differential test, but
+   this host has `/dev/dsa` and no `/dev/iax`. `test_iaa_run_detector hw` and
+   `COSORT_RLE=iaa_hw,iaa_hw_async` still have to run on the IAA machine.
+   `iaa_sw` numbers are QPL's own CPU scan, not an accelerator, and the
+   asynchronous form is *structurally* meaningless there because
+   `qpl_submit_job` executes the scan on the calling thread.
+6. **The indirect family has no `deep_parallel_` form.** Column 0 is split inside
+   its partitions, but a *deeper* single-range level -- one under a maximal tie --
+   still runs on one thread, because splitting it measured worse. Making that case
+   pay needs the nested executor removed, i.e. the partition split expressed as
+   tasks in the same tree rather than a tree of its own.
+7. **Asynchronous detectors are unreachable from the indirect family.** The
+   blocker is now narrow and fixable: the child-submitting emitters must own what
+   they need, the way `process_parallel_task`'s `make_emit` does, before an
+   `rle=iaa_hw_async` row can exist for `move=index`.
+8. **`gather` is still scalar-emulated for the clang families** in `v0.2.9`, so
+   `move=index` with `style=clang` measures that emulation: 34.92 ms against
+   19.14 ms for `intr` at 4 columns. It is the same class of gap the `net` leaf
+   had before `v0.2.9` fixed `permute_lanes`.
+9. **The dangling IAA plan** — `multi-column-sort-plan.md` defers Slice 9 to
    `iaa-rle-offload-plan.md`, which does not exist. Write it or restate Slice 9 as
    the DSA work that shipped.

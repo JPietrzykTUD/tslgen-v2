@@ -437,9 +437,16 @@ void run_index_case(
     if constexpr (tsl_detector_wants_executor<std::decay_t<decltype(detector)>>::value) {
       state.SkipWithError("asynchronous detectors have no indirect form");
     } else {
+      auto const parallel = variant.execution != TslExecution::Serial;
       for (auto _ : state) {
-        sorter.sort_index(data.specs(), data.column_count(), data.index(), data.rows(),
-                          variant.discovery, detector, &metrics);
+        if (parallel) {
+          sorter.sort_index_parallel(data.specs(), data.column_count(), data.index(),
+                                     data.rows(), variant.discovery, detector,
+                                     plan.worker_count, &metrics);
+        } else {
+          sorter.sort_index(data.specs(), data.column_count(), data.index(), data.rows(),
+                            variant.discovery, detector, &metrics);
+        }
         benchmark::DoNotOptimize(data.index());
         benchmark::ClobberMemory();
       }
@@ -459,6 +466,10 @@ void run_index_case(
   state.counters["levels"] = static_cast<double>(metrics.levels) / static_cast<double>(iterations);
   state.counters["ranges_sorted"] =
     static_cast<double>(metrics.ranges_sorted) / static_cast<double>(iterations);
+  state.counters["tasks"] =
+    static_cast<double>(metrics.tasks) / static_cast<double>(iterations);
+  state.counters["levels_split"] =
+    static_cast<double>(metrics.levels_split) / static_cast<double>(iterations);
   TslMultiColumnSortMetrics shared{};
   shared.rle_values_scanned = metrics.rle_values_scanned / static_cast<std::size_t>(iterations);
   shared.direct_equal_bands = metrics.direct_equal_bands / static_cast<std::size_t>(iterations);

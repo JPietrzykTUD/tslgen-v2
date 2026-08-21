@@ -155,10 +155,12 @@ struct TslVariant {
 // by carrying the start of the run that overlaps a fragment's open left edge, so a
 // fragment reports from there and the runs found in it are maximal.
 inline auto tsl_variant_is_implementable(TslVariant const & variant) -> bool {
-  // The indirect driver walks columns level by level on one thread; it has no
-  // executor, so the parallel executions have no indirect form yet.
+  // The indirect driver runs a task tree and already splits column 0's partitions
+  // across workers, so `parallel_` exists. `deep_parallel_` does not: its split is
+  // a nested executor rather than tasks in the same tree, and applying it to the
+  // deeper single-range levels measured slower than leaving them serial.
   if (variant.movement == TslMovement::Index) {
-    return variant.execution == TslExecution::Serial;
+    return variant.execution != TslExecution::DeepParallel;
   }
   return true;
 }
@@ -269,9 +271,10 @@ struct TslStagePlan {
     if (backend == TslDetectorBackend::Scalar) {
       return true;
     }
-    // The indirect driver reaches the detector from its serial path -- discovery
-    // runs on the materialized key buffer between levels -- but it never polls,
-    // so an asynchronous backend would not complete.
+    // The indirect driver reaches the detector from both its executions, on the
+    // contiguous materialized key buffer. Its parallel form calls discovery from
+    // worker threads, which a fleet handles, but it never polls, so an
+    // asynchronous backend would not complete.
     auto const has_seam = variant.movement == TslMovement::Index
       ? !tsl_detector_is_async(backend)
       : variant.execution != TslExecution::Serial;
@@ -339,6 +342,9 @@ inline auto tsl_default_plan(TslStage stage) -> TslStagePlan {
       plan.shapes = tsl_screen_shapes();
       plan.size_levels = {1, 3};              // L2 and LLC
       plan.describe_datasets = false;
+      // The indirect family is a viability question like any other. It has the
+      // serial and parallel executions, so it costs sixteen names here.
+      plan.movements = {TslMovement::Direct, TslMovement::Index};
       break;
     case TslStage::Tune:
       plan.shapes = tsl_tune_shapes();
