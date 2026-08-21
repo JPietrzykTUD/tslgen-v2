@@ -847,6 +847,14 @@ class TslMultiColumnQuickSorter {
       return;
     }
 
+    // A detector that wants the range before it is sorted gets it here: this path
+    // sorts [task.begin, task.end) and then detects over exactly that range, so
+    // the two see the same multiset. Order-independent work -- value frequencies,
+    // say -- can therefore overlap the sort. A detector without `prepare` is
+    // unaffected.
+    if constexpr (tsl_detector_wants_prepare<DetectRuns, DataType>::value) {
+      detect_runs.prepare(columns[task.column].data, task.begin, task.end);
+    }
     sort_active_range<false>(
       columns[task.column].data + task.begin,
       payloads,

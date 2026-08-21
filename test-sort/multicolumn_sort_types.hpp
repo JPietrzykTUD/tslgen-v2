@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstddef>
+#include <type_traits>
+#include <utility>
 
 
 enum class TslSortOrder { ASCENDING, DESCENDING };
@@ -39,3 +41,23 @@ struct TslMultiColumnSortMetrics {
   // Non-zero means the starvation safeguard was actually needed.
   std::size_t idle_poll_wakeups = 0;
 };
+
+
+// True when a detector wants to see a range *before* it is sorted, so it can
+// start work whose answer does not depend on order -- value frequencies, for
+// instance. Detected the same way the executor hook is, so a detector without
+// `prepare` is unaffected and a caller needs no per-backend branch.
+template <class Detector, class DataType, class = void>
+struct tsl_detector_wants_prepare : std::false_type {};
+
+template <class Detector, class DataType>
+struct tsl_detector_wants_prepare<
+  Detector,
+  DataType,
+  decltype(
+    std::declval<Detector &>().prepare(
+      std::declval<DataType const *>(), std::size_t{}, std::size_t{}
+    ),
+    void()
+  )
+> : std::true_type {};

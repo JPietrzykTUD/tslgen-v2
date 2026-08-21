@@ -27,6 +27,7 @@
 #include "multicolumn_index_sort.hpp"
 
 #ifdef TSL_COSORT_ENABLE_IAA
+#include "iaa_frequency_run_detector.hpp"
 #include "iaa_run_detector.hpp"
 #endif
 
@@ -330,6 +331,23 @@ int main() {
     TslIaaDetectorFleet<std::uint64_t> iaa64(TslIaaPath::SOFTWARE, 16, 64 * 1024, 0);
     run_shapes<std::uint32_t, TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK>("iaa/u32/3way/net", iaa32);
     run_shapes<std::uint64_t, TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK>("iaa/u64/3way/net", iaa64);
+  }
+
+  {
+    // The frequency detector reaches the sorter through the `prepare` hook: it is
+    // handed each range before that range is sorted, and must produce the same
+    // spans the scalar scan would. A fleet because the parallel driver calls both
+    // hooks from worker threads. min_prepare = 0 so the fast path is exercised
+    // even on the small shapes; a real run would leave the threshold alone.
+    std::printf("-- detector iaa_freq --\n");
+    TslIaaFrequencyOptions options;
+    options.path = TslIaaFrequencyPath::SOFTWARE;
+    TslFrequencyDetectorFleet<std::uint32_t> freq32(options, 16, 0);
+    TslFrequencyDetectorFleet<std::uint64_t> freq64(options, 16, 0);
+    run_shapes<std::uint32_t, TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK>(
+      "freq/u32/3way/net", freq32);
+    run_shapes<std::uint64_t, TslPartitionKind::TWO_WAY, TslLeafKind::INSERTION>(
+      "freq/u64/2way/ins", freq64);
   }
 #else
   std::printf("-- detector iaa_sw skipped (build without TSL_COSORT_ENABLE_IAA) --\n");

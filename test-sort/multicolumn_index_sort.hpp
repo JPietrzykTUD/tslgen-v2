@@ -196,6 +196,10 @@ class TslMultiColumnIndexSorter {
   std::size_t workers_ = 1;
   std::size_t partition_threshold_ = tsl_index_partition_threshold;
   std::vector<DataType> scratch_;
+  // Second copy of the materialized keys, written by the same gather that writes
+  // `scratch_`, for a detector that wants the values before the sort permutes
+  // them. Sized only when such a detector is in use.
+  std::vector<DataType> stable_keys_;
   std::vector<TslRunSpan> ranges_;
   std::vector<TslRunSpan> next_ranges_;
 
@@ -233,6 +237,9 @@ class TslMultiColumnIndexSorter {
       return;
     }
     scratch_.resize(row_count);
+    if constexpr (tsl_detector_wants_prepare<DetectRuns, DataType>::value) {
+      stable_keys_.resize(row_count);
+    }
     ranges_.clear();
     ranges_.push_back(TslRunSpan{0, row_count});
 
@@ -247,7 +254,7 @@ class TslMultiColumnIndexSorter {
           continue;
         }
         materialize(columns[column].data, index, range, column == 0, metrics);
-        sort_range(index, range, columns[column].order, discovery, detect_runs, metrics);
+        sort_range(index, range, columns[column], column == 0, discovery, detect_runs, metrics);
       }
 
       // Incremental discovery reports completions in whatever order partitions
@@ -308,6 +315,9 @@ class TslMultiColumnIndexSorter {
       return;
     }
     scratch_.resize(row_count);
+    if constexpr (tsl_detector_wants_prepare<DetectRuns, DataType>::value) {
+      stable_keys_.resize(row_count);
+    }
     workers_ = worker_count;
     partition_threshold_ = partition_threshold != 0
       ? partition_threshold
@@ -431,7 +441,13 @@ class TslMultiColumnIndexSorter {
     std::size_t end,
     bool identity
   ) {
+    // `mirror` is null unless a detector asked to see the keys before the sort.
+    // Writing it here costs one extra store per vector inside a pass that already
+    // runs, where a detector-side snapshot would be a second read/write pass.
+    auto * const mirror = stable_keys_.empty() ? nullptr : stable_keys_.data();
     if (identity) {
+      // The source column is itself a stable copy, so nothing is mirrored: the
+      // caller prepares on `column` directly.
       std::copy(column + begin, column + end, scratch_.data() + begin);
       return;
     }
@@ -442,9 +458,39 @@ class TslMultiColumnIndexSorter {
         SimdStyle, SimdStyle, static_cast<std::uint32_t>(sizeof(DataType))
       >(column, index_reg);
       tsl::store<SimdStyle, false>(scratch_.data() + position, values);
+      if (mirror != nullptr) {
+        tsl::store<SimdStyle, false>(mirror + position, values);
+      }
     }
     for (; position < end; ++position) {
       scratch_[position] = column[index[position]];
+      if (mirror != nullptr) {
+        mirror[position] = scratch_[position];
+      }
+    }
+  }
+
+  // Hands a detector the range's values before the sort permutes them, from a
+  // buffer that will not change: the source column at level 0, where the index is
+  // the identity and the column is read-only for the whole sort, and the gather's
+  // mirror below it. Either way no copy is made here.
+  template <class DetectRuns>
+  void prepare_detector(
+    DetectRuns & detect_runs,
+    DataType const * column,
+    std::size_t begin,
+    std::size_t end,
+    bool identity
+  ) {
+    if constexpr (tsl_detector_wants_prepare<DetectRuns, DataType>::value) {
+      auto const * source = identity ? column : stable_keys_.data();
+      detect_runs.prepare(source, begin, end, true);
+    } else {
+      (void)detect_runs;
+      (void)column;
+      (void)begin;
+      (void)end;
+      (void)identity;
     }
   }
 
@@ -528,6 +574,8 @@ class TslMultiColumnIndexSorter {
     };
 
     if (discovery == TslRunDiscoveryKind::POST_SORT) {
+      prepare_detector(detect_runs, columns[task.column].data, task.begin, task.end,
+                       task.column == 0);
       if (split) {
         auto no_band = [](std::size_t, std::size_t) {};
         auto no_leaf = [](std::size_t, std::size_t) {};
@@ -581,11 +629,13 @@ class TslMultiColumnIndexSorter {
   void sort_range(
     DataType * index,
     TslRunSpan range,
-    TslSortOrder order,
+    TslSortColumn<DataType> const & column,
+    bool identity,
     TslRunDiscoveryKind discovery,
     DetectRuns & detect_runs,
     TslIndexSortMetrics * metrics
   ) {
+    auto const order = column.order;
     auto const count = range.end - range.begin;
     if (metrics != nullptr) {
       ++metrics->ranges_sorted;
@@ -607,6 +657,7 @@ class TslMultiColumnIndexSorter {
     };
 
     if (discovery == TslRunDiscoveryKind::POST_SORT) {
+      prepare_detector(detect_runs, column.data, range.begin, range.end, identity);
       sorter_.sort_key(keys, payloads, 1, count, order);
       if (metrics != nullptr) {
         metrics->rle_values_scanned += count;
