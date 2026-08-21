@@ -394,6 +394,26 @@ if(TSL_COSORT_ENABLE_IAA)
   target_compile_definitions(test_multicolumn_index_sort PRIVATE TSL_COSORT_ENABLE_IAA=1)
   target_link_libraries(test_multicolumn_index_sort PRIVATE ${_iaa_link_targets})
 
+  # Frequency-derived run detection: counts resolved on the accelerator while the
+  # sort runs, consumed afterwards instead of a comparison scan.
+  add_executable(test_iaa_frequency_run_detector test_iaa_frequency_run_detector.cpp)
+  target_compile_features(test_iaa_frequency_run_detector PRIVATE cxx_std_17)
+  target_compile_definitions(test_iaa_frequency_run_detector PRIVATE TSL_COSORT_ENABLE_IAA=1)
+  target_link_libraries(
+    test_iaa_frequency_run_detector PRIVATE tsl::tsl Threads::Threads ${_iaa_link_targets}
+  )
+  add_test(NAME test_iaa_frequency_run_detector COMMAND test_iaa_frequency_run_detector)
+
+  # Tuning tool, not a test: finds the range size at which preparing the counts
+  # starts paying for itself. Meaningful only on an IAA host -- see the file's
+  # header and benchmark-final.md.
+  add_executable(bench_iaa_frequency_min_offload bench_iaa_frequency_min_offload.cpp)
+  target_compile_features(bench_iaa_frequency_min_offload PRIVATE cxx_std_17)
+  target_compile_definitions(bench_iaa_frequency_min_offload PRIVATE TSL_COSORT_ENABLE_IAA=1)
+  target_link_libraries(
+    bench_iaa_frequency_min_offload PRIVATE tsl::tsl Threads::Threads ${_iaa_link_targets}
+  )
+
   add_executable(test_iaa_run_detector test_iaa_run_detector.cpp)
   target_compile_features(test_iaa_run_detector PRIVATE cxx_std_17)
   target_compile_definitions(test_iaa_run_detector PRIVATE TSL_COSORT_ENABLE_IAA=1)

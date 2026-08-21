@@ -353,6 +353,72 @@ Whole programme: roughly 2,200 measured cases, one to two hours, against ~168,00
 for the full Cartesian product. Completeness of the *questions* is the goal, not
 completeness of the product.
 
+## Tuning the frequency detector
+
+`rle=iaa_freq_sw` / `rle=iaa_freq_hw` do not scan at all. They count the values of
+a range *before* it is sorted -- order does not affect a multiset -- and afterwards
+the multiplicity of a value is the length of its run, so discovery becomes one step
+per distinct value with no comparison. The counts come from
+`iaa_distinct_frequencies.hpp` and the walk from `iaa_frequency_run_detector.hpp`,
+reached through a `prepare` hook the sorter offers before sorting a range.
+
+Only `move=index` with `post` discovery can offer that hook: incremental reporting
+happens *during* partitioning, so there is no moment at which the range is known
+and unsorted. `detector_applies` encodes that, and everything else drops.
+
+The one parameter that matters is `COSORT_MIN_OFFLOAD`, the range size below which
+the detector declines and the scalar scan runs. It matters more than it looks,
+because the walk's cost scales with the *distinct count* while the scan's scales
+with the range: there is a crossover, it moves with cardinality, and above some
+cardinality it does not exist at all.
+
+`bench_iaa_frequency_min_offload` finds it. It times the sequence a sorter
+performs, twice over the same range -- `sort + scan` against
+`prepare + sort + walk` -- so the difference is exactly the part of the walk the
+sort failed to hide, less the scan it replaced. Nothing is modelled and the
+overlap is real:
+
+```bash
+cmake --preset iaa && cmake --build --preset iaa --target bench_iaa_frequency_min_offload
+./bench_iaa_frequency_min_offload            # hardware, the default
+./bench_iaa_frequency_min_offload sw         # QPL software path
+./bench_iaa_frequency_min_offload --csv min_offload.csv
+```
+
+It prints a delta per (distinct values, range size) and then the crossover per
+cardinality. Take the largest crossover among the cardinalities that matter: below
+a threshold the detector declines, which is the safe direction to be wrong in.
+
+On the software path, which is all a DSA host can run, the answer is a harness
+check rather than a result -- QPL executes each scan on the calling thread there,
+so the walk consumes a core instead of a device:
+
+```text
+distinct=4        COSORT_MIN_OFFLOAD=16384
+distinct=64       never -- the scan is cheaper at every size measured
+distinct=1024     never
+distinct=16384    never
+distinct=1048576  never
+```
+
+That is the expected shape and it says the tool works, not that the idea does not.
+
+**Read `rle_coverage` before believing any ratio on a frequency row.** It is the
+share of discovered elements the counts resolved rather than a fallback scan, and
+a row can look near-parity purely because the fast path barely ran -- an early
+measurement here reported 1.04-1.21x that turned out to be 5 prepared ranges
+against a million fallbacks. At full coverage and with the snapshot eliminated the
+software path costs 1.16-1.19x, essentially all of it the walk executing on a
+core, which is the component hardware replaces.
+
+One cost the idea does *not* pay, since it caused some confusion: there is no
+snapshot. `TslIaaDistinctFrequencies::start` keeps a pointer and needs its input
+unchanged, and a sort rewrites exactly that range -- but the indirect sorter never
+writes its source columns, so at level 0 `prepare` reads the column directly, and
+below it the materialize pass mirrors the gathered keys into a second buffer for
+one extra store rather than a second pass. `rle_snapshot_elements` reports zero on
+every row above.
+
 ## Builds
 
 ```bash
