@@ -1097,6 +1097,127 @@ class TslMultiColumnQuickSorter {
     }
   };
 
+  // Sorts ONE key range with its payloads across `worker_count` threads and
+  // reports the completion events, driving no multi-column recursion of its own.
+  // `sort_columns_parallel` owns the recursion because it owns the columns; a
+  // caller that owns its own level structure -- the indirect sorter in
+  // multicolumn_index_sort.hpp -- needs the range parallelism without it, and this
+  // is the seam for that.
+  //
+  // Two things the caller takes on:
+  //
+  //   * The sinks are invoked from worker threads, and a partition may be
+  //     finished by a worker other than the one that created it, so they must be
+  //     thread-safe. `sort_columns_parallel` sidesteps this by turning events into
+  //     executor tasks rather than user callbacks.
+  //   * Offloading a partition is unconditional here, where
+  //     `process_parallel_task` allows it only when a task owes nothing to its
+  //     complete range. That is sound precisely because this entry promises
+  //     nothing about scanning the whole range: it sorts and reports, and a caller
+  //     wanting a post-sort scan runs it after this returns, over the range as a
+  //     whole. A caller that instead scans inside a sink inherits the constraint
+  //     `process_parallel_task` documents and must pass `partition_threshold = 0`.
+  //
+  // `absolute_begin` offsets the reported spans, as in
+  // `sort_key_with_completion_events`.
+  template <class EqualBandSink, class LeafSink>
+  void sort_key_parallel(
+    DataType * keys,
+    DataType * const * payload_columns,
+    std::size_t payload_count,
+    std::size_t count,
+    TslSortOrder order,
+    std::size_t absolute_begin,
+    std::size_t worker_count,
+    std::size_t task_threshold,
+    std::size_t partition_threshold,
+    EqualBandSink & equal_band_sink,
+    LeafSink & leaf_sink
+  ) const {
+    if (payload_count > MaxColumns) {
+      throw std::invalid_argument("payload column count exceeds MaxColumns");
+    }
+    if (count < 2) {
+      return;
+    }
+    if (keys == nullptr) {
+      throw std::invalid_argument("key pointer is null");
+    }
+    if (worker_count == 0) {
+      worker_count = 1;
+    }
+    if (task_threshold == 0) {
+      task_threshold = 1;
+    }
+    if (partition_threshold != 0) {
+      // A range at or below the leaf threshold never partitions, so a smaller
+      // value would only queue ranges that cannot produce children.
+      partition_threshold = std::max(partition_threshold, leaf_threshold + 1);
+    }
+
+    // Relative to `keys`, so a task carries no column index: there is one key
+    // column here and the caller decides what follows.
+    struct range_task {
+      std::size_t begin;
+      std::size_t end;
+    };
+
+    auto payloads_at = [payload_columns, payload_count](std::size_t begin) {
+      column_pointers payloads{};
+      for (std::size_t column = 0; column < payload_count; ++column) {
+        payloads[column] = payload_columns[column] + begin;
+      }
+      return payloads;
+    };
+
+    auto worker = [&](range_task const & task, auto & executor) {
+      auto const task_count = task.end - task.begin;
+      if (task_count < 2) {
+        return;
+      }
+      // Seeded from the task's offset within this call, not from its absolute
+      // position, so that a range sorted here draws the same pivots it would
+      // under `sort_key`/`sort_key_with_completion_events`. That keeps the serial
+      // and parallel forms bit-identical, which is what lets a differential test
+      // compare permutations rather than only value images.
+      auto rng = TslPivotRng(task_seed(0, task.begin, task.end));
+      auto const payloads = payloads_at(task.begin);
+      // sort_impl reports in absolute coordinates, so a range it offers is
+      // converted back to the task's own frame here.
+      auto offload_range = [&executor, task_threshold, partition_threshold, absolute_begin](
+        std::size_t range_begin,
+        std::size_t range_end
+      ) {
+        if (partition_threshold == 0 || range_end - range_begin < partition_threshold) {
+          return false;
+        }
+        range_task child{range_begin - absolute_begin, range_end - absolute_begin};
+        if (child.end - child.begin < task_threshold) {
+          executor.run_inline(child);
+        } else {
+          executor.submit(child);
+        }
+        return true;
+      };
+      sort_active_range<true>(
+        keys + task.begin,
+        payloads,
+        payload_count,
+        task_count,
+        order,
+        rng,
+        absolute_begin + task.begin,
+        equal_band_sink,
+        leaf_sink,
+        offload_range
+      );
+    };
+
+    TslTaskExecutor<range_task, decltype(worker)> executor(worker_count, worker);
+    executor.submit(range_task{0, count});
+    executor.wait();
+  }
+
   void sort_columns_parallel(
     TslSortColumn<DataType> const * columns,
     std::size_t column_count,
