@@ -275,6 +275,16 @@ struct TslStagePlan {
     // contiguous materialized key buffer. Its parallel form calls discovery from
     // worker threads, which a fleet handles, but it never polls, so an
     // asynchronous backend would not complete.
+    auto const frequency = backend == TslDetectorBackend::IaaFrequencySoftware
+      || backend == TslDetectorBackend::IaaFrequencyHardware;
+    // Frequency discovery needs a range handed over before it is sorted. Only the
+    // indirect sorter's post-sort path does that -- incremental reports leaves
+    // discovered during the sort, so there is no such moment.
+    if (frequency
+        && (variant.movement != TslMovement::Index
+            || variant.discovery != TslRunDiscoveryKind::POST_SORT)) {
+      return false;
+    }
     auto const has_seam = variant.movement == TslMovement::Index
       ? !tsl_detector_is_async(backend)
       : variant.execution != TslExecution::Serial;

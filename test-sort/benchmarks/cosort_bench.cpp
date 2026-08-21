@@ -450,6 +450,15 @@ void run_index_case(
         benchmark::DoNotOptimize(data.index());
         benchmark::ClobberMemory();
       }
+      // Same publication the direct path does: without it a frequency-backed row
+      // shows a plausible ratio and no way to tell how much of its discovery
+      // actually came from the counts.
+      auto const iterations = std::max<std::int64_t>(state.iterations(), 1);
+      tsl_publish_detector_metrics(detector, [&](char const * name, double value) {
+        auto const ratio = std::string(name).find("coverage") != std::string::npos
+          || std::string(name).find("frac") != std::string::npos;
+        state.counters[name] = ratio ? value : value / static_cast<double>(iterations);
+      });
     }
   });
 
@@ -458,23 +467,24 @@ void run_index_case(
     return;
   }
 
-  auto const iterations = std::max<std::int64_t>(state.iterations(), 1);
+  auto const published_iterations = std::max<std::int64_t>(state.iterations(), 1);
   state.counters["materialized_per_row"] = data.rows() == 0
     ? 0.0
     : static_cast<double>(metrics.materialized_elements)
-      / static_cast<double>(iterations * static_cast<std::int64_t>(data.rows()));
-  state.counters["levels"] = static_cast<double>(metrics.levels) / static_cast<double>(iterations);
+      / static_cast<double>(published_iterations * static_cast<std::int64_t>(data.rows()));
+  state.counters["levels"] =
+    static_cast<double>(metrics.levels) / static_cast<double>(published_iterations);
   state.counters["ranges_sorted"] =
-    static_cast<double>(metrics.ranges_sorted) / static_cast<double>(iterations);
+    static_cast<double>(metrics.ranges_sorted) / static_cast<double>(published_iterations);
   state.counters["tasks"] =
-    static_cast<double>(metrics.tasks) / static_cast<double>(iterations);
+    static_cast<double>(metrics.tasks) / static_cast<double>(published_iterations);
   state.counters["levels_split"] =
-    static_cast<double>(metrics.levels_split) / static_cast<double>(iterations);
+    static_cast<double>(metrics.levels_split) / static_cast<double>(published_iterations);
   TslMultiColumnSortMetrics shared{};
-  shared.rle_values_scanned = metrics.rle_values_scanned / static_cast<std::size_t>(iterations);
-  shared.direct_equal_bands = metrics.direct_equal_bands / static_cast<std::size_t>(iterations);
-  shared.direct_equal_band_rows =
-    metrics.direct_equal_band_rows / static_cast<std::size_t>(iterations);
+  auto const per_iteration = static_cast<std::size_t>(published_iterations);
+  shared.rle_values_scanned = metrics.rle_values_scanned / per_iteration;
+  shared.direct_equal_bands = metrics.direct_equal_bands / per_iteration;
+  shared.direct_equal_band_rows = metrics.direct_equal_band_rows / per_iteration;
   publish(state, data.rows(), data.column_count(), Simd::lane_count_v, sizeof(DataType),
           variant.algorithm_id(), &shared, nullptr);
 }

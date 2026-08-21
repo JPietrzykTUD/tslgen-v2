@@ -66,6 +66,7 @@
 
 #if defined(TSL_COSORT_HAVE_IAA)
 // Provided by the IAA host: see the contract above.
+#include "iaa_frequency_run_detector.hpp"
 #include "iaa_run_detector.hpp"
 #endif
 
@@ -79,6 +80,10 @@ enum class TslDetectorBackend {
   IaaHardware,
   IaaSoftwareAsync,
   IaaHardwareAsync,
+  // Discovery from value frequencies counted while the sort runs, rather than
+  // from a scan afterwards. Needs a sorter that offers the `prepare` hook.
+  IaaFrequencySoftware,
+  IaaFrequencyHardware,
 };
 
 inline auto tsl_detector_name(TslDetectorBackend backend) -> char const * {
@@ -92,6 +97,8 @@ inline auto tsl_detector_name(TslDetectorBackend backend) -> char const * {
     case TslDetectorBackend::IaaHardware: return "iaa_hw";
     case TslDetectorBackend::IaaSoftwareAsync: return "iaa_sw_async";
     case TslDetectorBackend::IaaHardwareAsync: return "iaa_hw_async";
+    case TslDetectorBackend::IaaFrequencySoftware: return "iaa_freq_sw";
+    case TslDetectorBackend::IaaFrequencyHardware: return "iaa_freq_hw";
   }
   return "unknown";
 }
@@ -102,7 +109,8 @@ inline auto tsl_detector_from_name(std::string const & name) -> TslDetectorBacke
     TslDetectorBackend::DsaHardware, TslDetectorBackend::DmlSoftwareAsync,
     TslDetectorBackend::DsaHardwareAsync, TslDetectorBackend::IaaSoftware,
     TslDetectorBackend::IaaHardware, TslDetectorBackend::IaaSoftwareAsync,
-    TslDetectorBackend::IaaHardwareAsync,
+    TslDetectorBackend::IaaHardwareAsync, TslDetectorBackend::IaaFrequencySoftware,
+    TslDetectorBackend::IaaFrequencyHardware,
   }) {
     if (name == tsl_detector_name(backend)) return backend;
   }
@@ -137,6 +145,8 @@ inline auto tsl_detector_compiled(TslDetectorBackend backend) -> bool {
     case TslDetectorBackend::IaaHardware:
     case TslDetectorBackend::IaaSoftwareAsync:
     case TslDetectorBackend::IaaHardwareAsync:
+    case TslDetectorBackend::IaaFrequencySoftware:
+    case TslDetectorBackend::IaaFrequencyHardware:
 #if defined(TSL_COSORT_HAVE_IAA)
       return true;
 #else
@@ -153,7 +163,8 @@ inline auto tsl_compiled_detectors() -> std::vector<TslDetectorBackend> {
     TslDetectorBackend::DsaHardware, TslDetectorBackend::DmlSoftwareAsync,
     TslDetectorBackend::DsaHardwareAsync, TslDetectorBackend::IaaSoftware,
     TslDetectorBackend::IaaHardware, TslDetectorBackend::IaaSoftwareAsync,
-    TslDetectorBackend::IaaHardwareAsync,
+    TslDetectorBackend::IaaHardwareAsync, TslDetectorBackend::IaaFrequencySoftware,
+    TslDetectorBackend::IaaFrequencyHardware,
   }) {
     if (tsl_detector_compiled(backend)) backends.push_back(backend);
   }
@@ -215,6 +226,20 @@ void tsl_with_detector(TslDetectorBackend backend, TslDetectorConfig const & con
     }
 #endif
 #if defined(TSL_COSORT_HAVE_IAA)
+    case TslDetectorBackend::IaaFrequencySoftware:
+    case TslDetectorBackend::IaaFrequencyHardware: {
+      TslIaaFrequencyOptions options;
+      options.path = backend == TslDetectorBackend::IaaFrequencyHardware
+        ? TslIaaFrequencyPath::HARDWARE
+        : TslIaaFrequencyPath::SOFTWARE;
+      // A pool, not one detector per thread: the lease spans a (prepare, detect)
+      // pair. See the fleet's own comment.
+      TslFrequencyDetectorFleet<DataType> detector(
+        options, config.workers, config.min_offload
+      );
+      body(detector);
+      return;
+    }
     case TslDetectorBackend::IaaSoftware:
     case TslDetectorBackend::IaaHardware: {
       auto const hardware = backend == TslDetectorBackend::IaaHardware;
@@ -253,7 +278,22 @@ struct tsl_detector_has_metrics : std::false_type {};
 template <class Detector>
 struct tsl_detector_has_metrics<
   Detector,
-  decltype(void(std::declval<Detector const &>().aggregate_metrics()))
+  // Keyed on a field this branch actually reads, not merely on the accessor
+  // existing: another detector family can report a different metric set through
+  // the same accessor, and the two traits have to stay disjoint.
+  decltype(void(std::declval<Detector const &>().aggregate_metrics().offloaded_elements))
+> : std::true_type {};
+
+// True when a detector reports how much of its discovery came from precomputed
+// counts rather than from a scan. Separate from the offload trait because the two
+// metric sets have nothing in common.
+template <class Detector, class = void>
+struct tsl_detector_has_coverage : std::false_type {};
+
+template <class Detector>
+struct tsl_detector_has_coverage<
+  Detector,
+  decltype(void(std::declval<Detector const &>().aggregate_metrics().prepared_elements))
 > : std::true_type {};
 
 // Publishes whatever `rle_*` counters a detector exposes. A detector without them
@@ -269,6 +309,20 @@ void tsl_publish_detector_metrics(Detector const & detector, Sink && sink) {
     sink("rle_offloaded_frac", metrics.elements == 0
       ? 0.0
       : static_cast<double>(metrics.offloaded_elements) / static_cast<double>(metrics.elements));
+  } else if constexpr (tsl_detector_has_coverage<Detector>::value) {
+    auto const metrics = detector.aggregate_metrics();
+    sink("rle_ranges", static_cast<double>(metrics.ranges));
+    sink("rle_elements", static_cast<double>(metrics.elements));
+    sink("rle_prepared_elements", static_cast<double>(metrics.prepared_elements));
+    sink("rle_snapshot_elements", static_cast<double>(metrics.snapshot_elements));
+    sink("rle_walk_steps", static_cast<double>(metrics.walk_steps));
+    sink("rle_fallbacks", static_cast<double>(
+      metrics.fallback_unprepared + metrics.fallback_mismatch));
+    // The number that decides whether a ratio on this row means anything: the
+    // share of discovered elements the counts resolved instead of a scan.
+    sink("rle_coverage", metrics.elements == 0
+      ? 0.0
+      : static_cast<double>(metrics.prepared_elements) / static_cast<double>(metrics.elements));
   } else {
     (void)detector;
     (void)sink;
