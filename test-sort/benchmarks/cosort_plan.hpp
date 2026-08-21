@@ -108,12 +108,19 @@ struct TslVariant {
   TslStyle style = TslStyle::Intrinsics;
   std::size_t width_bits = 512;
   TslMovement movement = TslMovement::Direct;
+  // The third value of the `leaf` axis: the network leaf, but a leaf too sparse
+  // to be worth its fixed cost goes to insertion instead, and one too sparse for
+  // the network yet longer than insertion's threshold keeps partitioning. Only
+  // meaningful with `leaf == NETWORK`, which is how it is enumerated. The
+  // percentage itself depends on type and lane count, so it is a template
+  // argument at registration and published as `hybrid_fill_percent`.
+  bool hybrid_leaf = false;
 
   auto algorithm_name() const -> std::string {
     std::string name = tsl_execution_prefix(execution);
     name += discovery == TslRunDiscoveryKind::POST_SORT ? "post_" : "incremental_";
     name += partition == TslPartitionKind::TWO_WAY ? "2way_" : "3way_";
-    name += leaf == TslLeafKind::INSERTION ? "ins" : "net";
+    name += hybrid_leaf ? "hyb" : (leaf == TslLeafKind::INSERTION ? "ins" : "net");
     return name;
   }
 
@@ -134,6 +141,17 @@ struct TslVariant {
     auto const post = discovery == TslRunDiscoveryKind::POST_SORT;
     auto const two = partition == TslPartitionKind::TWO_WAY;
     auto const ins = leaf == TslLeafKind::INSERTION;
+    // The hybrid leaf is appended as 25 to 36 for the same reason as everything
+    // else above: inserting it next to its network sibling would renumber IDs
+    // that published JSON already uses.
+    if (hybrid_leaf) {
+      switch (execution) {
+        case TslExecution::Serial:       return post ? (two ? 25 : 26) : (two ? 27 : 28);
+        case TslExecution::Parallel:     return post ? (two ? 29 : 30) : (two ? 31 : 32);
+        case TslExecution::DeepParallel: return post ? (two ? 33 : 34) : (two ? 35 : 36);
+      }
+      return -1;
+    }
     switch (execution) {
       case TslExecution::Serial:
         if (post) return two ? (ins ? 1 : 3) : (ins ? 2 : 4);
@@ -179,9 +197,15 @@ inline auto tsl_all_variants(std::vector<TslStyle> const & styles,
         for (auto discovery : {TslRunDiscoveryKind::POST_SORT,
                                TslRunDiscoveryKind::INCREMENTAL}) {
           for (auto partition : {TslPartitionKind::TWO_WAY, TslPartitionKind::THREE_WAY}) {
-            for (auto leaf : {TslLeafKind::INSERTION, TslLeafKind::NETWORK}) {
-              TslVariant variant{execution, discovery, partition, leaf,
-                                 style, width, movement};
+            // The leaf axis: insertion, network, and the network with sparse
+            // leaves diverted. The third is a variation of the network leaf, so
+            // it is enumerated as one rather than as a fourth enum value.
+            struct leaf_choice { TslLeafKind kind; bool hybrid; };
+            for (auto choice : {leaf_choice{TslLeafKind::INSERTION, false},
+                                leaf_choice{TslLeafKind::NETWORK, false},
+                                leaf_choice{TslLeafKind::NETWORK, true}}) {
+              TslVariant variant{execution, discovery, partition, choice.kind,
+                                 style, width, movement, choice.hybrid};
               if (tsl_variant_is_implementable(variant)) {
                 variants.push_back(variant);
               }

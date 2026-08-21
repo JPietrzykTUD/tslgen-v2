@@ -152,7 +152,11 @@ template <
   class DataType = std::uint32_t,
   TslPartitionKind PartitionKind = TslPartitionKind::THREE_WAY,
   TslLeafKind LeafKind = TslLeafKind::NETWORK,
-  class SimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, DataType>
+  class SimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, DataType>,
+  // Forwarded to the inner sorter: with `LeafKind == NETWORK`, divert a leaf
+  // holding less than this share of the network's capacity to the insertion leaf.
+  // 0 keeps the leaf fixed. See `tsl_hybrid_auto_percent`.
+  std::size_t HybridFillPercent = 0
 >
 class TslMultiColumnIndexSorter {
   static_assert(std::is_integral_v<DataType>, "the index sort needs an integral element type");
@@ -161,7 +165,9 @@ class TslMultiColumnIndexSorter {
                 "SimdStyle::base_type must match DataType");
 
   // One payload: the index. The key column is the materialized scratch buffer.
-  using Sorter = TslMultiColumnQuickSorter<DataType, PartitionKind, LeafKind, 1, SimdStyle>;
+  using Sorter =
+    TslMultiColumnQuickSorter<DataType, PartitionKind, LeafKind, 1, SimdStyle,
+                              HybridFillPercent>;
 
   using register_type = typename SimdStyle::register_type;
   static constexpr std::size_t lane_count = SimdStyle::lane_count_v;

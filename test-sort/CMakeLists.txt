@@ -168,6 +168,14 @@ add_executable(test_multicolumn_sort test_multicolumn_sort.cpp)
 target_compile_features(test_multicolumn_sort PRIVATE cxx_std_17)
 target_link_libraries(test_multicolumn_sort PRIVATE tsl::tsl Threads::Threads)
 
+# Hybrid-leaf experiment: is the leaf a per-leaf decision rather than a
+# per-configuration one? Standalone driver plus its own sweep; see
+# multicolumn_qs_hybrid_leaf.hpp and benchmark-final.md.
+add_executable(bench_hybrid_leaf bench_hybrid_leaf.cpp)
+target_compile_features(bench_hybrid_leaf PRIVATE cxx_std_17)
+target_include_directories(bench_hybrid_leaf PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/datagen")
+target_link_libraries(bench_hybrid_leaf PRIVATE tsl::tsl Threads::Threads)
+
 # The indirect (index-permutation) sorter. Built without the accelerator options
 # it exercises the scalar detector; the IAA block below adds the QPL one, which
 # is what proves the detector seam applies to this driver too.

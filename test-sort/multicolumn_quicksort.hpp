@@ -40,6 +40,35 @@ enum class TslLeafKind { INSERTION, NETWORK };
 enum class TslPartitionKind { TWO_WAY, THREE_WAY };
 
 
+// The largest range the insertion leaf handles before partitioning takes over.
+// At namespace scope because the hybrid rule below is stated in terms of it and
+// callers pick a fill percentage from it without naming a sorter.
+inline constexpr std::size_t tsl_insertion_leaf_threshold = 64;
+
+
+// The parameter-free hybrid setting: divert exactly the leaves the insertion
+// configuration would have handled itself, so the network runs only where it is at
+// least as full as insertion's own threshold. Derived rather than written down
+// because the capacity depends on type and lane count -- u32/AVX-512 is 64 of 256,
+// so 25%, and u64/AVX-512 is 64 of 128, so 50%.
+template <class DataType, class SimdStyle>
+constexpr auto tsl_hybrid_auto_percent() -> std::size_t {
+  return 100 * tsl_insertion_leaf_threshold
+    / TslCoSortBitonicLeaf<DataType, SimdStyle>::capacity;
+}
+
+
+// Leaf routing tally for the hybrid-leaf experiment (`bench_hybrid_leaf`). Only
+// the hybrid branch of `leaf` writes it, so with `HybridFillPercent == 0` -- every
+// instantiation outside that experiment -- nothing here is read or written.
+struct TslLeafRoutingCounters {
+  std::size_t to_network = 0;      // leaves sorted by the fixed-cost network
+  std::size_t to_insertion = 0;    // leaves diverted to insertion instead
+  std::size_t network_padding = 0; // network capacity spent on padding, summed
+};
+inline thread_local TslLeafRoutingCounters tsl_leaf_routing{};
+
+
 // Sorts one active key while replaying its permutation on a runtime number of
 // payload columns. sort_columns builds a lexicographic sort from that primitive
 // by sorting the next column only inside complete equal runs of the active key.
@@ -48,7 +77,13 @@ template <
   TslPartitionKind PartitionKind = TslPartitionKind::TWO_WAY,
   TslLeafKind LeafKind = TslLeafKind::INSERTION,
   std::size_t MaxColumns = 16,
-  class SimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, DataType>
+  class SimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, DataType>,
+  // Hybrid leaf, for the experiment above: with `LeafKind == NETWORK`, a leaf
+  // holding less than this percentage of the network's fixed capacity goes to the
+  // insertion leaf instead. The partition loop still stops at the network's
+  // threshold, so the choice is made per leaf and costs one comparison there.
+  // 0 disables it, which is what every other instantiation uses.
+  std::size_t HybridFillPercent = 0
 >
 class TslMultiColumnQuickSorter {
   using DataSimdStyle = SimdStyle;
@@ -57,14 +92,38 @@ class TslMultiColumnQuickSorter {
   using register_type = typename DataSimdStyle::register_type;
   using Partition = TslPartitionReplayStep<DataType, SimdStyle>;
   static constexpr std::size_t lane_count = DataSimdStyle::lane_count_v;
+  static constexpr std::size_t insertion_leaf_threshold = tsl_insertion_leaf_threshold;
+  static constexpr std::size_t network_leaf_capacity =
+    TslCoSortBitonicLeaf<DataType, SimdStyle>::capacity;
   static constexpr std::size_t compute_leaf_threshold() {
     if constexpr (LeafKind == TslLeafKind::NETWORK) {
-      return TslCoSortBitonicLeaf<DataType, SimdStyle>::capacity;
+      return network_leaf_capacity;
     } else {
-      return 64;
+      return insertion_leaf_threshold;
     }
   }
+  // The largest range a leaf may be handed. Also the floor for the parallel
+  // paths' partition threshold, so it stays the network's capacity under the
+  // hybrid even though smaller ranges may keep partitioning.
   static constexpr std::size_t leaf_threshold = compute_leaf_threshold();
+
+  // True when a range stops partitioning and goes to the leaf.
+  //
+  // Under the hybrid the two leaves keep their own thresholds: insertion takes
+  // anything at or below its own, and the network takes over only where it would
+  // be filled enough to be worth its fixed cost. A range between the two -- too
+  // sparse for the network, too long for insertion -- keeps partitioning, which is
+  // what makes `HybridFillPercent` interpolate between the fixed configurations
+  // rather than inherit the network's threshold for both leaves.
+  static constexpr auto leaf_accepts(std::size_t count) -> bool {
+    if constexpr (HybridFillPercent == 0) {
+      return count <= leaf_threshold;
+    } else {
+      return count <= insertion_leaf_threshold
+        || (count <= network_leaf_capacity
+            && count * 100 >= HybridFillPercent * network_leaf_capacity);
+    }
+  }
 
   using column_pointers = std::array<DataType *, MaxColumns>;
 
@@ -316,6 +375,19 @@ class TslMultiColumnQuickSorter {
     std::size_t count
   ) {
     if constexpr (LeafKind == TslLeafKind::NETWORK) {
+      // The network sorts `capacity` elements whatever the leaf holds, so a
+      // sparse leaf pays for padding. Divert those to insertion, which is
+      // O(count^2) but on a handful of elements far cheaper than a full network.
+      if constexpr (HybridFillPercent != 0) {
+        constexpr auto capacity = network_leaf_capacity;
+        if (count * 100 < HybridFillPercent * capacity) {
+          ++tsl_leaf_routing.to_insertion;
+          insertion_leaf<Order>(keys, columns, payload_count, count);
+          return;
+        }
+        ++tsl_leaf_routing.to_network;
+        tsl_leaf_routing.network_padding += capacity - count;
+      }
       TslCoSortBitonicLeaf<DataType, SimdStyle>::template sort<Order>(
         keys,
         columns.data(),
@@ -359,7 +431,7 @@ class TslMultiColumnQuickSorter {
     LeafSink & leaf_sink,
     RangeSink & range_sink
   ) {
-    while (count > leaf_threshold) {
+    while (!leaf_accepts(count)) {
       auto const pivot_value =
         get_pivot<Order>(keys, columns, payload_count, count, rng.next());
       std::size_t left_count;

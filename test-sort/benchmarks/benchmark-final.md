@@ -22,38 +22,43 @@ kept only for the reasoning behind these decisions.
 ## Variant space
 
 A variant is one compiled sorter configuration. For the direct sorter the
-algorithmic part is `execution × discovery × partition × leaf` = 3 × 2 × 2 × 2 =
-**24**, and every cell is implemented and registered. The indirect sorter shares
-`discovery × partition × leaf` = 8 and has the serial and parallel executions but
-not `deep_parallel_`, so it adds 16 rather than 24:
+algorithmic part is `execution × discovery × partition × leaf` = 3 × 2 × 2 × 3 =
+**36**, and every cell is implemented and registered. The indirect sorter shares
+`discovery × partition × leaf` = 12 and has the serial and parallel executions but
+not `deep_parallel_`, so it adds 24 rather than 36:
 
 ```text
-direct    24 algorithm configurations
-indirect  16 algorithm configurations (no deep_parallel_)
-          40 x 3 styles (intr, clang, clang_bool) x 3 widths (128, 256, 512)
-           = 360 sorter configurations, plus the width- and style-independent
+direct    36 algorithm configurations
+indirect  24 algorithm configurations (no deep_parallel_)
+          60 x 3 styles (intr, clang, clang_bool) x 3 widths (128, 256, 512)
+           = 540 sorter configurations, plus the width- and style-independent
              baseline
-           = 361
+           = 541
 ```
 
-The 25 algorithm names `cosort_bench` registers, at one (style, width). The
-indirect family reuses the eight serial names and is distinguished by `move=`
+The `leaf` axis has three values: `ins`, `net`, and `hyb` — the network leaf with a
+per-leaf diversion of leaves too sparse to be worth its fixed cost. See
+[Choosing the leaf per leaf](#choosing-the-leaf-per-leaf); the algorithm IDs for
+`hyb` are appended as 25 to 36 so no published ID moves.
+
+The 37 algorithm names `cosort_bench` registers, at one (style, width). The
+indirect family reuses the twelve serial names and is distinguished by `move=`
 rather than by a name of its own, so a `move=direct`/`move=index` pair is the same
 algorithm on both sides of the comparison:
 
 ```text
-post_2way_ins                       post_2way_net
-post_3way_ins                       post_3way_net
-incremental_2way_ins                incremental_2way_net
-incremental_3way_ins                incremental_3way_net
-parallel_post_2way_ins              parallel_post_2way_net
-parallel_post_3way_ins              parallel_post_3way_net
-parallel_incremental_2way_ins       parallel_incremental_2way_net
-parallel_incremental_3way_ins       parallel_incremental_3way_net
-deep_parallel_post_2way_ins         deep_parallel_post_2way_net
-deep_parallel_post_3way_ins         deep_parallel_post_3way_net
-deep_parallel_incremental_2way_ins  deep_parallel_incremental_2way_net
-deep_parallel_incremental_3way_ins  deep_parallel_incremental_3way_net
+post_2way_ins                       post_2way_net                       post_2way_hyb
+post_3way_ins                       post_3way_net                       post_3way_hyb
+incremental_2way_ins                incremental_2way_net                incremental_2way_hyb
+incremental_3way_ins                incremental_3way_net                incremental_3way_hyb
+parallel_post_2way_ins              parallel_post_2way_net              parallel_post_2way_hyb
+parallel_post_3way_ins              parallel_post_3way_net              parallel_post_3way_hyb
+parallel_incremental_2way_ins       parallel_incremental_2way_net       parallel_incremental_2way_hyb
+parallel_incremental_3way_ins       parallel_incremental_3way_net       parallel_incremental_3way_hyb
+deep_parallel_post_2way_ins         deep_parallel_post_2way_net         deep_parallel_post_2way_hyb
+deep_parallel_post_3way_ins         deep_parallel_post_3way_net         deep_parallel_post_3way_hyb
+deep_parallel_incremental_2way_ins  deep_parallel_incremental_2way_net  deep_parallel_incremental_2way_hyb
+deep_parallel_incremental_3way_ins  deep_parallel_incremental_3way_net  deep_parallel_incremental_3way_hyb
 std_lex_argsort                     (scalar baseline, the normalizer)
 ```
 
@@ -419,6 +424,176 @@ below it the materialize pass mirrors the gathered keys into a second buffer for
 one extra store rather than a second pass. `rle_snapshot_elements` reports zero on
 every row above.
 
+## Choosing the leaf per leaf
+
+`leaf=ins` and `leaf=net` were a configuration axis in the corpus and the sweep
+picked whichever won per case. `leaf=hyb` makes the choice per leaf instead, and
+`bench_hybrid_leaf` is the standalone sweep that found its threshold. The two fixed
+configurations differ in more than which leaf runs:
+
+| | leaf | partitioning stops at | cost per leaf |
+| --- | --- | --- | --- |
+| `net` | one full-capacity bitonic sort | capacity (256 for u32/AVX-512) | constant |
+| `ins` | insertion | 64 | quadratic |
+
+A constant cost is a good trade for a full leaf and a bad one for a sparse leaf, so
+the right choice follows the leaf's *fill ratio* — which the data and the row count
+decide, not the configuration. Eight columns, u32/AVX-512, three-way, post-sort,
+best of five:
+
+| shape | rows | `ins` | `net` | diverted | hybrid |
+| --- | --- | --- | --- | --- | --- |
+| `low_cardinality_d4` | 2^18 | 12.20 ms | 20.08 ms | 74% | 13.74 ms |
+| `low_cardinality_d4` | 2^20 | 40.04 ms | 39.19 ms | 0% | 39.43 ms |
+| `skewed_zipf_s1` | 2^18 | 20.04 ms | 197.86 ms | 98% | 29.33 ms |
+| `unique_first` | 2^20 | 70.75 ms | 57.23 ms | 2% | 55.80 ms |
+
+Four distinct values per column put 4^7 groups under eight columns, so at 2^20 rows
+the leaves hold exactly 64 elements and at 2^18 only 16 — the same shape and the
+same column count with opposite winners. `skewed_zipf_s1`'s 9.9x is the fixed cost
+paid on leaves of a handful of elements.
+
+The knob is `HybridFillPercent` on `TslMultiColumnQuickSorter`: with `leaf=net`, a
+leaf below that share of capacity goes to the insertion leaf instead, and a range
+too sparse for the network but longer than insertion's own threshold keeps
+partitioning. The sweep therefore reaches both fixed configurations by
+construction, so it cannot miss a winner by not extending far enough — `P=100`
+leaves only exactly-full leaves to the network and measured 83.98 ms where `ins`
+measured 80.14. Its other end does *not* reduce to `net`: `P=1` diverts only
+two-element leaves, and on `skewed_zipf_s1` those are already 30% of all leaves, so
+it measured 454.89 ms against `net`'s 551.77 — an 18% saving from the cheapest
+possible diversion.
+
+Read `P=100` against `ins` as the noise floor too: the same pair measured 0.6%
+apart in one run and 4.8% apart in another, best-of-five each time. Nothing below
+about 5% is claimed as a per-configuration difference here, which is why the result
+below is stated over 24 configurations rather than on any one of them.
+
+**No setting beats the better fixed configuration by more than that noise.** What it
+buys is not having to know the shape. Against the per-configuration oracle over
+{`ins`, `net`}, four shapes x {2^18, 2^20} rows x {2, 4, 8} columns:
+
+| policy | geomean | worst case |
+| --- | --- | --- |
+| `ins` | 1.195 | 1.91x |
+| `net` | 1.313 | 9.87x |
+| `P = auto` | 1.044 | 1.46x |
+| `P = 50` | 1.103 | 1.30x |
+
+`auto` is parameter-free: divert exactly the leaves the insertion configuration
+would have handled itself, i.e. run the network only where it is at least as full
+as insertion's threshold. That is 64 of 256 for u32/AVX-512 (25%) and 64 of 128 for
+u64 (50%), so it is derived from the capacity rather than tuned —
+`tsl_hybrid_auto_percent`. The residual 1.46x is the network's own threshold: under
+`auto` a leaf of 64..256 elements still goes to the network as one full-capacity
+sort where `ins` would have partitioned it further, and `P=50` trades average for
+worst case by raising that bar.
+
+Read as a corpus result: fixing one leaf for the whole sweep costs 20% (`ins`) or
+31% (`net`) on average, so `leaf` has to stay an axis — but a per-leaf rule with no
+parameter gets within 4% of knowing the answer in advance, which is what a
+production sorter would want.
+
+`HybridFillPercent` defaults to 0, and every other instantiation in the tree uses
+that default, so `leaf_accepts` reduces to the previous `count > leaf_threshold`
+loop condition and the corpus is unaffected. `test_multicolumn_sort` and
+`test_multicolumn_index_sort` pass unchanged.
+
+```bash
+./bench_hybrid_leaf                                  # the default sweep
+./bench_hybrid_leaf --shapes skewed_zipf_s1 --cols 8 --rows 1048576
+./bench_hybrid_leaf --csv hybrid.csv
+```
+
+### In the corpus
+
+`leaf=hyb` is a value of the corpus axis, so it registers across every execution,
+discovery, movement and detector without further wiring, and `hybrid_fill_percent`
+is published per case. The direct family goes 24 -> 36 algorithm configurations and
+the indirect 16 -> 24; `cosort_bench` takes 200s to build rather than 137s.
+
+Measured with real discovery rather than in the standalone driver — u32, LLC, eight
+columns, `rle=scalar`, the two shapes where the fixed leaves disagree most, so this
+is the *unfavourable* selection for the hybrid rather than a representative one:
+
+| shape | move | family | `ins` | `net` | `hyb` | vs better fixed |
+| --- | --- | --- | --- | --- | --- | --- |
+| `skewed_zipf_s1` | direct | `incremental_3way` | 610.7 ms | 3036.6 ms | 718.2 ms | -17.6% |
+| `skewed_zipf_s1` | direct | `post_3way` | 650.2 ms | 2557.9 ms | 730.9 ms | -12.4% |
+| `skewed_zipf_s1` | index | `post_3way` | 816.7 ms | 3853.4 ms | 978.6 ms | -19.8% |
+| `skewed_zipf_s1` | index | `parallel_incremental_3way` | 1231.7 ms | 1320.6 ms | 1150.2 ms | +6.6% |
+| `low_cardinality_d4` | direct | `parallel_incremental_3way` | 62.3 ms | 62.2 ms | 60.9 ms | +2.1% |
+| `low_cardinality_d4` | direct | `post_3way` | 225.4 ms | 233.8 ms | 231.7 ms | -2.8% |
+| `low_cardinality_d4` | index | `post_3way` | 397.9 ms | 420.3 ms | 441.5 ms | -10.9% |
+
+Consistent with the standalone sweep rather than in tension with it: `hyb` trails
+`ins` by 12-20% on zipf, which is the same 1.46x-worst-case shape, while `net`
+trails it by 370-470% and the hybrid removes nearly all of that. The one family
+where the hybrid wins outright is the indirect parallel one.
+
+### With the detector axis
+
+The leaf axis and the discovery axis were expected to interact: the hybrid keeps
+partitioning below the network's threshold, so `incremental` reports more and
+smaller fragments, and a fragment under `min_offload` declines and falls back to
+the scalar scan. Measured, that interaction does not appear. Four columns, halfLLC,
+u32, medians of five, `hyb/ins` per detector — the ratio is what matters, since a
+detector changes both variants alike:
+
+| shape | family | `scalar` | `dml_sw` |
+| --- | --- | --- | --- |
+| `independent_uniform_c1024` | `parallel_post_3way` | 0.847 | 0.760 |
+| `independent_uniform_c1024` | `parallel_incremental_3way` | 0.816 | 0.808 |
+| `unique_last_g64` | `parallel_post_3way` | 0.975 | 0.872 |
+| `unique_last_g64` | `parallel_incremental_3way` | 0.994 | 0.984 |
+| `low_cardinality_d4` | `parallel_post_3way` | 0.978 | 0.963 |
+| `low_cardinality_d4` | `parallel_incremental_3way` | 1.000 | 0.999 |
+
+`move=index`, `post_3way`, the same sizes, against all three IAA-side backends:
+
+| shape | `scalar` | `iaa_sw` | `iaa_freq_sw` |
+| --- | --- | --- | --- |
+| `independent_uniform_c1024` | 0.890 | 0.910 | 0.871 |
+| `low_cardinality_d4` | 1.004 | 0.993 | 1.015 |
+| `unique_last_g64` | 1.154 | 1.110 | 1.151 |
+
+The ratio is set by the shape, not by the backend: it moves by at most 4 points
+across three IAA backends and never against the hybrid on the DSA side, where
+offload in fact widens the margin slightly. The reason the predicted interaction is
+harmless is that it is bounded on the wrong side — a fragment below `min_offload`
+falls back to the scalar scan, which is what the scalar detector would have cost
+anyway, so smaller fragments can cost the hybrid the *offload* but not more than
+running without one. **The leaf choice and the discovery backend can be tuned
+independently.**
+
+This pass also produced the hybrid's clearest win, on a shape the standalone sweep
+did not cover. `independent_uniform_c1024`, `parallel_post_3way`, `rle=scalar`:
+`ins` 224.69 ms, `net` 1126.79 ms, `hyb` 190.27 ms — 15% better than the better
+fixed leaf and 5.9x better than the worse one. A thousand distinct values over four
+columns puts almost every leaf in the sparse range where the network's fixed cost
+is wasted but the ranges are still long enough that insertion's threshold of 64
+partitions more than it needs to.
+
+Serial, post-sort, `move=direct`, `rle=scalar` only — the driver has no detector
+seam at all, just `tsl_for_each_equal_run` — and every policy comes out of one
+driver in `multicolumn_qs_hybrid_leaf.hpp`, so a comparison between them changes
+exactly one template argument.
+
+Deliberately not an axis in the corpus, and one interaction argues against making
+it one naively. `leaf_sink` fires once per leaf, after the partition loop exits, so
+changing when that loop exits changes what `incremental` discovery is handed: a
+range of 64..256 elements that `net` would have leafed keeps partitioning under the
+hybrid, and the same data therefore yields **more reported fragments, each
+smaller**. That is a wash for `rle=scalar` but the wrong direction for every
+accelerator backend, because a fragment below `min_offload` (4096 by default)
+declines and falls back to the scalar scan anyway. Under `move=index` with `post`
+the effect is different rather than absent: `prepare` is per range and not per
+leaf, so fragment size does not move, but the extra partitioning below 256 adds key
+movement to the window `prepare` is trying to hide behind.
+
+So the rule is measured where it is cleanest and its interaction with the
+discovery and execution axes is untested in both directions.
+
 ## Builds
 
 ```bash
@@ -471,6 +646,12 @@ configure time naming the file.
 4. **`dsa_hw` fails on this host** with `DML_STATUS_BATCH_LIMITS_ERROR`, and so
    does the pre-existing `test_dsa_run_detector hw`, so the fault predates this
    harness. Until it is diagnosed a DSA host measures `scalar` and `dml_sw`.
+   `dml_sw` itself only started working while measuring the hybrid leaf: its fleet
+   gave each new thread a permanent slot, and the executor starts fresh workers per
+   sort, so it threw `fewer slots than calling threads` on the second gbench
+   iteration of any parallel case. `TslDsaDetectorFleet` is now the same
+   borrow-and-return pool as the IAA one. Any earlier `dml_sw` figure in this
+   document predates the executor change that broke it.
 5. **IAA is unverified on hardware.** `iaa_sw`/`iaa_hw` and their asynchronous
    forms are implemented and the software path passes its differential test, but
    this host has `/dev/dsa` and no `/dev/iax`. `test_iaa_run_detector hw` and
@@ -491,6 +672,19 @@ configure time naming the file.
    `move=index` with `style=clang` measures that emulation: 34.92 ms against
    19.14 ms for `intr` at 4 columns. It is the same class of gap the `net` leaf
    had before `v0.2.9` fixed `permute_lanes`.
-9. **The dangling IAA plan** — `multi-column-sort-plan.md` defers Slice 9 to
+9. **The hybrid leaf's shape dependence is not predictable yet.** It is now
+   measured across executions, both movements, both discoveries and four detector
+   backends, and the detector turns out not to matter. What decides it is the
+   shape: +15% on `independent_uniform_c1024`, neutral on `low_cardinality_d4`,
+   -15% on `unique_last_g64`, -12 to -20% on `skewed_zipf_s1`. Promoting it to a
+   default needs a leaf-size distribution that predicts the sign, which
+   `bench_hybrid_leaf` can report but does not yet.
+10. **`dml_sw` on `skewed_zipf_s1` does not finish.** One case
+   (`parallel_post_3way_ins`, four columns, halfLLC) takes 115 ms with `rle=scalar`
+   and had not completed after 240 s with `rle=dml_sw`. It reproduces on `ins`, so
+   it is a property of the DSA detector on a heavy-tailed key, not of the leaf
+   axis, and it is why the accelerator tables above use
+   `independent_uniform_c1024` in zipf's place. Undiagnosed.
+11. **The dangling IAA plan** — `multi-column-sort-plan.md` defers Slice 9 to
    `iaa-rle-offload-plan.md`, which does not exist. Write it or restate Slice 9 as
    the DSA work that shipped.

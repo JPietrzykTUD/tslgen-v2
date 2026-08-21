@@ -301,7 +301,7 @@ void publish(
 // --- the measured body ------------------------------------------------------
 
 template <class DataType, TslStyle Style, std::size_t Width,
-          TslPartitionKind Partition, TslLeafKind Leaf>
+          TslPartitionKind Partition, TslLeafKind Leaf, std::size_t FillPercent>
 void run_case(
   benchmark::State & state,
   TslVariant variant,
@@ -311,7 +311,8 @@ void run_case(
   TslStagePlan plan
 ) {
   using Simd = typename tsl_simd_for<DataType, Style, Width>::type;
-  using Sorter = TslMultiColumnQuickSorter<DataType, Partition, Leaf, 16, Simd>;
+  using Sorter =
+    TslMultiColumnQuickSorter<DataType, Partition, Leaf, 16, Simd, FillPercent>;
 
   TslBenchCase<DataType> data(spec, direction_of(direction), plan.cache_bytes);
   Sorter sorter(tsl_spec_seed(spec) ^ static_cast<std::uint64_t>(direction));
@@ -366,6 +367,10 @@ void run_case(
   }
   publish(state, data.rows(), data.column_count(), Simd::lane_count_v, sizeof(DataType),
           variant.algorithm_id(), &metrics, plan.describe_datasets ? &descriptor : nullptr);
+  if constexpr (FillPercent != 0) {
+    // The rule is derived from type and lane count, so record which one ran.
+    state.counters["hybrid_fill_percent"] = static_cast<double>(FillPercent);
+  }
 }
 
 template <class DataType>
@@ -414,7 +419,7 @@ void run_baseline(
 // The indirect body: the columns stay read-only and the sort produces a row
 // permutation, so the oracle is the value image the permutation selects.
 template <class DataType, TslStyle Style, std::size_t Width,
-          TslPartitionKind Partition, TslLeafKind Leaf>
+          TslPartitionKind Partition, TslLeafKind Leaf, std::size_t FillPercent>
 void run_index_case(
   benchmark::State & state,
   TslVariant variant,
@@ -424,7 +429,8 @@ void run_index_case(
   TslStagePlan plan
 ) {
   using Simd = typename tsl_simd_for<DataType, Style, Width>::type;
-  using Sorter = TslMultiColumnIndexSorter<DataType, Partition, Leaf, Simd>;
+  using Sorter =
+    TslMultiColumnIndexSorter<DataType, Partition, Leaf, Simd, FillPercent>;
 
   TslBenchCase<DataType> data(spec, direction_of(direction), plan.cache_bytes);
   Sorter sorter(tsl_spec_seed(spec) ^ static_cast<std::uint64_t>(direction));
@@ -487,6 +493,9 @@ void run_index_case(
   shared.direct_equal_band_rows = metrics.direct_equal_band_rows / per_iteration;
   publish(state, data.rows(), data.column_count(), Simd::lane_count_v, sizeof(DataType),
           variant.algorithm_id(), &shared, nullptr);
+  if constexpr (FillPercent != 0) {
+    state.counters["hybrid_fill_percent"] = static_cast<double>(FillPercent);
+  }
 }
 
 // --- registration -----------------------------------------------------------
@@ -534,14 +543,15 @@ struct Registrar {
 };
 
 template <class DataType, TslStyle Style, std::size_t Width,
-          TslPartitionKind Partition, TslLeafKind Leaf>
+          TslPartitionKind Partition, TslLeafKind Leaf, std::size_t FillPercent>
 void register_leaf(Registrar & registrar, char const * type_name) {
   auto const & plan = registrar.plan;
   for (auto movement : plan.movements) {
    for (auto execution : {TslExecution::Serial, TslExecution::Parallel,
                          TslExecution::DeepParallel}) {
     for (auto discovery : {TslRunDiscoveryKind::POST_SORT, TslRunDiscoveryKind::INCREMENTAL}) {
-      TslVariant const variant{execution, discovery, Partition, Leaf, Style, Width, movement};
+      TslVariant const variant{execution, discovery, Partition, Leaf, Style, Width,
+                               movement, FillPercent != 0};
       if (!tsl_variant_is_implementable(variant)) {
         registrar.drops.drop(TslDropReason::MovementUnsupported);
         continue;
@@ -591,7 +601,8 @@ void register_leaf(Registrar & registrar, char const * type_name) {
                   benchmark::RegisterBenchmark(
                     name,
                     [variant, spec, direction, backend, plan](benchmark::State & state) {
-                      run_index_case<DataType, Style, Width, Partition, Leaf>(
+                      run_index_case<DataType, Style, Width, Partition, Leaf,
+                                     FillPercent>(
                         state, variant, spec, direction, backend, plan
                       );
                     }
@@ -600,7 +611,7 @@ void register_leaf(Registrar & registrar, char const * type_name) {
                   benchmark::RegisterBenchmark(
                     name,
                     [variant, spec, direction, backend, plan](benchmark::State & state) {
-                      run_case<DataType, Style, Width, Partition, Leaf>(
+                      run_case<DataType, Style, Width, Partition, Leaf, FillPercent>(
                         state, variant, spec, direction, backend, plan
                       );
                     }
@@ -619,10 +630,16 @@ void register_leaf(Registrar & registrar, char const * type_name) {
 
 template <class DataType, TslStyle Style, std::size_t Width>
 void register_width(Registrar & registrar, char const * type_name) {
-  register_leaf<DataType, Style, Width, TslPartitionKind::TWO_WAY, TslLeafKind::INSERTION>(registrar, type_name);
-  register_leaf<DataType, Style, Width, TslPartitionKind::TWO_WAY, TslLeafKind::NETWORK>(registrar, type_name);
-  register_leaf<DataType, Style, Width, TslPartitionKind::THREE_WAY, TslLeafKind::INSERTION>(registrar, type_name);
-  register_leaf<DataType, Style, Width, TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK>(registrar, type_name);
+  using Simd = typename tsl_simd_for<DataType, Style, Width>::type;
+  // The hybrid's threshold is derived from this type and width, not chosen, so it
+  // is a constant here rather than an axis value.
+  constexpr std::size_t hybrid = tsl_hybrid_auto_percent<DataType, Simd>();
+  register_leaf<DataType, Style, Width, TslPartitionKind::TWO_WAY, TslLeafKind::INSERTION, 0>(registrar, type_name);
+  register_leaf<DataType, Style, Width, TslPartitionKind::TWO_WAY, TslLeafKind::NETWORK, 0>(registrar, type_name);
+  register_leaf<DataType, Style, Width, TslPartitionKind::TWO_WAY, TslLeafKind::NETWORK, hybrid>(registrar, type_name);
+  register_leaf<DataType, Style, Width, TslPartitionKind::THREE_WAY, TslLeafKind::INSERTION, 0>(registrar, type_name);
+  register_leaf<DataType, Style, Width, TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK, 0>(registrar, type_name);
+  register_leaf<DataType, Style, Width, TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK, hybrid>(registrar, type_name);
 }
 
 template <class DataType, TslStyle Style>
