@@ -16,6 +16,12 @@ set -euo pipefail
 
 build="${1:?usage: run_paper.sh <build-dir> <results-dir> [--quick]}"
 results="${2:?usage: run_paper.sh <build-dir> <results-dir> [--quick]}"
+# Absolute from here on. Several steps run the drivers from inside the build
+# directory -- `(cd "$build" && ./bench_q2_algorithms --csv "$results/...")` -- so a
+# relative results path put the CSVs in the build tree while `tee` wrote the logs
+# where the caller asked, splitting a results directory in half without saying so.
+mkdir -p "$results"
+results="$(cd "$results" && pwd)"
 quick="${3:-}"
 
 host="$(hostname)"

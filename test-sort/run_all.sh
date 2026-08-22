@@ -49,6 +49,10 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 results="${results:-$root/results/$(hostname)}"
+# Absolute, for the same reason run_paper.sh does it: the steps below run from
+# inside the build directory.
+mkdir -p "$results"
+results="$(cd "$results" && pwd)"
 
 # --- the compiler -------------------------------------------------------------
 # Pinned rather than discovered: the generated TSL selects its profile and its
@@ -117,6 +121,22 @@ else
 fi
 build="$root/tslctmp/test-sort-$preset"
 echo "accelerators: dsa=$have_dsa iax=$have_iax  ->  preset $preset"
+# The work queues are character devices, usually root-owned and mode 600. Without
+# access the accelerator rows come out as drops naming the reason, which is honest
+# but empty -- and the point of running on this host is those rows. Said here, once,
+# rather than discovered in Q3's output hours later.
+for _dev in /dev/dsa/wq* /dev/iax/wq*; do
+  [[ -e "$_dev" ]] || continue
+  if [[ ! -r "$_dev" ]]; then
+    echo "  !! $_dev is not readable by $(id -un): the accelerator rows will be drops."
+    echo "     Either grant access once --"
+    echo "       sudo chgrp \$(id -gn) $(dirname "$_dev")/wq* && sudo chmod 660 $(dirname "$_dev")/wq*"
+    echo "     (a udev rule if it should survive a reboot) -- or run this whole"
+    echo "     script under sudo, which also makes every build tree, the 13 GB of"
+    echo "     generated tables and the results directory root-owned."
+  fi
+  break
+done
 echo
 echo "=== 1/4 configure"
 extra=()
