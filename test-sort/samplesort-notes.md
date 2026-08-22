@@ -131,6 +131,69 @@ sequential one where keys tie, so the test demands the *sorted key image* match
 exactly, which it does. Clean under ThreadSanitizer, and under
 `-fsanitize=address,undefined`.
 
+## Section 9.2: the stream cliff does not move, it stops mattering
+
+`bench_samplesort_streams` runs the deferred experiment: T threads each
+distributing their own chunk into their own output region with K buckets, timed
+with and without the index column, so the difference is the second column's cost
+-- which is what the original cliff was measured on.
+
+**The cliff reproduces exactly at one thread.** u32 penalty in ns/element:
+0.356 at K=8, 0.413 at K=16, 0.452 at K=32, then **1.938 at K=64**. That is a
+4.3x jump at 128 streams, against the 3.3-3.9x the specification reports. u64 is
+0.834 / 0.771 / 0.968 / **3.390**, a 3.5x jump. So the harness and the original
+measurement agree.
+
+**It does not track total streams.** The ratio of the K=64 penalty to the K=32
+penalty, by thread count:
+
+| threads | u32 | u64 | total streams at K=64 |
+| --- | --- | --- | --- |
+| 1 | 4.29x | 3.50x | 128 |
+| 2 | 3.34x | 7.52x | 256 |
+| 4 | 2.54x | 4.03x | 512 |
+| 8 | 3.21x | 3.41x | 1024 |
+| 16 | 1.22x | 1.49x | 2048 |
+| 24 | **0.90x** | **0.99x** | 3072 |
+
+At 24 threads and K=64 there are 3072 concurrent write streams -- 24 times past
+the cliff the single-core measurement found -- and **there is no penalty at all**.
+Meanwhile T=4/K=16 and T=8/K=8 both sit at exactly 128 total streams and show no
+cliff either.
+
+So `2*T*K` is the wrong statistic. The cliff tracks streams **per core**, which is
+consistent with the specification's own guess at the mechanism -- L1
+write-combine buffers, DTLB entries, store-buffer capacity -- and it is a
+per-core resource that does not become a shared one. What happens instead is that
+at high thread counts distribution goes bandwidth-bound and the per-core stream
+limit stops being the binding constraint. The direction the specification worried
+about, contention moving the constraint to LLC associativity or DRAM banks and
+forcing K *down*, does not happen.
+
+**And a larger K still does not pay, for an unrelated reason.** End to end:
+
+| type | K | 1 worker | 8 workers | 24 workers |
+| --- | --- | --- | --- | --- |
+| u32 | 8 | **26.28** | 5.51 | 3.46 |
+| u32 | 16 | 26.66 | **4.34** | **2.33** |
+| u32 | 32 | 32.56 | 5.22 | 2.97 |
+| u64 | 8 | 37.99 | | 4.31 |
+| u64 | 16 | **33.51** | | 3.81 |
+| u64 | 32 | 36.06 | | **3.69** |
+
+K=16 wins at 8 and 24 workers for u32 and at one worker for u64; K=32 is within
+3% of K=16 for u64 at 24 workers, which is noise. K=32 loses 22% at u32/T=1 and
+that is nothing to do with streams -- 64 per thread is inside the flat region.
+It is classification: 31 splitters instead of 15 roughly doubles the comparison
+sweep, and the pass count only falls from 4.65 to 3.92.
+
+**So K is set by classification cost against pass count, not by the write-stream
+cliff.** The cliff only bites at K=64, which is outside the useful range for
+other reasons. The `2 * K <= 64` assertion in the kernels is therefore a
+single-core bound that measurement shows relaxes with thread count; it is kept
+because nothing above K=32 is worth compiling anyway, not because it is the
+binding constraint it was thought to be.
+
 ## In place
 
 `TslSampleSortMovement::InPlace` replaces the scatter into a second pair with a

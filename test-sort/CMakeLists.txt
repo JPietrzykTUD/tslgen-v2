@@ -187,6 +187,13 @@ target_link_libraries(test_samplesort_cosort PRIVATE tsl::tsl Threads::Threads)
 
 # The parallel executor lives in samplesort_parallel_executor.hpp and needs the
 # thread library; both binaries exercise it.
+# Section 9.2 of the samplesort specification: whether the concurrent
+# write-stream cliff that fixed K=16 on one core moves once T threads share the
+# LLC and the memory controllers.
+add_executable(bench_samplesort_streams bench_samplesort_streams.cpp)
+target_compile_features(bench_samplesort_streams PRIVATE cxx_std_17)
+target_link_libraries(bench_samplesort_streams PRIVATE tsl::tsl Threads::Threads)
+
 add_executable(bench_samplesort_cosort bench_samplesort_cosort.cpp)
 target_compile_features(bench_samplesort_cosort PRIVATE cxx_std_17)
 target_link_libraries(bench_samplesort_cosort PRIVATE tsl::tsl Threads::Threads)

@@ -347,11 +347,15 @@ class TslSampleSortKernels {
   static_assert(std::is_same_v<typename KeyVec::mask_type, typename IdxVec::mask_type>,
                 "key and index vectors must share a mask type");
   // Distribution keeps one open write stream per bucket per column and two
-  // columns are carried, so the typical bucket count must stay inside the flat
-  // region the stream measurement found. `Adaptive` reaches `max_buckets` only on
-  // a key where every splitter repeats; that case must stay under the measured
-  // cliff rather than under the comfortable rule, and `max_buckets_used` reports
-  // where a run actually landed.
+  // columns are carried. `bench_samplesort_streams` measured where that bites:
+  // the cliff is at 128 streams **per core**, it reproduces at one thread, and it
+  // relaxes rather than tightens as threads are added -- at 24 threads, 3072 total
+  // streams cost nothing. So this is a single-core bound, and it is not what
+  // decides K: K=32 sits inside the flat region and still loses end to end,
+  // because 31 splitters roughly double the classification sweep. Kept because
+  // nothing above K=32 is worth compiling, not because it binds.
+  // `Adaptive` reaches `max_buckets` only where every splitter repeats;
+  // `max_buckets_used` reports where a run actually landed.
   static_assert(2 * K <= 64,
                 "too many concurrent write streams in the typical case: lower K");
   static_assert(!byte_ids || max_buckets <= 256,

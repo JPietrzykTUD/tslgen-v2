@@ -40,6 +40,9 @@
 #include <vector>
 
 #include "samplesort_cosort.hpp"
+// The trivial cases (n <= 1, one worker) delegate to the sequential executor
+// rather than reimplementing them.
+#include "samplesort_executor.hpp"
 
 
 // Fans the chunk bodies of one phase across threads and joins. Stage 1 runs a
