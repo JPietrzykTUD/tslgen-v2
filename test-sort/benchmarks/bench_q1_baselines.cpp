@@ -87,6 +87,7 @@ auto split(std::string const & text, char separator) -> std::vector<std::string>
 
 TslTunedConfig g_samplesort_config;
 TslTunedConfig g_quicksort_config;
+std::map<std::string, TslTunedConfig> g_tuned;
 
 template <class Key>
 auto image_matches(std::vector<std::vector<Key>> const & columns,
@@ -533,10 +534,7 @@ int main(int argc, char ** argv) {
     // Q0 tunes u32 only, so a u64 run reuses the u32 configuration. That is a
     // proxy, not a tuned value, and the row's variant already says "(tuned)" --
     // so it is stated here and in docs/benchmark-plan.md rather than implied.
-    g_samplesort_config = tsl_tuned_for(tuned, "samplesort", TslStyle::Intrinsics,
-                                        512, 4);
-    g_quicksort_config = tsl_tuned_for(tuned, "quicksort", TslStyle::Intrinsics,
-                                       512, 4);
+    g_tuned = tuned;
   }
 #if defined(TSL_COSORT_HAVE_IPS4O)
   std::printf("ips4o: built in\n");
@@ -563,9 +561,13 @@ int main(int argc, char ** argv) {
 
   for (auto const element_bytes : element_byte_list) {
     if (element_bytes == 4) {
+      tsl_select_tuned<std::uint32_t>(g_tuned, g_samplesort_config,
+                                      g_quicksort_config);
       run_all<std::uint32_t>(results, shapes, column_counts, worker_counts, rows,
                              tpcds_dir);
     } else if (element_bytes == 8) {
+      tsl_select_tuned<std::uint64_t>(g_tuned, g_samplesort_config,
+                                      g_quicksort_config);
       run_all<std::uint64_t>(results, shapes, column_counts, worker_counts, rows,
                              tpcds_dir);
     } else {

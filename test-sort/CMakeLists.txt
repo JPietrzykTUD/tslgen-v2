@@ -216,6 +216,27 @@ add_executable(bench_q4_scaling benchmarks/bench_q4_scaling.cpp)
 target_compile_features(bench_q4_scaling PRIVATE cxx_std_17)
 target_link_libraries(bench_q4_scaling PRIVATE tsl::tsl Threads::Threads)
 
+# --- measurement builds collect nothing ------------------------------------------
+# A build made for publishing numbers should be incapable of collecting counters,
+# not merely configured not to. This compiles the element and range counters out of
+# both sorters: the entry points funnel the caller's metrics pointer through
+# `tsl_metrics_or_null`, which returns a statically-known null, so every guarded
+# increment folds away. Measured on tpcds_q064 at twenty-four workers, the atomic
+# counters on the parallel index-sort path cost 1.17x -- twenty fetch_adds across
+# 986,867 task-tree nodes.
+#
+# Off by default so tests and diagnostic tools keep their counters. The `bench`
+# preset turns it on for exactly the targets that publish numbers.
+option(TSL_COSORT_NO_INSTRUMENTATION
+       "Compile the sorters' counters out: for builds that publish measurements" OFF)
+
+# Targets whose output is a published number. Kept as a list because the property
+# has to follow every one of them, and a driver added without it would silently
+# publish instrumented numbers.
+set(TSL_COSORT_MEASURING_TARGETS
+    bench_q0_tune bench_q1_baselines bench_q2_algorithms bench_q3_detection
+    bench_q4_scaling cosort_bench)
+
 # --- Q1 external baselines ----------------------------------------------------
 # Off by default, following the QPL/DML pattern: the default build stays
 # dependency-free and no test acquires a hidden network requirement. When asked
@@ -803,3 +824,22 @@ endif()
 add_test(NAME test_sort COMMAND test_sort)
 add_test(NAME test_multicolumn_sort COMMAND test_multicolumn_sort)
 add_test(NAME test_multicolumn_index_sort COMMAND test_multicolumn_index_sort)
+
+# Applied last, so every measuring target exists by now.
+if(TSL_COSORT_NO_INSTRUMENTATION)
+  foreach(_measuring IN LISTS TSL_COSORT_MEASURING_TARGETS)
+    if(TARGET ${_measuring})
+      target_compile_definitions(${_measuring} PRIVATE TSL_COSORT_NO_INSTRUMENTATION=1)
+      message(STATUS "${_measuring}: counters compiled out")
+    endif()
+  endforeach()
+  # Q0's per-cell units are separate object libraries and need it too.
+  foreach(_style Intrinsics ClangBuiltin ClangBoolMask)
+    foreach(_width 128 256 512)
+      set(_unit "q0_unit_${_style}_${_width}")
+      if(TARGET ${_unit})
+        target_compile_definitions(${_unit} PRIVATE TSL_COSORT_NO_INSTRUMENTATION=1)
+      endif()
+    endforeach()
+  endforeach()
+endif()

@@ -81,6 +81,7 @@
 #include <string>
 #include <vector>
 
+#include "common/instrumentation.hpp"
 #include "cluster_detection/scalar/equal_runs.hpp"
 #include "sorting/common/multicolumn_sort_types.hpp"
 #include "sorting/sample_sort/samplesort_executor.hpp"
@@ -144,8 +145,9 @@ class TslSampleSortMultiColumn {
     index_type * index,
     std::size_t row_count,
     DetectRuns & detect_runs,
-    TslSampleSortColumnMetrics * metrics = nullptr
+    TslSampleSortColumnMetrics * metrics_in = nullptr
   ) {
+    auto * const metrics = tsl_metrics_or_null(metrics_in);
     static_assert(
       !tsl_detector_wants_executor<DetectRuns>::value,
       "this driver never polls, so an asynchronous detector would never "
@@ -163,7 +165,7 @@ class TslSampleSortMultiColumn {
     std::size_t row_count,
     DetectRuns & detect_runs,
     std::size_t worker_count,
-    TslSampleSortColumnMetrics * metrics = nullptr
+    TslSampleSortColumnMetrics * metrics_in = nullptr
   ) {
     static_assert(
       !tsl_detector_wants_executor<DetectRuns>::value,
@@ -171,7 +173,7 @@ class TslSampleSortMultiColumn {
       "complete. Use a synchronous backend."
     );
     run(columns, column_count, index, row_count, detect_runs,
-        std::max<std::size_t>(1, worker_count), metrics);
+        std::max<std::size_t>(1, worker_count), tsl_metrics_or_null(metrics_in));
   }
 
  private:

@@ -93,6 +93,7 @@ auto image_matches(std::vector<std::vector<Key>> const & columns,
 // insertion leaf is up to 6.6x faster, which made a comparison look like a result.
 TslTunedConfig g_samplesort_config;
 TslTunedConfig g_quicksort_config;
+std::map<std::string, TslTunedConfig> g_tuned;
 bool g_tuned_from_file = false;
 
 // Both algorithms plus the scalar reference over one dataset. Shared so a
@@ -119,8 +120,11 @@ void run_pair(TslPaperResults & results, TslDatasetSource<Key> & source,
       row.algorithm = "samplesort";
       row.detector = "scalar";
       row.workers = workers;
+      // The config's own flag, not a separate global: the selection now happens
+      // per key width, so a global computed once in main was always stale and
+      // labelled tuned rows "(default)".
       row.variant = g_samplesort_config.describe_samplesort()
-                    + (g_tuned_from_file ? " (tuned)" : " (default)");
+                    + (g_samplesort_config.from_file ? " (tuned)" : " (default)");
       TslSampleSortColumnMetrics metrics;
       auto const dispatched = with_samplesort<Key, Simd, TSL_COSORT_PHASES>(
         g_samplesort_config, [&](auto sorter) {
@@ -157,7 +161,7 @@ void run_pair(TslPaperResults & results, TslDatasetSource<Key> & source,
       row.detector = "scalar";
       row.workers = workers;
       row.variant = g_quicksort_config.describe_quicksort()
-                    + (g_tuned_from_file ? " (tuned)" : " (default)");
+                    + (g_quicksort_config.from_file ? " (tuned)" : " (default)");
       TslIndexSortMetrics quick_metrics;
       auto const dispatched = with_quicksort_leaf<Key, Simd, TSL_COSORT_PHASES>(
         g_quicksort_config, [&](auto sorter) {
@@ -358,10 +362,8 @@ int main(int argc, char ** argv) {
 
   // Read the descent's answer. Without it the defaults are used and every row
   // says "(default)", so a figure can never quietly rest on an untuned knob.
-  auto const tuned = tsl_read_tuned(tuned_path);
-  g_samplesort_config = tsl_tuned_for(tuned, "samplesort", TslStyle::Intrinsics, 512, 4);
-  g_quicksort_config = tsl_tuned_for(tuned, "quicksort", TslStyle::Intrinsics, 512, 4);
-  g_tuned_from_file = g_samplesort_config.from_file || g_quicksort_config.from_file;
+  g_tuned = tsl_read_tuned(tuned_path);
+  g_tuned_from_file = !g_tuned.empty();
   std::printf("tuning: %s\n  samplesort %s\n  quicksort  %s\n",
               g_tuned_from_file ? tuned_path.c_str()
                                 : "not found, using defaults",
@@ -385,12 +387,18 @@ int main(int argc, char ** argv) {
 
   for (auto const width : widths) {
     if (width == 4) {
+      // The configuration Q0 found for *this* key width. Asking for the 4-byte one
+      // while measuring 8-byte keys would report a proxy as tuned.
+      tsl_select_tuned<std::uint32_t>(g_tuned, g_samplesort_config,
+                                      g_quicksort_config);
       if (!tpcds_dir.empty()) {
         run_external<std::uint32_t>(results, tpcds_dir, worker_counts);
       }
       run_grid<std::uint32_t>(results, shapes, row_counts, column_counts,
                               worker_counts);
     } else if (width == 8) {
+      tsl_select_tuned<std::uint64_t>(g_tuned, g_samplesort_config,
+                                      g_quicksort_config);
       run_grid<std::uint64_t>(results, shapes, row_counts, column_counts,
                               worker_counts);
     } else {

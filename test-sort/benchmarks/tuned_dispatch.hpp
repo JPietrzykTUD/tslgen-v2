@@ -14,6 +14,7 @@
 // result. One dispatch means one place for that to be right.
 
 #include <cstddef>
+#include <map>
 
 #include "sorting/quicksort/multicolumn_index_sort.hpp"
 #include "sorting/sample_sort/samplesort_multicolumn.hpp"
@@ -60,26 +61,69 @@ auto with_samplesort(TslTunedConfig const & config, Run && run) -> bool {
   constexpr auto adaptive = TslSampleSortBuckets::Adaptive;
   constexpr auto byte_ids = TslSampleSortIds::Byte;
   constexpr auto oop = TslSampleSortMovement::OutOfPlace;
+  constexpr auto net = TslSampleSortBase::Network;
+  constexpr auto ins = TslSampleSortBase::Insertion;
   constexpr std::size_t lanes = Simd::lane_count_v;
-  if (config.k != 16 || config.buckets != adaptive || config.ids != byte_ids
+  // The axes the descent settled: ordered buckets were 2.4x worse, key-width ids
+  // and in-place movement both lost. A configuration asking for one of those is
+  // reported rather than measured, because the descent already answered it.
+  if (config.buckets != adaptive || config.ids != byte_ids
       || config.movement != oop) {
     return false;
   }
-  auto const net = config.base_policy == TslSampleSortBase::Network;
-#define TSL_TUNED_SS(BC, P)                                                            run(TslSampleSortMultiColumn<Key, Simd, 16, adaptive, 8, BC, P, byte_ids,                                       BC / lanes, 50, oop, Profile>{})
-  if (config.base_case == 64) {
-    if (net) { TSL_TUNED_SS(64, TslSampleSortBase::Network); }
-    else { TSL_TUNED_SS(64, TslSampleSortBase::Insertion); }
-  } else if (config.base_case == 128) {
-    if (net) { TSL_TUNED_SS(128, TslSampleSortBase::Network); }
-    else { TSL_TUNED_SS(128, TslSampleSortBase::Insertion); }
-  } else if (config.base_case == 256) {
-    if (net) { TSL_TUNED_SS(256, TslSampleSortBase::Network); }
-    else { TSL_TUNED_SS(256, TslSampleSortBase::Insertion); }
-  } else {
-    return false;
-  }
+  // Bucket count, base case, base-case leaf and its fill threshold are all
+  // dispatched, because Q0 varies all four and any of them can win. Until this
+  // existed the bucket count produced a drop and the fill threshold was worse: the
+  // dispatch hard-coded 50 and ignored what the tuner chose, so a fill=75 winner
+  // ran as fill=50 and the row still said "(tuned)". A silent substitution is the
+  // one failure mode a reader cannot detect.
+#define TSL_TUNED_SS(K, BC, P, F)                                                  \
+  run(TslSampleSortMultiColumn<Key, Simd, K, adaptive, 8, BC, P, byte_ids,          \
+                               BC / lanes, F, oop, Profile>{})
+#define TSL_TUNED_SS_FILL(K, BC)                                                   \
+  do {                                                                             \
+    if (config.base_policy == ins) { TSL_TUNED_SS(K, BC, ins, 50); return true; }   \
+    if (config.fill_percent == 25) { TSL_TUNED_SS(K, BC, net, 25); return true; }   \
+    if (config.fill_percent == 50) { TSL_TUNED_SS(K, BC, net, 50); return true; }   \
+    if (config.fill_percent == 75) { TSL_TUNED_SS(K, BC, net, 75); return true; }   \
+    return false;                                                                  \
+  } while (false)
+#define TSL_TUNED_SS_BASE(K)                                                       \
+  do {                                                                             \
+    if (config.base_case == 64) { TSL_TUNED_SS_FILL(K, 64); }                       \
+    if (config.base_case == 128) { TSL_TUNED_SS_FILL(K, 128); }                     \
+    if (config.base_case == 256) { TSL_TUNED_SS_FILL(K, 256); }                     \
+    return false;                                                                  \
+  } while (false)
+  if (config.k == 8) { TSL_TUNED_SS_BASE(8); }
+  if (config.k == 16) { TSL_TUNED_SS_BASE(16); }
+  if (config.k == 32) { TSL_TUNED_SS_BASE(32); }
+  return false;
+#undef TSL_TUNED_SS_BASE
+#undef TSL_TUNED_SS_FILL
 #undef TSL_TUNED_SS
-  return true;
 }
 
+// The tuned configuration for the key width about to be measured.
+//
+// Q0 tunes each key width separately, because a lane holds half as many 8-byte
+// elements and that moves the base case, the bucket count and the leaf capacity
+// together. A reader that asks for the 4-byte configuration while measuring 8-byte
+// keys gets a proxy and still labels the row "(tuned)" -- which is what these
+// drivers did until the tuner learned about u64.
+//
+// Style and register width are fixed at Intrinsics/512 deliberately, and that is a
+// measured choice rather than a default: across all nine cells the best
+// configuration per cell spans 1.00x to 1.02x for seven of them, inside the noise
+// floor, and the only two that separate are the narrow intrinsics cells at 1.43x
+// and 2.03x -- both worse. 512 is the widest available, so no narrower cell can
+// beat it. The other cells' configurations are Q0's design-space *answer*, printed
+// in its report, not an input any reporting driver needs.
+template <class Key>
+void tsl_select_tuned(std::map<std::string, TslTunedConfig> const & tuned,
+                      TslTunedConfig & samplesort, TslTunedConfig & quicksort) {
+  samplesort = tsl_tuned_for(tuned, "samplesort", TslStyle::Intrinsics, 512,
+                             sizeof(Key));
+  quicksort = tsl_tuned_for(tuned, "quicksort", TslStyle::Intrinsics, 512,
+                            sizeof(Key));
+}

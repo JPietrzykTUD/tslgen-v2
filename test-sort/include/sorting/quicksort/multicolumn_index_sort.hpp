@@ -91,6 +91,7 @@
 #include "cluster_detection/scalar/equal_runs.hpp"
 #include "sorting/quicksort/multicolumn_quicksort.hpp"
 #include "sorting/common/multicolumn_sort_tasks.hpp"
+#include "common/instrumentation.hpp"
 #include "sorting/common/multicolumn_sort_types.hpp"
 
 
@@ -243,13 +244,14 @@ class TslMultiColumnIndexSorter {
     std::size_t row_count,
     TslRunDiscoveryKind discovery,
     DetectRuns & detect_runs,
-    TslIndexSortMetrics * metrics = nullptr
+    TslIndexSortMetrics * metrics_in = nullptr
   ) {
     static_assert(
       !tsl_detector_wants_executor<DetectRuns>::value,
       "the index sort is serial and never polls: an asynchronous detector would "
       "never complete. Use a synchronous backend."
     );
+    auto * const metrics = tsl_metrics_or_null(metrics_in);
     validate_inputs(columns, column_count, index, row_count);
 
     // The identity the level-0 copy relies on.
@@ -326,8 +328,9 @@ class TslMultiColumnIndexSorter {
     DetectRuns & detect_runs,
     std::size_t worker_count,
     std::size_t partition_threshold,
-    TslIndexSortMetrics * metrics = nullptr
+    TslIndexSortMetrics * metrics_in = nullptr
   ) {
+    auto * const metrics = tsl_metrics_or_null(metrics_in);
     static_assert(
       !tsl_detector_wants_executor<DetectRuns>::value,
       "an asynchronous detector retains the emitting callable past the task that "
@@ -335,7 +338,8 @@ class TslMultiColumnIndexSorter {
       "self-contained. Use a synchronous backend."
     );
     if (worker_count <= 1) {
-      sort_index(columns, column_count, index, row_count, discovery, detect_runs, metrics);
+      sort_index(columns, column_count, index, row_count, discovery, detect_runs,
+                 metrics_in);
       return;
     }
     validate_inputs(columns, column_count, index, row_count);
@@ -378,7 +382,7 @@ class TslMultiColumnIndexSorter {
       for (std::size_t begin = 0; begin < row_count; begin += chunk) {
         copier.submit(TslIndexMaterializeChunk{begin, std::min(begin + chunk, row_count)});
         if (shared_metrics != nullptr) {
-          shared_metrics->materialize_chunks.fetch_add(1, std::memory_order_relaxed);
+          tsl_count_add(shared_metrics->materialize_chunks, 1);
         }
       }
       copier.wait();
@@ -386,7 +390,7 @@ class TslMultiColumnIndexSorter {
       std::copy(columns[0].data, columns[0].data + row_count, scratch_.data());
     }
     if (shared_metrics != nullptr) {
-      shared_metrics->materialized_elements.fetch_add(row_count, std::memory_order_relaxed);
+      tsl_count_add(shared_metrics->materialized_elements, row_count);
     }
 
     auto worker = [&](index_task const & task, auto & executor) {
@@ -575,9 +579,9 @@ class TslMultiColumnIndexSorter {
       return;
     }
     if (metrics != nullptr) {
-      metrics->tasks.fetch_add(1, std::memory_order_relaxed);
-      metrics->ranges_sorted.fetch_add(1, std::memory_order_relaxed);
-      metrics->rows_sorted.fetch_add(count, std::memory_order_relaxed);
+      tsl_count_add(metrics->tasks, 1);
+      tsl_count_add(metrics->ranges_sorted, 1);
+      tsl_count_add(metrics->rows_sorted, count);
       metrics->column_mask.fetch_or(
         std::uint64_t{1} << std::min<std::size_t>(task.column, 63),
         std::memory_order_relaxed
@@ -587,11 +591,9 @@ class TslMultiColumnIndexSorter {
       auto const mark = std::chrono::steady_clock::now();
       materialize_chunk(columns[task.column].data, index, task.begin, task.end, false);
       if (metrics != nullptr) {
-        metrics->materialized_elements.fetch_add(count, std::memory_order_relaxed);
+        tsl_count_add(metrics->materialized_elements, count);
         if constexpr (Profile) {
-          metrics->ns_materialize.fetch_add(
-            static_cast<std::uint64_t>(tsl_index_since(mark)),
-            std::memory_order_relaxed);
+          tsl_count_add(metrics->ns_materialize, static_cast<std::uint64_t>(tsl_index_since(mark)));
         }
       }
     }
@@ -617,7 +619,7 @@ class TslMultiColumnIndexSorter {
         return;
       }
       if (metrics != nullptr) {
-        metrics->next_level_ranges.fetch_add(span.end - span.begin, std::memory_order_relaxed);
+        tsl_count_add(metrics->next_level_ranges, span.end - span.begin);
       }
       index_task child{next_column, span.begin, span.end, false};
       if (span.end - span.begin < tsl_index_inline_task) {
@@ -644,18 +646,16 @@ class TslMultiColumnIndexSorter {
         sorter_.sort_key_parallel(keys, payloads, 1, count, order, task.begin,
                                   workers_, 1, partition_threshold_, no_band, no_leaf);
         if (metrics != nullptr) {
-          metrics->levels_split.fetch_add(1, std::memory_order_relaxed);
+          tsl_count_add(metrics->levels_split, 1);
         }
       } else {
         sorter_.sort_key(keys, payloads, 1, count, order);
       }
       if (metrics != nullptr) {
         if constexpr (Profile) {
-          metrics->ns_sort.fetch_add(
-            static_cast<std::uint64_t>(tsl_index_since(t_sort)),
-            std::memory_order_relaxed);
+          tsl_count_add(metrics->ns_sort, static_cast<std::uint64_t>(tsl_index_since(t_sort)));
         }
-        metrics->rle_values_scanned.fetch_add(count, std::memory_order_relaxed);
+        tsl_count_add(metrics->rle_values_scanned, count);
       }
       // Sound here and not inside a partition: the whole range is sorted by now,
       // so no equal run can be split between two scans.
@@ -665,8 +665,7 @@ class TslMultiColumnIndexSorter {
         if constexpr (Profile) {
           auto const spent = static_cast<std::uint64_t>(tsl_index_since(t_detect));
           auto const nested = inline_ns.load(std::memory_order_relaxed);
-          metrics->ns_detect.fetch_add(spent > nested ? spent - nested : 0,
-                                       std::memory_order_relaxed);
+          tsl_count_add(metrics->ns_detect, spent > nested ? spent - nested : 0);
         }
       }
       return;
@@ -674,8 +673,8 @@ class TslMultiColumnIndexSorter {
 
     auto equal_band_sink = [&](std::size_t begin, std::size_t end) {
       if (metrics != nullptr) {
-        metrics->direct_equal_bands.fetch_add(1, std::memory_order_relaxed);
-        metrics->direct_equal_band_rows.fetch_add(end - begin, std::memory_order_relaxed);
+        tsl_count_add(metrics->direct_equal_bands, 1);
+        tsl_count_add(metrics->direct_equal_band_rows, end - begin);
       }
       emit_child(TslRunSpan{begin, end});
     };
@@ -686,7 +685,7 @@ class TslMultiColumnIndexSorter {
     std::atomic<std::uint64_t> detect_ns{0};
     auto leaf_sink = [&](std::size_t begin, std::size_t end) {
       if (metrics != nullptr) {
-        metrics->rle_values_scanned.fetch_add(end - begin, std::memory_order_relaxed);
+        tsl_count_add(metrics->rle_values_scanned, end - begin);
       }
       auto const mark = std::chrono::steady_clock::now();
       detect_runs(scratch_.data(), begin, end, emit_child);
@@ -701,7 +700,7 @@ class TslMultiColumnIndexSorter {
                                 workers_, 1, partition_threshold_,
                                 equal_band_sink, leaf_sink);
       if (metrics != nullptr) {
-        metrics->levels_split.fetch_add(1, std::memory_order_relaxed);
+        tsl_count_add(metrics->levels_split, 1);
       }
     } else {
       sorter_.sort_key_with_completion_events(
@@ -716,11 +715,8 @@ class TslMultiColumnIndexSorter {
         auto const nested_inline = inline_ns.load(std::memory_order_relaxed);
         auto const total = static_cast<std::uint64_t>(tsl_index_since(t_sort));
         auto const own = nested_detect + nested_inline;
-        metrics->ns_sort.fetch_add(total > own ? total - own : 0,
-                                   std::memory_order_relaxed);
-        metrics->ns_detect.fetch_add(
-          nested_detect > nested_inline ? nested_detect - nested_inline : 0,
-          std::memory_order_relaxed);
+        tsl_count_add(metrics->ns_sort, total > own ? total - own : 0);
+        tsl_count_add(metrics->ns_detect, nested_detect > nested_inline ? nested_detect - nested_inline : 0);
       }
     }
   }

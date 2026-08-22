@@ -11,6 +11,7 @@
 
 #include <tsl.hpp>
 
+#include "common/instrumentation.hpp"
 #include "sorting/primitives/cosort_bitonic_leaf.hpp"
 #include "sorting/primitives/cosort_network.hpp"
 #include "cluster_detection/scalar/equal_runs.hpp"
@@ -371,12 +372,16 @@ class TslMultiColumnQuickSorter {
         // that holds 32 and the sort is silently wrong. A leaf too long for the
         // network goes to insertion whatever its fill.
         if (count > capacity || count * 100 < HybridFillPercent * capacity) {
-          ++tsl_leaf_routing.to_insertion;
+          if constexpr (tsl_cosort_instrumentation) {
+            ++tsl_leaf_routing.to_insertion;
+          }
           insertion_leaf<Order>(keys, columns, payload_count, count);
           return;
         }
-        ++tsl_leaf_routing.to_network;
-        tsl_leaf_routing.network_padding += capacity - count;
+        if constexpr (tsl_cosort_instrumentation) {
+          ++tsl_leaf_routing.to_network;
+          tsl_leaf_routing.network_padding += capacity - count;
+        }
       }
       TslCoSortBitonicLeaf<DataType, SimdStyle>::template sort<Order>(
         keys,

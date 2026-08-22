@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common/instrumentation.hpp"
+
 // The measurement method every `bench_qN_*` driver shares, so it exists once.
 //
 // A driver declares its grid and its cases; this owns everything about *how* a
@@ -90,6 +92,17 @@ struct TslPaperMachine {
     if (load > 1.0) {
       std::printf("  !! load average above 1.0: another process is competing and "
                   "these numbers are not publishable\n");
+    }
+    // Whether this binary can collect anything while it measures. Printed rather
+    // than assumed: the counters cost enough on the parallel index-sort path to
+    // move a comparison, and a run has no other way to say which build produced
+    // it. `run_paper.sh` reads this line.
+    if constexpr (tsl_cosort_instrumentation) {
+      std::printf("  !! instrumentation is compiled in: counter collection is "
+                  "active and these numbers carry its cost. Configure with "
+                  "--preset bench (TSL_COSORT_NO_INSTRUMENTATION=ON) to publish.\n");
+    } else {
+      std::printf("instrumentation=off (counters compiled out)\n");
     }
   }
 };

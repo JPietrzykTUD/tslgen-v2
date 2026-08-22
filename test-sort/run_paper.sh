@@ -117,6 +117,21 @@ else
   echo "  produce them with benchmarks/datagen/tpcds/extract_keys.py"
 fi
 
+# A measuring build collects nothing. The drivers announce which build they are,
+# and this refuses to produce a results directory from an instrumented one:
+# the counters cost up to 1.17x on the parallel index-sort path, which is enough
+# to move a comparison and impossible to subtract afterwards.
+if [[ -x "$build/bench_q4_scaling" ]]; then
+  if ! "$build/bench_q4_scaling" --axis threads --shapes low_cardinality_d4 \
+        --rows 65536 --element-bytes 4 2>&1 | grep -q "instrumentation=off"; then
+    echo "refusing to measure: $build has instrumentation compiled in" >&2
+    echo "  configure with: cmake -S test-sort --preset bench-dsa" >&2
+    echo "  (or add -DTSL_COSORT_NO_INSTRUMENTATION=ON)" >&2
+    exit 1
+  fi
+  echo "build check: instrumentation is compiled out"
+fi
+
 # Correctness before any number: a configuration that sorts wrongly is a bug in
 # the sorter, not a slow candidate, and the tuner routing around it would hide
 # that. This checks every (style, width, configuration) at a small size and fails

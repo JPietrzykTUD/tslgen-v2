@@ -52,6 +52,7 @@ namespace {
 // quicksort.
 TslTunedConfig g_samplesort_config;
 TslTunedConfig g_quicksort_config;
+std::map<std::string, TslTunedConfig> g_tuned;
 
 auto split(std::string const & text, char separator) -> std::vector<std::string> {
   std::vector<std::string> parts;
@@ -374,15 +375,16 @@ int main(int argc, char ** argv) {
     } else {
       std::printf("tuned configurations from %s\n", tuned_path.c_str());
     }
-    g_samplesort_config = tsl_tuned_for(tuned, "samplesort", TslStyle::Intrinsics,
-                                        512, 4);
-    g_quicksort_config = tsl_tuned_for(tuned, "quicksort", TslStyle::Intrinsics,
-                                       512, 4);
+    g_tuned = tuned;
   }
   for (auto const width : widths) {
     if (width == 4) {
+      tsl_select_tuned<std::uint32_t>(g_tuned, g_samplesort_config,
+                                      g_quicksort_config);
       run_width<std::uint32_t>(results, tpcds_dir, shapes, axis, base_rows, base_columns);
     } else if (width == 8) {
+      tsl_select_tuned<std::uint64_t>(g_tuned, g_samplesort_config,
+                                      g_quicksort_config);
       run_width<std::uint64_t>(results, tpcds_dir, shapes, axis, base_rows, base_columns);
     }
   }
