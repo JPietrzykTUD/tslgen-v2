@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Export compile_commands.json")
 project(tsl_release_fetch_content_sort LANGUAGES CXX)
 
+# Binaries that read the `rle=` backend registry and so gain the accelerator
+# backends wherever a build has them.
+set(TSL_COSORT_RLE_CONSUMERS cosort_bench bench_samplesort_multicolumn)
+
+
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
@@ -416,15 +421,20 @@ if(TSL_COSORT_ENABLE_IAA)
     set(_iaa_link_targets qpl)
   endif()
 
-  if(TARGET cosort_bench)
-    # TSL_COSORT_ENABLE_IAA is what the detector header itself gates on;
-    # TSL_COSORT_HAVE_IAA is what the benchmark's backend registry reads.
-    target_compile_definitions(
-      cosort_bench PRIVATE TSL_COSORT_ENABLE_IAA=1 TSL_COSORT_HAVE_IAA=1
-    )
-    target_link_libraries(cosort_bench PRIVATE ${_iaa_link_targets})
-    message(STATUS "cosort_bench: IAA detector backends enabled")
-  endif()
+  # Every binary that reads the `rle=` backend registry in
+  # benchmarks/cosort_detectors.hpp, not just the staged corpus: the multi-column
+  # samplesort takes the same detectors.
+  foreach(_rle_consumer ${TSL_COSORT_RLE_CONSUMERS})
+    if(TARGET ${_rle_consumer})
+      # TSL_COSORT_ENABLE_IAA is what the detector header itself gates on;
+      # TSL_COSORT_HAVE_IAA is what the backend registry reads.
+      target_compile_definitions(
+        ${_rle_consumer} PRIVATE TSL_COSORT_ENABLE_IAA=1 TSL_COSORT_HAVE_IAA=1
+      )
+      target_link_libraries(${_rle_consumer} PRIVATE ${_iaa_link_targets})
+      message(STATUS "${_rle_consumer}: IAA detector backends enabled")
+    endif()
+  endforeach()
 
   # Same test binary, now with the QPL detector compiled in: the index sorter's
   # discovery runs on its materialized key buffer, so an accelerator backend
@@ -527,15 +537,17 @@ if(TSL_COSORT_ENABLE_DSA)
   endif()
 
   # The staged benchmark gains the DSA backends of the `rle=` axis.
-  if(TARGET cosort_bench)
-    # TSL_COSORT_ENABLE_DSA is what the detector headers themselves gate on;
-    # TSL_COSORT_HAVE_DSA is what the benchmark's backend registry reads.
-    target_compile_definitions(
-      cosort_bench PRIVATE TSL_COSORT_ENABLE_DSA=1 TSL_COSORT_HAVE_DSA=1
-    )
-    target_link_libraries(cosort_bench PRIVATE ${_dsa_link_targets})
-    message(STATUS "cosort_bench: DSA detector backends enabled")
-  endif()
+  foreach(_rle_consumer ${TSL_COSORT_RLE_CONSUMERS})
+    if(TARGET ${_rle_consumer})
+      # TSL_COSORT_ENABLE_DSA is what the detector headers themselves gate on;
+      # TSL_COSORT_HAVE_DSA is what the backend registry reads.
+      target_compile_definitions(
+        ${_rle_consumer} PRIVATE TSL_COSORT_ENABLE_DSA=1 TSL_COSORT_HAVE_DSA=1
+      )
+      target_link_libraries(${_rle_consumer} PRIVATE ${_dsa_link_targets})
+      message(STATUS "${_rle_consumer}: DSA detector backends enabled")
+    endif()
+  endforeach()
 
   add_executable(test_dsa_run_detector tests/test_dsa_run_detector.cpp)
   target_compile_features(test_dsa_run_detector PRIVATE cxx_std_17)

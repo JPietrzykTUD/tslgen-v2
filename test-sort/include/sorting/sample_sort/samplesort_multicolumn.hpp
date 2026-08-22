@@ -72,6 +72,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <chrono>
 #include <condition_variable>
 #include <mutex>
 #include <numeric>
@@ -96,6 +97,12 @@ struct TslSampleSortColumnMetrics {
   std::size_t deepest_column = 0;
   std::size_t parallel_ranges = 0;        // ranges sorted by the parallel executor
   TslSampleSortMetrics sort;              // summed from every samplesort call
+  // Filled only when the driver is instantiated with profiling on. Wall time per
+  // phase summed across workers, so on threads these exceed the elapsed time and
+  // only their ratio means anything.
+  double ns_materialize = 0.0;
+  double ns_sort = 0.0;
+  double ns_detect = 0.0;
 };
 
 
@@ -109,7 +116,10 @@ template <
   TslSampleSortBase BasePolicy = TslSampleSortBase::Network,
   TslSampleSortIds IdWidth = TslSampleSortIds::Byte,
   std::size_t BaseRows = BaseCase / SimdStyle::lane_count_v,
-  std::size_t BaseFillPercent = 50
+  std::size_t BaseFillPercent = 50,
+  // Times the three phases. Two clock reads per phase per range, so it is off by
+  // default and off in any timed run that is not asking where the time goes.
+  bool Profile = false
 >
 class TslSampleSortMultiColumn {
  public:
@@ -357,6 +367,11 @@ class TslSampleSortMultiColumn {
     if (count < 2 || current.column >= column_count) {
       return;
     }
+    auto const since = [](auto start) {
+      return std::chrono::duration<double, std::nano>(
+               std::chrono::steady_clock::now() - start).count();
+    };
+    auto const t_materialize = std::chrono::steady_clock::now();
 
     // Level 0's index is the identity, so it is a copy rather than a gather.
     auto const * source = columns[current.column].data;
@@ -367,10 +382,14 @@ class TslSampleSortMultiColumn {
         keys[at] = source[static_cast<std::size_t>(index[at])];
       }
     }
+    if constexpr (Profile) {
+      metrics.ns_materialize += since(t_materialize);
+    }
     metrics.materialized_elements += count;
     ++metrics.ranges;
     metrics.rows += count;
 
+    auto const t_sort = std::chrono::steady_clock::now();
     TslSampleSortMetrics sort_metrics;
     if (workers > 1) {
       tsl_samplesort_cosort_parallel<Key, SimdStyle, K, Policy, Oversample, BaseCase,
@@ -383,6 +402,9 @@ class TslSampleSortMultiColumn {
         keys.data() + current.begin, index + current.begin, count,
         keys_scratch.data(), index_scratch.data(), {}, &sort_metrics);
     }
+    if constexpr (Profile) {
+      metrics.ns_sort += since(t_sort);
+    }
     accumulate(metrics.sort, sort_metrics);
 
     if (current.column + 1 >= column_count) {
@@ -393,10 +415,14 @@ class TslSampleSortMultiColumn {
     ++metrics.detected_ranges;
     metrics.detected_elements += count;
     auto const next = current.column + 1;
+    auto const t_detect = std::chrono::steady_clock::now();
     detect_runs(keys.data(), current.begin, current.end, [&](TslRunSpan span) {
       ++metrics.runs_found;
       children.push_back(range{next, span.begin, span.end});
     });
+    if constexpr (Profile) {
+      metrics.ns_detect += since(t_detect);
+    }
   }
 
   static void merge(TslSampleSortColumnMetrics & into,
@@ -408,6 +434,9 @@ class TslSampleSortMultiColumn {
     into.detected_elements += from.detected_elements;
     into.runs_found += from.runs_found;
     into.parallel_ranges += from.parallel_ranges;
+    into.ns_materialize += from.ns_materialize;
+    into.ns_sort += from.ns_sort;
+    into.ns_detect += from.ns_detect;
     into.deepest_column = std::max(into.deepest_column, from.deepest_column);
     accumulate(into.sort, from.sort);
   }

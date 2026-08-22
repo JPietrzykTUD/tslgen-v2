@@ -105,21 +105,69 @@ materialise the active column through the index, samplesort it, detect the equal
 runs, recurse into each on the next column. Level 0 is a copy rather than a
 gather, and only rows inside a surviving range are ever materialised.
 
-Against the indirect quicksort on the identical problem, 2^21 rows, four columns,
+Against the indirect quicksort on the identical problem, 2^20 rows, four columns,
 u32, `rle=scalar`, ns/element:
 
 | shape | samplesort w=1 | quicksort w=1 | samplesort w=24 | quicksort w=24 |
 | --- | --- | --- | --- | --- |
-| `low_cardinality_d4` | 17.5 | **13.3** | 7.9 | **4.9** |
-| `unique_last_g64` | 49.5 | **45.5** | **11.8** | 12.5 |
-| `skewed_zipf_s1` | **57.4** | 95.2 | **15.0** | 31.1 |
-| `unique_first` | 27.2 | **19.2** | 7.5 | **5.5** |
+| `low_cardinality_d4` | 14.5 | **11.5** | 8.7 | **5.9** |
+| `unique_last_g64` | 43.7 | **41.1** | 15.6 | **12.1** |
+| `unique_first` | 24.4 | **18.5** | 8.1 | **8.0** |
+| `skewed_zipf_s1` | **57.4** | 109.5 | **16.5** | 49.6 |
+| `independent_uniform_c1024` | **83.8** | 293.8 | **14.5** | 98.7 |
 
-`std::sort` over row indices with a lexicographic comparator is 93 to 228 on the
-same cases, so both are 4-15x that. Samplesort wins on the heavy-tailed shape by
-1.7x at one thread and 2.1x on 24, loses on the others, and the split is the same
-one the single-key numbers showed: it is better where the data punishes a binary
-partition and worse where a tuned single-pass partition is already right.
+`std::sort` over row indices with a lexicographic comparator is 88 to 183 on the
+same cases. The split is the one the single-key numbers already showed, and it is
+sharp: samplesort loses by 20-30% wherever a binary partition is already the right
+shape, and wins by a lot -- **1.9x/3.0x on zipf and 3.5x/6.8x on a
+thousand-distinct-value key** -- wherever it is not. `independent_uniform_c1024`
+is the widest margin measured anywhere in this document, and the quicksort's 293.8
+against `std::sort`'s 130.3 on the same case says why: a three-way partition on a
+key with a thousand distinct values and four columns is close to its worst case,
+where a 16-way split on sampled splitters is close to its best.
+
+### The detector axis applies, and it does not matter
+
+This is what the multi-column loop was for, so it is measured: `scalar`, `iaa_sw`,
+`iaa_freq_sw` and `dml_sw` all drive the driver unchanged, through the same
+`tsl_with_detector` factory the corpus uses. The hardware backends compile and
+then throw from their constructors on this host -- no `/dev/iax`, and `dsa_hw`
+still fails with the pre-existing DML batch-limits error -- so the benchmark
+reports them as unavailable and continues rather than aborting the sweep.
+
+The answer is that offloading detection cannot help here, and the profile says why
+before the backends do. Timing the three phases separately (`Profile = true` on
+the driver), u32, 2^21 rows:
+
+| shape | columns | materialise | sort | detect | detect share |
+| --- | --- | --- | --- | --- | --- |
+| `low_cardinality_d4` | 4 | 7.8 | 8.6 | 0.8 | 4.5% |
+| `unique_last_g64` | 4 | 12.7 | 34.9 | 0.9 | 1.8% |
+| `skewed_zipf_s1` | 8 | 112.8 | 94.1 | 5.3 | 2.5% |
+| `independent_uniform_c1024` | 8 | 25.8 | 56.2 | 8.0 | **8.9%** |
+
+**Detection is 0.5% to 10.4% of the runtime**, and the measured backends bear that
+out: on `low_cardinality_d4` at one thread, `scalar` 15.7, `iaa_sw` 14.7,
+`iaa_freq_sw` 15.1 -- all inside each other's noise. `dml_sw` is the exception in
+the wrong direction: 258 ns/element against `scalar`'s 11.3 at 24 workers on
+`independent_uniform_c1024`, the same pathology recorded as open item 10 for the
+corpus.
+
+Two consequences.
+
+**The free-clusters harvest is not worth doing, and that question is now closed.**
+A samplesort does know some equal runs without looking -- an equality bucket's span
+is a maximal run and the histogram gives its bounds -- but the whole phase it would
+shrink is at most a tenth of the runtime and usually a fortieth, while collecting
+those spans needs one mutex-protected report per terminal range, about 440k of them
+in a 2^24-row sort. That is the shape already measured to cap the samplesort
+executor at 1.04x on 24 threads. The saving is smaller than the mechanism.
+
+**The gather is the thing worth attacking.** At eight columns materialise is the
+largest phase: 112.8 ns/element against the sort's 94.1 on `skewed_zipf_s1`, and
+35.6 against 29.4 on `low_cardinality_d4`. It is a pure random gather through the
+index, it grows with column count while detection does not, and nothing in this
+driver has tried to make it cheaper.
 
 ### The parallel form needed two corrections, both measured
 

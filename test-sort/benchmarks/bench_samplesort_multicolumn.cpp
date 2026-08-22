@@ -18,9 +18,12 @@
 #include <cstring>
 #include <fstream>
 #include <numeric>
+#include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
+#include "cosort_detectors.hpp"
 #include "dataset_catalog.hpp"
 #include "dataset_reference.hpp"
 #include "dataset_source.hpp"
@@ -100,7 +103,8 @@ int main(int argc, char ** argv) {
   std::size_t rows = 1u << 21;
   std::vector<std::size_t> column_counts{2, 4, 8};
   std::vector<std::string> shapes{"low_cardinality_d4", "unique_last_g64",
-                                  "skewed_zipf_s1", "unique_first"};
+                                  "skewed_zipf_s1", "unique_first",
+                                  "independent_uniform_c1024"};
   std::vector<std::size_t> worker_counts{1, 24};
   std::string csv_path;
   for (int i = 1; i < argc; ++i) {
@@ -109,6 +113,21 @@ int main(int argc, char ** argv) {
       rows = static_cast<std::size_t>(std::strtoull(argv[++i], nullptr, 10));
     } else if (flag == "--cols" && i + 1 < argc) {
       column_counts = {static_cast<std::size_t>(std::strtoull(argv[++i], nullptr, 10))};
+    } else if (flag == "--shapes" && i + 1 < argc) {
+      shapes.clear();
+      std::string list = argv[++i];
+      std::size_t start = 0;
+      while (start <= list.size()) {
+        auto const cut = list.find(',', start);
+        auto const end = cut == std::string::npos ? list.size() : cut;
+        if (end > start) {
+          shapes.push_back(list.substr(start, end - start));
+        }
+        if (cut == std::string::npos) {
+          break;
+        }
+        start = cut + 1;
+      }
     } else if (flag == "--csv" && i + 1 < argc) {
       csv_path = argv[++i];
     } else {
@@ -147,18 +166,46 @@ int main(int argc, char ** argv) {
       }
 
       for (auto const workers : worker_counts) {
-        TslSampleSortMultiColumn<Key, Simd, 16> samplesort;
-        measure(shape, rows, columns, "samplesort multicolumn", workers, *pristine,
-                *reference, [&](std::vector<Key> & index) {
-                  TslIndexScalarDetector<Key> detector;
-                  if (workers > 1) {
-                    samplesort.sort_index_parallel(specs.data(), columns, index.data(),
-                                                   rows, detector, workers);
-                  } else {
-                    samplesort.sort_index(specs.data(), columns, index.data(), rows,
-                                          detector);
-                  }
-                });
+        // The whole point of the multi-column driver is that the `rle=` axis
+        // applies to it, so every synchronous backend this build has is measured.
+        // Asynchronous ones are skipped: this driver never polls, so they would
+        // never complete, which its own static_assert also says.
+        for (auto const backend : tsl_compiled_detectors()) {
+          if (tsl_detector_is_async(backend)) {
+            continue;
+          }
+          TslDetectorConfig config;
+          config.workers = workers;
+          auto const label =
+            std::string("samplesort mc rle=") + tsl_detector_name(backend);
+          // A backend can be compiled in and still be unavailable: the IAA
+          // hardware path needs a device and configured work queues, and throws
+          // from its constructor when the host has neither. Report and move on
+          // rather than taking the whole sweep down with it.
+          try {
+          tsl_with_detector<Key>(backend, config, [&](auto & detector) {
+            using Detector = std::decay_t<decltype(detector)>;
+            if constexpr (!tsl_detector_wants_executor<Detector>::value) {
+              TslSampleSortMultiColumn<Key, Simd, 16> samplesort;
+              measure(shape, rows, columns, label, workers, *pristine, *reference,
+                      [&](std::vector<Key> & index) {
+                        if (workers > 1) {
+                          samplesort.sort_index_parallel(specs.data(), columns,
+                                                         index.data(), rows, detector,
+                                                         workers);
+                        } else {
+                          samplesort.sort_index(specs.data(), columns, index.data(),
+                                                rows, detector);
+                        }
+                      });
+            }
+          });
+          } catch (std::exception const & error) {
+            std::printf("%-26s %5zu %8zu %-26s %7zu   unavailable: %s\n",
+                        shape.c_str(), columns, rows, label.c_str(), workers,
+                        error.what());
+          }
+        }
 
         TslMultiColumnIndexSorter<Key, TslPartitionKind::THREE_WAY,
                                   TslLeafKind::NETWORK, Simd> quicksort(0x5A3F1E77);
