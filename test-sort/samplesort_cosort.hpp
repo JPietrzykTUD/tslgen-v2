@@ -257,7 +257,24 @@ template <
   int Oversample = 8,
   std::size_t BaseCase = 256,
   TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion,
-  TslSampleSortIds IdWidth = TslSampleSortIds::Byte
+  TslSampleSortIds IdWidth = TslSampleSortIds::Byte,
+  // Rows of the base-case network, so its capacity is `lanes * BaseRows`. The
+  // base case sees ranges averaging tens of elements, and a network costs its
+  // full capacity however little of it is filled, so this is the knob that
+  // decides whether the network is worth using at all.
+  // Rows of the base-case network. Derived so its capacity is exactly `BaseCase`,
+  // which is what makes the network cover every range that reaches the base case
+  // and leaves nothing for insertion except the ranges too sparse to be worth it.
+  // Measured: a *narrower* network sized to the average range (38 elements) is
+  // worse, because it hands the large ranges -- which hold most of the elements
+  // -- back to the quadratic leaf.
+  std::size_t BaseRows = BaseCase / SimdStyle::lane_count_v,
+  // Percentage of the base network's capacity a range must fill to be worth its
+  // fixed cost; below it the insertion leaf runs. 0 sends everything to the
+  // network, above 100 sends everything to insertion, so the sweep spans both.
+  // Width-dependent in practice: u32 prefers 25, u64 prefers 50, because the
+  // u64 network costs more per element and needs a fuller range to pay.
+  std::size_t BaseFillPercent = 50
 >
 class TslSampleSortKernels {
  public:
@@ -289,11 +306,15 @@ class TslSampleSortKernels {
   static constexpr bool network_base =
     BasePolicy == TslSampleSortBase::Network
     && std::is_same_v<Key, typename TslSampleSortTraits<Key>::index_type>;
-  using NetworkLeaf = TslCoSortBitonicLeaf<Key, SimdStyle>;
+  using NetworkLeaf = TslCoSortBitonicLeaf<Key, SimdStyle, BaseRows>;
   // Asking for the network leaf with a signed key is not an error, it just does
   // not get one: `network_base` is false and the insertion leaf runs.
-  static constexpr std::size_t base_case =
-    network_base ? std::min(BaseCase, NetworkLeaf::capacity) : BaseCase;
+  // Deliberately *not* clamped to the network's capacity. The base case decides
+  // how deep the recursion goes and the network only decides who sorts a range
+  // once it is there: clamping would buy an extra partition level wherever the
+  // capacity is below `BaseCase`, which at u64 costs more than the network saves.
+  // `base_sort_pairs` sends anything above the capacity to insertion instead.
+  static constexpr std::size_t base_case = BaseCase;
   static constexpr std::size_t sample_size =
     static_cast<std::size_t>(Oversample) * static_cast<std::size_t>(K);
 
@@ -333,9 +354,25 @@ class TslSampleSortKernels {
     auto const count = end - begin;
 
     std::array<Key, sample_size> sample{};
-    auto const drawn = std::min(sample_size, count);
+    // Scale the sample to the range. `Oversample * K` draws is the right budget
+    // for a range whose buckets get partitioned again, but most partition steps
+    // sit near the bottom of the tree, where 128 draws can be a quarter of the
+    // range and every bucket goes straight to the base case whatever the
+    // splitters are. The floor keeps `2K` draws, so every splitter position
+    // still has two candidates.
+    auto const budget = std::max<std::size_t>(2 * static_cast<std::size_t>(K),
+                                              count / 4);
+    auto const drawn = std::min(std::min(sample_size, budget), count);
+    // `rng.next() % count` is a 64-bit division per draw, and there are
+    // `Oversample * K` draws per partition step: measured at 16% of the runtime,
+    // most of it here. Lemire's multiply-shift maps the full random word into
+    // `[0, count)` with one widening multiply and keeps the draw random, which a
+    // fixed stride would not -- a strided sample is adversarially bad on a
+    // periodic key.
     for (std::size_t i = 0; i < drawn; ++i) {
-      sample[i] = keys[begin + static_cast<std::size_t>(rng.next() % count)];
+      auto const at = static_cast<std::size_t>(
+        (static_cast<unsigned __int128>(rng.next()) * count) >> 64);
+      sample[i] = keys[begin + at];
     }
     std::sort(sample.begin(), sample.begin() + static_cast<std::ptrdiff_t>(drawn));
 
@@ -550,7 +587,11 @@ class TslSampleSortKernels {
   ) {
     if constexpr (network_base) {
       auto const count = end - begin;
-      if (count <= NetworkLeaf::capacity) {
+      // Fixed cost, so only worth it on a range that fills enough of it. Without
+      // this test the network is a 50% regression on ranges averaging tens of
+      // elements; with it, it is the largest single win in this sorter.
+      if (count * 100 >= BaseFillPercent * NetworkLeaf::capacity
+          && count <= NetworkLeaf::capacity) {
         // The index column is the leaf's single payload. `network_base` has
         // already established that its type is the key's.
         Key * payload = reinterpret_cast<Key *>(idx + begin);

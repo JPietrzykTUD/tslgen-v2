@@ -149,7 +149,9 @@ void stage_breakdown(char const * type, std::size_t n) {
 // ---------------------------------------------------------------------------
 template <class Key, class Simd, int K, TslSampleSortBuckets Policy,
           int Oversample = 8, std::size_t BaseCase = 256,
-          TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion>
+          TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion,
+          std::size_t BaseRows = BaseCase / Simd::lane_count_v,
+          std::size_t BaseFillPercent = 50>
 auto end_to_end(char const * type, std::size_t n, std::size_t chunks) -> double {
   using Idx = typename TslSampleSortTraits<Key>::index_type;
   auto const source = random_keys<Key>(n, 0x1234F00D);
@@ -168,7 +170,8 @@ auto end_to_end(char const * type, std::size_t n, std::size_t chunks) -> double 
     keys = source;
     std::iota(idx.begin(), idx.end(), Idx{0});
     auto const start = Clock::now();
-    tsl_samplesort_cosort<Key, Simd, K, Policy, Oversample, BaseCase, BasePolicy>(
+    tsl_samplesort_cosort<Key, Simd, K, Policy, Oversample, BaseCase, BasePolicy,
+                          TslSampleSortIds::Byte, BaseRows, BaseFillPercent>(
       keys.data(), idx.data(), n, keys_scratch.data(), idx_scratch.data(),
       options, &metrics);
     auto const stop = Clock::now();
@@ -181,8 +184,9 @@ auto end_to_end(char const * type, std::size_t n, std::size_t chunks) -> double 
   auto const ns = median(samples);
   char note[128];
   std::snprintf(note, sizeof(note),
-                "%s base=%zu passes=%.2f baseel=%.2f copyback=%.2f buckets<=%zu eqb=%zu",
+                "%s base=%zu rows=%zu fill=%zu passes=%.2f baseel=%.2f copyback=%.2f buckets<=%zu eqb=%zu",
                 BasePolicy == TslSampleSortBase::Network ? "net" : "ins", BaseCase,
+                BaseRows, BaseFillPercent,
                 static_cast<double>(metrics.classified_elements) / static_cast<double>(n),
                 static_cast<double>(metrics.base_case_elements) / static_cast<double>(n),
                 static_cast<double>(metrics.copied_back_elements) / static_cast<double>(n),
@@ -323,12 +327,32 @@ int main(int argc, char ** argv) {
   // The same sweep against the playground's branch-free leaf. Its cost does not
   // depend on how full the range is, which is the property that matters when
   // most ranges arrive at the base case rather than through it.
+  // A network sized to the base case rather than to the register file. Its cost
+  // is fixed at `lanes * rows`, so the row count is the whole question: rows=16
+  // is the 256-wide leaf the partition loop uses and it is far too wide here.
   constexpr auto network_base = TslSampleSortBase::Network;
-  std::printf("\n-- base-case sweep with the bitonic network leaf --\n");
-  end_to_end<U32, Simd32, 16, equality, 8, 64, network_base>("u32", n, 1);
-  end_to_end<U32, Simd32, 16, equality, 8, 128, network_base>("u32", n, 1);
-  end_to_end<U32, Simd32, 16, equality, 8, 256, network_base>("u32", n, 1);
-  end_to_end<U64, Simd64, 16, equality, 8, 128, network_base>("u64", n, 1);
+  // The network's cost is fixed at its capacity, and the ranges reaching the
+  // base case average 38 elements -- so the capacity should track the ranges,
+  // not `BaseCase`. rows=16 is the 256-wide leaf the partition loop uses.
+  std::printf("\n-- base-case network: capacity (rows) and fill threshold --\n");
+  end_to_end<U32, Simd32, 16, equality, 8, 256, network_base, 16, 101>("u32", n, 1);
+  end_to_end<U32, Simd32, 16, equality, 8, 256, network_base, 2, 25>("u32", n, 1);
+  end_to_end<U32, Simd32, 16, equality, 8, 256, network_base, 4, 25>("u32", n, 1);
+  end_to_end<U32, Simd32, 16, equality, 8, 256, network_base, 4, 50>("u32", n, 1);
+  end_to_end<U32, Simd32, 16, equality, 8, 256, network_base, 8, 25>("u32", n, 1);
+  end_to_end<U32, Simd32, 16, equality, 8, 256, network_base, 8, 50>("u32", n, 1);
+  end_to_end<U32, Simd32, 16, equality, 8, 256, network_base, 16, 25>("u32", n, 1);
+  end_to_end<U64, Simd64, 16, equality, 8, 256, network_base, 16, 101>("u64", n, 1);
+  end_to_end<U64, Simd64, 16, equality, 8, 256, network_base, 2, 25>("u64", n, 1);
+  end_to_end<U64, Simd64, 16, equality, 8, 256, network_base, 4, 25>("u64", n, 1);
+  end_to_end<U64, Simd64, 16, equality, 8, 256, network_base, 4, 50>("u64", n, 1);
+  end_to_end<U64, Simd64, 16, equality, 8, 256, network_base, 8, 25>("u64", n, 1);
+  end_to_end<U64, Simd64, 16, equality, 8, 256, network_base, 8, 50>("u64", n, 1);
+  end_to_end<U64, Simd64, 16, equality, 8, 256, network_base, 16, 25>("u64", n, 1);
+  // rows=32 gives u64 a capacity of 256, i.e. full coverage of `BaseCase`, which
+  // is what u32 already has at rows=16. It also asks for a 32-register key bank.
+  end_to_end<U64, Simd64, 16, equality, 8, 256, network_base, 32, 25>("u64", n, 1);
+  end_to_end<U64, Simd64, 16, equality, 8, 256, network_base, 32, 50>("u64", n, 1);
 
   std::printf("\n-- chunk sweep, still one thread: the tax a parallel run prepays --\n");
   auto const one_chunk = end_to_end<U32, Simd32, 16, equality>("u32", n, 1);

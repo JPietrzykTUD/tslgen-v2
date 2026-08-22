@@ -34,7 +34,14 @@
 // selects the extension, defaulting to the native (widest) one.
 // -----------------------------------------------------------------------------
 template <class DataType = std::uint32_t,
-          class SimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, DataType>>
+          class SimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, DataType>,
+          // Rows of the resident key bank, so `capacity = lanes * Rows`. The
+          // default keeps the bank at the register file's size, which is what a
+          // leaf reached through a partition loop wants. A caller whose ranges
+          // are known to be much shorter -- samplesort's base case averages tens
+          // of elements -- wants fewer rows, because the network's cost is fixed
+          // at its capacity however little of it is filled.
+          std::size_t Rows = 16>
 class TslCoSortBitonicLeaf {
   using Vec = SimdStyle;
   static_assert(std::is_same_v<typename SimdStyle::base_type, DataType>,
@@ -44,8 +51,9 @@ class TslCoSortBitonicLeaf {
   using imask_type = typename Vec::imask_type;
 
   static constexpr std::size_t lanes = Vec::lane_count_v;
-  static constexpr std::size_t rows = 16;
+  static constexpr std::size_t rows = Rows;
   static_assert((lanes & (lanes - 1)) == 0, "lane count must be a power of two");
+  static_assert(Rows >= 1 && (Rows & (Rows - 1)) == 0, "row count must be a power of two");
 
   static constexpr std::size_t log2_of(std::size_t value) {
     std::size_t result = 0;

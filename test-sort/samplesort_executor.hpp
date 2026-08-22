@@ -37,6 +37,8 @@ template <
   std::size_t BaseCase = 256,
   TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion,
   TslSampleSortIds IdWidth = TslSampleSortIds::Byte,
+  std::size_t BaseRows = BaseCase / SimdStyle::lane_count_v,
+  std::size_t BaseFillPercent = 50,
   bool Profile = false
 >
 void tsl_samplesort_cosort(
@@ -50,7 +52,7 @@ void tsl_samplesort_cosort(
 ) {
   using Kernels =
     TslSampleSortKernels<Key, SimdStyle, K, Policy, Oversample, BaseCase, BasePolicy,
-                         IdWidth>;
+                         IdWidth, BaseRows, BaseFillPercent>;
   using Idx = typename Kernels::index_type;
 
   TslSampleSortMetrics metrics;

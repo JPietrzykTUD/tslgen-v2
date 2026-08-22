@@ -17,8 +17,8 @@ All figures are medians of five, `n = 2^24`, single threaded.
 | --- | --- | --- |
 | `TslMultiColumnQuickSorter::sort_key` + index, network leaf | **21.8 ns/element** | 42.9 |
 | `TslMultiColumnQuickSorter::sort_key` + index, insertion leaf | 30.5 | 44.5 |
-| samplesort co-sort, K=16, adaptive equality buckets | 31.1 | **35.5** |
-| samplesort co-sort, K=16, ordered buckets | 30.5 | 35.4 |
+| samplesort, network base case at its best fill threshold | **25.4** | **33.7** |
+| samplesort, insertion base case | 30.7 | 36.9 |
 | `std::sort` over `(key, index)` pairs | 66.1 | 69.7 |
 | `std::stable_sort` over pairs | 61.2 | 99.6 |
 
@@ -36,20 +36,67 @@ passes stay in cache. Its case rests on the parallel question, which is not
 implemented. At this size, on one thread, a tuned single-pass partition with
 `compress`/`expand` beats a classify-then-scatter pass pair.
 
+## Acting on the profile
+
+The profile below said the two vector kernels are a third of the runtime and the
+base case is nearly half. Two changes followed from it.
+
+**A hybrid base case (45.6% -> 35.3%).** The bitonic leaf on its own was a 50%
+regression, measured earlier: it pays its full capacity on ranges averaging 38
+elements. Adding the same fill test the direct sorter's hybrid leaf uses -- take
+the network only above `BaseFillPercent` of its capacity, insertion below --
+turns it into the largest single win here. u32 end to end 30.7 -> 25.4, u64
+36.9 -> 33.7.
+
+Two things about it were counter-intuitive enough to be worth stating:
+
+* **The network must be wide, not matched to the average range.** Sizing its
+  capacity to the 38-element average (rows=4, capacity 64) measures 28.7 against
+  25.4 for the full 256. The average is not what matters: the large ranges are
+  few but hold most of the elements, and a narrow network hands exactly those
+  back to the quadratic leaf. `BaseRows` is therefore derived as
+  `BaseCase / lanes`, so the capacity always covers the whole base case.
+* **`base_case` must not be clamped to the capacity.** Clamping buys an extra
+  partition level wherever the capacity is smaller, which at u64 cost more than
+  the network saved -- it was the difference between the network losing to
+  insertion and beating it.
+
+`TslCoSortBitonicLeaf` gained a defaulted `Rows` parameter to make this
+measurable; every existing instantiation is unchanged.
+
+**Cheaper sampling (16.2% -> 14.7%).** Two changes, one of which did nothing:
+
+* Replacing `rng.next() % count` with Lemire's multiply-shift: **no measurable
+  effect**. 128 divisions per step sounded expensive, but the draws are
+  independent random loads and the divisions hide under their latency. Kept
+  anyway, since it is strictly less work.
+* Scaling the sample to the range (`max(2K, count/4)`, capped at `Oversample * K`):
+  about 1.5%. Most partition steps sit near the bottom of the tree, where 128
+  draws can be a quarter of the range and the splitter quality cannot matter --
+  every bucket goes straight to the base case regardless.
+
+Sampling is the one place where §4.1's claim that "the sample sort is not on the
+critical path" is closest to wrong and still hardest to fix: it is 15% of the
+runtime and neither change moved it much.
+
 ## Where the time actually goes
 
 The two kernels the specification's performance section is about are 31% of the
 runtime. Profiled build (`Profile = true` on the executor, which costs about 8%
 in clock reads, so shares matter more than absolutes), u32, K=16, `n = 2^24`:
 
-| phase | ns/element | share | |
+| phase | before | after | share now |
 | --- | --- | --- | --- |
-| base case | 15.02 | 45.6% | 440461 ranges, average **38.1 elements** |
-| splitter selection | 5.33 | 16.2% | 29364 steps x 128 samples |
-| distribute | 5.51 | 16.7% | |
-| classify | 4.80 | 14.6% | 4.64 passes |
-| copy back | 0.50 | 1.5% | 0.64 elements per element |
-| queue and task admin | 1.80 | 5.5% | |
+| base case | 15.02 | **10.74** | 35.3% |
+| distribute | 5.51 | 6.91 | 22.7% |
+| classify | 4.80 | 5.93 | 19.5% |
+| splitter selection | 5.33 | **4.47** | 14.7% |
+| queue and task admin | 1.80 | 1.86 | 6.1% |
+| copy back | 0.50 | 0.55 | 1.8% |
+
+("before" is the insertion base case and unscaled sampling; classify and
+distribute rise only because the profiled total fell, their absolute cost is
+unchanged. 440020 base-case ranges averaging 38.1 elements.)
 
 u64 is the same shape: base case 38.8%, splitters 13.9%, the two kernels 41%.
 
@@ -240,8 +287,7 @@ any target where the narrowing pair is absent.
   moves) is still the first thing to run after threading. With adaptive equality
   buckets the typical stream count is `2·T·K` as §3.1 assumed, not double it.
 * The mask-free classification form of finding 1, which needs the bias pass.
-* A base-case sort tuned for ~38-element ranges, and cheaper splitter sampling:
-  together 62% of the runtime, per the profile above.
+* Threading, and then in-place block permutation.
 * An IPS⁴o baseline. `std::sort` over pairs is the wrong yardstick for a
   samplesort and these numbers should not harden without it.
 * In-place block permutation (IPS⁴o's technique).
