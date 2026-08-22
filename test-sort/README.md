@@ -23,7 +23,11 @@ include/
 benchmarks/
   datagen/                  dataset generation, manifests and reference images
   visualization/            plotting and sweep scripts
-  *.cpp                     benchmark binaries; cosort_bench is the staged corpus
+  paper_harness.hpp         the measurement method, once: verify then time,
+                            median of nine with the IQR, machine state, drops
+  bench_qN_*.cpp            one paper question each; see docs/benchmark-plan.md
+  cosort_bench.cpp          the staged variant corpus
+  bench_*.cpp               focused studies behind one decision each
 tests/                      one binary per subject
 docs/                       plans, reports and measured notes
 ```
@@ -89,6 +93,18 @@ The variant space is written down once, as types, in
 enumerates the registered algorithm names. A directory tree saying the same thing
 would be a second representation that can drift from the first, and only one of
 the two is checkable.
+
+## Producing the paper's numbers
+
+```bash
+./run_paper.sh <build-dir> <results-dir>            # everything
+./run_paper.sh <build-dir> <results-dir> --quick    # one cell per question
+```
+
+`docs/benchmark-plan.md` says which question each binary answers and under what
+method. One CSV schema across all of them, so a figure is a query over the results
+directory rather than a re-run, and the runner refuses to mix two hosts' numbers
+in one directory.
 
 ## Checking a refactor
 

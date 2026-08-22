@@ -4,7 +4,8 @@ project(tsl_release_fetch_content_sort LANGUAGES CXX)
 
 # Binaries that read the `rle=` backend registry and so gain the accelerator
 # backends wherever a build has them.
-set(TSL_COSORT_RLE_CONSUMERS cosort_bench bench_samplesort_multicolumn)
+set(TSL_COSORT_RLE_CONSUMERS cosort_bench bench_samplesort_multicolumn
+    bench_q3_detection)
 
 
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
@@ -185,6 +186,20 @@ target_link_libraries(bench_hybrid_leaf PRIVATE tsl::tsl Threads::Threads)
 # rest with one gather pass each. Kernels in samplesort_cosort.hpp, the
 # swappable sequential executor in samplesort_executor.hpp, measurements in
 # samplesort-notes.md.
+# The paper's systematic drivers: one question per binary, one CSV schema, the
+# method fixed once in benchmarks/paper_harness.hpp. See docs/benchmark-plan.md.
+add_executable(bench_q4_scaling benchmarks/bench_q4_scaling.cpp)
+target_compile_features(bench_q4_scaling PRIVATE cxx_std_17)
+target_link_libraries(bench_q4_scaling PRIVATE tsl::tsl Threads::Threads)
+
+add_executable(bench_q3_detection benchmarks/bench_q3_detection.cpp)
+target_compile_features(bench_q3_detection PRIVATE cxx_std_17)
+target_link_libraries(bench_q3_detection PRIVATE tsl::tsl Threads::Threads)
+
+add_executable(bench_q2_algorithms benchmarks/bench_q2_algorithms.cpp)
+target_compile_features(bench_q2_algorithms PRIVATE cxx_std_17)
+target_link_libraries(bench_q2_algorithms PRIVATE tsl::tsl Threads::Threads)
+
 add_executable(bench_samplesort_multicolumn benchmarks/bench_samplesort_multicolumn.cpp)
 target_compile_features(bench_samplesort_multicolumn PRIVATE cxx_std_17)
 target_link_libraries(bench_samplesort_multicolumn PRIVATE tsl::tsl Threads::Threads)

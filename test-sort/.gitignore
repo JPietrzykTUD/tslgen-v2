@@ -1,3 +1,6 @@
 # Reference checkouts of other projects, kept locally for comparison. They are
 # separate git repositories, so they must never be added to this one.
 TMP/
+
+# Paper results are per-host and per-run; regenerate with run_paper.sh.
+results/
