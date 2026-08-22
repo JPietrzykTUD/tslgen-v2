@@ -48,6 +48,7 @@
 #include <benchmark/benchmark.h>
 
 #include "cosort_case.hpp"
+#include "sorting/sample_sort/samplesort_multicolumn.hpp"
 #include "sorting/quicksort/multicolumn_index_sort.hpp"
 #include "cosort_detectors.hpp"
 #include "cosort_plan.hpp"
@@ -442,6 +443,87 @@ void run_index_case(
   }
 }
 
+
+// --- samplesort, for the portability question ---------------------------------
+//
+// Q6 asks whether the implementation style and register width cost anything, and
+// until now it answered that for the quicksort only -- so "TSL gives portable
+// performance" rested on one of the two algorithms. The samplesort is not a point
+// in the quicksort's variant space (its axes are bucket count, base case, base
+// leaf, ids, movement), so it is registered separately, and with one
+// configuration per cell rather than its own product: the question here is the
+// cell, not the configuration. That configuration is the reference point the
+// descent settled on, fixed in source deliberately -- this driver is a
+// google-benchmark binary with no access to `best_config.tsv`, and a portability
+// comparison wants the *same* configuration in every cell anyway, otherwise it
+// measures tuning rather than portability.
+template <class DataType, TslStyle Style, std::size_t Width>
+void run_samplesort_case(
+  benchmark::State & state,
+  TslDatasetSpec spec,
+  int direction,
+  TslDetectorBackend backend,
+  TslStagePlan plan,
+  bool parallel
+) {
+  using Simd = typename tsl_simd_for<DataType, Style, Width>::type;
+  constexpr std::size_t base_case = 256;
+  using Sorter = TslSampleSortMultiColumn<
+    DataType, Simd, 16, TslSampleSortBuckets::Adaptive, 8, base_case,
+    TslSampleSortBase::Network, TslSampleSortIds::Byte,
+    base_case / Simd::lane_count_v, 50, TslSampleSortMovement::OutOfPlace, false>;
+
+  TslBenchCase<DataType> data(spec, direction_of(direction), plan.cache_bytes);
+  Sorter sorter;
+  TslSampleSortColumnMetrics metrics;
+
+  tsl_with_detector<DataType>(backend, plan.detector_config, [&](auto & detector) {
+    if constexpr (tsl_detector_wants_executor<std::decay_t<decltype(detector)>>::value) {
+      state.SkipWithError("asynchronous detectors have no samplesort form");
+    } else {
+      for (auto _ : state) {
+        if (parallel) {
+          sorter.sort_index_parallel(data.specs(), data.column_count(), data.index(),
+                                     data.rows(), detector, plan.worker_count,
+                                     &metrics);
+        } else {
+          sorter.sort_index(data.specs(), data.column_count(), data.index(),
+                            data.rows(), detector, &metrics);
+        }
+        benchmark::DoNotOptimize(data.index());
+        benchmark::ClobberMemory();
+      }
+      auto const iterations = std::max<std::int64_t>(state.iterations(), 1);
+      tsl_publish_detector_metrics(detector, [&](char const * name, double value) {
+        auto const ratio = std::string(name).find("coverage") != std::string::npos
+          || std::string(name).find("frac") != std::string::npos;
+        state.counters[name] = ratio ? value : value / static_cast<double>(iterations);
+      });
+    }
+  });
+
+  if (auto const error = data.verify_index(); !error.empty()) {
+    state.SkipWithError(error.c_str());
+    return;
+  }
+
+  auto const published = std::max<std::int64_t>(state.iterations(), 1);
+  state.counters["materialized_per_row"] = data.rows() == 0
+    ? 0.0
+    : static_cast<double>(metrics.materialized_elements)
+      / static_cast<double>(published * static_cast<std::int64_t>(data.rows()));
+  state.counters["ranges_sorted"] =
+    static_cast<double>(metrics.ranges) / static_cast<double>(published);
+  state.counters["deepest_column"] = static_cast<double>(metrics.deepest_column);
+  TslMultiColumnSortMetrics shared{};
+  shared.rle_values_scanned =
+    metrics.detected_elements / static_cast<std::size_t>(published);
+  // 200-series ids: the index quicksort uses 100 + its algorithmic id, so the
+  // samplesort starts above that and no published id moves.
+  publish(state, data.rows(), data.column_count(), Simd::lane_count_v,
+          sizeof(DataType), parallel ? 201 : 200, &shared, nullptr);
+}
+
 // --- registration -----------------------------------------------------------
 
 struct Registrar {
@@ -572,8 +654,74 @@ void register_leaf(Registrar & registrar, char const * type_name) {
   }
 }
 
+
+// One samplesort per cell, serial and parallel. Only the stages that ask a
+// style/width question register it; `screen` and `characterize` are about the
+// quicksort's variant space.
+template <class DataType, TslStyle Style, std::size_t Width>
+void register_samplesort(Registrar & registrar, char const * type_name) {
+  auto const & plan = registrar.plan;
+  if (plan.stage != TslStage::Attribute) {
+    return;
+  }
+  for (auto level : plan.size_levels) {
+    if (level >= registrar.levels.size()) {
+      registrar.drops.drop(TslDropReason::StageAxis);
+      continue;
+    }
+    auto const size = registrar.levels[level];
+    auto rows = static_cast<std::size_t>(size.per_column_bytes / sizeof(DataType));
+    if (rows < 2) rows = 2;
+    for (auto columns : plan.columns) {
+      auto const catalog = tsl_default_catalog(rows, columns, sizeof(DataType));
+      auto const chosen = tsl_select_datasets(catalog, plan.shapes, sizeof(DataType));
+      for (auto const & spec : chosen) {
+        if (!registrar.footprint_ok(spec)) {
+          registrar.drops.drop(TslDropReason::FootprintCap);
+          continue;
+        }
+        for (auto direction : plan.directions) {
+          for (auto backend : plan.detectors) {
+            if (!tsl_detector_compiled(backend)) {
+              registrar.drops.drop(TslDropReason::DetectorUnavailable);
+              continue;
+            }
+            // The attribute stage is serial by design -- style against style with
+            // nothing else moving -- so only the serial form is registered, and
+            // the detector predicate is asked about the equivalent quicksort
+            // variant because the seam is the same one.
+            TslVariant const equivalent{
+              TslExecution::Serial, TslRunDiscoveryKind::POST_SORT,
+              TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK, Style, Width,
+              TslMovement::Index, false};
+            if (!plan.detector_applies(equivalent, backend, spec.columns, level)) {
+              registrar.drops.drop(TslDropReason::DetectorInapplicable);
+              continue;
+            }
+            auto const name = case_name(
+              "samplesort", type_name, tsl_style_name(Style),
+              std::to_string(tsl_simd_for<DataType, Style, Width>::type::lane_count_v),
+              spec, direction, size, plan, backend, false, false, TslMovement::Index
+            );
+            benchmark::RegisterBenchmark(
+              name,
+              [spec, direction, backend, plan](benchmark::State & state) {
+                run_samplesort_case<DataType, Style, Width>(
+                  state, spec, direction, backend, plan, false
+                );
+              }
+            )->Unit(benchmark::kNanosecond)->UseRealTime();
+            ++registrar.registered;
+          }
+        }
+      }
+    }
+  }
+}
+
 template <class DataType, TslStyle Style, std::size_t Width>
 void register_width(Registrar & registrar, char const * type_name) {
+  register_samplesort<DataType, Style, Width>(registrar, type_name);
   using Simd = typename tsl_simd_for<DataType, Style, Width>::type;
   // The hybrid's threshold is derived from this type and width, not chosen, so it
   // is a constant here rather than an axis value.
