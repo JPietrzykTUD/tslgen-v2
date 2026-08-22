@@ -472,6 +472,7 @@ void run_all(TslPaperResults & results, std::vector<std::string> const & shapes,
       }
       std::printf("\n-- %s, %zu rows, %zu columns, u%zu --\n", spec->id.c_str(),
                   spec->rows, spec->columns, sizeof(Key) * 8);
+      results.stage(spec->id);
       run_shape<Key>(results, source, *spec, worker_counts);
     }
   }
@@ -481,6 +482,7 @@ void run_all(TslPaperResults & results, std::vector<std::string> const & shapes,
   for (auto const & spec : tsl_external_catalog(tpcds_dir, sizeof(Key))) {
     std::printf("\n-- %s, %zu rows, %zu columns, u%zu (measured) --\n",
                 spec.id.c_str(), spec.rows, spec.columns, sizeof(Key) * 8);
+    results.stage(spec.id);
     run_shape<Key>(results, source, spec, worker_counts);
   }
 }
@@ -564,6 +566,11 @@ int main(int argc, char ** argv) {
   std::printf("arrow: NOT built in; its rows will be drops\n");
 #endif
 
+  // Seven entrants per (shape, column count, worker count): both of ours,
+  // std::sort or its parallel form, stable_sort, IPS4o, argsort and Arrow -- some
+  // of which drop, which still counts as a row.
+  results.expect(element_byte_list.size() * column_counts.size()
+                 * shapes.size() * worker_counts.size() * 7);
   for (auto const element_bytes : element_byte_list) {
     if (element_bytes == 4) {
       tsl_select_tuned<std::uint32_t>(g_tuned, g_samplesort_config,

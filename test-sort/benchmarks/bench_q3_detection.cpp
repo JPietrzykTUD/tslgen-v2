@@ -351,6 +351,8 @@ int main(int argc, char ** argv) {
   }
   std::printf("\n");
 
+  results.expect(cardinalities.size() * column_counts.size() * widths.size()
+                 * worker_counts.size() * tsl_compiled_detectors().size());
   for (auto const width : widths) {
     if (width == 4) {
       tsl_select_tuned<std::uint32_t>(g_tuned, g_samplesort_config,

@@ -83,17 +83,40 @@ if [[ -n "$(awk '{print ($1 > 1.0)}' /proc/loadavg)" ]] \
   echo "!! load average is above 1.0; these numbers are not publishable" >&2
 fi
 
+# Elapsed per stage and since the start, printed either side of each driver. A
+# full run is six to eight hours; without this the only way to tell a slow stage
+# from a hung one is to watch the row count by hand.
+suite_started=$SECONDS
+stage_index=0
+stage_total=6
+
+elapsed_text() {  # seconds
+  local s=$1
+  if (( s >= 3600 )); then printf '%dh%02dm' $(( s / 3600 )) $(( (s % 3600) / 60 ))
+  elif (( s >= 60 )); then printf '%dm%02ds' $(( s / 60 )) $(( s % 60 ))
+  else printf '%ds' "$s"; fi
+}
+
 run() {  # binary, csv name, args...
   local binary="$1"; shift
   local name="$1"; shift
+  stage_index=$(( stage_index + 1 ))
   if [[ ! -x "$build/$binary" ]]; then
     echo "skipping $name: $build/$binary is not built"
     return
   fi
+  local began=$SECONDS
   echo
-  echo "=== $name"
-  (cd "$build" && "./$binary" "$@" --csv "$results/$name.csv") \
+  echo "=== [$stage_index/$stage_total] $name  (started $(date +%H:%M:%S), \
+$(elapsed_text $(( began - suite_started ))) into the run)"
+  # stderr is merged in so the drivers' progress lines land in the log too: after a
+  # seven-hour run the question is usually "where did the time go", and that needs
+  # the timestamps, not just the final table.
+  (cd "$build" && "./$binary" "$@" --csv "$results/$name.csv" 2>&1) \
     | tee "$results/$name.log"
+  local took=$(( SECONDS - began ))
+  echo "--- $name finished in $(elapsed_text $took); \
+$(elapsed_text $(( SECONDS - suite_started ))) total so far"
 }
 
 if [[ "$quick" == "--quick" ]]; then
@@ -214,20 +237,26 @@ if [[ -x "$build/cosort_bench" ]]; then
   converter="$(dirname "$0")/benchmarks/visualization/gbench_to_paper.py"
   for stage in screen:q5_variants attribute:q6_portability; do
     name="${stage#*:}"
+    stage_index=$(( stage_index + 1 ))
+    corpus_began=$SECONDS
     echo
-    echo "=== $name (cosort_bench, ${stage%%:*} stage)"
+    echo "=== [$stage_index/$stage_total] $name (cosort_bench, ${stage%%:*} stage) \
+$(elapsed_text $(( corpus_began - suite_started ))) into the run"
     if (cd "$build" && COSORT_STAGE="${stage%%:*}" ./cosort_bench \
           --benchmark_repetitions=9 --benchmark_report_aggregates_only=true \
           --benchmark_format=json --benchmark_out="$results/$name.json") \
         > "$results/$name.log" 2>&1; then
       python3 "$converter" "$results/$name.json" "$results/$name.csv" \
         --question "$name" || echo "  conversion failed"
+      echo "--- $name finished in $(elapsed_text $(( SECONDS - corpus_began )))"
     else
       echo "  cosort_bench ${stage%%:*} failed, see $results/$name.log"
     fi
   done
 fi
 
+echo
+echo "the whole run took $(elapsed_text $(( SECONDS - suite_started )))"
 echo
 echo "results in $results:"
 ls -1 "$results"

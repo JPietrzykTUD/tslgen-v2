@@ -217,6 +217,13 @@ class TslPaperResults {
   std::vector<TslPaperRow> rows_;
   std::size_t unsettled_ = 0;   // rows still wide after the repetition ceiling
   bool header_printed_ = false;
+  // Progress. A full run is six to eight hours across six drivers, and without
+  // this the only sign of life is a table that grows in bursts -- a shape that
+  // takes twenty minutes looks identical to one that has hung. Written to stderr
+  // so the tables on stdout stay clean enough to read afterwards.
+  std::chrono::steady_clock::time_point started_ = std::chrono::steady_clock::now();
+  std::size_t expected_ = 0;    // 0 when the driver cannot cheaply say
+  std::string stage_;           // the outer loop's current position
 
  public:
   TslPaperResults(std::string question, std::string binary)
@@ -224,6 +231,51 @@ class TslPaperResults {
         machine_(TslPaperMachine::probe()) {
     std::printf("%s / %s\n", question_.c_str(), binary_.c_str());
     machine_.print();
+  }
+
+  // How many rows this run intends to produce, when the driver knows. It only
+  // feeds the estimate, so being approximate is better than staying silent: a
+  // wrong total still tells you whether you are a tenth or nine tenths through.
+  void expect(std::size_t rows) { expected_ = rows; }
+
+  // Where the outer loop is, for runs whose rows are not self-describing.
+  void stage(std::string where) { stage_ = std::move(where); }
+
+  static auto duration_text(double seconds) -> std::string {
+    if (seconds < 0.0) {
+      seconds = 0.0;
+    }
+    auto const total = static_cast<long long>(seconds);
+    char text[32];
+    if (total >= 3600) {
+      std::snprintf(text, sizeof text, "%lldh%02lldm", total / 3600,
+                    (total % 3600) / 60);
+    } else if (total >= 60) {
+      std::snprintf(text, sizeof text, "%lldm%02llds", total / 60, total % 60);
+    } else {
+      std::snprintf(text, sizeof text, "%llds", total);
+    }
+    return text;
+  }
+
+  void report_progress() const {
+    auto const elapsed = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - started_).count();
+    auto const done = rows_.size();
+    if (expected_ == 0) {
+      std::fprintf(stderr, "\r[%s] %zu rows, %s elapsed%s%s   ",
+                   binary_.c_str(), done, duration_text(elapsed).c_str(),
+                   stage_.empty() ? "" : " | ", stage_.c_str());
+    } else {
+      auto const fraction = static_cast<double>(done)
+                          / static_cast<double>(expected_ < done ? done : expected_);
+      auto const remaining = fraction > 0.0 ? elapsed / fraction - elapsed : 0.0;
+      std::fprintf(stderr, "\r[%s] %zu/%zu (%.0f%%) %s elapsed, ~%s left%s%s   ",
+                   binary_.c_str(), done, expected_, fraction * 100.0,
+                   duration_text(elapsed).c_str(), duration_text(remaining).c_str(),
+                   stage_.empty() ? "" : " | ", stage_.c_str());
+    }
+    std::fflush(stderr);
   }
 
   auto machine() const -> TslPaperMachine const & { return machine_; }
@@ -237,6 +289,10 @@ class TslPaperResults {
   }
 
   void add(TslPaperRow row) {
+    // A carriage-returned progress line and a table on stdout would overwrite each
+    // other, so the line is cleared before the row is printed and redrawn after.
+    std::fprintf(stderr, "\r%78s\r", "");
+    std::fflush(stderr);
     // The measurement knows how many samples it took; the row should not have to
     // be told separately, because a driver that forgot would report nine.
     if (row.ns_per_element.repetitions > 0) {
@@ -272,6 +328,7 @@ class TslPaperResults {
                   100.0 * row.ns_per_element.relative_iqr());
     }
     rows_.push_back(std::move(row));
+    report_progress();
   }
 
   // A configuration the grid asked for and could not run. Emitted rather than

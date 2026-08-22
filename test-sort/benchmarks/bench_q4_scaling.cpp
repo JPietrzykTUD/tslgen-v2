@@ -119,6 +119,8 @@ void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
       break;
     }
   }
+  results.stage(where.shape + " x" + std::to_string(where.columns) + "col w"
+                + std::to_string(where.workers));
   auto blank = results.make_row();
   blank.shape = where.shape;
   blank.rows = where.rows;
@@ -381,6 +383,15 @@ int main(int argc, char ** argv) {
       std::printf("tuned configurations from %s\n", tuned_path.c_str());
     }
     g_tuned = tuned;
+  }
+  // Threads {1,2,4,8,16,24} plus rows {4} x workers {2} plus columns {5} x
+  // workers {2} = 24 cells per shape per width, each measuring both algorithms.
+  {
+    std::size_t per_shape = 0;
+    if (axis == "threads" || axis == "all") per_shape += 6;
+    if (axis == "rows" || axis == "all") per_shape += 4 * 2;
+    if (axis == "columns" || axis == "all") per_shape += 5 * 2;
+    results.expect(shapes.size() * per_shape * widths.size() * 2);
   }
   for (auto const width : widths) {
     if (width == 4) {

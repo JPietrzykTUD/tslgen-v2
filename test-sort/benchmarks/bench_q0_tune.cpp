@@ -392,6 +392,9 @@ int main(int argc, char ** argv) {
     return broken == 0 ? 0 : 1;
   }
 
+  // 21 candidates per (style, width, key width) unit at each worker count.
+  results.expect(tsl_tune_units().size() * worker_counts.size() * 21);
+
   std::map<std::string, TslTunedConfig> tuned;
   // Best score per (style, width, key width), so the cell the reporting drivers
   // were *built* for can be compared against the cell that actually won. Without

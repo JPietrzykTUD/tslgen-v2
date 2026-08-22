@@ -394,6 +394,11 @@ int main(int argc, char ** argv) {
     std::printf("--all: %zu shapes\n", shapes.size());
   }
 
+  // Rows this run intends: every (shape, row count, column count, width) cell
+  // measures both algorithms at each worker count plus one std::sort, and the
+  // external keys add their own. Approximate is fine -- it feeds the estimate.
+  results.expect(shapes.size() * row_counts.size() * column_counts.size()
+                 * widths.size() * (worker_counts.size() * 2 + 1));
   for (auto const width : widths) {
     if (width == 4) {
       // The configuration Q0 found for *this* key width. Asking for the 4-byte one
@@ -403,11 +408,13 @@ int main(int argc, char ** argv) {
       if (!tpcds_dir.empty()) {
         run_external<std::uint32_t>(results, tpcds_dir, worker_counts);
       }
+      results.stage("u32");
       run_grid<std::uint32_t>(results, shapes, row_counts, column_counts,
                               worker_counts);
     } else if (width == 8) {
       tsl_select_tuned<std::uint64_t>(g_tuned, g_samplesort_config,
                                       g_quicksort_config);
+      results.stage("u64");
       run_grid<std::uint64_t>(results, shapes, row_counts, column_counts,
                               worker_counts);
     } else {
