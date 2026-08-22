@@ -98,7 +98,20 @@ inline auto path_of(TslDetectorBackend backend) -> char const * {
 
 inline std::string g_paths = "hw";
 
+// An explicit allow list, when one device is wanted rather than a whole path.
+// `--paths hw` asks for every hardware backend compiled in, which on a host with
+// only one accelerator means the other one's rows are attempted and dropped as
+// unavailable. That is honest but it is not the same as not asking: a per-machine
+// run of the paper's accelerator table wants `--detectors scalar,iaa_hw` on the
+// IAA host and `scalar,dsa_hw` here. Empty means "whatever --paths says".
+inline std::vector<std::string> g_detectors;
+
 inline auto wanted(TslDetectorBackend backend) -> bool {
+  auto const name = std::string(tsl_detector_name(backend));
+  if (!g_detectors.empty()) {
+    return std::find(g_detectors.begin(), g_detectors.end(), name)
+           != g_detectors.end();
+  }
   auto const path = std::string(path_of(backend));
   return path == "scalar" || g_paths == "all" || g_paths == path;
 }
@@ -242,6 +255,20 @@ int main(int argc, char ** argv) {
       rows = std::strtoull(value().c_str(), nullptr, 10);
     } else if (flag == "--min-offload") {
       min_offload = std::strtoull(value().c_str(), nullptr, 10);
+    } else if (flag == "--detectors") {
+      g_detectors = split(value(), ',');
+      for (auto const & name : g_detectors) {
+        try {
+          (void)tsl_detector_from_name(name);
+        } catch (std::exception const & error) {
+          std::printf("%s\nvalid names: ", error.what());
+          for (auto const backend : tsl_compiled_detectors()) {
+            std::printf("%s ", tsl_detector_name(backend));
+          }
+          std::printf("\n");
+          return 2;
+        }
+      }
     } else if (flag == "--paths") {
       g_paths = value();
       if (g_paths != "hw" && g_paths != "sw" && g_paths != "all") {
@@ -257,8 +284,26 @@ int main(int argc, char ** argv) {
   }
 
   TslPaperResults results("Q3 detection", "bench_q3_detection");
-  std::printf("paths=%s (software paths are for correctness, not for figures)\n",
-              g_paths.c_str());
+  if (g_detectors.empty()) {
+    std::printf("paths=%s (software paths are for correctness, not for figures)\n",
+                g_paths.c_str());
+  } else {
+    std::printf("detectors=");
+    for (auto const & name : g_detectors) {
+      std::printf("%s ", name.c_str());
+    }
+    std::printf("(explicit list; --paths ignored)\n");
+    // Asking for a backend this binary was not built with is a mistake worth
+    // saying out loud rather than a quietly shorter grid.
+    auto const compiled = tsl_compiled_detectors();
+    for (auto const & name : g_detectors) {
+      auto const backend = tsl_detector_from_name(name);
+      if (std::find(compiled.begin(), compiled.end(), backend) == compiled.end()) {
+        std::printf("  !! %s was requested but is not compiled into this binary\n",
+                    name.c_str());
+      }
+    }
+  }
   std::printf("min_offload=%zu  backends compiled in: ", min_offload);
   for (auto const backend : tsl_compiled_detectors()) {
     std::printf("%s ", tsl_detector_name(backend));

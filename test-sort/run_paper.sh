@@ -49,8 +49,17 @@ cat "$results/machine.txt"
 have_dsa=$([[ -e /dev/dsa ]] && echo yes || echo no)
 have_iax=$([[ -e /dev/iax ]] && echo yes || echo no)
 echo "accelerators: dsa=$have_dsa iax=$have_iax"
+# Ask only for what this host has. `--paths hw` would ask for every compiled
+# hardware backend and drop the absent ones as unavailable, which is honest but
+# fills the accelerator table with rows from the wrong machine. Override with
+# COSORT_Q3_DETECTORS to force a list.
+q3_detectors="scalar"
+[[ "$have_dsa" == "yes" ]] && q3_detectors="$q3_detectors,dsa_hw"
+[[ "$have_iax" == "yes" ]] && q3_detectors="$q3_detectors,iaa_hw,iaa_freq_hw"
+q3_detectors="${COSORT_Q3_DETECTORS:-$q3_detectors}"
+echo "q3 detectors: $q3_detectors"
 if [[ "$have_dsa" == "no" && "$have_iax" == "no" ]]; then
-  echo "  no accelerator on this host: Q3's hardware rows will all be drops"
+  echo "  no accelerator on this host: Q3 contributes the scalar baseline only"
 fi
 if ! ldconfig -p 2>/dev/null | grep -q libaccel-config; then
   echo "  !! libaccel-config is not installed; DML dlopens it to enumerate work"
@@ -106,7 +115,21 @@ else
   echo "  produce them with benchmarks/datagen/tpcds/extract_keys.py"
 fi
 
-# Q0 first: it writes the configuration the reporting drivers read. Without it
+# Correctness before any number: a configuration that sorts wrongly is a bug in
+# the sorter, not a slow candidate, and the tuner routing around it would hide
+# that. This checks every (style, width, configuration) at a small size and fails
+# the run rather than reporting a narrower grid. Well under a minute.
+if [[ -x "$build/bench_q0_tune" ]]; then
+  echo
+  echo "=== correctness gate"
+  if ! (cd "$build" && ./bench_q0_tune --verify-only) | tee "$results/verify.log" \
+       | tail -1; then
+    echo "a configuration sorts wrongly; fix it before measuring anything" >&2
+    exit 1
+  fi
+fi
+
+# Q0 next: it writes the configuration the reporting drivers read. Without it
 # they fall back to defaults and label every row "(default)", which is how a
 # hard-coded leaf once made the quicksort look 6.6x slower than it is.
 tuned="$results/best_config.tsv"
@@ -127,9 +150,10 @@ fi
 
 run bench_q2_algorithms q2_algorithms --tuned "$tuned" "${tpcds_args[@]+"${tpcds_args[@]}"}" \
     "${narrow_q2[@]+"${narrow_q2[@]}"}"
-# Hardware paths only: the software ones are QPL's and DML's own CPU code, kept
-# for correctness rather than for figures.
-run bench_q3_detection  q3_detection  --paths hw "${narrow_q3[@]+"${narrow_q3[@]}"}"
+# Hardware only, and only this host's hardware: the software paths are QPL's and
+# DML's own CPU code, kept for correctness rather than for figures.
+run bench_q3_detection  q3_detection  --detectors "$q3_detectors" \
+    "${narrow_q3[@]+"${narrow_q3[@]}"}"
 run bench_q4_scaling    q4_scaling    "${narrow_q4[@]+"${narrow_q4[@]}"}"
 
 # Q5 and Q6 are stages of the existing staged driver rather than new binaries.

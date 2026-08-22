@@ -256,10 +256,25 @@ class TslPaperResults {
 // result is right; a false makes the row `INCORRECT` and produces no number, so a
 // wrong configuration can never contribute a figure.
 template <class Body, class Verify>
-auto tsl_paper_measure(Body && body, Verify && verify, std::size_t elements)
+auto tsl_paper_measure(Body && body, Verify && verify, std::size_t elements,
+                       double abandon_after_seconds = 0.0,
+                       bool * abandoned = nullptr)
   -> std::pair<bool, TslPaperStats> {
+  // The first pass is the verification pass, and timing it costs nothing extra.
+  // A configuration whose single pass already exceeds the budget cannot become
+  // competitive over nine of them, so it is abandoned rather than measured --
+  // which is a different finding from sorting wrongly, hence the out-parameter.
+  auto const first = std::chrono::steady_clock::now();
   body();
+  auto const first_seconds =
+    std::chrono::duration<double>(std::chrono::steady_clock::now() - first).count();
   if (!verify()) {
+    return {false, TslPaperStats{}};
+  }
+  if (abandon_after_seconds > 0.0 && first_seconds > abandon_after_seconds) {
+    if (abandoned != nullptr) {
+      *abandoned = true;
+    }
     return {false, TslPaperStats{}};
   }
   std::vector<double> samples;

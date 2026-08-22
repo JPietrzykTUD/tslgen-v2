@@ -4,6 +4,8 @@
 //
 // Each unit registers itself, so `bench_q0_tune` needs no table to keep in step.
 
+#include <cstdio>
+
 #include "q0_tune_impl.hpp"
 
 #if !defined(TSL_Q0_STYLE) || !defined(TSL_Q0_WIDTH)
@@ -27,8 +29,15 @@ auto samplesort_candidates(TslTuneProblem const & problem)
   std::vector<TslTuneCandidate> out;
 
   auto add = [&](std::string axis, std::string label, TslTunedConfig config,
-                 double score) {
-    out.push_back(TslTuneCandidate{std::move(axis), std::move(label), config, score});
+                 TslTuneScore score) {
+    std::printf("    samplesort %-10s %-22s %10.2f ns/elem%s\n", axis.c_str(),
+                label.c_str(), score.score,
+                score.over_budget ? "  (over budget)"
+                                  : (score.failures.empty() ? "" : "  WRONG"));
+    std::fflush(stdout);
+    out.push_back(TslTuneCandidate{std::move(axis), std::move(label), config,
+                                   score.score, std::move(score.per_shape),
+                                   std::move(score.failures), score.over_budget});
   };
 
 #define TSL_Q0_POINT(AXIS, LABEL, K, B, P, BC, F, I, M)                            \
@@ -88,10 +97,15 @@ auto quicksort_candidates(TslTuneProblem const & problem)
     config.partition = (PART); config.leaf = (LEAF);                                \
     config.hybrid_leaf = ((FILL) != 0);                                             \
     config.discovery = (DISCOVERY);                                                 \
-    out.push_back(TslTuneCandidate{                                                 \
-      AXIS, LABEL, config,                                                          \
-      (tsl_tune_quicksort_point<Key, Simd, PART, LEAF, FILL>(                       \
-        source, problem, DISCOVERY, config.partition_threshold))});                 \
+    auto score = tsl_tune_quicksort_point<Key, Simd, PART, LEAF, FILL>(             \
+      source, problem, DISCOVERY, config.partition_threshold);                       \
+    std::printf("    quicksort  %-10s %-22s %10.2f ns/elem%s\n", AXIS, LABEL,        \
+                score.score, score.over_budget ? "  (over budget)"                    \
+                  : (score.failures.empty() ? "" : "  WRONG"));                       \
+    std::fflush(stdout);                                                              \
+    out.push_back(TslTuneCandidate{AXIS, LABEL, config, score.score,                 \
+                                   std::move(score.per_shape),                        \
+                                   std::move(score.failures), score.over_budget});     \
   } while (false)
 
   constexpr auto three = TslPartitionKind::THREE_WAY;

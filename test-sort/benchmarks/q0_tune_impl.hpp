@@ -25,6 +25,7 @@
 // cross member.
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -47,6 +48,31 @@
 struct TslTuneProblem {
   std::vector<TslDatasetSpec> specs;
   std::size_t workers = 1;
+  // Correctness sweep rather than a tuning run: check every shape instead of
+  // stopping at the first failure, and do not time anything. A configuration that
+  // sorts wrongly is a bug in the sorter, not a slow candidate, so the question
+  // "does every (style, width, configuration) still sort correctly" deserves to be
+  // askable on its own and cheaply -- not answered incidentally by whichever cells
+  // a tuning run happens to visit.
+  bool verify_only = false;
+  // Seconds a single candidate may spend before it is abandoned. A configuration
+  // 66x off the pace can never win, and on duplicate-heavy real keys the two-way
+  // partition is quadratic -- one such candidate consumed two hours of a run whose
+  // useful part was fourteen minutes. Abandoning it is not the same as calling it
+  // wrong, and the report says which. 0 means unlimited.
+  double candidate_seconds = 0.0;
+};
+
+// A candidate's measured cost: the geometric mean the descent ranks on, and the
+// per-shape times behind it. The descent only needs the mean, but collapsing to it
+// answers "which configuration wins on average" while destroying the evidence for
+// "does the winner depend on the shape" -- which is the more interesting question,
+// so both are kept.
+struct TslTuneScore {
+  double score = 0.0;               // geometric mean ns/element; 0 means incorrect
+  std::vector<double> per_shape;    // parallel to TslTuneProblem::specs
+  std::vector<std::string> failures; // shape ids this candidate sorted wrongly
+  bool over_budget = false;          // abandoned on time, not incorrect
 };
 
 // One measured candidate.
@@ -55,6 +81,9 @@ struct TslTuneCandidate {
   std::string label;       // the value on that coordinate
   TslTunedConfig config;
   double score = 0.0;      // geometric mean ns/element; 0 means it sorted wrongly
+  std::vector<double> per_shape;
+  std::vector<std::string> failures;
+  bool over_budget = false;
 };
 
 // A unit is one (style, width): it runs the whole search and reports.
@@ -73,10 +102,27 @@ inline auto tsl_tune_units() -> std::vector<TslTuneUnit> & {
 
 namespace tsl_tune_detail {
 
+// Correctness of one candidate: the index must be a permutation of the rows, and
+// applying it to every column must reproduce the reference image.
+//
+// The permutation half is not redundant. Comparing values alone passes an index
+// that repeats one row and drops another whenever the two hold equal keys -- and
+// the tuning set is chosen to be duplicate-heavy, so `low_cardinality_d4` at four
+// distinct values would accept almost any garbage. For an index co-sort, "the
+// values came out sorted" and "no row was lost" are different claims and the
+// second is the one a caller depends on.
 template <class Key>
-auto image_matches(std::vector<std::vector<Key>> const & columns,
-                   std::vector<std::vector<Key>> const & reference,
-                   std::vector<Key> const & index) -> bool {
+auto sorted_image_of_a_permutation(std::vector<std::vector<Key>> const & columns,
+                                   std::vector<std::vector<Key>> const & reference,
+                                   std::vector<Key> const & index) -> bool {
+  std::vector<char> seen(index.size(), 0);
+  for (auto const row : index) {
+    auto const at = static_cast<std::size_t>(row);
+    if (at >= seen.size() || seen[at] != 0) {
+      return false;  // out of range, or a row delivered twice
+    }
+    seen[at] = 1;
+  }
   for (std::size_t column = 0; column < columns.size(); ++column) {
     for (std::size_t at = 0; at < index.size(); ++at) {
       if (columns[column][static_cast<std::size_t>(index[at])]
@@ -92,10 +138,20 @@ auto image_matches(std::vector<std::vector<Key>> const & columns,
 // as a ratio, and it stops one slow shape from deciding every axis.
 template <class Key, class Run>
 auto geometric_score(TslDatasetSource<Key> & source, TslTuneProblem const & problem,
-                     Run && run) -> double {
+                     Run && run) -> TslTuneScore {
+  TslTuneScore out;
   double logs = 0.0;
   std::size_t counted = 0;
+  auto const started = std::chrono::steady_clock::now();
   for (auto const & spec : problem.specs) {
+    if (problem.candidate_seconds > 0.0) {
+      auto const spent = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - started).count();
+      if (spent > problem.candidate_seconds) {
+        out.over_budget = true;
+        break;
+      }
+    }
     auto const pristine = source.pristine(spec);
     auto const reference = source.reference(spec, TslDirection::Ascending);
     std::vector<TslSortColumn<Key>> columns;
@@ -104,17 +160,43 @@ auto geometric_score(TslDatasetSource<Key> & source, TslTuneProblem const & prob
                                            TslSortOrder::ASCENDING});
     }
     std::vector<Key> index(spec.rows);
-    auto const [ok, stats] = tsl_paper_measure(
-      [&] { run(columns.data(), spec.columns, index.data(), spec.rows,
-                problem.workers); },
-      [&] { return image_matches(*pristine, *reference, index); }, spec.rows);
-    if (!ok || stats.median <= 0.0) {
-      return 0.0;  // a wrong candidate cannot win, whatever its time
+    auto const body = [&] {
+      run(columns.data(), spec.columns, index.data(), spec.rows, problem.workers);
+    };
+    auto const correct = [&] {
+      return sorted_image_of_a_permutation(*pristine, *reference, index);
+    };
+    if (problem.verify_only) {
+      body();
+      if (!correct()) {
+        out.failures.push_back(spec.id);
+      }
+      continue;  // nothing is timed in a correctness sweep
     }
+    // Split the budget across the shapes so no single one can consume it all.
+    auto const per_shape_budget =
+      problem.candidate_seconds > 0.0
+        ? problem.candidate_seconds / static_cast<double>(problem.specs.size())
+        : 0.0;
+    bool abandoned = false;
+    auto const [ok, stats] =
+      tsl_paper_measure(body, correct, spec.rows, per_shape_budget, &abandoned);
+    if (abandoned) {
+      out.over_budget = true;
+      break;
+    }
+    if (!ok || stats.median <= 0.0) {
+      out.failures.push_back(spec.id);
+      return out;  // a wrong candidate cannot win, whatever its time
+    }
+    out.per_shape.push_back(stats.median);
     logs += std::log(stats.median);
     ++counted;
   }
-  return counted == 0 ? 0.0 : std::exp(logs / static_cast<double>(counted));
+  out.score = (counted == 0 || !out.failures.empty() || out.over_budget)
+                ? 0.0
+                : std::exp(logs / static_cast<double>(counted));
+  return out;
 }
 
 }  // namespace tsl_tune_detail
@@ -126,7 +208,7 @@ template <class Key, class Simd, int K, TslSampleSortBuckets B, TslSampleSortBas
           std::size_t BC, std::size_t F, TslSampleSortIds I,
           TslSampleSortMovement M>
 auto tsl_tune_samplesort_point(TslDatasetSource<Key> & source,
-                               TslTuneProblem const & problem) -> double {
+                               TslTuneProblem const & problem) -> TslTuneScore {
   using Sorter = TslSampleSortMultiColumn<Key, Simd, K, B, 8, BC, P, I,
                                           BC / Simd::lane_count_v, F, M, false>;
   Sorter sorter;
@@ -152,7 +234,7 @@ template <class Key, class Simd, TslPartitionKind Partition, TslLeafKind Leaf,
 auto tsl_tune_quicksort_point(TslDatasetSource<Key> & source,
                               TslTuneProblem const & problem,
                               TslRunDiscoveryKind discovery,
-                              std::size_t partition_threshold) -> double {
+                              std::size_t partition_threshold) -> TslTuneScore {
   using Sorter = TslMultiColumnIndexSorter<Key, Partition, Leaf, Simd, Fill>;
   Sorter sorter(0x5A3F1E77);
   return tsl_tune_detail::geometric_score<Key>(
