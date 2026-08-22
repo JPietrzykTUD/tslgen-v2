@@ -25,6 +25,30 @@ calibrated to the same per-column cardinalities measured here. That is a cleaner
 contrast than TPC-DS against DSB anyway: cardinalities and key width held fixed,
 distribution and correlation the only difference.
 
+## "Selected scale factor is NOT valid for result publication"
+
+dsdgen prints this at every scale factor below 1000, and it is expected here.
+
+Its defined factors are `{1, 10, 100, 300, 1000, 3000, 10000, 30000, 100000}`
+(`code/tools/scaling.c`), each with its own row-count column in the distribution
+table, and anything under 1000 additionally sets `QERR_BAD_SCALE`. So the data at
+scale factor 1 or 10 is generated exactly as specified -- the warning is about
+TPC's rule that an *official published TPC-DS result* must be at 1 TB or above,
+not about the data being wrong.
+
+It does not apply to what this directory is for. We are not publishing a TPC-DS
+result; we project the sort keys real queries produce and measure a sort operator
+on them. And it could not apply anyway, because DSB is a modified dsdgen with
+deliberately different distributions, so nothing it emits is a compliant TPC-DS
+result -- which is the reason for using it.
+
+**How to describe this data in a paper.** "Sort keys projected from DSB, a modified
+TPC-DS generator, at scale factor 10", with the queries named and the
+order-preserving dictionary encoding stated. Not "TPC-DS results", not a comparison
+against anybody's published TPC-DS numbers, and no claim of TPC compliance -- none
+of which the measurements need, since the claim is about sorting the keys, not
+about executing the queries.
+
 ## What the extraction does, and what it does not
 
 * **Joins the fact table to the dimensions the sort key needs, and projects the
