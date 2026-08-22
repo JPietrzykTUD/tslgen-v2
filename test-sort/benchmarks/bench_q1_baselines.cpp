@@ -54,6 +54,11 @@
 #if defined(TSL_COSORT_HAVE_XSS)
 #include "x86simdsort-static-incl.h"
 #endif
+#if defined(TSL_COSORT_HAVE_ARROW)
+#include <arrow/api.h>
+#include <arrow/compute/api_vector.h>
+#include <arrow/compute/initialize.h>
+#endif
 
 #include "datagen/dataset_catalog.hpp"
 #include "datagen/dataset_source.hpp"
@@ -338,76 +343,106 @@ void run_shape(TslPaperResults & results, TslDatasetSource<Key> & source,
       }
 #endif
     }
+
+    // --- Arrow SortIndices ---------------------------------------------------
+    // The semantically equal baseline: a multi-column lexicographic indirect
+    // sort returning a permutation, which is exactly the operation and exactly
+    // the artifact. Nothing here is adapted or restricted, so if it wins, it
+    // wins on the same problem.
+    {
+      auto row = blank;
+      row.algorithm = "arrow::SortIndices";
+      row.workers = workers;
+#if !defined(TSL_COSORT_HAVE_ARROW)
+      results.drop(row, "not built: configure with -DTSL_COSORT_ENABLE_BASELINES=ON");
+#else
+      row.variant = "table, one SortKey per column";
+      if (many) {
+        // SortIndices runs on the calling thread; Arrow parallelises across
+        // ExecPlan nodes, not inside this kernel. Reported rather than omitted so
+        // its absence from the parallel table is a stated fact.
+        results.drop(row, "single-threaded kernel: Arrow parallelises across plan "
+                          "nodes, not within SortIndices");
+      } else {
+        // The table wraps our buffers without copying, and it is built outside the
+        // timed region: a system would build it once and sort many times, and
+        // charging Arrow for construction would be the straw man this file exists
+        // to avoid.
+        std::vector<std::shared_ptr<arrow::Field>> fields;
+        std::vector<std::shared_ptr<arrow::ChunkedArray>> arrays;
+        auto const type = sizeof(Key) == 4 ? arrow::uint32() : arrow::uint64();
+        bool built = true;
+        for (std::size_t column = 0; column < spec.columns; ++column) {
+          auto const name = "c" + std::to_string(column);
+          fields.push_back(arrow::field(name, type));
+          auto buffer = arrow::Buffer::Wrap(raw[column], spec.rows);
+          auto data = arrow::ArrayData::Make(
+            type, static_cast<std::int64_t>(spec.rows), {nullptr, buffer});
+          auto array = arrow::MakeArray(data);
+          if (array == nullptr) {
+            built = false;
+            break;
+          }
+          arrays.push_back(std::make_shared<arrow::ChunkedArray>(array));
+        }
+        if (!built) {
+          results.drop(row, "could not wrap the columns as an Arrow table");
+        } else {
+          auto const table = arrow::Table::Make(arrow::schema(fields), arrays,
+                                                static_cast<std::int64_t>(spec.rows));
+          std::vector<arrow::compute::SortKey> keys;
+          for (std::size_t column = 0; column < spec.columns; ++column) {
+            keys.emplace_back("c" + std::to_string(column),
+                              arrow::compute::SortOrder::Ascending);
+          }
+          arrow::compute::SortOptions const options(keys);
+          std::shared_ptr<arrow::Array> permutation;
+          auto const [ok, stats] = tsl_paper_measure(
+            [&] {
+              auto result = arrow::compute::SortIndices(arrow::Datum(table), options);
+              permutation = result.ok() ? *result : nullptr;
+            },
+            [&] {
+              if (permutation == nullptr) {
+                return false;
+              }
+              auto const & wide =
+                static_cast<arrow::UInt64Array const &>(*permutation);
+              if (static_cast<std::size_t>(wide.length()) != spec.rows) {
+                return false;
+              }
+              // Narrowed outside the timed body, as for argsort.
+              for (std::size_t at = 0; at < spec.rows; ++at) {
+                index[at] = static_cast<Key>(wide.Value(
+                  static_cast<std::int64_t>(at)));
+              }
+              return correct();
+            },
+            spec.rows);
+          if (!ok) {
+            results.drop(row, "did not produce a correct permutation");
+          } else {
+            row.verified = true;
+            row.ns_per_element = stats;
+            results.add(std::move(row));
+          }
+        }
+      }
+#endif
+    }
   }
 }
 
-}  // namespace
-
-int main(int argc, char ** argv) {
-  std::vector<std::string> shapes{"skewed_zipf_s1", "low_cardinality_d4",
-                                  "independent_uniform_c1024", "unique_first"};
-  std::vector<std::size_t> column_counts{1, 4, 8};
-  std::vector<std::size_t> worker_counts{1, 24};
-  std::size_t rows = 1u << 22;
-  std::string csv_path;
-  std::string tuned_path = "best_config.tsv";
-  std::string tpcds_dir;
-
-  for (int i = 1; i < argc; ++i) {
-    auto const flag = std::string(argv[i]);
-    auto const value = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
-    auto const list = [&](std::vector<std::size_t> & into) {
-      into.clear();
-      for (auto const & part : split(value(), ',')) {
-        into.push_back(std::strtoull(part.c_str(), nullptr, 10));
-      }
-    };
-    if (flag == "--shapes") {
-      shapes = split(value(), ',');
-    } else if (flag == "--cols") {
-      list(column_counts);
-    } else if (flag == "--workers") {
-      list(worker_counts);
-    } else if (flag == "--rows") {
-      rows = std::strtoull(value().c_str(), nullptr, 10);
-    } else if (flag == "--tuned") {
-      tuned_path = value();
-    } else if (flag == "--tpcds-dir") {
-      tpcds_dir = value();
-    } else if (flag == "--csv") {
-      csv_path = value();
-    } else {
-      std::printf("unknown argument: %s\n", flag.c_str());
-      return 2;
-    }
-  }
-
-  TslPaperResults results("Q1 baselines", "bench_q1_baselines");
-  {
-    auto const tuned = tsl_read_tuned(tuned_path);
-    if (tuned.empty()) {
-      std::printf("no %s: ours run at their defaults, rows labelled (default)\n",
-                  tuned_path.c_str());
-    }
-    g_samplesort_config = tsl_tuned_for(tuned, "samplesort", TslStyle::Intrinsics,
-                                        512, 4);
-    g_quicksort_config = tsl_tuned_for(tuned, "quicksort", TslStyle::Intrinsics,
-                                       512, 4);
-  }
-#if defined(TSL_COSORT_HAVE_IPS4O)
-  std::printf("ips4o: built in\n");
-#else
-  std::printf("ips4o: NOT built in; its rows will be drops\n");
-#endif
-#if defined(TSL_COSORT_HAVE_XSS)
-  std::printf("x86-simd-sort: built in (one-column rows only)\n");
-#else
-  std::printf("x86-simd-sort: NOT built in; its rows will be drops\n");
-#endif
-
-  using Key = std::uint32_t;
+// Every shape at one key width. Templated so 4-byte and 8-byte keys go through
+// exactly the same entrants and the same oracle; a baseline that only ever sees
+// 32-bit keys would leave the wider key -- where a lane holds half as many
+// elements and the permutation costs twice the traffic -- unmeasured.
+template <class Key>
+void run_all(TslPaperResults & results, std::vector<std::string> const & shapes,
+             std::vector<std::size_t> const & column_counts,
+             std::vector<std::size_t> const & worker_counts, std::size_t rows,
+             std::string const & tpcds_dir) {
   TslDatasetSource<Key> source(12ull << 30);
-
   for (auto const columns : column_counts) {
     auto const catalog = tsl_default_catalog(rows, columns, sizeof(Key));
     auto const tail = "_u" + std::to_string(sizeof(Key) * 8) + "_n";
@@ -429,19 +464,112 @@ int main(int argc, char ** argv) {
         results.drop(row, "no such dataset at this size and column count");
         continue;
       }
-      std::printf("\n-- %s, %zu rows, %zu columns --\n", spec->id.c_str(),
-                  spec->rows, spec->columns);
+      std::printf("\n-- %s, %zu rows, %zu columns, u%zu --\n", spec->id.c_str(),
+                  spec->rows, spec->columns, sizeof(Key) * 8);
       run_shape<Key>(results, source, *spec, worker_counts);
     }
   }
 
   // Measured keys, at their own width. The baselines matter most here: a real
   // key's skew is what a comparator-based sort cannot exploit.
-  if (!tpcds_dir.empty()) {
-    for (auto const & spec : tsl_external_catalog(tpcds_dir, sizeof(Key))) {
-      std::printf("\n-- %s, %zu rows, %zu columns (measured) --\n", spec.id.c_str(),
-                  spec.rows, spec.columns);
-      run_shape<Key>(results, source, spec, worker_counts);
+  for (auto const & spec : tsl_external_catalog(tpcds_dir, sizeof(Key))) {
+    std::printf("\n-- %s, %zu rows, %zu columns, u%zu (measured) --\n",
+                spec.id.c_str(), spec.rows, spec.columns, sizeof(Key) * 8);
+    run_shape<Key>(results, source, spec, worker_counts);
+  }
+}
+
+}  // namespace
+
+int main(int argc, char ** argv) {
+  std::vector<std::string> shapes{"skewed_zipf_s1", "low_cardinality_d4",
+                                  "independent_uniform_c1024", "unique_first"};
+  std::vector<std::size_t> column_counts{1, 4, 8};
+  std::vector<std::size_t> worker_counts{1, 24};
+  std::size_t rows = 1u << 22;
+  std::string csv_path;
+  std::string tuned_path = "best_config.tsv";
+  std::string tpcds_dir;
+  std::vector<std::size_t> element_byte_list{4, 8};
+
+  for (int i = 1; i < argc; ++i) {
+    auto const flag = std::string(argv[i]);
+    auto const value = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
+    auto const list = [&](std::vector<std::size_t> & into) {
+      into.clear();
+      for (auto const & part : split(value(), ',')) {
+        into.push_back(std::strtoull(part.c_str(), nullptr, 10));
+      }
+    };
+    if (flag == "--shapes") {
+      shapes = split(value(), ',');
+    } else if (flag == "--cols") {
+      list(column_counts);
+    } else if (flag == "--workers") {
+      list(worker_counts);
+    } else if (flag == "--rows") {
+      rows = std::strtoull(value().c_str(), nullptr, 10);
+    } else if (flag == "--element-bytes") {
+      list(element_byte_list);
+    } else if (flag == "--tuned") {
+      tuned_path = value();
+    } else if (flag == "--tpcds-dir") {
+      tpcds_dir = value();
+    } else if (flag == "--csv") {
+      csv_path = value();
+    } else {
+      std::printf("unknown argument: %s\n", flag.c_str());
+      return 2;
+    }
+  }
+
+  TslPaperResults results("Q1 baselines", "bench_q1_baselines");
+  {
+    auto const tuned = tsl_read_tuned(tuned_path);
+    if (tuned.empty()) {
+      std::printf("no %s: ours run at their defaults, rows labelled (default)\n",
+                  tuned_path.c_str());
+    }
+    // Q0 tunes u32 only, so a u64 run reuses the u32 configuration. That is a
+    // proxy, not a tuned value, and the row's variant already says "(tuned)" --
+    // so it is stated here and in docs/benchmark-plan.md rather than implied.
+    g_samplesort_config = tsl_tuned_for(tuned, "samplesort", TslStyle::Intrinsics,
+                                        512, 4);
+    g_quicksort_config = tsl_tuned_for(tuned, "quicksort", TslStyle::Intrinsics,
+                                       512, 4);
+  }
+#if defined(TSL_COSORT_HAVE_IPS4O)
+  std::printf("ips4o: built in\n");
+#else
+  std::printf("ips4o: NOT built in; its rows will be drops\n");
+#endif
+#if defined(TSL_COSORT_HAVE_XSS)
+  std::printf("x86-simd-sort: built in (one-column rows only)\n");
+#else
+  std::printf("x86-simd-sort: NOT built in; its rows will be drops\n");
+#endif
+#if defined(TSL_COSORT_HAVE_ARROW)
+  // Arrow 23 keeps the compute kernels in libarrow_compute and registers them on
+  // demand: without this the registry has no "sort_indices" at all, and the
+  // failure surfaces as a wrong permutation rather than a missing function.
+  {
+    auto const status = arrow::compute::Initialize();
+    std::printf("arrow: built in, compute init %s (serial rows only)\n",
+                status.ok() ? "OK" : status.ToString().c_str());
+  }
+#else
+  std::printf("arrow: NOT built in; its rows will be drops\n");
+#endif
+
+  for (auto const element_bytes : element_byte_list) {
+    if (element_bytes == 4) {
+      run_all<std::uint32_t>(results, shapes, column_counts, worker_counts, rows,
+                             tpcds_dir);
+    } else if (element_bytes == 8) {
+      run_all<std::uint64_t>(results, shapes, column_counts, worker_counts, rows,
+                             tpcds_dir);
+    } else {
+      std::printf("unsupported element width: %zu\n", element_bytes);
     }
   }
 

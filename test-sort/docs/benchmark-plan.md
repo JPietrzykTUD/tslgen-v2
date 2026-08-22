@@ -144,9 +144,29 @@ partitioning kernel and nothing else. This is the comparison that answers "is ou
 SIMD partition worth writing", and it is the one a reviewer of a sorting paper
 will look for.
 
-**Semantically equal.** Arrow's `SortIndices` with several sort keys performs
-literally this operation and produces the same artifact. Strongest optics,
-heaviest dependency; added only if the paper needs a system-level baseline.
+**Semantically equal.** Arrow's `SortIndices` over a table with one sort key per
+column performs literally this operation and produces the same artifact. It is
+built. Nothing about it is adapted or restricted, and its table wraps our buffers
+without copying and is built outside the timed region -- a system builds a table
+once and sorts many times, so charging Arrow for construction would be the straw
+man this section exists to remove. At 2^20 rows, one worker, our quicksort against
+it: 11.92 vs 122.65 ns/element on low_cardinality_d4 at four columns, 44.08 vs
+155.43 on skewed_zipf_s1, 50.59 vs 249.69 at eight columns, 86.36 vs 260.66. So
+three to ten times, against the one baseline that solves exactly our problem.
+
+Two notes. `SortIndices` runs on the calling thread -- Arrow parallelises across
+ExecPlan nodes, not inside this kernel -- so it appears in the serial table only,
+as a stated drop rather than an omission. And Arrow 23 keeps its compute kernels
+in `libarrow_compute` and registers them on demand: without
+`arrow::compute::Initialize()` the registry has no `sort_indices` at all, and the
+failure surfaces as a wrong permutation rather than a missing function, which is
+how it was first observed here.
+
+**Not Google Highway's VQSort.** It sorts keys in place and yields a sorted array,
+not a permutation, so it does not perform this operation. Its packed key-value
+form is one column with an interleaved payload, which is a different layout and
+strictly narrower than `avx512_argsort` -- already present, and producing the
+artifact we produce.
 
 Both would be fetched under `TSL_COSORT_ENABLE_BASELINES`, off by default,
 following the pattern QPL and DML already use — so the default build stays

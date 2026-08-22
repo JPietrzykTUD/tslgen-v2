@@ -275,6 +275,27 @@ if(TSL_COSORT_ENABLE_BASELINES)
   # libatomic.so.1 without the libatomic.so development symlink, and IPS4o's
   # parallel path needs __atomic_fetch_add_16 either way. Disabling its 16-byte
   # compare-and-exchange would handicap the baseline, which defeats the purpose.
+  # Arrow is the semantically equal baseline -- SortIndices over a table with one
+  # sort key per column is literally this operation. Optional even within the
+  # baselines gate, because it is the heaviest of them.
+  find_package(Arrow QUIET)
+  if(Arrow_FOUND)
+    target_compile_definitions(bench_q1_baselines PRIVATE TSL_COSORT_HAVE_ARROW=1)
+    if(TARGET Arrow::arrow_shared)
+      target_link_libraries(bench_q1_baselines PRIVATE Arrow::arrow_shared)
+    else()
+      target_link_libraries(bench_q1_baselines PRIVATE arrow)
+    endif()
+    find_library(TSL_ARROW_COMPUTE NAMES arrow_compute)
+    if(TSL_ARROW_COMPUTE)
+      target_link_libraries(bench_q1_baselines PRIVATE ${TSL_ARROW_COMPUTE})
+    endif()
+    message(STATUS "bench_q1_baselines: Arrow found, SortIndices enabled")
+  else()
+    message(STATUS "bench_q1_baselines: Arrow not found; its rows will be drops. "
+                   "Install libarrow-dev to include it.")
+  endif()
+
   find_library(TSL_LIBATOMIC NAMES atomic libatomic.so.1)
   if(TSL_LIBATOMIC)
     target_link_libraries(bench_q1_baselines PRIVATE ${TSL_LIBATOMIC})
