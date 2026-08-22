@@ -185,6 +185,8 @@ add_executable(test_samplesort_cosort test_samplesort_cosort.cpp)
 target_compile_features(test_samplesort_cosort PRIVATE cxx_std_17)
 target_link_libraries(test_samplesort_cosort PRIVATE tsl::tsl Threads::Threads)
 
+# The parallel executor lives in samplesort_parallel_executor.hpp and needs the
+# thread library; both binaries exercise it.
 add_executable(bench_samplesort_cosort bench_samplesort_cosort.cpp)
 target_compile_features(bench_samplesort_cosort PRIVATE cxx_std_17)
 target_link_libraries(bench_samplesort_cosort PRIVATE tsl::tsl Threads::Threads)

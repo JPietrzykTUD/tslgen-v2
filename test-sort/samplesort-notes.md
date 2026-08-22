@@ -13,14 +13,33 @@ All figures are medians of five, `n = 2^24`, single threaded.
 
 ## Headline
 
+Single threaded:
+
 | | u32 | u64 |
 | --- | --- | --- |
 | `TslMultiColumnQuickSorter::sort_key` + index, network leaf | **21.8 ns/element** | 42.9 |
-| `TslMultiColumnQuickSorter::sort_key` + index, insertion leaf | 30.5 | 44.5 |
-| samplesort, network base case at its best fill threshold | **25.4** | **33.7** |
-| samplesort, insertion base case | 30.7 | 36.9 |
+| samplesort, network base case | 25.4 | **33.7** |
 | `std::sort` over `(key, index)` pairs | 66.1 | 69.7 |
-| `std::stable_sort` over pairs | 61.2 | 99.6 |
+
+**On threads, against the playground's own parallel task tree on the identical
+problem** -- `sort_key_parallel` with the index as its one payload:
+
+| workers | samplesort u32 | quicksort u32 | samplesort u64 | quicksort u64 |
+| --- | --- | --- | --- | --- |
+| 1 | 25.43 | **21.85** | **34.02** | 42.93 |
+| 2 | 15.83 | **12.37** | | |
+| 4 | 8.79 | **6.92** | | |
+| 8 | 5.25 | **4.68** | **6.16** | 8.86 |
+| 16 | **3.31** | 4.13 | | |
+| 24 | **3.11** | 3.53 | **3.01** | 7.14 |
+
+**Samplesort scales better and crosses over.** 8.2x on 24 threads for u32 and
+11.3x for u64, against 6.2x and 6.0x for the task tree, so it goes from 1.16x
+behind at one thread to 12% ahead at 24, and from 1.26x ahead to 2.4x ahead for
+u64. That is the structural argument the whole design rested on, and it is the
+first measurement that supports it: phases 2 and 4 are independent per chunk and
+the task list is explicit, where a quicksort partition is inherently sequential
+within a range.
 
 Per pass, u32, K=16: classification 1.01, distribution **1.16** (target 1.30),
 combined 2.17. Chunked bookkeeping from 1 to 16 chunks single-threaded: +1.0%.
@@ -29,12 +48,9 @@ The first two rows are the playground's existing sorter on exactly this problem
 -- one key column, the index as its single replayed payload -- so this is
 like-for-like and not a comparison against a general-purpose sort.
 
-**Samplesort loses to what is already here on u32 by 1.4x, and wins on u64 by
-1.2x.** Both beat `std::sort` by 2-3x. This is the regime least favourable to
-samplesort: single threaded, and at 2^24 elements a binary quicksort's extra
-passes stay in cache. Its case rests on the parallel question, which is not
-implemented. At this size, on one thread, a tuned single-pass partition with
-`compress`/`expand` beats a classify-then-scatter pass pair.
+On one thread samplesort still loses on u32: a tuned single-pass partition with
+`compress`/`expand` beats a classify-then-scatter pass pair at this size. What
+changes the answer is threads, above.
 
 ## Acting on the profile
 
@@ -78,6 +94,42 @@ measurable; every existing instantiation is unchanged.
 Sampling is the one place where §4.1's claim that "the sample sort is not on the
 critical path" is closest to wrong and still hardest to fix: it is 15% of the
 runtime and neither change moved it much.
+
+## Threading
+
+`samplesort_parallel_executor.hpp` contains no kernel and no phase logic. It
+calls the same `tsl_samplesort_partition_step` as the sequential executor and
+differs only in who runs the chunk bodies and who pops the queue -- which is what
+`TslSampleSortSerialChunks` and the `ChunkRunner` parameter exist for. Two stages,
+because the task tree starts with a single task:
+
+* **Descent.** One task at a time, its phases 2 and 4 fanned across `workers`
+  chunks with the phase-3 reduction between them. Ends once the queue holds
+  `workers` independent tasks, which at K=16 is two levels -- so it forks a few
+  dozen times over a whole sort, not once per step.
+* **Task parallel.** Every worker pops whole tasks and runs them with one chunk.
+  Ranges are disjoint, so the workers share one `bucket_ids` array and keep only
+  the per-step reduction arrays private.
+
+One thing about stage 2 was worth an order of magnitude. Routing every task
+through the shared queue **capped the whole sort at 1.04x on 24 threads**: a run
+produces about 440k tasks, almost all of them base-case ranges, and a mutex plus a
+`notify_all` per task is a thundering herd, not a scheduler. Each worker now keeps
+a local LIFO stack and publishes only tasks at or above `base_case * K` -- the
+ones that will fan out again. Small work stays where it was produced, which is
+also where its data is warm. That single change took 24 threads from 1.04x to
+8.2x.
+
+The termination condition needed care for a related reason: the worker that
+observes "every worker idle and the queue empty" must decrement the idle count on
+its way out, which falsifies that same condition for everyone still waiting on it.
+It is a latch, not a re-tested predicate.
+
+Validation: 1685 checks, and the parallel runs are checked at 2, 3, 8 and 24
+workers across nine input shapes. The permutation may legitimately differ from the
+sequential one where keys tie, so the test demands the *sorted key image* match
+exactly, which it does. Clean under ThreadSanitizer, and under
+`-fsanitize=address,undefined`.
 
 ## Where the time actually goes
 
@@ -287,7 +339,13 @@ any target where the narrowing pair is absent.
   moves) is still the first thing to run after threading. With adaptive equality
   buckets the typical stream count is `2·T·K` as §3.1 assumed, not double it.
 * The mask-free classification form of finding 1, which needs the bias pass.
-* Threading, and then in-place block permutation.
+* **In-place block permutation.** Still not done, and the profile says why it
+  should not be next for speed: it removes the copy-back, which is 1.8% of the
+  runtime. Its argument is halving peak memory -- the sort needs two buffer pairs
+  -- which is a capacity decision rather than a throughput one.
+* An IPS4o baseline, which is the yardstick that matters now that the parallel
+  numbers exist.
+* The mask-free classification form of finding 1, which needs the bias pass.
 * An IPS⁴o baseline. `std::sort` over pairs is the wrong yardstick for a
   samplesort and these numbers should not harden without it.
 * In-place block permutation (IPS⁴o's technique).

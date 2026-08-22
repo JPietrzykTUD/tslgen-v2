@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "samplesort_executor.hpp"
+#include "samplesort_parallel_executor.hpp"
 
 namespace {
 
@@ -245,6 +246,41 @@ void run_width(char const * tag) {
   run_classifier_agreement<Key, Simd, K, Policy>(tag);
 }
 
+// The parallel executor seeds each worker differently, so with duplicate keys the
+// permutation it returns is one of several valid ones -- but the sorted key image
+// is unique however ties break, so that must match the sequential run exactly,
+// and every invariant must hold. Anything less would let a race that merely
+// reorders equal keys pass unnoticed.
+template <class Key, class Simd, int K, TslSampleSortBuckets Policy>
+void run_parallel(char const * tag, Shape shape, std::size_t n) {
+  using Idx = typename TslSampleSortTraits<Key>::index_type;
+  auto const label =
+    std::string(tag) + "/parallel/" + shape_name(shape) + "/n=" + std::to_string(n);
+  auto const original = make_keys<Key>(shape, n, 0x9E3D ^ (n * 13));
+
+  std::vector<Idx> serial_idx;
+  auto const serial_keys = run_sort<Key, Simd, K, Policy>(original, 1, serial_idx);
+  check_result(label + "/w=1", original, serial_keys, serial_idx);
+
+  for (std::size_t workers : {std::size_t{2}, std::size_t{3}, std::size_t{8},
+                              std::size_t{24}}) {
+    ++g_checks;
+    auto keys = original;
+    std::vector<Idx> idx(n);
+    std::iota(idx.begin(), idx.end(), Idx{0});
+    std::vector<Key> keys_scratch(n);
+    std::vector<Idx> idx_scratch(n);
+    tsl_samplesort_cosort_parallel<Key, Simd, K, Policy>(
+      keys.data(), idx.data(), n, keys_scratch.data(), idx_scratch.data(), workers);
+
+    check_result(label + "/w=" + std::to_string(workers), original, keys, idx);
+    if (keys != serial_keys) {
+      fail(label + "/w=" + std::to_string(workers),
+           "sorted keys differ from the sequential run");
+    }
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -282,6 +318,26 @@ int main() {
   run_shape<std::uint32_t, tsl::simd<std::uint32_t, tsl::avx512>, 16,
             TslSampleSortBuckets::Adaptive>("u32/K=16/equality", Shape::AllEqual,
                                                 1u << 24);
+
+  // Parallel: every shape that stresses duplicate handling, at sizes that reach
+  // both stages of the parallel executor (stage 1 needs a range big enough to
+  // chunk; below that it degenerates to stage 2 alone, which is also worth
+  // covering).
+  for (auto const shape : {Shape::Random, Shape::AllEqual, Shape::TwoValues,
+                           Shape::ModThree, Shape::Skewed, Shape::Sawtooth,
+                           Shape::Sorted, Shape::Reverse, Shape::OrganPipe}) {
+    for (auto const n : {std::size_t{0}, std::size_t{1}, std::size_t{257},
+                         std::size_t{4095}, std::size_t{1u << 20}}) {
+      run_parallel<std::uint32_t, tsl::simd<std::uint32_t, tsl::avx512>, 16,
+                   TslSampleSortBuckets::Adaptive>("u32/K=16/adaptive", shape, n);
+    }
+  }
+  run_parallel<std::uint64_t, tsl::simd<std::uint64_t, tsl::avx512>, 16,
+               TslSampleSortBuckets::Adaptive>("u64/K=16/adaptive", Shape::Random,
+                                               1u << 20);
+  run_parallel<std::uint64_t, tsl::simd<std::uint64_t, tsl::avx512>, 16,
+               TslSampleSortBuckets::Ordered>("u64/K=16/ordered", Shape::Skewed,
+                                              1u << 20);
 
   if (g_failures != 0) {
     std::printf("\nsamplesort tests FAILED: %zu of %zu checks\n", g_failures, g_checks);

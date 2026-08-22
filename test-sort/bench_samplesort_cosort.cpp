@@ -34,6 +34,7 @@
 
 #include "multicolumn_quicksort.hpp"
 #include "samplesort_executor.hpp"
+#include "samplesort_parallel_executor.hpp"
 
 namespace {
 
@@ -266,6 +267,75 @@ void quicksort_baseline(char const * type, char const * leaf, std::size_t n) {
          median(samples));
 }
 
+// Parallel samplesort, and parallel quicksort on the identical problem. This is
+// the comparison the whole structure was built for: the competitor is not
+// std::sort, it is the playground's own parallel task tree.
+template <class Key, class Simd, int K, std::size_t Fill>
+auto parallel_samplesort(char const * type, std::size_t n, std::size_t workers)
+  -> double {
+  using Idx = typename TslSampleSortTraits<Key>::index_type;
+  auto const source = random_keys<Key>(n, 0x1234F00D);
+  std::vector<Key> keys(n), keys_scratch(n);
+  std::vector<Idx> idx(n), idx_scratch(n);
+
+  std::vector<double> samples;
+  TslSampleSortMetrics metrics;
+  for (int rep = 0; rep < repetitions; ++rep) {
+    keys = source;
+    std::iota(idx.begin(), idx.end(), Idx{0});
+    auto const start = Clock::now();
+    tsl_samplesort_cosort_parallel<Key, Simd, K, TslSampleSortBuckets::Adaptive, 8,
+                                   256, TslSampleSortBase::Network,
+                                   TslSampleSortIds::Byte,
+                                   256 / Simd::lane_count_v, Fill>(
+      keys.data(), idx.data(), n, keys_scratch.data(), idx_scratch.data(), workers);
+    auto const stop = Clock::now();
+    samples.push_back(std::chrono::duration<double, std::nano>(stop - start).count()
+                      / static_cast<double>(n));
+  }
+  if (!std::is_sorted(keys.begin(), keys.end())) {
+    std::printf("  !! parallel samplesort did not sort\n");
+  }
+  auto const ns = median(samples);
+  char note[96];
+  std::snprintf(note, sizeof(note), "steps=%zu tasks=%zu", metrics.partition_steps,
+                metrics.tasks);
+  report("samplesort parallel", type, K, "adaptive", workers, n, ns, note);
+  return ns;
+}
+
+template <class Key, class Simd, TslLeafKind Leaf>
+auto parallel_quicksort(char const * type, char const * leaf, std::size_t n,
+                        std::size_t workers) -> double {
+  using Sorter = TslMultiColumnQuickSorter<Key, TslPartitionKind::THREE_WAY, Leaf, 1, Simd>;
+  auto const source = random_keys<Key>(n, 0x1234F00D);
+  std::vector<Key> keys(n), index(n);
+  Sorter sorter(0x5A3F1E77);
+  auto no_band = [](std::size_t, std::size_t) {};
+  auto no_leaf = [](std::size_t, std::size_t) {};
+
+  std::vector<double> samples;
+  for (int rep = 0; rep < repetitions; ++rep) {
+    keys = source;
+    for (std::size_t i = 0; i < n; ++i) {
+      index[i] = static_cast<Key>(i);
+    }
+    Key * columns[1] = {index.data()};
+    auto const start = Clock::now();
+    sorter.sort_key_parallel(keys.data(), columns, 1, n, TslSortOrder::ASCENDING, 0,
+                             workers, 4096, 16384, no_band, no_leaf);
+    auto const stop = Clock::now();
+    samples.push_back(std::chrono::duration<double, std::nano>(stop - start).count()
+                      / static_cast<double>(n));
+  }
+  if (!std::is_sorted(keys.begin(), keys.end())) {
+    std::printf("  !! parallel quicksort did not sort\n");
+  }
+  auto const ns = median(samples);
+  report(std::string("quicksort parallel (") + leaf + ")", type, 0, "-", workers, n, ns);
+  return ns;
+}
+
 }  // namespace
 
 int main(int argc, char ** argv) {
@@ -365,6 +435,23 @@ int main(int argc, char ** argv) {
               100.0 * (widest - one_chunk) / one_chunk,
               (widest - one_chunk) / one_chunk > 0.05
                 ? "(over 5%: check the phase-3 loop order)" : "(within 5%)");
+
+  std::printf("\n-- parallel: samplesort against the parallel task tree --\n");
+  for (std::size_t workers : {std::size_t{1}, std::size_t{2}, std::size_t{4},
+                              std::size_t{8}, std::size_t{16}, std::size_t{24}}) {
+    auto const sample = parallel_samplesort<U32, Simd32, 16, 25>("u32", n, workers);
+    auto const quick =
+      parallel_quicksort<U32, Simd32, TslLeafKind::NETWORK>("u32", "net", n, workers);
+    std::printf("   u32 w=%-2zu  samplesort %6.2f  quicksort %6.2f  ratio %.2fx\n",
+                workers, sample, quick, sample / quick);
+  }
+  for (std::size_t workers : {std::size_t{1}, std::size_t{8}, std::size_t{24}}) {
+    auto const sample = parallel_samplesort<U64, Simd64, 16, 50>("u64", n, workers);
+    auto const quick =
+      parallel_quicksort<U64, Simd64, TslLeafKind::NETWORK>("u64", "net", n, workers);
+    std::printf("   u64 w=%-2zu  samplesort %6.2f  quicksort %6.2f  ratio %.2fx\n",
+                workers, sample, quick, sample / quick);
+  }
 
   std::printf("\n-- baselines --\n");
   quicksort_baseline<U32, Simd32, TslLeafKind::INSERTION>("u32", "ins", n);

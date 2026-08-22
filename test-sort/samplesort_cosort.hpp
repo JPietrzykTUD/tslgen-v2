@@ -714,18 +714,44 @@ struct TslSampleSortWorkspace {
 
   using bucket_id_type = typename Kernels::bucket_id_type;
 
-  std::vector<bucket_id_type> bucket_ids;  // one per element, indexed absolutely
+  // The bucket-id array is indexed by absolute position and tasks own disjoint
+  // ranges, so several workers can share one array while keeping the per-step
+  // reduction arrays below private. Hence a pointer rather than ownership: the
+  // sequential executor points it at `owned_ids`, a parallel one points every
+  // worker at the same external array.
+  bucket_id_type * bucket_ids = nullptr;
+  std::vector<bucket_id_type> owned_ids;
   std::vector<std::size_t> histogram;  // chunks x buckets, row-major per chunk
   std::vector<index_type> cursors;     // chunks x buckets
   std::vector<std::size_t> counts;     // buckets
   std::vector<std::size_t> offsets;    // buckets, absolute
 
   void resize(std::size_t elements, std::size_t chunks) {
-    bucket_ids.assign(elements, bucket_id_type{0});
+    owned_ids.assign(elements, bucket_id_type{0});
+    attach(owned_ids.data(), chunks);
+  }
+
+  void attach(bucket_id_type * external, std::size_t chunks) {
+    bucket_ids = external;
     histogram.assign(chunks * static_cast<std::size_t>(Kernels::max_buckets), 0);
     cursors.assign(chunks * static_cast<std::size_t>(Kernels::max_buckets), index_type{0});
     counts.assign(static_cast<std::size_t>(Kernels::max_buckets), 0);
     offsets.assign(static_cast<std::size_t>(Kernels::max_buckets), 0);
+  }
+};
+
+
+// Runs the chunk bodies of phases 2 and 4. The default is a plain loop; a
+// parallel executor supplies one that fans the bodies across workers. This is the
+// whole of what "a scheduler can put a barrier between any two phases" means in
+// code: the two phases are separate calls, and what runs their chunks is the
+// caller's business.
+struct TslSampleSortSerialChunks {
+  template <class Body>
+  void operator()(std::size_t chunks, Body && body) const {
+    for (std::size_t c = 0; c < chunks; ++c) {
+      body(c);
+    }
   }
 };
 
@@ -735,7 +761,8 @@ struct TslSampleSortWorkspace {
 //
 // Returns false when the range needs no partitioning at all (every key equal),
 // in which case `emit` carries the range back as an already-sorted task.
-template <class Kernels, bool Profile = false>
+template <class Kernels, bool Profile = false,
+          class ChunkRunner = TslSampleSortSerialChunks>
 auto tsl_samplesort_partition_step(
   TslSampleSortTask const & task,
   typename Kernels::key_type * keys,
@@ -746,7 +773,8 @@ auto tsl_samplesort_partition_step(
   TslSampleSortOptions const & options,
   TslPivotRng & rng,
   TslSampleSortMetrics & metrics,
-  std::vector<TslSampleSortTask> & emit
+  std::vector<TslSampleSortTask> & emit,
+  ChunkRunner const & run_chunks = ChunkRunner{}
 ) -> void {
   using Key = typename Kernels::key_type;
   using Idx = typename Kernels::index_type;
@@ -816,11 +844,11 @@ auto tsl_samplesort_partition_step(
             workspace.histogram.begin()
               + static_cast<std::ptrdiff_t>(chunks * buckets), 0);
   auto const t_classify = now();
-  for (std::size_t c = 0; c < chunks; ++c) {
-    Kernels::classify_chunk(workspace.bucket_ids.data(), source_keys,
+  run_chunks(chunks, [&](std::size_t c) {
+    Kernels::classify_chunk(workspace.bucket_ids, source_keys,
                             chunk_begin(c), chunk_end(c), splitters,
                             workspace.histogram.data() + c * buckets);
-  }
+  });
   if constexpr (Profile) {
     metrics.ns_classify += since(t_classify);
   }
@@ -844,11 +872,11 @@ auto tsl_samplesort_partition_step(
 
   // ---- phase 4: per chunk, independent ----
   auto const t_distribute = now();
-  for (std::size_t c = 0; c < chunks; ++c) {
+  run_chunks(chunks, [&](std::size_t c) {
     Kernels::distribute_chunk(target_keys, target_idx, source_keys, source_idx,
-                              workspace.bucket_ids.data(), chunk_begin(c),
+                              workspace.bucket_ids, chunk_begin(c),
                               chunk_end(c), workspace.cursors.data() + c * buckets);
-  }
+  });
   if constexpr (Profile) {
     metrics.ns_distribute += since(t_distribute);
   }
