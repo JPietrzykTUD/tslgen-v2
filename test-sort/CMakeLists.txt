@@ -188,6 +188,30 @@ target_link_libraries(bench_hybrid_leaf PRIVATE tsl::tsl Threads::Threads)
 # samplesort-notes.md.
 # The paper's systematic drivers: one question per binary, one CSV schema, the
 # method fixed once in benchmarks/paper_harness.hpp. See docs/benchmark-plan.md.
+# Q0, the coordinate descent every later number depends on. One object library
+# per (style, width) so the nine instantiations of the candidate set compile in
+# parallel rather than serialising into one enormous translation unit.
+set(_q0_units "")
+foreach(_q0_style Intrinsics ClangBuiltin ClangBoolMask)
+  foreach(_q0_width 128 256 512)
+    set(_q0_name q0_unit_${_q0_style}_${_q0_width})
+    add_library(${_q0_name} OBJECT benchmarks/q0_tune_unit.cpp)
+    target_compile_features(${_q0_name} PRIVATE cxx_std_17)
+    target_compile_definitions(
+      ${_q0_name} PRIVATE TSL_Q0_STYLE=${_q0_style} TSL_Q0_WIDTH=${_q0_width}
+    )
+    target_link_libraries(${_q0_name} PRIVATE tsl::tsl Threads::Threads)
+    list(APPEND _q0_units ${_q0_name})
+  endforeach()
+endforeach()
+
+add_executable(bench_q0_tune benchmarks/bench_q0_tune.cpp)
+target_compile_features(bench_q0_tune PRIVATE cxx_std_17)
+target_link_libraries(bench_q0_tune PRIVATE tsl::tsl Threads::Threads)
+foreach(_q0_unit ${_q0_units})
+  target_sources(bench_q0_tune PRIVATE $<TARGET_OBJECTS:${_q0_unit}>)
+endforeach()
+
 add_executable(bench_q4_scaling benchmarks/bench_q4_scaling.cpp)
 target_compile_features(bench_q4_scaling PRIVATE cxx_std_17)
 target_link_libraries(bench_q4_scaling PRIVATE tsl::tsl Threads::Threads)

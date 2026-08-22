@@ -120,7 +120,8 @@ void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
     row.variant = "K=16/adaptive/net";
     TslSampleSortMultiColumn<Key, Simd, 16, TslSampleSortBuckets::Adaptive, 8, 256,
                              TslSampleSortBase::Network, TslSampleSortIds::Byte,
-                             256 / Simd::lane_count_v, 50, true> sorter;
+                             256 / Simd::lane_count_v, 50,
+                               TslSampleSortMovement::OutOfPlace, true> sorter;
     TslSampleSortColumnMetrics metrics;
     auto const [ok, stats] = tsl_paper_measure(
       [&] {
@@ -251,7 +252,14 @@ int main(int argc, char ** argv) {
       base_rows = std::strtoull(value().c_str(), nullptr, 10);
     } else if (flag == "--cols") {
       base_columns = std::strtoull(value().c_str(), nullptr, 10);
-    } else if (flag == "--widths") {
+    } else if (flag == "--element-bytes" || flag == "--widths") {
+      // `--widths` was the old name and meant element *bytes*, which reads as
+      // register width and misled a reader into thinking these drivers sweep
+      // 128/256/512. They do not: register width is bench_q0_tune's axis and
+      // bench_q6_portability's. Kept as an alias so old command lines still work.
+      if (flag == "--widths") {
+        std::printf("note: --widths means element bytes; prefer --element-bytes\n");
+      }
       widths.clear();
       for (auto const & part : split(value(), ',')) {
         widths.push_back(std::strtoull(part.c_str(), nullptr, 10));

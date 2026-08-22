@@ -117,6 +117,10 @@ template <
   TslSampleSortIds IdWidth = TslSampleSortIds::Byte,
   std::size_t BaseRows = BaseCase / SimdStyle::lane_count_v,
   std::size_t BaseFillPercent = 50,
+  // Forwarded to the samplesort. In place halves the footprint and costs
+  // throughput; reachable from here so the tuner can put it on an axis rather
+  // than it being a property only the single-key sort has.
+  TslSampleSortMovement Movement = TslSampleSortMovement::OutOfPlace,
   // Times the three phases. Two clock reads per phase per range, so it is off by
   // default and off in any timed run that is not asking where the time goes.
   bool Profile = false
@@ -393,12 +397,14 @@ class TslSampleSortMultiColumn {
     TslSampleSortMetrics sort_metrics;
     if (workers > 1) {
       tsl_samplesort_cosort_parallel<Key, SimdStyle, K, Policy, Oversample, BaseCase,
-                                    BasePolicy, IdWidth, BaseRows, BaseFillPercent>(
+                                    BasePolicy, IdWidth, BaseRows, BaseFillPercent,
+                                    Movement>(
         keys.data() + current.begin, index + current.begin, count,
         keys_scratch.data(), index_scratch.data(), workers, {}, &sort_metrics);
     } else {
       tsl_samplesort_cosort<Key, SimdStyle, K, Policy, Oversample, BaseCase,
-                            BasePolicy, IdWidth, BaseRows, BaseFillPercent>(
+                            BasePolicy, IdWidth, BaseRows, BaseFillPercent,
+                            Movement>(
         keys.data() + current.begin, index + current.begin, count,
         keys_scratch.data(), index_scratch.data(), {}, &sort_metrics);
     }

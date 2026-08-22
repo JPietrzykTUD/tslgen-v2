@@ -14,6 +14,7 @@ baselines come from adapted libraries rather than only `std::sort`.
 
 | # | question | binary | status |
 | --- | --- | --- | --- |
+| Q0 | what configuration should every other number use? | `bench_q0_tune` | built |
 | Q1 | How do we compare to the best available implementations? | `bench_q1_baseline` | **outstanding**, see below |
 | Q2 | Quicksort or samplesort — which, where, and why? | `bench_q2_algorithms` | built |
 | Q3 | What does cluster detection cost, and does offloading it pay? | `bench_q3_detection` | built |
@@ -35,6 +36,28 @@ Supporting evidence, cited as mechanism and not as headline: `bench_hybrid_leaf`
 (why the leaf is a per-leaf decision), `bench_samplesort_streams` (why K is not
 set by the write-stream cliff), `bench_iaa_frequency_min_offload` (where an
 offload starts to pay).
+
+## Which dimensions are actually swept
+
+Worth stating plainly, because the answer is not uniform:
+
+| dimension | swept by |
+| --- | --- |
+| register width, 128/256/512 | Q0 (both algorithms), Q6 (quicksort only) |
+| style, `intr`/`clang`/`clang_bool` | Q0 (both algorithms), Q6 (quicksort only) |
+| element width, 4 and 8 bytes | Q2, Q3, Q4 (`--element-bytes`) |
+| algorithmic knobs (K, leaf, base case, fill, ids, movement, partition, discovery) | Q0 |
+| threads, rows, columns | Q4 |
+| detector backend | Q3 |
+| dataset shape | Q2, Q4, and Q0's tuning set |
+
+Two notes on reading a width sweep. First, `--element-bytes` in Q2/Q3/Q4 is the
+*element* width; it was called `--widths`, which read as register width and misled
+exactly as you would expect. Second, `tsl::sse` and `tsl::avx2` in this profile
+mean 128-bit and 256-bit, not the SSE and AVX2 instruction sets: on a host with
+AVX-512VL the narrower scatters resolve to VL-encoded AVX-512 instructions. So a
+width sweep here compares register widths on one ISA and says nothing about a
+machine that genuinely lacks AVX-512.
 
 ## Method
 
@@ -65,6 +88,48 @@ rather than per file:
   A silently narrowed sweep reads as full coverage.
 * **ns per element, never speedup.** Ratios go in the prose, where the
   denominator can be named.
+
+## Q0 — the design-space exploration
+
+Every other number depends on a configuration, so this runs first and the others
+read what it chose. Without it, the tuned values live in each driver's source:
+re-tuning on new hardware becomes a code change, the figures stop being
+reproducible from one command, and — as the corrected table above shows — a
+comparison can rest on a knob nobody examined.
+
+**The search.** A cross over the axes measured to interact (bucket count,
+base-case leaf, fill threshold) and one-factor-at-a-time around the default for
+the rest. Not a full grid, and not a strict sequential descent, for the same
+reason in both cases: almost every knob is a template parameter, so a candidate is
+an instantiation. A grid is 400-odd per style and width; a sequential descent
+needs round two's candidates, which depend on round one's runtime winner, so every
+reachable configuration would have to be built anyway. The cross plus OFAT is a
+sum, about 29 instantiations per cell, and the combined winner is measured so that
+combining individual winners being *worse* is visible rather than assumed away.
+
+**Re-run per (style, width).** Nine cells, because a narrower vector changes the
+leaf's capacity, a bucket's stream cost and the base case's fill ratio at once, so
+whether the best algorithmic configuration depends on register width is itself a
+question. One translation unit per cell, compiled in parallel: 24 seconds wall for
+all nine against three minutes of CPU.
+
+**What it found first, at intr/512 on a duplicate-heavy tuning set.** For the
+quicksort: `3way/ins/post` at 27.2 ns/element, against `3way/hyb` 29.7, `3way/net`
+54.5 — and `2way/net` at 897.6, thirty-three times worse, which is the quadratic
+two-way case the corpus already gates on size. For the samplesort: `base_case=64`
+best at 38.6, with `buckets=ordered` 2.41x worse and `movement=inplace` 1.41x
+worse, both consistent with what the notes measured separately.
+
+**The limitation, stated.** One descent round. A second needs the base moved to
+the winner, which is a rebuild rather than a flag, and the driver says when it
+would be worth it — when the combined winner beats the best cross member.
+
+**And a tension worth naming.** The premise of tuning is that one configuration is
+best; the finding of this whole project is that the best configuration depends on
+the data. Q0 scores candidates by the geometric mean over a set of shapes, so what
+it returns is a compromise, and the per-axis table it prints is more informative
+than the single winner. Where an axis's winner flips between shapes, that belongs
+in the paper as a result rather than being averaged away.
 
 ## Q1 — external baselines
 
@@ -134,23 +199,30 @@ everything else — the leading column's cardinality:
 | q064 | 9 | 2.65 M | `i_product_name` | ~18 000 |
 | q081 | 15 | 100 k | `c_customer_id` | near-unique |
 
-**First results, and they are a split rather than a sweep.** ns/element,
-`rle=scalar`:
+**First results — and the first version of this table was wrong.** It reported
+the quicksort with a network leaf, because that was hard-coded in the driver. The
+descent in Q0 then found the insertion leaf is up to **6.6x faster** on exactly
+these keys, and with it the verdict inverts. Both are below, because the size of
+the error is the argument for Q0 existing:
 
-| key | ss w=1 | qs w=1 | ss w=24 | qs w=24 | `std::sort` |
-| --- | --- | --- | --- | --- | --- |
-| q064 | **188.3** | 447.0 | **22.3** | 183.9 | 310.3 |
-| q067 | **130.2** | 280.8 | **17.1** | 87.7 | 317.6 |
-| q010 | **56.6** | 79.8 | **14.3** | 18.1 | 212.3 |
-| q050 | 30.5 | **11.1** | 19.4 | **5.7** | 67.6 |
-| q081 | 23.7 | **14.1** | 32.1 | **24.2** | 63.2 |
+| key | samplesort | quicksort, `net` (as first published) | quicksort, tuned `ins` |
+| --- | --- | --- | --- |
+| q064 | 188.3 | 447.0 | **68.2** |
+| q067 | 130.2 | 280.8 | **51.6** |
+| q010 | 56.6 | 79.8 | **31.5** |
+| q050 | 30.5 | 11.1 | **10.9** |
+| q081 | 23.7 | **14.1** | 25.2 |
 
-Three to two, with a mechanism for each side. Samplesort takes the keys whose
-leading column is wide enough to split. The quicksort takes q050, whose ten
-columns hold one to five distinct values each — one is constant — so a three-way
-partition's equal band swallows whole columns at once and a 16-way split has
-almost nothing to divide. It also takes q081, which at 100 k rows is too small to
-feed 24 threads: samplesort is *slower* there at 24 workers than at 1.
+At one thread the tuned quicksort wins **all five**; the "three to two favouring
+samplesort" in the first version of this document was an artefact of one
+unexamined knob. At 24 workers samplesort still wins three of five — q067 17.1
+against 72.3 and q064 22.3 against 120.9 — so the honest summary is that the
+quicksort is the better serial sorter on real keys and the samplesort scales
+better, not that either dominates.
+
+That is also the answer to "why tune at all": a comparison between two algorithms
+is a comparison between two *configurations* of them, and picking one by hand is
+picking the result.
 
 **What skew is worth, isolated.** The synthetic `tpcds_q67` shape is calibrated to
 the cardinalities measured above, so it and the real key differ only in

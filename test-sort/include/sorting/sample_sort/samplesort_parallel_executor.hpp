@@ -88,7 +88,11 @@ template <
   TslSampleSortBase BasePolicy = TslSampleSortBase::Network,
   TslSampleSortIds IdWidth = TslSampleSortIds::Byte,
   std::size_t BaseRows = BaseCase / SimdStyle::lane_count_v,
-  std::size_t BaseFillPercent = 50
+  std::size_t BaseFillPercent = 50,
+  // In place has no parallel form of its own: a whole-range cycle permutation is
+  // not divisible into chunks, so it is forwarded and the phases that would fan
+  // out simply do not. Present so a caller can select it uniformly.
+  TslSampleSortMovement Movement = TslSampleSortMovement::OutOfPlace
 >
 void tsl_samplesort_cosort_parallel(
   Key * keys,
@@ -102,7 +106,7 @@ void tsl_samplesort_cosort_parallel(
 ) {
   using Kernels = TslSampleSortKernels<Key, SimdStyle, K, Policy, Oversample,
                                        BaseCase, BasePolicy, IdWidth, BaseRows,
-                                       BaseFillPercent>;
+                                       BaseFillPercent, Movement>;
   using Idx = typename Kernels::index_type;
 
   if (workers == 0) {
@@ -111,7 +115,8 @@ void tsl_samplesort_cosort_parallel(
   TslSampleSortMetrics metrics;
   if (n <= 1 || workers == 1) {
     tsl_samplesort_cosort<Key, SimdStyle, K, Policy, Oversample, BaseCase,
-                          BasePolicy, IdWidth, BaseRows, BaseFillPercent>(
+                          BasePolicy, IdWidth, BaseRows, BaseFillPercent,
+                          Movement>(
       keys, idx, n, keys_scratch, idx_scratch, options, metrics_out);
     return;
   }

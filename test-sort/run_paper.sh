@@ -106,7 +106,26 @@ else
   echo "  produce them with benchmarks/datagen/tpcds/extract_keys.py"
 fi
 
-run bench_q2_algorithms q2_algorithms "${tpcds_args[@]+"${tpcds_args[@]}"}" \
+# Q0 first: it writes the configuration the reporting drivers read. Without it
+# they fall back to defaults and label every row "(default)", which is how a
+# hard-coded leaf once made the quicksort look 6.6x slower than it is.
+tuned="$results/best_config.tsv"
+if [[ -x "$build/bench_q0_tune" ]]; then
+  echo
+  echo "=== q0_tune"
+  if [[ "$quick" == "--quick" ]]; then
+    q0_args=(--styles intr --widths 512 --workers 1 --rows 262144
+             --shapes tpcds_q67_sf1,skewed_zipf_s1)
+  else
+    q0_args=()
+  fi
+  (cd "$build" && ./bench_q0_tune "${q0_args[@]+"${q0_args[@]}"}" \
+      --out "$tuned" --csv "$results/q0_tune.csv") | tee "$results/q0_tune.log"
+else
+  echo "bench_q0_tune is not built; the drivers will use their defaults"
+fi
+
+run bench_q2_algorithms q2_algorithms --tuned "$tuned" "${tpcds_args[@]+"${tpcds_args[@]}"}" \
     "${narrow_q2[@]+"${narrow_q2[@]}"}"
 # Hardware paths only: the software ones are QPL's and DML's own CPU code, kept
 # for correctness rather than for figures.

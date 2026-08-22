@@ -885,6 +885,25 @@ inline auto tsl_expected_checks(
   add("columns", static_cast<double>(columns), static_cast<double>(measured.columns));
 
   switch (spec.shape) {
+    case TslShape::TpcdsQ67: {
+      // The hierarchy is exact by construction, so the leading columns' distinct
+      // counts are the calibrated cardinalities. Asserting them catches drift in
+      // the derivation: an earlier version produced 12 categories where the
+      // measured data has 10.
+      auto const root = std::sqrt(std::max(spec.param("sf", 1.0), 0.01));
+      auto const expect = [&](double base) {
+        return std::min(static_cast<double>(rows),
+                        std::max(1.0, std::floor(base * root)));
+      };
+      add("D_1 == categories", std::min(static_cast<double>(rows), 10.0), distinct(1));
+      if (columns >= 2) {
+        add("D_2 == classes", expect(99.0), distinct(2));
+      }
+      if (columns >= 3) {
+        add("D_3 == brands", expect(710.0), distinct(3));
+      }
+      break;
+    }
     case TslShape::UniqueFirst: {
       add("D_1 == N", rows, distinct(1));
       add("R_1 == 0", 0.0, static_cast<double>(measured.tied_rows[1]));
