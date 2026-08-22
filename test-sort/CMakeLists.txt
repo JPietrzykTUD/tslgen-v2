@@ -160,20 +160,19 @@ if(ENABLE_VQSORT_BENCHMARK)
   endif()
 endif()
 
-add_executable(test_sort test_quicksort_pairwise_swap.cpp)
+add_executable(test_sort tests/test_quicksort_pairwise_swap.cpp)
 target_compile_features(test_sort PRIVATE cxx_std_17)
 target_link_libraries(test_sort PRIVATE tsl::tsl)
 
-add_executable(test_multicolumn_sort test_multicolumn_sort.cpp)
+add_executable(test_multicolumn_sort tests/test_multicolumn_sort.cpp)
 target_compile_features(test_multicolumn_sort PRIVATE cxx_std_17)
 target_link_libraries(test_multicolumn_sort PRIVATE tsl::tsl Threads::Threads)
 
 # Hybrid-leaf experiment: is the leaf a per-leaf decision rather than a
 # per-configuration one? Standalone driver plus its own sweep; see
 # multicolumn_qs_hybrid_leaf.hpp and benchmark-final.md.
-add_executable(bench_hybrid_leaf bench_hybrid_leaf.cpp)
+add_executable(bench_hybrid_leaf benchmarks/bench_hybrid_leaf.cpp)
 target_compile_features(bench_hybrid_leaf PRIVATE cxx_std_17)
-target_include_directories(bench_hybrid_leaf PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/datagen")
 target_link_libraries(bench_hybrid_leaf PRIVATE tsl::tsl Threads::Threads)
 
 # Samplesort co-sort: a different algorithm for the same data model as the
@@ -181,7 +180,7 @@ target_link_libraries(bench_hybrid_leaf PRIVATE tsl::tsl Threads::Threads)
 # rest with one gather pass each. Kernels in samplesort_cosort.hpp, the
 # swappable sequential executor in samplesort_executor.hpp, measurements in
 # samplesort-notes.md.
-add_executable(test_samplesort_cosort test_samplesort_cosort.cpp)
+add_executable(test_samplesort_cosort tests/test_samplesort_cosort.cpp)
 target_compile_features(test_samplesort_cosort PRIVATE cxx_std_17)
 target_link_libraries(test_samplesort_cosort PRIVATE tsl::tsl Threads::Threads)
 
@@ -190,22 +189,22 @@ target_link_libraries(test_samplesort_cosort PRIVATE tsl::tsl Threads::Threads)
 # Section 9.2 of the samplesort specification: whether the concurrent
 # write-stream cliff that fixed K=16 on one core moves once T threads share the
 # LLC and the memory controllers.
-add_executable(bench_samplesort_streams bench_samplesort_streams.cpp)
+add_executable(bench_samplesort_streams benchmarks/bench_samplesort_streams.cpp)
 target_compile_features(bench_samplesort_streams PRIVATE cxx_std_17)
 target_link_libraries(bench_samplesort_streams PRIVATE tsl::tsl Threads::Threads)
 
-add_executable(bench_samplesort_cosort bench_samplesort_cosort.cpp)
+add_executable(bench_samplesort_cosort benchmarks/bench_samplesort_cosort.cpp)
 target_compile_features(bench_samplesort_cosort PRIVATE cxx_std_17)
 target_link_libraries(bench_samplesort_cosort PRIVATE tsl::tsl Threads::Threads)
 
 # The indirect (index-permutation) sorter. Built without the accelerator options
 # it exercises the scalar detector; the IAA block below adds the QPL one, which
 # is what proves the detector seam applies to this driver too.
-add_executable(test_multicolumn_index_sort test_multicolumn_index_sort.cpp)
+add_executable(test_multicolumn_index_sort tests/test_multicolumn_index_sort.cpp)
 target_compile_features(test_multicolumn_index_sort PRIVATE cxx_std_17)
 target_link_libraries(test_multicolumn_index_sort PRIVATE tsl::tsl Threads::Threads)
 
-add_executable(benchmark_quicksort_pairwise_swap benchmark_quicksort_pairwise_swap.cpp)
+add_executable(benchmark_quicksort_pairwise_swap benchmarks/benchmark_quicksort_pairwise_swap.cpp)
 target_compile_features(benchmark_quicksort_pairwise_swap PRIVATE cxx_std_17)
 target_link_libraries(benchmark_quicksort_pairwise_swap PRIVATE tsl::tsl)
 if(ENABLE_VQSORT_BENCHMARK)
@@ -213,15 +212,15 @@ if(ENABLE_VQSORT_BENCHMARK)
   target_link_libraries(benchmark_quicksort_pairwise_swap PRIVATE hwy_contrib)
 endif()
 
-add_executable(benchmark_compact_merge benchmark_compact_merge.cpp)
+add_executable(benchmark_compact_merge benchmarks/benchmark_compact_merge.cpp)
 target_compile_features(benchmark_compact_merge PRIVATE cxx_std_17)
 target_link_libraries(benchmark_compact_merge PRIVATE tsl::tsl)
 
-add_executable(benchmark_cosort_network benchmark_cosort_network.cpp)
+add_executable(benchmark_cosort_network benchmarks/benchmark_cosort_network.cpp)
 target_compile_features(benchmark_cosort_network PRIVATE cxx_std_17)
 target_link_libraries(benchmark_cosort_network PRIVATE tsl::tsl)
 
-add_executable(benchmark_multicolumn_sort benchmark_multicolumn_sort.cpp)
+add_executable(benchmark_multicolumn_sort benchmarks/benchmark_multicolumn_sort.cpp)
 target_compile_features(benchmark_multicolumn_sort PRIVATE cxx_std_17)
 target_link_libraries(benchmark_multicolumn_sort PRIVATE tsl::tsl)
 
@@ -254,7 +253,7 @@ if(ENABLE_GBENCH)
     endif()
   endif()
 
-  add_executable(benchmark_multicolumn_gbench benchmark_multicolumn_gbench.cpp)
+  add_executable(benchmark_multicolumn_gbench benchmarks/benchmark_multicolumn_gbench.cpp)
   target_compile_features(benchmark_multicolumn_gbench PRIVATE cxx_std_17)
   target_link_libraries(
     benchmark_multicolumn_gbench
@@ -426,7 +425,7 @@ if(TSL_COSORT_ENABLE_IAA)
 
   # Frequency-derived run detection: counts resolved on the accelerator while the
   # sort runs, consumed afterwards instead of a comparison scan.
-  add_executable(test_iaa_frequency_run_detector test_iaa_frequency_run_detector.cpp)
+  add_executable(test_iaa_frequency_run_detector tests/test_iaa_frequency_run_detector.cpp)
   target_compile_features(test_iaa_frequency_run_detector PRIVATE cxx_std_17)
   target_compile_definitions(test_iaa_frequency_run_detector PRIVATE TSL_COSORT_ENABLE_IAA=1)
   target_link_libraries(
@@ -437,14 +436,14 @@ if(TSL_COSORT_ENABLE_IAA)
   # Tuning tool, not a test: finds the range size at which preparing the counts
   # starts paying for itself. Meaningful only on an IAA host -- see the file's
   # header and benchmark-final.md.
-  add_executable(bench_iaa_frequency_min_offload bench_iaa_frequency_min_offload.cpp)
+  add_executable(bench_iaa_frequency_min_offload benchmarks/bench_iaa_frequency_min_offload.cpp)
   target_compile_features(bench_iaa_frequency_min_offload PRIVATE cxx_std_17)
   target_compile_definitions(bench_iaa_frequency_min_offload PRIVATE TSL_COSORT_ENABLE_IAA=1)
   target_link_libraries(
     bench_iaa_frequency_min_offload PRIVATE tsl::tsl Threads::Threads ${_iaa_link_targets}
   )
 
-  add_executable(test_iaa_run_detector test_iaa_run_detector.cpp)
+  add_executable(test_iaa_run_detector tests/test_iaa_run_detector.cpp)
   target_compile_features(test_iaa_run_detector PRIVATE cxx_std_17)
   target_compile_definitions(test_iaa_run_detector PRIVATE TSL_COSORT_ENABLE_IAA=1)
   target_link_libraries(
@@ -457,7 +456,7 @@ if(TSL_COSORT_ENABLE_IAA)
   # Distinct-value frequencies over an unsorted range. Independent of the
   # detector: iaa_distinct_frequencies.hpp needs only QPL, and its entry point
   # takes a std::span, so this target asks for C++20.
-  add_executable(test_iaa_distinct_frequencies test_iaa_distinct_frequencies.cpp)
+  add_executable(test_iaa_distinct_frequencies tests/test_iaa_distinct_frequencies.cpp)
   target_compile_features(test_iaa_distinct_frequencies PRIVATE cxx_std_20)
   target_compile_definitions(test_iaa_distinct_frequencies PRIVATE TSL_COSORT_ENABLE_IAA=1)
   target_link_libraries(test_iaa_distinct_frequencies PRIVATE ${_iaa_link_targets})
@@ -529,13 +528,13 @@ if(TSL_COSORT_ENABLE_DSA)
     message(STATUS "cosort_bench: DSA detector backends enabled")
   endif()
 
-  add_executable(test_dsa_run_detector test_dsa_run_detector.cpp)
+  add_executable(test_dsa_run_detector tests/test_dsa_run_detector.cpp)
   target_compile_features(test_dsa_run_detector PRIVATE cxx_std_17)
   target_compile_definitions(test_dsa_run_detector PRIVATE TSL_COSORT_ENABLE_DSA=1)
   target_link_libraries(test_dsa_run_detector PRIVATE tsl::tsl ${_dsa_link_targets})
   add_test(NAME test_dsa_run_detector COMMAND test_dsa_run_detector)
 
-  add_executable(benchmark_dsa_run_detector benchmark_dsa_run_detector.cpp)
+  add_executable(benchmark_dsa_run_detector benchmarks/benchmark_dsa_run_detector.cpp)
   target_compile_features(benchmark_dsa_run_detector PRIVATE cxx_std_17)
   target_compile_definitions(benchmark_dsa_run_detector PRIVATE TSL_COSORT_ENABLE_DSA=1)
   target_link_libraries(benchmark_dsa_run_detector PRIVATE tsl::tsl ${_dsa_link_targets})
@@ -543,7 +542,7 @@ if(TSL_COSORT_ENABLE_DSA)
   # The full co-sort with the RLE backend as the registered axis. Needs Google
   # Benchmark, so it follows ENABLE_GBENCH.
   if(ENABLE_GBENCH)
-    add_executable(benchmark_dsa_cosort benchmark_dsa_cosort.cpp)
+    add_executable(benchmark_dsa_cosort benchmarks/benchmark_dsa_cosort.cpp)
     target_compile_features(benchmark_dsa_cosort PRIVATE cxx_std_17)
     target_compile_definitions(benchmark_dsa_cosort PRIVATE TSL_COSORT_ENABLE_DSA=1)
     target_link_libraries(
@@ -558,13 +557,22 @@ endif()
 # description_datasets.md and need neither TSL nor a SIMD host. The default
 # output directory is the committed source path so that running the binary from
 # any build tree writes to the same place; --out overrides it.
+# One include root per kind of header, so a source says what it is including:
+#   sorting/quicksort/...   sorting/primitives/...   cluster_detection/iaa/...
+# `benchmarks` and `benchmarks/datagen` are on the path so the benchmark-local and
+# dataset headers keep the bare names they use among themselves.
+include_directories(
+  "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks"
+  "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/datagen"
+)
+
 option(TSL_COSORT_BUILD_DATAGEN "Build the synthetic dataset generator and verifier" ON)
 
 if(TSL_COSORT_BUILD_DATAGEN)
   foreach(_datagen_target generate_datasets verify_datasets)
-    add_executable(${_datagen_target} datagen/${_datagen_target}.cpp)
+    add_executable(${_datagen_target} benchmarks/datagen/${_datagen_target}.cpp)
     target_compile_features(${_datagen_target} PRIVATE cxx_std_17)
-    target_include_directories(${_datagen_target} PRIVATE datagen)
     target_compile_definitions(
       ${_datagen_target}
       PRIVATE TSL_DATASET_DEFAULT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
@@ -576,7 +584,6 @@ if(TSL_COSORT_BUILD_DATAGEN)
   # sorting implementation under test.
   add_executable(reference benchmarks/reference.cpp)
   target_compile_features(reference PRIVATE cxx_std_17)
-  target_include_directories(reference PRIVATE datagen)
   target_link_libraries(reference PRIVATE Threads::Threads)
   target_compile_definitions(
     reference

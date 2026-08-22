@@ -21,10 +21,10 @@
 #include <string>
 #include <vector>
 
-#include "dataset_catalog.hpp"
-#include "dataset_reference.hpp"
-#include "dataset_source.hpp"
-#include "multicolumn_quicksort.hpp"
+#include "datagen/dataset_catalog.hpp"
+#include "datagen/dataset_reference.hpp"
+#include "datagen/dataset_source.hpp"
+#include "sorting/quicksort/multicolumn_quicksort.hpp"
 
 // --- working-set sizes ------------------------------------------------------
 

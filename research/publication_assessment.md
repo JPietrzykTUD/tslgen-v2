@@ -51,7 +51,7 @@ The local evidence reviewed included the repository and compiler charters, archi
 - `tslc/tests/test_build_verify.py`, `tslc/tests/test_value_tests.py`, and the remaining static test suite;
 - `coverage/primitive-coverage-inventory.md`, `coverage/benchmark-shape-inventory.md`, and `coverage/benchmark-rust-shape-inventory.md`;
 - `docs/variant-benchmarking.md`, `todo/db-operators.md`, and the C++ and Rust examples;
-- `test-sort/multi-column-sort.md`, `test-sort/multi-column-sort-plan.md`, `test-sort/benchmark_multicolumn_gbench.cpp`, and `test-sort/CMakeLists.txt`.
+- `test-sort/docs/multi-column-sort.md`, `test-sort/docs/multi-column-sort-plan.md`, `test-sort/benchmarks/benchmark_multicolumn_gbench.cpp`, and `test-sort/CMakeLists.txt`.
 
 The related-work search covered the direct TSL lineage, portable SIMD libraries and standards, database execution and query compilation, vector IRs, generative/autotuning systems, and compiler-testing work. It prioritized papers and official project or venue sources. It was not a formal systematic literature review, citation-network study, patent search, or exhaustive code-hosting search. Therefore, “no novelty found” means that no defensible novelty emerged against the strong nearby work inspected; it is not proof that every related publication has been enumerated.
 
@@ -259,7 +259,7 @@ The precise claim is **one source-of-truth corpus and shared semantic model**, n
 
 **Exact proposed claim.** Equal-run discovery and incremental multi-way refinement can accelerate lexicographic multi-column sorting while preserving payload permutation and parallelism.
 
-**Repository evidence.** `test-sort/multi-column-sort.md` documents serial/parallel and incremental variants; `benchmark_multicolumn_gbench.cpp` defines a broad intended benchmark matrix over types, lane widths, data distributions, directions, cache-relative sizes, and threading; `multi-column-sort-plan.md` records implementation status and a few local measurements.
+**Repository evidence.** `test-sort/docs/multi-column-sort.md` documents serial/parallel and incremental variants; `benchmark_multicolumn_gbench.cpp` defines a broad intended benchmark matrix over types, lane widths, data distributions, directions, cache-relative sizes, and threading; `multi-column-sort-plan.md` records implementation status and a few local measurements.
 
 **Potentially new element.** There may be an algorithmic or data-dependent scheduling insight in deciding when to refine equal runs, scan boundaries, or replay payloads.
 

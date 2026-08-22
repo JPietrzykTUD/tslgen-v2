@@ -48,11 +48,11 @@
 #include <benchmark/benchmark.h>
 
 #include "cosort_case.hpp"
-#include "multicolumn_index_sort.hpp"
+#include "sorting/quicksort/multicolumn_index_sort.hpp"
 #include "cosort_detectors.hpp"
 #include "cosort_plan.hpp"
-#include "dataset_catalog.hpp"
-#include "dataset_descriptor.hpp"
+#include "datagen/dataset_catalog.hpp"
+#include "datagen/dataset_descriptor.hpp"
 
 namespace {
 

@@ -39,9 +39,9 @@
 #include <thread>
 #include <vector>
 
-#include "dataset_file.hpp"
-#include "dataset_manifest.hpp"
-#include "dataset_reference.hpp"
+#include "datagen/dataset_file.hpp"
+#include "datagen/dataset_manifest.hpp"
+#include "datagen/dataset_reference.hpp"
 
 #ifndef TSL_DATASET_DEFAULT_DIR
 #define TSL_DATASET_DEFAULT_DIR "data"

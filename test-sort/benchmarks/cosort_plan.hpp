@@ -30,7 +30,7 @@
 #include <vector>
 
 #include "cosort_detectors.hpp"
-#include "multicolumn_quicksort.hpp"
+#include "sorting/quicksort/multicolumn_quicksort.hpp"
 
 enum class TslExecution { Serial, Parallel, DeepParallel };
 // Two clang implementation families, distinguished by mask representation:

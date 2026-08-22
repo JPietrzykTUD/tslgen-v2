@@ -56,18 +56,18 @@
 #include <utility>
 #include <vector>
 
-#include "equal_runs.hpp"
-#include "multicolumn_sort_types.hpp"
+#include "cluster_detection/scalar/equal_runs.hpp"
+#include "sorting/common/multicolumn_sort_types.hpp"
 
 #if defined(TSL_COSORT_HAVE_DSA)
-#include "dsa_async_run_detector.hpp"
-#include "dsa_run_detector.hpp"
+#include "cluster_detection/dsa/dsa_async_run_detector.hpp"
+#include "cluster_detection/dsa/dsa_run_detector.hpp"
 #endif
 
 #if defined(TSL_COSORT_HAVE_IAA)
 // Provided by the IAA host: see the contract above.
-#include "iaa_frequency_run_detector.hpp"
-#include "iaa_run_detector.hpp"
+#include "cluster_detection/iaa/iaa_frequency_run_detector.hpp"
+#include "cluster_detection/iaa/iaa_run_detector.hpp"
 #endif
 
 enum class TslDetectorBackend {
