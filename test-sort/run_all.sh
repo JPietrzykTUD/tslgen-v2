@@ -193,19 +193,50 @@ configure
 # Real query keys. Large and per-scale-factor, so they live outside the repository
 # and are produced once. Q1, Q2 and Q4 pick them up; without them those drivers
 # run synthetic shapes only and say so.
-keys="$here/TMP/tpcds_keys"
+#
+# The directory is *named* for the scale factor, and carries a manifest recording
+# it. The earlier version checked only whether any keys existed, so asking for
+# `--scale 10` with scale-1 keys already present skipped the generation and
+# measured scale 1 while the log said 10 -- the worst kind of wrong, because every
+# number was real and every label was a lie. Keeping them in separate directories
+# also means two scale factors can coexist rather than one overwriting the other.
+gen="$here/benchmarks/datagen/tpcds"
+keys="$here/TMP/tpcds_keys/sf$scale"
+manifest="$keys/manifest.txt"
 echo
 echo "=== 2/4 data (scale factor $scale)"
-if compgen -G "$keys/*.tsldset" > /dev/null; then
-  echo "keys already extracted: $(ls "$keys"/*.tsldset | wc -l) files in $keys"
-else
-  gen="$here/benchmarks/datagen/tpcds"
+
+# Keys from before this layout existed, flat in TMP/tpcds_keys. Their scale factor
+# was never recorded, so they are reported and ignored rather than guessed at.
+if compgen -G "$here/TMP/tpcds_keys/*.tsldset" > /dev/null; then
+  echo "note: $here/TMP/tpcds_keys holds keys of unrecorded scale factor;"
+  echo "      ignoring them. Delete them once you no longer need them."
+fi
+
+keys_ready=no
+if [[ -f "$manifest" ]] && compgen -G "$keys/*.tsldset" > /dev/null; then
+  recorded="$(sed -n 's/^scale_factor=//p' "$manifest")"
+  if [[ "$recorded" == "$scale" ]]; then
+    keys_ready=yes
+    echo "keys already extracted at scale factor $scale: \
+$(ls "$keys"/*.tsldset | wc -l) files in $keys"
+  else
+    echo "$keys records scale factor $recorded, not $scale -- regenerating"
+    rm -rf "$keys"
+  fi
+elif compgen -G "$keys/*.tsldset" > /dev/null; then
+  echo "$keys holds keys with no manifest -- regenerating so the scale factor is"
+  echo "  recorded rather than assumed"
+  rm -rf "$keys"
+fi
+
+if [[ "$keys_ready" == "no" ]]; then
   if [[ ! -x "$gen/.dsb/code/tools/dsdgen" ]]; then
     echo "building DSB's dsdgen"
     (cd "$gen" && ./build_generator.sh)
   fi
   if [[ ! -d "$gen/.data/sf$scale" ]]; then
-    echo "generating tables at scale factor $scale"
+    echo "generating tables at scale factor $scale (this is the slow step)"
     (cd "$gen" && ./generate.sh "$scale")
   fi
   echo "extracting key columns"
@@ -213,6 +244,18 @@ else
   (cd "$gen" && ./extract_keys.py --data ".data/sf$scale" \
       --schema .dsb/scripts/create_tables.sql --out "$keys" \
       --queries q067,q064,q010,q050,q081)
+  # Written last, so an interrupted extraction leaves no manifest and the next run
+  # regenerates rather than trusting a half-populated directory.
+  {
+    printf 'scale_factor=%s\n' "$scale"
+    printf 'generated=%s\n' "$(date -Is)"
+    printf 'host=%s\n' "$(hostname)"
+    printf 'generator=%s\n' "DSB dsdgen, benchmarks/datagen/tpcds"
+    for f in "$keys"/*.tsldset; do
+      printf 'key=%s\n' "$(basename "$f")"
+    done
+  } > "$manifest"
+  echo "wrote $manifest"
 fi
 
 # --- 3. build, in two phases --------------------------------------------------

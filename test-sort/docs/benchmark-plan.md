@@ -477,7 +477,10 @@ One command, from a clean checkout to a results directory:
 ```
 
 It configures, generates the data, builds and runs, skipping any step already
-done, so a re-run after a failure does not repeat `dsdgen`. The preset is chosen
+done, so a re-run after a failure does not repeat `dsdgen`. Extracted keys go to
+`TMP/tpcds_keys/sf<N>/` with a `manifest.txt` naming the scale factor: the earlier
+version checked only whether keys existed, so `--scale 10` with scale-1 keys
+present measured scale 1 and logged 10 -- every number real, every label wrong. The preset is chosen
 from what `/dev` actually has -- `bench-dsa-baselines` on a DSA host,
 `bench-iaa-baselines` on an IAA one, `bench` on neither -- and is always a
 *measurement* preset.
@@ -496,7 +499,7 @@ cmake -S . --preset bench-dsa-baselines       # or bench, bench-iaa, ...
 cmake --build --preset bench-dsa-baselines
 benchmarks/datagen/tpcds/build_generator.sh   # once
 benchmarks/datagen/tpcds/generate.sh 1
-benchmarks/datagen/tpcds/extract_keys.py --data ... --out TMP/tpcds_keys
+benchmarks/datagen/tpcds/extract_keys.py --data ... --out TMP/tpcds_keys/sf1
 TPCDS_KEYS=TMP/tpcds_keys ./run_paper.sh <build-dir> <results-dir>
 ```
 
