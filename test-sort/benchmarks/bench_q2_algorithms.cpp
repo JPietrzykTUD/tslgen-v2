@@ -29,6 +29,7 @@
 #include "dataset_source.hpp"
 #include "paper_harness.hpp"
 #include "tuned_config.hpp"
+#include "tuned_dispatch.hpp"
 #include "sorting/quicksort/multicolumn_index_sort.hpp"
 #include "sorting/sample_sort/samplesort_multicolumn.hpp"
 
@@ -84,53 +85,6 @@ auto image_matches(std::vector<std::vector<Key>> const & columns,
 TslTunedConfig g_samplesort_config;
 TslTunedConfig g_quicksort_config;
 bool g_tuned_from_file = false;
-
-// Only the axes the descent found decisive are dispatched here; a configuration
-// asking for anything else is reported rather than silently replaced.
-template <class Key, class Simd, class Run>
-auto with_quicksort_leaf(TslTunedConfig const & config, Run && run) -> bool {
-  constexpr auto three = TslPartitionKind::THREE_WAY;
-  if (config.partition != three) {
-    return false;
-  }
-  if (config.hybrid_leaf) {
-    run(TslMultiColumnIndexSorter<Key, three, TslLeafKind::NETWORK, Simd,
-                                  tsl_hybrid_auto_percent<Key, Simd>()>(0x5A3F1E77));
-  } else if (config.leaf == TslLeafKind::INSERTION) {
-    run(TslMultiColumnIndexSorter<Key, three, TslLeafKind::INSERTION, Simd>(0x5A3F1E77));
-  } else {
-    run(TslMultiColumnIndexSorter<Key, three, TslLeafKind::NETWORK, Simd>(0x5A3F1E77));
-  }
-  return true;
-}
-
-template <class Key, class Simd, class Run>
-auto with_samplesort(TslTunedConfig const & config, Run && run) -> bool {
-  constexpr auto adaptive = TslSampleSortBuckets::Adaptive;
-  constexpr auto byte_ids = TslSampleSortIds::Byte;
-  constexpr auto oop = TslSampleSortMovement::OutOfPlace;
-  constexpr std::size_t lanes = Simd::lane_count_v;
-  if (config.k != 16 || config.buckets != adaptive || config.ids != byte_ids
-      || config.movement != oop) {
-    return false;
-  }
-  auto const net = config.base_policy == TslSampleSortBase::Network;
-#define TSL_Q2_SS(BC, P)                                                            run(TslSampleSortMultiColumn<Key, Simd, 16, adaptive, 8, BC, P, byte_ids,                                       BC / lanes, 50, oop, true>{})
-  if (config.base_case == 64) {
-    if (net) { TSL_Q2_SS(64, TslSampleSortBase::Network); }
-    else { TSL_Q2_SS(64, TslSampleSortBase::Insertion); }
-  } else if (config.base_case == 128) {
-    if (net) { TSL_Q2_SS(128, TslSampleSortBase::Network); }
-    else { TSL_Q2_SS(128, TslSampleSortBase::Insertion); }
-  } else if (config.base_case == 256) {
-    if (net) { TSL_Q2_SS(256, TslSampleSortBase::Network); }
-    else { TSL_Q2_SS(256, TslSampleSortBase::Insertion); }
-  } else {
-    return false;
-  }
-#undef TSL_Q2_SS
-  return true;
-}
 
 // Both algorithms plus the scalar reference over one dataset. Shared so a
 // measured key and a generated one go through exactly the same measurement.

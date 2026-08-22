@@ -88,6 +88,7 @@ run() {  # binary, csv name, args...
 
 if [[ "$quick" == "--quick" ]]; then
   # A shape and size per question: proves the pipeline, not the paper.
+  narrow_q1=(--shapes low_cardinality_d4 --rows 1048576 --cols 1,4 --workers 1,24)
   narrow_q2=(--shapes low_cardinality_d4,skewed_zipf_s1 --rows 1048576 --cols 4 --widths 4)
   narrow_q3=(--cardinalities 1024 --cols 4 --widths 4 --workers 1 --rows 1048576)
   narrow_q4=(--axis threads --shapes skewed_zipf_s1 --widths 4 --rows 1048576)
@@ -97,6 +98,7 @@ if [[ "$quick" == "--quick" ]]; then
   export COSORT_SIZE_LEVELS=1
   export COSORT_COLUMNS=3
 else
+  narrow_q1=()
   narrow_q2=()
   narrow_q3=()
   narrow_q4=()
@@ -148,13 +150,28 @@ else
   echo "bench_q0_tune is not built; the drivers will use their defaults"
 fi
 
+# Q1 exists only in a build configured with -DTSL_COSORT_ENABLE_BASELINES=ON, so
+# it is run when present rather than required: the default build stays
+# dependency-free.
+if [[ -x "$build/bench_q1_baselines" ]]; then
+  run bench_q1_baselines q1_baselines --tuned "$tuned" \
+      "${tpcds_args[@]+"${tpcds_args[@]}"}" "${narrow_q1[@]+"${narrow_q1[@]}"}"
+else
+  echo
+  echo "=== q1_baselines: not built; configure with -DTSL_COSORT_ENABLE_BASELINES=ON"
+fi
+
 run bench_q2_algorithms q2_algorithms --tuned "$tuned" "${tpcds_args[@]+"${tpcds_args[@]}"}" \
     "${narrow_q2[@]+"${narrow_q2[@]}"}"
 # Hardware only, and only this host's hardware: the software paths are QPL's and
 # DML's own CPU code, kept for correctness rather than for figures.
 run bench_q3_detection  q3_detection  --detectors "$q3_detectors" \
     "${narrow_q3[@]+"${narrow_q3[@]}"}"
-run bench_q4_scaling    q4_scaling    "${narrow_q4[@]+"${narrow_q4[@]}"}"
+# Q4 gets the tuned configuration and the measured keys: its thread axis is where
+# the algorithm crossover is visible, and it is only visible on real keys -- the
+# synthetic shapes are won by the quicksort at every thread count.
+run bench_q4_scaling    q4_scaling    --tuned "$tuned" \
+    "${tpcds_args[@]+"${tpcds_args[@]}"}" "${narrow_q4[@]+"${narrow_q4[@]}"}"
 
 # Q5 and Q6 are stages of the existing staged driver rather than new binaries.
 if [[ -x "$build/cosort_bench" ]]; then

@@ -209,6 +209,26 @@ class TslPaperResults {
     add(std::move(row));
   }
 
+  // RFC 4180 quoting. Not pedantry: a variant like "execution::par, library-chosen
+  // threads" and a drop reason like "x86-simd-sort, 8-byte indices" both contain a
+  // comma, and an unquoted comma shifts every later column of that row -- so a
+  // reader silently sees the detector where the worker count should be. This was
+  // corrupting rows rather than failing loudly.
+  static auto csv_field(std::string const & text) -> std::string {
+    if (text.find_first_of(",\"\n\r") == std::string::npos) {
+      return text;
+    }
+    std::string quoted = "\"";
+    for (auto const character : text) {
+      if (character == '"') {
+        quoted += '"';  // a literal quote is doubled
+      }
+      quoted += character;
+    }
+    quoted += '"';
+    return quoted;
+  }
+
   void write_csv(std::string const & path) const {
     std::ofstream csv(path);
     if (!csv) {
@@ -221,16 +241,18 @@ class TslPaperResults {
            "ns_materialize,ns_sort,ns_detect,verified,drop_reason,"
            "host,governor,clock_mhz,compiler\n";
     for (auto const & row : rows_) {
-      csv << row.question << ',' << row.binary << ',' << row.shape << ','
-          << row.shape_params << ',' << row.rows << ',' << row.columns << ','
-          << row.element_bytes << ',' << row.algorithm << ',' << row.variant << ','
-          << row.detector << ',' << row.workers << ',' << row.repetitions << ','
+      csv << csv_field(row.question) << ',' << csv_field(row.binary) << ','
+          << csv_field(row.shape) << ',' << csv_field(row.shape_params) << ','
+          << row.rows << ',' << row.columns << ',' << row.element_bytes << ','
+          << csv_field(row.algorithm) << ',' << csv_field(row.variant) << ','
+          << csv_field(row.detector) << ',' << row.workers << ','
+          << row.repetitions << ','
           << row.ns_per_element.median << ',' << row.ns_per_element.p25 << ','
           << row.ns_per_element.p75 << ',' << row.ns_materialize << ','
           << row.ns_sort << ',' << row.ns_detect << ','
-          << (row.verified ? 1 : 0) << ',' << row.drop_reason << ','
-          << machine_.host << ',' << machine_.governor << ','
-          << machine_.clock_mhz << ',' << machine_.compiler << '\n';
+          << (row.verified ? 1 : 0) << ',' << csv_field(row.drop_reason) << ','
+          << csv_field(machine_.host) << ',' << csv_field(machine_.governor) << ','
+          << machine_.clock_mhz << ',' << csv_field(machine_.compiler) << '\n';
     }
     std::printf("\nwrote %s (%zu rows)\n", path.c_str(), rows_.size());
   }

@@ -30,8 +30,19 @@
 #include "paper_harness.hpp"
 #include "sorting/quicksort/multicolumn_index_sort.hpp"
 #include "sorting/sample_sort/samplesort_multicolumn.hpp"
+#include "tuned_config.hpp"
+#include "tuned_dispatch.hpp"
 
 namespace {
+
+// The configuration bench_q0_tune chose. Scaling is measured on the sorter we
+// would ship, not on whichever instantiation happened to be typed here: this
+// driver previously hard-coded a network leaf, which the descent showed is up to
+// 6.6x slower than the insertion leaf on real keys, so its thread-scaling
+// crossover was a comparison between a tuned samplesort and a mis-configured
+// quicksort.
+TslTunedConfig g_samplesort_config;
+TslTunedConfig g_quicksort_config;
 
 auto split(std::string const & text, char separator) -> std::vector<std::string> {
   std::vector<std::string> parts;
@@ -75,11 +86,18 @@ struct cell {
 // One measurement of both algorithms over one cell.
 template <class Key>
 void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
-                  cell const & where, std::map<std::string, double> & serial) {
+                  cell const & where, std::map<std::string, double> & serial,
+                  TslDatasetSpec const * external = nullptr) {
   using Simd = tsl::simd<Key, tsl::avx512>;
   auto const tail = "_u" + std::to_string(sizeof(Key) * 8) + "_n";
-  auto const catalog = tsl_default_catalog(where.rows, where.columns, sizeof(Key));
-  TslDatasetSpec const * spec = nullptr;
+  // A measured dataset comes with its own row and column count, so it is passed
+  // in rather than looked up by size. That makes it usable on the thread axis --
+  // where rows and columns are held fixed anyway -- and not on the row or column
+  // axes, which would have to invent data the query never produced.
+  auto const catalog = external != nullptr
+                         ? std::vector<TslDatasetSpec>{}
+                         : tsl_default_catalog(where.rows, where.columns, sizeof(Key));
+  TslDatasetSpec const * spec = external;
   for (auto const & candidate : catalog) {
     if (candidate.id.rfind(where.shape + tail, 0) == 0) {
       spec = &candidate;
@@ -117,73 +135,101 @@ void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
   {
     auto row = blank;
     row.algorithm = "samplesort";
-    row.variant = "K=16/adaptive/net";
-    TslSampleSortMultiColumn<Key, Simd, 16, TslSampleSortBuckets::Adaptive, 8, 256,
-                             TslSampleSortBase::Network, TslSampleSortIds::Byte,
-                             256 / Simd::lane_count_v, 50,
-                               TslSampleSortMovement::OutOfPlace, true> sorter;
+    row.variant = g_samplesort_config.describe_samplesort()
+                  + (g_samplesort_config.from_file ? " (tuned)" : " (default)");
     TslSampleSortColumnMetrics metrics;
-    auto const [ok, stats] = tsl_paper_measure(
-      [&] {
-        TslIndexScalarDetector<Key> detector;
-        metrics = {};
-        if (where.workers > 1) {
-          sorter.sort_index_parallel(specs.data(), where.columns, index.data(),
-                                     where.rows, detector, where.workers, &metrics);
-        } else {
-          sorter.sort_index(specs.data(), where.columns, index.data(), where.rows,
-                            detector, &metrics);
-        }
-      },
-      [&] { return image_matches(*pristine, *reference, index); }, where.rows);
-    row.verified = ok;
-    row.ns_per_element = stats;
-    auto const scale = static_cast<double>(where.rows);
-    row.ns_materialize = metrics.ns_materialize / scale;
-    row.ns_sort = metrics.ns_sort / scale;
-    row.ns_detect = metrics.ns_detect / scale;
-    double speedup = 0.0;
-    if (where.workers == 1) {
-      serial[key("samplesort")] = stats.median;
-    } else if (auto const found = serial.find(key("samplesort"));
-               found != serial.end() && stats.median > 0.0) {
-      speedup = found->second / stats.median;
-    }
-    results.add(std::move(row));
-    // After the row, so the two read together.
-    if (speedup > 0.0) {
-      std::printf("%76s speedup %.2fx vs its own 1 worker\n", "", speedup);
+    bool measured_ok = false;
+    TslPaperStats measured{};
+    auto const dispatched = with_samplesort<Key, Simd>(
+      g_samplesort_config, [&](auto sorter) {
+        auto const [ok, stats] = tsl_paper_measure(
+          [&] {
+            TslIndexScalarDetector<Key> detector;
+            metrics = {};
+            if (where.workers > 1) {
+              sorter.sort_index_parallel(specs.data(), where.columns, index.data(),
+                                         where.rows, detector, where.workers,
+                                         &metrics);
+            } else {
+              sorter.sort_index(specs.data(), where.columns, index.data(),
+                                where.rows, detector, &metrics);
+            }
+          },
+          [&] { return image_matches(*pristine, *reference, index); }, where.rows);
+        measured_ok = ok;
+        measured = stats;
+      });
+    if (!dispatched) {
+      auto drop = row;
+      results.drop(drop, "tuned samplesort configuration is not instantiated here: "
+                         + g_samplesort_config.describe_samplesort());
+    } else if (!measured_ok) {
+      auto drop = row;
+      results.drop(drop, "sorted wrongly");
+    } else {
+      row.ns_per_element = measured;
+      row.ns_materialize = metrics.ns_materialize;
+      row.ns_sort = metrics.ns_sort;
+      row.ns_detect = metrics.ns_detect;
+      row.verified = true;
+      double sample_speedup = 0.0;
+      if (where.workers == 1) {
+        serial[key("samplesort")] = measured.median;
+      } else if (auto const found = serial.find(key("samplesort"));
+                 found != serial.end() && measured.median > 0.0) {
+        sample_speedup = found->second / measured.median;
+      }
+      results.add(std::move(row));
+      if (sample_speedup > 0.0) {
+        std::printf("%76s speedup %.2fx vs its own 1 worker\n", "",
+                    sample_speedup);
+      }
     }
   }
+
   {
     auto row = blank;
     row.algorithm = "quicksort";
-    row.variant = "3way/net/post";
-    TslMultiColumnIndexSorter<Key, TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK,
-                              Simd> sorter(0x5A3F1E77);
-    auto const [ok, stats] = tsl_paper_measure(
-      [&] {
-        TslIndexScalarDetector<Key> detector;
-        if (where.workers > 1) {
-          sorter.sort_index_parallel(specs.data(), where.columns, index.data(),
-                                     where.rows, TslRunDiscoveryKind::POST_SORT,
-                                     detector, where.workers, 16384);
-        } else {
-          sorter.sort_index(specs.data(), where.columns, index.data(), where.rows,
-                            TslRunDiscoveryKind::POST_SORT, detector);
-        }
-      },
-      [&] { return image_matches(*pristine, *reference, index); }, where.rows);
-    row.verified = ok;
-    row.ns_per_element = stats;
+    row.variant = g_quicksort_config.describe_quicksort()
+                  + (g_quicksort_config.from_file ? " (tuned)" : " (default)");
+    bool measured_ok = false;
+    TslPaperStats measured{};
+    auto const dispatched = with_quicksort_leaf<Key, Simd>(
+      g_quicksort_config, [&](auto sorter) {
+        auto const [ok, stats] = tsl_paper_measure(
+          [&] {
+            TslIndexScalarDetector<Key> detector;
+            if (where.workers > 1) {
+              sorter.sort_index_parallel(specs.data(), where.columns, index.data(),
+                                         where.rows, g_quicksort_config.discovery,
+                                         detector, where.workers,
+                                         g_quicksort_config.partition_threshold);
+            } else {
+              sorter.sort_index(specs.data(), where.columns, index.data(),
+                                where.rows, g_quicksort_config.discovery, detector);
+            }
+          },
+          [&] { return image_matches(*pristine, *reference, index); }, where.rows);
+        measured_ok = ok;
+        measured = stats;
+      });
     double speedup = 0.0;
-    if (where.workers == 1) {
-      serial[key("quicksort")] = stats.median;
-    } else if (auto const found = serial.find(key("quicksort"));
-               found != serial.end() && stats.median > 0.0) {
-      speedup = found->second / stats.median;
+    if (!dispatched) {
+      results.drop(row, "tuned quicksort configuration is not instantiated here: "
+                        + g_quicksort_config.describe_quicksort());
+    } else if (!measured_ok) {
+      results.drop(row, "sorted wrongly");
+    } else {
+      row.verified = true;
+      row.ns_per_element = measured;
+      if (where.workers == 1) {
+        serial[key("quicksort")] = measured.median;
+      } else if (auto const found = serial.find(key("quicksort"));
+                 found != serial.end() && measured.median > 0.0) {
+        speedup = found->second / measured.median;
+      }
+      results.add(std::move(row));
     }
-    results.add(std::move(row));
     // After the row, so the two read together.
     if (speedup > 0.0) {
       std::printf("%76s speedup %.2fx vs its own 1 worker\n", "", speedup);
@@ -192,7 +238,8 @@ void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
 }
 
 template <class Key>
-void run_width(TslPaperResults & results, std::vector<std::string> const & shapes,
+void run_width(TslPaperResults & results, std::string const & tpcds_dir,
+               std::vector<std::string> const & shapes,
                std::string const & axis, std::size_t base_rows,
                std::size_t base_columns) {
   TslDatasetSource<Key> source(12ull << 30);
@@ -228,6 +275,23 @@ void run_width(TslPaperResults & results, std::vector<std::string> const & shape
       }
     }
   }
+
+  // Real query keys, thread axis only. This is where the crossover lives: the
+  // synthetic shapes are duplicate-heavy in a uniform way and the quicksort wins
+  // them at every thread count, while a measured key's skew is what lets the
+  // samplesort's wider fan-out pay above a thread count.
+  if (!tpcds_dir.empty() && (axis == "threads" || axis == "all")) {
+    auto const measured = tsl_external_catalog(tpcds_dir, sizeof(Key));
+    for (auto const & spec : measured) {
+      std::printf("\n-- threads, %s, %zu rows, %zu columns, u%zu (measured) --\n",
+                  spec.id.c_str(), spec.rows, spec.columns, sizeof(Key) * 8);
+      for (std::size_t workers : {1u, 2u, 4u, 8u, 16u, 24u}) {
+        measure_cell<Key>(results, source,
+                          {spec.id, spec.rows, spec.columns, workers}, serial,
+                          &spec);
+      }
+    }
+  }
 }
 
 }  // namespace
@@ -240,6 +304,8 @@ int main(int argc, char ** argv) {
   std::size_t base_columns = 4;
   std::vector<std::size_t> widths{4, 8};
   std::string csv_path;
+  std::string tuned_path = "best_config.tsv";
+  std::string tpcds_dir;
 
   for (int i = 1; i < argc; ++i) {
     auto const flag = std::string(argv[i]);
@@ -264,6 +330,10 @@ int main(int argc, char ** argv) {
       for (auto const & part : split(value(), ',')) {
         widths.push_back(std::strtoull(part.c_str(), nullptr, 10));
       }
+    } else if (flag == "--tuned") {
+      tuned_path = value();
+    } else if (flag == "--tpcds-dir") {
+      tpcds_dir = value();
     } else if (flag == "--csv") {
       csv_path = value();
     } else {
@@ -273,11 +343,27 @@ int main(int argc, char ** argv) {
   }
 
   TslPaperResults results("Q4 scaling", "bench_q4_scaling");
+
+  // The tuned configuration, or the defaults with every row labelled "(default)"
+  // so a run without Q0 cannot be mistaken for a tuned one.
+  {
+    auto const tuned = tsl_read_tuned(tuned_path);
+    if (tuned.empty()) {
+      std::printf("no %s: measuring defaults, rows labelled (default)\n",
+                  tuned_path.c_str());
+    } else {
+      std::printf("tuned configurations from %s\n", tuned_path.c_str());
+    }
+    g_samplesort_config = tsl_tuned_for(tuned, "samplesort", TslStyle::Intrinsics,
+                                        512, 4);
+    g_quicksort_config = tsl_tuned_for(tuned, "quicksort", TslStyle::Intrinsics,
+                                       512, 4);
+  }
   for (auto const width : widths) {
     if (width == 4) {
-      run_width<std::uint32_t>(results, shapes, axis, base_rows, base_columns);
+      run_width<std::uint32_t>(results, tpcds_dir, shapes, axis, base_rows, base_columns);
     } else if (width == 8) {
-      run_width<std::uint64_t>(results, shapes, axis, base_rows, base_columns);
+      run_width<std::uint64_t>(results, tpcds_dir, shapes, axis, base_rows, base_columns);
     }
   }
   std::printf("\n%s\n", results.summary().c_str());

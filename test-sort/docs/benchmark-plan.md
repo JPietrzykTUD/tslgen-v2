@@ -152,10 +152,50 @@ Both would be fetched under `TSL_COSORT_ENABLE_BASELINES`, off by default,
 following the pattern QPL and DML already use — so the default build stays
 dependency-free and no test acquires a hidden network requirement.
 
-**This is the one question still unbuilt.** Everything else here runs; Q1 needs
-the dependency gate and an adapter per library, and until it exists the only
-external number in the results is `std::sort` over row indices, which is the weak
-baseline this section exists to replace.
+**Built, and it changed the story.** `bench_q1_baselines` runs every entrant over
+the same datasets, through the same verify-then-time harness, against the same
+oracle, and nothing is timed unless it first produced a permutation whose image
+matches the reference. Serial and parallel are matched: a parallel row of ours is
+never compared against a serial baseline.
+
+At 2^22 rows, u32, one worker, our quicksort wins all nine measured cells --
+1.15x to 8.5x over IPS4o, 2.8x to 13x over `std::sort`. On the single-column
+kernel it also beats Intel's own `avx512_argsort`, 6.68 against 9.79 ns/element
+at 2^20 rows, which is the kernel-fair comparison this section was written for.
+
+At twenty-four workers we lose six of nine, and five of five on measured TPC-DS
+keys, to `std::sort(std::execution::par)`:
+
+| key | ours, best | std::sort(par) |
+| --- | --- | --- |
+| tpcds_q050 | 5.28 | **2.78** |
+| tpcds_q081 | 25.06 | **5.22** |
+| tpcds_q010 | 14.24 | **10.91** |
+| tpcds_q064 | 21.70 | **17.46** |
+| tpcds_q067 | 17.54 | **16.30** |
+
+Not because TBB's kernel is better -- serially it is three to thirteen times
+worse -- but because its *scaling* is. It climbs from a slow base at close to the
+thread count while ours does not, and on several shapes our quicksort is worse at
+twenty-four workers than at one: tpcds_q064 goes 82.88 to 133.86, tpcds_q067
+59.54 to 82.82, skewed_zipf_s1 at eight columns 91.23 to 159.13. It anti-scales.
+The samplesort scales as intended, 188.17 to 21.70 on tpcds_q064, and still does
+not win.
+
+Two consequences for the paper. The serial claim is strong and rests on a real
+baseline rather than a straw man. The parallel claim is not currently supportable
+and the quicksort's parallel path is the first thing to fix; until then, a
+parallel figure that omits `execution::par` would be the straw man this section
+exists to remove.
+
+Fairness notes that belong beside the numbers. `avx512_argsort` writes 8-byte
+indices where ours are 4-byte, so a one-column row is not a pure instruction-level
+comparison; its parallel path exists but needs `XSS_COMPILE_OPENMP`, absent here.
+IPS4o and `std::sort` see the columns only through a comparator, so they cannot
+exploit equal runs the way the detector seam does -- which is the structural claim,
+and reporting the one-column rows beside the multi-column ones is what keeps that
+from being read as a faster inner loop. `execution::par` picks its own thread
+count; the row records what we asked *ours* for.
 
 ## Q2 — quicksort against samplesort
 

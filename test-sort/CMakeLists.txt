@@ -216,6 +216,77 @@ add_executable(bench_q4_scaling benchmarks/bench_q4_scaling.cpp)
 target_compile_features(bench_q4_scaling PRIVATE cxx_std_17)
 target_link_libraries(bench_q4_scaling PRIVATE tsl::tsl Threads::Threads)
 
+# --- Q1 external baselines ----------------------------------------------------
+# Off by default and fetched only when asked, following the QPL/DML pattern: the
+# default build stays dependency-free and no test acquires a hidden network
+# requirement. IPS4o's parallel sort needs TBB and C++ threads; x86-simd-sort is
+# header-only and contributes single-column rows only.
+option(TSL_COSORT_ENABLE_BASELINES
+       "Fetch IPS4o and x86-simd-sort and build the Q1 baseline comparison" OFF)
+
+if(TSL_COSORT_ENABLE_BASELINES)
+  FetchContent_Declare(
+    ips4o
+    GIT_REPOSITORY https://github.com/ips4o/ips4o.git
+    GIT_TAG        08a5b926ee65cef19139057c6bde02bb5542c1cb
+    GIT_SHALLOW    FALSE
+  )
+  FetchContent_Declare(
+    x86simdsort
+    GIT_REPOSITORY https://github.com/intel/x86-simd-sort.git
+    GIT_TAG        fa944efbea1a33426b3f8a9a21e23794ab8aa300
+    GIT_SHALLOW    FALSE
+  )
+  # Both are consumed as headers; neither project's own CMake is run, because
+  # IPS4o's would go looking for its own TBB and libatomic.
+  FetchContent_Populate(ips4o)
+  FetchContent_Populate(x86simdsort)
+
+  find_package(TBB QUIET)
+  add_executable(bench_q1_baselines benchmarks/bench_q1_baselines.cpp)
+  target_compile_features(bench_q1_baselines PRIVATE cxx_std_17)
+  target_include_directories(
+    bench_q1_baselines PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks"
+    "${ips4o_SOURCE_DIR}/include"
+    "${x86simdsort_SOURCE_DIR}/src"
+  )
+  target_compile_definitions(
+    bench_q1_baselines PRIVATE TSL_COSORT_HAVE_IPS4O=1 TSL_COSORT_HAVE_XSS=1
+  )
+  # IPS4o exposes `ips4o::parallel` only under _REENTRANT, which -pthread defines.
+  # Threads::Threads alone does not guarantee the macro, so it is explicit.
+  target_compile_options(bench_q1_baselines PRIVATE -pthread)
+  target_link_libraries(bench_q1_baselines PRIVATE tsl::tsl Threads::Threads)
+  if(TBB_FOUND)
+    target_link_libraries(bench_q1_baselines PRIVATE TBB::tbb)
+    message(STATUS "bench_q1_baselines: TBB found, execution::par and IPS4o "
+                   "parallel enabled")
+  else()
+    message(WARNING
+      "bench_q1_baselines: TBB not found. std::sort(execution::par) falls back to "
+      "a serial implementation on libstdc++, which would make the parallel "
+      "baseline silently unfair. Install libtbb-dev.")
+  endif()
+  # IPS4o's 16-byte compare-and-exchange path wants libatomic where the compiler
+  # does not lower it inline.
+  # The versioned soname is searched as well: a runtime-only install has
+  # libatomic.so.1 without the libatomic.so development symlink, and IPS4o's
+  # parallel path needs __atomic_fetch_add_16 either way. Disabling its 16-byte
+  # compare-and-exchange would handicap the baseline, which defeats the purpose.
+  find_library(TSL_LIBATOMIC NAMES atomic libatomic.so.1)
+  if(TSL_LIBATOMIC)
+    target_link_libraries(bench_q1_baselines PRIVATE ${TSL_LIBATOMIC})
+    message(STATUS "bench_q1_baselines: libatomic at ${TSL_LIBATOMIC}")
+  else()
+    message(FATAL_ERROR
+      "bench_q1_baselines: libatomic not found, and IPS4o's parallel sort needs "
+      "__atomic_fetch_add_16. Install libatomic1 (runtime) or gcc's libatomic "
+      "development package.")
+  endif()
+endif()
+
 add_executable(bench_q3_detection benchmarks/bench_q3_detection.cpp)
 target_compile_features(bench_q3_detection PRIVATE cxx_std_17)
 target_link_libraries(bench_q3_detection PRIVATE tsl::tsl Threads::Threads)
