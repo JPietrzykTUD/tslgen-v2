@@ -104,35 +104,73 @@ materialise, sort, detect — because the interesting result is not which wins b
 why, and the phase split is what makes "better where the data punishes a binary
 partition" a measurement rather than a story.
 
-## Data: TPC-DS query 67
+## Data: real TPC-DS / DSB sort keys
 
-The synthetic catalog covers structure classes; query 67 covers what a real query
-asks for. It rolls up over
+The synthetic catalog covers structure classes. These cover what queries actually
+ask for, and they are **measured, not modelled**: DSB's `dsdgen` generates all
+tables, DuckDB performs the joins each query's sort key needs, every column is
+order-preserving dictionary-encoded, and the result is written as a `TSLDSET1`
+container the drivers read through `external_path`.
+`benchmarks/datagen/tpcds/README.md` has the pipeline and what it does not
+reproduce.
 
-```
-i_category, i_class, i_brand, i_product_name, d_year, d_qoy, d_moy, s_store_id
-```
+**Why DSB rather than TPC-DS.** DSB (Microsoft, MIT, VLDB 2021) is TPC-DS with
+deliberately skewed and cross-table-correlated data, and its templates keep
+TPC-DS's numbering. Since every result in these documents says co-sort cost is
+shape-dependent, more realistic shapes are the point. The official TPC-DS toolkit
+is not used: it needs a licence accepted through TPC's website rather than being
+fetchable.
 
-which is an eight-column co-sort key, and two structures meet in it: the first
-four columns are a strict hierarchy, each nested in the one before, while the last
-four come from other dimension tables and are independent. A leading column of ten
-distinct values means the first sort produces very few, very large equal runs and
-everything after it is decided inside those — the case the whole multi-column
-recursion exists for.
+**Which queries, chosen on evidence.** The templates were surveyed by `ORDER BY`
+width rather than `GROUP BY` width, because `ORDER BY` is what a sort operator
+compiles to while a `GROUP BY` may be hashed. Five keys span the axis that decides
+everything else — the leading column's cardinality:
 
-`tpcds_q67` is a shape in the generator, at `sf=1` and `sf=100`, and it is in the
-default grid of Q2 and Q4. The cardinalities are **modelled** on the schema's and
-scaled by the square root of the scale factor, not produced by dsdgen. That is
-enough to reproduce the shape and its skew; calibrating against a real dsdgen run
-is worth doing before the numbers are cited as TPC-DS's rather than as its shape.
+| key | columns | rows at sf=1 | leading column | leading cardinality |
+| --- | --- | --- | --- | --- |
+| q010 | 8 | 2.66 M | `cd_gender` | **2** |
+| q050 | 10 | 2.75 M | `s_store_name` | 4 |
+| q067 | 8 | 2.69 M | `i_category` | 10 |
+| q064 | 9 | 2.65 M | `i_product_name` | ~18 000 |
+| q081 | 15 | 100 k | `c_customer_id` | near-unique |
 
-First measurement, 2^20 rows, eight columns, u32, and the reason it is in the
-default grid: samplesort 182.5 ns/element against the indirect quicksort's 510.5
-at one thread, and 22.1 against 158.4 on 24 — with the quicksort *slower than
-`std::sort`* on the same data (510.5 against 332.7). A three-way partition on a
-key whose leading column has ten values is close to its worst case.
+**First results, and they are a split rather than a sweep.** ns/element,
+`rle=scalar`:
 
-## Q3 — cluster detection
+| key | ss w=1 | qs w=1 | ss w=24 | qs w=24 | `std::sort` |
+| --- | --- | --- | --- | --- | --- |
+| q064 | **188.3** | 447.0 | **22.3** | 183.9 | 310.3 |
+| q067 | **130.2** | 280.8 | **17.1** | 87.7 | 317.6 |
+| q010 | **56.6** | 79.8 | **14.3** | 18.1 | 212.3 |
+| q050 | 30.5 | **11.1** | 19.4 | **5.7** | 67.6 |
+| q081 | 23.7 | **14.1** | 32.1 | **24.2** | 63.2 |
+
+Three to two, with a mechanism for each side. Samplesort takes the keys whose
+leading column is wide enough to split. The quicksort takes q050, whose ten
+columns hold one to five distinct values each — one is constant — so a three-way
+partition's equal band swallows whole columns at once and a 16-way split has
+almost nothing to divide. It also takes q081, which at 100 k rows is too small to
+feed 24 threads: samplesort is *slower* there at 24 workers than at 1.
+
+**What skew is worth, isolated.** The synthetic `tpcds_q67` shape is calibrated to
+the cardinalities measured above, so it and the real key differ only in
+distribution and correlation. Same 2 685 687 rows, same eight columns:
+
+| | ss w=1 | qs w=1 | ss w=24 | qs w=24 | samplesort ÷ quicksort |
+| --- | --- | --- | --- | --- | --- |
+| uniform, calibrated | 207.9 | 462.3 | 24.0 | 147.3 | 2.22x |
+| real, skewed | 130.2 | 280.8 | 17.1 | 87.7 | 2.16x |
+| ratio | 0.63 | 0.61 | 0.71 | 0.60 | |
+
+Real skew is about 1.6x **faster** than uniform data at the same cardinalities --
+concentration means fewer distinct tuples to separate and more runs that resolve
+whole blocks. But the ratio between the two algorithms barely moves. So uniform
+synthetic data at correct cardinalities predicts the *ranking* to within about
+five percent while overstating absolute cost by roughly half again. That is worth
+saying explicitly in the paper: it is the justification for every synthetic number
+in it, and the limit on them.
+
+## Q3 — cluster detection## Q3 — cluster detection
 
 The centrepiece, and it has to be built to *look for* the regime where offload
 pays rather than to confirm that it does. What is already measured says it mostly

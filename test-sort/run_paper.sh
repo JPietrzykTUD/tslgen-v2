@@ -93,7 +93,21 @@ else
   narrow_q4=()
 fi
 
-run bench_q2_algorithms q2_algorithms "${narrow_q2[@]+"${narrow_q2[@]}"}"
+# Real TPC-DS / DSB keys join Q2's grid when they have been extracted. See
+# benchmarks/datagen/tpcds/README.md for producing them; they are large and
+# per-scale-factor, so they are not in the repository.
+tpcds_args=()
+tpcds_dir="${TPCDS_KEYS:-$(dirname "$0")/data/tpcds}"
+if [[ -d "$tpcds_dir" ]] && compgen -G "$tpcds_dir/*.tsldset" > /dev/null; then
+  echo "real TPC-DS keys: $tpcds_dir ($(ls "$tpcds_dir"/*.tsldset | wc -l) files)"
+  tpcds_args=(--tpcds-dir "$tpcds_dir")
+else
+  echo "no extracted TPC-DS keys at $tpcds_dir; Q2 runs synthetic shapes only"
+  echo "  produce them with benchmarks/datagen/tpcds/extract_keys.py"
+fi
+
+run bench_q2_algorithms q2_algorithms "${tpcds_args[@]+"${tpcds_args[@]}"}" \
+    "${narrow_q2[@]+"${narrow_q2[@]}"}"
 # Hardware paths only: the software ones are QPL's and DML's own CPU code, kept
 # for correctness rather than for figures.
 run bench_q3_detection  q3_detection  --paths hw "${narrow_q3[@]+"${narrow_q3[@]}"}"

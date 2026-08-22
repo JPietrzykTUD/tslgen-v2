@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "dataset_catalog.hpp"
+#include "dataset_file.hpp"
 #include "dataset_descriptor.hpp"
 #include "dataset_reference.hpp"
 
@@ -45,6 +46,20 @@ class TslDatasetSource {
 
   auto pristine(TslDatasetSpec const & spec) -> Handle {
     return fetch(spec.id, [&spec] {
+      // A real TPC-DS key is read; everything else is generated. The reference
+      // image below is computed the same way either way, so the oracle is
+      // exactly as strong for measured data as for synthetic.
+      if (!spec.external_path.empty()) {
+        auto const header = tsl_dataset_read_header(spec.external_path);
+        if (header.element_bytes != sizeof(DataType)) {
+          throw std::runtime_error(
+            "element width mismatch reading " + spec.external_path + ": file has "
+            + std::to_string(header.element_bytes) + ", asked for "
+            + std::to_string(sizeof(DataType)));
+        }
+        return std::make_shared<Image>(
+          tsl_dataset_read<DataType>(spec.external_path, header));
+      }
       return std::make_shared<Image>(tsl_generate_dataset<DataType>(spec));
     });
   }

@@ -14,6 +14,9 @@
 // generator bug that shifts D_2 cannot also shift the number it is compared to.
 
 #include <algorithm>
+#include <filesystem>
+#include <cstdlib>
+#include <system_error>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -132,6 +135,10 @@ inline auto tsl_shape_section(TslShape shape) -> int {
 
 struct TslDatasetSpec {
   std::string id;
+  // Set for a dataset that is read rather than generated: real TPC-DS / DSB sort
+  // keys, projected by benchmarks/datagen/tpcds/extract_keys.py. Empty means the
+  // shape and params below generate it.
+  std::string external_path;
   TslShape shape = TslShape::UniqueFirst;
   std::size_t rows = 0;
   std::size_t columns = 0;
@@ -147,6 +154,50 @@ struct TslDatasetSpec {
     return found == params.end() ? fallback : static_cast<std::size_t>(found->second + 0.5);
   }
 };
+
+// Every extracted TPC-DS / DSB key in a directory, as specs. The filenames carry
+// the shape: `tpcds_<query>_u<bits>_n<rows>_m<columns>.tsldset`, which is the same
+// convention the generated ids use, so a driver can filter by prefix exactly as it
+// does for a synthetic shape.
+inline auto tsl_external_catalog(std::string const & directory, std::size_t element_bytes)
+  -> std::vector<TslDatasetSpec> {
+  std::vector<TslDatasetSpec> specs;
+  if (directory.empty()) {
+    return specs;
+  }
+  std::error_code failed;
+  for (auto const & entry : std::filesystem::directory_iterator(directory, failed)) {
+    if (failed || entry.path().extension() != ".tsldset") {
+      continue;
+    }
+    auto const name = entry.path().stem().string();
+    auto const width = "_u" + std::to_string(element_bytes * 8) + "_n";
+    auto const at = name.find(width);
+    if (at == std::string::npos) {
+      continue;  // a different element width than the caller asked for
+    }
+    TslDatasetSpec spec;
+    spec.id = name;
+    spec.external_path = entry.path().string();
+    spec.element_bytes = element_bytes;
+    // rows and columns come from the name so a caller can size its grid without
+    // opening every file; the loader checks them against the header.
+    auto const rows_at = at + width.size();
+    auto const m_at = name.find("_m", rows_at);
+    if (m_at == std::string::npos) {
+      continue;
+    }
+    spec.rows = std::strtoull(name.substr(rows_at, m_at - rows_at).c_str(), nullptr, 10);
+    spec.columns = std::strtoull(name.substr(m_at + 2).c_str(), nullptr, 10);
+    specs.push_back(std::move(spec));
+  }
+  std::sort(specs.begin(), specs.end(),
+            [](TslDatasetSpec const & a, TslDatasetSpec const & b) {
+              return a.id < b.id;
+            });
+  return specs;
+}
+
 
 // Deterministic seed from the identity of the instance. Any change to shape,
 // parameters, size or width produces a different stream; an unchanged spec
@@ -482,33 +533,45 @@ auto tsl_generate_dataset(TslDatasetSpec const & spec) -> std::vector<std::vecto
       // produces very few, very large equal runs and everything after it is
       // decided inside those.
       //
-      // The cardinalities are *modelled* on the schema's and scaled by `sf`, not
-      // produced by dsdgen: item and store scale with the square root of the
-      // scale factor, category, class and brand counts are fixed, and query 67
-      // filters a twelve-month window so at most two years appear. Calibrating
-      // them against a real dsdgen run is worth doing before they are cited as
-      // TPC-DS numbers rather than as its shape.
+      // The cardinalities are **calibrated** against a real DSB dsdgen run at
+      // scale factor 1, measured through the join query 67 performs -- see
+      // benchmarks/datagen/tpcds/README.md. They are not guesses any more:
+      //
+      //   i_category 10, i_class 99, i_brand 710, i_product_name 17958,
+      //   d_year 6, d_qoy 4, d_moy 12, s_store_id 4
+      //
+      // What this shape does *not* reproduce is the real distribution. Measured,
+      // the largest group holds 22.9% of `i_category` and 6.6% of `i_brand`,
+      // where uniform gives 10% and 0.1% -- sixty-five times off on the latter.
+      // That is deliberate: this is the uniform arm of the skew comparison, and
+      // holding the cardinalities and key width fixed while varying only the
+      // distribution is what isolates skew. The skewed arm is the measured data,
+      // read through `external_path`.
       auto const scale = std::max(spec.param("sf", 1.0), 0.01);
       auto const root = std::sqrt(scale);
-      auto const brands = std::size_t{1000};
+      auto const brands = std::max<std::size_t>(static_cast<std::size_t>(710.0 * root), 1);
       auto const products =
-        std::max<std::size_t>(static_cast<std::size_t>(18000.0 * root), brands);
-      auto const stores =
-        std::max<std::size_t>(static_cast<std::size_t>(12.0 * root), 1);
+        std::max<std::size_t>(static_cast<std::size_t>(17958.0 * root), brands);
+      auto const stores = std::max<std::size_t>(static_cast<std::size_t>(4.0 * root), 1);
+      auto const classes = std::max<std::size_t>(static_cast<std::size_t>(99.0 * root), 1);
+      auto const categories = std::size_t{10};
       auto const per_brand = std::max<std::size_t>(products / brands, 1);
-      auto const per_class = std::max<std::size_t>(brands / 100u, 1);
-      auto const per_category = std::max<std::size_t>(100u / 10u, 1);
+      auto const per_class = std::max<std::size_t>(brands / classes, 1);
+      auto const per_category = std::max<std::size_t>(classes / categories, 1);
 
       for (std::size_t row = 0; row < rows; ++row) {
         // One draw fixes the whole hierarchy, so the nesting is exact rather than
         // approximate: a brand belongs to one class and a class to one category,
         // as in the schema.
+        // Clamped at each level: integer division of the largest product id
+        // overshoots the level above it, which would give 12 categories where the
+        // measured data has 10.
         auto const product = uniform(products);
-        auto const brand = product / per_brand;
-        auto const item_class = brand / per_class;
-        auto const category = item_class / per_category;
+        auto const brand = std::min(product / per_brand, brands - 1);
+        auto const item_class = std::min(brand / per_class, classes - 1);
+        auto const category = std::min(item_class / per_category, categories - 1);
         std::size_t const key[8] = {category, item_class, brand, product,
-                                    uniform(2), uniform(4), uniform(12),
+                                    uniform(6), uniform(4), uniform(12),
                                     uniform(stores)};
         for (std::size_t column = 0; column < column_count; ++column) {
           columns[column][row] = static_cast<DataType>(

@@ -76,6 +76,133 @@ auto image_matches(std::vector<std::vector<Key>> const & columns,
   return true;
 }
 
+// Both algorithms plus the scalar reference over one dataset. Shared so a
+// measured key and a generated one go through exactly the same measurement.
+template <class Key>
+void run_pair(TslPaperResults & results, TslDatasetSource<Key> & source,
+              TslDatasetSpec const & spec, TslPaperRow const & blank,
+              std::vector<std::size_t> const & worker_counts) {
+  using Simd = tsl::simd<Key, tsl::avx512>;
+  auto const columns = spec.columns;
+  auto const rows = spec.rows;
+  auto const pristine = source.pristine(spec);
+  auto const reference = source.reference(spec, TslDirection::Ascending);
+  std::vector<TslSortColumn<Key>> specs;
+  for (auto const & column : *pristine) {
+    specs.push_back(TslSortColumn<Key>{const_cast<Key *>(column.data()),
+                                       TslSortOrder::ASCENDING});
+  }
+
+  for (auto const workers : worker_counts) {
+    std::vector<Key> index(rows);
+    {
+      auto row = blank;
+      row.algorithm = "samplesort";
+      row.variant = "K=16/adaptive/net";
+      row.detector = "scalar";
+      row.workers = workers;
+      TslSampleSortMultiColumn<Key, Simd, 16, TslSampleSortBuckets::Adaptive, 8, 256,
+                               TslSampleSortBase::Network, TslSampleSortIds::Byte,
+                               256 / Simd::lane_count_v, 50, true> sorter;
+      TslSampleSortColumnMetrics metrics;
+      auto const [ok, stats] = tsl_paper_measure(
+        [&] {
+          TslIndexScalarDetector<Key> detector;
+          metrics = {};
+          if (workers > 1) {
+            sorter.sort_index_parallel(specs.data(), columns, index.data(), rows,
+                                       detector, workers, &metrics);
+          } else {
+            sorter.sort_index(specs.data(), columns, index.data(), rows, detector,
+                              &metrics);
+          }
+        },
+        [&] { return image_matches(*pristine, *reference, index); }, rows);
+      row.verified = ok;
+      row.ns_per_element = stats;
+      auto const scale = static_cast<double>(rows);
+      row.ns_materialize = metrics.ns_materialize / scale;
+      row.ns_sort = metrics.ns_sort / scale;
+      row.ns_detect = metrics.ns_detect / scale;
+      results.add(std::move(row));
+    }
+    {
+      auto row = blank;
+      row.algorithm = "quicksort";
+      row.variant = "3way/net/post";
+      row.detector = "scalar";
+      row.workers = workers;
+      TslMultiColumnIndexSorter<Key, TslPartitionKind::THREE_WAY,
+                                TslLeafKind::NETWORK, Simd> sorter(0x5A3F1E77);
+      auto const [ok, stats] = tsl_paper_measure(
+        [&] {
+          TslIndexScalarDetector<Key> detector;
+          if (workers > 1) {
+            sorter.sort_index_parallel(specs.data(), columns, index.data(), rows,
+                                       TslRunDiscoveryKind::POST_SORT, detector,
+                                       workers, 16384);
+          } else {
+            sorter.sort_index(specs.data(), columns, index.data(), rows,
+                              TslRunDiscoveryKind::POST_SORT, detector);
+          }
+        },
+        [&] { return image_matches(*pristine, *reference, index); }, rows);
+      row.verified = ok;
+      row.ns_per_element = stats;
+      results.add(std::move(row));
+    }
+  }
+  {
+    auto row = blank;
+    row.algorithm = "std::sort lexicographic";
+    row.detector = "-";
+    row.workers = 1;
+    std::vector<Key> index(rows);
+    auto const & data = *pristine;
+    auto const [ok, stats] = tsl_paper_measure(
+      [&] {
+        std::iota(index.begin(), index.end(), Key{0});
+        std::sort(index.begin(), index.end(), [&](Key left, Key right) {
+          for (std::size_t column = 0; column < data.size(); ++column) {
+            if (data[column][left] != data[column][right]) {
+              return data[column][left] < data[column][right];
+            }
+          }
+          return false;
+        });
+      },
+      [&] { return image_matches(*pristine, *reference, index); }, rows);
+    row.verified = ok;
+    row.ns_per_element = stats;
+    results.add(std::move(row));
+  }
+}
+
+
+// The measured keys, read rather than generated. Their row count and column count
+// come from the data, so they ignore the grid's rows/cols axes -- a real key has
+// the width the query gives it.
+template <class Key>
+void run_external(TslPaperResults & results, std::string const & directory,
+                  std::vector<std::size_t> const & worker_counts) {
+  TslDatasetSource<Key> source(12ull << 30);
+  for (auto const & spec : tsl_external_catalog(directory, sizeof(Key))) {
+    auto blank = results.make_row();
+    blank.shape = spec.id.substr(0, spec.id.find("_u"));
+    blank.shape_params = "measured";
+    blank.rows = spec.rows;
+    blank.columns = spec.columns;
+    blank.element_bytes = sizeof(Key);
+    try {
+      run_pair<Key>(results, source, spec, blank, worker_counts);
+    } catch (std::exception const & error) {
+      auto row = blank;
+      row.algorithm = "-";
+      results.drop(row, std::string("could not read: ") + error.what());
+    }
+  }
+}
+
 template <class Key>
 void run_grid(TslPaperResults & results, std::vector<std::string> const & shapes,
               std::vector<std::size_t> const & row_counts,
@@ -122,103 +249,7 @@ void run_grid(TslPaperResults & results, std::vector<std::string> const & shapes
           blank.shape_params += name + '=' + text;
         }
 
-        auto const pristine = source.pristine(*spec);
-        auto const reference = source.reference(*spec, TslDirection::Ascending);
-        std::vector<TslSortColumn<Key>> specs;
-        for (auto const & column : *pristine) {
-          specs.push_back(TslSortColumn<Key>{const_cast<Key *>(column.data()),
-                                             TslSortOrder::ASCENDING});
-        }
-
-        for (auto const workers : worker_counts) {
-          std::vector<Key> index(rows);
-
-          // ---- samplesort, with its phase split ----
-          {
-            auto row = blank;
-            row.algorithm = "samplesort";
-            row.variant = "K=16/adaptive/net";
-            row.detector = "scalar";
-            row.workers = workers;
-            TslSampleSortMultiColumn<Key, Simd, 16, TslSampleSortBuckets::Adaptive, 8,
-                                     256, TslSampleSortBase::Network,
-                                     TslSampleSortIds::Byte,
-                                     256 / Simd::lane_count_v, 50, true> sorter;
-            TslSampleSortColumnMetrics metrics;
-            auto const [ok, stats] = tsl_paper_measure(
-              [&] {
-                TslIndexScalarDetector<Key> detector;
-                metrics = {};
-                if (workers > 1) {
-                  sorter.sort_index_parallel(specs.data(), columns, index.data(), rows,
-                                             detector, workers, &metrics);
-                } else {
-                  sorter.sort_index(specs.data(), columns, index.data(), rows,
-                                    detector, &metrics);
-                }
-              },
-              [&] { return image_matches(*pristine, *reference, index); }, rows);
-            row.verified = ok;
-            row.ns_per_element = stats;
-            row.ns_materialize = metrics.ns_materialize / static_cast<double>(rows);
-            row.ns_sort = metrics.ns_sort / static_cast<double>(rows);
-            row.ns_detect = metrics.ns_detect / static_cast<double>(rows);
-            results.add(std::move(row));
-          }
-
-          // ---- the indirect quicksort, the sorter this has to beat ----
-          {
-            auto row = blank;
-            row.algorithm = "quicksort";
-            row.variant = "3way/net/post";
-            row.detector = "scalar";
-            row.workers = workers;
-            TslMultiColumnIndexSorter<Key, TslPartitionKind::THREE_WAY,
-                                      TslLeafKind::NETWORK, Simd> sorter(0x5A3F1E77);
-            auto const [ok, stats] = tsl_paper_measure(
-              [&] {
-                TslIndexScalarDetector<Key> detector;
-                if (workers > 1) {
-                  sorter.sort_index_parallel(specs.data(), columns, index.data(), rows,
-                                             TslRunDiscoveryKind::POST_SORT, detector,
-                                             workers, 16384);
-                } else {
-                  sorter.sort_index(specs.data(), columns, index.data(), rows,
-                                    TslRunDiscoveryKind::POST_SORT, detector);
-                }
-              },
-              [&] { return image_matches(*pristine, *reference, index); }, rows);
-            row.verified = ok;
-            row.ns_per_element = stats;
-            results.add(std::move(row));
-          }
-        }
-
-        // ---- the scalar reference, once per dataset ----
-        {
-          auto row = blank;
-          row.algorithm = "std::sort lexicographic";
-          row.detector = "-";
-          row.workers = 1;
-          std::vector<Key> index(rows);
-          auto const & data = *pristine;
-          auto const [ok, stats] = tsl_paper_measure(
-            [&] {
-              std::iota(index.begin(), index.end(), Key{0});
-              std::sort(index.begin(), index.end(), [&](Key left, Key right) {
-                for (std::size_t column = 0; column < data.size(); ++column) {
-                  if (data[column][left] != data[column][right]) {
-                    return data[column][left] < data[column][right];
-                  }
-                }
-                return false;
-              });
-            },
-            [&] { return image_matches(*pristine, *reference, index); }, rows);
-          row.verified = ok;
-          row.ns_per_element = stats;
-          results.add(std::move(row));
-        }
+        run_pair<Key>(results, source, *spec, blank, worker_counts);
       }
     }
   }
@@ -233,6 +264,7 @@ int main(int argc, char ** argv) {
   std::vector<std::size_t> worker_counts{1, 24};
   std::vector<std::size_t> widths{4, 8};
   std::string csv_path;
+  std::string tpcds_dir;
 
   for (int i = 1; i < argc; ++i) {
     auto const flag = std::string(argv[i]);
@@ -259,6 +291,8 @@ int main(int argc, char ** argv) {
       for (auto const & part : split(value(), ',')) {
         widths.push_back(std::strtoull(part.c_str(), nullptr, 10));
       }
+    } else if (flag == "--tpcds-dir") {
+      tpcds_dir = value();
     } else if (flag == "--csv") {
       csv_path = value();
     } else if (flag == "--all") {
@@ -288,6 +322,9 @@ int main(int argc, char ** argv) {
 
   for (auto const width : widths) {
     if (width == 4) {
+      if (!tpcds_dir.empty()) {
+        run_external<std::uint32_t>(results, tpcds_dir, worker_counts);
+      }
       run_grid<std::uint32_t>(results, shapes, row_counts, column_counts,
                               worker_counts);
     } else if (width == 8) {
