@@ -363,7 +363,14 @@ class TslMultiColumnQuickSorter {
       // O(count^2) but on a handful of elements far cheaper than a full network.
       if constexpr (HybridFillPercent != 0) {
         constexpr auto capacity = network_leaf_capacity;
-        if (count * 100 < HybridFillPercent * capacity) {
+        // `count > capacity` is not redundant. The network holds `lanes * rows`
+        // elements, which at a narrow register and a wide key is *smaller* than
+        // insertion's threshold -- 128-bit u64 gives two lanes, so capacity is 32
+        // against a threshold of 64. `leaf_accepts` admits anything up to the
+        // threshold, so without this test a 64-element leaf is handed to a network
+        // that holds 32 and the sort is silently wrong. A leaf too long for the
+        // network goes to insertion whatever its fill.
+        if (count > capacity || count * 100 < HybridFillPercent * capacity) {
           ++tsl_leaf_routing.to_insertion;
           insertion_leaf<Order>(keys, columns, payload_count, count);
           return;

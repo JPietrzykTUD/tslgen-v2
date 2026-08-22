@@ -1,6 +1,13 @@
-// One (style, width) of the coordinate descent. CMake compiles this file once per
-// pair with TSL_Q0_STYLE and TSL_Q0_WIDTH set, so the nine instantiations build in
-// parallel instead of serialising into one enormous translation unit.
+// One (style, register width) of the coordinate descent, at both key widths. CMake
+// compiles this file once per pair with TSL_Q0_STYLE and TSL_Q0_WIDTH set, so the
+// nine instantiations build in parallel instead of serialising into one enormous
+// translation unit.
+//
+// Both 4-byte and 8-byte keys are tuned, separately. A configuration found on
+// 32-bit keys is not a tuned configuration for 64-bit keys: the lane holds half as
+// many elements, which moves the base case, the bucket count and the leaf capacity
+// together. Reusing the narrow answer for the wide key and still labelling the row
+// "(tuned)" is the sort of quiet substitution this file exists to prevent.
 //
 // Each unit registers itself, so `bench_q0_tune` needs no table to keep in step.
 
@@ -14,17 +21,17 @@
 
 namespace {
 
-using Key = std::uint32_t;
 constexpr TslStyle style = TslStyle::TSL_Q0_STYLE;
 constexpr std::size_t width = TSL_Q0_WIDTH;
-using Simd = typename tsl_simd_for<Key, style, width>::type;
 
 // The candidate set. The cross is over the axes measured to interact -- the
 // base-case leaf only pays above a fill threshold, and both depend on how many
 // buckets a level produces -- while the rest vary one at a time around the
 // default. See q0_tune_impl.hpp for why it is not a full grid.
+template <class Key>
 auto samplesort_candidates(TslTuneProblem const & problem)
   -> std::vector<TslTuneCandidate> {
+  using Simd = typename tsl_simd_for<Key, style, width>::type;
   TslDatasetSource<Key> source(12ull << 30);
   std::vector<TslTuneCandidate> out;
 
@@ -83,8 +90,10 @@ auto samplesort_candidates(TslTuneProblem const & problem)
   return out;
 }
 
+template <class Key>
 auto quicksort_candidates(TslTuneProblem const & problem)
   -> std::vector<TslTuneCandidate> {
+  using Simd = typename tsl_simd_for<Key, style, width>::type;
   TslDatasetSource<Key> source(12ull << 30);
   std::vector<TslTuneCandidate> out;
   // The hybrid leaf's threshold is derived from the width, so it changes with the
@@ -128,8 +137,12 @@ auto quicksort_candidates(TslTuneProblem const & problem)
 
 struct Registrar {
   Registrar() {
-    tsl_tune_units().push_back(TslTuneUnit{style, width, &samplesort_candidates,
-                                          &quicksort_candidates});
+    tsl_tune_units().push_back(
+      TslTuneUnit{style, width, 4, &samplesort_candidates<std::uint32_t>,
+                  &quicksort_candidates<std::uint32_t>});
+    tsl_tune_units().push_back(
+      TslTuneUnit{style, width, 8, &samplesort_candidates<std::uint64_t>,
+                  &quicksort_candidates<std::uint64_t>});
   }
 };
 Registrar const registrar;

@@ -293,41 +293,53 @@ int main(int argc, char ** argv) {
   // The problem every candidate is scored on. Several shapes so the winner is not
   // fitted to one, and the row count and column count fixed so the only thing
   // varying is the configuration.
-  TslTuneProblem problem;
-  problem.candidate_seconds = problem_seconds;
-  auto const catalog = tsl_default_catalog(rows, columns, 4);
-  for (auto const & shape : shapes) {
-    auto const prefix = shape + "_u32_n";
-    for (auto const & spec : catalog) {
-      if (spec.id.rfind(prefix, 0) == 0) {
-        problem.specs.push_back(spec);
-        break;
+  // One spec list per key width: a unit tunes one width, and the datasets it is
+  // scored on must be that width.
+  auto build_problem = [&](std::size_t element_bytes) {
+    TslTuneProblem problem;
+    problem.candidate_seconds = problem_seconds;
+    auto const catalog = tsl_default_catalog(rows, columns, element_bytes);
+    auto const tail = "_u" + std::to_string(element_bytes * 8) + "_n";
+    for (auto const & shape : shapes) {
+      auto const prefix = shape + tail;
+      for (auto const & spec : catalog) {
+        if (spec.id.rfind(prefix, 0) == 0) {
+          problem.specs.push_back(spec);
+          break;
+        }
       }
     }
+    for (auto const & spec : tsl_external_catalog(tpcds_dir, element_bytes)) {
+      problem.specs.push_back(spec);
+    }
+    return problem;
+  };
+
+  std::map<std::size_t, TslTuneProblem> problems;
+  for (auto const element_bytes : {std::size_t{4}, std::size_t{8}}) {
+    auto problem = build_problem(element_bytes);
+    if (problem.specs.empty()) {
+      std::printf("no datasets at %zu rows x %zu columns for u%zu; skipping that "
+                  "key width\n", rows, columns, element_bytes * 8);
+      continue;
+    }
+    std::printf("\nu%zu: tuning on %zu shapes\n", element_bytes * 8,
+                problem.specs.size());
+    for (auto const & spec : problem.specs) {
+      std::printf("  %-42s %9zu rows x %2zu columns\n", spec.id.c_str(), spec.rows,
+                  spec.columns);
+    }
+    problems.emplace(element_bytes, std::move(problem));
   }
-  // Real query keys, when they have been extracted. The shape question this
-  // decomposition answers is most interesting on them, because their column
-  // cardinalities and skew are not ours to choose.
-  for (auto const & spec : tsl_external_catalog(tpcds_dir, 4)) {
-    problem.specs.push_back(spec);
-  }
-  if (problem.specs.empty()) {
-    std::printf("none of the requested shapes exist at %zu rows and %zu columns\n",
-                rows, columns);
+  if (problems.empty()) {
+    std::printf("nothing to tune\n");
     return 1;
-  }
-  std::printf("\ntuning on %zu shapes, u32\n", problem.specs.size());
-  for (auto const & spec : problem.specs) {
-    std::printf("  %-42s %9zu rows x %2zu columns\n", spec.id.c_str(), spec.rows,
-                spec.columns);
   }
 
   // A correctness sweep is a different job from tuning and gets its own exit
-  // code, so it can gate a commit. It visits every unit, not just the ones a
-  // tuning run happens to be pointed at.
+  // code, so it can gate a commit. It visits every unit at every key width, not
+  // just the ones a tuning run happens to be pointed at.
   if (verify_only) {
-    problem.verify_only = true;
-    problem.workers = worker_counts.empty() ? 1 : worker_counts.back();
     std::size_t checked = 0;
     std::size_t broken = 0;
     for (auto const & unit : tsl_tune_units()) {
@@ -340,8 +352,16 @@ int main(int argc, char ** argv) {
           && std::find(widths.begin(), widths.end(), unit.width) == widths.end()) {
         continue;
       }
-      std::printf("\n%s / %zu-bit / %zu workers\n", tsl_style_name(unit.style),
-                  unit.width, problem.workers);
+      auto const found = problems.find(unit.element_bytes);
+      if (found == problems.end()) {
+        continue;
+      }
+      auto problem = found->second;
+      problem.verify_only = true;
+      problem.workers = worker_counts.empty() ? 1 : worker_counts.back();
+      std::printf("\n%s / %zu-bit / u%zu / %zu workers\n",
+                  tsl_style_name(unit.style), unit.width, unit.element_bytes * 8,
+                  problem.workers);
       for (auto const * set : {&unit.samplesort, &unit.quicksort}) {
         auto const algorithm = set == &unit.samplesort ? "samplesort" : "quicksort";
         for (auto const & candidate : (*set)(problem)) {
@@ -358,9 +378,11 @@ int main(int argc, char ** argv) {
           std::printf("\n");
         }
       }
-      std::printf("  %zu configurations checked so far, %zu wrong\n", checked, broken);
+      std::printf("  %zu configurations checked so far, %zu wrong\n", checked,
+                  broken);
     }
-    std::printf("\n%zu configurations checked, %zu sorted wrongly\n", checked, broken);
+    std::printf("\n%zu configurations checked, %zu sorted wrongly\n", checked,
+                broken);
     if (checked == 0) {
       // A gate that passes having checked nothing is worse than no gate.
       std::printf("no unit matched the filters: nothing was verified\n");
@@ -381,11 +403,16 @@ int main(int argc, char ** argv) {
         && std::find(widths.begin(), widths.end(), unit.width) == widths.end()) {
       continue;
     }
+    auto const found = problems.find(unit.element_bytes);
+    if (found == problems.end()) {
+      continue;  // no datasets at this key width; already reported
+    }
+    auto problem = found->second;
     for (auto const workers : worker_counts) {
       problem.workers = workers;
-      std::printf("\n================ %s / %zu-bit / %zu worker%s\n",
-                  tsl_style_name(unit.style), unit.width, workers,
-                  workers == 1 ? "" : "s");
+      std::printf("\n================ %s / %zu-bit / u%zu / %zu worker%s\n",
+                  tsl_style_name(unit.style), unit.width, unit.element_bytes * 8,
+                  workers, workers == 1 ? "" : "s");
 
       auto const samplesort = unit.samplesort(problem);
       auto const sample_outcome = summarise(samplesort);
@@ -407,14 +434,16 @@ int main(int argc, char ** argv) {
       if (workers == worker_counts.front()) {
         auto publish = [&](char const * algorithm, Outcome const & outcome) {
           if (outcome.best.score <= 0.0) {
-            std::printf("  !! %s/%s/%zu-bit: no candidate sorted correctly; "
+            std::printf("  !! %s/%s/%zu-bit/u%zu: no candidate sorted correctly; "
                         "publishing nothing for this cell\n",
-                        algorithm, tsl_style_name(unit.style), unit.width);
+                        algorithm, tsl_style_name(unit.style), unit.width,
+                        unit.element_bytes * 8);
             return;
           }
           auto config = outcome.best.config;
           config.from_file = true;
-          tuned[tsl_tuned_key(algorithm, unit.style, unit.width, 4)] = config;
+          tuned[tsl_tuned_key(algorithm, unit.style, unit.width,
+                              unit.element_bytes)] = config;
         };
         publish("samplesort", sample_outcome);
         publish("quicksort", quick_outcome);
@@ -428,7 +457,7 @@ int main(int argc, char ** argv) {
           row.shape_params = std::to_string(problem.specs.size()) + " shapes";
           row.rows = rows;
           row.columns = columns;
-          row.element_bytes = 4;
+          row.element_bytes = unit.element_bytes;
           row.algorithm = algorithm;
           row.variant = std::string(tsl_style_name(unit.style)) + "/"
                         + std::to_string(unit.width) + " " + candidate.axis + "="

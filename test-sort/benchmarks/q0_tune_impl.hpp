@@ -86,10 +86,15 @@ struct TslTuneCandidate {
   bool over_budget = false;
 };
 
-// A unit is one (style, width): it runs the whole search and reports.
+// A unit is one (style, register width, key width): it runs the whole search and
+// reports. The key width is part of the identity because a configuration tuned on
+// 4-byte keys is not a tuned configuration for 8-byte keys -- the lane holds half
+// as many elements, so the base case, the bucket count and the leaf capacity all
+// shift -- and `best_config.tsv` is already keyed on element bytes.
 struct TslTuneUnit {
   TslStyle style;
   std::size_t width;
+  std::size_t element_bytes = 4;
   std::function<std::vector<TslTuneCandidate>(TslTuneProblem const &)> samplesort;
   std::function<std::vector<TslTuneCandidate>(TslTuneProblem const &)> quicksort;
 };

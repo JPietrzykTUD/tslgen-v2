@@ -396,6 +396,10 @@ inline auto tsl_default_plan(TslStage stage) -> TslStagePlan {
         TslStyle::Intrinsics, TslStyle::ClangBuiltin, TslStyle::ClangBoolMask
       };
       plan.widths = {128, 256, 512};
+      // Both key widths. A style comparison on 4-byte keys only would leave the
+      // case where a register holds half as many elements unmeasured, and lane
+      // count is exactly what separates one style's codegen from another's.
+      plan.element_bytes = {4, 8};
       plan.size_levels = {1, 3};
       break;
   }
