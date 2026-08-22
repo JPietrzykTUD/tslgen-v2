@@ -119,7 +119,15 @@ elif [[ "$have_iax" == "yes" ]]; then
 else
   preset=bench
 fi
-build="$root/tslctmp/test-sort-$preset"
+# Where the binaries go. Overridable because a repository can be visible under two
+# paths at once -- a devcontainer bind-mounts the host checkout, so
+# /home/you/repo and /workspaces/repo are the same directory -- and cmake keys its
+# cache on the source path *string*. Two views therefore fight over one build
+# directory, each invalidating the other's cache, and the loser is whichever one
+# ran second. Give each view its own:
+#
+#   TSL_COSORT_BUILD_DIR=~/bench-build ./run_all.sh ...
+build="${TSL_COSORT_BUILD_DIR:-$root/tslctmp/test-sort-$preset}"
 echo "accelerators: dsa=$have_dsa iax=$have_iax  ->  preset $preset"
 # The work queues are character devices, usually root-owned and mode 600. Without
 # access the accelerator rows come out as drops naming the reason, which is honest
@@ -151,7 +159,25 @@ extra=()
 if [[ -f "$build/CMakeCache.txt" ]]; then
   cached_home="$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$build/CMakeCache.txt")"
   if [[ -n "$cached_home" && "$cached_home" != "$here" ]]; then
-    echo "$build was configured for $cached_home, not $here -- removing it"
+    # Same directory under a different path is the common case here, not a tree
+    # copied from another machine: compare what the paths resolve to before
+    # deciding this cache is foreign.
+    same_tree=no
+    if [[ -d "$cached_home" ]]; then
+      cached_id="$(stat -c '%d:%i' "$cached_home" 2>/dev/null || true)"
+      here_id="$(stat -c '%d:%i' "$here" 2>/dev/null || true)"
+      [[ -n "$cached_id" && "$cached_id" == "$here_id" ]] && same_tree=yes
+    fi
+    if [[ "$same_tree" == "yes" ]]; then
+      echo "  !! $build was configured as $cached_home, which is this same"
+      echo "     directory under another path -- a container bind-mount, most"
+      echo "     likely. cmake keys its cache on the path string, so reusing this"
+      echo "     build directory means the two views keep invalidating each other."
+      echo "     Reconfiguring it for $here now; set TSL_COSORT_BUILD_DIR to give"
+      echo "     each view its own build directory and stop the thrashing."
+    else
+      echo "$build was configured for $cached_home, a different tree -- removing it"
+    fi
     rm -rf "$build"
   fi
 fi

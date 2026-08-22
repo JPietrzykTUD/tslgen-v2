@@ -53,7 +53,6 @@
       "name": "bench",
       "inherits": "clang",
       "displayName": "clang 22, release, measurement: counters compiled out",
-      "binaryDir": "${sourceParentDir}/tslctmp/test-sort-bench",
       "cacheVariables": {
         "TSL_COSORT_NO_INSTRUMENTATION": "ON"
       },
@@ -63,7 +62,6 @@
       "name": "bench-dsa",
       "inherits": "clang",
       "displayName": "Measurement on a host with Intel DSA",
-      "binaryDir": "${sourceParentDir}/tslctmp/test-sort-bench-dsa",
       "cacheVariables": {
         "TSL_COSORT_NO_INSTRUMENTATION": "ON",
         "TSL_COSORT_ENABLE_DSA": "ON"
@@ -74,7 +72,6 @@
       "name": "bench-iaa",
       "inherits": "clang",
       "displayName": "Measurement on a host with Intel IAA",
-      "binaryDir": "${sourceParentDir}/tslctmp/test-sort-bench-iaa",
       "cacheVariables": {
         "TSL_COSORT_NO_INSTRUMENTATION": "ON",
         "TSL_COSORT_ENABLE_IAA": "ON"
@@ -85,7 +82,6 @@
       "name": "bench-dsa-baselines",
       "inherits": "clang",
       "displayName": "Measurement with DSA and the Q1 external baselines",
-      "binaryDir": "${sourceParentDir}/tslctmp/test-sort-bench-dsa-baselines",
       "cacheVariables": {
         "TSL_COSORT_NO_INSTRUMENTATION": "ON",
         "TSL_COSORT_ENABLE_DSA": "ON",
@@ -97,7 +93,6 @@
       "name": "bench-iaa-baselines",
       "inherits": "clang",
       "displayName": "Measurement with IAA and the Q1 external baselines",
-      "binaryDir": "${sourceParentDir}/tslctmp/test-sort-bench-iaa-baselines",
       "cacheVariables": {
         "TSL_COSORT_NO_INSTRUMENTATION": "ON",
         "TSL_COSORT_ENABLE_IAA": "ON",
@@ -109,7 +104,6 @@
       "name": "phases",
       "inherits": "clang",
       "displayName": "Diagnosis: phase timers on. Never for published numbers.",
-      "binaryDir": "${sourceParentDir}/tslctmp/test-sort-phases",
       "cacheVariables": {
         "CMAKE_CXX_FLAGS": "-DTSL_COSORT_PHASES=true"
       },
