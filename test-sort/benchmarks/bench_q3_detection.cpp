@@ -39,6 +39,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "tsl_simd_for.hpp"
 #include "cosort_detectors.hpp"
 #include "dataset_catalog.hpp"
 #include "dataset_reference.hpp"
@@ -127,7 +128,11 @@ void run_width(TslPaperResults & results,
                std::vector<std::size_t> const & column_counts,
                std::size_t rows, std::vector<std::size_t> const & worker_counts,
                std::size_t min_offload) {
-  using Simd = tsl::simd<Key, tsl::avx512>;
+  // The cell this binary was built for: intr/512 unless
+  // TSL_COSORT_MEASURE_STYLE/WIDTH say otherwise. Q0 checks that default against
+  // the nine cells it measured, so a host where it is the wrong choice says so
+  // rather than reporting a quietly suboptimal number.
+  using Simd = tsl_measure_simd_t<Key>;
   TslDatasetSource<Key> source(8ull << 30);
   auto const tail = "_u" + std::to_string(sizeof(Key) * 8) + "_n";
 

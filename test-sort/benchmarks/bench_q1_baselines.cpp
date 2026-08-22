@@ -49,6 +49,7 @@
 #include <vector>
 
 #if defined(TSL_COSORT_HAVE_IPS4O)
+#include "tsl_simd_for.hpp"
 #include "ips4o.hpp"
 #endif
 #if defined(TSL_COSORT_HAVE_XSS)
@@ -134,7 +135,11 @@ template <class Key>
 void run_shape(TslPaperResults & results, TslDatasetSource<Key> & source,
                TslDatasetSpec const & spec,
                std::vector<std::size_t> const & worker_counts) {
-  using Simd = tsl::simd<Key, tsl::avx512>;
+  // The cell this binary was built for: intr/512 unless
+  // TSL_COSORT_MEASURE_STYLE/WIDTH say otherwise. Q0 checks that default against
+  // the nine cells it measured, so a host where it is the wrong choice says so
+  // rather than reporting a quietly suboptimal number.
+  using Simd = tsl_measure_simd_t<Key>;
   auto const pristine = source.pristine(spec);
   auto const reference = source.reference(spec, TslDirection::Ascending);
 

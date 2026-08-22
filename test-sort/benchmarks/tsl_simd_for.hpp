@@ -116,3 +116,36 @@ template <class DataType, std::size_t Width> struct tsl_simd_for<DataType, TslSt
 constexpr bool tsl_clang_bool_style_available = false;
 #endif
 
+// The cell the reporting drivers are built for.
+//
+// Q0 explores all nine (style, register width) cells; the reporting drivers can
+// only be *built* for one, because the style and the width are template
+// parameters and the configuration dispatch they sit on top of is already 36
+// instantiations per key width -- crossing the two is 324, which is minutes of
+// compile per driver for a difference that, on the host this was written on, is
+// inside the noise floor.
+//
+// So the cell is a build parameter with a default, not a hard-coded choice, and
+// Q0 checks the default against what it measured. On this host seven of nine cells
+// land within 1.06% and the two that separate are the narrower intrinsics ones, so
+// intr/512 is right here. On a host where AVX-512 downclocks, or where the clang
+// families schedule differently, it may not be -- which is exactly the case a
+// hard-coded 512 would hide, and why `bench_q0_tune` says so out loud and
+// `run_paper.sh` refuses to continue past a mismatch it did not expect.
+//
+//   cmake --preset bench-iaa -DTSL_COSORT_MEASURE_STYLE=ClangBuiltin \
+//                            -DTSL_COSORT_MEASURE_WIDTH=256
+#if !defined(TSL_COSORT_MEASURE_STYLE)
+#define TSL_COSORT_MEASURE_STYLE Intrinsics
+#endif
+#if !defined(TSL_COSORT_MEASURE_WIDTH)
+#define TSL_COSORT_MEASURE_WIDTH 512
+#endif
+
+inline constexpr TslStyle tsl_measure_style = TslStyle::TSL_COSORT_MEASURE_STYLE;
+inline constexpr std::size_t tsl_measure_width = TSL_COSORT_MEASURE_WIDTH;
+
+// The vector type every reporting driver measures with.
+template <class DataType>
+using tsl_measure_simd_t =
+  typename tsl_simd_for<DataType, tsl_measure_style, tsl_measure_width>::type;

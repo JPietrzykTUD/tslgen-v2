@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tsl_simd_for.hpp"
 #include "common/instrumentation.hpp"
 
 // The measurement method every `bench_qN_*` driver shares, so it exists once.
@@ -126,6 +127,12 @@ struct TslPaperMachine {
     } else {
       std::printf("instrumentation=off (counters compiled out)\n");
     }
+    // Which (style, register width) cell this binary was built for. A results
+    // directory holds one build's numbers, so recording it once per run is enough
+    // -- but recording it nowhere would leave a figure unable to say what produced
+    // it, and the cell is chosen per host by `run_all.sh`.
+    std::printf("measure-cell=%s/%zu-bit\n", tsl_style_name(tsl_measure_style),
+                tsl_measure_width);
     // `TSL_PROFILE=auto` probes the compiler and falls back to the scalar profile
     // when the probe fails, and nothing downstream complains: the intrinsics style
     // still compiles, the drivers still run, and every number is a TSL scalar

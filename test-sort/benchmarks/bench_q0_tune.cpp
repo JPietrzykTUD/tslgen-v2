@@ -20,6 +20,7 @@
 #include <cstring>
 #include <map>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "paper_harness.hpp"
@@ -392,6 +393,11 @@ int main(int argc, char ** argv) {
   }
 
   std::map<std::string, TslTunedConfig> tuned;
+  // Best score per (style, width, key width), so the cell the reporting drivers
+  // were *built* for can be compared against the cell that actually won. Without
+  // this the style and width axes are explored and then discarded: the drivers can
+  // only be built for one cell, so the least they can do is say when it is wrong.
+  std::map<std::tuple<std::string, std::size_t, std::size_t>, double> cell_best;
 
   for (auto const & unit : tsl_tune_units()) {
     if (!style_names.empty()
@@ -423,6 +429,22 @@ int main(int argc, char ** argv) {
       report("quicksort", unit.style, unit.width, quicksort, quick_outcome);
 
       report_decomposition(decompose(problem, samplesort, quicksort));
+
+      if (workers == worker_counts.front()) {
+        auto const key = std::make_tuple(std::string(tsl_style_name(unit.style)),
+                                         unit.width, unit.element_bytes);
+        for (auto const * set : {&samplesort, &quicksort}) {
+          for (auto const & candidate : *set) {
+            if (candidate.score <= 0.0) {
+              continue;
+            }
+            auto const found = cell_best.find(key);
+            if (found == cell_best.end() || candidate.score < found->second) {
+              cell_best[key] = candidate.score;
+            }
+          }
+        }
+      }
 
       // One row per algorithm per cell, with the workers folded into the key so a
       // serial and a parallel run can disagree about the best configuration --
@@ -481,6 +503,83 @@ int main(int argc, char ** argv) {
                 key.rfind("samplesort", 0) == 0 ? config.describe_samplesort().c_str()
                                                 : config.describe_quicksort().c_str());
   }
+  // Which cell won, and whether the reporting drivers were built for it.
+  if (!cell_best.empty()) {
+    std::printf("\nbest configuration per (style, width) cell\n");
+    for (auto const element_bytes : {std::size_t{4}, std::size_t{8}}) {
+      std::vector<std::pair<std::tuple<std::string, std::size_t, std::size_t>,
+                            double>> cells;
+      for (auto const & entry : cell_best) {
+        if (std::get<2>(entry.first) == element_bytes) {
+          cells.push_back(entry);
+        }
+      }
+      if (cells.empty()) {
+        continue;
+      }
+      std::sort(cells.begin(), cells.end(),
+                [](auto const & a, auto const & b) { return a.second < b.second; });
+      auto const & winner = cells.front();
+      std::printf("  u%zu:", element_bytes * 8);
+      for (auto const & cell : cells) {
+        std::printf("  %s/%zu %.2f (%.2fx)", std::get<0>(cell.first).c_str(),
+                    std::get<1>(cell.first), cell.second,
+                    cell.second / winner.second);
+      }
+      std::printf("\n");
+      auto const built = std::make_tuple(std::string(tsl_style_name(tsl_measure_style)),
+                                         tsl_measure_width, element_bytes);
+      auto const here = cell_best.find(built);
+      if (here == cell_best.end()) {
+        continue;
+      }
+      auto const penalty = here->second / winner.second;
+      std::printf("       the reporting drivers are built for %s/%zu, %.2fx the "
+                  "best cell (%s/%zu)\n",
+                  std::get<0>(built).c_str(), std::get<1>(built), penalty,
+                  std::get<0>(winner.first).c_str(), std::get<1>(winner.first));
+      if (penalty > 1.10) {
+        std::printf("  !! that is more than 10%% off: rebuild with "
+                    "-DTSL_COSORT_MEASURE_STYLE=%s -DTSL_COSORT_MEASURE_WIDTH=%zu "
+                    "before publishing, or the reported numbers understate the "
+                    "sorter on this host\n",
+                    std::get<0>(winner.first).c_str(), std::get<1>(winner.first));
+      }
+    }
+  }
+
+  // One machine-readable line naming the cell to build the reporting drivers for.
+  // Combined across key widths by geometric mean, because the drivers are built
+  // once and measure both: picking the u32 winner would be arbitrary where the two
+  // disagree. `run_all.sh` reads this, then builds everything else for that cell.
+  if (!cell_best.empty()) {
+    std::map<std::pair<std::string, std::size_t>, std::pair<double, int>> combined;
+    for (auto const & entry : cell_best) {
+      auto & slot = combined[{std::get<0>(entry.first), std::get<1>(entry.first)}];
+      slot.first += std::log(entry.second);
+      ++slot.second;
+    }
+    std::string best_style;
+    std::size_t best_width = 0;
+    double best_score = 0.0;
+    for (auto const & entry : combined) {
+      if (entry.second.second == 0) {
+        continue;
+      }
+      auto const score =
+        std::exp(entry.second.first / static_cast<double>(entry.second.second));
+      if (best_width == 0 || score < best_score) {
+        best_style = entry.first.first;
+        best_width = entry.first.second;
+        best_score = score;
+      }
+    }
+    if (best_width != 0) {
+      std::printf("\nTSL_COSORT_BEST_CELL %s %zu %.4f\n", best_style.c_str(),
+                  best_width, best_score);
+    }
+  }
+
   std::printf("\n%s\n", results.summary().c_str());
   if (!csv_path.empty()) {
     results.write_csv(csv_path);

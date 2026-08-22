@@ -230,6 +230,17 @@ target_link_libraries(bench_q4_scaling PRIVATE tsl::tsl Threads::Threads)
 option(TSL_COSORT_NO_INSTRUMENTATION
        "Compile the sorters' counters out: for builds that publish measurements" OFF)
 
+# The (style, register width) cell the reporting drivers are built for. Q0 explores
+# all nine; a driver can only be built for one, because both are template
+# parameters sitting under a configuration dispatch that is already 36
+# instantiations per key width. So the cell is a build parameter, `run_all.sh`
+# probes Q0 for the winner before building the rest, and the full Q0 run re-checks
+# the choice and says so if the built cell is more than 10% off.
+set(TSL_COSORT_MEASURE_STYLE "Intrinsics" CACHE STRING
+    "TslStyle the reporting drivers measure with: Intrinsics|ClangBuiltin|ClangBoolMask")
+set(TSL_COSORT_MEASURE_WIDTH "512" CACHE STRING
+    "Register width in bits the reporting drivers measure with: 128|256|512")
+
 # Targets whose output is a published number. Kept as a list because the property
 # has to follow every one of them, and a driver added without it would silently
 # publish instrumented numbers.
@@ -843,3 +854,15 @@ if(TSL_COSORT_NO_INSTRUMENTATION)
     endforeach()
   endforeach()
 endif()
+
+# The measurement cell, applied to every target that publishes a number.
+foreach(_measuring IN LISTS TSL_COSORT_MEASURING_TARGETS)
+  if(TARGET ${_measuring})
+    target_compile_definitions(
+      ${_measuring} PRIVATE
+      TSL_COSORT_MEASURE_STYLE=${TSL_COSORT_MEASURE_STYLE}
+      TSL_COSORT_MEASURE_WIDTH=${TSL_COSORT_MEASURE_WIDTH}
+    )
+  endif()
+endforeach()
+message(STATUS "reporting drivers measure with ${TSL_COSORT_MEASURE_STYLE}/${TSL_COSORT_MEASURE_WIDTH}-bit")

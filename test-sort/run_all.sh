@@ -101,9 +101,51 @@ else
       --queries q067,q064,q010,q050,q081)
 fi
 
-# --- 3. build -----------------------------------------------------------------
+# --- 3. build, in two phases --------------------------------------------------
+# The reporting drivers can only be *built* for one (style, register width) cell:
+# both are template parameters of the sorters, sitting under a configuration
+# dispatch that is already 36 instantiations per key width, so crossing them with
+# nine cells is 324 and minutes of compile per driver. The cell is therefore a
+# build parameter -- which is only honest if something chooses it from measurement
+# rather than from a default nobody revisits.
+#
+# So: build the tuner, ask it which cell wins on this host, then build everything
+# else for that cell. The probe is small on purpose (two shapes, few rows) because
+# it is ranking cells rather than choosing a configuration; the full Q0 inside
+# run_paper.sh re-checks the built cell against its own nine and says so if the
+# choice was wrong by more than 10%.
 echo
-echo "=== 3/4 build"
+echo "=== 3/4 build (phase 1: the tuner)"
+cmake --build "$build" -j "$(nproc)" --target bench_q0_tune
+
+echo
+echo "--- probing for this host's best (style, width) cell"
+probe="$("$build/bench_q0_tune" --workers 1 --rows 65536 \
+           --shapes low_cardinality_d4,skewed_zipf_s1 --out /dev/null 2>&1 \
+         | grep '^TSL_COSORT_BEST_CELL' | tail -1 || true)"
+if [[ -n "$probe" ]]; then
+  cell_style="$(awk '{print $2}' <<< "$probe")"
+  cell_width="$(awk '{print $3}' <<< "$probe")"
+  case "$cell_style" in
+    intr)       cell_style=Intrinsics ;;
+    clang)      cell_style=ClangBuiltin ;;
+    clang_bool) cell_style=ClangBoolMask ;;
+    *) echo "unrecognised style '$cell_style' from the probe; keeping the default" >&2
+       cell_style="" ;;
+  esac
+  if [[ -n "$cell_style" ]]; then
+    echo "best cell on this host: $cell_style/$cell_width-bit"
+    cmake -S "$here" --preset "$preset" -DCMAKE_CXX_COMPILER="$compiler" \
+          -DTSL_COSORT_MEASURE_STYLE="$cell_style" \
+          -DTSL_COSORT_MEASURE_WIDTH="$cell_width" \
+          "${extra[@]+"${extra[@]}"}"
+  fi
+else
+  echo "the probe produced no cell; building for the default" >&2
+fi
+
+echo
+echo "=== 3/4 build (phase 2: everything else)"
 targets=(bench_q0_tune bench_q2_algorithms bench_q3_detection bench_q4_scaling
          cosort_bench)
 [[ "$baselines" == "yes" ]] && targets+=(bench_q1_baselines)

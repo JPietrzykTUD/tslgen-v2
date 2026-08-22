@@ -37,6 +37,10 @@ printf '%s\n' "$host" > "$stamp"
   printf 'cores: %s\n' "$(nproc)"
   printf 'governor: %s\n' "$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo unknown)"
   printf 'load: %s\n' "$(cut -d' ' -f1-3 /proc/loadavg)"
+  printf 'measure-cell: %s\n' \
+    "$("$build/bench_q4_scaling" --axis threads --shapes low_cardinality_d4 \
+        --rows 65536 --element-bytes 4 2>/dev/null \
+       | grep -m1 '^measure-cell=' | cut -d= -f2 || echo unknown)"
   printf 'devices: dsa=%s iax=%s\n' \
     "$(ls -d /dev/dsa 2>/dev/null || echo absent)" \
     "$(ls -d /dev/iax 2>/dev/null || echo absent)"

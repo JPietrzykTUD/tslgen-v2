@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 
+#include "tsl_simd_for.hpp"
 #include "dataset_catalog.hpp"
 #include "dataset_reference.hpp"
 #include "dataset_source.hpp"
@@ -102,7 +103,11 @@ template <class Key>
 void run_pair(TslPaperResults & results, TslDatasetSource<Key> & source,
               TslDatasetSpec const & spec, TslPaperRow const & blank,
               std::vector<std::size_t> const & worker_counts) {
-  using Simd = tsl::simd<Key, tsl::avx512>;
+  // The cell this binary was built for: intr/512 unless
+  // TSL_COSORT_MEASURE_STYLE/WIDTH say otherwise. Q0 checks that default against
+  // the nine cells it measured, so a host where it is the wrong choice says so
+  // rather than reporting a quietly suboptimal number.
+  using Simd = tsl_measure_simd_t<Key>;
   auto const columns = spec.columns;
   auto const rows = spec.rows;
   auto const pristine = source.pristine(spec);
@@ -253,7 +258,11 @@ void run_grid(TslPaperResults & results, std::vector<std::string> const & shapes
               std::vector<std::size_t> const & row_counts,
               std::vector<std::size_t> const & column_counts,
               std::vector<std::size_t> const & worker_counts) {
-  using Simd = tsl::simd<Key, tsl::avx512>;
+  // The cell this binary was built for: intr/512 unless
+  // TSL_COSORT_MEASURE_STYLE/WIDTH say otherwise. Q0 checks that default against
+  // the nine cells it measured, so a host where it is the wrong choice says so
+  // rather than reporting a quietly suboptimal number.
+  using Simd = tsl_measure_simd_t<Key>;
   TslDatasetSource<Key> source(8ull << 30);
   auto const tail = "_u" + std::to_string(sizeof(Key) * 8) + "_n";
 

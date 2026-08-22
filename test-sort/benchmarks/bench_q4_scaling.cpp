@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 
+#include "tsl_simd_for.hpp"
 #include "dataset_catalog.hpp"
 #include "dataset_reference.hpp"
 #include "dataset_source.hpp"
@@ -98,7 +99,11 @@ template <class Key>
 void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
                   cell const & where, std::map<std::string, double> & serial,
                   TslDatasetSpec const * external = nullptr) {
-  using Simd = tsl::simd<Key, tsl::avx512>;
+  // The cell this binary was built for: intr/512 unless
+  // TSL_COSORT_MEASURE_STYLE/WIDTH say otherwise. Q0 checks that default against
+  // the nine cells it measured, so a host where it is the wrong choice says so
+  // rather than reporting a quietly suboptimal number.
+  using Simd = tsl_measure_simd_t<Key>;
   auto const tail = "_u" + std::to_string(sizeof(Key) * 8) + "_n";
   // A measured dataset comes with its own row and column count, so it is passed
   // in rather than looked up by size. That makes it usable on the thread axis --
