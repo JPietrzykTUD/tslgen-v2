@@ -126,6 +126,19 @@ struct TslPaperMachine {
     } else {
       std::printf("instrumentation=off (counters compiled out)\n");
     }
+    // `TSL_PROFILE=auto` probes the compiler and falls back to the scalar profile
+    // when the probe fails, and nothing downstream complains: the intrinsics style
+    // still compiles, the drivers still run, and every number is a TSL scalar
+    // fallback. It happened here -- a build directory reconfigured while a build
+    // was in flight came out scalar, and the only symptom was an unrelated compile
+    // error in a header assuming `tsl::avx512` exists. Checked at runtime rather
+    // than in CMake because this is where the define is definitionally visible.
+#if defined(TSL_PROFILE_SCALAR)
+    std::printf("  !! TSL profile is SCALAR: every number here is a scalar "
+                "fallback, whatever the style column says. Delete the build "
+                "directory and configure it again; the usual cause is "
+                "reconfiguring while a build is running.\n");
+#endif
   }
 };
 

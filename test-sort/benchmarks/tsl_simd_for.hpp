@@ -29,6 +29,14 @@
 
 #include <cstddef>
 
+// Whether this profile has sized SIMD registers at all. The scalar profile does
+// not, and every width in the table below is meaningless there.
+#if defined(TSL_PROFILE_SCALAR)
+inline constexpr bool tsl_profile_has_register_widths = false;
+#else
+inline constexpr bool tsl_profile_has_register_widths = true;
+#endif
+
 #include <tsl.hpp>
 
 #include "cosort_plan.hpp"
@@ -44,6 +52,16 @@ template <class DataType, std::size_t Width>
 struct tsl_simd_for<DataType, TslStyle::Intrinsics, Width> {
   static_assert(Width % (8 * sizeof(DataType)) == 0,
                 "a register width must hold a whole number of elements");
+  // A profile with no register of this width has no specialization for the lane
+  // count, and the failure surfaces deep inside TSL as an incomplete
+  // `simd_for<fixed<N>, T>`. Say it here instead: the usual cause is a build whose
+  // `TSL_PROFILE=auto` probe fell back to `scalar`, which is silent everywhere
+  // else and makes every measured number a scalar fallback.
+  static_assert(
+    tsl_profile_has_register_widths,
+    "this TSL profile has no sized SIMD registers -- it is almost certainly the "
+    "scalar profile, reached because TSL_PROFILE=auto could not probe the "
+    "compiler. Delete the build directory and configure it again.");
   using type = tsl::dataparallel::simd_for_t<
     tsl::dataparallel::fixed<Width / (8 * sizeof(DataType))>, DataType>;
 };
@@ -65,7 +83,11 @@ constexpr bool tsl_clang_style_available = true;
 // style axis stays in the model either way, so a run reports what it could not
 // measure instead of silently omitting it.
 template <class DataType, std::size_t Width> struct tsl_simd_for<DataType, TslStyle::ClangBuiltin, Width> {
-  using type = tsl::simd<DataType, tsl::avx512>;  // never registered; keeps the table total
+  // Never registered -- it exists so the style axis keeps its shape and a run can
+  // report what it could not measure. It must therefore name a type every profile
+  // has, which `tsl::avx512` is not: on a scalar profile that produced "no member
+  // named 'avx512' in namespace 'tsl'" from a header nobody was looking at.
+  using type = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, DataType>;
 };
 constexpr bool tsl_clang_style_available = false;
 #endif
@@ -85,7 +107,11 @@ constexpr bool tsl_clang_bool_style_available = true;
 // `clang_v*_bool` additionally needs the ext_vector_type boolean extension, which
 // is a separate capability from the elementwise builtins, so it gets its own probe.
 template <class DataType, std::size_t Width> struct tsl_simd_for<DataType, TslStyle::ClangBoolMask, Width> {
-  using type = tsl::simd<DataType, tsl::avx512>;  // never registered; keeps the table total
+  // Never registered -- it exists so the style axis keeps its shape and a run can
+  // report what it could not measure. It must therefore name a type every profile
+  // has, which `tsl::avx512` is not: on a scalar profile that produced "no member
+  // named 'avx512' in namespace 'tsl'" from a header nobody was looking at.
+  using type = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, DataType>;
 };
 constexpr bool tsl_clang_bool_style_available = false;
 #endif

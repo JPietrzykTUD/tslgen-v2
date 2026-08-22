@@ -129,7 +129,14 @@ if [[ -x "$build/bench_q4_scaling" ]]; then
     echo "  (or add -DTSL_COSORT_NO_INSTRUMENTATION=ON)" >&2
     exit 1
   fi
-  echo "build check: instrumentation is compiled out"
+  if "$build/bench_q4_scaling" --axis threads --shapes low_cardinality_d4 \
+        --rows 65536 --element-bytes 4 2>&1 | grep -q "TSL profile is SCALAR"; then
+    echo "refusing to measure: $build resolved the scalar TSL profile" >&2
+    echo "  every number would be a scalar fallback. Delete $build and" >&2
+    echo "  configure it again, or set -DTSL_PROFILE=<name> deliberately." >&2
+    exit 1
+  fi
+  echo "build check: instrumentation is compiled out, profile is not scalar"
 fi
 
 # Correctness before any number: a configuration that sorts wrongly is a bug in
