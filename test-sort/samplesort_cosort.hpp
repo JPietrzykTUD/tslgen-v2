@@ -272,7 +272,11 @@ template <
   TslSampleSortBuckets Policy = TslSampleSortBuckets::Adaptive,
   int Oversample = 8,
   std::size_t BaseCase = 256,
-  TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion,
+  // Network is the measured default: it is 21% faster end to end than the
+  // insertion leaf at u32 once gated on `BaseFillPercent`, and it degrades to
+  // insertion by itself for a signed key, where the index column's type
+  // differs from the key's. See samplesort-notes.md.
+  TslSampleSortBase BasePolicy = TslSampleSortBase::Network,
   TslSampleSortIds IdWidth = TslSampleSortIds::Byte,
   // Rows of the base-case network, so its capacity is `lanes * BaseRows`. The
   // base case sees ranges averaging tens of elements, and a network costs its
