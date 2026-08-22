@@ -9,7 +9,7 @@
     {
       "name": "clang",
       "displayName": "clang 22, release, no accelerator",
-      "description": "Baseline for every host. clang 22 is required for the clang implementation family (tsl::clang_v*), whose profile header needs __builtin_elementwise_clzg.",
+      "description": "Baseline for every host. clang 22 is required for the clang implementation family (tsl::clang_v*), whose profile header needs __builtin_elementwise_clzg. The compiler is pinned by name; the actual requirement is clang 22 or newer, so on a host with only a later one override both CMAKE_CXX_COMPILER and CMAKE_C_COMPILER, or use run_all.sh which discovers them.",
       "binaryDir": "${sourceParentDir}/tslctmp/test-sort-${presetName}",
       "cacheVariables": {
         "CMAKE_C_COMPILER": "clang-22",

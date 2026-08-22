@@ -19,39 +19,89 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 
-results="${1:-$root/results/$(hostname)}"
+usage() {
+  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-0}"
+}
+
+results=""
 quick=""
 scale=1
 baselines=yes
-shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    -h|--help) usage 0 ;;
     --quick) quick="--quick" ;;
-    --scale) scale="$2"; shift ;;
+    --scale) scale="${2:?--scale needs a number}"; shift ;;
     --no-baselines) baselines=no ;;
-    *) echo "unknown argument: $1" >&2; exit 2 ;;
+    -*) echo "unknown option: $1" >&2; usage 2 ;;
+    *)
+      # A bare argument is the results directory, and only the first one is. The
+      # earlier version took `$1` unconditionally, so `--help` became a directory
+      # name and the run started anyway.
+      if [[ -n "$results" ]]; then
+        echo "more than one results directory given: $results and $1" >&2
+        usage 2
+      fi
+      results="$1"
+      ;;
   esac
   shift
 done
+results="${results:-$root/results/$(hostname)}"
 
 # --- the compiler -------------------------------------------------------------
 # Pinned rather than discovered: the generated TSL selects its profile and its
 # compiler-capability defines from the compiler it is configured with, so a
 # different one is a different library, and comparing results across them would be
 # comparing two things at once.
+# Clang 22 or newer, because the generated TSL's clang implementation family needs
+# its elementwise builtins -- but *newer* is fine, so the version is discovered
+# rather than pinned. The first version of this script required exactly
+# `clang++-22` and failed on a host that had only clang++-24.
+#
 # Deliberately not `$CXX`: that variable is often already set to something else in
-# a dev container -- it was `zig c++` here, which this script happily picked up on
-# its first run. The override is its own name so an unrelated environment cannot
-# silently change which compiler produced a published measurement.
-compiler="${TSL_COSORT_CXX:-clang++-22}"
-if ! command -v "$compiler" > /dev/null 2>&1; then
-  echo "$compiler is not on PATH." >&2
-  echo "  Set TSL_COSORT_CXX to override. Note that the generated TSL selects its" >&2
-  echo "  profile and capability defines from the compiler, so results from two" >&2
-  echo "  compilers are not comparable." >&2
+# a dev container -- it was `zig c++` here, which an earlier version of this script
+# happily picked up. The override has its own name so an unrelated environment
+# cannot silently change which compiler produced a published measurement.
+clang_major_of() {
+  "$1" --version 2>/dev/null | sed -n 's/.*clang version \([0-9]\+\).*/\1/p' | head -1
+}
+
+compiler="${TSL_COSORT_CXX:-}"
+if [[ -z "$compiler" ]]; then
+  for candidate in clang++-26 clang++-25 clang++-24 clang++-23 clang++-22 clang++; do
+    command -v "$candidate" > /dev/null 2>&1 || continue
+    major="$(clang_major_of "$candidate")"
+    if [[ -n "$major" && "$major" -ge 22 ]]; then
+      compiler="$candidate"
+      break
+    fi
+  done
+fi
+if [[ -z "$compiler" ]] || ! command -v "$compiler" > /dev/null 2>&1; then
+  echo "no clang++ 22 or newer on PATH." >&2
+  echo "  The generated TSL's clang implementation family needs clang 22's" >&2
+  echo "  elementwise builtins; below that the style axis measures TSL's scalar" >&2
+  echo "  fallbacks instead of the styles." >&2
+  echo "  Set TSL_COSORT_CXX to name one explicitly." >&2
   exit 1
 fi
-echo "compiler: $compiler ($("$compiler" --version | head -1))"
+major="$(clang_major_of "$compiler")"
+if [[ -z "$major" || "$major" -lt 22 ]]; then
+  echo "$compiler reports version '${major:-unknown}', and 22 or newer is required." >&2
+  exit 1
+fi
+# The C compiler has to match: DML's kernels are C, and the `clang` preset pins
+# `clang-22`, which is wrong on a host that has only a newer one. Passing both
+# explicitly is what stops the preset's value surviving into the cache.
+c_compiler="${TSL_COSORT_CC:-}"
+if [[ -z "$c_compiler" ]]; then
+  c_compiler="${compiler%++*}${compiler#*++}"      # clang++-24 -> clang-24
+  command -v "$c_compiler" > /dev/null 2>&1 || c_compiler=clang
+fi
+echo "compiler: $compiler (clang $major), C: $c_compiler"
+echo "          $("$compiler" --version | head -1)"
 
 # --- 1. configure -------------------------------------------------------------
 have_dsa=$([[ -e /dev/dsa ]] && echo yes || echo no)
@@ -72,8 +122,26 @@ echo "=== 1/4 configure"
 extra=()
 [[ "$preset" == "bench-iaa" && "$baselines" == "yes" ]] \
   && extra+=(-DTSL_COSORT_ENABLE_BASELINES=ON)
-cmake -S "$here" --preset "$preset" -DCMAKE_CXX_COMPILER="$compiler" \
-      "${extra[@]+"${extra[@]}"}"
+
+# A build directory carried over from another machine keeps a CMakeCache.txt whose
+# recorded source and binary paths are that machine's, and cmake refuses to reuse
+# it -- correctly, but fatally, and the message is about "reediting the cache"
+# rather than about deleting a directory that should never have travelled. Detect
+# it and start clean.
+if [[ -f "$build/CMakeCache.txt" ]]; then
+  cached_home="$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$build/CMakeCache.txt")"
+  if [[ -n "$cached_home" && "$cached_home" != "$here" ]]; then
+    echo "$build was configured for $cached_home, not $here -- removing it"
+    rm -rf "$build"
+  fi
+fi
+
+configure() {
+  cmake -S "$here" --preset "$preset" \
+        -DCMAKE_CXX_COMPILER="$compiler" -DCMAKE_C_COMPILER="$c_compiler" \
+        "${extra[@]+"${extra[@]}"}" "$@"
+}
+configure
 
 # --- 2. data ------------------------------------------------------------------
 # Real query keys. Large and per-scale-factor, so they live outside the repository
@@ -135,10 +203,8 @@ if [[ -n "$probe" ]]; then
   esac
   if [[ -n "$cell_style" ]]; then
     echo "best cell on this host: $cell_style/$cell_width-bit"
-    cmake -S "$here" --preset "$preset" -DCMAKE_CXX_COMPILER="$compiler" \
-          -DTSL_COSORT_MEASURE_STYLE="$cell_style" \
-          -DTSL_COSORT_MEASURE_WIDTH="$cell_width" \
-          "${extra[@]+"${extra[@]}"}"
+    configure -DTSL_COSORT_MEASURE_STYLE="$cell_style" \
+              -DTSL_COSORT_MEASURE_WIDTH="$cell_width"
   fi
 else
   echo "the probe produced no cell; building for the default" >&2

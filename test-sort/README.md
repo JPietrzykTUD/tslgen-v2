@@ -155,10 +155,28 @@ cmake --preset bench                          # measurement, no accelerator
 cmake --preset phases                         # phase timers on; never for figures
 ```
 
-`clang++-22` is required and pinned: the generated TSL selects its profile and its
-capability defines from the compiler it is configured with, so a build with a
-different compiler is a different library and its numbers are not comparable.
-`run_all.sh` overrides only through `TSL_COSORT_CXX`, deliberately not `CXX`.
+**clang 22 or newer.** The generated TSL's clang implementation family needs clang
+22's elementwise builtins; below that the style axis measures TSL's scalar
+fallbacks rather than the styles. Newer is fine.
+
+`run_all.sh` discovers the newest clang++ on `PATH` that is at least 22 and derives
+the matching C compiler, because DML's kernels are C and a mismatched pair fails at
+configure time. Override with `TSL_COSORT_CXX` / `TSL_COSORT_CC` -- deliberately not
+`CXX`, which is often already set to something unrelated in a container.
+
+The `clang` preset, and everything inheriting it, pins `clang++-22` and `clang-22`
+by name, so on a host with only a newer clang a manual configure needs both
+overridden:
+
+```bash
+cmake --preset bench-dsa-baselines \
+      -DCMAKE_CXX_COMPILER=clang++-24 -DCMAKE_C_COMPILER=clang-24
+```
+
+`run_all.sh` passes both for you. It also removes a build directory whose
+`CMakeCache.txt` records a different source path -- which happens when a tree is
+copied between machines, and which cmake otherwise reports as a cache to "reedit"
+rather than a directory to delete.
 
 Q1's external baselines (`TSL_COSORT_ENABLE_BASELINES=ON`) fetch IPS4o and
 x86-simd-sort at pinned commits and build oneTBB if the system has none; TBB and
