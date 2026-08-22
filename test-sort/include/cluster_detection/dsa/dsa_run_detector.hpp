@@ -83,6 +83,7 @@
 #include <vector>
 
 #include "cluster_detection/scalar/equal_runs.hpp"
+#include "common/borrow_pool.hpp"
 #include "sorting/common/multicolumn_sort_types.hpp"
 
 #ifdef TSL_COSORT_ENABLE_DSA
@@ -204,40 +205,8 @@ class TslDsaRunDetector;
 // across the scan.
 template <class DataType>
 class TslDsaDetectorFleet {
-  std::vector<std::unique_ptr<TslDsaRunDetector<DataType>>> detectors_;
-  std::vector<TslDsaRunDetector<DataType> *> available_;
-  mutable std::mutex mutex_;
-  std::condition_variable released_;
-
-  // Returns a detector to the pool however the borrower left the scope.
-  class lease {
-    TslDsaDetectorFleet * fleet_;
-    TslDsaRunDetector<DataType> * detector_;
-
-   public:
-    lease(TslDsaDetectorFleet & fleet, TslDsaRunDetector<DataType> * detector)
-        : fleet_(&fleet), detector_(detector) {}
-    lease(lease const &) = delete;
-    auto operator=(lease const &) -> lease & = delete;
-    ~lease() {
-      {
-        std::lock_guard<std::mutex> lock(fleet_->mutex_);
-        fleet_->available_.push_back(detector_);
-      }
-      fleet_->released_.notify_one();
-    }
-    auto get() const -> TslDsaRunDetector<DataType> & { return *detector_; }
-  };
-
-  auto borrow() -> lease {
-    std::unique_lock<std::mutex> lock(mutex_);
-    // Only waits if more threads call concurrently than the pool was sized for,
-    // which the executor's worker count makes unexpected rather than impossible.
-    released_.wait(lock, [this] { return !available_.empty(); });
-    auto * detector = available_.back();
-    available_.pop_back();
-    return lease(*this, detector);
-  }
+  using detector_type = TslDsaRunDetector<DataType>;
+  TslBorrowPool<detector_type> pool_;
 
  public:
   TslDsaDetectorFleet(
@@ -245,31 +214,24 @@ class TslDsaDetectorFleet {
     std::size_t worker_count,
     std::size_t region_bytes = tsl_dsa_default_region_bytes,
     std::size_t min_offload_elements = 4096
-  ) {
-    // One spare: the caller's thread may also run work inline.
-    auto const size = worker_count + 1;
-    detectors_.reserve(size);
-    available_.reserve(size);
-    for (std::size_t slot = 0; slot < size; ++slot) {
-      detectors_.push_back(std::make_unique<TslDsaRunDetector<DataType>>(
-        backend, region_bytes, min_offload_elements
-      ));
-      available_.push_back(detectors_.back().get());
-    }
-  }
+  )
+      // One spare: the caller's thread may also run work inline.
+      : pool_(worker_count + 1, [&](std::size_t) {
+          return std::make_unique<detector_type>(backend, region_bytes,
+                                                 min_offload_elements);
+        }) {}
 
   template <class Emit>
   void operator()(DataType const * values, std::size_t begin, std::size_t end, Emit && emit) {
-    auto held = borrow();
-    held.get().detect(values, begin, end, std::forward<Emit>(emit));
+    auto held = pool_.borrow();
+    held->detect(values, begin, end, std::forward<Emit>(emit));
   }
 
   // Call only after the sort has joined its workers.
   auto aggregate_metrics() const -> TslDsaRunDetectorMetrics {
-    std::lock_guard<std::mutex> lock(mutex_);
     TslDsaRunDetectorMetrics total{};
-    for (auto const & detector : detectors_) {
-      auto const & m = detector->metrics();
+    pool_.for_each([&](detector_type const & detector) {
+      auto const & m = detector.metrics();
       total.ranges += m.ranges;
       total.elements += m.elements;
       total.offloaded_elements += m.offloaded_elements;
@@ -281,15 +243,12 @@ class TslDsaDetectorFleet {
       total.tail_elements += m.tail_elements;
       total.fallback_small += m.fallback_small;
       total.spans_emitted += m.spans_emitted;
-    }
+    });
     return total;
   }
 
   void reset_metrics() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    for (auto & detector : detectors_) {
-      detector->reset_metrics();
-    }
+    pool_.for_each([](detector_type & detector) { detector.reset_metrics(); });
   }
 };
 

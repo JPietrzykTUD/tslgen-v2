@@ -363,10 +363,11 @@ set(QPL_ROOT "" CACHE PATH "Pre-built Intel QPL install prefix (empty = fetch fr
 set(QPL_GIT_TAG "v1.9.0" CACHE STRING "Intel QPL tag to fetch when QPL_ROOT is unset")
 
 if(TSL_COSORT_ENABLE_IAA)
-  if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/iaa_run_detector.hpp")
+  if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/cluster_detection/iaa/iaa_run_detector.hpp")
     message(
       FATAL_ERROR
-      "TSL_COSORT_ENABLE_IAA needs test-sort/iaa_run_detector.hpp, providing "
+      "TSL_COSORT_ENABLE_IAA needs "
+      "test-sort/include/cluster_detection/iaa/iaa_run_detector.hpp, providing "
       "TslIaaRunDetector<T>, TslIaaDetectorFleet<T> and TslIaaAsyncRunDetector<T>. "
       "The contract is documented at the top of benchmarks/cosort_detectors.hpp."
     )

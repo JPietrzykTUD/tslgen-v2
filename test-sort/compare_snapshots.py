@@ -11,7 +11,11 @@ idle machine:
   * **Exact entries** (test results and counts, tree shape) have no noise. They
     must match, and a difference fails the comparison.
   * **Serial timings** moved by up to 21% between identical runs, even with the
-    median of three collections.
+    median of three collections -- and the samplesort distribution-stage row is
+    worse still: five consecutive runs of one unchanged binary spanned 1.078 to
+    1.420 ns/element, a 32% spread. The default tolerance sits below that on
+    purpose, so such a row is surfaced and checked rather than hidden; when one
+    trips, re-measure it a few times before believing it.
   * **Parallel timings** moved by up to 40%. They are reported as advisory and
     excluded from the verdict, because nothing a file move does could change
     them by less than that.

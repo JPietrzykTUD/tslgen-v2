@@ -8,6 +8,7 @@ TSL release and is built by its own `CMakeLists.txt`.
 
 ```
 include/
+  common/                   infrastructure that is neither sorting nor detection
   cluster_detection/        finding maximal equal runs in a sorted column
     scalar/                 the scan every other backend is compared against
     dsa/                    Intel DSA, synchronous and asynchronous
@@ -36,6 +37,25 @@ Every source includes by role, so a header says where it belongs:
 `include/`, `benchmarks/` and `benchmarks/datagen/` are the include roots.
 Benchmark-local and dataset headers keep the bare names they use among
 themselves.
+
+## Why `common/` holds a borrow pool and not a thread pool
+
+Three detector fleets had grown their own copy of the same object pool, and the
+same bug had been found in two of them independently: a detector owns a device
+job, so it cannot be shared, and giving each new thread a permanent slot needs as
+many slots as (sorts x workers) rather than as many as run concurrently.
+`common/borrow_pool.hpp` is that one concept, written down once.
+
+The *executors* are deliberately not merged. `sorting/common/multicolumn_sort_tasks.hpp`
+carries exception propagation off worker threads and the pending-work accounting
+the asynchronous detectors need; the samplesort's executor carries per-worker
+local stacks with a share threshold. Those are different schedulers, not two
+copies of one, and the difference is measured: routing every task through a
+shared queue -- which is what the task executor does -- capped the samplesort at
+1.04x on 24 threads, against 8.2x with local stacks. Unifying them would mean
+either giving up that, or reworking the scheduler every parallel quicksort
+variant depends on. Four concurrency shapes exist in this tree and only the pool
+was duplicated.
 
 ## Why `primitives/` exists
 

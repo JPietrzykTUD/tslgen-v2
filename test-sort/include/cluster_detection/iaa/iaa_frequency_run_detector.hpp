@@ -78,6 +78,7 @@
 #include <vector>
 
 #include "cluster_detection/scalar/equal_runs.hpp"
+#include "common/borrow_pool.hpp"
 #include "cluster_detection/iaa/iaa_distinct_frequencies.hpp"
 #include "sorting/common/multicolumn_sort_types.hpp"
 
@@ -325,14 +326,13 @@ class TslIaaFrequencyRunDetector {
 template <class DataType>
 class TslFrequencyDetectorFleet {
   using detector_type = TslIaaFrequencyRunDetector<DataType>;
+  TslBorrowPool<detector_type> pool_;
 
-  std::vector<std::unique_ptr<detector_type>> detectors_;
-  std::vector<detector_type *> available_;
-  mutable std::mutex mutex_;
-  std::condition_variable released_;
-
-  // The lease this thread holds on this fleet, if any. Keyed on the fleet so two
-  // of them cannot be confused; a thread is only ever inside one at a time here.
+  // This detector's lease has to span two calls, not one: `prepare` starts the
+  // counts and `detect` walks them, and it must be the same detector both times.
+  // So the pairing lives here rather than in the pool -- `acquire`/`release` lend
+  // the object, and this decides for how long. Keyed on the fleet so two of them
+  // cannot be confused; a thread is only ever inside one at a time.
   auto lease_slot() -> detector_type *& {
     thread_local void const * owner = nullptr;
     thread_local detector_type * leased = nullptr;
@@ -343,36 +343,16 @@ class TslFrequencyDetectorFleet {
     return leased;
   }
 
-  auto acquire() -> detector_type * {
-    std::unique_lock<std::mutex> lock(mutex_);
-    released_.wait(lock, [this] { return !available_.empty(); });
-    auto * detector = available_.back();
-    available_.pop_back();
-    return detector;
-  }
-
-  void release(detector_type * detector) {
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      available_.push_back(detector);
-    }
-    released_.notify_one();
-  }
-
  public:
   TslFrequencyDetectorFleet(
     TslIaaFrequencyOptions options,
     std::size_t worker_count,
     std::size_t min_prepare_elements = 4096
-  ) {
-    auto const size = worker_count + 1;
-    detectors_.reserve(size);
-    available_.reserve(size);
-    for (std::size_t slot = 0; slot < size; ++slot) {
-      detectors_.push_back(std::make_unique<detector_type>(options, min_prepare_elements));
-      available_.push_back(detectors_.back().get());
-    }
-  }
+  )
+      // One spare: the caller's thread may also run work inline.
+      : pool_(worker_count + 1, [&](std::size_t) {
+          return std::make_unique<detector_type>(options, min_prepare_elements);
+        }) {}
 
   void prepare(
     DataType const * values,
@@ -382,11 +362,13 @@ class TslFrequencyDetectorFleet {
   ) {
     auto *& leased = lease_slot();
     if (leased == nullptr) {
-      leased = acquire();
+      leased = pool_.acquire();
     }
     leased->prepare(values, begin, end, stable);
   }
 
+  // Consumes the lease `prepare` took, or borrows for this call alone when the
+  // caller never prepared.
   template <class Emit>
   void operator()(DataType const * values, std::size_t begin, std::size_t end, Emit && emit) {
     auto *& leased = lease_slot();
@@ -394,22 +376,21 @@ class TslFrequencyDetectorFleet {
     if (detector != nullptr) {
       leased = nullptr;
     } else {
-      detector = acquire();
+      detector = pool_.acquire();
     }
     try {
       detector->detect(values, begin, end, std::forward<Emit>(emit));
     } catch (...) {
-      release(detector);
+      pool_.release(detector);
       throw;
     }
-    release(detector);
+    pool_.release(detector);
   }
 
   auto aggregate_metrics() const -> TslFrequencyDetectorMetrics {
-    std::lock_guard<std::mutex> lock(mutex_);
     TslFrequencyDetectorMetrics total{};
-    for (auto const & detector : detectors_) {
-      auto const & m = detector->metrics();
+    pool_.for_each([&](detector_type const & detector) {
+      auto const & m = detector.metrics();
       total.ranges += m.ranges;
       total.elements += m.elements;
       total.prepared_ranges += m.prepared_ranges;
@@ -420,7 +401,7 @@ class TslFrequencyDetectorFleet {
       total.fallback_unprepared += m.fallback_unprepared;
       total.fallback_mismatch += m.fallback_mismatch;
       total.spans_emitted += m.spans_emitted;
-    }
+    });
     return total;
   }
 };

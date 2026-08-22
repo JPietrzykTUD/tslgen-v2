@@ -45,8 +45,12 @@ def collect_tests(out, build, extra_builds):
         if label == "dsa":
             binaries.append(("dsa_run_detector", directory, "test_dsa_run_detector"))
         else:
-            binaries.append(("iaa_frequency", directory,
-                             "test_iaa_frequency_run_detector"))
+            binaries += [
+                ("iaa_frequency", directory, "test_iaa_frequency_run_detector"),
+                ("iaa_run_detector", directory, "test_iaa_run_detector"),
+                ("iaa_distinct_frequencies", directory,
+                 "test_iaa_distinct_frequencies"),
+            ]
 
     for name, directory, binary in binaries:
         path = os.path.join(directory, binary)
