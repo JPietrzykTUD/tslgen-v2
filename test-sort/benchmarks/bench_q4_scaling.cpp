@@ -168,9 +168,12 @@ void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
       results.drop(drop, "sorted wrongly");
     } else {
       row.ns_per_element = measured;
-      row.ns_materialize = metrics.ns_materialize;
-      row.ns_sort = metrics.ns_sort;
-      row.ns_detect = metrics.ns_detect;
+      // Per element, as Q2 reports them: the CSV column is shared, so the unit
+      // has to be too or a figure joining the two silently mixes scales.
+      auto const sscale = static_cast<double>(where.rows);
+      row.ns_materialize = metrics.ns_materialize / sscale;
+      row.ns_sort = metrics.ns_sort / sscale;
+      row.ns_detect = metrics.ns_detect / sscale;
       row.verified = true;
       double sample_speedup = 0.0;
       if (where.workers == 1) {
@@ -194,19 +197,23 @@ void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
                   + (g_quicksort_config.from_file ? " (tuned)" : " (default)");
     bool measured_ok = false;
     TslPaperStats measured{};
+    TslIndexSortMetrics quick_metrics;
     auto const dispatched = with_quicksort_leaf<Key, Simd>(
       g_quicksort_config, [&](auto sorter) {
         auto const [ok, stats] = tsl_paper_measure(
           [&] {
             TslIndexScalarDetector<Key> detector;
+            quick_metrics = {};
             if (where.workers > 1) {
               sorter.sort_index_parallel(specs.data(), where.columns, index.data(),
                                          where.rows, g_quicksort_config.discovery,
                                          detector, where.workers,
-                                         g_quicksort_config.partition_threshold);
+                                         g_quicksort_config.partition_threshold,
+                                         &quick_metrics);
             } else {
               sorter.sort_index(specs.data(), where.columns, index.data(),
-                                where.rows, g_quicksort_config.discovery, detector);
+                                where.rows, g_quicksort_config.discovery, detector,
+                                &quick_metrics);
             }
           },
           [&] { return image_matches(*pristine, *reference, index); }, where.rows);
@@ -222,6 +229,10 @@ void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
     } else {
       row.verified = true;
       row.ns_per_element = measured;
+      auto const qscale = static_cast<double>(where.rows);
+      row.ns_materialize = quick_metrics.ns_materialize / qscale;
+      row.ns_sort = quick_metrics.ns_sort / qscale;
+      row.ns_detect = quick_metrics.ns_detect / qscale;
       if (where.workers == 1) {
         serial[key("quicksort")] = measured.median;
       } else if (auto const found = serial.find(key("quicksort"));

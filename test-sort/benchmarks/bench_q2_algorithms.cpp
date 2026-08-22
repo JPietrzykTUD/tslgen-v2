@@ -149,24 +149,32 @@ void run_pair(TslPaperResults & results, TslDatasetSource<Key> & source,
       row.workers = workers;
       row.variant = g_quicksort_config.describe_quicksort()
                     + (g_tuned_from_file ? " (tuned)" : " (default)");
+      TslIndexSortMetrics quick_metrics;
       auto const dispatched = with_quicksort_leaf<Key, Simd>(
         g_quicksort_config, [&](auto sorter) {
           auto const [ok, stats] = tsl_paper_measure(
             [&] {
               TslIndexScalarDetector<Key> detector;
+              quick_metrics = {};
               if (workers > 1) {
                 sorter.sort_index_parallel(specs.data(), columns, index.data(), rows,
                                            g_quicksort_config.discovery, detector,
                                            workers,
-                                           g_quicksort_config.partition_threshold);
+                                           g_quicksort_config.partition_threshold,
+                                           &quick_metrics);
               } else {
                 sorter.sort_index(specs.data(), columns, index.data(), rows,
-                                  g_quicksort_config.discovery, detector);
+                                  g_quicksort_config.discovery, detector,
+                                  &quick_metrics);
               }
             },
             [&] { return image_matches(*pristine, *reference, index); }, rows);
           row.verified = ok;
           row.ns_per_element = stats;
+          auto const scale = static_cast<double>(rows);
+          row.ns_materialize = quick_metrics.ns_materialize / scale;
+          row.ns_sort = quick_metrics.ns_sort / scale;
+          row.ns_detect = quick_metrics.ns_detect / scale;
         });
       if (dispatched) {
         results.add(std::move(row));

@@ -217,14 +217,36 @@ target_compile_features(bench_q4_scaling PRIVATE cxx_std_17)
 target_link_libraries(bench_q4_scaling PRIVATE tsl::tsl Threads::Threads)
 
 # --- Q1 external baselines ----------------------------------------------------
-# Off by default and fetched only when asked, following the QPL/DML pattern: the
-# default build stays dependency-free and no test acquires a hidden network
-# requirement. IPS4o's parallel sort needs TBB and C++ threads; x86-simd-sort is
-# header-only and contributes single-column rows only.
+# Off by default, following the QPL/DML pattern: the default build stays
+# dependency-free and no test acquires a hidden network requirement. When asked
+# for, the build acquires what it can and says precisely what it cannot, per host,
+# so a second machine needs this flag and nothing else remembered.
+#
+#   -DTSL_COSORT_ENABLE_BASELINES=ON
+#
+# Fetched automatically (headers, pinned commits, no system package):
+#   IPS4o            state-of-the-art parallel comparison sort
+#   x86-simd-sort    Intel's AVX-512 argsort, single-column rows
+#   oneTBB           only if no system TBB is found
+#
+# From the system, because building them here is not worth the minutes:
+#   TBB      libtbb-dev            execution::par, and IPS4o's parallel sort
+#   Arrow    libarrow-dev          SortIndices, the semantically equal baseline
+#   atomic   libatomic1            IPS4o's 16-byte compare-and-exchange
+#
+# A missing optional baseline is not an error: its rows are emitted as drops
+# naming the reason, so a run from a host without it is visibly incomplete rather
+# than quietly shorter. A missing *required* piece is a fatal error, because a
+# handicapped competitor is worse than an absent one.
 option(TSL_COSORT_ENABLE_BASELINES
        "Fetch IPS4o and x86-simd-sort and build the Q1 baseline comparison" OFF)
+option(TSL_COSORT_FETCH_TBB
+       "Build oneTBB from source when the system has none" ON)
 
 if(TSL_COSORT_ENABLE_BASELINES)
+  set(_q1_present)
+  set(_q1_absent)
+
   FetchContent_Declare(
     ips4o
     GIT_REPOSITORY https://github.com/ips4o/ips4o.git
@@ -241,8 +263,8 @@ if(TSL_COSORT_ENABLE_BASELINES)
   # IPS4o's would go looking for its own TBB and libatomic.
   FetchContent_Populate(ips4o)
   FetchContent_Populate(x86simdsort)
+  list(APPEND _q1_present "ips4o (fetched)" "x86-simd-sort (fetched)")
 
-  find_package(TBB QUIET)
   add_executable(bench_q1_baselines benchmarks/bench_q1_baselines.cpp)
   target_compile_features(bench_q1_baselines PRIVATE cxx_std_17)
   target_include_directories(
@@ -259,25 +281,60 @@ if(TSL_COSORT_ENABLE_BASELINES)
   # Threads::Threads alone does not guarantee the macro, so it is explicit.
   target_compile_options(bench_q1_baselines PRIVATE -pthread)
   target_link_libraries(bench_q1_baselines PRIVATE tsl::tsl Threads::Threads)
+
+  # --- TBB: required, because without it execution::par is silently serial ------
+  find_package(TBB QUIET)
+  if(NOT TBB_FOUND AND TSL_COSORT_FETCH_TBB)
+    message(STATUS "bench_q1_baselines: no system TBB; building oneTBB from source")
+    set(TBB_TEST OFF CACHE BOOL "" FORCE)
+    set(TBB_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(TBB_STRICT OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+      onetbb
+      GIT_REPOSITORY https://github.com/uxlfoundation/oneTBB.git
+      GIT_TAG        v2022.0.0
+      GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(onetbb)
+    if(TARGET TBB::tbb)
+      set(TBB_FOUND TRUE)
+      list(APPEND _q1_present "oneTBB (built from source)")
+    endif()
+  elseif(TBB_FOUND)
+    list(APPEND _q1_present "TBB (system)")
+  endif()
   if(TBB_FOUND)
     target_link_libraries(bench_q1_baselines PRIVATE TBB::tbb)
-    message(STATUS "bench_q1_baselines: TBB found, execution::par and IPS4o "
-                   "parallel enabled")
   else()
-    message(WARNING
-      "bench_q1_baselines: TBB not found. std::sort(execution::par) falls back to "
-      "a serial implementation on libstdc++, which would make the parallel "
-      "baseline silently unfair. Install libtbb-dev.")
+    message(FATAL_ERROR
+      "bench_q1_baselines needs TBB: without it libstdc++ runs "
+      "std::sort(std::execution::par) serially, which would silently turn the "
+      "parallel baseline into a second serial one and invert the comparison. "
+      "Install it (Debian/Ubuntu: apt-get install libtbb-dev; Fedora/RHEL: dnf "
+      "install tbb-devel) or leave TSL_COSORT_FETCH_TBB=ON to build it here.")
   endif()
-  # IPS4o's 16-byte compare-and-exchange path wants libatomic where the compiler
-  # does not lower it inline.
-  # The versioned soname is searched as well: a runtime-only install has
+
+  # --- libatomic: required, for IPS4o's 16-byte compare-and-exchange ------------
+  # The versioned soname is searched too: a runtime-only install has
   # libatomic.so.1 without the libatomic.so development symlink, and IPS4o's
   # parallel path needs __atomic_fetch_add_16 either way. Disabling its 16-byte
   # compare-and-exchange would handicap the baseline, which defeats the purpose.
-  # Arrow is the semantically equal baseline -- SortIndices over a table with one
-  # sort key per column is literally this operation. Optional even within the
-  # baselines gate, because it is the heaviest of them.
+  find_library(TSL_LIBATOMIC NAMES atomic libatomic.so.1)
+  if(TSL_LIBATOMIC)
+    target_link_libraries(bench_q1_baselines PRIVATE ${TSL_LIBATOMIC})
+  else()
+    message(FATAL_ERROR
+      "bench_q1_baselines needs libatomic for IPS4o's __atomic_fetch_add_16 "
+      "(Debian/Ubuntu: apt-get install libatomic1; Fedora/RHEL: dnf install "
+      "libatomic). Its parallel sort is the strongest baseline here and running "
+      "it without 16-byte atomics would understate it.")
+  endif()
+
+  # --- Arrow: optional, and its absence is reported in the results --------------
+  # SortIndices over a table with one sort key per column is literally this
+  # operation, so it is the baseline whose result cannot be dismissed. Building
+  # Arrow from source is many minutes and many dependencies, so it comes from the
+  # system or not at all.
   find_package(Arrow QUIET)
   if(Arrow_FOUND)
     target_compile_definitions(bench_q1_baselines PRIVATE TSL_COSORT_HAVE_ARROW=1)
@@ -286,26 +343,26 @@ if(TSL_COSORT_ENABLE_BASELINES)
     else()
       target_link_libraries(bench_q1_baselines PRIVATE arrow)
     endif()
+    # Arrow 23 keeps the compute kernels in their own library and registers them
+    # on demand; without it `sort_indices` is not in the registry at all.
     find_library(TSL_ARROW_COMPUTE NAMES arrow_compute)
     if(TSL_ARROW_COMPUTE)
       target_link_libraries(bench_q1_baselines PRIVATE ${TSL_ARROW_COMPUTE})
     endif()
-    message(STATUS "bench_q1_baselines: Arrow found, SortIndices enabled")
+    list(APPEND _q1_present "Arrow (system)")
   else()
-    message(STATUS "bench_q1_baselines: Arrow not found; its rows will be drops. "
-                   "Install libarrow-dev to include it.")
+    list(APPEND _q1_absent
+         "Arrow -- apt-get install libarrow-dev (Fedora/RHEL: dnf install "
+         "libarrow-devel). Its rows will be drops.")
   endif()
 
-  find_library(TSL_LIBATOMIC NAMES atomic libatomic.so.1)
-  if(TSL_LIBATOMIC)
-    target_link_libraries(bench_q1_baselines PRIVATE ${TSL_LIBATOMIC})
-    message(STATUS "bench_q1_baselines: libatomic at ${TSL_LIBATOMIC}")
-  else()
-    message(FATAL_ERROR
-      "bench_q1_baselines: libatomic not found, and IPS4o's parallel sort needs "
-      "__atomic_fetch_add_16. Install libatomic1 (runtime) or gcc's libatomic "
-      "development package.")
-  endif()
+  message(STATUS "bench_q1_baselines will compare against:")
+  foreach(_entry IN LISTS _q1_present)
+    message(STATUS "    + ${_entry}")
+  endforeach()
+  foreach(_entry IN LISTS _q1_absent)
+    message(STATUS "    - ${_entry}")
+  endforeach()
 endif()
 
 add_executable(bench_q3_detection benchmarks/bench_q3_detection.cpp)

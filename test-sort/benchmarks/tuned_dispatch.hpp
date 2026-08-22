@@ -27,13 +27,19 @@ auto with_quicksort_leaf(TslTunedConfig const & config, Run && run) -> bool {
   if (config.partition != three) {
     return false;
   }
+  // Profiling on, like the samplesort's dispatch: the reporting drivers publish a
+  // phase split, and without it a thread count that makes the sort *slower* --
+  // which happens -- is unattributable.
   if (config.hybrid_leaf) {
     run(TslMultiColumnIndexSorter<Key, three, TslLeafKind::NETWORK, Simd,
-                                  tsl_hybrid_auto_percent<Key, Simd>()>(0x5A3F1E77));
+                                  tsl_hybrid_auto_percent<Key, Simd>(), true>(
+      0x5A3F1E77));
   } else if (config.leaf == TslLeafKind::INSERTION) {
-    run(TslMultiColumnIndexSorter<Key, three, TslLeafKind::INSERTION, Simd>(0x5A3F1E77));
+    run(TslMultiColumnIndexSorter<Key, three, TslLeafKind::INSERTION, Simd, 0, true>(
+      0x5A3F1E77));
   } else {
-    run(TslMultiColumnIndexSorter<Key, three, TslLeafKind::NETWORK, Simd>(0x5A3F1E77));
+    run(TslMultiColumnIndexSorter<Key, three, TslLeafKind::NETWORK, Simd, 0, true>(
+      0x5A3F1E77));
   }
   return true;
 }

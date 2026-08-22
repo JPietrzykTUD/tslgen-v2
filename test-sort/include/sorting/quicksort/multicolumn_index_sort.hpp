@@ -70,6 +70,7 @@
 //     order unspecified (the partition is not stable), so a checker must compare
 //     the *values* the permutation selects, not the permutation itself.
 
+#include <chrono>
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
@@ -134,7 +135,22 @@ struct TslIndexSortMetrics {
   std::size_t materialize_chunks = 0;      // parallel form: chunks handed out
   std::size_t tasks = 0;                   // parallel form: task-tree nodes executed
   std::size_t levels_split = 0;            // ranges split inside their partitions
+  // Filled only when the sorter is instantiated with profiling on. Wall time per
+  // phase, summed across workers, so on threads these exceed the elapsed time and
+  // only their ratio means anything. They exist to answer "where did the time go"
+  // when a thread count makes the sort slower rather than faster: the three phases
+  // scale for different reasons -- the gather is memory-bound, the sort is the
+  // task tree, and detection is whatever the `rle=` backend does under contention.
+  double ns_materialize = 0.0;
+  double ns_sort = 0.0;
+  double ns_detect = 0.0;
 };
+
+// Nanoseconds since a mark, as a double. Local to the profiling paths.
+inline auto tsl_index_since(std::chrono::steady_clock::time_point mark) -> double {
+  return std::chrono::duration<double, std::nano>(
+    std::chrono::steady_clock::now() - mark).count();
+}
 
 
 // The portable detector, in the same call shape the accelerator fleets use, so a
@@ -149,7 +165,11 @@ template <
   // Forwarded to the inner sorter: with `LeafKind == NETWORK`, divert a leaf
   // holding less than this share of the network's capacity to the insertion leaf.
   // 0 keeps the leaf fixed. See `tsl_hybrid_auto_percent`.
-  std::size_t HybridFillPercent = 0
+  std::size_t HybridFillPercent = 0,
+  // Time the materialize / sort / detect phases into the metrics. Off by default
+  // because the clock reads sit on the per-range path, and a caller that only
+  // wants the sort should not pay for them.
+  bool Profile = false
 >
 class TslMultiColumnIndexSorter {
   static_assert(std::is_integral_v<DataType>, "the index sort needs an integral element type");
@@ -189,6 +209,10 @@ class TslMultiColumnIndexSorter {
     std::atomic<std::size_t> next_level_ranges{0};
     std::atomic<std::size_t> materialize_chunks{0};
     std::atomic<std::size_t> levels_split{0};
+    // Nanoseconds, integral so the accumulation is lock-free.
+    std::atomic<std::uint64_t> ns_materialize{0};
+    std::atomic<std::uint64_t> ns_sort{0};
+    std::atomic<std::uint64_t> ns_detect{0};
   };
 
   Sorter sorter_;
@@ -252,7 +276,15 @@ class TslMultiColumnIndexSorter {
         if (range.end - range.begin < 2) {
           continue;
         }
-        materialize(columns[column].data, index, range, column == 0, metrics);
+        if constexpr (Profile) {
+          auto const mark = std::chrono::steady_clock::now();
+          materialize(columns[column].data, index, range, column == 0, metrics);
+          if (metrics != nullptr) {
+            metrics->ns_materialize += tsl_index_since(mark);
+          }
+        } else {
+          materialize(columns[column].data, index, range, column == 0, metrics);
+        }
         sort_range(index, range, columns[column], column == 0, discovery, detect_runs, metrics);
       }
 
@@ -379,6 +411,14 @@ class TslMultiColumnIndexSorter {
       metrics->direct_equal_band_rows =
         shared.direct_equal_band_rows.load(std::memory_order_relaxed);
       metrics->next_level_ranges = shared.next_level_ranges.load(std::memory_order_relaxed);
+      if constexpr (Profile) {
+        metrics->ns_materialize =
+          static_cast<double>(shared.ns_materialize.load(std::memory_order_relaxed));
+        metrics->ns_sort =
+          static_cast<double>(shared.ns_sort.load(std::memory_order_relaxed));
+        metrics->ns_detect =
+          static_cast<double>(shared.ns_detect.load(std::memory_order_relaxed));
+      }
       metrics->materialize_chunks = shared.materialize_chunks.load(std::memory_order_relaxed);
       metrics->levels_split = shared.levels_split.load(std::memory_order_relaxed);
       metrics->tasks = shared.tasks.load(std::memory_order_relaxed);
@@ -544,9 +584,15 @@ class TslMultiColumnIndexSorter {
       );
     }
     if (!task.materialized) {
+      auto const mark = std::chrono::steady_clock::now();
       materialize_chunk(columns[task.column].data, index, task.begin, task.end, false);
       if (metrics != nullptr) {
         metrics->materialized_elements.fetch_add(count, std::memory_order_relaxed);
+        if constexpr (Profile) {
+          metrics->ns_materialize.fetch_add(
+            static_cast<std::uint64_t>(tsl_index_since(mark)),
+            std::memory_order_relaxed);
+        }
       }
     }
 
@@ -557,7 +603,16 @@ class TslMultiColumnIndexSorter {
     auto const next_column = task.column + 1;
     auto const split = task.column == 0 && count >= tsl_index_parallel_range;
 
-    auto emit_child = [&executor, metrics, next_column, column_count](TslRunSpan span) {
+    // A small child runs inline, which means the whole child subtree executes
+    // inside whatever call emitted it -- and the emitting call is a detector
+    // callback. Timing the detector by bracketing it would therefore charge every
+    // nested materialize and sort to detection, which is how it first came out at
+    // fifteen times the total runtime. The inline time is accumulated here and
+    // subtracted by the caller. Atomic because `split` fans one range across
+    // workers, so the sink runs concurrently.
+    std::atomic<std::uint64_t> inline_ns{0};
+    auto emit_child = [&executor, metrics, next_column, column_count,
+                       &inline_ns](TslRunSpan span) {
       if (span.end - span.begin < 2 || next_column >= column_count) {
         return;
       }
@@ -566,7 +621,14 @@ class TslMultiColumnIndexSorter {
       }
       index_task child{next_column, span.begin, span.end, false};
       if (span.end - span.begin < tsl_index_inline_task) {
-        executor.run_inline(child);
+        if constexpr (Profile) {
+          auto const mark = std::chrono::steady_clock::now();
+          executor.run_inline(child);
+          inline_ns.fetch_add(static_cast<std::uint64_t>(tsl_index_since(mark)),
+                              std::memory_order_relaxed);
+        } else {
+          executor.run_inline(child);
+        }
       } else {
         executor.submit(child);
       }
@@ -575,6 +637,7 @@ class TslMultiColumnIndexSorter {
     if (discovery == TslRunDiscoveryKind::POST_SORT) {
       prepare_detector(detect_runs, columns[task.column].data, task.begin, task.end,
                        task.column == 0);
+      auto const t_sort = std::chrono::steady_clock::now();
       if (split) {
         auto no_band = [](std::size_t, std::size_t) {};
         auto no_leaf = [](std::size_t, std::size_t) {};
@@ -587,11 +650,25 @@ class TslMultiColumnIndexSorter {
         sorter_.sort_key(keys, payloads, 1, count, order);
       }
       if (metrics != nullptr) {
+        if constexpr (Profile) {
+          metrics->ns_sort.fetch_add(
+            static_cast<std::uint64_t>(tsl_index_since(t_sort)),
+            std::memory_order_relaxed);
+        }
         metrics->rle_values_scanned.fetch_add(count, std::memory_order_relaxed);
       }
       // Sound here and not inside a partition: the whole range is sorted by now,
       // so no equal run can be split between two scans.
+      auto const t_detect = std::chrono::steady_clock::now();
       detect_runs(scratch_.data(), task.begin, task.end, emit_child);
+      if (metrics != nullptr) {
+        if constexpr (Profile) {
+          auto const spent = static_cast<std::uint64_t>(tsl_index_since(t_detect));
+          auto const nested = inline_ns.load(std::memory_order_relaxed);
+          metrics->ns_detect.fetch_add(spent > nested ? spent - nested : 0,
+                                       std::memory_order_relaxed);
+        }
+      }
       return;
     }
 
@@ -602,12 +679,23 @@ class TslMultiColumnIndexSorter {
       }
       emit_child(TslRunSpan{begin, end});
     };
+    // As in the serial form: detection runs from inside the sort, so it is
+    // accumulated here and subtracted from the enclosing duration. `split` fans
+    // this range across workers, so the sink runs on several threads at once and
+    // the accumulator is atomic.
+    std::atomic<std::uint64_t> detect_ns{0};
     auto leaf_sink = [&](std::size_t begin, std::size_t end) {
       if (metrics != nullptr) {
         metrics->rle_values_scanned.fetch_add(end - begin, std::memory_order_relaxed);
       }
+      auto const mark = std::chrono::steady_clock::now();
       detect_runs(scratch_.data(), begin, end, emit_child);
+      if constexpr (Profile) {
+        detect_ns.fetch_add(static_cast<std::uint64_t>(tsl_index_since(mark)),
+                            std::memory_order_relaxed);
+      }
     };
+    auto const t_sort = std::chrono::steady_clock::now();
     if (split) {
       sorter_.sort_key_parallel(keys, payloads, 1, count, order, task.begin,
                                 workers_, 1, partition_threshold_,
@@ -619,6 +707,21 @@ class TslMultiColumnIndexSorter {
       sorter_.sort_key_with_completion_events(
         keys, payloads, 1, count, order, task.begin, equal_band_sink, leaf_sink
       );
+    }
+    if (metrics != nullptr) {
+      if constexpr (Profile) {
+        // The sort encloses detection, which itself encloses any inline child
+        // subtree. Both are removed so the three phases stay disjoint.
+        auto const nested_detect = detect_ns.load(std::memory_order_relaxed);
+        auto const nested_inline = inline_ns.load(std::memory_order_relaxed);
+        auto const total = static_cast<std::uint64_t>(tsl_index_since(t_sort));
+        auto const own = nested_detect + nested_inline;
+        metrics->ns_sort.fetch_add(total > own ? total - own : 0,
+                                   std::memory_order_relaxed);
+        metrics->ns_detect.fetch_add(
+          nested_detect > nested_inline ? nested_detect - nested_inline : 0,
+          std::memory_order_relaxed);
+      }
     }
   }
 
@@ -657,11 +760,23 @@ class TslMultiColumnIndexSorter {
 
     if (discovery == TslRunDiscoveryKind::POST_SORT) {
       prepare_detector(detect_runs, column.data, range.begin, range.end, identity);
+      auto const t_sort = std::chrono::steady_clock::now();
       sorter_.sort_key(keys, payloads, 1, count, order);
+      if constexpr (Profile) {
+        if (metrics != nullptr) {
+          metrics->ns_sort += tsl_index_since(t_sort);
+        }
+      }
       if (metrics != nullptr) {
         metrics->rle_values_scanned += count;
       }
+      auto const t_detect = std::chrono::steady_clock::now();
       detect_runs(scratch_.data(), range.begin, range.end, keep);
+      if constexpr (Profile) {
+        if (metrics != nullptr) {
+          metrics->ns_detect += tsl_index_since(t_detect);
+        }
+      }
       return;
     }
 
@@ -674,14 +789,31 @@ class TslMultiColumnIndexSorter {
       }
       keep(TslRunSpan{band_begin, band_end});
     };
+    // Incremental discovery runs detection from inside the sort, so the two cannot
+    // be timed by bracketing them. Detection is accumulated in the sink and
+    // subtracted from the enclosing duration, which is what makes the phase split
+    // comparable between the two discovery kinds rather than an artefact of where
+    // the calls sit.
+    double detect_ns = 0.0;
     auto leaf_sink = [&](std::size_t leaf_begin, std::size_t leaf_end) {
       if (metrics != nullptr) {
         metrics->rle_values_scanned += leaf_end - leaf_begin;
       }
+      auto const mark = std::chrono::steady_clock::now();
       detect_runs(scratch_.data(), leaf_begin, leaf_end, keep);
+      if constexpr (Profile) {
+        detect_ns += tsl_index_since(mark);
+      }
     };
+    auto const t_sort = std::chrono::steady_clock::now();
     sorter_.sort_key_with_completion_events(
       keys, payloads, 1, count, order, range.begin, equal_band_sink, leaf_sink
     );
+    if constexpr (Profile) {
+      if (metrics != nullptr) {
+        metrics->ns_sort += tsl_index_since(t_sort) - detect_ns;
+        metrics->ns_detect += detect_ns;
+      }
+    }
   }
 };
