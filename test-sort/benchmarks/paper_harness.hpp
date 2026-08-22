@@ -35,6 +35,28 @@
 
 inline constexpr int tsl_paper_repetitions = 9;
 
+// Nine is the floor, not the answer. Measured across 335 rows collected on this
+// machine, the relative inter-quartile range is 1.81% at the median and 5.80% at
+// the ninetieth percentile -- but 3.6% of rows exceed 10% and the worst reached
+// 40.8%, all of them parallel. For those, nine samples put a quartile inside the
+// noise and the median is not a number worth publishing.
+//
+// So a measurement that comes out wide is repeated: batches of four more until the
+// relative IQR falls under the target or the ceiling is reached. The row records
+// how many it actually took, so a reader can see which measurements were hard.
+//
+// This is not what Google Benchmark would fix. Its contribution is auto-tuning the
+// *iteration count* so a sub-millisecond kernel is timed above the clock's
+// resolution -- our sorts run tens to hundreds of milliseconds, where one
+// iteration per repetition is already right and gbench would choose the same. Its
+// aggregates are mean and standard deviation over repetitions, which is what we do
+// with the median and quartiles, and the quartiles are the more robust pair for a
+// distribution skewed by an occasional slow run. What neither addresses is the
+// dominant term: the same binary re-run in a fresh process varies by 21-40% here
+// against 1-5% within one process. That is machine state, and no harness fixes it.
+inline constexpr int tsl_paper_max_repetitions = 33;
+inline constexpr double tsl_paper_target_spread = 0.05;
+
 
 // Recorded with the results, because a figure whose host is unknown is not
 // reproducible and this host's clock moves under load.
@@ -112,6 +134,9 @@ struct TslPaperStats {
   double median = 0.0;
   double p25 = 0.0;
   double p75 = 0.0;
+  // How many samples this actually took. Adaptive, so it varies per row, and a
+  // reader can see which measurements needed persuading.
+  int repetitions = 0;
 
   // Spread as a fraction of the centre, which is what decides whether two rows
   // can be told apart.
@@ -135,6 +160,7 @@ inline auto tsl_paper_stats(std::vector<double> samples) -> TslPaperStats {
   stats.p25 = at(0.25);
   stats.median = at(0.50);
   stats.p75 = at(0.75);
+  stats.repetitions = static_cast<int>(samples.size());
   return stats;
 }
 
@@ -169,6 +195,7 @@ class TslPaperResults {
   std::string binary_;
   TslPaperMachine machine_;
   std::vector<TslPaperRow> rows_;
+  std::size_t unsettled_ = 0;   // rows still wide after the repetition ceiling
   bool header_printed_ = false;
 
  public:
@@ -190,6 +217,18 @@ class TslPaperResults {
   }
 
   void add(TslPaperRow row) {
+    // The measurement knows how many samples it took; the row should not have to
+    // be told separately, because a driver that forgot would report nine.
+    if (row.ns_per_element.repetitions > 0) {
+      row.repetitions = row.ns_per_element.repetitions;
+    }
+    // A row that stayed wide after the ceiling is a measurement the machine would
+    // not settle, not a number. Said out loud here as well as recorded, because a
+    // console reader should not have to open the CSV to notice.
+    if (row.repetitions >= tsl_paper_max_repetitions
+        && row.ns_per_element.relative_iqr() > tsl_paper_target_spread) {
+      ++unsettled_;
+    }
     if (!header_printed_) {
       std::printf("\n%-26s %-12s %5s %8s %-24s %-14s %7s %10s %8s\n", "shape",
                   "params", "cols", "rows", "algorithm", "detector", "workers",
@@ -280,9 +319,18 @@ class TslPaperResults {
         ++wrong;
       }
     }
-    return std::to_string(rows_.size() - dropped - wrong) + " measured, "
-           + std::to_string(dropped) + " dropped, " + std::to_string(wrong)
-           + " incorrect";
+    auto text = std::to_string(rows_.size() - dropped - wrong) + " measured, "
+                + std::to_string(dropped) + " dropped, " + std::to_string(wrong)
+                + " incorrect";
+    if (unsettled_ > 0) {
+      text += "\n  !! " + std::to_string(unsettled_)
+              + " row(s) still spread wider than "
+              + std::to_string(static_cast<int>(tsl_paper_target_spread * 100))
+              + "% after " + std::to_string(tsl_paper_max_repetitions)
+              + " repetitions: the machine would not settle on those, and their"
+              " medians should not be compared at fine margins";
+    }
+    return text;
   }
 };
 
@@ -313,7 +361,7 @@ auto tsl_paper_measure(Body && body, Verify && verify, std::size_t elements,
     return {false, TslPaperStats{}};
   }
   std::vector<double> samples;
-  samples.reserve(tsl_paper_repetitions);
+  samples.reserve(tsl_paper_max_repetitions);
   for (int rep = 0; rep < tsl_paper_repetitions; ++rep) {
     auto const start = std::chrono::steady_clock::now();
     body();
@@ -321,5 +369,19 @@ auto tsl_paper_measure(Body && body, Verify && verify, std::size_t elements,
     samples.push_back(std::chrono::duration<double, std::nano>(stop - start).count()
                       / static_cast<double>(elements == 0 ? 1 : elements));
   }
-  return {true, tsl_paper_stats(std::move(samples))};
+  // Widen the sample until the bulk is tight or the ceiling stops us.
+  auto stats = tsl_paper_stats(samples);
+  while (static_cast<int>(samples.size()) < tsl_paper_max_repetitions
+         && stats.median > 0.0
+         && (stats.p75 - stats.p25) / stats.median > tsl_paper_target_spread) {
+    for (int extra = 0; extra < 4; ++extra) {
+      auto const start = std::chrono::steady_clock::now();
+      body();
+      auto const stop = std::chrono::steady_clock::now();
+      samples.push_back(std::chrono::duration<double, std::nano>(stop - start).count()
+                        / static_cast<double>(elements == 0 ? 1 : elements));
+    }
+    stats = tsl_paper_stats(samples);
+  }
+  return {true, stats};
 }

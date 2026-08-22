@@ -44,6 +44,8 @@
 #include "dataset_reference.hpp"
 #include "dataset_source.hpp"
 #include "paper_harness.hpp"
+#include "tuned_config.hpp"
+#include "tuned_dispatch.hpp"
 #include "sorting/sample_sort/samplesort_multicolumn.hpp"
 
 namespace {
@@ -97,6 +99,9 @@ inline auto path_of(TslDetectorBackend backend) -> char const * {
 }
 
 inline std::string g_paths = "hw";
+TslTunedConfig g_samplesort_config;
+TslTunedConfig g_quicksort_config;
+std::map<std::string, TslTunedConfig> g_tuned;
 
 // An explicit allow list, when one device is wanted rather than a whole path.
 // `--paths hw` asks for every hardware backend compiled in, which on a host with
@@ -144,7 +149,7 @@ void run_width(TslPaperResults & results,
       blank.columns = columns;
       blank.element_bytes = sizeof(Key);
       blank.algorithm = "samplesort";
-      blank.variant = "K=16/adaptive/net";
+      blank.variant = g_samplesort_config.describe_samplesort();
       if (spec == nullptr) {
         results.drop(blank, "no such dataset at this size and column count");
         continue;
@@ -178,31 +183,54 @@ void run_width(TslPaperResults & results,
             tsl_with_detector<Key>(backend, config, [&](auto & detector) {
               using Detector = std::decay_t<decltype(detector)>;
               if constexpr (!tsl_detector_wants_executor<Detector>::value) {
-                TslSampleSortMultiColumn<Key, Simd, 16,
-                                         TslSampleSortBuckets::Adaptive, 8, 256,
-                                         TslSampleSortBase::Network,
-                                         TslSampleSortIds::Byte,
-                                         256 / Simd::lane_count_v, 50,
-                               TslSampleSortMovement::OutOfPlace, true> sorter;
+                // The sorter Q0 chose, not one typed here. Detection's share of
+                // the runtime is this driver's headline, and a share is a ratio
+                // against the sort: measuring it around a sorter twice as slow as
+                // the one we ship would halve the share and understate every
+                // offload decision that rests on it.
                 TslSampleSortColumnMetrics metrics;
-                auto const [ok, stats] = tsl_paper_measure(
-                  [&] {
-                    metrics = {};
-                    if (workers > 1) {
-                      sorter.sort_index_parallel(specs.data(), columns, index.data(),
-                                                 rows, detector, workers, &metrics);
-                    } else {
-                      sorter.sort_index(specs.data(), columns, index.data(), rows,
-                                        detector, &metrics);
-                    }
-                  },
-                  [&] { return image_matches(*pristine, *reference, index); }, rows);
-                row.verified = ok;
-                row.ns_per_element = stats;
-                row.ns_materialize = metrics.ns_materialize / static_cast<double>(rows);
-                row.ns_sort = metrics.ns_sort / static_cast<double>(rows);
-                row.ns_detect = metrics.ns_detect / static_cast<double>(rows);
-                results.add(std::move(row));
+                bool ok = false;
+                TslPaperStats stats{};
+                // Profiling stays on here, unlike every other driver: the phase
+                // split *is* the measurement. So Q3's absolute ns/element are not
+                // comparable with Q2's or Q4's -- they carry the timers' 1.08x to
+                // 1.28x -- while the share and the between-detector comparison,
+                // both taken within this build, are unaffected.
+                auto const dispatched = with_samplesort<Key, Simd, true>(
+                  g_samplesort_config, [&](auto sorter) {
+                    auto const measured = tsl_paper_measure(
+                      [&] {
+                        metrics = {};
+                        if (workers > 1) {
+                          sorter.sort_index_parallel(specs.data(), columns,
+                                                     index.data(), rows, detector,
+                                                     workers, &metrics);
+                        } else {
+                          sorter.sort_index(specs.data(), columns, index.data(),
+                                            rows, detector, &metrics);
+                        }
+                      },
+                      [&] { return image_matches(*pristine, *reference, index); },
+                      rows);
+                    ok = measured.first;
+                    stats = measured.second;
+                  });
+                if (!dispatched) {
+                  results.drop(row, "tuned samplesort configuration is not "
+                                    "instantiated here: "
+                                    + g_samplesort_config.describe_samplesort());
+                } else {
+                  row.variant = g_samplesort_config.describe_samplesort()
+                                + (g_samplesort_config.from_file ? " (tuned)"
+                                                                 : " (default)");
+                  row.verified = ok;
+                  row.ns_per_element = stats;
+                  auto const denominator = static_cast<double>(rows);
+                  row.ns_materialize = metrics.ns_materialize / denominator;
+                  row.ns_sort = metrics.ns_sort / denominator;
+                  row.ns_detect = metrics.ns_detect / denominator;
+                  results.add(std::move(row));
+                }
               }
             });
           } catch (std::exception const & error) {
@@ -226,6 +254,7 @@ int main(int argc, char ** argv) {
   std::size_t rows = 1u << 21;
   std::size_t min_offload = 4096;
   std::string csv_path;
+  std::string tuned_path = "best_config.tsv";
 
   for (int i = 1; i < argc; ++i) {
     auto const flag = std::string(argv[i]);
@@ -275,6 +304,8 @@ int main(int argc, char ** argv) {
         std::printf("--paths takes hw, sw or all\n");
         return 2;
       }
+    } else if (flag == "--tuned") {
+      tuned_path = value();
     } else if (flag == "--csv") {
       csv_path = value();
     } else {
@@ -284,6 +315,11 @@ int main(int argc, char ** argv) {
   }
 
   TslPaperResults results("Q3 detection", "bench_q3_detection");
+  g_tuned = tsl_read_tuned(tuned_path);
+  if (g_tuned.empty()) {
+    std::printf("no %s: measuring the default configuration, rows labelled "
+                "(default)\n", tuned_path.c_str());
+  }
   if (g_detectors.empty()) {
     std::printf("paths=%s (software paths are for correctness, not for figures)\n",
                 g_paths.c_str());
@@ -312,9 +348,13 @@ int main(int argc, char ** argv) {
 
   for (auto const width : widths) {
     if (width == 4) {
+      tsl_select_tuned<std::uint32_t>(g_tuned, g_samplesort_config,
+                                      g_quicksort_config);
       run_width<std::uint32_t>(results, cardinalities, column_counts, rows,
                                worker_counts, min_offload);
     } else if (width == 8) {
+      tsl_select_tuned<std::uint64_t>(g_tuned, g_samplesort_config,
+                                      g_quicksort_config);
       run_width<std::uint64_t>(results, cardinalities, column_counts, rows,
                                worker_counts, min_offload);
     }

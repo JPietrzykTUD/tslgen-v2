@@ -180,7 +180,7 @@ run bench_q2_algorithms q2_algorithms --tuned "$tuned" "${tpcds_args[@]+"${tpcds
     "${narrow_q2[@]+"${narrow_q2[@]}"}"
 # Hardware only, and only this host's hardware: the software paths are QPL's and
 # DML's own CPU code, kept for correctness rather than for figures.
-run bench_q3_detection  q3_detection  --detectors "$q3_detectors" \
+run bench_q3_detection  q3_detection  --tuned "$tuned" --detectors "$q3_detectors" \
     "${narrow_q3[@]+"${narrow_q3[@]}"}"
 # Q4 gets the tuned configuration and the measured keys: its thread axis is where
 # the algorithm crossover is visible, and it is only visible on real keys -- the
