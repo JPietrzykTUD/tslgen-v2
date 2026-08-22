@@ -176,6 +176,19 @@ target_compile_features(bench_hybrid_leaf PRIVATE cxx_std_17)
 target_include_directories(bench_hybrid_leaf PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/datagen")
 target_link_libraries(bench_hybrid_leaf PRIVATE tsl::tsl Threads::Threads)
 
+# Samplesort co-sort: a different algorithm for the same data model as the
+# indirect sorter -- sort a key column, carry an index column, materialise the
+# rest with one gather pass each. Kernels in samplesort_cosort.hpp, the
+# swappable sequential executor in samplesort_executor.hpp, measurements in
+# samplesort-notes.md.
+add_executable(test_samplesort_cosort test_samplesort_cosort.cpp)
+target_compile_features(test_samplesort_cosort PRIVATE cxx_std_17)
+target_link_libraries(test_samplesort_cosort PRIVATE tsl::tsl Threads::Threads)
+
+add_executable(bench_samplesort_cosort bench_samplesort_cosort.cpp)
+target_compile_features(bench_samplesort_cosort PRIVATE cxx_std_17)
+target_link_libraries(bench_samplesort_cosort PRIVATE tsl::tsl Threads::Threads)
+
 # The indirect (index-permutation) sorter. Built without the accelerator options
 # it exercises the scalar detector; the IAA block below adds the QPL one, which
 # is what proves the detector seam applies to this driver too.
