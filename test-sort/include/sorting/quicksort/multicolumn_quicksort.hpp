@@ -19,23 +19,6 @@
 #include "sorting/common/sort_helpers.hpp"
 
 
-// True when a run detector participates in executor accounting, i.e. exposes
-// bind(TslPendingWork&) and poll(). Synchronous detectors do not, and are wired
-// as plain callables.
-template <class Detector, class = void>
-struct tsl_detector_wants_executor : std::false_type {};
-
-template <class Detector>
-struct tsl_detector_wants_executor<
-  Detector,
-  decltype(
-    std::declval<Detector &>().bind(std::declval<TslPendingWork &>()),
-    std::declval<Detector &>().poll(),
-    void()
-  )
-> : std::true_type {};
-
-
 enum class TslLeafKind { INSERTION, NETWORK };
 enum class TslPartitionKind { TWO_WAY, THREE_WAY };
 

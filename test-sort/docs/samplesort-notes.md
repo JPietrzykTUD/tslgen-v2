@@ -95,6 +95,59 @@ Sampling is the one place where §4.1's claim that "the sample sort is not on th
 critical path" is closest to wrong and still hardest to fix: it is 15% of the
 runtime and neither change moved it much.
 
+## Multi-column
+
+`samplesort_multicolumn.hpp` is the column loop that turns the single-key
+samplesort into a lexicographic co-sort, which is what makes the `rle=` detector
+axis apply to it. Index movement necessarily -- samplesort's premise is that the
+permutation lives in an index column -- so the loop is the indirect quicksort's:
+materialise the active column through the index, samplesort it, detect the equal
+runs, recurse into each on the next column. Level 0 is a copy rather than a
+gather, and only rows inside a surviving range are ever materialised.
+
+Against the indirect quicksort on the identical problem, 2^21 rows, four columns,
+u32, `rle=scalar`, ns/element:
+
+| shape | samplesort w=1 | quicksort w=1 | samplesort w=24 | quicksort w=24 |
+| --- | --- | --- | --- | --- |
+| `low_cardinality_d4` | 17.5 | **13.3** | 7.9 | **4.9** |
+| `unique_last_g64` | 49.5 | **45.5** | **11.8** | 12.5 |
+| `skewed_zipf_s1` | **57.4** | 95.2 | **15.0** | 31.1 |
+| `unique_first` | 27.2 | **19.2** | 7.5 | **5.5** |
+
+`std::sort` over row indices with a lexicographic comparator is 93 to 228 on the
+same cases, so both are 4-15x that. Samplesort wins on the heavy-tailed shape by
+1.7x at one thread and 2.1x on 24, loses on the others, and the split is the same
+one the single-key numbers showed: it is better where the data punishes a binary
+partition and worse where a tuned single-pass partition is already right.
+
+### The parallel form needed two corrections, both measured
+
+The obvious construction -- call the parallel samplesort for every range above a
+size threshold -- was **slower than one thread**: 145 ns/element against 51 on
+`unique_last_g64`, and monotonically worse with more workers. The parallel
+executor builds a thread pool per call, and the driver was calling it 33 times.
+The standalone samplesort benchmark calls it once, which is why this never
+surfaced there.
+
+So the driver is two phases, like the samplesort's own executor: fan a single
+range across threads while one range dominates, then hand whole ranges to a
+persistent pool that sorts each serially. That took `unique_last_g64` from 145 to
+10.7 at 24 workers.
+
+The second correction is the criterion for phase one. Fanning "until there are as
+many ranges as workers" is the intuitive rule and it is wrong: a key with four
+distinct values yields four children per split, so reaching 24 ranges takes eight
+fans, each on a smaller range, and the pool per fan costs more than the split
+gains -- 20.6 ns/element against 12.4. Fanning only a range that holds at least
+half the rows left gives exactly one fan on every shape measured, and both shapes
+then scale monotonically.
+
+Ascending only: the samplesort compares keys directly and takes no order
+argument, so a descending column needs the comparison inverted in the kernels
+rather than a flag in the driver. `sort_index` rejects it rather than sorting
+wrongly.
+
 ## Threading
 
 `samplesort_parallel_executor.hpp` contains no kernel and no phase logic. It

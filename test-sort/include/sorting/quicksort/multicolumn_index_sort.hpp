@@ -139,13 +139,6 @@ struct TslIndexSortMetrics {
 
 // The portable detector, in the same call shape the accelerator fleets use, so a
 // caller that does not care about `rle=` need not name one.
-template <class DataType>
-struct TslIndexScalarDetector {
-  template <class Emit>
-  void operator()(DataType const * values, std::size_t begin, std::size_t end, Emit && emit) {
-    tsl_for_each_equal_run(values, begin, end, std::forward<Emit>(emit));
-  }
-};
 
 
 template <

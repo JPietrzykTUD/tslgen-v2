@@ -18,7 +18,8 @@ include/
     primitives/             vector kernels shared by more than one algorithm:
                             the partition/replay step and the bitonic leaves
     quicksort/              the multi-column quicksort, direct and index movement
-    sample_sort/            the samplesort co-sort and its two executors
+    sample_sort/            the samplesort co-sort, its two executors, and the
+                            column loop that makes it multi-column
 benchmarks/
   datagen/                  dataset generation, manifests and reference images
   visualization/            plotting and sweep scripts
@@ -63,6 +64,15 @@ Neither sorter owns the vector kernels. `cosort_network.hpp` holds the
 partition/replay step and `cosort_bitonic_leaf.hpp` the branch-free leaf, and
 both are used by the quicksort *and* by the samplesort, which takes the bitonic
 leaf as its base case. Filing them under either algorithm would misdescribe them.
+
+## Two lexicographic co-sorts
+
+`sorting/quicksort/` and `sorting/sample_sort/` both solve the same problem --
+order a table by several columns, leaving the columns untouched and the
+permutation in an index -- and both take the same detector seam, so the `rle=`
+backends apply to either. They disagree about the middle: a partition around one
+pivot against a K-way split on sampled splitters. `docs/samplesort-notes.md` has
+the head-to-head.
 
 ## Why there is no directory per variant axis
 

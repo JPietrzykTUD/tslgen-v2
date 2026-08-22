@@ -40,6 +40,7 @@ def collect_tests(out, build, extra_builds):
         ("multicolumn_sort", build, "test_multicolumn_sort"),
         ("multicolumn_index_sort", build, "test_multicolumn_index_sort"),
         ("samplesort", build, "test_samplesort_cosort"),
+        ("samplesort_multicolumn", build, "test_samplesort_multicolumn"),
     ]
     for label, directory in extra_builds.items():
         if label == "dsa":

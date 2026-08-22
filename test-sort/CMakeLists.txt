@@ -180,6 +180,14 @@ target_link_libraries(bench_hybrid_leaf PRIVATE tsl::tsl Threads::Threads)
 # rest with one gather pass each. Kernels in samplesort_cosort.hpp, the
 # swappable sequential executor in samplesort_executor.hpp, measurements in
 # samplesort-notes.md.
+add_executable(bench_samplesort_multicolumn benchmarks/bench_samplesort_multicolumn.cpp)
+target_compile_features(bench_samplesort_multicolumn PRIVATE cxx_std_17)
+target_link_libraries(bench_samplesort_multicolumn PRIVATE tsl::tsl Threads::Threads)
+
+add_executable(test_samplesort_multicolumn tests/test_samplesort_multicolumn.cpp)
+target_compile_features(test_samplesort_multicolumn PRIVATE cxx_std_17)
+target_link_libraries(test_samplesort_multicolumn PRIVATE tsl::tsl Threads::Threads)
+
 add_executable(test_samplesort_cosort tests/test_samplesort_cosort.cpp)
 target_compile_features(test_samplesort_cosort PRIVATE cxx_std_17)
 target_link_libraries(test_samplesort_cosort PRIVATE tsl::tsl Threads::Threads)

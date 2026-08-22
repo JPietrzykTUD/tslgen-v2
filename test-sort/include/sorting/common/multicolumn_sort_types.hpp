@@ -1,5 +1,8 @@
 #pragma once
 
+// TslPendingWork, which the asynchronous-detector trait below names.
+#include "sorting/common/multicolumn_sort_tasks.hpp"
+
 #include <cstddef>
 #include <type_traits>
 #include <utility>
@@ -47,6 +50,23 @@ struct TslMultiColumnSortMetrics {
 // start work whose answer does not depend on order -- value frequencies, for
 // instance. Detected the same way the executor hook is, so a detector without
 // `prepare` is unaffected and a caller needs no per-backend branch.
+// True when a run detector participates in executor accounting, i.e. exposes
+// bind(TslPendingWork&) and poll(). Synchronous detectors do not, and are wired
+// as plain callables.
+template <class Detector, class = void>
+struct tsl_detector_wants_executor : std::false_type {};
+
+template <class Detector>
+struct tsl_detector_wants_executor<
+  Detector,
+  decltype(
+    std::declval<Detector &>().bind(std::declval<TslPendingWork &>()),
+    std::declval<Detector &>().poll(),
+    void()
+  )
+> : std::true_type {};
+
+
 template <class Detector, class DataType, class = void>
 struct tsl_detector_wants_prepare : std::false_type {};
 
