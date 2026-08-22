@@ -131,6 +131,37 @@ it returns is a compromise, and the per-axis table it prints is more informative
 than the single winner. Where an axis's winner flips between shapes, that belongs
 in the paper as a result rather than being averaged away.
 
+## Method: what a measured run collects, and how long it looks
+
+**Nothing is collected while a number is measured.** Phase timers are a template
+parameter and off by default; the element and range counters are compiled out by
+`TSL_COSORT_NO_INSTRUMENTATION`, which the `bench*` presets set. Verified in the
+object code rather than by timing: 51 locked atomic instructions become 19, and
+the 19 that remain belong to the task executor's queue and latches. Each driver
+prints `instrumentation=off`, and `run_paper.sh` refuses to write a results
+directory from a build that does not.
+
+**Nine repetitions is the floor, not the answer.** Across 335 rows measured here
+the relative inter-quartile range is 1.81% at the median and 5.80% at the
+ninetieth percentile -- but 3.6% of rows exceed 10% and the worst reached 40.8%,
+all of them parallel. So a wide measurement is repeated in batches of four until
+its relative IQR falls under 5% or it reaches 33, and the row records how many it
+took. In a representative run: 246 rows settled at nine, 17 needed between 13 and
+25, and 11 reached the ceiling still wide. The summary names that last group,
+because a row that would not settle cannot be distinguished from its neighbours
+and a figure drawn from it should say so.
+
+**Google Benchmark would not fix this.** Its contribution is auto-tuning the
+*iteration count* so a sub-millisecond kernel is timed above the clock's
+resolution; these sorts run tens to hundreds of milliseconds, where one iteration
+per repetition is already right and gbench would choose the same. Its aggregates
+are mean and standard deviation, where the median and quartiles are the more
+robust pair for a distribution skewed by an occasional slow run. And what neither
+addresses is the dominant term: the same binary re-run in a fresh process varies
+by 21-40% here against 1-5% within one process. That is machine state. It is why
+`run_paper.sh` records the host, governor, clock and load, and refuses to mix
+hosts in one results directory.
+
 ## Q1 — external baselines
 
 The objection a single comparator-based baseline invites is that it is a straw
