@@ -13,7 +13,7 @@ kept only for the reasoning behind these decisions.
 | Correctness is `memcmp` against the reference image | with every column a sort key the sorted image is unique however an unstable sort breaks ties, so the comparison is exact and names the first differing row | implemented |
 | Registration goes through per-family predicates, selected by `COSORT_STAGE` | the full product is unrunnable and mostly redundant; each stage answers one question and reports what it dropped | implemented |
 | clang 22 for everything | required by the generated clang profile header (`__builtin_elementwise_clzg`); the intrinsic families build with it too | implemented |
-| Generated TSL release `v0.2.9` | `v0.2.8` gave the clang families a native `compress`/`expand`; `v0.2.9` adds the native runtime-index `permute_lanes` the bitonic leaf needs. Below either, the style axis measures TSL's scalar fallbacks rather than the styles | implemented |
+| Generated TSL release `v0.3.0` | `v0.2.8` gave the clang families a native `compress`/`expand`; `v0.2.9` adds the native runtime-index `permute_lanes` the bitonic leaf needs. Below either, the style axis measures TSL's scalar fallbacks rather than the styles. `v0.3.0` changes only the `*_clang.hpp` headers -- intrinsics and core are byte-identical -- adding intrinsics fallbacks where a compiler builtin is missing; A/B'd across 189 configurations at a median of 1.001x, with the `intr` cells as a control establishing the 0.913x-1.039x noise floor | implemented |
 | Register width and implementation style are *variant* dimensions | both are template parameters of the sorter, not conditions it runs under | implemented |
 | `rle=` is an axis of the one binary, with per-machine backends | the detector parameterizes a sort call; a host has DSA or IAA, and `rle=` records which produced a row | implemented |
 | Row movement is a *variant* dimension, `move=` | the direct sorter permutes every column; the indirect one permutes a row index and materializes the active column per level. Same datasets, same discovery, same detectors -- so the question "does moving indices beat moving rows" is one axis rather than a second benchmark | implemented |
@@ -335,7 +335,22 @@ cases, plus targeted slices for lanes (72), direction (36) and column count (96)
 
 **`attribute`** — the style experiment, deliberately separate: 4 algorithm
 configurations (2way|3way × ins|net, serial post-sort) × 3 styles × 3 widths × 3
-shapes × 2 sizes. It answers two questions that the other stages hold fixed.
+shapes × 2 sizes, plus the samplesort at one fixed configuration per cell. It
+answers two questions that the other stages hold fixed, and it now answers them for
+both algorithms: this is the portability claim, and enumerating only the quicksort's
+variant space made a claim about TSL rest on one of the two sorts. The samplesort is
+registered with a single configuration rather than its own product, because the
+question here is the cell and not the configuration -- and because holding the
+configuration fixed across cells is what keeps the comparison about portability
+instead of tuning. Its cases carry algorithm ids 200 and 201, above the indirect
+quicksort's 100-series, so no published id moves.
+
+A third question falls out of the same sweep, and it is the sharpest argument in
+the corpus for generating through an abstraction. At 128 bits the intrinsic style
+is 1.89x the best cell on 4-byte keys and 1.73x on 8-byte, while `clang/128` is
+within 1.02x -- 40.11 against 21.24 ns/element for the same algorithm at the same
+width. The gap survived the 128-bit hybrid-leaf fix, so it is not a defect: clang's
+`ext_vector_type` at 128 bits schedules what explicit SSE intrinsics pin.
 
 *What does a native primitive buy?* As of `v0.2.8` the clang families reach the
 hardware `compress`/`expand`, so what remains emulated on that path is

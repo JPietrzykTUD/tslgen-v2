@@ -97,9 +97,23 @@ the two is checkable.
 
 ## Producing the paper's numbers
 
+One command, from a clean checkout: it configures, generates the TPC-DS/DSB key
+columns, builds and runs, skipping whatever is already done.
+
 ```bash
-./run_paper.sh <build-dir> <results-dir>            # everything
-./run_paper.sh <build-dir> <results-dir> --quick    # one cell per question
+./run_all.sh                                  # results/$(hostname)
+./run_all.sh results/<host> --quick           # prove the pipeline, ~10 min
+./run_all.sh results/<host> --scale 10        # a larger scale factor
+./run_all.sh results/<host> --no-baselines    # skip Q1's external libraries
+```
+
+The preset comes from what `/dev` actually has, and is always a *measurement*
+preset: the sorters' counters are compiled out, so a published run collects nothing
+while it measures. `run_paper.sh` refuses a build without that, which is why the
+step below names a `bench*` preset and not `clang`.
+
+```bash
+TPCDS_KEYS=TMP/tpcds_keys ./run_paper.sh <build-dir> <results-dir> [--quick]
 ```
 
 ```bash
@@ -127,11 +141,31 @@ current reference.
 
 ## Building
 
+Development presets keep the counters and diagnostics; `bench*` presets compile
+them out and are the only ones `run_paper.sh` accepts.
+
 ```bash
-cmake --preset clang && cmake --build --preset clang          # any host
+cmake --preset clang && cmake --build --preset clang          # any host, counters on
 cmake --preset dsa   && cmake --build --preset dsa            # a DSA host
 QPL_ROOT=<prefix> cmake --preset iaa && cmake --build --preset iaa   # an IAA host
+
+cmake --preset bench-dsa-baselines            # measurement, DSA, Q1 baselines
+cmake --preset bench-iaa-baselines            # measurement, IAA, Q1 baselines
+cmake --preset bench                          # measurement, no accelerator
+cmake --preset phases                         # phase timers on; never for figures
 ```
+
+`clang++-22` is required and pinned: the generated TSL selects its profile and its
+capability defines from the compiler it is configured with, so a build with a
+different compiler is a different library and its numbers are not comparable.
+`run_all.sh` overrides only through `TSL_COSORT_CXX`, deliberately not `CXX`.
+
+Q1's external baselines (`TSL_COSORT_ENABLE_BASELINES=ON`) fetch IPS4o and
+x86-simd-sort at pinned commits and build oneTBB if the system has none; TBB and
+libatomic are required because without them `std::sort(execution::par)` runs
+serially and IPS4o loses its 16-byte atomics, either of which would weaken a
+competitor rather than remove it. Arrow is optional -- `libarrow-dev` -- and its
+absence shows up as drops naming the reason.
 
 See `docs/benchmark-final.md` for what the corpus measures and why, and
 `docs/samplesort-notes.md` for the samplesort's measured state.

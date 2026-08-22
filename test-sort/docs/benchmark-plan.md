@@ -15,12 +15,12 @@ baselines come from adapted libraries rather than only `std::sort`.
 | # | question | binary | status |
 | --- | --- | --- | --- |
 | Q0 | what configuration should every other number use? | `bench_q0_tune` | built |
-| Q1 | How do we compare to the best available implementations? | `bench_q1_baseline` | **outstanding**, see below |
+| Q1 | How do we compare to the best available implementations? | `bench_q1_baselines` | built |
 | Q2 | Quicksort or samplesort — which, where, and why? | `bench_q2_algorithms` | built |
 | Q3 | What does cluster detection cost, and does offloading it pay? | `bench_q3_detection` | built |
 | Q4 | How does it scale in threads, rows, columns and element width? | `bench_q4_scaling` | built |
 | Q5 | Which variant wins where? | `cosort_bench --stage screen` | exists, staged |
-| Q6 | What do the native primitives and the mask representation buy? | `cosort_bench --stage attribute` | exists, staged |
+| Q6 | What do the native primitives and the mask representation buy? | `cosort_bench --stage attribute` | built, both algorithms |
 
 **Why Q5 and Q6 have no `bench_q5_*.cpp`.** They are stages of the corpus rather
 than binaries of their own. A `bench_q5_variants.cpp` would have to re-implement
@@ -43,8 +43,8 @@ Worth stating plainly, because the answer is not uniform:
 
 | dimension | swept by |
 | --- | --- |
-| register width, 128/256/512 | Q0 (both algorithms), Q6 (quicksort only) |
-| style, `intr`/`clang`/`clang_bool` | Q0 (both algorithms), Q6 (quicksort only) |
+| register width, 128/256/512 | Q0 (both algorithms, both key widths), Q6 (both algorithms) |
+| style, `intr`/`clang`/`clang_bool` | Q0 (both algorithms, both key widths), Q6 (both algorithms) |
 | element width, 4 and 8 bytes | Q2, Q3, Q4 (`--element-bytes`) |
 | algorithmic knobs (K, leaf, base case, fill, ids, movement, partition, discovery) | Q0 |
 | threads, rows, columns | Q4 |
@@ -67,9 +67,26 @@ rather than per file:
 * **Verify, then time.** Every configuration is checked against the reference
   image from `datagen` before its first timed run. A configuration that sorts
   wrongly reports `INCORRECT` and no number.
-* **Median of nine, IQR reported.** The mean is the wrong centre here: the
-  distribution is skewed by scheduler outliers rather than symmetric around them,
-  so the median is what survives and the quartiles say how wide the bulk is.
+* **Median of at least nine, IQR reported, more samples where it is wide.** The
+  mean is the wrong centre here: the distribution is skewed by scheduler outliers
+  rather than symmetric around them, so the median is what survives and the
+  quartiles say how wide the bulk is.
+
+  Nine is a floor rather than the answer. Across 335 rows measured on this host the
+  relative IQR is 1.81% at the median and 5.80% at the ninetieth percentile, but
+  3.6% exceed 10% and the worst reached 40.8%, all parallel. A wide measurement is
+  resampled in batches of four until its relative IQR falls under 5% or it reaches
+  33, and the row records how many it took. In a representative run 246 rows
+  settled at nine, 17 needed 13 to 25, and 11 reached the ceiling still wide -- the
+  summary names that last group, because a row that would not settle cannot be
+  distinguished from its neighbours.
+
+  Google Benchmark would not fix this. Its contribution is auto-tuning the
+  *iteration count* so a sub-millisecond kernel clears the timer's resolution;
+  these sorts run tens to hundreds of milliseconds, where one iteration per
+  repetition is already right and gbench would choose the same. Its aggregates are
+  mean and standard deviation where the median and quartiles are the more robust
+  pair. And neither addresses the dominant term, below.
 
   Two variances are in play and a figure has to say which it reports. Repeating
   *inside* one process, on warm data, the IQR is **1–5%**. Re-running the whole
@@ -88,6 +105,24 @@ rather than per file:
   A silently narrowed sweep reads as full coverage.
 * **ns per element, never speedup.** Ratios go in the prose, where the
   denominator can be named.
+* **Nothing is collected while a number is measured.** Phase timers are a template
+  parameter and off by default; the element and range counters are compiled out by
+  `TSL_COSORT_NO_INSTRUMENTATION`, which every `bench*` preset sets. Verified in
+  the object code rather than by timing, which was too noisy to settle it: 51
+  locked atomic instructions become 19, and those 19 belong to the task executor's
+  queue and latches. On the parallel index-sort path the counters are twenty atomic
+  increments per task and tpcds_q064 produces 986,867 tasks. Every driver prints
+  `instrumentation=off`, and `run_paper.sh` refuses to write a results directory
+  from a build that does not.
+* **One configuration per driver, taken from Q0, never typed in.** Every reporting
+  driver reads `best_config.tsv` and selects the entry for the key width it is
+  about to measure. This is not hygiene for its own sake: a hard-coded network leaf
+  once made the quicksort look 6.6x slower than it is, Q4's thread-scaling
+  crossover was measured against a mis-configured quicksort, Q3 built its
+  samplesort out of literals while reporting detection's *share* of that sorter's
+  runtime, and the samplesort dispatch silently replaced a tuned `fill=75` with
+  `fill=50` while still labelling the row `(tuned)`. A configuration the driver
+  cannot instantiate is now a drop naming it, never a substitution.
 
 ## Q0 — the design-space exploration
 
@@ -106,6 +141,13 @@ needs round two's candidates, which depend on round one's runtime winner, so eve
 reachable configuration would have to be built anyway. The cross plus OFAT is a
 sum, about 29 instantiations per cell, and the combined winner is measured so that
 combining individual winners being *worse* is visible rather than assumed away.
+
+**Both key widths, separately.** A configuration found on 32-bit keys is not a
+tuned configuration for 64-bit keys: the lane holds half as many elements, which
+moves the base case, the bucket count and the leaf capacity together. Measured,
+they differ -- the samplesort takes `K=8/fill50` at four bytes and `K=16/fill75` at
+eight. Until the tuner covered both, every 8-byte row in Q1, Q2 and Q4 applied the
+4-byte configuration and still called itself `(tuned)`.
 
 **Re-run per (style, width).** Nine cells, because a narrower vector changes the
 leaf's capacity, a bucket's stream cost and the base case's fill ratio at once, so
@@ -130,37 +172,6 @@ the data. Q0 scores candidates by the geometric mean over a set of shapes, so wh
 it returns is a compromise, and the per-axis table it prints is more informative
 than the single winner. Where an axis's winner flips between shapes, that belongs
 in the paper as a result rather than being averaged away.
-
-## Method: what a measured run collects, and how long it looks
-
-**Nothing is collected while a number is measured.** Phase timers are a template
-parameter and off by default; the element and range counters are compiled out by
-`TSL_COSORT_NO_INSTRUMENTATION`, which the `bench*` presets set. Verified in the
-object code rather than by timing: 51 locked atomic instructions become 19, and
-the 19 that remain belong to the task executor's queue and latches. Each driver
-prints `instrumentation=off`, and `run_paper.sh` refuses to write a results
-directory from a build that does not.
-
-**Nine repetitions is the floor, not the answer.** Across 335 rows measured here
-the relative inter-quartile range is 1.81% at the median and 5.80% at the
-ninetieth percentile -- but 3.6% of rows exceed 10% and the worst reached 40.8%,
-all of them parallel. So a wide measurement is repeated in batches of four until
-its relative IQR falls under 5% or it reaches 33, and the row records how many it
-took. In a representative run: 246 rows settled at nine, 17 needed between 13 and
-25, and 11 reached the ceiling still wide. The summary names that last group,
-because a row that would not settle cannot be distinguished from its neighbours
-and a figure drawn from it should say so.
-
-**Google Benchmark would not fix this.** Its contribution is auto-tuning the
-*iteration count* so a sub-millisecond kernel is timed above the clock's
-resolution; these sorts run tens to hundreds of milliseconds, where one iteration
-per repetition is already right and gbench would choose the same. Its aggregates
-are mean and standard deviation, where the median and quartiles are the more
-robust pair for a distribution skewed by an occasional slow run. And what neither
-addresses is the dominant term: the same binary re-run in a fresh process varies
-by 21-40% here against 1-5% within one process. That is machine state. It is why
-`run_paper.sh` records the host, governor, clock and load, and refuses to mix
-hosts in one results directory.
 
 ## Q1 — external baselines
 
@@ -341,7 +352,7 @@ five percent while overstating absolute cost by roughly half again. That is wort
 saying explicitly in the paper: it is the justification for every synthetic number
 in it, and the limit on them.
 
-## Q3 — cluster detection## Q3 — cluster detection
+## Q3 — cluster detection
 
 The centrepiece, and it has to be built to *look for* the regime where offload
 pays rather than to confirm that it does. What is already measured says it mostly
@@ -363,28 +374,136 @@ our scalar scan against somebody else's. They stay available for correctness
 
 **Which hardware exists is per machine, and no machine has both.** This host has a
 DSA and no `/dev/iax`; the IAA host has the reverse. So the accelerator table is
-assembled from two runs and every row records its host. `run_paper.sh` reports
-which devices it can see, and warns when `libaccel-config` is missing — without it
-DML cannot enumerate work queues and every hardware submission fails identically,
-which is what made `dsa_hw` look broken for months.
+assembled from two runs and every row records its host. `run_paper.sh` derives the
+detector list from the devices it can actually see -- `--detectors scalar,dsa_hw`
+here, `scalar,iaa_hw,iaa_freq_hw` there, overridable with `COSORT_Q3_DETECTORS` --
+rather than asking for every compiled backend and dropping the absent ones, which
+filled the table with rows from the wrong machine. It also warns when
+`libaccel-config` is missing: without it DML cannot enumerate work queues and every
+hardware submission fails identically, which is what made `dsa_hw` look broken for
+months.
+
+**Two things about this driver's numbers.** It reads Q0's configuration like the
+others, which it did not until recently -- it built its samplesort from literals,
+and since its headline is detection's *share* of the runtime, and a share is a
+ratio against the sort, measuring it around a slower sorter understated every
+offload decision resting on it. And its phase timers stay *on*, unlike every other
+driver, because here the phase split is the measurement. So Q3's absolute
+ns/element are not comparable with Q2's or Q4's -- they carry the timers' 1.08x to
+1.28x -- while the share and the between-detector comparison, both taken within one
+build, are unaffected.
 
 ## Q4 — scaling
 
 Threads {1,2,4,8,16,24} x rows {2^18 .. 2^24} x columns {1,2,4,8,16} x {u32,u64},
-on three shapes chosen for opposite range structure. Reports speedup against its
-own single-thread row, so the axis is self-normalising, plus the phase profile so
-a plateau can be attributed rather than noted.
+on three shapes chosen for opposite range structure, plus the measured keys on the
+thread axis. Reports speedup against its own single-thread row, so the axis is
+self-normalising.
+
+**The thread axis is where the algorithm crossover lives, and it is only visible on
+real keys.** The synthetic shapes are won by the quicksort at every thread count.
+On `tpcds_q064` the crossover sits between two and four workers: samplesort 187.43
+against quicksort 83.28 at one worker, 66.13 against 97.03 at four, 21.31 against
+119.73 at twenty-four. A measured dataset arrives with its own row and column
+count, so it is passed in rather than looked up by size -- usable on the thread
+axis, and correctly unavailable on the row and column axes, which would have to
+invent data the query never produced.
+
+**The quicksort does not scale, and that is the largest open item in the suite.**
+Unprofiled, end to end on `tpcds_q064`: 102.17 ns/element at one worker, 88.29 at
+two, 98.20 at four, 128.24 at eight, 131.20 at twenty-four. Best at two workers and
+degrading from four. The samplesort scales 8.6x on the same key, so the data and the
+machine both permit scaling; this is a defect in the task tree, not a limit of the
+approach. Attributing it to a phase is still open: the per-task phase timers cost
+enough at ~10^6 tasks to distort what they measure, and the first attribution drawn
+from them was withdrawn.
+
+## Q5 and Q6 — variant screening and what the primitives buy
+
+Both are stages of `cosort_bench` rather than binaries of their own, for the
+reason given at the top: they would have to re-implement its registration to
+produce numbers it already produces. `run_paper.sh` runs them at nine repetitions
+and converts the Google Benchmark JSON into the shared schema.
+
+**Q5, the `screen` stage.** Every implementable variant at one point per axis --
+execution, discovery, partition kind, leaf, movement -- over six shapes at two
+size levels. The question is viability, not tuning: which cells are worth carrying
+at all. Two-way partitioning is registered only below a size cap, because it is
+quadratic in the equal-run length and a low-cardinality key above that cap is a
+several-minute row that tells you nothing you did not already know.
+
+**Q6, the `attribute` stage.** Three implementation styles by three register
+widths by both key widths, serial and post-sort so nothing but the primitives
+differs. This is the portability claim, and until recently it enumerated the
+quicksort's variant space only -- so a claim about TSL rested on one of the two
+algorithms. The samplesort is now registered alongside it: not its own product,
+because the question here is the cell rather than the configuration, but one fixed
+configuration per cell, which is also what keeps the comparison about portability
+instead of tuning. Eighteen cases, verified through the same index check the
+quicksort cases use, published under algorithm ids 200 and 201 so no existing id
+moves.
+
+First numbers, samplesort on `low_cardinality_d4` at L2, three columns:
+
+| lanes | intr | clang | clang_bool |
+| --- | --- | --- | --- |
+| 4 (128-bit) | 8.94 ms | 8.24 | 9.27 |
+| 8 (256-bit) | 6.90 | 7.18 | 7.48 |
+| 16 (512-bit) | 5.03 | 4.98 | **4.68** |
+
+Register width is worth 1.8x from four lanes to sixteen. At sixteen the three
+styles sit within 7% of each other, which is the portability result stated
+positively: the abstraction costs nothing at the width that matters.
+
+**And one asymmetry worth its own paragraph.** Q0's per-cell comparison puts
+`intr/128` at 1.89x the best cell on 4-byte keys and 1.73x on 8-byte, while
+`clang/128` is within 1.02x -- 40.11 against 21.24 ns/element for the same
+algorithm at the same width. That gap survived the 128-bit hybrid-leaf fix, so it
+is not a bug: clang's `ext_vector_type` at 128 bits generates materially better
+code than explicit SSE intrinsics, because the compiler is free to schedule what
+the intrinsics pin. It is the clearest single argument in the suite for generating
+through an abstraction rather than writing intrinsics by hand, and it appears only
+because the style axis is swept.
 
 ## Running it
 
+One command, from a clean checkout to a results directory:
+
 ```bash
-./run_paper.sh <build-dir> <results-dir>            # everything
-./run_paper.sh <build-dir> <results-dir> --quick    # one cell per question
+./run_all.sh                                  # results/$(hostname)
+./run_all.sh results/<host> --quick           # prove the pipeline
+./run_all.sh results/<host> --scale 10        # a larger scale factor
+./run_all.sh results/<host> --no-baselines    # skip Q1's external libraries
 ```
 
-`--quick` proves the pipeline in a couple of minutes and proves nothing about the
-paper. The full run is hours, and the accelerator rows need the machine with the
-devices.
+It configures, generates the data, builds and runs, skipping any step already
+done, so a re-run after a failure does not repeat `dsdgen`. The preset is chosen
+from what `/dev` actually has -- `bench-dsa-baselines` on a DSA host,
+`bench-iaa-baselines` on an IAA one, `bench` on neither -- and is always a
+*measurement* preset.
+
+The compiler is pinned to `clang++-22` and overridden only through
+`TSL_COSORT_CXX`, deliberately not `CXX`: the generated TSL selects its profile
+and its capability defines from the compiler it is configured with, so a different
+compiler is a different library and two results are not comparable. (`CXX` was
+already set to `zig c++` in the development container, and the first version of
+the script used it.)
+
+The stages underneath, if a step needs running by hand:
+
+```bash
+cmake -S . --preset bench-dsa-baselines       # or bench, bench-iaa, ...
+cmake --build --preset bench-dsa-baselines
+benchmarks/datagen/tpcds/build_generator.sh   # once
+benchmarks/datagen/tpcds/generate.sh 1
+benchmarks/datagen/tpcds/extract_keys.py --data ... --out TMP/tpcds_keys
+TPCDS_KEYS=TMP/tpcds_keys ./run_paper.sh <build-dir> <results-dir>
+```
+
+`run_paper.sh` refuses a build with instrumentation compiled in, so the `dev` and
+`phases` presets cannot produce a results directory. `--quick` proves the pipeline
+in about ten minutes and proves nothing about the paper; the full run is six to
+seven hours, and the accelerator rows need the machine with the devices.
 
 ## Exploring the results
 
