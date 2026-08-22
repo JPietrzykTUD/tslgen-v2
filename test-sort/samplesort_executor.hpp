@@ -39,6 +39,7 @@ template <
   TslSampleSortIds IdWidth = TslSampleSortIds::Byte,
   std::size_t BaseRows = BaseCase / SimdStyle::lane_count_v,
   std::size_t BaseFillPercent = 50,
+  TslSampleSortMovement Movement = TslSampleSortMovement::OutOfPlace,
   bool Profile = false
 >
 void tsl_samplesort_cosort(
@@ -52,14 +53,19 @@ void tsl_samplesort_cosort(
 ) {
   using Kernels =
     TslSampleSortKernels<Key, SimdStyle, K, Policy, Oversample, BaseCase, BasePolicy,
-                         IdWidth, BaseRows, BaseFillPercent>;
+                         IdWidth, BaseRows, BaseFillPercent, Movement>;
   using Idx = typename Kernels::index_type;
 
   TslSampleSortMetrics metrics;
   if (n > 1) {
-    if (keys == nullptr || idx == nullptr || keys_scratch == nullptr
-        || idx_scratch == nullptr) {
-      throw std::invalid_argument("samplesort needs both buffer pairs");
+    if (keys == nullptr || idx == nullptr) {
+      throw std::invalid_argument("samplesort needs a key and an index column");
+    }
+    // In place there is no second pair, so the caller may pass null for it.
+    if constexpr (!Kernels::in_place) {
+      if (keys_scratch == nullptr || idx_scratch == nullptr) {
+        throw std::invalid_argument("samplesort needs both buffer pairs");
+      }
     }
 
     // 2 * ceil(log_K n) + 8: the safety net that turns a pathological recursion

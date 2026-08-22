@@ -152,7 +152,8 @@ template <class Key, class Simd, int K, TslSampleSortBuckets Policy,
           int Oversample = 8, std::size_t BaseCase = 256,
           TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion,
           std::size_t BaseRows = BaseCase / Simd::lane_count_v,
-          std::size_t BaseFillPercent = 50>
+          std::size_t BaseFillPercent = 50,
+          TslSampleSortMovement Movement = TslSampleSortMovement::OutOfPlace>
 auto end_to_end(char const * type, std::size_t n, std::size_t chunks) -> double {
   using Idx = typename TslSampleSortTraits<Key>::index_type;
   auto const source = random_keys<Key>(n, 0x1234F00D);
@@ -172,7 +173,8 @@ auto end_to_end(char const * type, std::size_t n, std::size_t chunks) -> double 
     std::iota(idx.begin(), idx.end(), Idx{0});
     auto const start = Clock::now();
     tsl_samplesort_cosort<Key, Simd, K, Policy, Oversample, BaseCase, BasePolicy,
-                          TslSampleSortIds::Byte, BaseRows, BaseFillPercent>(
+                          TslSampleSortIds::Byte, BaseRows, BaseFillPercent,
+                          Movement>(
       keys.data(), idx.data(), n, keys_scratch.data(), idx_scratch.data(),
       options, &metrics);
     auto const stop = Clock::now();
@@ -185,8 +187,9 @@ auto end_to_end(char const * type, std::size_t n, std::size_t chunks) -> double 
   auto const ns = median(samples);
   char note[128];
   std::snprintf(note, sizeof(note),
-                "%s base=%zu rows=%zu fill=%zu passes=%.2f baseel=%.2f copyback=%.2f buckets<=%zu eqb=%zu",
-                BasePolicy == TslSampleSortBase::Network ? "net" : "ins", BaseCase,
+                "%s%s base=%zu rows=%zu fill=%zu passes=%.2f baseel=%.2f copyback=%.2f buckets<=%zu eqb=%zu",
+                BasePolicy == TslSampleSortBase::Network ? "net" : "ins",
+                Movement == TslSampleSortMovement::InPlace ? "/inplace" : "", BaseCase,
                 BaseRows, BaseFillPercent,
                 static_cast<double>(metrics.classified_elements) / static_cast<double>(n),
                 static_cast<double>(metrics.base_case_elements) / static_cast<double>(n),
@@ -435,6 +438,24 @@ int main(int argc, char ** argv) {
               100.0 * (widest - one_chunk) / one_chunk,
               (widest - one_chunk) / one_chunk > 0.05
                 ? "(over 5%: check the phase-3 loop order)" : "(within 5%)");
+
+  // In place: no second buffer pair, so the footprint halves. Phase 4 becomes a
+  // scalar whole-range permutation instead of a vectorised scatter, and stops
+  // being divisible into chunks.
+  constexpr auto in_place = TslSampleSortMovement::InPlace;
+  std::printf("\n-- in place against out of place --\n");
+  auto const oop32 = end_to_end<U32, Simd32, 16, equality, 8, 256, network_base,
+                                16, 25>("u32", n, 1);
+  auto const ip32 = end_to_end<U32, Simd32, 16, equality, 8, 256, network_base,
+                               16, 25, in_place>("u32", n, 1);
+  auto const oop64 = end_to_end<U64, Simd64, 16, equality, 8, 256, network_base,
+                                32, 50>("u64", n, 1);
+  auto const ip64 = end_to_end<U64, Simd64, 16, equality, 8, 256, network_base,
+                               32, 50, in_place>("u64", n, 1);
+  std::printf("   u32 in place costs %+.1f%%, u64 %+.1f%%, and both halve the\n"
+              "   footprint: %zu bytes per element rather than %zu.\n",
+              100.0 * (ip32 - oop32) / oop32, 100.0 * (ip64 - oop64) / oop64,
+              sizeof(U32) * 2, sizeof(U32) * 4);
 
   std::printf("\n-- parallel: samplesort against the parallel task tree --\n");
   for (std::size_t workers : {std::size_t{1}, std::size_t{2}, std::size_t{4},

@@ -75,6 +75,22 @@
 #include "sort_helpers.hpp"
 
 
+// How phase 4 moves elements.
+enum class TslSampleSortMovement {
+  // Scatter into the other buffer pair and ping-pong. Vectorised, chunk-parallel,
+  // and needs `2n` elements of key plus index.
+  OutOfPlace,
+  // Permute within the range using the exact bucket offsets, following cycles.
+  // Needs no second pair at all, so the sort's footprint halves -- at `n = 4e9`
+  // and 32-bit keys that is 32 GiB rather than 64. The cost is that it is scalar
+  // and element-at-a-time, and that a whole-range permutation is not divisible
+  // into independent chunks, so it forgoes the chunk parallelism of phases 2
+  // and 4. Recovering both is what IPS4o's block permutation is for; this is the
+  // simple form, implemented to price the trade rather than to win it.
+  InPlace,
+};
+
+
 // Bucket-id width. Classification writes this array and distribution reads it,
 // so at 32-bit keys a key-width id is three extra bytes per element per pass in
 // each direction. Measured on the phase that reads it: byte ids cost 17.5% less
@@ -274,7 +290,8 @@ template <
   // network, above 100 sends everything to insertion, so the sweep spans both.
   // Width-dependent in practice: u32 prefers 25, u64 prefers 50, because the
   // u64 network costs more per element and needs a fuller range to pay.
-  std::size_t BaseFillPercent = 50
+  std::size_t BaseFillPercent = 50,
+  TslSampleSortMovement Movement = TslSampleSortMovement::OutOfPlace
 >
 class TslSampleSortKernels {
  public:
@@ -315,6 +332,7 @@ class TslSampleSortKernels {
   // capacity is below `BaseCase`, which at u64 costs more than the network saves.
   // `base_sort_pairs` sends anything above the capacity to insertion instead.
   static constexpr std::size_t base_case = BaseCase;
+  static constexpr bool in_place = Movement == TslSampleSortMovement::InPlace;
   static constexpr std::size_t sample_size =
     static_cast<std::size_t>(Oversample) * static_cast<std::size_t>(K);
 
@@ -577,6 +595,41 @@ class TslSampleSortKernels {
     }
   }
 
+  // Phase 4, in place. Every element is carried to its bucket's cursor and the
+  // element found there is examined in turn, so each one is written at most once
+  // and the whole range costs O(count) swaps. The bucket ids travel with the
+  // elements: they were computed for the original positions, and permuting
+  // without them would leave the walk reading an id that belongs to whatever used
+  // to be there.
+  //
+  // `cursors` must hold each bucket's absolute start; on return each holds its
+  // bucket's end, which is the same postcondition `distribute_chunk` leaves.
+  static void permute_in_place(
+    Key * keys,
+    index_type * idx,
+    bucket_id_type * bucket_ids,
+    std::size_t const * offsets,
+    std::size_t const * counts,
+    std::size_t buckets,
+    index_type * cursors
+  ) {
+    for (std::size_t b = 0; b < buckets; ++b) {
+      auto const stop = offsets[b] + counts[b];
+      while (cursors[b] < stop) {
+        auto const at = static_cast<std::size_t>(cursors[b]);
+        auto const target = static_cast<std::size_t>(bucket_ids[at]);
+        if (target == b) {
+          ++cursors[b];
+          continue;
+        }
+        auto const to = static_cast<std::size_t>(cursors[target]++);
+        std::swap(keys[at], keys[to]);
+        std::swap(idx[at], idx[to]);
+        std::swap(bucket_ids[at], bucket_ids[to]);
+      }
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Base cases
   // ---------------------------------------------------------------------------
@@ -780,11 +833,15 @@ auto tsl_samplesort_partition_step(
   using Idx = typename Kernels::index_type;
   constexpr auto lanes = Kernels::lanes;
 
-  // Read from whichever pair holds this range; write to the other one.
+  // Read from whichever pair holds this range; write to the other one. In place
+  // there is only one pair and phase 4 permutes within it, so `task.in_scratch`
+  // is never set and the scratch pointers are unused.
   Key * const source_keys = task.in_scratch ? keys_scratch : keys;
   Idx * const source_idx = task.in_scratch ? idx_scratch : idx;
-  Key * const target_keys = task.in_scratch ? keys : keys_scratch;
-  Idx * const target_idx = task.in_scratch ? idx : idx_scratch;
+  Key * const target_keys =
+    Kernels::in_place ? source_keys : (task.in_scratch ? keys : keys_scratch);
+  Idx * const target_idx =
+    Kernels::in_place ? source_idx : (task.in_scratch ? idx : idx_scratch);
 
   auto const begin = task.begin;
   auto const end = task.begin + task.count;
@@ -872,11 +929,20 @@ auto tsl_samplesort_partition_step(
 
   // ---- phase 4: per chunk, independent ----
   auto const t_distribute = now();
-  run_chunks(chunks, [&](std::size_t c) {
-    Kernels::distribute_chunk(target_keys, target_idx, source_keys, source_idx,
-                              workspace.bucket_ids, chunk_begin(c),
-                              chunk_end(c), workspace.cursors.data() + c * buckets);
-  });
+  if constexpr (Kernels::in_place) {
+    // A whole-range permutation, so it takes the single cursor row and ignores
+    // the chunk split. `split()` above still enforces lane alignment, which keeps
+    // phase 2 chunkable and the invariance test meaningful.
+    Kernels::permute_in_place(source_keys, source_idx, workspace.bucket_ids,
+                              workspace.offsets.data(), workspace.counts.data(),
+                              buckets, workspace.cursors.data());
+  } else {
+    run_chunks(chunks, [&](std::size_t c) {
+      Kernels::distribute_chunk(target_keys, target_idx, source_keys, source_idx,
+                                workspace.bucket_ids, chunk_begin(c),
+                                chunk_end(c), workspace.cursors.data() + c * buckets);
+    });
+  }
   if constexpr (Profile) {
     metrics.ns_distribute += since(t_distribute);
   }
@@ -886,10 +952,17 @@ auto tsl_samplesort_partition_step(
   // is what proves the scatter conflict-resolution assumption above held.
   for (std::size_t b = 0; b < buckets; ++b) {
     auto expected = workspace.offsets[b];
-    for (std::size_t c = 0; c < chunks; ++c) {
-      expected += workspace.histogram[c * buckets + b];
-      assert(workspace.cursors[c * buckets + b] == static_cast<Idx>(expected)
-             && "a distribution cursor overran its bucket");
+    if constexpr (Kernels::in_place) {
+      // One cursor row, and it must have walked to the bucket's end.
+      expected += workspace.counts[b];
+      assert(workspace.cursors[b] == static_cast<Idx>(expected)
+             && "an in-place cursor did not reach its bucket's end");
+    } else {
+      for (std::size_t c = 0; c < chunks; ++c) {
+        expected += workspace.histogram[c * buckets + b];
+        assert(workspace.cursors[c * buckets + b] == static_cast<Idx>(expected)
+               && "a distribution cursor overran its bucket");
+      }
     }
     (void)expected;
   }
@@ -906,7 +979,8 @@ auto tsl_samplesort_partition_step(
       metrics.equality_elements += count;
     }
     emit.push_back(TslSampleSortTask{
-      workspace.offsets[b], count, task.depth + 1, !task.in_scratch,
+      workspace.offsets[b], count, task.depth + 1,
+      Kernels::in_place ? false : !task.in_scratch,
       equality || count <= 1});
   }
 }

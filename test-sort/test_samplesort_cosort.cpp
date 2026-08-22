@@ -125,7 +125,8 @@ void check_result(std::string const & label, std::vector<Key> const & original,
 }
 
 template <class Key, class Simd, int K, TslSampleSortBuckets Policy,
-          TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion>
+          TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion,
+          TslSampleSortMovement Movement = TslSampleSortMovement::OutOfPlace>
 auto run_sort(std::vector<Key> keys, std::size_t chunks,
               std::vector<typename TslSampleSortTraits<Key>::index_type> & idx_out,
               TslSampleSortMetrics * metrics = nullptr) -> std::vector<Key> {
@@ -138,7 +139,9 @@ auto run_sort(std::vector<Key> keys, std::size_t chunks,
 
   TslSampleSortOptions options;
   options.chunks = chunks;
-  tsl_samplesort_cosort<Key, Simd, K, Policy, 8, 256, BasePolicy>(
+  tsl_samplesort_cosort<Key, Simd, K, Policy, 8, 256, BasePolicy,
+                        TslSampleSortIds::Byte, 256 / Simd::lane_count_v, 50,
+                        Movement>(
     keys.data(), idx.data(), n, keys_scratch.data(), idx_scratch.data(),
     options, metrics);
   idx_out = std::move(idx);
@@ -146,20 +149,22 @@ auto run_sort(std::vector<Key> keys, std::size_t chunks,
 }
 
 template <class Key, class Simd, int K, TslSampleSortBuckets Policy,
-          TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion>
+          TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion,
+          TslSampleSortMovement Movement = TslSampleSortMovement::OutOfPlace>
 void run_shape(char const * tag, Shape shape, std::size_t n) {
   using Idx = typename TslSampleSortTraits<Key>::index_type;
   auto const label = std::string(tag) + "/" + shape_name(shape) + "/n=" + std::to_string(n);
   auto const original = make_keys<Key>(shape, n, 0xC0FFEE ^ (n * 31));
 
   std::vector<Idx> idx;
-  auto const keys = run_sort<Key, Simd, K, Policy, BasePolicy>(original, 1, idx);
+  auto const keys = run_sort<Key, Simd, K, Policy, BasePolicy, Movement>(original, 1, idx);
   check_result(label, original, keys, idx);
 }
 
 // The chunk-invariance test of the specification's section 8 item 6.
 template <class Key, class Simd, int K, TslSampleSortBuckets Policy,
-          TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion>
+          TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion,
+          TslSampleSortMovement Movement = TslSampleSortMovement::OutOfPlace>
 void run_chunk_invariance(char const * tag, Shape shape, std::size_t n) {
   using Idx = typename TslSampleSortTraits<Key>::index_type;
   auto const label =
@@ -168,13 +173,13 @@ void run_chunk_invariance(char const * tag, Shape shape, std::size_t n) {
 
   std::vector<Idx> reference_idx;
   auto const reference_keys =
-    run_sort<Key, Simd, K, Policy, BasePolicy>(original, 1, reference_idx);
+    run_sort<Key, Simd, K, Policy, BasePolicy, Movement>(original, 1, reference_idx);
   check_result(label + "/c=1", original, reference_keys, reference_idx);
 
   for (std::size_t chunks : {std::size_t{2}, std::size_t{3}, std::size_t{7}}) {
     ++g_checks;
     std::vector<Idx> idx;
-    auto const keys = run_sort<Key, Simd, K, Policy, BasePolicy>(original, chunks, idx);
+    auto const keys = run_sort<Key, Simd, K, Policy, BasePolicy, Movement>(original, chunks, idx);
     if (keys != reference_keys) {
       fail(label + "/c=" + std::to_string(chunks), "keys differ from the one-chunk run");
       continue;
@@ -221,7 +226,8 @@ void run_classifier_agreement(char const * tag) {
 }
 
 template <class Key, class Simd, int K, TslSampleSortBuckets Policy,
-          TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion>
+          TslSampleSortBase BasePolicy = TslSampleSortBase::Insertion,
+          TslSampleSortMovement Movement = TslSampleSortMovement::OutOfPlace>
 void run_width(char const * tag) {
   std::vector<std::size_t> const sizes{
     0, 1, 2, 15, 16, 17, 255, 256, 257, 4095, 1u << 20
@@ -233,15 +239,15 @@ void run_width(char const * tag) {
 
   for (auto const shape : shapes) {
     for (auto const n : sizes) {
-      run_shape<Key, Simd, K, Policy, BasePolicy>(tag, shape, n);
+      run_shape<Key, Simd, K, Policy, BasePolicy, Movement>(tag, shape, n);
     }
   }
   // Sizes that are not multiples of the lane count, and shapes that stress the
   // duplicate handling, are the ones worth running through every chunk count.
   for (auto const shape : {Shape::Random, Shape::AllEqual, Shape::TwoValues,
                            Shape::Skewed, Shape::Sawtooth}) {
-    run_chunk_invariance<Key, Simd, K, Policy, BasePolicy>(tag, shape, 4095);
-    run_chunk_invariance<Key, Simd, K, Policy, BasePolicy>(tag, shape, 1u << 20);
+    run_chunk_invariance<Key, Simd, K, Policy, BasePolicy, Movement>(tag, shape, 4095);
+    run_chunk_invariance<Key, Simd, K, Policy, BasePolicy, Movement>(tag, shape, 1u << 20);
   }
   run_classifier_agreement<Key, Simd, K, Policy>(tag);
 }
@@ -301,6 +307,15 @@ int main() {
             TslSampleSortBuckets::Adaptive>("u32/K=8/equality");
   run_width<std::uint32_t, tsl::simd<std::uint32_t, tsl::avx512>, 32,
             TslSampleSortBuckets::Ordered>("u32/K=32/ordered");
+
+  // In-place phase 4: no second buffer pair, so this also covers the executor's
+  // relaxed argument check and the different subtask parity.
+  run_width<std::uint32_t, tsl::simd<std::uint32_t, tsl::avx512>, 16,
+            TslSampleSortBuckets::Adaptive, TslSampleSortBase::Network,
+            TslSampleSortMovement::InPlace>("u32/K=16/adaptive/in-place");
+  run_width<std::uint64_t, tsl::simd<std::uint64_t, tsl::avx512>, 16,
+            TslSampleSortBuckets::Ordered, TslSampleSortBase::Insertion,
+            TslSampleSortMovement::InPlace>("u64/K=16/ordered/in-place");
 
   // The bitonic network as the base case instead of insertion. Measured slower
   // (see samplesort-notes.md) but it is a supported policy, so it is tested.

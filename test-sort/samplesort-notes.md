@@ -131,6 +131,34 @@ sequential one where keys tie, so the test demands the *sorted key image* match
 exactly, which it does. Clean under ThreadSanitizer, and under
 `-fsanitize=address,undefined`.
 
+## In place
+
+`TslSampleSortMovement::InPlace` replaces the scatter into a second pair with a
+permutation inside the range: each element is carried to its bucket's cursor and
+whatever was there is examined next, so every element is written at most once and
+the range costs O(count) swaps. The bucket ids travel with the elements, because
+they were computed for the original positions.
+
+| | out of place | in place | |
+| --- | --- | --- | --- |
+| u32 end to end | 25.8 | 41.8 | +62.1% |
+| u64 end to end | 34.0 | 45.7 | +34.3% |
+| bytes per element | 16 | **8** | |
+| copy-back | 0.65 elem/elem | **none** | |
+
+So the simple in-place form is not a speed win at any size measured -- it trades
+a vectorised scatter for a scalar element-at-a-time walk, and that costs far more
+than the 1.8% the copy-back was worth. It buys exactly one thing: footprint. At
+the specification's stated `n = 4e9` with 32-bit keys that is 32 GiB rather than
+64, which can be the difference between fitting in a machine and not, so it is
+kept as an option rather than removed.
+
+It also gives up the chunk parallelism of phase 4: a whole-range cycle
+permutation is not divisible into independent chunks, where the scatter is.
+Recovering the vector width *and* the chunk split is precisely what IPS4o's block
+permutation does -- distribute into per-bucket block buffers, then permute whole
+blocks -- and this measurement is the price it would be paying for.
+
 ## Where the time actually goes
 
 The two kernels the specification's performance section is about are 31% of the
@@ -339,10 +367,10 @@ any target where the narrowing pair is absent.
   moves) is still the first thing to run after threading. With adaptive equality
   buckets the typical stream count is `2·T·K` as §3.1 assumed, not double it.
 * The mask-free classification form of finding 1, which needs the bias pass.
-* **In-place block permutation.** Still not done, and the profile says why it
-  should not be next for speed: it removes the copy-back, which is 1.8% of the
-  runtime. Its argument is halving peak memory -- the sort needs two buffer pairs
-  -- which is a capacity decision rather than a throughput one.
+* **IPS4o's *block* permutation.** The simple in-place form is implemented and
+  measured above; the block form is what would make in-place competitive rather
+  than merely smaller, and it is the one piece of the original specification's
+  "future work" still outstanding.
 * An IPS4o baseline, which is the yardstick that matters now that the parallel
   numbers exist.
 * The mask-free classification form of finding 1, which needs the bias pass.
