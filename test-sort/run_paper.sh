@@ -43,6 +43,21 @@ printf '%s\n' "$host" > "$stamp"
 } > "$results/machine.txt"
 cat "$results/machine.txt"
 
+# Which accelerator rows this machine can contribute. No host here has both, so
+# the paper's accelerator table is assembled from more than one run and each row
+# records where it came from.
+have_dsa=$([[ -e /dev/dsa ]] && echo yes || echo no)
+have_iax=$([[ -e /dev/iax ]] && echo yes || echo no)
+echo "accelerators: dsa=$have_dsa iax=$have_iax"
+if [[ "$have_dsa" == "no" && "$have_iax" == "no" ]]; then
+  echo "  no accelerator on this host: Q3's hardware rows will all be drops"
+fi
+if ! ldconfig -p 2>/dev/null | grep -q libaccel-config; then
+  echo "  !! libaccel-config is not installed; DML dlopens it to enumerate work"
+  echo "     queues, and without it every hardware submission fails with an"
+  echo "     internal error whatever its size"
+fi
+
 if [[ -n "$(awk '{print ($1 > 1.0)}' /proc/loadavg)" ]] \
    && [[ "$(awk '{print ($1 > 1.0)}' /proc/loadavg)" == "1" ]]; then
   echo
@@ -79,21 +94,32 @@ else
 fi
 
 run bench_q2_algorithms q2_algorithms "${narrow_q2[@]+"${narrow_q2[@]}"}"
-run bench_q3_detection  q3_detection  "${narrow_q3[@]+"${narrow_q3[@]}"}"
+# Hardware paths only: the software ones are QPL's and DML's own CPU code, kept
+# for correctness rather than for figures.
+run bench_q3_detection  q3_detection  --paths hw "${narrow_q3[@]+"${narrow_q3[@]}"}"
 run bench_q4_scaling    q4_scaling    "${narrow_q4[@]+"${narrow_q4[@]}"}"
 
 # Q5 and Q6 are stages of the existing staged driver rather than new binaries.
 if [[ -x "$build/cosort_bench" ]]; then
-  echo
-  echo "=== q5_variants (cosort_bench, screen stage)"
-  (cd "$build" && COSORT_STAGE=screen ./cosort_bench \
-      --benchmark_format=json --benchmark_out="$results/q5_variants.json") \
-    > "$results/q5_variants.log" 2>&1 || echo "  cosort_bench screen failed, see the log"
-  echo
-  echo "=== q6_portability (cosort_bench, attribute stage)"
-  (cd "$build" && COSORT_STAGE=attribute ./cosort_bench \
-      --benchmark_format=json --benchmark_out="$results/q6_portability.json") \
-    > "$results/q6_portability.log" 2>&1 || echo "  cosort_bench attribute failed, see the log"
+  # Q5 and Q6 are stages of the corpus rather than binaries of their own: a
+  # bench_q5_*.cpp would have to re-implement its registration and drop
+  # accounting to produce numbers it already produces. What the paper needs from
+  # them is the shared schema, so the JSON is converted into it.
+  converter="$(dirname "$0")/benchmarks/visualization/gbench_to_paper.py"
+  for stage in screen:q5_variants attribute:q6_portability; do
+    name="${stage#*:}"
+    echo
+    echo "=== $name (cosort_bench, ${stage%%:*} stage)"
+    if (cd "$build" && COSORT_STAGE="${stage%%:*}" ./cosort_bench \
+          --benchmark_repetitions=9 --benchmark_report_aggregates_only=true \
+          --benchmark_format=json --benchmark_out="$results/$name.json") \
+        > "$results/$name.log" 2>&1; then
+      python3 "$converter" "$results/$name.json" "$results/$name.csv" \
+        --question "$name" || echo "  conversion failed"
+    else
+      echo "  cosort_bench ${stage%%:*} failed, see $results/$name.log"
+    fi
+  done
 fi
 
 echo

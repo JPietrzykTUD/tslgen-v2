@@ -414,8 +414,8 @@ class TslDsaAsyncRunDetector {
       auto const result = slot.handler.get();
       if (result.status != dml::status_code::ok) {
         throw std::runtime_error(
-          "async create_delta failed with DML status "
-          + std::to_string(static_cast<std::uint32_t>(result.status))
+          "async create_delta failed: "
+          + std::string(tsl_dml_status_name(result.status))
         );
       }
       if (result.delta_record_size > slot.deltas.size()) {

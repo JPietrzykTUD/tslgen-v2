@@ -643,15 +643,27 @@ configure time naming the file.
    completeness, but a candidate to drop from `screen` if the sweep needs
    trimming. Whether the earlier task exposure helps at higher worker counts or on
    the skewed shapes is unmeasured.
-4. **`dsa_hw` fails on this host** with `DML_STATUS_BATCH_LIMITS_ERROR`, and so
-   does the pre-existing `test_dsa_run_detector hw`, so the fault predates this
-   harness. Until it is diagnosed a DSA host measures `scalar` and `dml_sw`.
-   `dml_sw` itself only started working while measuring the hybrid leaf: its fleet
-   gave each new thread a permanent slot, and the executor starts fresh workers per
-   sort, so it threw `fewer slots than calling threads` on the second gbench
-   iteration of any parallel case. `TslDsaDetectorFleet` is now the same
-   borrow-and-return pool as the IAA one. Any earlier `dml_sw` figure in this
-   document predates the executor change that broke it.
+4. **`dsa_hw` works; it was a missing library, not a bug.** This item previously
+   read that `dsa_hw` failed with `DML_STATUS_BATCH_LIMITS_ERROR` and that the
+   fault predated the harness. Both halves were wrong.
+
+   The number was mis-decoded. DML's C++ API has its own `status_code` enum,
+   numbered from zero, which is *not* the C API's `dml_status_t`; code 16 there is
+   `error` — "internal library error" — not `BATCH_LIMITS`. Reading it against the
+   C enum sent the search towards batch sizes, where there was nothing to find.
+   `tsl_dml_status_name` now prints the right name.
+
+   The cause was that DML dlopens `libaccel-config.so.1` to enumerate work queues
+   and it was not installed. Without it every hardware submission fails
+   identically whatever its size — a minimal 64-byte `create_delta` failed exactly
+   as a 512 KiB one did, which is what ruled out sizing, batching and our own
+   code. The work queues were healthy throughout: `wq0.0` shared and `wq0.1`
+   dedicated, both enabled, `max_batch_size` 1024, 2 GiB transfers.
+
+   With `libaccel-config1` installed, `test_dsa_run_detector hw` passes 4296
+   checks and `dsa_hw` measures normally. A host that wants the DSA rows needs
+   that package; `run_paper.sh` checks for it and says so.
+
 5. **IAA is unverified on hardware.** `iaa_sw`/`iaa_hw` and their asynchronous
    forms are implemented and the software path passes its differential test, but
    this host has `/dev/dsa` and no `/dev/iax`. `test_iaa_run_detector hw` and

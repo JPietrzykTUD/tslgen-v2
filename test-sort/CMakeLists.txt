@@ -200,7 +200,7 @@ add_executable(bench_q2_algorithms benchmarks/bench_q2_algorithms.cpp)
 target_compile_features(bench_q2_algorithms PRIVATE cxx_std_17)
 target_link_libraries(bench_q2_algorithms PRIVATE tsl::tsl Threads::Threads)
 
-add_executable(bench_samplesort_multicolumn benchmarks/bench_samplesort_multicolumn.cpp)
+add_executable(bench_samplesort_multicolumn EXCLUDE_FROM_ALL benchmarks/deprecated/bench_samplesort_multicolumn.cpp)
 target_compile_features(bench_samplesort_multicolumn PRIVATE cxx_std_17)
 target_link_libraries(bench_samplesort_multicolumn PRIVATE tsl::tsl Threads::Threads)
 
@@ -232,7 +232,7 @@ add_executable(test_multicolumn_index_sort tests/test_multicolumn_index_sort.cpp
 target_compile_features(test_multicolumn_index_sort PRIVATE cxx_std_17)
 target_link_libraries(test_multicolumn_index_sort PRIVATE tsl::tsl Threads::Threads)
 
-add_executable(benchmark_quicksort_pairwise_swap benchmarks/benchmark_quicksort_pairwise_swap.cpp)
+add_executable(benchmark_quicksort_pairwise_swap EXCLUDE_FROM_ALL benchmarks/deprecated/benchmark_quicksort_pairwise_swap.cpp)
 target_compile_features(benchmark_quicksort_pairwise_swap PRIVATE cxx_std_17)
 target_link_libraries(benchmark_quicksort_pairwise_swap PRIVATE tsl::tsl)
 if(ENABLE_VQSORT_BENCHMARK)
@@ -240,15 +240,15 @@ if(ENABLE_VQSORT_BENCHMARK)
   target_link_libraries(benchmark_quicksort_pairwise_swap PRIVATE hwy_contrib)
 endif()
 
-add_executable(benchmark_compact_merge benchmarks/benchmark_compact_merge.cpp)
+add_executable(benchmark_compact_merge EXCLUDE_FROM_ALL benchmarks/deprecated/benchmark_compact_merge.cpp)
 target_compile_features(benchmark_compact_merge PRIVATE cxx_std_17)
 target_link_libraries(benchmark_compact_merge PRIVATE tsl::tsl)
 
-add_executable(benchmark_cosort_network benchmarks/benchmark_cosort_network.cpp)
+add_executable(benchmark_cosort_network EXCLUDE_FROM_ALL benchmarks/deprecated/benchmark_cosort_network.cpp)
 target_compile_features(benchmark_cosort_network PRIVATE cxx_std_17)
 target_link_libraries(benchmark_cosort_network PRIVATE tsl::tsl)
 
-add_executable(benchmark_multicolumn_sort benchmarks/benchmark_multicolumn_sort.cpp)
+add_executable(benchmark_multicolumn_sort EXCLUDE_FROM_ALL benchmarks/deprecated/benchmark_multicolumn_sort.cpp)
 target_compile_features(benchmark_multicolumn_sort PRIVATE cxx_std_17)
 target_link_libraries(benchmark_multicolumn_sort PRIVATE tsl::tsl)
 
@@ -281,7 +281,7 @@ if(ENABLE_GBENCH)
     endif()
   endif()
 
-  add_executable(benchmark_multicolumn_gbench benchmarks/benchmark_multicolumn_gbench.cpp)
+  add_executable(benchmark_multicolumn_gbench EXCLUDE_FROM_ALL benchmarks/deprecated/benchmark_multicolumn_gbench.cpp)
   target_compile_features(benchmark_multicolumn_gbench PRIVATE cxx_std_17)
   target_link_libraries(
     benchmark_multicolumn_gbench
@@ -570,7 +570,7 @@ if(TSL_COSORT_ENABLE_DSA)
   target_link_libraries(test_dsa_run_detector PRIVATE tsl::tsl ${_dsa_link_targets})
   add_test(NAME test_dsa_run_detector COMMAND test_dsa_run_detector)
 
-  add_executable(benchmark_dsa_run_detector benchmarks/benchmark_dsa_run_detector.cpp)
+  add_executable(benchmark_dsa_run_detector EXCLUDE_FROM_ALL benchmarks/deprecated/benchmark_dsa_run_detector.cpp)
   target_compile_features(benchmark_dsa_run_detector PRIVATE cxx_std_17)
   target_compile_definitions(benchmark_dsa_run_detector PRIVATE TSL_COSORT_ENABLE_DSA=1)
   target_link_libraries(benchmark_dsa_run_detector PRIVATE tsl::tsl ${_dsa_link_targets})
@@ -578,7 +578,7 @@ if(TSL_COSORT_ENABLE_DSA)
   # The full co-sort with the RLE backend as the registered axis. Needs Google
   # Benchmark, so it follows ENABLE_GBENCH.
   if(ENABLE_GBENCH)
-    add_executable(benchmark_dsa_cosort benchmarks/benchmark_dsa_cosort.cpp)
+    add_executable(benchmark_dsa_cosort EXCLUDE_FROM_ALL benchmarks/deprecated/benchmark_dsa_cosort.cpp)
     target_compile_features(benchmark_dsa_cosort PRIVATE cxx_std_17)
     target_compile_definitions(benchmark_dsa_cosort PRIVATE TSL_COSORT_ENABLE_DSA=1)
     target_link_libraries(

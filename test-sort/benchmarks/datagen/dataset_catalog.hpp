@@ -51,12 +51,14 @@ enum class TslShape {
   PermutationLocal,
   PermutationBlocked,
   PermutationRandom,
+  TpcdsQ67,
 };
 
 inline auto tsl_shape_name(TslShape shape) -> std::string {
   switch (shape) {
     case TslShape::UniqueFirst: return "unique_first";
     case TslShape::UniqueLast: return "unique_last";
+    case TslShape::TpcdsQ67: return "tpcds_q67";
     case TslShape::IndependentUniform: return "independent_uniform";
     case TslShape::BalancedHierarchy: return "balanced_hierarchy";
     case TslShape::SkewedZipf: return "skewed_zipf";
@@ -105,7 +107,8 @@ inline auto tsl_shape_section(TslShape shape) -> int {
     case TslShape::UniqueFirst: return 1;
     case TslShape::UniqueLast: return 2;
     case TslShape::IndependentUniform:
-    case TslShape::BalancedHierarchy: return 3;
+    case TslShape::BalancedHierarchy:
+    case TslShape::TpcdsQ67: return 3;
     case TslShape::SkewedZipf:
     case TslShape::HeavyHitter: return 4;
     case TslShape::LowCardinality:
@@ -461,6 +464,57 @@ auto tsl_generate_dataset(TslDatasetSpec const & spec) -> std::vector<std::vecto
       for (auto & column : columns) {
         for (auto & value : column) {
           value = static_cast<DataType>(uniform(cardinality));
+        }
+      }
+      break;
+    }
+    case TslShape::TpcdsQ67: {
+      // The grouping key of TPC-DS query 67, which rolls up over
+      //
+      //   i_category, i_class, i_brand, i_product_name,
+      //   d_year, d_qoy, d_moy, s_store_id
+      //
+      // and is the widest co-sort key in this benchmark. Two structures meet in
+      // it, which is what makes it worth having: the first four columns are a
+      // strict hierarchy, each nested in the one before, while the last four come
+      // from other dimension tables and are independent of them and of each
+      // other. A leading column of ten distinct values means the first sort
+      // produces very few, very large equal runs and everything after it is
+      // decided inside those.
+      //
+      // The cardinalities are *modelled* on the schema's and scaled by `sf`, not
+      // produced by dsdgen: item and store scale with the square root of the
+      // scale factor, category, class and brand counts are fixed, and query 67
+      // filters a twelve-month window so at most two years appear. Calibrating
+      // them against a real dsdgen run is worth doing before they are cited as
+      // TPC-DS numbers rather than as its shape.
+      auto const scale = std::max(spec.param("sf", 1.0), 0.01);
+      auto const root = std::sqrt(scale);
+      auto const brands = std::size_t{1000};
+      auto const products =
+        std::max<std::size_t>(static_cast<std::size_t>(18000.0 * root), brands);
+      auto const stores =
+        std::max<std::size_t>(static_cast<std::size_t>(12.0 * root), 1);
+      auto const per_brand = std::max<std::size_t>(products / brands, 1);
+      auto const per_class = std::max<std::size_t>(brands / 100u, 1);
+      auto const per_category = std::max<std::size_t>(100u / 10u, 1);
+
+      for (std::size_t row = 0; row < rows; ++row) {
+        // One draw fixes the whole hierarchy, so the nesting is exact rather than
+        // approximate: a brand belongs to one class and a class to one category,
+        // as in the schema.
+        auto const product = uniform(products);
+        auto const brand = product / per_brand;
+        auto const item_class = brand / per_class;
+        auto const category = item_class / per_category;
+        std::size_t const key[8] = {category, item_class, brand, product,
+                                    uniform(2), uniform(4), uniform(12),
+                                    uniform(stores)};
+        for (std::size_t column = 0; column < column_count; ++column) {
+          columns[column][row] = static_cast<DataType>(
+            // Past the rollup key a real query has nothing left to order by, so
+            // the extra columns are a unique tie-break.
+            column < 8 ? key[column] : row);
         }
       }
       break;
@@ -1000,6 +1054,12 @@ inline auto tsl_default_catalog(std::size_t rows, std::size_t columns, std::size
         "d" + std::to_string(distinct_values));
   }
   add(TslShape::AllEqualPrefix, {}, "");
+  // The query-67 rollup key. Only meaningful with enough columns to carry a
+  // recognisable prefix of it.
+  if (columns >= 4) {
+    add(TslShape::TpcdsQ67, {{"sf", 1.0}}, "sf1");
+    add(TslShape::TpcdsQ67, {{"sf", 100.0}}, "sf100");
+  }
   add(TslShape::CorrelatedForward, {{"c", 4096}, {"shift", 4}}, "");
   add(TslShape::CorrelatedReverse, {{"shift", 4}}, "");
   add(TslShape::CorrelatedNoisy, {{"c", 4096}, {"noise", 16}}, "");

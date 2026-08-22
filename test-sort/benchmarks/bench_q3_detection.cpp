@@ -13,10 +13,18 @@
 // can win, and reporting it first keeps a 2x speedup on 2% of the runtime from
 // being read as a 2x speedup.
 //
-// Hardware backends need a device: `/dev/iax` for the IAA paths and a working DSA
-// for `dsa_hw`. Where they are absent the row is emitted as a drop with the
-// reason, so a run on a machine without them cannot be mistaken for a run where
-// they lost.
+// **Hardware paths only, by default.** The software paths are QPL's and DML's own
+// CPU implementations: they exist so a backend can be checked for correctness
+// without the device, and a published figure that includes them is comparing our
+// scalar scan against somebody else's scalar scan. `--paths sw` and `--paths all`
+// are there for the correctness case and for curiosity.
+//
+// Which hardware exists is per machine and no machine here has both: this host
+// has DSA and no `/dev/iax`, the IAA host has the reverse. So the paper's
+// accelerator table is assembled from two runs, and each row records the host it
+// came from. Where a device is absent the row is emitted as a drop with the
+// reason, so a run on the wrong machine cannot be mistaken for a backend that
+// lost.
 //
 //   ./bench_q3_detection
 //   ./bench_q3_detection --cardinalities 16,1024,65536 --cols 8
@@ -79,6 +87,22 @@ auto cardinality_shape(std::size_t cardinality) -> std::string {
   return "independent_uniform_c" + std::to_string(cardinality);
 }
 
+// scalar is always kept: it is the thing every backend is compared against.
+inline auto path_of(TslDetectorBackend backend) -> char const * {
+  std::string const name = tsl_detector_name(backend);
+  if (backend == TslDetectorBackend::Scalar) {
+    return "scalar";
+  }
+  return name.size() >= 3 && name.substr(name.size() - 3) == "_hw" ? "hw" : "sw";
+}
+
+inline std::string g_paths = "hw";
+
+inline auto wanted(TslDetectorBackend backend) -> bool {
+  auto const path = std::string(path_of(backend));
+  return path == "scalar" || g_paths == "all" || g_paths == path;
+}
+
 template <class Key>
 void run_width(TslPaperResults & results,
                std::vector<std::size_t> const & cardinalities,
@@ -129,6 +153,9 @@ void run_width(TslPaperResults & results,
           if (tsl_detector_is_async(backend)) {
             results.drop(row, "asynchronous: this driver never polls");
             continue;
+          }
+          if (!wanted(backend)) {
+            continue;  // not asked for; not a drop, the grid never included it
           }
           TslDetectorConfig config;
           config.workers = workers;
@@ -207,6 +234,12 @@ int main(int argc, char ** argv) {
       rows = std::strtoull(value().c_str(), nullptr, 10);
     } else if (flag == "--min-offload") {
       min_offload = std::strtoull(value().c_str(), nullptr, 10);
+    } else if (flag == "--paths") {
+      g_paths = value();
+      if (g_paths != "hw" && g_paths != "sw" && g_paths != "all") {
+        std::printf("--paths takes hw, sw or all\n");
+        return 2;
+      }
     } else if (flag == "--csv") {
       csv_path = value();
     } else {
@@ -216,6 +249,8 @@ int main(int argc, char ** argv) {
   }
 
   TslPaperResults results("Q3 detection", "bench_q3_detection");
+  std::printf("paths=%s (software paths are for correctness, not for figures)\n",
+              g_paths.c_str());
   std::printf("min_offload=%zu  backends compiled in: ", min_offload);
   for (auto const backend : tsl_compiled_detectors()) {
     std::printf("%s ", tsl_detector_name(backend));

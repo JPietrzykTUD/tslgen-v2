@@ -36,7 +36,8 @@ namespace {
 // Shape classes rather than every parameterisation: opposite range structures,
 // which is what separates the two algorithms. `--all` takes the whole catalog.
 auto default_shapes() -> std::vector<std::string> {
-  return {"unique_first", "unique_last_g2", "unique_last_g64", "unique_last_g4096",
+  return {"tpcds_q67_sf1", "tpcds_q67_sf100",
+          "unique_first", "unique_last_g2", "unique_last_g64", "unique_last_g4096",
           "independent_uniform_c16", "independent_uniform_c1024",
           "independent_uniform_c65536", "balanced_hierarchy_c64",
           "skewed_zipf_s0.5", "skewed_zipf_s1", "skewed_zipf_s2",

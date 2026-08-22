@@ -14,12 +14,22 @@ baselines come from adapted libraries rather than only `std::sort`.
 
 | # | question | binary | status |
 | --- | --- | --- | --- |
-| Q1 | How do we compare to the best available implementations? | `bench_q1_baseline` | **outstanding** |
+| Q1 | How do we compare to the best available implementations? | `bench_q1_baseline` | **outstanding**, see below |
 | Q2 | Quicksort or samplesort — which, where, and why? | `bench_q2_algorithms` | built |
 | Q3 | What does cluster detection cost, and does offloading it pay? | `bench_q3_detection` | built |
 | Q4 | How does it scale in threads, rows, columns and element width? | `bench_q4_scaling` | built |
-| Q5 | Which variant wins where? | `cosort_bench` | exists, staged |
-| Q6 | What do the native primitives and the mask representation buy? | `cosort_bench --stage attribute` | exists |
+| Q5 | Which variant wins where? | `cosort_bench --stage screen` | exists, staged |
+| Q6 | What do the native primitives and the mask representation buy? | `cosort_bench --stage attribute` | exists, staged |
+
+**Why Q5 and Q6 have no `bench_q5_*.cpp`.** They are stages of the corpus rather
+than binaries of their own. A `bench_q5_variants.cpp` would have to re-implement
+`cosort_bench`'s registration — the staged plan, the variant enumeration, the drop
+accounting, the per-leaf template dispatch — to produce numbers it already
+produces. What the paper needs from those two questions is the shared *schema*, so
+a figure can be one query across all six, and
+`benchmarks/visualization/gbench_to_paper.py` supplies that by converting the
+corpus's Google Benchmark JSON. `run_paper.sh` runs both stages at
+`--benchmark_repetitions=9` and converts them.
 
 Supporting evidence, cited as mechanism and not as headline: `bench_hybrid_leaf`
 (why the leaf is a per-leaf decision), `bench_samplesort_streams` (why K is not
@@ -94,6 +104,34 @@ materialise, sort, detect — because the interesting result is not which wins b
 why, and the phase split is what makes "better where the data punishes a binary
 partition" a measurement rather than a story.
 
+## Data: TPC-DS query 67
+
+The synthetic catalog covers structure classes; query 67 covers what a real query
+asks for. It rolls up over
+
+```
+i_category, i_class, i_brand, i_product_name, d_year, d_qoy, d_moy, s_store_id
+```
+
+which is an eight-column co-sort key, and two structures meet in it: the first
+four columns are a strict hierarchy, each nested in the one before, while the last
+four come from other dimension tables and are independent. A leading column of ten
+distinct values means the first sort produces very few, very large equal runs and
+everything after it is decided inside those — the case the whole multi-column
+recursion exists for.
+
+`tpcds_q67` is a shape in the generator, at `sf=1` and `sf=100`, and it is in the
+default grid of Q2 and Q4. The cardinalities are **modelled** on the schema's and
+scaled by the square root of the scale factor, not produced by dsdgen. That is
+enough to reproduce the shape and its skew; calibrating against a real dsdgen run
+is worth doing before the numbers are cited as TPC-DS's rather than as its shape.
+
+First measurement, 2^20 rows, eight columns, u32, and the reason it is in the
+default grid: samplesort 182.5 ns/element against the indirect quicksort's 510.5
+at one thread, and 22.1 against 158.4 on 24 — with the quicksort *slower than
+`std::sort`* on the same data (510.5 against 332.7). A three-way partition on a
+key whose leading column has ten values is close to its worst case.
+
 ## Q3 — cluster detection
 
 The centrepiece, and it has to be built to *look for* the regime where offload
@@ -109,11 +147,17 @@ alone: distinct-value count, element width, column count, discovery mode
 (`post` against `incremental`, which changes fragment size), and range size
 against `min_offload`. Backends are the inner loop, not the outer one.
 
-**This needs hardware that this host does not have.** `/dev/iax` is absent, so
-`iaa_hw` and `iaa_freq_hw` throw at construction, and `dsa_hw` fails with a
-pre-existing DML batch-limits error. Every accelerator figure in the paper has to
-come from a machine with both, and `run_paper.sh` exists partly so that is one
-command there rather than a reconstruction.
+**Hardware paths only.** `--paths hw` is the default: the software paths are QPL's
+and DML's own CPU implementations, so a published figure including them compares
+our scalar scan against somebody else's. They stay available for correctness
+(`--paths sw`, `--paths all`).
+
+**Which hardware exists is per machine, and no machine has both.** This host has a
+DSA and no `/dev/iax`; the IAA host has the reverse. So the accelerator table is
+assembled from two runs and every row records its host. `run_paper.sh` reports
+which devices it can see, and warns when `libaccel-config` is missing — without it
+DML cannot enumerate work queues and every hardware submission fails identically,
+which is what made `dsa_hw` look broken for months.
 
 ## Q4 — scaling
 
@@ -132,6 +176,17 @@ a plateau can be attributed rather than noted.
 `--quick` proves the pipeline in a couple of minutes and proves nothing about the
 paper. The full run is hours, and the accelerator rows need the machine with the
 devices.
+
+## Exploring the results
+
+```bash
+pip install streamlit pandas altair
+streamlit run benchmarks/visualization/explore.py -- --results <results-dir>
+```
+
+Reads every CSV the directory holds — one schema, so questions compare directly.
+It shows the interquartile range on every point, gives drops their own tab rather
+than letting them look like gaps, and says so when two hosts' numbers are mixed.
 
 ## Output
 

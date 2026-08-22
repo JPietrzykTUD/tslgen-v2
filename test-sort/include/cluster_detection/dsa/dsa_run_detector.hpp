@@ -188,6 +188,39 @@ class aligned_bytes {
 }  // namespace tsl_dsa_detail
 
 
+// DML's C++ API has its own `status_code` enum, numbered from zero, which is
+// *not* the C API's `dml_status_t`. Printing the raw number and reading it
+// against the C enum is how a plain internal error spent months documented as
+// `DML_STATUS_BATCH_LIMITS_ERROR`, and sent the search for its cause towards
+// batch sizes. It was a missing `libaccel-config.so.1`, which DML dlopens to
+// enumerate work queues: without it every hardware submission fails identically
+// whatever its size.
+inline auto tsl_dml_status_name(dml::status_code status) -> char const * {
+  switch (status) {
+    case dml::status_code::ok: return "ok";
+    case dml::status_code::false_predicate: return "false_predicate";
+    case dml::status_code::partial_completion: return "partial_completion";
+    case dml::status_code::nullptr_error: return "nullptr_error";
+    case dml::status_code::bad_size: return "bad_size";
+    case dml::status_code::bad_length: return "bad_length";
+    case dml::status_code::inconsistent_size: return "inconsistent_size";
+    case dml::status_code::dualcast_bad_padding: return "dualcast_bad_padding";
+    case dml::status_code::bad_alignment: return "bad_alignment";
+    case dml::status_code::buffers_overlapping: return "buffers_overlapping";
+    case dml::status_code::delta_bad_size: return "delta_bad_size";
+    case dml::status_code::delta_delta_empty: return "delta_delta_empty";
+    case dml::status_code::batch_overflow: return "batch_overflow";
+    case dml::status_code::execution_failed: return "execution_failed";
+    case dml::status_code::unsupported_operation: return "unsupported_operation";
+    case dml::status_code::queue_busy: return "queue_busy";
+    case dml::status_code::error: return "error (internal; is libaccel-config installed?)";
+    case dml::status_code::config_error: return "config_error";
+    case dml::status_code::not_supported_by_wqs: return "not_supported_by_wqs";
+  }
+  return "unknown";
+}
+
+
 template <class DataType>
 class TslDsaRunDetector;
 
@@ -450,9 +483,10 @@ class TslDsaRunDetector {
 
     if (result.status != dml::status_code::ok) {
       throw std::runtime_error(
-        "create_delta failed with DML status "
-        + std::to_string(static_cast<std::uint32_t>(result.status))
-        + " (" + tsl_rle_backend_name(backend_) + ", "
+        std::string("create_delta failed: ")
+        + tsl_dml_status_name(result.status)
+        + " (code " + std::to_string(static_cast<std::uint32_t>(result.status))
+        + ", " + tsl_rle_backend_name(backend_) + ", "
         + std::to_string(delta_elems * sizeof(DataType)) + " bytes)"
       );
     }

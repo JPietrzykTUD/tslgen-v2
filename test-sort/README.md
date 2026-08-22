@@ -28,6 +28,7 @@ benchmarks/
   bench_qN_*.cpp            one paper question each; see docs/benchmark-plan.md
   cosort_bench.cpp          the staged variant corpus
   bench_*.cpp               focused studies behind one decision each
+  deprecated/               superseded, EXCLUDE_FROM_ALL, see its README
 tests/                      one binary per subject
 docs/                       plans, reports and measured notes
 ```
@@ -99,6 +100,11 @@ the two is checkable.
 ```bash
 ./run_paper.sh <build-dir> <results-dir>            # everything
 ./run_paper.sh <build-dir> <results-dir> --quick    # one cell per question
+```
+
+```bash
+pip install streamlit pandas altair
+streamlit run benchmarks/visualization/explore.py -- --results <results-dir>
 ```
 
 `docs/benchmark-plan.md` says which question each binary answers and under what

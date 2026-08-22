@@ -232,8 +232,8 @@ void run_width(TslPaperResults & results, std::vector<std::string> const & shape
 }  // namespace
 
 int main(int argc, char ** argv) {
-  std::vector<std::string> shapes{"low_cardinality_d4", "independent_uniform_c1024",
-                                  "skewed_zipf_s1"};
+  std::vector<std::string> shapes{"tpcds_q67_sf1", "low_cardinality_d4",
+                                  "independent_uniform_c1024", "skewed_zipf_s1"};
   std::string axis = "all";
   std::size_t base_rows = 1u << 21;
   std::size_t base_columns = 4;
