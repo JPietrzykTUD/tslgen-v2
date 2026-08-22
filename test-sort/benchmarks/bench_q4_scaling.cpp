@@ -33,6 +33,15 @@
 #include "tuned_config.hpp"
 #include "tuned_dispatch.hpp"
 
+// Phase attribution is a build-time choice, not a runtime one: it selects a
+// different instantiation of both sorters. It is off unless asked for, because
+// the timers cost 1.08x-1.28x on the samplesort and up to 1.79x on the quicksort
+// -- enough to move a conclusion. Build with -DTSL_COSORT_PHASES=true when
+// attributing time; the published numbers come from a build without it.
+#if !defined(TSL_COSORT_PHASES)
+#define TSL_COSORT_PHASES false
+#endif
+
 namespace {
 
 // The configuration bench_q0_tune chose. Scaling is measured on the sorter we
@@ -140,7 +149,7 @@ void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
     TslSampleSortColumnMetrics metrics;
     bool measured_ok = false;
     TslPaperStats measured{};
-    auto const dispatched = with_samplesort<Key, Simd>(
+    auto const dispatched = with_samplesort<Key, Simd, TSL_COSORT_PHASES>(
       g_samplesort_config, [&](auto sorter) {
         auto const [ok, stats] = tsl_paper_measure(
           [&] {
@@ -198,7 +207,7 @@ void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
     bool measured_ok = false;
     TslPaperStats measured{};
     TslIndexSortMetrics quick_metrics;
-    auto const dispatched = with_quicksort_leaf<Key, Simd>(
+    auto const dispatched = with_quicksort_leaf<Key, Simd, TSL_COSORT_PHASES>(
       g_quicksort_config, [&](auto sorter) {
         auto const [ok, stats] = tsl_paper_measure(
           [&] {

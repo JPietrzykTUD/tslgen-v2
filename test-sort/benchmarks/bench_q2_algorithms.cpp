@@ -33,6 +33,15 @@
 #include "sorting/quicksort/multicolumn_index_sort.hpp"
 #include "sorting/sample_sort/samplesort_multicolumn.hpp"
 
+// Phase attribution is a build-time choice, not a runtime one: it selects a
+// different instantiation of both sorters. It is off unless asked for, because
+// the timers cost 1.08x-1.28x on the samplesort and up to 1.79x on the quicksort
+// -- enough to move a conclusion. Build with -DTSL_COSORT_PHASES=true when
+// attributing time; the published numbers come from a build without it.
+#if !defined(TSL_COSORT_PHASES)
+#define TSL_COSORT_PHASES false
+#endif
+
 namespace {
 
 // Shape classes rather than every parameterisation: opposite range structures,
@@ -113,7 +122,7 @@ void run_pair(TslPaperResults & results, TslDatasetSource<Key> & source,
       row.variant = g_samplesort_config.describe_samplesort()
                     + (g_tuned_from_file ? " (tuned)" : " (default)");
       TslSampleSortColumnMetrics metrics;
-      auto const dispatched = with_samplesort<Key, Simd>(
+      auto const dispatched = with_samplesort<Key, Simd, TSL_COSORT_PHASES>(
         g_samplesort_config, [&](auto sorter) {
           auto const [ok, stats] = tsl_paper_measure(
             [&] {
@@ -150,7 +159,7 @@ void run_pair(TslPaperResults & results, TslDatasetSource<Key> & source,
       row.variant = g_quicksort_config.describe_quicksort()
                     + (g_tuned_from_file ? " (tuned)" : " (default)");
       TslIndexSortMetrics quick_metrics;
-      auto const dispatched = with_quicksort_leaf<Key, Simd>(
+      auto const dispatched = with_quicksort_leaf<Key, Simd, TSL_COSORT_PHASES>(
         g_quicksort_config, [&](auto sorter) {
           auto const [ok, stats] = tsl_paper_measure(
             [&] {

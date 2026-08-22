@@ -183,24 +183,32 @@ At 2^22 rows, u32, one worker, our quicksort wins all nine measured cells --
 kernel it also beats Intel's own `avx512_argsort`, 6.68 against 9.79 ns/element
 at 2^20 rows, which is the kernel-fair comparison this section was written for.
 
-At twenty-four workers we lose six of nine, and five of five on measured TPC-DS
-keys, to `std::sort(std::execution::par)`:
+At twenty-four workers `std::sort(std::execution::par)` wins all five measured
+keys. Measured with the sorters' phase instrumentation *off*, which matters: the
+first version of this table was taken from a profiled build and overstated the gap
+by 8-24%.
 
-| key | ours, best | std::sort(par) |
-| --- | --- | --- |
-| tpcds_q050 | 5.28 | **2.78** |
-| tpcds_q081 | 25.06 | **5.22** |
-| tpcds_q010 | 14.24 | **10.91** |
-| tpcds_q064 | 21.70 | **17.46** |
-| tpcds_q067 | 17.54 | **16.30** |
+| key | ours, 1w | best other, 1w | ours, 24w | best other, 24w |
+| --- | --- | --- | --- | --- |
+| tpcds_q010 | **53.22** | 137.61 | 14.37 | **11.09** |
+| tpcds_q050 | 13.20 | **12.34** | 5.23 | **2.73** |
+| tpcds_q064 | **109.88** | 238.74 | 20.05 | **18.27** |
+| tpcds_q067 | **76.78** | 226.50 | 16.30 | **16.17** |
+| tpcds_q081 | **17.67** | 28.88 | 25.68 | **5.07** |
 
-Not because TBB's kernel is better -- serially it is three to thirteen times
-worse -- but because its *scaling* is. It climbs from a slow base at close to the
-thread count while ours does not, and on several shapes our quicksort is worse at
-twenty-four workers than at one: tpcds_q064 goes 82.88 to 133.86, tpcds_q067
-59.54 to 82.82, skewed_zipf_s1 at eight columns 91.23 to 159.13. It anti-scales.
-The samplesort scales as intended, 188.17 to 21.70 on tpcds_q064, and still does
-not win.
+Serially we win four of five, by 1.6x to 2.9x; tpcds_q050 goes to IPS4o by 7%. In
+parallel we lose all five, but three of the five margins are 1.01x, 1.10x and
+1.30x -- tpcds_q067 is a dead heat -- and only tpcds_q081 is a rout at 5.07x. That
+key is 100,000 rows over fifteen columns, so per-column overhead dominates and
+there is little for a task tree to spread.
+
+The quicksort's parallel path is the specific problem, not the approach. On
+tpcds_q064 it goes from 109.88 to 112.16 ns/element between one and twenty-four
+workers; on tpcds_q067, 76.78 to 77.95. It does not scale at all, so above two
+workers the samplesort carries every parallel number. Measured without
+instrumentation, end to end: 102.17 at one worker, 88.29 at two, 98.20 at four,
+128.24 at eight, 131.20 at twenty-four. The best point is two workers and it
+degrades from four.
 
 Two consequences for the paper. The serial claim is strong and rests on a real
 baseline rather than a straw man. The parallel claim is not currently supportable

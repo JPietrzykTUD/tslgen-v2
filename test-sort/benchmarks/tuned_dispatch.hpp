@@ -21,30 +21,41 @@
 
 // Only the axes the descent found decisive are dispatched here; a configuration
 // asking for anything else is reported rather than silently replaced.
-template <class Key, class Simd, class Run>
+// `Profile` instantiates the sorter with its phase timers on. Off by default, and
+// that default is not a preference: the index sorter's timers sit on the per-task
+// path, and a shape that produces a million task-tree nodes -- tpcds_q064 produces
+// 986,867 over 2.65M rows -- pays two `steady_clock::now()` calls per phase per
+// task. Measured on that key, the profiled build is 1.24x slower at one worker and
+// 1.79x at two, so leaving it on would have put up to 79% of instrumentation into
+// every published quicksort number, weighted differently at each thread count --
+// which is worse than having no phase split at all, because it looks like data.
+// Ask for it explicitly when attributing time, not when reporting it.
+template <class Key, class Simd, bool Profile = false, class Run>
 auto with_quicksort_leaf(TslTunedConfig const & config, Run && run) -> bool {
   constexpr auto three = TslPartitionKind::THREE_WAY;
   if (config.partition != three) {
     return false;
   }
-  // Profiling on, like the samplesort's dispatch: the reporting drivers publish a
-  // phase split, and without it a thread count that makes the sort *slower* --
-  // which happens -- is unattributable.
   if (config.hybrid_leaf) {
     run(TslMultiColumnIndexSorter<Key, three, TslLeafKind::NETWORK, Simd,
-                                  tsl_hybrid_auto_percent<Key, Simd>(), true>(
+                                  tsl_hybrid_auto_percent<Key, Simd>(), Profile>(
       0x5A3F1E77));
   } else if (config.leaf == TslLeafKind::INSERTION) {
-    run(TslMultiColumnIndexSorter<Key, three, TslLeafKind::INSERTION, Simd, 0, true>(
-      0x5A3F1E77));
+    run(TslMultiColumnIndexSorter<Key, three, TslLeafKind::INSERTION, Simd, 0,
+                                  Profile>(0x5A3F1E77));
   } else {
-    run(TslMultiColumnIndexSorter<Key, three, TslLeafKind::NETWORK, Simd, 0, true>(
-      0x5A3F1E77));
+    run(TslMultiColumnIndexSorter<Key, three, TslLeafKind::NETWORK, Simd, 0,
+                                  Profile>(0x5A3F1E77));
   }
   return true;
 }
 
-template <class Key, class Simd, class Run>
+// Same default, same reason. The samplesort's timers sit per range in its column
+// loop rather than per task, which is cheaper -- but tpcds_q064 produces 986,867
+// ranges either way, and the measured overhead is 1.08x at one worker and 1.28x at
+// two. Small enough to look harmless in a table and large enough to move a
+// conclusion, which is the worst size for a systematic error.
+template <class Key, class Simd, bool Profile = false, class Run>
 auto with_samplesort(TslTunedConfig const & config, Run && run) -> bool {
   constexpr auto adaptive = TslSampleSortBuckets::Adaptive;
   constexpr auto byte_ids = TslSampleSortIds::Byte;
@@ -55,7 +66,7 @@ auto with_samplesort(TslTunedConfig const & config, Run && run) -> bool {
     return false;
   }
   auto const net = config.base_policy == TslSampleSortBase::Network;
-#define TSL_TUNED_SS(BC, P)                                                            run(TslSampleSortMultiColumn<Key, Simd, 16, adaptive, 8, BC, P, byte_ids,                                       BC / lanes, 50, oop, true>{})
+#define TSL_TUNED_SS(BC, P)                                                            run(TslSampleSortMultiColumn<Key, Simd, 16, adaptive, 8, BC, P, byte_ids,                                       BC / lanes, 50, oop, Profile>{})
   if (config.base_case == 64) {
     if (net) { TSL_TUNED_SS(64, TslSampleSortBase::Network); }
     else { TSL_TUNED_SS(64, TslSampleSortBase::Insertion); }
