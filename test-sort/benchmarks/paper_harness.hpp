@@ -24,6 +24,10 @@
 // See `docs/benchmark-plan.md` for which question each driver answers.
 
 #include <algorithm>
+#include <sched.h>
+#include <set>
+#include <filesystem>
+#include <system_error>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -66,7 +70,11 @@ struct TslPaperMachine {
   std::string governor = "unknown";
   std::string compiler = "unknown";
   double clock_mhz = 0.0;
-  std::size_t cores = 0;
+  std::size_t cores = 0;            // logical CPUs the machine has
+  std::size_t allowed_cpus = 0;     // logical CPUs this process may run on
+  std::size_t physical_per_node = 0;// physical cores in one NUMA node
+  std::size_t numa_nodes = 0;
+  bool pinned = false;              // affinity is one node's physical cores
   double load = 0.0;
 
   static auto probe() -> TslPaperMachine {
@@ -98,6 +106,56 @@ struct TslPaperMachine {
     if (std::ifstream loadavg("/proc/loadavg"); loadavg) {
       loadavg >> machine.load;
     }
+    // What this process may actually run on, which is the number that matters:
+    // a worker count above it oversubscribes whatever `numactl` allowed.
+    {
+      cpu_set_t allowed;
+      CPU_ZERO(&allowed);
+      if (sched_getaffinity(0, sizeof(allowed), &allowed) == 0) {
+        machine.allowed_cpus = static_cast<std::size_t>(CPU_COUNT(&allowed));
+      }
+    }
+    // Physical cores per NUMA node, from sysfs: one entry per logical cpu, and
+    // `thread_siblings_list` names the SMT group so each physical core is counted
+    // once. Nodes come from the `node*` directories.
+    {
+      std::set<std::string> node_zero_cores;
+      for (std::size_t cpu = 0; cpu < machine.cores; ++cpu) {
+        auto const base = "/sys/devices/system/cpu/cpu" + std::to_string(cpu);
+        std::ifstream node_list(base + "/topology/physical_package_id");
+        std::ifstream siblings(base + "/topology/thread_siblings_list");
+        std::ifstream core_id(base + "/topology/core_id");
+        std::string siblings_text;
+        std::string core_text;
+        if (siblings) {
+          std::getline(siblings, siblings_text);
+        }
+        if (core_id) {
+          std::getline(core_id, core_text);
+        }
+        // Which NUMA node owns this cpu.
+        std::size_t which_node = 0;
+        bool found_node = false;
+        for (std::size_t node = 0; node < 16 && !found_node; ++node) {
+          std::error_code ignored;
+          if (std::filesystem::exists(
+                base + "/node" + std::to_string(node), ignored)) {
+            which_node = node;
+            found_node = true;
+          }
+        }
+        if (found_node) {
+          machine.numa_nodes = std::max(machine.numa_nodes, which_node + 1);
+          if (which_node == 0 && !siblings_text.empty()) {
+            node_zero_cores.insert(siblings_text);
+          }
+        }
+      }
+      machine.physical_per_node = node_zero_cores.size();
+    }
+    machine.pinned = machine.physical_per_node > 0
+                     && machine.allowed_cpus > 0
+                     && machine.allowed_cpus <= machine.physical_per_node;
 #if defined(__clang__)
     machine.compiler = "clang " + std::to_string(__clang_major__) + "."
                        + std::to_string(__clang_minor__);
@@ -112,6 +170,22 @@ struct TslPaperMachine {
     std::printf("host=%s cores=%zu governor=%s clock=%.0fMHz load=%.2f compiler=%s\n",
                 host.c_str(), cores, governor.c_str(), clock_mhz, load,
                 compiler.c_str());
+    // Topology, because "24 cores" on this class of machine is twelve physical
+    // cores with SMT siblings spread over two NUMA nodes, and a memory-bound
+    // co-sort run across all of them measures cache thrashing and cross-node
+    // latency rather than the sort. The honest full-machine number is one thread
+    // per physical core within one node.
+    std::printf("topology: %zu NUMA node(s), %zu physical core(s) per node, "
+                "%zu logical cpu(s) available to this process%s\n",
+                numa_nodes, physical_per_node, allowed_cpus,
+                pinned ? " [pinned]" : "");
+    if (!pinned && physical_per_node > 0 && allowed_cpus > physical_per_node) {
+      std::printf("  !! not pinned: this process may use SMT siblings and both "
+                  "NUMA nodes. Run under `numactl --cpunodebind=0 --membind=0` "
+                  "with at most %zu workers, or the parallel numbers include "
+                  "contention that has nothing to do with the sort.\n",
+                  physical_per_node);
+    }
     if (load > 1.0) {
       std::printf("  !! load average above 1.0: another process is competing and "
                   "these numbers are not publishable\n");

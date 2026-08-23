@@ -216,6 +216,7 @@ fi
 # dependency-free.
 if [[ -x "$build/bench_q1_baselines" ]]; then
   run bench_q1_baselines q1_baselines --tuned "$tuned" \
+      ${COSORT_WORKERS:+--workers "$COSORT_WORKERS"} \
       "${tpcds_args[@]+"${tpcds_args[@]}"}" "${narrow_q1[@]+"${narrow_q1[@]}"}"
 else
   echo
@@ -227,11 +228,13 @@ run bench_q2_algorithms q2_algorithms --tuned "$tuned" "${tpcds_args[@]+"${tpcds
 # Hardware only, and only this host's hardware: the software paths are QPL's and
 # DML's own CPU code, kept for correctness rather than for figures.
 run bench_q3_detection  q3_detection  --tuned "$tuned" --detectors "$q3_detectors" \
+    ${COSORT_WORKERS:+--workers "$COSORT_WORKERS"} \
     "${narrow_q3[@]+"${narrow_q3[@]}"}"
 # Q4 gets the tuned configuration and the measured keys: its thread axis is where
 # the algorithm crossover is visible, and it is only visible on real keys -- the
 # synthetic shapes are won by the quicksort at every thread count.
 run bench_q4_scaling    q4_scaling    --tuned "$tuned" \
+    ${COSORT_MAX_WORKERS:+--max-workers "$COSORT_MAX_WORKERS"} \
     "${tpcds_args[@]+"${tpcds_args[@]}"}" "${narrow_q4[@]+"${narrow_q4[@]}"}"
 
 # Q5 and Q6 are stages of the existing staged driver rather than new binaries.

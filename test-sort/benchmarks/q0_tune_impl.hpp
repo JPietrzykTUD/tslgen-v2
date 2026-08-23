@@ -55,6 +55,19 @@ struct TslTuneProblem {
   // askable on its own and cheaply -- not answered incidentally by whichever cells
   // a tuning run happens to visit.
   bool verify_only = false;
+  // Two-way partitioning is quadratic in the equal-run length, and this tuning set
+  // is duplicate-heavy on purpose, so above a working-set size the candidate stops
+  // being a measurement and becomes a hang: it was already 66x off the pace at
+  // 2^20 rows and the full Q0 sat on it for over an hour at twenty-four workers.
+  // The corpus driver has gated it this way for the same reason
+  // (`TslStagePlan::two_way_size_cap`); Q0 did not.
+  std::uint64_t two_way_size_cap = 256ull * 1024;
+  // Abandon a candidate whose first pass already costs more than this multiple of
+  // the best candidate measured so far. Relative rather than absolute, so it
+  // calibrates itself to the shape and the machine instead of needing a wall-clock
+  // guess: a configuration five times off the pace cannot win, and measuring it
+  // nine times over five shapes is how a tuning run turns into an overnight hang.
+  double abandon_factor = 5.0;
   // Seconds a single candidate may spend before it is abandoned. A configuration
   // 66x off the pace can never win, and on duplicate-heavy real keys the two-way
   // partition is quadratic -- one such candidate consumed two hours of a run whose
@@ -84,6 +97,9 @@ struct TslTuneCandidate {
   std::vector<double> per_shape;
   std::vector<std::string> failures;
   bool over_budget = false;
+  // Set when a candidate was deliberately not measured. Distinct from wrong and
+  // from over-budget: this one was never going to be informative.
+  std::string skipped;
 };
 
 // A unit is one (style, register width, key width): it runs the whole search and
@@ -141,9 +157,12 @@ auto sorted_image_of_a_permutation(std::vector<std::vector<Key>> const & columns
 
 // Geometric mean over the shapes: the right average for a score that is compared
 // as a ratio, and it stops one slow shape from deciding every axis.
+// `best_so_far` is the best per-element cost any candidate in this set has
+// reached, or 0 before the first one finishes. It bounds every later candidate.
 template <class Key, class Run>
 auto geometric_score(TslDatasetSource<Key> & source, TslTuneProblem const & problem,
-                     Run && run) -> TslTuneScore {
+                     Run && run, double const * best_so_far = nullptr)
+  -> TslTuneScore {
   TslTuneScore out;
   double logs = 0.0;
   std::size_t counted = 0;
@@ -178,11 +197,23 @@ auto geometric_score(TslDatasetSource<Key> & source, TslTuneProblem const & prob
       }
       continue;  // nothing is timed in a correctness sweep
     }
-    // Split the budget across the shapes so no single one can consume it all.
-    auto const per_shape_budget =
+    // Two bounds, whichever bites first. The relative one is the useful one: at
+    // `abandon_factor` times the best per-element cost seen so far, this shape's
+    // single pass would take longer than any winner ever could, so there is
+    // nothing to learn by finishing it. The absolute one stays as a backstop for
+    // the first candidate, when there is no best yet.
+    double per_shape_budget =
       problem.candidate_seconds > 0.0
         ? problem.candidate_seconds / static_cast<double>(problem.specs.size())
         : 0.0;
+    if (best_so_far != nullptr && *best_so_far > 0.0
+        && problem.abandon_factor > 0.0) {
+      auto const relative = problem.abandon_factor * *best_so_far * 1e-9
+                            * static_cast<double>(spec.rows);
+      per_shape_budget = per_shape_budget > 0.0
+                           ? std::min(per_shape_budget, relative)
+                           : relative;
+    }
     bool abandoned = false;
     auto const [ok, stats] =
       tsl_paper_measure(body, correct, spec.rows, per_shape_budget, &abandoned);
@@ -213,7 +244,9 @@ template <class Key, class Simd, int K, TslSampleSortBuckets B, TslSampleSortBas
           std::size_t BC, std::size_t F, TslSampleSortIds I,
           TslSampleSortMovement M>
 auto tsl_tune_samplesort_point(TslDatasetSource<Key> & source,
-                               TslTuneProblem const & problem) -> TslTuneScore {
+                               TslTuneProblem const & problem,
+                               double const * best_so_far = nullptr)
+  -> TslTuneScore {
   using Sorter = TslSampleSortMultiColumn<Key, Simd, K, B, 8, BC, P, I,
                                           BC / Simd::lane_count_v, F, M, false>;
   Sorter sorter;
@@ -239,7 +272,9 @@ template <class Key, class Simd, TslPartitionKind Partition, TslLeafKind Leaf,
 auto tsl_tune_quicksort_point(TslDatasetSource<Key> & source,
                               TslTuneProblem const & problem,
                               TslRunDiscoveryKind discovery,
-                              std::size_t partition_threshold) -> TslTuneScore {
+                              std::size_t partition_threshold,
+                              double const * best_so_far = nullptr)
+  -> TslTuneScore {
   using Sorter = TslMultiColumnIndexSorter<Key, Partition, Leaf, Simd, Fill>;
   Sorter sorter(0x5A3F1E77);
   return tsl_tune_detail::geometric_score<Key>(

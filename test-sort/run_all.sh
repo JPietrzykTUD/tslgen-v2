@@ -281,13 +281,47 @@ fi
 # rows, a working set inside L2 -- deciding the register width. It picked
 # ClangBuiltin/128-bit once, a four-lane cell, on a 2% gap inside its own noise.
 # One full run costs more than the probe did but replaces the second run entirely.
+# --- topology: one thread per physical core, inside one NUMA node ---------------
+# `nproc` on this class of machine counts SMT siblings across every node: a Xeon
+# w5-3425 reports 24 for twelve physical cores spread over two NUMA nodes. Running
+# a memory-bound co-sort across all 24 measures SMT pairs thrashing a shared L1 and
+# gathers crossing a node boundary -- contention that has nothing to do with the
+# sorter, and which is what made the parallel numbers degrade past four workers.
+#
+# So the measured machine is one node's physical cores: the first thread of each
+# core on node 0, with memory bound to the same node. Enforced with numactl rather
+# than requested politely, because the executors size themselves from the worker
+# count they are given and would otherwise spread wherever the scheduler allows.
+phys_cpus="$(lscpu -p=CPU,CORE,NODE | grep -v '^#' \
+             | awk -F, '$3==0 { if (!($2 in seen)) { seen[$2]=1; printf "%s%s", sep, $1; sep="," } }')"
+phys_count="$(awk -F, '{print NF}' <<< "$phys_cpus")"
+if [[ -z "$phys_cpus" || "$phys_count" -lt 1 ]]; then
+  echo "could not read the CPU topology; falling back to nproc" >&2
+  phys_cpus=""
+  phys_count="$(nproc)"
+fi
+pin=()
+if [[ -n "$phys_cpus" ]] && command -v numactl > /dev/null; then
+  pin=(numactl --physcpubind="$phys_cpus" --membind=0)
+  echo "pinning to node 0 physical cores: $phys_cpus ($phys_count workers max)"
+else
+  echo "!! numactl is unavailable or the topology is unreadable: the run is NOT" >&2
+  echo "   pinned, and its parallel numbers include SMT and cross-NUMA effects." >&2
+  echo "   Install numactl (apt-get install numactl) before publishing." >&2
+fi
+# Every driver that takes a worker count gets this pair: serial, and one thread per
+# physical core of the local node. Never the logical count.
+export COSORT_WORKERS="1,$phys_count"
+export COSORT_MAX_WORKERS="$phys_count"
+
 cmake --build "$build" -j "$(nproc)" --target bench_q0_tune
 
 mkdir -p "$results"
 tuned="$results/best_config.tsv"
 echo
 echo "=== q0_tune (full: decides the cell and every configuration)"
-"$build/bench_q0_tune" --out "$tuned" --csv "$results/q0_tune.csv" 2>&1 \
+"${pin[@]}" "$build/bench_q0_tune" --workers "$COSORT_WORKERS" \
+  --out "$tuned" --csv "$results/q0_tune.csv" 2>&1 \
   | tee "$results/q0_tune.log"
 probe="$(grep '^TSL_COSORT_BEST_CELL' "$results/q0_tune.log" | tail -1 || true)"
 if [[ -n "$probe" ]]; then
@@ -318,4 +352,4 @@ cmake --build "$build" -j "$(nproc)" --target "${targets[@]}"
 # --- 4. run -------------------------------------------------------------------
 echo
 echo "=== 4/4 run"
-TPCDS_KEYS="$keys" "$here/run_paper.sh" "$build" "$results" ${quick:+$quick}
+TPCDS_KEYS="$keys" "${pin[@]}" "$here/run_paper.sh" "$build" "$results" ${quick:+$quick}

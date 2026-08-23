@@ -35,8 +35,14 @@ auto samplesort_candidates(TslTuneProblem const & problem)
   TslDatasetSource<Key> source(12ull << 30);
   std::vector<TslTuneCandidate> out;
 
+  // The best per-element cost so far bounds every later candidate: a point five
+  // times off the pace is abandoned rather than measured to completion.
+  double best_so_far = 0.0;
   auto add = [&](std::string axis, std::string label, TslTunedConfig config,
                  TslTuneScore score) {
+    if (score.score > 0.0 && (best_so_far == 0.0 || score.score < best_so_far)) {
+      best_so_far = score.score;
+    }
     std::printf("    samplesort %-10s %-22s %10.2f ns/elem%s\n", axis.c_str(),
                 label.c_str(), score.score,
                 score.over_budget ? "  (over budget)"
@@ -55,7 +61,8 @@ auto samplesort_candidates(TslTuneProblem const & problem)
     config.movement = (M);                                                          \
     add(AXIS, LABEL,                                                                \
         config,                                                                     \
-        (tsl_tune_samplesort_point<Key, Simd, K, B, P, BC, F, I, M>(source, problem))); \
+        (tsl_tune_samplesort_point<Key, Simd, K, B, P, BC, F, I, M>(               \
+          source, problem, &best_so_far)));                                          \
   } while (false)
 
   // --- the cross: K x base-case leaf x fill -----------------------------------
@@ -96,6 +103,14 @@ auto quicksort_candidates(TslTuneProblem const & problem)
   using Simd = typename tsl_simd_for<Key, style, width>::type;
   TslDatasetSource<Key> source(12ull << 30);
   std::vector<TslTuneCandidate> out;
+  // The largest working set this problem will ask for, which is what decides
+  // whether the quadratic two-way candidate is measurable or a trap.
+  double best_so_far = 0.0;
+  std::uint64_t working_set = 0;
+  for (auto const & spec : problem.specs) {
+    working_set = std::max<std::uint64_t>(
+      working_set, static_cast<std::uint64_t>(spec.rows) * spec.columns * sizeof(Key));
+  }
   // The hybrid leaf's threshold is derived from the width, so it changes with the
   // unit rather than being a knob of its own.
   constexpr std::size_t hybrid = tsl_hybrid_auto_percent<Key, Simd>();
@@ -103,11 +118,23 @@ auto quicksort_candidates(TslTuneProblem const & problem)
 #define TSL_Q0_QS(AXIS, LABEL, PART, LEAF, FILL, DISCOVERY)                        \
   do {                                                                             \
     TslTunedConfig config;                                                          \
+    if ((PART) == TslPartitionKind::TWO_WAY && working_set > problem.two_way_size_cap) { \
+      TslTuneCandidate skipped;                                                     \
+      skipped.axis = AXIS;                                                          \
+      skipped.label = LABEL;                                                        \
+      skipped.skipped = "two-way is quadratic in the equal-run length above the "   \
+                        "working-set cap";                                          \
+      out.push_back(std::move(skipped));                                            \
+      break;                                                                        \
+    }                                                                               \
     config.partition = (PART); config.leaf = (LEAF);                                \
     config.hybrid_leaf = ((FILL) != 0);                                             \
     config.discovery = (DISCOVERY);                                                 \
     auto score = tsl_tune_quicksort_point<Key, Simd, PART, LEAF, FILL>(             \
-      source, problem, DISCOVERY, config.partition_threshold);                       \
+      source, problem, DISCOVERY, config.partition_threshold, &best_so_far);         \
+    if (score.score > 0.0 && (best_so_far == 0.0 || score.score < best_so_far)) {    \
+      best_so_far = score.score;                                                     \
+    }                                                                                \
     std::printf("    quicksort  %-10s %-22s %10.2f ns/elem%s\n", AXIS, LABEL,        \
                 score.score, score.over_budget ? "  (over budget)"                    \
                   : (score.failures.empty() ? "" : "  WRONG"));                       \

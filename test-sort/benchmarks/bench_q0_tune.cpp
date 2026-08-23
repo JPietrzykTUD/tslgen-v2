@@ -82,6 +82,11 @@ void report(char const * algorithm, TslStyle style, std::size_t width,
               return a.score < b.score;
             });
   for (auto const & candidate : sorted) {
+    if (!candidate.skipped.empty()) {
+      std::printf("  %-12s %-24s %12s  %s\n", candidate.axis.c_str(),
+                  candidate.label.c_str(), "SKIPPED", candidate.skipped.c_str());
+      continue;
+    }
     if (candidate.score <= 0.0 && candidate.over_budget) {
       std::printf("  %-12s %-24s %12s  %s\n", candidate.axis.c_str(),
                   candidate.label.c_str(), "OVER BUDGET",
@@ -372,6 +377,9 @@ int main(int argc, char ** argv) {
       for (auto const * set : {&unit.samplesort, &unit.quicksort}) {
         auto const algorithm = set == &unit.samplesort ? "samplesort" : "quicksort";
         for (auto const & candidate : (*set)(problem)) {
+          if (!candidate.skipped.empty()) {
+            continue;
+          }
           ++checked;
           if (candidate.failures.empty()) {
             continue;

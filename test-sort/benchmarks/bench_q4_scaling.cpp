@@ -45,6 +45,27 @@
 
 namespace {
 
+std::size_t g_max_workers = 0;   // set from --max-workers, or the topology
+
+// The thread points to sweep, capped at what the machine can actually give one
+// thread per physical core inside one NUMA node. The old sweep was
+// {1,2,4,8,16,24}: on a twelve-core two-node part that means four of its six
+// points oversubscribe the local node, so the tail of every scaling curve measured
+// SMT contention and cross-node gathers. It also never measured the interesting
+// point -- all physical cores of one node, no SMT -- because that is six, and six
+// is not a power of two.
+inline auto tsl_thread_points(std::size_t max_workers)
+  -> std::vector<std::size_t> {
+  std::vector<std::size_t> points;
+  for (std::size_t workers = 1; workers < max_workers; workers *= 2) {
+    points.push_back(workers);
+  }
+  if (points.empty() || points.back() != max_workers) {
+    points.push_back(max_workers);
+  }
+  return points;
+}
+
 // The configuration bench_q0_tune chose. Scaling is measured on the sorter we
 // would ship, not on whichever instantiation happened to be typed here: this
 // driver previously hard-coded a network leaf, which the descent showed is up to
@@ -277,7 +298,7 @@ void run_width(TslPaperResults & results, std::string const & tpcds_dir,
     if (axis == "threads" || axis == "all") {
       std::printf("\n-- threads, %s, %zu rows, %zu columns, u%zu --\n", shape.c_str(),
                   base_rows, base_columns, sizeof(Key) * 8);
-      for (std::size_t workers : {1u, 2u, 4u, 8u, 16u, 24u}) {
+      for (std::size_t workers : tsl_thread_points(g_max_workers)) {
         measure_cell<Key>(results, source, {shape, base_rows, base_columns, workers},
                           serial);
       }
@@ -313,7 +334,7 @@ void run_width(TslPaperResults & results, std::string const & tpcds_dir,
     for (auto const & spec : measured) {
       std::printf("\n-- threads, %s, %zu rows, %zu columns, u%zu (measured) --\n",
                   spec.id.c_str(), spec.rows, spec.columns, sizeof(Key) * 8);
-      for (std::size_t workers : {1u, 2u, 4u, 8u, 16u, 24u}) {
+      for (std::size_t workers : tsl_thread_points(g_max_workers)) {
         measure_cell<Key>(results, source,
                           {spec.id, spec.rows, spec.columns, workers}, serial,
                           &spec);
@@ -358,6 +379,8 @@ int main(int argc, char ** argv) {
       for (auto const & part : split(value(), ',')) {
         widths.push_back(std::strtoull(part.c_str(), nullptr, 10));
       }
+    } else if (flag == "--max-workers") {
+      g_max_workers = std::strtoull(value().c_str(), nullptr, 10);
     } else if (flag == "--tuned") {
       tuned_path = value();
     } else if (flag == "--tpcds-dir") {
@@ -371,6 +394,14 @@ int main(int argc, char ** argv) {
   }
 
   TslPaperResults results("Q4 scaling", "bench_q4_scaling");
+  if (g_max_workers == 0) {
+    // One thread per physical core of one NUMA node, which is what the harness
+    // probed. Falling back to the logical count would sweep past the point where
+    // the curve stops being about the sorter.
+    g_max_workers = std::max<std::size_t>(1, results.machine().physical_per_node);
+    std::printf("thread sweep capped at %zu (physical cores per NUMA node); "
+                "override with --max-workers\n", g_max_workers);
+  }
 
   // The tuned configuration, or the defaults with every row labelled "(default)"
   // so a run without Q0 cannot be mistaken for a tuned one.
