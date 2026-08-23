@@ -174,6 +174,10 @@ than the single winner. Where an axis's winner flips between shapes, that belong
 in the paper as a result rather than being averaged away.
 
 
+The mechanism -- what is built when, what each stage measures, and where each
+measurement goes -- is [benchmark-workflow.md](benchmark-workflow.md). This file is
+the reasoning behind the axes.
+
 ## What each axis is for
 
 The suite kept producing indefensible answers -- a four-lane cell chosen to

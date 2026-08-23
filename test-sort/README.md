@@ -25,7 +25,8 @@ benchmarks/
   visualization/            plotting and sweep scripts
   paper_harness.hpp         the measurement method, once: verify then time,
                             median of nine with the IQR, machine state, drops
-  bench_qN_*.cpp            one paper question each; see docs/benchmark-plan.md
+  bench_qN_*.cpp            one paper question each; see docs/benchmark-plan.md`) and the mechanism
+(`docs/benchmark-workflow.md
   cosort_bench.cpp          the staged variant corpus
   bench_*.cpp               focused studies behind one decision each
   deprecated/               superseded, EXCLUDE_FROM_ALL, see its README

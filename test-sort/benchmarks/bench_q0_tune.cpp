@@ -328,12 +328,20 @@ int main(int argc, char ** argv) {
   // up. What Q0 must still decide is the register *width* at the built style, which
   // is three cells. Pass --styles to widen it when the cross-style knob comparison
   // is the question.
-  // The style the reporting drivers are built for, so the configurations Q0 writes
-  // are the ones they look up. Hardcoding a style here means tuning one
-  // instantiation and measuring another: with the incumbent moved to
-  // ClangBoolMask, a default of "intr" would have Q0 write configurations no
-  // driver reads and every reported row fall back to "(default)".
-  std::vector<std::string> style_names{tsl_style_name(tsl_measure_style)};
+  // Empty means "every style this binary was built with". Q0 registers a unit per
+  // compiled (style, register width), so restricting the default would throw away
+  // the design-space answer the style axis exists to produce -- and the reporting
+  // drivers still look up only the cell they were built for, so measuring the
+  // others costs time and loses nothing.
+  //
+  // What it must never do is default to a style *different* from the built one:
+  // that writes configurations no driver reads, and every reported row falls back
+  // to "(default)". Tuning all of them cannot make that mistake; tuning one
+  // hardcoded name did, when the incumbent moved to ClangBoolMask.
+  //
+  // `--styles` narrows it. On a slow host, `--styles $(built style)` is three cells
+  // instead of nine and still produces everything the drivers read.
+  std::vector<std::string> style_names;
   std::vector<std::size_t> widths;
   // 0 means "derive it from the cache", which is what happens unless --rows says
   // otherwise. A literal here is how the tuner came to run entirely inside the LLC.
@@ -627,6 +635,25 @@ int main(int argc, char ** argv) {
     }
   }
 
+  // The one mistake this must not make quietly: finishing without a configuration
+  // for the cell the reporting drivers were built for.
+  {
+    auto const built = std::string(tsl_style_name(tsl_measure_style));
+    bool covered = false;
+    for (auto const & entry : tuned) {
+      if (entry.first.find("|" + built + "|" + std::to_string(tsl_measure_width) + "|")
+          != std::string::npos) {
+        covered = true;
+        break;
+      }
+    }
+    if (!covered) {
+      std::printf("\n  !! nothing was tuned for %s/%zu-bit, which is the cell the "
+                  "reporting drivers are built for: every row they publish will say "
+                  "(default). Widen --styles or --widths.\n",
+                  built.c_str(), tsl_measure_width);
+    }
+  }
   tsl_write_tuned(out_path, tuned);
   std::printf("\nwrote %s (%zu configurations)\n", out_path.c_str(), tuned.size());
   for (auto const & [key, config] : tuned) {
