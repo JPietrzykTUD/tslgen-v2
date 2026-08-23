@@ -48,29 +48,53 @@ auto split(std::string const & text, char separator) -> std::vector<std::string>
 // The winner overall, plus the winner on each coordinate, which is what makes the
 // output readable as a design-space answer rather than a single number.
 struct Outcome {
-  TslTuneCandidate best;
+  TslTuneCandidate best;                    // what is shipped
+  TslTuneCandidate fastest;                 // the lowest number measured
+  std::vector<TslTuneCandidate> tied;       // indistinguishable from `fastest`
   std::map<std::string, TslTuneCandidate> per_axis;
 };
 
-auto summarise(std::vector<TslTuneCandidate> const & candidates) -> Outcome {
+// The fastest candidate, everything statistically tied with it, and the one to
+// ship. Shipping the default when it is tied is what makes the answer stable: the
+// alternative is a configuration that changes between two runs of the same binary.
+auto summarise(std::vector<TslTuneCandidate> const & candidates, double tie_margin)
+  -> Outcome {
   Outcome outcome;
   for (auto const & candidate : candidates) {
     if (candidate.score <= 0.0) {
       continue;  // sorted wrongly; never a winner
     }
-    if (outcome.best.score <= 0.0 || candidate.score < outcome.best.score) {
-      outcome.best = candidate;
+    if (outcome.fastest.score <= 0.0 || candidate.score < outcome.fastest.score) {
+      outcome.fastest = candidate;
     }
     auto const existing = outcome.per_axis.find(candidate.axis);
     if (existing == outcome.per_axis.end() || candidate.score < existing->second.score) {
       outcome.per_axis[candidate.axis] = candidate;
     }
   }
+  if (outcome.fastest.score <= 0.0) {
+    return outcome;
+  }
+  auto const ceiling = outcome.fastest.score * (1.0 + tie_margin);
+  for (auto const & candidate : candidates) {
+    if (candidate.score > 0.0 && candidate.score <= ceiling) {
+      outcome.tied.push_back(candidate);
+    }
+  }
+  // Ship the default when it is among the tied; otherwise the fastest.
+  outcome.best = outcome.fastest;
+  for (auto const & candidate : outcome.tied) {
+    if (candidate.is_default) {
+      outcome.best = candidate;
+      break;
+    }
+  }
   return outcome;
 }
 
 void report(char const * algorithm, TslStyle style, std::size_t width,
-            std::vector<TslTuneCandidate> const & candidates, Outcome const & outcome) {
+            std::vector<TslTuneCandidate> const & candidates, Outcome const & outcome,
+            double tie_margin) {
   std::printf("\n%s, %s/%zu-bit — %zu candidates\n", algorithm,
               tsl_style_name(style), width, candidates.size());
   std::printf("  %-12s %-24s %12s %8s\n", "axis", "value", "ns/elem", "vs best");
@@ -81,6 +105,8 @@ void report(char const * algorithm, TslStyle style, std::size_t width,
               if (b.score <= 0.0) return true;
               return a.score < b.score;
             });
+  auto const ceiling = outcome.fastest.score > 0.0
+                         ? outcome.fastest.score * (1.0 + tie_margin) : 0.0;
   for (auto const & candidate : sorted) {
     if (!candidate.skipped.empty()) {
       std::printf("  %-12s %-24s %12s  %s\n", candidate.axis.c_str(),
@@ -105,10 +131,13 @@ void report(char const * algorithm, TslStyle style, std::size_t width,
                   where.empty() ? "-" : where.c_str());
       continue;
     }
+    char const * mark = "";
+    if (candidate.score <= ceiling) {
+      mark = candidate.is_default ? "  <- tied, shipped (default)" : "  <- tied";
+    }
     std::printf("  %-12s %-24s %12.2f %7.2fx%s\n", candidate.axis.c_str(),
                 candidate.label.c_str(), candidate.score,
-                candidate.score / outcome.best.score,
-                &candidate == &sorted.front() ? "  <- best" : "");
+                candidate.score / outcome.fastest.score, mark);
   }
 }
 
@@ -259,6 +288,7 @@ int main(int argc, char ** argv) {
   // Default from the measured noise floor: the byte-identical control varied by
   // about 4% between runs, so 5% is the smallest gap worth acting on.
   double cell_margin = 0.05;
+  double tie_margin = 0.04;
 
   for (int i = 1; i < argc; ++i) {
     auto const flag = std::string(argv[i]);
@@ -283,6 +313,8 @@ int main(int argc, char ** argv) {
       }
     } else if (flag == "--tpcds-dir") {
       tpcds_dir = value();
+    } else if (flag == "--tie-margin") {
+      tie_margin = std::strtod(value().c_str(), nullptr) / 100.0;
     } else if (flag == "--cell-margin") {
       cell_margin = std::strtod(value().c_str(), nullptr) / 100.0;
     } else if (flag == "--candidate-seconds") {
@@ -310,6 +342,7 @@ int main(int argc, char ** argv) {
   auto build_problem = [&](std::size_t element_bytes) {
     TslTuneProblem problem;
     problem.candidate_seconds = problem_seconds;
+    problem.tie_margin = tie_margin;
     auto const catalog = tsl_default_catalog(rows, columns, element_bytes);
     auto const tail = "_u" + std::to_string(element_bytes * 8) + "_n";
     for (auto const & shape : shapes) {
@@ -433,17 +466,26 @@ int main(int argc, char ** argv) {
     auto problem = found->second;
     for (auto const workers : worker_counts) {
       problem.workers = workers;
-      std::printf("\n================ %s / %zu-bit / u%zu / %zu worker%s\n",
+      // Lanes, spelled out, because that is what the algorithm actually sees.
+      // A sorting network holds `lanes * rows`; the base case, the bucket count
+      // and the leaf capacity all scale with lanes. So register width and value
+      // width are not two independent axes here -- their ratio is the axis, and
+      // 256-bit/u32 is the same eight lanes as 512-bit/u64. Printing it makes that
+      // checkable instead of hidden behind two numbers that look unrelated.
+      auto const lanes = unit.width / (8 * unit.element_bytes);
+      std::printf("\n================ %s / %zu-bit / u%zu = %zu lanes / %zu worker%s\n",
                   tsl_style_name(unit.style), unit.width, unit.element_bytes * 8,
-                  workers, workers == 1 ? "" : "s");
+                  lanes, workers, workers == 1 ? "" : "s");
 
       auto const samplesort = unit.samplesort(problem);
-      auto const sample_outcome = summarise(samplesort);
-      report("samplesort", unit.style, unit.width, samplesort, sample_outcome);
+      auto const sample_outcome = summarise(samplesort, tie_margin);
+      report("samplesort", unit.style, unit.width, samplesort, sample_outcome,
+             tie_margin);
 
       auto const quicksort = unit.quicksort(problem);
-      auto const quick_outcome = summarise(quicksort);
-      report("quicksort", unit.style, unit.width, quicksort, quick_outcome);
+      auto const quick_outcome = summarise(quicksort, tie_margin);
+      report("quicksort", unit.style, unit.width, quicksort, quick_outcome,
+             tie_margin);
 
       report_decomposition(decompose(problem, samplesort, quicksort));
 

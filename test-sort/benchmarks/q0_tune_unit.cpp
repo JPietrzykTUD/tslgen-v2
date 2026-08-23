@@ -77,6 +77,7 @@ auto samplesort_candidates(TslTuneProblem const & problem)
   TSL_Q0_POINT("cross", "K8/ins",       8, adaptive, ins, 256, 50, byte_ids, oop);
   TSL_Q0_POINT("cross", "K16/net/f25", 16, adaptive, net, 256, 25, byte_ids, oop);
   TSL_Q0_POINT("cross", "K16/net/f50", 16, adaptive, net, 256, 50, byte_ids, oop);
+  out.back().is_default = true;   // the documented default samplesort
   TSL_Q0_POINT("cross", "K16/net/f75", 16, adaptive, net, 256, 75, byte_ids, oop);
   TSL_Q0_POINT("cross", "K16/ins",     16, adaptive, ins, 256, 50, byte_ids, oop);
   TSL_Q0_POINT("cross", "K32/net/f25", 32, adaptive, net, 256, 25, byte_ids, oop);
@@ -154,6 +155,7 @@ auto quicksort_candidates(TslTuneProblem const & problem)
   TSL_Q0_QS("cross", "3way/net/post", three, net_leaf, 0, post);
   TSL_Q0_QS("cross", "3way/ins/post", three, ins_leaf, 0, post);
   TSL_Q0_QS("cross", "3way/hyb/post", three, net_leaf, hybrid, post);
+  out.back().is_default = true;   // the documented default quicksort
   TSL_Q0_QS("cross", "2way/net/post", two, net_leaf, 0, post);
   TSL_Q0_QS("discovery", "3way/net/incremental", three, net_leaf, 0, incremental);
   TSL_Q0_QS("discovery", "3way/hyb/incremental", three, net_leaf, hybrid, incremental);

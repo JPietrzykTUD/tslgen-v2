@@ -173,6 +173,66 @@ it returns is a compromise, and the per-axis table it prints is more informative
 than the single winner. Where an axis's winner flips between shapes, that belongs
 in the paper as a result rather than being averaged away.
 
+
+## What each axis is for
+
+The suite kept producing indefensible answers -- a four-lane cell chosen to
+measure the paper, a "best" configuration that changed between two runs of the
+same binary -- and the cause was one confusion repeated in three places: axes of
+different *kinds* were being optimised over as though they were commensurable.
+There are four kinds, and only one of them is a thing to choose.
+
+**Input shape.** Rows, columns, distinct-value count and skew, and key width.
+These are properties of the data, not decisions: they are swept, and every result
+is reported per shape. A single number averaged over shapes is a summary, never a
+finding -- the whole project's result is that cost is shape-dependent.
+
+**Degree of parallelism.** `lanes = register bits / (8 x value bytes)`. This is the
+axis the algorithm's structure depends on: a sorting network holds `lanes * rows`,
+and the base case, bucket count and leaf capacity all scale with it. Register width
+and value width are therefore *not* two independent axes -- their ratio is the
+axis. 256-bit over 4-byte keys is the same eight lanes as 512-bit over 8-byte keys,
+which the old output hid behind two unrelated-looking numbers. Q0 now prints lanes.
+
+Whether the tuned knobs actually track lanes is still open, and the honest reason
+is that the effect is smaller than the measurement. The two eight-lane cells chose
+different configurations -- K=8/base 256 against K=16/base 128 -- but repeating the
+identical cell twice also changed its winner, so that disagreement is drift and not
+a lane effect. Settling it needs either far more repetitions or a size where lane
+count bites harder.
+
+**Implementation style.** Intrinsics, clang vector builtins, clang builtins with
+packed boolean masks. Same lanes, three ways of expressing them. This axis exists
+to be *compared*, never selected: it is the portability claim, and a style that
+costs nothing is the result. Ranking styles by runtime and building the reporting
+drivers for the fastest was a category error -- it optimised over the axis whose
+purpose is the comparison, and on a 0.3% margin it chose ClangBuiltin/128-bit, a
+four-lane cell, to measure an AVX-512 paper with. The reporting drivers are built
+for intrinsics at the widest width, a challenger has to clear a margin to displace
+it, and Q6 reports what the other styles cost at equal lanes.
+
+**Algorithmic knobs.** Bucket count, base case, base-case leaf and its fill
+threshold, discovery, partition kind, movement. Their optimum is a function of the
+two axes above, so they are tuned per (cell, key width) and nowhere else.
+
+And they are reported as a *tied set*. Running the identical candidate set twice on
+a quiet, pinned machine moves individual scores by 1.0% at the median and 3.5% at
+the worst -- enough to swap which samplesort configuration wins, when the top four
+sit within 0.2% of each other. So Q0 reports everything within the drift of the
+fastest and ships the documented default whenever the default is in that set. The
+claim that survives is not "these knobs are optimal" but "nothing we measured beats
+the default by more than the measurement's own drift", which is both defensible and
+stable across machines.
+
+**Thread count** is not a design axis at all: it is one thread per physical core of
+one NUMA node, pinned with `numactl`. See the note in run_all.sh.
+
+**So Q0 against Q2-Q4 is a division of labour, not a duplication.** Q0 explores
+the knob space per cell and per key width and emits one file. Q2, Q3 and Q4 are
+built for one cell, read that file for the key width they are measuring, and sweep
+the *shape* axes. Nothing is tuned twice, and every reported row names the
+configuration it used and whether it came from the file.
+
 ## Q1 — external baselines
 
 The objection a single comparator-based baseline invites is that it is a straw

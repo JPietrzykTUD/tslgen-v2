@@ -68,6 +68,21 @@ struct TslTuneProblem {
   // guess: a configuration five times off the pace cannot win, and measuring it
   // nine times over five shapes is how a tuning run turns into an overnight hang.
   double abandon_factor = 5.0;
+  // Two candidates whose scores differ by less than this are the same answer.
+  //
+  // Not a comfort setting. Running the identical candidate set twice on a quiet,
+  // pinned machine moved individual scores by 1.0% at the median and 3.5% at the
+  // worst, and that was enough to change which samplesort configuration "won":
+  // K16/net/f50 at 44.09 and K16/net/f75 at 44.07 in one run, reversed in the
+  // next. Four candidates sat within 0.2% of each other. Reporting one of them as
+  // the optimum is reporting the noise.
+  //
+  // So the tuner reports a tied *set* and ships the documented default whenever the
+  // default is in it. That makes the published configuration stable across runs
+  // and across machines, and makes the claim defensible: not "these knobs are
+  // optimal" but "nothing we measured beats the default by more than the
+  // measurement's own drift".
+  double tie_margin = 0.04;
   // Seconds a single candidate may spend before it is abandoned. A configuration
   // 66x off the pace can never win, and on duplicate-heavy real keys the two-way
   // partition is quadratic -- one such candidate consumed two hours of a run whose
@@ -100,6 +115,9 @@ struct TslTuneCandidate {
   // Set when a candidate was deliberately not measured. Distinct from wrong and
   // from over-budget: this one was never going to be informative.
   std::string skipped;
+  // The documented default configuration. When several candidates are
+  // statistically tied, this is the one shipped: see `tie_margin`.
+  bool is_default = false;
 };
 
 // A unit is one (style, register width, key width): it runs the whole search and
