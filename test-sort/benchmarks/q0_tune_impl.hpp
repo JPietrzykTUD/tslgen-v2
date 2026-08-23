@@ -55,6 +55,9 @@ struct TslTuneProblem {
   // askable on its own and cheaply -- not answered incidentally by whichever cells
   // a tuning run happens to visit.
   bool verify_only = false;
+  // Measure only the documented default. Used to price a whole cell before
+  // committing to tuning it: one candidate says whether the cell is in the running.
+  bool probe_default_only = false;
   // Two-way partitioning is quadratic in the equal-run length, and this tuning set
   // is duplicate-heavy on purpose, so above a working-set size the candidate stops
   // being a measurement and becomes a hang: it was already 66x off the pace at
@@ -144,6 +147,34 @@ struct TslTuneUnit {
 inline auto tsl_tune_units() -> std::vector<TslTuneUnit> & {
   static std::vector<TslTuneUnit> units;
   return units;
+}
+
+// Expected-best-first, so a cell that cannot compete is found early and cheaply.
+//
+// The order is not a guess: wider registers hold more lanes, and at a fixed width
+// the packed-boolean-mask style is at least as fast as intrinsics on every shape
+// measured while the lane-mask style is never faster and costs up to 46%
+// (`probe_paired_styles`). So the sweep runs
+//
+//   clang_bool/512, intr/512, clang/512, clang_bool/256, intr/256, clang/256, ...
+//
+// and the first cell establishes a reference the rest are priced against. Without
+// this the units come out in link order and the 128-bit cells -- three to four
+// times slower here -- are tuned in full before anything knows they cannot win.
+inline auto tsl_tune_unit_rank(TslTuneUnit const & unit) -> int {
+  auto const style_rank = unit.style == TslStyle::ClangBoolMask ? 0
+                        : unit.style == TslStyle::Intrinsics    ? 1
+                                                               : 2;
+  // Width descending, then style, then key width for a stable total order.
+  return static_cast<int>((512 - unit.width) * 100 + style_rank * 10
+                          + unit.element_bytes);
+}
+
+inline void tsl_sort_tune_units(std::vector<TslTuneUnit> & units) {
+  std::stable_sort(units.begin(), units.end(),
+                   [](TslTuneUnit const & a, TslTuneUnit const & b) {
+                     return tsl_tune_unit_rank(a) < tsl_tune_unit_rank(b);
+                   });
 }
 
 
@@ -326,6 +357,21 @@ auto measure_interleaved(TslDatasetSource<Key> & source,
   // next -- while pooling gives the quartile band more samples and a stabler
   // answer to the only question that matters, "is this resolvably faster".
   std::vector<std::vector<double>> ratios(entrants.size());
+
+  // Pricing a cell: measure the default alone. One candidate is enough to say
+  // whether a cell is within reach of the best cell so far, and fifteen are not
+  // needed to say it is not.
+  std::vector<char> priced(entrants.size(), 1);
+  if (problem.probe_default_only && default_at < entrants.size()) {
+    std::fill(priced.begin(), priced.end(), 0);
+    priced[default_at] = 1;
+    for (std::size_t at = 0; at < entrants.size(); ++at) {
+      if (priced[at] == 0) {
+        alive[at] = 0;
+        out[at].skipped = "not measured: this cell was priced on its default alone";
+      }
+    }
+  }
 
   for (auto const & spec : problem.specs) {
     auto const pristine = source.pristine(spec);

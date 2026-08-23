@@ -315,6 +315,7 @@ class TslPaperResults {
   std::string binary_;
   TslPaperMachine machine_;
   std::vector<TslPaperRow> rows_;
+  bool quiet_ = false;
   std::size_t unsettled_ = 0;   // rows still wide after the repetition ceiling
   bool header_printed_ = false;
   // Progress. A full run is six to eight hours across six drivers, and without
@@ -380,6 +381,13 @@ class TslPaperResults {
 
   auto machine() const -> TslPaperMachine const & { return machine_; }
 
+  // Stop echoing every row. A driver whose readable output is its own tables --
+  // Q0 prints one per cell, with every candidate, its label and its ratio -- gains
+  // nothing from also dumping the same numbers as rows whose only distinguishing
+  // column is `detector=scalar`, which reads as though the sort were scalar. The
+  // CSV is written either way.
+  void set_quiet(bool quiet) { quiet_ = quiet; }
+
   auto make_row() const -> TslPaperRow {
     TslPaperRow row;
     row.question = question_;
@@ -404,6 +412,10 @@ class TslPaperResults {
     if (row.repetitions >= tsl_paper_max_repetitions
         && row.ns_per_element.relative_iqr() > tsl_paper_target_spread) {
       ++unsettled_;
+    }
+    if (quiet_) {
+      rows_.push_back(std::move(row));
+      return;
     }
     if (!header_printed_) {
       std::printf("\n%-26s %-12s %5s %8s %-24s %-14s %7s %10s %8s\n", "shape",

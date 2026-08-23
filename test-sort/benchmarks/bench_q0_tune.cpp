@@ -358,6 +358,9 @@ int main(int argc, char ** argv) {
   // about 4% between runs, so 5% is the smallest gap worth acting on.
   double cell_margin = 0.05;
   double tie_margin = 0.04;
+  // How many times the best cell's score a cell may be before the rest of it is
+  // not worth measuring. 0 disables the pruning.
+  double cell_prune_factor = 1.5;
 
   for (int i = 1; i < argc; ++i) {
     auto const flag = std::string(argv[i]);
@@ -382,6 +385,8 @@ int main(int argc, char ** argv) {
       }
     } else if (flag == "--tpcds-dir") {
       tpcds_dir = value();
+    } else if (flag == "--cell-prune-factor") {
+      cell_prune_factor = std::strtod(value().c_str(), nullptr);
     } else if (flag == "--tie-margin") {
       tie_margin = std::strtod(value().c_str(), nullptr) / 100.0;
     } else if (flag == "--cell-margin") {
@@ -402,6 +407,8 @@ int main(int argc, char ** argv) {
   }
 
   TslPaperResults results("Q0 tuning", "bench_q0_tune");
+  // The per-cell tables are this driver's readable output; the rows go to the CSV.
+  results.set_quiet(true);
   if (worker_counts.empty()) {
     worker_counts = tsl_default_workers(results.machine());
   }
@@ -460,6 +467,11 @@ int main(int argc, char ** argv) {
     std::printf("nothing to tune\n");
     return 1;
   }
+
+  // Expected-best-first for both paths: the correctness sweep reads better in the
+  // same order the tuning uses, and the tuning needs it so the first cell measured
+  // is the one most likely to set the reference.
+  tsl_sort_tune_units(tsl_tune_units());
 
   // A correctness sweep is a different job from tuning and gets its own exit
   // code, so it can gate a commit. It visits every unit at every key width, not
@@ -529,6 +541,19 @@ int main(int argc, char ** argv) {
   // only be built for one cell, so the least they can do is say when it is wrong.
   std::map<std::tuple<std::string, std::size_t, std::size_t>, double> cell_best;
 
+  // Expected-best-first, and price each cell before tuning it. The full sweep is
+  // 756 measurements and about five hours here, most of it spent tuning cells three
+  // to four times off the pace: at 128-bit the samplesort runs 61-88 ns/element
+  // against 21-32 at 512-bit, and no configuration closes that. So the first cell
+  // establishes a reference and a later cell whose *default* exceeds
+  // `cell_prune_factor` times it is recorded with that one measurement and skipped.
+  // It is the candidate-level abandon rule one level up, for the same reason.
+  // Per key width, not one number for both. An 8-byte key moves twice the bytes of
+  // a 4-byte one and costs roughly twice as much whatever the cell, so pricing a
+  // u64 cell against the best u32 cell prunes every u64 cell -- which is what the
+  // first version of this did, discarding half the design space to a unit error.
+  std::map<std::size_t, double> best_cell_default;
+
   for (auto const & unit : tsl_tune_units()) {
     if (!style_names.empty()
         && std::find(style_names.begin(), style_names.end(),
@@ -557,8 +582,61 @@ int main(int argc, char ** argv) {
                   tsl_style_name(unit.style), unit.width, unit.element_bytes * 8,
                   lanes, workers, workers == 1 ? "" : "s");
 
+      // Price the cell on its default, unless this is the first cell measured.
+      auto const reference = best_cell_default.find(unit.element_bytes);
+      if (cell_prune_factor > 0.0 && reference != best_cell_default.end()
+          && reference->second > 0.0) {
+        auto priced = problem;
+        priced.probe_default_only = true;
+        auto const probe = unit.samplesort(priced);
+        double cell_default = 0.0;
+        for (auto const & candidate : probe) {
+          if (candidate.is_default && candidate.score > 0.0) {
+            cell_default = candidate.score;
+          }
+        }
+        if (cell_default > 0.0
+            && cell_default > cell_prune_factor * reference->second) {
+          std::printf("  cell default %.2f ns/element is %.2fx the best u%zu cell's "
+                      "%.2f: skipping the rest of this cell, no configuration "
+                      "closes that gap\n",
+                      cell_default, cell_default / reference->second,
+                      unit.element_bytes * 8, reference->second);
+          for (auto const & candidate : probe) {
+            auto row = results.make_row();
+            row.shape = "tuning-set";
+            row.rows = rows;
+            row.columns = columns;
+            row.element_bytes = unit.element_bytes;
+            row.algorithm = "samplesort";
+            row.variant = std::string(tsl_style_name(unit.style)) + "/"
+                          + std::to_string(unit.width) + " " + candidate.axis + "="
+                          + candidate.label;
+            row.detector = "scalar";
+            row.workers = workers;
+            if (candidate.score > 0.0) {
+              row.verified = true;
+              row.ns_per_element.median = candidate.score;
+              row.ns_per_element.p25 = candidate.score;
+              row.ns_per_element.p75 = candidate.score;
+              results.add(std::move(row));
+            } else {
+              results.drop(row, "cell priced out: its default is far off the best "
+                                "cell's, so the rest was not measured");
+            }
+          }
+          continue;
+        }
+      }
+
       auto const samplesort = unit.samplesort(problem);
       auto const sample_outcome = summarise(samplesort, tie_margin);
+      if (sample_outcome.fastest.score > 0.0) {
+        auto & best = best_cell_default[unit.element_bytes];
+        if (best == 0.0 || sample_outcome.fastest.score < best) {
+          best = sample_outcome.fastest.score;
+        }
+      }
       report("samplesort", unit.style, unit.width, samplesort, sample_outcome,
              tie_margin);
 
@@ -623,9 +701,34 @@ int main(int argc, char ** argv) {
           row.variant = std::string(tsl_style_name(unit.style)) + "/"
                         + std::to_string(unit.width) + " " + candidate.axis + "="
                         + candidate.label;
+          // The scalar cluster detector, throughout: the detector is Q3's axis, and
+          // holding it fixed here keeps it from confounding a knob comparison.
           row.detector = "scalar";
           row.workers = workers;
-          row.verified = candidate.score > 0.0;
+          // A zero score means one of three different things, and they must not
+          // collapse into "INCORRECT". Only a candidate that actually sorted wrongly
+          // is a correctness failure; the other two were never measured, and saying
+          // they were wrong is a stronger claim than the run can support.
+          if (!candidate.skipped.empty()) {
+            results.drop(row, candidate.skipped);
+            continue;
+          }
+          if (candidate.over_budget) {
+            results.drop(row, "abandoned: first pass exceeded the abandon factor "
+                              "times the best candidate, so it cannot win");
+            continue;
+          }
+          if (candidate.score <= 0.0) {
+            std::string where;
+            for (auto const & shape : candidate.failures) {
+              where += (where.empty() ? "" : ",") + shape;
+            }
+            row.verified = false;
+            results.add(std::move(row));
+            (void)where;
+            continue;
+          }
+          row.verified = true;
           row.ns_per_element.median = candidate.score;
           row.ns_per_element.p25 = candidate.score;
           row.ns_per_element.p75 = candidate.score;
