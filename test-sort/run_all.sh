@@ -331,12 +331,24 @@ echo
 # Several can be combined in the one string. Everything else about the run stays
 # derived from the host.
 read -r -a q0_extra <<< "${COSORT_Q0_ARGS:-}"
+# --quick has to narrow the tuner too. When Q0 moved here from run_paper.sh its
+# quick-mode narrowing was left behind, so `--quick` -- whose whole purpose is to
+# prove the pipeline in minutes -- ran the full multi-hour tune and never reached the
+# stages it was meant to be checking.
+if [[ "$quick" == "--quick" ]]; then
+  q0_quick=(--rows 262144 --shapes low_cardinality_d4,skewed_zipf_s1
+            --styles "$(tr 'A-Z' 'a-z' <<< "${TSL_COSORT_MEASURE_STYLE:-ClangBoolMask}" \
+                        | sed 's/clangboolmask/clang_bool/;s/clangbuiltin/clang/;s/intrinsics/intr/')"
+            --widths 512)
+else
+  q0_quick=()
+fi
 echo "=== q0_tune (full: decides the cell and every configuration)"
 if [[ ${#q0_extra[@]} -gt 0 ]]; then
   echo "    extra tuner flags: ${q0_extra[*]}"
 fi
 "${pin[@]}" "$build/bench_q0_tune" --workers "$COSORT_WORKERS" \
-  "${q0_extra[@]+"${q0_extra[@]}"}" \
+  "${q0_quick[@]+"${q0_quick[@]}"}" "${q0_extra[@]+"${q0_extra[@]}"}" \
   --out "$tuned" --csv "$results/q0_tune.csv" 2>&1 \
   | tee "$results/q0_tune.log"
 probe="$(grep '^TSL_COSORT_BEST_CELL' "$results/q0_tune.log" | tail -1 || true)"
