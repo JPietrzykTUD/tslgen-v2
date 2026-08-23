@@ -349,7 +349,7 @@ int main(int argc, char ** argv) {
   std::vector<std::string> shapes{"tpcds_q67_sf1", "low_cardinality_d4",
                                   "independent_uniform_c1024", "skewed_zipf_s1"};
   std::string axis = "all";
-  std::size_t base_rows = 1u << 21;
+  std::size_t base_rows = 0;                // machine-derived unless --rows
   std::size_t base_columns = 4;
   std::vector<std::size_t> widths{4, 8};
   std::string csv_path;
@@ -394,6 +394,10 @@ int main(int argc, char ** argv) {
   }
 
   TslPaperResults results("Q4 scaling", "bench_q4_scaling");
+  if (base_rows == 0) {
+    base_rows = tsl_rows_out_of_cache(results.machine(), base_columns, 4);
+    std::printf("rows=%zu (derived from this machine)\n", base_rows);
+  }
   if (g_max_workers == 0) {
     // One thread per physical core of one NUMA node, which is what the harness
     // probed. Falling back to the logical count would sweep past the point where

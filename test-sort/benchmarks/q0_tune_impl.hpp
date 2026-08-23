@@ -111,6 +111,14 @@ struct TslTuneCandidate {
   double score = 0.0;      // geometric mean ns/element; 0 means it sorted wrongly
   std::vector<double> per_shape;
   std::vector<std::string> failures;
+  // Paired against the documented default, one shape at a time: `beats_default` is
+  // true only where the upper quartile of the per-round ratio is below 1.0 on every
+  // shape. A fixed percentage margin cannot do this job -- the default sits near
+  // the boundary, so which side of it lands is itself a coin flip, and the shipped
+  // configuration flipped between two interleaved runs. Asking whether the
+  // *difference* is resolvable is the question that has a stable answer.
+  bool beats_default = false;
+  double ratio_to_default = 0.0;   // median over shapes, for the report
   bool over_budget = false;
   // Set when a candidate was deliberately not measured. Distinct from wrong and
   // from over-budget: this one was never going to be informative.
@@ -255,6 +263,183 @@ auto geometric_score(TslDatasetSource<Key> & source, TslTuneProblem const & prob
 
 }  // namespace tsl_tune_detail
 
+
+// --- interleaved measurement ----------------------------------------------------
+// Measuring candidate A to completion and then candidate B charges any drift
+// between the two blocks to the A-B difference. On a quiet, pinned machine that
+// drift is 1.0% at the median and 3.5% at the worst, which is larger than the
+// differences the tuner exists to resolve: the top four samplesort candidates sat
+// within 0.2% of each other, and two runs of the same binary named different
+// winners. Interleaving -- one pass of every candidate, then the next round --
+// removes drift slow relative to a round, which is what machine drift is.
+//
+// The cost is unchanged: the same number of passes per candidate, in a different
+// order. What changes is that every candidate's sorter has to be live at once, so
+// the sort is erased behind a callable rather than instantiated inside the loop.
+template <class Key>
+struct TslTuneEntrant {
+  std::string axis;
+  std::string label;
+  TslTunedConfig config;
+  bool is_default = false;
+  // Sorts `index` for one dataset. Distinct types behind one signature, which is
+  // the price of holding them all at once.
+  std::function<void(TslSortColumn<Key> *, std::size_t, Key *, std::size_t,
+                     std::size_t)> run;
+};
+
+namespace tsl_tune_detail {
+
+// Interleave every entrant over one problem and return them as scored candidates.
+template <class Key>
+auto measure_interleaved(TslDatasetSource<Key> & source,
+                         TslTuneProblem const & problem,
+                         std::vector<TslTuneEntrant<Key>> const & entrants)
+  -> std::vector<TslTuneCandidate> {
+  std::vector<TslTuneCandidate> out;
+  out.reserve(entrants.size());
+  for (auto const & entrant : entrants) {
+    TslTuneCandidate candidate;
+    candidate.axis = entrant.axis;
+    candidate.label = entrant.label;
+    candidate.config = entrant.config;
+    candidate.is_default = entrant.is_default;
+    out.push_back(std::move(candidate));
+  }
+  // Per-shape medians, accumulated into a geometric mean at the end.
+  std::vector<double> logs(entrants.size(), 0.0);
+  std::vector<std::size_t> counted(entrants.size(), 0);
+  std::vector<char> alive(entrants.size(), 1);
+  // Which entrant is the documented default, and per-candidate evidence about
+  // whether it is beaten. `wins` counts shapes where the ratio band clears 1.0,
+  // `shapes` counts shapes where both ran, and the two must agree for a candidate
+  // to displace the default.
+  std::size_t default_at = entrants.size();
+  for (std::size_t at = 0; at < entrants.size(); ++at) {
+    if (entrants[at].is_default) {
+      default_at = at;
+    }
+  }
+  // Every per-round ratio against the default, pooled across shapes. Pooling
+  // rather than requiring per-shape unanimity: unanimity is boundary-sensitive --
+  // a candidate marginal on one shape is excluded in one run and admitted in the
+  // next -- while pooling gives the quartile band more samples and a stabler
+  // answer to the only question that matters, "is this resolvably faster".
+  std::vector<std::vector<double>> ratios(entrants.size());
+
+  for (auto const & spec : problem.specs) {
+    auto const pristine = source.pristine(spec);
+    auto const reference = source.reference(spec, TslDirection::Ascending);
+    std::vector<TslSortColumn<Key>> columns;
+    for (auto const & column : *pristine) {
+      columns.push_back(TslSortColumn<Key>{const_cast<Key *>(column.data()),
+                                           TslSortOrder::ASCENDING});
+    }
+    std::vector<Key> index(spec.rows);
+
+    // One calibration pass each. It is the correctness check the harness would run
+    // anyway, and timing it costs nothing extra -- so it also prices every
+    // candidate before any of them is measured nine times. A candidate already
+    // `abandon_factor` off the pace here cannot win, and is dropped before the
+    // rounds rather than after them.
+    std::vector<double> calibration(entrants.size(), 0.0);
+    for (std::size_t at = 0; at < entrants.size(); ++at) {
+      if (alive[at] == 0) {
+        continue;
+      }
+      auto const start = std::chrono::steady_clock::now();
+      entrants[at].run(columns.data(), spec.columns, index.data(), spec.rows,
+                       problem.workers);
+      calibration[at] = std::chrono::duration<double, std::nano>(
+        std::chrono::steady_clock::now() - start).count()
+        / static_cast<double>(spec.rows);
+      if (!sorted_image_of_a_permutation(*pristine, *reference, index)) {
+        out[at].failures.push_back(spec.id);
+        alive[at] = 0;
+      }
+    }
+    double best_calibration = 0.0;
+    for (std::size_t at = 0; at < entrants.size(); ++at) {
+      if (alive[at] != 0 && calibration[at] > 0.0
+          && (best_calibration == 0.0 || calibration[at] < best_calibration)) {
+        best_calibration = calibration[at];
+      }
+    }
+    if (problem.abandon_factor > 0.0 && best_calibration > 0.0) {
+      for (std::size_t at = 0; at < entrants.size(); ++at) {
+        if (alive[at] != 0
+            && calibration[at] > problem.abandon_factor * best_calibration) {
+          out[at].over_budget = true;
+          alive[at] = 0;
+        }
+      }
+    }
+
+    // The rounds. Every surviving candidate runs once per round, in a fixed order,
+    // so a drift affecting one round affects all of them equally.
+    std::vector<std::vector<double>> samples(entrants.size());
+    for (int round = 0; round < tsl_paper_repetitions; ++round) {
+      for (std::size_t at = 0; at < entrants.size(); ++at) {
+        if (alive[at] == 0) {
+          continue;
+        }
+        auto const start = std::chrono::steady_clock::now();
+        entrants[at].run(columns.data(), spec.columns, index.data(), spec.rows,
+                         problem.workers);
+        samples[at].push_back(
+          std::chrono::duration<double, std::nano>(
+            std::chrono::steady_clock::now() - start).count()
+          / static_cast<double>(spec.rows));
+      }
+    }
+    // Paired ratios against the default, computed round by round *before* the
+    // per-candidate samples are sorted: pairing only cancels drift while the rounds
+    // still line up.
+    if (default_at < entrants.size() && alive[default_at] != 0
+        && !samples[default_at].empty()) {
+      for (std::size_t at = 0; at < entrants.size(); ++at) {
+        if (at == default_at || alive[at] == 0
+            || samples[at].size() != samples[default_at].size()) {
+          continue;
+        }
+        for (std::size_t round = 0; round < samples[at].size(); ++round) {
+          if (samples[default_at][round] > 0.0) {
+            ratios[at].push_back(samples[at][round] / samples[default_at][round]);
+          }
+        }
+      }
+    }
+    for (std::size_t at = 0; at < entrants.size(); ++at) {
+      if (alive[at] == 0 || samples[at].empty()) {
+        continue;
+      }
+      std::sort(samples[at].begin(), samples[at].end());
+      auto const median = samples[at][samples[at].size() / 2];
+      out[at].per_shape.push_back(median);
+      logs[at] += std::log(median);
+      ++counted[at];
+    }
+  }
+
+  for (std::size_t at = 0; at < entrants.size(); ++at) {
+    if (counted[at] == 0 || !out[at].failures.empty() || out[at].over_budget) {
+      out[at].score = 0.0;
+      continue;
+    }
+    out[at].score = std::exp(logs[at] / static_cast<double>(counted[at]));
+    if (!ratios[at].empty()) {
+      auto & pooled = ratios[at];
+      std::sort(pooled.begin(), pooled.end());
+      out[at].ratio_to_default = pooled[pooled.size() / 2];
+      // Resolvably faster: the upper quartile of the pooled ratio is below one, so
+      // three quarters of the paired rounds had this candidate ahead.
+      out[at].beats_default = pooled[(3 * pooled.size()) / 4] < 1.0;
+    }
+  }
+  return out;
+}
+
+}  // namespace tsl_tune_detail
 
 // --- samplesort ---------------------------------------------------------------
 

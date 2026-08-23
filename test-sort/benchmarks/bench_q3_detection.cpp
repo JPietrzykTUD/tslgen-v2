@@ -254,9 +254,9 @@ int main(int argc, char ** argv) {
   // decides how much work a detector has relative to the scan it replaces.
   std::vector<std::size_t> cardinalities{16, 1024, 65536};
   std::vector<std::size_t> column_counts{2, 8};
-  std::vector<std::size_t> worker_counts{1, 24};
+  std::vector<std::size_t> worker_counts;   // machine-derived unless --workers
   std::vector<std::size_t> widths{4, 8};
-  std::size_t rows = 1u << 21;
+  std::size_t rows = 0;                     // machine-derived unless --rows
   std::size_t min_offload = 4096;
   std::string csv_path;
   std::string tuned_path = "best_config.tsv";
@@ -320,6 +320,14 @@ int main(int argc, char ** argv) {
   }
 
   TslPaperResults results("Q3 detection", "bench_q3_detection");
+  if (worker_counts.empty()) {
+    worker_counts = tsl_default_workers(results.machine());
+  }
+  if (rows == 0) {
+    rows = tsl_rows_out_of_cache(results.machine(), 4, 4);
+  }
+  std::printf("workers=%zu..%zu, rows=%zu (derived from this machine)\n",
+              worker_counts.front(), worker_counts.back(), rows);
   g_tuned = tsl_read_tuned(tuned_path);
   if (g_tuned.empty()) {
     std::printf("no %s: measuring the default configuration, rows labelled "

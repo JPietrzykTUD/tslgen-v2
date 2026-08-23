@@ -313,9 +313,9 @@ void run_grid(TslPaperResults & results, std::vector<std::string> const & shapes
 
 int main(int argc, char ** argv) {
   std::vector<std::string> shapes = default_shapes();
-  std::vector<std::size_t> row_counts{1u << 20, 1u << 23};
+  std::vector<std::size_t> row_counts;      // machine-derived unless --rows
   std::vector<std::size_t> column_counts{2, 4, 8};
-  std::vector<std::size_t> worker_counts{1, 24};
+  std::vector<std::size_t> worker_counts;   // machine-derived unless --workers
   std::vector<std::size_t> widths{4, 8};
   std::string csv_path;
   std::string tpcds_dir;
@@ -368,6 +368,19 @@ int main(int argc, char ** argv) {
   }
 
   TslPaperResults results("Q2 algorithms", "bench_q2_algorithms");
+  if (worker_counts.empty()) {
+    worker_counts = tsl_default_workers(results.machine());
+  }
+  if (row_counts.empty()) {
+    // Both regimes on purpose: one working set inside the last level and one well
+    // outside it. Which side of the cache a sort lands on changes what dominates,
+    // so it is a shape axis rather than a size to be picked.
+    row_counts = {tsl_rows_in_cache(results.machine(), 4, 4),
+                  tsl_rows_out_of_cache(results.machine(), 4, 4)};
+  }
+  std::printf("workers=%zu..%zu, rows=%zu and %zu (derived from this machine)\n",
+              worker_counts.front(), worker_counts.back(), row_counts.front(),
+              row_counts.back());
 
   // Read the descent's answer. Without it the defaults are used and every row
   // says "(default)", so a figure can never quietly rest on an untuned knob.

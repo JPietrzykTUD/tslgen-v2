@@ -25,6 +25,7 @@
 
 #include "paper_harness.hpp"
 #include "q0_tune_impl.hpp"
+#include "tsl_simd_for.hpp"
 
 namespace {
 
@@ -81,13 +82,48 @@ auto summarise(std::vector<TslTuneCandidate> const & candidates, double tie_marg
       outcome.tied.push_back(candidate);
     }
   }
-  // Ship the default when it is among the tied; otherwise the fastest.
+  // What ships: the default, unless some candidate is *resolvably* faster than it
+  // on every shape -- the upper quartile of its per-round ratio below 1.0 each
+  // time. A fixed margin put the default near a boundary and the shipped
+  // configuration flipped between two runs of the same binary; a paired test on
+  // every shape does not, because it asks whether the difference is measurable
+  // rather than whether it exceeds a number someone chose.
   outcome.best = outcome.fastest;
-  for (auto const & candidate : outcome.tied) {
-    if (candidate.is_default) {
+  for (auto const & candidate : candidates) {
+    if (candidate.is_default && candidate.score > 0.0) {
       outcome.best = candidate;
       break;
     }
+  }
+  // Among candidates that resolvably beat the default, choose by the *paired*
+  // statistic rather than the absolute score: the ratio is what pairing stabilised,
+  // and two challengers within a percent of each other on absolute time can swap
+  // order between runs while their ratios do not.
+  TslTuneCandidate const * challenger = nullptr;
+  double best_ratio = 0.0;
+  for (auto const & candidate : candidates) {
+    if (candidate.score > 0.0 && candidate.beats_default
+        && (best_ratio == 0.0 || candidate.ratio_to_default < best_ratio)) {
+      best_ratio = candidate.ratio_to_default;
+    }
+  }
+  // Several challengers can be indistinguishable from each other -- the samplesort's
+  // base case at 64, 128 and 256 differed by under a percent -- and taking the
+  // argmin of a tie flips between runs just as it did before. So among challengers
+  // within the margin of the best ratio, take the first in the candidate list. That
+  // order is fixed and documented, which is all a tie-break has to be.
+  if (best_ratio > 0.0) {
+    auto const ceiling_ratio = best_ratio * (1.0 + tie_margin);
+    for (auto const & candidate : candidates) {
+      if (candidate.score > 0.0 && candidate.beats_default
+          && candidate.ratio_to_default <= ceiling_ratio) {
+        challenger = &candidate;
+        break;
+      }
+    }
+  }
+  if (challenger != nullptr) {
+    outcome.best = *challenger;
   }
   return outcome;
 }
@@ -132,12 +168,23 @@ void report(char const * algorithm, TslStyle style, std::size_t width,
       continue;
     }
     char const * mark = "";
-    if (candidate.score <= ceiling) {
-      mark = candidate.is_default ? "  <- tied, shipped (default)" : "  <- tied";
+    if (candidate.is_default) {
+      mark = (&candidate == &outcome.best) ? "  <- default, shipped" : "  <- default";
+    } else if (candidate.beats_default) {
+      mark = (candidate.label == outcome.best.label)
+               ? "  <- beats the default on every shape, shipped"
+               : "  <- beats the default on every shape";
+    } else if (candidate.score <= ceiling) {
+      mark = "  <- tied with the fastest";
     }
-    std::printf("  %-12s %-24s %12.2f %7.2fx%s\n", candidate.axis.c_str(),
+    std::printf("  %-12s %-24s %12.2f %7.2fx %7s%s\n", candidate.axis.c_str(),
                 candidate.label.c_str(), candidate.score,
-                candidate.score / outcome.fastest.score, mark);
+                candidate.score / outcome.fastest.score,
+                candidate.ratio_to_default > 0.0
+                  ? (std::to_string(candidate.ratio_to_default).substr(0, 5) + "d")
+                      .c_str()
+                  : "",
+                mark);
   }
 }
 
@@ -281,13 +328,18 @@ int main(int argc, char ** argv) {
   // up. What Q0 must still decide is the register *width* at the built style, which
   // is three cells. Pass --styles to widen it when the cross-style knob comparison
   // is the question.
-  std::vector<std::string> style_names{"intr"};
+  // The style the reporting drivers are built for, so the configurations Q0 writes
+  // are the ones they look up. Hardcoding a style here means tuning one
+  // instantiation and measuring another: with the incumbent moved to
+  // ClangBoolMask, a default of "intr" would have Q0 write configurations no
+  // driver reads and every reported row fall back to "(default)".
+  std::vector<std::string> style_names{tsl_style_name(tsl_measure_style)};
   std::vector<std::size_t> widths;
   // 0 means "derive it from the cache", which is what happens unless --rows says
   // otherwise. A literal here is how the tuner came to run entirely inside the LLC.
   std::size_t rows = 0;
   std::size_t columns = 4;
-  std::vector<std::size_t> worker_counts{1, 24};
+  std::vector<std::size_t> worker_counts;   // machine-derived unless --workers
   std::string out_path = "best_config.tsv";
   std::string tpcds_dir;
   std::string csv_path;
@@ -342,24 +394,16 @@ int main(int argc, char ** argv) {
   }
 
   TslPaperResults results("Q0 tuning", "bench_q0_tune");
+  if (worker_counts.empty()) {
+    worker_counts = tsl_default_workers(results.machine());
+  }
   if (rows == 0) {
-    // Big enough that the working set misses the last level by a comfortable
-    // factor. Keys, the index and the out-of-place scratch are all live at once,
-    // so the footprint is roughly (columns + 2) * rows * element_bytes; four times
-    // the LLC puts every candidate in the regime the reported figures live in.
-    auto const llc = results.machine().llc_bytes > 0
-                       ? results.machine().llc_bytes
-                       : 32ull * 1024 * 1024;
-    auto const per_row = (columns + 2) * 4;   // the u32 pass; u64 is larger still
-    auto const wanted = 4 * llc / per_row;
-    rows = 1;
-    while (rows < wanted) {
-      rows *= 2;                              // the catalog offers powers of two
-    }
+    rows = tsl_rows_out_of_cache(results.machine(), columns, 4);
     std::printf("rows not given: using %zu, about %zu MiB of live data against a "
                 "%zu MiB LLC. Tuning inside the cache would choose knobs for a "
                 "regime no reported figure measures.\n",
-                rows, rows * per_row / (1024 * 1024), llc / (1024 * 1024));
+                rows, rows * (columns + 2) * 4 / (1024 * 1024),
+                results.machine().llc_bytes / (1024 * 1024));
   }
 
   // The problem every candidate is scored on. Several shapes so the winner is not

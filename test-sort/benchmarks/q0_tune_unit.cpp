@@ -33,39 +33,35 @@ auto samplesort_candidates(TslTuneProblem const & problem)
   -> std::vector<TslTuneCandidate> {
   using Simd = typename tsl_simd_for<Key, style, width>::type;
   TslDatasetSource<Key> source(12ull << 30);
-  std::vector<TslTuneCandidate> out;
+  std::vector<TslTuneEntrant<Key>> entrants;
 
-  // The best per-element cost so far bounds every later candidate: a point five
-  // times off the pace is abandoned rather than measured to completion.
-  double best_so_far = 0.0;
-  auto add = [&](std::string axis, std::string label, TslTunedConfig config,
-                 TslTuneScore score) {
-    if (score.score > 0.0 && (best_so_far == 0.0 || score.score < best_so_far)) {
-      best_so_far = score.score;
-    }
-    std::printf("    samplesort %-10s %-22s %10.2f ns/elem%s\n", axis.c_str(),
-                label.c_str(), score.score,
-                score.over_budget ? "  (over budget)"
-                                  : (score.failures.empty() ? "" : "  WRONG"));
-    std::fflush(stdout);
-    out.push_back(TslTuneCandidate{std::move(axis), std::move(label), config,
-                                   score.score, std::move(score.per_shape),
-                                   std::move(score.failures), score.over_budget});
-  };
-
+  // Each point contributes a *callable*, not a measurement: they are all measured
+  // together afterwards, one pass each per round, so drift cannot land on one
+  // candidate rather than another. The sorter is captured by value in a shared_ptr
+  // because every candidate's buffers stay live for the whole interleaved run.
 #define TSL_Q0_POINT(AXIS, LABEL, K, B, P, BC, F, I, M)                            \
   do {                                                                             \
     TslTunedConfig config;                                                          \
     config.k = (K); config.buckets = (B); config.base_policy = (P);                 \
     config.base_case = (BC); config.fill_percent = (F); config.ids = (I);           \
     config.movement = (M);                                                          \
-    add(AXIS, LABEL,                                                                \
-        config,                                                                     \
-        (tsl_tune_samplesort_point<Key, Simd, K, B, P, BC, F, I, M>(               \
-          source, problem, &best_so_far)));                                          \
+    using Sorter = TslSampleSortMultiColumn<Key, Simd, K, B, 8, BC, P, I,            \
+                                            BC / Simd::lane_count_v, F, M, false>;   \
+    auto sorter = std::make_shared<Sorter>();                                        \
+    entrants.push_back(TslTuneEntrant<Key>{                                          \
+      AXIS, LABEL, config, false,                                                    \
+      [sorter](TslSortColumn<Key> * columns, std::size_t column_count,               \
+               Key * index, std::size_t rows, std::size_t workers) {                 \
+        TslIndexScalarDetector<Key> detector;                                        \
+        if (workers > 1) {                                                           \
+          sorter->sort_index_parallel(columns, column_count, index, rows, detector,   \
+                                      workers);                                      \
+        } else {                                                                     \
+          sorter->sort_index(columns, column_count, index, rows, detector);           \
+        }                                                                            \
+      }});                                                                           \
   } while (false)
 
-  // --- the cross: K x base-case leaf x fill -----------------------------------
   constexpr auto adaptive = TslSampleSortBuckets::Adaptive;
   constexpr auto byte_ids = TslSampleSortIds::Byte;
   constexpr auto oop = TslSampleSortMovement::OutOfPlace;
@@ -77,14 +73,12 @@ auto samplesort_candidates(TslTuneProblem const & problem)
   TSL_Q0_POINT("cross", "K8/ins",       8, adaptive, ins, 256, 50, byte_ids, oop);
   TSL_Q0_POINT("cross", "K16/net/f25", 16, adaptive, net, 256, 25, byte_ids, oop);
   TSL_Q0_POINT("cross", "K16/net/f50", 16, adaptive, net, 256, 50, byte_ids, oop);
-  out.back().is_default = true;   // the documented default samplesort
+  entrants.back().is_default = true;   // the documented default samplesort
   TSL_Q0_POINT("cross", "K16/net/f75", 16, adaptive, net, 256, 75, byte_ids, oop);
   TSL_Q0_POINT("cross", "K16/ins",     16, adaptive, ins, 256, 50, byte_ids, oop);
   TSL_Q0_POINT("cross", "K32/net/f25", 32, adaptive, net, 256, 25, byte_ids, oop);
   TSL_Q0_POINT("cross", "K32/net/f50", 32, adaptive, net, 256, 50, byte_ids, oop);
   TSL_Q0_POINT("cross", "K32/ins",     32, adaptive, ins, 256, 50, byte_ids, oop);
-
-  // --- one factor at a time around the default --------------------------------
   TSL_Q0_POINT("buckets", "ordered", 16, TslSampleSortBuckets::Ordered, net, 256, 50,
                byte_ids, oop);
   TSL_Q0_POINT("ids", "keywidth", 16, adaptive, net, 256, 50,
@@ -95,7 +89,7 @@ auto samplesort_candidates(TslTuneProblem const & problem)
   TSL_Q0_POINT("base_case", "128", 16, adaptive, net, 128, 50, byte_ids, oop);
 
 #undef TSL_Q0_POINT
-  return out;
+  return tsl_tune_detail::measure_interleaved<Key>(source, problem, entrants);
 }
 
 template <class Key>
@@ -103,46 +97,52 @@ auto quicksort_candidates(TslTuneProblem const & problem)
   -> std::vector<TslTuneCandidate> {
   using Simd = typename tsl_simd_for<Key, style, width>::type;
   TslDatasetSource<Key> source(12ull << 30);
-  std::vector<TslTuneCandidate> out;
-  // The largest working set this problem will ask for, which is what decides
-  // whether the quadratic two-way candidate is measurable or a trap.
-  double best_so_far = 0.0;
+  std::vector<TslTuneEntrant<Key>> entrants;
+  std::vector<TslTuneCandidate> skipped;
+  // The hybrid leaf's threshold is derived from the width, so it changes with the
+  // unit rather than being a knob of its own.
+  constexpr std::size_t hybrid = tsl_hybrid_auto_percent<Key, Simd>();
+  // The largest working set this problem asks for, which decides whether the
+  // quadratic two-way candidate is measurable or a trap.
   std::uint64_t working_set = 0;
   for (auto const & spec : problem.specs) {
     working_set = std::max<std::uint64_t>(
       working_set, static_cast<std::uint64_t>(spec.rows) * spec.columns * sizeof(Key));
   }
-  // The hybrid leaf's threshold is derived from the width, so it changes with the
-  // unit rather than being a knob of its own.
-  constexpr std::size_t hybrid = tsl_hybrid_auto_percent<Key, Simd>();
 
 #define TSL_Q0_QS(AXIS, LABEL, PART, LEAF, FILL, DISCOVERY)                        \
   do {                                                                             \
     TslTunedConfig config;                                                          \
-    if ((PART) == TslPartitionKind::TWO_WAY && working_set > problem.two_way_size_cap) { \
-      TslTuneCandidate skipped;                                                     \
-      skipped.axis = AXIS;                                                          \
-      skipped.label = LABEL;                                                        \
-      skipped.skipped = "two-way is quadratic in the equal-run length above the "   \
-                        "working-set cap";                                          \
-      out.push_back(std::move(skipped));                                            \
-      break;                                                                        \
-    }                                                                               \
     config.partition = (PART); config.leaf = (LEAF);                                \
     config.hybrid_leaf = ((FILL) != 0);                                             \
     config.discovery = (DISCOVERY);                                                 \
-    auto score = tsl_tune_quicksort_point<Key, Simd, PART, LEAF, FILL>(             \
-      source, problem, DISCOVERY, config.partition_threshold, &best_so_far);         \
-    if (score.score > 0.0 && (best_so_far == 0.0 || score.score < best_so_far)) {    \
-      best_so_far = score.score;                                                     \
+    if ((PART) == TslPartitionKind::TWO_WAY                                          \
+        && working_set > problem.two_way_size_cap) {                                 \
+      TslTuneCandidate gated;                                                        \
+      gated.axis = AXIS;                                                             \
+      gated.label = LABEL;                                                           \
+      gated.skipped = "two-way is quadratic in the equal-run length above the "      \
+                      "working-set cap";                                             \
+      skipped.push_back(std::move(gated));                                           \
+      break;                                                                         \
     }                                                                                \
-    std::printf("    quicksort  %-10s %-22s %10.2f ns/elem%s\n", AXIS, LABEL,        \
-                score.score, score.over_budget ? "  (over budget)"                    \
-                  : (score.failures.empty() ? "" : "  WRONG"));                       \
-    std::fflush(stdout);                                                              \
-    out.push_back(TslTuneCandidate{AXIS, LABEL, config, score.score,                 \
-                                   std::move(score.per_shape),                        \
-                                   std::move(score.failures), score.over_budget});     \
+    using Sorter = TslMultiColumnIndexSorter<Key, PART, LEAF, Simd, FILL>;           \
+    auto sorter = std::make_shared<Sorter>(0x5A3F1E77);                              \
+    auto const discovery = (DISCOVERY);                                              \
+    auto const threshold = config.partition_threshold;                               \
+    entrants.push_back(TslTuneEntrant<Key>{                                          \
+      AXIS, LABEL, config, false,                                                    \
+      [sorter, discovery, threshold](                                                \
+        TslSortColumn<Key> * columns, std::size_t column_count, Key * index,          \
+        std::size_t rows, std::size_t workers) {                                      \
+        TslIndexScalarDetector<Key> detector;                                        \
+        if (workers > 1) {                                                           \
+          sorter->sort_index_parallel(columns, column_count, index, rows, discovery,  \
+                                      detector, workers, threshold);                 \
+        } else {                                                                     \
+          sorter->sort_index(columns, column_count, index, rows, discovery, detector);\
+        }                                                                            \
+      }});                                                                           \
   } while (false)
 
   constexpr auto three = TslPartitionKind::THREE_WAY;
@@ -155,13 +155,17 @@ auto quicksort_candidates(TslTuneProblem const & problem)
   TSL_Q0_QS("cross", "3way/net/post", three, net_leaf, 0, post);
   TSL_Q0_QS("cross", "3way/ins/post", three, ins_leaf, 0, post);
   TSL_Q0_QS("cross", "3way/hyb/post", three, net_leaf, hybrid, post);
-  out.back().is_default = true;   // the documented default quicksort
+  entrants.back().is_default = true;   // the documented default quicksort
   TSL_Q0_QS("cross", "2way/net/post", two, net_leaf, 0, post);
   TSL_Q0_QS("discovery", "3way/net/incremental", three, net_leaf, 0, incremental);
   TSL_Q0_QS("discovery", "3way/hyb/incremental", three, net_leaf, hybrid, incremental);
 
 #undef TSL_Q0_QS
-  return out;
+  auto measured = tsl_tune_detail::measure_interleaved<Key>(source, problem, entrants);
+  for (auto & gated : skipped) {
+    measured.push_back(std::move(gated));
+  }
+  return measured;
 }
 
 struct Registrar {

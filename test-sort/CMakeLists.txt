@@ -251,7 +251,14 @@ option(TSL_COSORT_NO_INSTRUMENTATION
 # instantiations per key width. So the cell is a build parameter, `run_all.sh`
 # probes Q0 for the winner before building the rest, and the full Q0 run re-checks
 # the choice and says so if the built cell is more than 10% off.
-set(TSL_COSORT_MEASURE_STYLE "Intrinsics" CACHE STRING
+# ClangBoolMask, not Intrinsics. Measured in pairs at a fixed sixteen lanes, the
+# packed-boolean-mask overlay is at least as fast as hand-written intrinsics on
+# every shape tried and 2-5% faster on three of four; the lane-mask overlay is
+# never faster and costs up to 46%. On AVX-512 that is what the encoding predicts:
+# a packed boolean mask *is* a `k` register, where a lane-wide compare result has
+# to be converted into one for every masked operation. See probe_paired_styles and
+# docs/benchmark-plan.md. Override per host if its ordering differs.
+set(TSL_COSORT_MEASURE_STYLE "ClangBoolMask" CACHE STRING
     "TslStyle the reporting drivers measure with: Intrinsics|ClangBuiltin|ClangBoolMask")
 set(TSL_COSORT_MEASURE_WIDTH "512" CACHE STRING
     "Register width in bits the reporting drivers measure with: 128|256|512")

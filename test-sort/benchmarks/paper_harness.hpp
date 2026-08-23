@@ -629,3 +629,53 @@ auto tsl_paper_compare(std::vector<Body> & entrants, int rounds)
   }
   return out;
 }
+
+// --- machine-derived defaults ---------------------------------------------------
+// A literal row count or worker count is a statement about one machine. These turn
+// the intent -- "enough data to miss the last level", "one thread per physical core
+// of one node" -- into a number wherever the suite runs.
+
+// The smallest power of two whose live footprint reaches `target_bytes`. Keys, the
+// index and the out-of-place scratch are all resident at once, so the footprint per
+// row is `(columns + 2) * element_bytes`.
+inline auto tsl_rows_for_bytes(std::size_t target_bytes, std::size_t columns,
+                               std::size_t element_bytes) -> std::size_t {
+  auto const per_row = (columns + 2) * element_bytes;
+  auto const wanted = per_row == 0 ? 0 : target_bytes / per_row;
+  std::size_t rows = 1;
+  while (rows < wanted) {
+    rows *= 2;   // the generator's catalog is offered at powers of two
+  }
+  return rows;
+}
+
+// Comfortably outside the last level: the regime every reported figure lives in.
+inline auto tsl_rows_out_of_cache(TslPaperMachine const & machine,
+                                  std::size_t columns, std::size_t element_bytes)
+  -> std::size_t {
+  auto const llc = machine.llc_bytes > 0 ? machine.llc_bytes
+                                         : 32ull * 1024 * 1024;
+  return tsl_rows_for_bytes(4 * llc, columns, element_bytes);
+}
+
+// Inside it, for a driver that deliberately sweeps both regimes. Half the LLC, so
+// the working set still fits once the index and scratch are counted.
+inline auto tsl_rows_in_cache(TslPaperMachine const & machine, std::size_t columns,
+                              std::size_t element_bytes) -> std::size_t {
+  auto const llc = machine.llc_bytes > 0 ? machine.llc_bytes
+                                         : 32ull * 1024 * 1024;
+  return tsl_rows_for_bytes(llc / 2, columns, element_bytes);
+}
+
+// Serial, and one thread per physical core of one NUMA node. Never the logical
+// count: SMT siblings share an L1 and a memory-bound co-sort spends the second
+// thread evicting the first one's lines.
+inline auto tsl_default_workers(TslPaperMachine const & machine)
+  -> std::vector<std::size_t> {
+  auto const many = machine.physical_per_node > 0 ? machine.physical_per_node
+                                                  : 1;
+  if (many <= 1) {
+    return {1};
+  }
+  return {1, many};
+}

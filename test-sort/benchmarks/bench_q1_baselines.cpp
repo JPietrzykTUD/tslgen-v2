@@ -495,8 +495,8 @@ int main(int argc, char ** argv) {
   std::vector<std::string> shapes{"skewed_zipf_s1", "low_cardinality_d4",
                                   "independent_uniform_c1024", "unique_first"};
   std::vector<std::size_t> column_counts{1, 4, 8};
-  std::vector<std::size_t> worker_counts{1, 24};
-  std::size_t rows = 1u << 22;
+  std::vector<std::size_t> worker_counts;   // machine-derived unless --workers
+  std::size_t rows = 0;                     // machine-derived unless --rows
   std::string csv_path;
   std::string tuned_path = "best_config.tsv";
   std::string tpcds_dir;
@@ -534,6 +534,14 @@ int main(int argc, char ** argv) {
   }
 
   TslPaperResults results("Q1 baselines", "bench_q1_baselines");
+  if (worker_counts.empty()) {
+    worker_counts = tsl_default_workers(results.machine());
+  }
+  if (rows == 0) {
+    rows = tsl_rows_out_of_cache(results.machine(), 4, 4);
+  }
+  std::printf("workers=%zu..%zu, rows=%zu (derived from this machine)\n",
+              worker_counts.front(), worker_counts.back(), rows);
   {
     auto const tuned = tsl_read_tuned(tuned_path);
     if (tuned.empty()) {
