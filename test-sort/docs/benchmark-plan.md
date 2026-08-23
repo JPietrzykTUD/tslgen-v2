@@ -194,17 +194,62 @@ and value width are therefore *not* two independent axes -- their ratio is the
 axis. 256-bit over 4-byte keys is the same eight lanes as 512-bit over 8-byte keys,
 which the old output hid behind two unrelated-looking numbers. Q0 now prints lanes.
 
-Whether the tuned knobs actually track lanes is still open, and the honest reason
-is that the effect is smaller than the measurement. The two eight-lane cells chose
-different configurations -- K=8/base 256 against K=16/base 128 -- but repeating the
-identical cell twice also changed its winner, so that disagreement is drift and not
-a lane effect. Settling it needs either far more repetitions or a size where lane
-count bites harder.
+**Resolved, and the answer is no.** Comparing each cell's *winner* could never
+settle it: the curve is flat near its minimum, so the argmin is the least stable
+statistic it has. What is measurable is the curve. Sweeping the bucket count within
+each cell, interleaved and normalised to that cell's own K=16 so absolute cost
+divides out, at 2^21 rows over four columns:
+
+| cell | lanes | K=8 | K=16 | K=32 |
+| --- | --- | --- | --- | --- |
+| u32 @ 256-bit | 8 | 0.9795 [0.9585..0.9975] | 1.0000 | 0.9879 [0.9700..0.9941] |
+| u64 @ 512-bit | 8 | **1.0193** [1.0084..1.0292] | 1.0000 | 1.0047 [0.9998..1.0088] |
+| u32 @ 512-bit | 16 | 1.0012 [0.9863..1.0169] | 1.0000 | 1.0129 [0.9934..1.0177] |
+| u64 @ 256-bit | 4 | 1.0121 [1.0023..1.0163] | 1.0000 | 0.9947 [0.9891..1.0018] |
+
+The two eight-lane cells point in opposite directions -- K=8 is faster than K=16 in
+one and slower in the other -- and their quartile bands do not overlap. So the knobs
+are not a function of lanes alone.
+
+That is mechanistically sensible rather than surprising. The bucket count trades
+fewer passes against more concurrent output streams, and stream pressure on cache
+and TLB is set by *bytes*, not by lanes: an eight-lane u64 cell moves twice the
+bytes of an eight-lane u32 cell. So the tuning key has to carry both the cell and
+the key width -- which is what `best_config.tsv` has always done, now for a reason
+rather than by accident.
+
+The effects are small, 2-5%, and only visible because of how they are measured.
+`tsl_paper_compare` in paper_harness.hpp interleaves entrants and reduces per-round
+ratios, which removes drift slow relative to a round. Sequentially -- all
+repetitions of A, then all of B -- the same differences are invisible: that is the
+method that named a different winner on two runs of one binary.
 
 **Implementation style.** Intrinsics, clang vector builtins, clang builtins with
 packed boolean masks. Same lanes, three ways of expressing them. This axis exists
 to be *compared*, never selected: it is the portability claim, and a style that
-costs nothing is the result. Ranking styles by runtime and building the reporting
+costs nothing is the result.
+
+**Measured, paired, at a fixed sixteen lanes** (512-bit over 4-byte keys, quicksort
+3way/hyb/post, one worker, 2^21 rows, ratios against intrinsics):
+
+| shape | intrinsics | clang vector builtins | clang packed boolean masks |
+| --- | --- | --- | --- |
+| low_cardinality_d4 | 1.0000 | 0.9957 (tied) | **0.9449** |
+| skewed_zipf_s1 | 1.0000 | 1.2552 | **0.9832** |
+| independent_uniform_c1024 | 1.0000 | 1.1485 | **0.9801** |
+| unique_first | 1.0000 | 1.4569 | 0.9803 (tied) |
+
+The packed-boolean-mask overlay is at least as fast as hand-written intrinsics on
+every shape and 2-5% faster on three; the lane-mask overlay is never faster and
+costs up to 46%. On AVX-512 that is what one would predict -- a packed boolean mask
+is a `k` register, while a lane-wide compare result has to be converted to one for
+every masked operation -- and it is a strong result for TSL: the portable
+expression is not a tax, it is a small win, provided the mask representation
+matches the target's.
+
+It also shows how badly the sequential ranking was misleading: it had
+ClangBuiltin/128-bit -- four lanes, and the slowest style -- tied with
+Intrinsics/512. Ranking styles by runtime and building the reporting
 drivers for the fastest was a category error -- it optimised over the axis whose
 purpose is the comparison, and on a 0.3% margin it chose ClangBuiltin/128-bit, a
 four-lane cell, to measure an AVX-512 paper with. The reporting drivers are built

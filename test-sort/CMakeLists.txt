@@ -977,3 +977,36 @@ foreach(_measuring IN LISTS TSL_COSORT_MEASURING_TARGETS)
   endif()
 endforeach()
 message(STATUS "reporting drivers measure with ${TSL_COSORT_MEASURE_STYLE}/${TSL_COSORT_MEASURE_WIDTH}-bit")
+
+# --- paired-comparison probes ---------------------------------------------------
+# Two questions the reporting drivers cannot answer, because they compare costs
+# that differ by less than the machine's drift: whether the three implementation
+# styles differ at a fixed lane count, and whether a knob's response curve is a
+# function of lane count alone. Both need interleaved measurement -- see
+# `tsl_paper_compare` -- so they live as small probes rather than as another axis
+# bolted onto a driver whose job is reporting.
+#
+# EXCLUDE_FROM_ALL: they answer a question once and are not part of a paper run.
+#   cmake --build <dir> --target probe_paired_styles probe_lane_curves
+foreach(_probe probe_paired_styles probe_lane_curves)
+  add_executable(${_probe} EXCLUDE_FROM_ALL benchmarks/${_probe}.cpp)
+  target_compile_features(${_probe} PRIVATE cxx_std_17)
+  target_include_directories(
+    ${_probe} PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks"
+  )
+  # A probe measures, so it collects nothing while it does.
+  target_compile_definitions(${_probe} PRIVATE TSL_COSORT_NO_INSTRUMENTATION=1)
+  target_link_libraries(${_probe} PRIVATE tsl::tsl Threads::Threads)
+endforeach()
+# The style probe needs the clang families to exist at all.
+if(_cosort_clang_style)
+  target_compile_definitions(
+    probe_paired_styles PRIVATE TSL_ENABLE_CLANG TSL_COSORT_HAVE_CLANG_STYLE=1
+  )
+  if(TSL_COSORT_HAVE_EXT_VECTOR_TYPE_BOOLEAN)
+    target_compile_definitions(
+      probe_paired_styles PRIVATE TSL_COSORT_HAVE_CLANG_BOOL_STYLE=1
+    )
+  endif()
+endif()

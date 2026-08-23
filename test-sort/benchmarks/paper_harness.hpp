@@ -536,3 +536,70 @@ auto tsl_paper_measure(Body && body, Verify && verify, std::size_t elements,
   }
   return {true, stats};
 }
+
+// Paired, interleaved comparison.
+//
+// `tsl_paper_measure` runs one body to completion, which is right for reporting a
+// cost but wrong for comparing two costs that differ by less than the machine's
+// drift. Measuring all of A and then all of B charges whatever drifted between the
+// two blocks to the A-B difference, and on this machine that drift is 1.0% at the
+// median and 3.5% at the worst -- enough to reverse a comparison of two sorter
+// configurations sitting 0.2% apart, which is how the tuner came to name a
+// different winner on two runs of the same binary.
+//
+// Interleaving A,B,C,A,B,C,... and reducing the *per-round ratios* removes drift
+// slow relative to one round, which is what machine drift is. What comes back is a
+// ratio against the first entrant with a quartile band: when the band excludes
+// 1.0, the difference is real. Two things that could not be measured any other way
+// came out of this -- that TSL's packed-boolean-mask style beats hand-written
+// intrinsics by 2-5% while its lane-mask style costs up to 46%, and that a knob's
+// response curve is *not* a function of lane count alone.
+//
+// Each entrant must be idempotent and must leave the input unchanged, exactly as
+// for `tsl_paper_measure`; correctness is the caller's to check once before
+// comparing.
+struct TslPaperRatio {
+  double median = 0.0;   // per-round ratio against entrant 0
+  double p25 = 0.0;
+  double p75 = 0.0;
+  double median_ms = 0.0;
+  auto distinguishable() const -> bool { return p25 > 1.0 || p75 < 1.0; }
+};
+
+template <class Body>
+auto tsl_paper_compare(std::vector<Body> & entrants, int rounds)
+  -> std::vector<TslPaperRatio> {
+  std::vector<std::vector<double>> times(entrants.size());
+  for (int round = 0; round < rounds; ++round) {
+    for (std::size_t at = 0; at < entrants.size(); ++at) {
+      auto const start = std::chrono::steady_clock::now();
+      entrants[at]();
+      times[at].push_back(std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - start).count());
+    }
+  }
+  auto quantile = [](std::vector<double> values, double fraction) {
+    std::sort(values.begin(), values.end());
+    auto const index = static_cast<std::size_t>(
+      std::llround(fraction * static_cast<double>(values.size() - 1)));
+    return values[std::min(index, values.size() - 1)];
+  };
+  std::vector<TslPaperRatio> out;
+  for (std::size_t at = 0; at < entrants.size(); ++at) {
+    std::vector<double> ratios;
+    for (int round = 0; round < rounds; ++round) {
+      if (times[0][round] > 0.0) {
+        ratios.push_back(times[at][round] / times[0][round]);
+      }
+    }
+    TslPaperRatio ratio;
+    if (!ratios.empty()) {
+      ratio.median = quantile(ratios, 0.50);
+      ratio.p25 = quantile(ratios, 0.25);
+      ratio.p75 = quantile(ratios, 0.75);
+    }
+    ratio.median_ms = quantile(times[at], 0.50);
+    out.push_back(ratio);
+  }
+  return out;
+}
