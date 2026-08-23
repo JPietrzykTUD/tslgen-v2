@@ -274,9 +274,18 @@ void report_decomposition(Decomposition const & d) {
 int main(int argc, char ** argv) {
   std::vector<std::string> shapes{"tpcds_q67_sf1", "skewed_zipf_s1",
                                   "low_cardinality_d4", "independent_uniform_c1024"};
-  std::vector<std::string> style_names;
+  // Intrinsics only, by default. Style is an axis to *compare*, not to choose --
+  // `probe_paired_styles` is the instrument for it, and Q6 reports it -- so the
+  // knobs of the clang cells are read by nothing. Tuning all nine cells spent six
+  // ninths of a three-and-a-half-hour run producing configurations no driver looks
+  // up. What Q0 must still decide is the register *width* at the built style, which
+  // is three cells. Pass --styles to widen it when the cross-style knob comparison
+  // is the question.
+  std::vector<std::string> style_names{"intr"};
   std::vector<std::size_t> widths;
-  std::size_t rows = 1u << 20;
+  // 0 means "derive it from the cache", which is what happens unless --rows says
+  // otherwise. A literal here is how the tuner came to run entirely inside the LLC.
+  std::size_t rows = 0;
   std::size_t columns = 4;
   std::vector<std::size_t> worker_counts{1, 24};
   std::string out_path = "best_config.tsv";
@@ -333,6 +342,25 @@ int main(int argc, char ** argv) {
   }
 
   TslPaperResults results("Q0 tuning", "bench_q0_tune");
+  if (rows == 0) {
+    // Big enough that the working set misses the last level by a comfortable
+    // factor. Keys, the index and the out-of-place scratch are all live at once,
+    // so the footprint is roughly (columns + 2) * rows * element_bytes; four times
+    // the LLC puts every candidate in the regime the reported figures live in.
+    auto const llc = results.machine().llc_bytes > 0
+                       ? results.machine().llc_bytes
+                       : 32ull * 1024 * 1024;
+    auto const per_row = (columns + 2) * 4;   // the u32 pass; u64 is larger still
+    auto const wanted = 4 * llc / per_row;
+    rows = 1;
+    while (rows < wanted) {
+      rows *= 2;                              // the catalog offers powers of two
+    }
+    std::printf("rows not given: using %zu, about %zu MiB of live data against a "
+                "%zu MiB LLC. Tuning inside the cache would choose knobs for a "
+                "regime no reported figure measures.\n",
+                rows, rows * per_row / (1024 * 1024), llc / (1024 * 1024));
+  }
 
   // The problem every candidate is scored on. Several shapes so the winner is not
   // fitted to one, and the row count and column count fixed so the only thing

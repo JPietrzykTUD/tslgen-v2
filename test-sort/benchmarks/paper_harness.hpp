@@ -75,6 +75,7 @@ struct TslPaperMachine {
   std::size_t physical_per_node = 0;// physical cores in one NUMA node
   std::size_t numa_nodes = 0;
   bool pinned = false;              // affinity is one node's physical cores
+  std::size_t llc_bytes = 0;        // largest cache level, for sizing datasets
   double load = 0.0;
 
   static auto probe() -> TslPaperMachine {
@@ -153,6 +154,31 @@ struct TslPaperMachine {
       }
       machine.physical_per_node = node_zero_cores.size();
     }
+    // Largest cache level. A tuning run whose working set fits in it is tuning
+    // for a regime no reported figure measures: the knobs that trade passes
+    // against concurrent output streams only start paying once the streams miss.
+    for (std::size_t index = 0; index < 8; ++index) {
+      auto const dir = "/sys/devices/system/cpu/cpu0/cache/index"
+                       + std::to_string(index);
+      std::ifstream size_file(dir + "/size");
+      if (!size_file) {
+        continue;
+      }
+      std::string text;
+      std::getline(size_file, text);
+      if (text.empty()) {
+        continue;
+      }
+      auto const unit = text.back();
+      auto const value = std::strtoull(text.c_str(), nullptr, 10);
+      std::size_t bytes = value;
+      if (unit == 'K' || unit == 'k') {
+        bytes = value * 1024;
+      } else if (unit == 'M' || unit == 'm') {
+        bytes = value * 1024 * 1024;
+      }
+      machine.llc_bytes = std::max(machine.llc_bytes, bytes);
+    }
     machine.pinned = machine.physical_per_node > 0
                      && machine.allowed_cpus > 0
                      && machine.allowed_cpus <= machine.physical_per_node;
@@ -176,9 +202,9 @@ struct TslPaperMachine {
     // latency rather than the sort. The honest full-machine number is one thread
     // per physical core within one node.
     std::printf("topology: %zu NUMA node(s), %zu physical core(s) per node, "
-                "%zu logical cpu(s) available to this process%s\n",
+                "%zu logical cpu(s) available to this process%s, LLC %zu MiB\n",
                 numa_nodes, physical_per_node, allowed_cpus,
-                pinned ? " [pinned]" : "");
+                pinned ? " [pinned]" : "", llc_bytes / (1024 * 1024));
     if (!pinned && physical_per_node > 0 && allowed_cpus > physical_per_node) {
       std::printf("  !! not pinned: this process may use SMT siblings and both "
                   "NUMA nodes. Run under `numactl --cpunodebind=0 --membind=0` "
