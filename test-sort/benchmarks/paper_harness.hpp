@@ -468,7 +468,7 @@ class TslPaperResults {
            "algorithm,variant,detector,workers,repetitions,"
            "ns_per_element_median,ns_per_element_p25,ns_per_element_p75,"
            "ns_materialize,ns_sort,ns_detect,verified,drop_reason,"
-           "host,governor,clock_mhz,compiler\n";
+           "host,governor,clock_mhz,compiler,start_load,pinned_cpus\n";
     for (auto const & row : rows_) {
       csv << csv_field(row.question) << ',' << csv_field(row.binary) << ','
           << csv_field(row.shape) << ',' << csv_field(row.shape_params) << ','
@@ -481,7 +481,14 @@ class TslPaperResults {
           << row.ns_sort << ',' << row.ns_detect << ','
           << (row.verified ? 1 : 0) << ',' << csv_field(row.drop_reason) << ','
           << csv_field(machine_.host) << ',' << csv_field(machine_.governor) << ','
-          << machine_.clock_mhz << ',' << csv_field(machine_.compiler) << '\n';
+          << machine_.clock_mhz << ',' << csv_field(machine_.compiler) << ','
+          // The load average when the run started, and how many CPUs it was
+          // allowed. Printed as a warning already, but a warning scrolls past and a
+          // column does not: a run that shared its cores with something else is
+          // otherwise indistinguishable afterwards from a clean one. This is not
+          // hypothetical -- a stray pinned job took one of six cores from the first
+          // minutes of a real run, and nothing in the results would have said so.
+          << machine_.load << ',' << machine_.allowed_cpus << '\n';
     }
     std::printf("\nwrote %s (%zu rows)\n", path.c_str(), rows_.size());
   }
