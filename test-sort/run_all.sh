@@ -183,7 +183,13 @@ if [[ -f "$build/CMakeCache.txt" ]]; then
 fi
 
 configure() {
-  cmake -S "$here" --preset "$preset" \
+  # `-B "$build"` is not redundant. A preset carries its own `binaryDir`, so
+  # `--preset` alone writes wherever the preset says -- which silently ignores
+  # TSL_COSORT_BUILD_DIR and leaves configure and build looking at two different
+  # directories. That surfaced as cmake's "could not load cache" at the first
+  # build step, with a configure log that had just reported success. An explicit
+  # -B overrides the preset, so one variable decides for both.
+  cmake -S "$here" -B "$build" --preset "$preset" \
         -DCMAKE_CXX_COMPILER="$compiler" -DCMAKE_C_COMPILER="$c_compiler" \
         "${extra[@]+"${extra[@]}"}" "$@"
 }
@@ -267,40 +273,43 @@ fi
 # rather than from a default nobody revisits.
 #
 # So: build the tuner, ask it which cell wins on this host, then build everything
-# else for that cell. The probe is small on purpose (two shapes, few rows) because
-# it is ranking cells rather than choosing a configuration; the full Q0 inside
-# run_paper.sh re-checks the built cell against its own nine and says so if the
-# choice was wrong by more than 10%.
-echo
-echo "=== 3/4 build (phase 1: the tuner)"
+# else for that cell. Q0 runs ONCE, in full, and its single result decides both
+# things: which cell the drivers are built for, and which configuration they use.
+#
+# It used to be a small probe here and a second full Q0 inside run_paper.sh. That
+# was two runs that could disagree, with the cheaper one -- two shapes at 65,536
+# rows, a working set inside L2 -- deciding the register width. It picked
+# ClangBuiltin/128-bit once, a four-lane cell, on a 2% gap inside its own noise.
+# One full run costs more than the probe did but replaces the second run entirely.
 cmake --build "$build" -j "$(nproc)" --target bench_q0_tune
 
+mkdir -p "$results"
+tuned="$results/best_config.tsv"
 echo
-echo "--- probing for this host's best (style, width) cell"
-probe="$("$build/bench_q0_tune" --workers 1 --rows 65536 \
-           --shapes low_cardinality_d4,skewed_zipf_s1 --out /dev/null 2>&1 \
-         | grep '^TSL_COSORT_BEST_CELL' | tail -1 || true)"
+echo "=== q0_tune (full: decides the cell and every configuration)"
+"$build/bench_q0_tune" --out "$tuned" --csv "$results/q0_tune.csv" 2>&1 \
+  | tee "$results/q0_tune.log"
+probe="$(grep '^TSL_COSORT_BEST_CELL' "$results/q0_tune.log" | tail -1 || true)"
 if [[ -n "$probe" ]]; then
   cell_style="$(awk '{print $2}' <<< "$probe")"
   cell_width="$(awk '{print $3}' <<< "$probe")"
   case "$cell_style" in
-    intr)       cell_style=Intrinsics ;;
-    clang)      cell_style=ClangBuiltin ;;
+    intr) cell_style=Intrinsics ;;
+    clang) cell_style=ClangBuiltin ;;
     clang_bool) cell_style=ClangBoolMask ;;
-    *) echo "unrecognised style '$cell_style' from the probe; keeping the default" >&2
-       cell_style="" ;;
+    *) echo "unrecognised style '$cell_style' from q0; keeping the default" >&2
+       cell_style=""; cell_width="" ;;
   esac
   if [[ -n "$cell_style" ]]; then
-    echo "best cell on this host: $cell_style/$cell_width-bit"
-    configure -DTSL_COSORT_MEASURE_STYLE="$cell_style" \
-              -DTSL_COSORT_MEASURE_WIDTH="$cell_width"
+    echo "building the reporting drivers for $cell_style/$cell_width-bit"
+    cmake -S "$here" -B "$build" \
+      -DTSL_COSORT_MEASURE_STYLE="$cell_style" \
+      -DTSL_COSORT_MEASURE_WIDTH="$cell_width" > /dev/null
   fi
 else
-  echo "the probe produced no cell; building for the default" >&2
+  echo "q0 named no cell; building for the default" >&2
 fi
 
-echo
-echo "=== 3/4 build (phase 2: everything else)"
 targets=(bench_q0_tune bench_q2_algorithms bench_q3_detection bench_q4_scaling
          cosort_bench)
 [[ "$baselines" == "yes" ]] && targets+=(bench_q1_baselines)

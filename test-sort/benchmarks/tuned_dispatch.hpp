@@ -18,6 +18,7 @@
 
 #include "sorting/quicksort/multicolumn_index_sort.hpp"
 #include "sorting/sample_sort/samplesort_multicolumn.hpp"
+#include "tsl_simd_for.hpp"
 #include "tuned_config.hpp"
 
 // Only the axes the descent found decisive are dispatched here; a configuration
@@ -122,8 +123,13 @@ auto with_samplesort(TslTunedConfig const & config, Run && run) -> bool {
 template <class Key>
 void tsl_select_tuned(std::map<std::string, TslTunedConfig> const & tuned,
                       TslTunedConfig & samplesort, TslTunedConfig & quicksort) {
-  samplesort = tsl_tuned_for(tuned, "samplesort", TslStyle::Intrinsics, 512,
-                             sizeof(Key));
-  quicksort = tsl_tuned_for(tuned, "quicksort", TslStyle::Intrinsics, 512,
-                            sizeof(Key));
+  // The cell this binary was *built* for, not a fixed one. The drivers now take
+  // their SIMD type from `tsl_measure_simd_t`, so asking Q0 for Intrinsics/512
+  // regardless meant a binary built for clang_bool/512 ran that code with the
+  // configuration tuned for intrinsics -- the knobs and the instantiation
+  // disagreeing, with the row still labelled "(tuned)".
+  samplesort = tsl_tuned_for(tuned, "samplesort", tsl_measure_style,
+                             tsl_measure_width, sizeof(Key));
+  quicksort = tsl_tuned_for(tuned, "quicksort", tsl_measure_style,
+                            tsl_measure_width, sizeof(Key));
 }

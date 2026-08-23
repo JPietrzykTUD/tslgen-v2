@@ -190,7 +190,13 @@ fi
 # they fall back to defaults and label every row "(default)", which is how a
 # hard-coded leaf once made the quicksort look 6.6x slower than it is.
 tuned="$results/best_config.tsv"
-if [[ -x "$build/bench_q0_tune" ]]; then
+if [[ -s "$tuned" ]]; then
+  # run_all.sh already ran Q0 in full -- its output chose the cell these drivers
+  # were built for, so re-running it here would be a second, possibly different
+  # answer for the same question. Reuse it.
+  echo
+  echo "=== q0_tune: reusing $tuned ($(grep -vc '^#' "$tuned") configurations)"
+elif [[ -x "$build/bench_q0_tune" ]]; then
   echo
   echo "=== q0_tune"
   if [[ "$quick" == "--quick" ]]; then

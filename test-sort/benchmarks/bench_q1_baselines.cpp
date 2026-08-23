@@ -58,7 +58,9 @@
 #if defined(TSL_COSORT_HAVE_ARROW)
 #include <arrow/api.h>
 #include <arrow/compute/api_vector.h>
+#if defined(TSL_COSORT_ARROW_HAS_INITIALIZE)
 #include <arrow/compute/initialize.h>
+#endif
 #endif
 
 #include "datagen/dataset_catalog.hpp"
@@ -557,11 +559,18 @@ int main(int argc, char ** argv) {
   // Arrow 23 keeps the compute kernels in libarrow_compute and registers them on
   // demand: without this the registry has no "sort_indices" at all, and the
   // failure surfaces as a wrong permutation rather than a missing function.
+  // Before Arrow 14 there is no such call -- libarrow registered them itself --
+  // and the header does not exist, so this is compiled out rather than assumed.
+#if defined(TSL_COSORT_ARROW_HAS_INITIALIZE)
   {
     auto const status = arrow::compute::Initialize();
     std::printf("arrow: built in, compute init %s (serial rows only)\n",
                 status.ok() ? "OK" : status.ToString().c_str());
   }
+#else
+  std::printf("arrow: built in, no compute init needed on this version "
+              "(serial rows only)\n");
+#endif
 #else
   std::printf("arrow: NOT built in; its rows will be drops\n");
 #endif

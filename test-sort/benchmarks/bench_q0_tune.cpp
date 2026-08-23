@@ -250,6 +250,10 @@ int main(int argc, char ** argv) {
   std::string csv_path;
   bool verify_only = false;
   double problem_seconds = 0.0;
+  // How much better a cell must be to displace intrinsics at the widest width.
+  // Default from the measured noise floor: the byte-identical control varied by
+  // about 4% between runs, so 5% is the smallest gap worth acting on.
+  double cell_margin = 0.05;
 
   for (int i = 1; i < argc; ++i) {
     auto const flag = std::string(argv[i]);
@@ -274,6 +278,8 @@ int main(int argc, char ** argv) {
       }
     } else if (flag == "--tpcds-dir") {
       tpcds_dir = value();
+    } else if (flag == "--cell-margin") {
+      cell_margin = std::strtod(value().c_str(), nullptr) / 100.0;
     } else if (flag == "--candidate-seconds") {
       problem_seconds = std::strtod(value().c_str(), nullptr);
     } else if (flag == "--verify-only") {
@@ -555,6 +561,17 @@ int main(int argc, char ** argv) {
   // Combined across key widths by geometric mean, because the drivers are built
   // once and measure both: picking the u32 winner would be arbitrary where the two
   // disagree. `run_all.sh` reads this, then builds everything else for that cell.
+  //
+  // A cell only wins by a *margin*. Ranking nine cells by strict less-than made
+  // this suite build every reporting driver for ClangBuiltin/128-bit -- a
+  // four-lane configuration -- because it came out 2% ahead on a probe whose own
+  // noise floor is wider than that. The byte-identical `intr` control in the TSL
+  // A/B spanned 0.913x to 1.039x across runs, so a gap under about 4% carries no
+  // information, and seven of the nine cells sat inside 2% of each other.
+  //
+  // So the incumbent is Intrinsics at the widest register, a tie goes to it, and a
+  // challenger has to clear `cell_margin` to displace it. The full ranking is
+  // printed either way: the design-space answer is the table, not the winner.
   if (!cell_best.empty()) {
     std::map<std::pair<std::string, std::size_t>, std::pair<double, int>> combined;
     for (auto const & entry : cell_best) {
@@ -562,25 +579,69 @@ int main(int argc, char ** argv) {
       slot.first += std::log(entry.second);
       ++slot.second;
     }
-    std::string best_style;
-    std::size_t best_width = 0;
-    double best_score = 0.0;
+    std::vector<std::pair<std::pair<std::string, std::size_t>, double>> ranked;
     for (auto const & entry : combined) {
       if (entry.second.second == 0) {
         continue;
       }
-      auto const score =
-        std::exp(entry.second.first / static_cast<double>(entry.second.second));
-      if (best_width == 0 || score < best_score) {
-        best_style = entry.first.first;
-        best_width = entry.first.second;
-        best_score = score;
+      ranked.push_back({entry.first,
+                        std::exp(entry.second.first
+                                 / static_cast<double>(entry.second.second))});
+    }
+    std::sort(ranked.begin(), ranked.end(),
+              [](auto const & a, auto const & b) { return a.second < b.second; });
+
+    // The incumbent: intrinsics at the widest register width measured.
+    std::string incumbent_style = "intr";
+    std::size_t incumbent_width = 0;
+    double incumbent_score = 0.0;
+    for (auto const & entry : ranked) {
+      if (entry.first.first == incumbent_style
+          && entry.first.second > incumbent_width) {
+        incumbent_width = entry.first.second;
+        incumbent_score = entry.second;
       }
     }
-    if (best_width != 0) {
-      std::printf("\nTSL_COSORT_BEST_CELL %s %zu %.4f\n", best_style.c_str(),
-                  best_width, best_score);
+
+    if (!ranked.empty()) {
+      std::printf("\ncell ranking, geometric mean over key widths (ns/element)\n");
+      for (auto const & entry : ranked) {
+        auto const relative = incumbent_score > 0.0 ? entry.second / incumbent_score
+                                                    : 0.0;
+        std::printf("  %-12s %4zu-bit %10.2f  %6.3fx vs incumbent%s\n",
+                    entry.first.first.c_str(), entry.first.second, entry.second,
+                    relative,
+                    entry.first == std::make_pair(incumbent_style, incumbent_width)
+                      ? "  <- incumbent" : "");
+      }
     }
+
+    auto const & winner = ranked.front();
+    auto const gain = (incumbent_score > 0.0 && winner.second > 0.0)
+                        ? incumbent_score / winner.second
+                        : 1.0;
+    auto chosen = winner.first;
+    if (incumbent_width == 0) {
+      std::printf("\nno intrinsics cell was measured; naming the ranking's "
+                  "leader\n");
+    } else if (gain < 1.0 + cell_margin) {
+      chosen = {incumbent_style, incumbent_width};
+      std::printf("\nleader %s/%zu-bit is only %.1f%% ahead of the incumbent "
+                  "%s/%zu-bit, under the %.0f%% margin: keeping the incumbent. A "
+                  "gap this size is inside the run-to-run noise and would pick a "
+                  "cell at random.\n",
+                  winner.first.first.c_str(), winner.first.second,
+                  (gain - 1.0) * 100.0, incumbent_style.c_str(), incumbent_width,
+                  cell_margin * 100.0);
+    } else {
+      std::printf("\n%s/%zu-bit beats the incumbent %s/%zu-bit by %.1f%%, clearing "
+                  "the %.0f%% margin\n",
+                  winner.first.first.c_str(), winner.first.second,
+                  incumbent_style.c_str(), incumbent_width, (gain - 1.0) * 100.0,
+                  cell_margin * 100.0);
+    }
+    std::printf("\nTSL_COSORT_BEST_CELL %s %zu %.4f\n", chosen.first.c_str(),
+                chosen.second, winner.second);
   }
 
   std::printf("\n%s\n", results.summary().c_str());

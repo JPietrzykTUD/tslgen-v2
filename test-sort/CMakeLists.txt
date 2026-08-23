@@ -63,7 +63,22 @@ set(
 if(ENABLE_VQSORT_BENCHMARK AND (NOT DEFINED CMAKE_C_COMPILER OR CMAKE_C_COMPILER STREQUAL ""))
   set(_highway_c_compiler_candidates)
   if(CMAKE_CXX_COMPILER)
+    # The C++ compiler's own sibling first: `clang++-22` -> `clang-22`. A fetched
+    # dependency that derives its C flags from the C++ compiler's identity -- Arrow
+    # does, and adds clang's `-Qunused-arguments` -- hands them to whatever C
+    # compiler CMake picked, and `cc` being gcc turns that into a build failure in
+    # somebody else's project. Matching the pair is also simply more correct.
+    get_filename_component(_highway_cxx_compiler_name "${CMAKE_CXX_COMPILER}" NAME)
     get_filename_component(_highway_cxx_compiler_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    string(REPLACE "clang++" "clang" _highway_sibling "${_highway_cxx_compiler_name}")
+    string(REPLACE "g++" "gcc" _highway_sibling "${_highway_sibling}")
+    if(NOT _highway_sibling STREQUAL _highway_cxx_compiler_name)
+      if(_highway_cxx_compiler_dir)
+        list(APPEND _highway_c_compiler_candidates
+             "${_highway_cxx_compiler_dir}/${_highway_sibling}")
+      endif()
+      list(APPEND _highway_c_compiler_candidates "${_highway_sibling}")
+    endif()
     list(APPEND _highway_c_compiler_candidates "${_highway_cxx_compiler_dir}/cc")
     list(APPEND _highway_c_compiler_candidates "${_highway_cxx_compiler_dir}/gcc")
   endif()
@@ -362,30 +377,126 @@ if(TSL_COSORT_ENABLE_BASELINES)
       "it without 16-byte atomics would understate it.")
   endif()
 
-  # --- Arrow: optional, and its absence is reported in the results --------------
+  # --- Arrow: fetched, so both machines measure the same one --------------------
   # SortIndices over a table with one sort key per column is literally this
-  # operation, so it is the baseline whose result cannot be dismissed. Building
-  # Arrow from source is many minutes and many dependencies, so it comes from the
-  # system or not at all.
-  find_package(Arrow QUIET)
-  if(Arrow_FOUND)
-    target_compile_definitions(bench_q1_baselines PRIVATE TSL_COSORT_HAVE_ARROW=1)
-    if(TARGET Arrow::arrow_shared)
-      target_link_libraries(bench_q1_baselines PRIVATE Arrow::arrow_shared)
-    else()
-      target_link_libraries(bench_q1_baselines PRIVATE arrow)
-    endif()
-    # Arrow 23 keeps the compute kernels in their own library and registers them
-    # on demand; without it `sort_indices` is not in the registry at all.
-    find_library(TSL_ARROW_COMPUTE NAMES arrow_compute)
-    if(TSL_ARROW_COMPUTE)
-      target_link_libraries(bench_q1_baselines PRIVATE ${TSL_ARROW_COMPUTE})
-    endif()
-    list(APPEND _q1_present "Arrow (system)")
+  # operation, so Arrow is the baseline whose result cannot be dismissed -- which
+  # makes "whatever the distribution packaged" the wrong way to get it. One host
+  # had Arrow 23 and another an Arrow predating `arrow/compute/initialize.h`, so
+  # the same source failed to compile on the second machine, and even had it
+  # compiled the two would have been comparing against different Arrows.
+  #
+  # Fetching it is wired up and *not* the default, because it does not currently
+  # work here: apache-arrow-23.0.0 fails to compile with clang 22 inside
+  # `arrow/util/dispatch_internal.h`, an upstream incompatibility rather than
+  # anything about this wiring. Distribution packages are built with gcc, which is
+  # why the system one works. Set TSL_COSORT_ARROW_FETCH=ON on a host with an older
+  # clang or with gcc to get a pinned Arrow identical across machines; otherwise
+  # the system one is used and its version is probed, so a host with an Arrow
+  # predating `arrow/compute/initialize.h` still builds.
+  option(TSL_COSORT_ARROW_FETCH
+         "Fetch and build a pinned Arrow instead of using the system one" OFF)
+  if(TSL_COSORT_ARROW_FETCH)
+    set(TSL_COSORT_ARROW_FROM_SYSTEM OFF)
   else()
-    list(APPEND _q1_absent
-         "Arrow -- apt-get install libarrow-dev (Fedora/RHEL: dnf install "
-         "libarrow-devel). Its rows will be drops.")
+    set(TSL_COSORT_ARROW_FROM_SYSTEM ON)
+  endif()
+  set(TSL_COSORT_ARROW_TAG "apache-arrow-23.0.0" CACHE STRING
+      "Arrow release tag to fetch for the Q1 baseline")
+
+  set(_arrow_target "")
+  if(TSL_COSORT_ARROW_FROM_SYSTEM)
+    find_package(Arrow QUIET)
+    if(Arrow_FOUND)
+      if(TARGET Arrow::arrow_shared)
+        set(_arrow_target Arrow::arrow_shared)
+      else()
+        set(_arrow_target arrow)
+      endif()
+      find_library(TSL_ARROW_COMPUTE NAMES arrow_compute)
+      if(TSL_ARROW_COMPUTE)
+        list(APPEND _arrow_target ${TSL_ARROW_COMPUTE})
+      endif()
+      list(APPEND _q1_present "Arrow ${Arrow_VERSION} (system)")
+    else()
+      list(APPEND _q1_absent
+           "Arrow -- TSL_COSORT_ARROW_FROM_SYSTEM=ON but none found. Its rows will "
+           "be drops.")
+    endif()
+  else()
+    # Everything Arrow can build is turned off except the compute kernels the
+    # baseline needs. Bundled thirdparty, so the fetch does not depend on what the
+    # host happens to have installed.
+    set(ARROW_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+    set(ARROW_BUILD_STATIC ON CACHE BOOL "" FORCE)
+    set(ARROW_COMPUTE ON CACHE BOOL "" FORCE)
+    set(ARROW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(ARROW_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+    set(ARROW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(ARROW_BUILD_UTILITIES OFF CACHE BOOL "" FORCE)
+    set(ARROW_BUILD_INTEGRATION OFF CACHE BOOL "" FORCE)
+    set(ARROW_CSV OFF CACHE BOOL "" FORCE)
+    set(ARROW_JSON OFF CACHE BOOL "" FORCE)
+    set(ARROW_PARQUET OFF CACHE BOOL "" FORCE)
+    set(ARROW_IPC OFF CACHE BOOL "" FORCE)
+    set(ARROW_FILESYSTEM OFF CACHE BOOL "" FORCE)
+    set(ARROW_DATASET OFF CACHE BOOL "" FORCE)
+    set(ARROW_ACERO OFF CACHE BOOL "" FORCE)
+    set(ARROW_FLIGHT OFF CACHE BOOL "" FORCE)
+    set(ARROW_JEMALLOC OFF CACHE BOOL "" FORCE)
+    set(ARROW_MIMALLOC OFF CACHE BOOL "" FORCE)
+    set(ARROW_WITH_RE2 OFF CACHE BOOL "" FORCE)
+    set(ARROW_WITH_UTF8PROC OFF CACHE BOOL "" FORCE)
+    set(ARROW_DEPENDENCY_SOURCE "BUNDLED" CACHE STRING "" FORCE)
+    set(ARROW_SIMD_LEVEL "AVX512" CACHE STRING "" FORCE)
+    FetchContent_Declare(
+      arrow
+      GIT_REPOSITORY https://github.com/apache/arrow.git
+      GIT_TAG        ${TSL_COSORT_ARROW_TAG}
+      GIT_SHALLOW    TRUE
+      SOURCE_SUBDIR  cpp
+    )
+    FetchContent_MakeAvailable(arrow)
+    if(TARGET arrow_static)
+      set(_arrow_target arrow_static)
+    elseif(TARGET arrow_shared)
+      set(_arrow_target arrow_shared)
+    endif()
+    if(TARGET arrow_compute_static)
+      list(APPEND _arrow_target arrow_compute_static)
+    elseif(TARGET arrow_compute_shared)
+      list(APPEND _arrow_target arrow_compute_shared)
+    endif()
+    if(_arrow_target)
+      list(APPEND _q1_present "Arrow ${TSL_COSORT_ARROW_TAG} (fetched)")
+    else()
+      list(APPEND _q1_absent
+           "Arrow -- the fetch produced no usable target. Its rows will be drops.")
+    endif()
+  endif()
+
+  if(_arrow_target)
+    target_compile_definitions(bench_q1_baselines PRIVATE TSL_COSORT_HAVE_ARROW=1)
+    target_link_libraries(bench_q1_baselines PRIVATE ${_arrow_target})
+    # `arrow/compute/initialize.h` arrived in Arrow 14; before that libarrow
+    # registered the kernels itself and there is nothing to call. Probed rather
+    # than assumed, because a system Arrow can be either.
+    include(CheckIncludeFileCXX)
+    set(CMAKE_REQUIRED_INCLUDES_SAVED "${CMAKE_REQUIRED_INCLUDES}")
+    foreach(_t IN LISTS _arrow_target)
+      if(TARGET ${_t})
+        get_target_property(_inc ${_t} INTERFACE_INCLUDE_DIRECTORIES)
+        if(_inc)
+          list(APPEND CMAKE_REQUIRED_INCLUDES ${_inc})
+        endif()
+      endif()
+    endforeach()
+    check_include_file_cxx("arrow/compute/initialize.h" TSL_ARROW_HAS_INITIALIZE)
+    set(CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES_SAVED}")
+    if(TSL_ARROW_HAS_INITIALIZE)
+      target_compile_definitions(
+        bench_q1_baselines PRIVATE TSL_COSORT_ARROW_HAS_INITIALIZE=1
+      )
+    endif()
   endif()
 
   message(STATUS "bench_q1_baselines will compare against:")
