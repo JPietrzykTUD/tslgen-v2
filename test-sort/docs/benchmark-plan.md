@@ -6,8 +6,9 @@ a query over `results/` rather than a re-run.
 
 Settled with the author: the paper is about **sorting on modern hardware**, with
 two specific angles — **accelerator-offloaded cluster detection** and **TSL
-portability for a real algorithm**. Statistics are **median of nine with the IQR
-reported**. The samplesort stays a separate binary but shares the grid. External
+portability for a real algorithm**. Statistics are **median of at least nine
+with the IQR reported**, resampled where the spread is wide, and *paired* wherever
+two costs differ by less than the machine's drift. The samplesort stays a separate binary but shares the grid. External
 baselines come from adapted libraries rather than only `std::sort`.
 
 ## The questions
@@ -43,13 +44,20 @@ Worth stating plainly, because the answer is not uniform:
 
 | dimension | swept by |
 | --- | --- |
-| register width, 128/256/512 | Q0 (both algorithms, both key widths), Q6 (both algorithms) |
-| style, `intr`/`clang`/`clang_bool` | Q0 (both algorithms, both key widths), Q6 (both algorithms) |
-| element width, 4 and 8 bytes | Q2, Q3, Q4 (`--element-bytes`) |
+| register width, 128/256/512 | Q0 (all cells), Q6, `probe_lane_curves` |
+| style, `intr`/`clang`/`clang_bool` | Q0 (all cells), Q6, `probe_paired_styles` |
+| element width, 4 and 8 bytes | Q0, Q1, Q2, Q3, Q4 |
+| lanes = bits / (8 x bytes) | derived, not swept: it is the ratio of the two above |
 | algorithmic knobs (K, leaf, base case, fill, ids, movement, partition, discovery) | Q0 |
-| threads, rows, columns | Q4 |
-| detector backend | Q3 |
-| dataset shape | Q2, Q4, and Q0's tuning set |
+| threads | Q4, 1 up to the physical cores of one NUMA node |
+| rows, columns | Q2 (rows in *and* out of cache), Q4 |
+| detector backend | Q3, this host's hardware only |
+| dataset shape | Q1, Q2, Q4, and Q0's tuning set |
+
+Nothing in that table is a literal about one machine. Row counts come from the
+probed last-level cache, worker counts from the physical cores of one NUMA node, and
+the measurement cell from Q0 -- see
+[benchmark-workflow.md](benchmark-workflow.md).
 
 Two notes on reading a width sweep. First, `--element-bytes` in Q2/Q3/Q4 is the
 *element* width; it was called `--widths`, which read as register width and misled
@@ -132,46 +140,61 @@ re-tuning on new hardware becomes a code change, the figures stop being
 reproducible from one command, and — as the corrected table above shows — a
 comparison can rest on a knob nobody examined.
 
-**The search.** A cross over the axes measured to interact (bucket count,
-base-case leaf, fill threshold) and one-factor-at-a-time around the default for
-the rest. Not a full grid, and not a strict sequential descent, for the same
-reason in both cases: almost every knob is a template parameter, so a candidate is
-an instantiation. A grid is 400-odd per style and width; a sequential descent
-needs round two's candidates, which depend on round one's runtime winner, so every
-reachable configuration would have to be built anyway. The cross plus OFAT is a
-sum, about 29 instantiations per cell, and the combined winner is measured so that
-combining individual winners being *worse* is visible rather than assumed away.
+**The candidate set.** A cross over the axes measured to interact (bucket count,
+base-case leaf, fill threshold) and one-factor-at-a-time around the default for the
+rest: fifteen samplesort points and six quicksort points per cell. Not a full grid,
+because almost every knob is a template parameter, so a candidate is an
+instantiation and a grid is 400-odd per cell.
 
-**Both key widths, separately.** A configuration found on 32-bit keys is not a
-tuned configuration for 64-bit keys: the lane holds half as many elements, which
-moves the base case, the bucket count and the leaf capacity together. Measured,
-they differ -- the samplesort takes `K=8/fill50` at four bytes and `K=16/fill75` at
-eight. Until the tuner covered both, every 8-byte row in Q1, Q2 and Q4 applied the
-4-byte configuration and still called itself `(tuned)`.
+**Interleaved, not sequential.** Each point contributes a callable rather than a
+measurement; every candidate's sorter stays live and one pass of each runs per
+round. Measuring A to completion and then B charges whatever drifted between the two
+blocks to their difference, and that drift is 1.0% at the median and 3.5% at the
+worst -- larger than the differences being resolved, since the leading candidates sit
+within 0.2% of each other. The cost is identical: the same passes in a different
+order.
 
-**Re-run per (style, width).** Nine cells, because a narrower vector changes the
-leaf's capacity, a bucket's stream cost and the base case's fill ratio at once, so
-whether the best algorithmic configuration depends on register width is itself a
-question. One translation unit per cell, compiled in parallel: 24 seconds wall for
-all nine against three minutes of CPU.
+**Out of cache, by construction.** The row count is derived from the probed last
+level: four times it in live data, so keys, index and scratch together miss. A
+literal size had it tuning inside a 30 MiB LLC while Q2 and Q4 applied the result at
+134 MB, and the answers differ -- in cache the samplesort preferred `K=8`, out of
+cache the `K=16` default is at least tied. Bucket count is precisely the knob that
+trades fewer passes against more concurrent output streams, and stream pressure does
+not exist until the streams miss.
 
-**What it found first, at intr/512 on a duplicate-heavy tuning set.** For the
-quicksort: `3way/ins/post` at 27.2 ns/element, against `3way/hyb` 29.7, `3way/net`
-54.5 — and `2way/net` at 897.6, thirty-three times worse, which is the quadratic
-two-way case the corpus already gates on size. For the samplesort: `base_case=64`
-best at 38.6, with `buckets=ordered` 2.41x worse and `movement=inplace` 1.41x
-worse, both consistent with what the notes measured separately.
+**Every compiled cell, both key widths.** Eighteen here: three styles by three
+register widths by two key widths, one translation unit per (style, width) compiled
+in parallel. A configuration found on 32-bit keys is not a tuned configuration for
+64-bit keys -- the samplesort takes `K=8/fill50` at four bytes and `K=16/fill75` at
+eight -- and until the tuner covered both, every 8-byte row in Q1, Q2 and Q4 applied
+the 4-byte configuration and still called itself `(tuned)`. Q0 says so out loud if it
+finishes without a configuration for the cell the reporting drivers were built for.
 
-**The limitation, stated.** One descent round. A second needs the base moved to
-the winner, which is a rebuild rather than a flag, and the driver says when it
-would be worth it — when the combined winner beats the best cross member.
+**What ships is the default unless something resolvably beats it.** Not the fastest
+number: the fastest number is unstable. Running the identical candidate set twice
+moves scores enough to swap the samplesort winner when four candidates sit within
+0.2%. The rule is a paired test -- pooled per-round ratio against the default, upper
+quartile below 1.0 -- and among challengers that clear it, the first in the fixed
+candidate order within the margin. The tied set is printed either way.
 
-**And a tension worth naming.** The premise of tuning is that one configuration is
-best; the finding of this whole project is that the best configuration depends on
-the data. Q0 scores candidates by the geometric mean over a set of shapes, so what
-it returns is a compromise, and the per-axis table it prints is more informative
-than the single winner. Where an axis's winner flips between shapes, that belongs
-in the paper as a result rather than being averaged away.
+The claim this supports is weaker and true: not "these knobs are optimal" but
+"nothing we measured beats the default by more than the measurement's own drift".
+
+**Two guards on cost, both learned the hard way.** Two-way partitioning is
+quadratic in the equal-run length on a duplicate-heavy tuning set, and a full run
+sat on that one candidate for over an hour; it is skipped above a working-set cap,
+reported as `SKIPPED` with the reason, exactly as the corpus driver has always
+gated it. And any candidate whose calibration pass -- the correctness check, timed,
+which costs nothing extra -- exceeds five times the best is abandoned before its
+rounds rather than after them.
+
+**The limitation, stated.** One descent round. A second needs the base moved to the
+winner, which is a rebuild rather than a flag, and the driver says when it would be
+worth it. And at a small sample the shipped configuration can still vary for the
+8-byte key, where `base_case` at 64, 128 and 256 differ by under a percent: any rule
+that must emit one choice flips when the tie structure does. That is a statement
+about the sample rather than the rule, and tied configurations perform identically by
+construction -- what matters is that the tie is reported, which it is.
 
 
 The mechanism -- what is built when, what each stage measures, and where each
@@ -256,9 +279,15 @@ ClangBuiltin/128-bit -- four lanes, and the slowest style -- tied with
 Intrinsics/512. Ranking styles by runtime and building the reporting
 drivers for the fastest was a category error -- it optimised over the axis whose
 purpose is the comparison, and on a 0.3% margin it chose ClangBuiltin/128-bit, a
-four-lane cell, to measure an AVX-512 paper with. The reporting drivers are built
-for intrinsics at the widest width, a challenger has to clear a margin to displace
-it, and Q6 reports what the other styles cost at equal lanes.
+four-lane cell, to measure an AVX-512 paper with.
+
+So the cell is chosen once, deliberately, and defended by the paired measurement
+below rather than by a ranking: **`ClangBoolMask` at the widest register width**,
+because packed boolean masks are at least as fast as hand-written intrinsics on
+every shape tried. A challenger still has to clear a 5% margin to displace the
+widest-width incumbent, and Q6 reports what the other styles cost at equal lanes.
+Q0 measures every compiled cell regardless, because the comparison is the result;
+what it never does is *choose* on style.
 
 **Algorithmic knobs.** Bucket count, base case, base-case leaf and its fill
 threshold, discovery, partition kind, movement. Their optimum is a function of the
@@ -434,10 +463,12 @@ the error is the argument for Q0 existing:
 
 At one thread the tuned quicksort wins **all five**; the "three to two favouring
 samplesort" in the first version of this document was an artefact of one
-unexamined knob. At 24 workers samplesort still wins three of five — q067 17.1
-against 72.3 and q064 22.3 against 120.9 — so the honest summary is that the
-quicksort is the better serial sorter on real keys and the samplesort scales
-better, not that either dominates.
+unexamined knob. In parallel the samplesort still wins several
+keys, so the honest summary is that the quicksort is the better serial sorter on
+real keys and the samplesort scales better, not that either dominates. The
+parallel half of that comparison was taken at twenty-four workers, which on this
+host oversubscribes a six-core node twice over, and needs re-measuring pinned
+before it is quoted.
 
 That is also the answer to "why tune at all": a comparison between two algorithms
 is a comparison between two *configurations* of them, and picking one by hand is
@@ -476,10 +507,12 @@ alone: distinct-value count, element width, column count, discovery mode
 (`post` against `incremental`, which changes fragment size), and range size
 against `min_offload`. Backends are the inner loop, not the outer one.
 
-**Hardware paths only.** `--paths hw` is the default: the software paths are QPL's
-and DML's own CPU implementations, so a published figure including them compares
-our scalar scan against somebody else's. They stay available for correctness
-(`--paths sw`, `--paths all`).
+**This host's hardware only.** `run_all.sh` probes `/dev/dsa` and `/dev/iax` and
+passes `--detectors` naming exactly what exists, so a run cannot fill the
+accelerator table with drops from the wrong machine. `--paths hw|sw|all` remains as
+a coarser switch; the software paths are QPL's and DML's own CPU implementations, so
+a published figure including them compares our scalar scan against somebody
+else's.
 
 **Which hardware exists is per machine, and no machine has both.** This host has a
 DSA and no `/dev/iax`; the IAA host has the reverse. So the accelerator table is
@@ -504,7 +537,8 @@ build, are unaffected.
 
 ## Q4 — scaling
 
-Threads {1,2,4,8,16,24} x rows {2^18 .. 2^24} x columns {1,2,4,8,16} x {u32,u64},
+Threads 1 up to the physical cores of one NUMA node -- six here, and derived rather
+than written down -- x rows x columns {1,2,4,8,16} x {u32,u64},
 on three shapes chosen for opposite range structure, plus the measured keys on the
 thread axis. Reports speedup against its own single-thread row, so the axis is
 self-normalising.
@@ -518,14 +552,20 @@ count, so it is passed in rather than looked up by size -- usable on the thread
 axis, and correctly unavailable on the row and column axes, which would have to
 invent data the query never produced.
 
-**The quicksort does not scale, and that is the largest open item in the suite.**
-Unprofiled, end to end on `tpcds_q064`: 102.17 ns/element at one worker, 88.29 at
-two, 98.20 at four, 128.24 at eight, 131.20 at twenty-four. Best at two workers and
-degrading from four. The samplesort scales 8.6x on the same key, so the data and the
-machine both permit scaling; this is a defect in the task tree, not a limit of the
-approach. Attributing it to a phase is still open: the per-task phase timers cost
-enough at ~10^6 tasks to distort what they measure, and the first attribution drawn
-from them was withdrawn.
+**The "quicksort does not scale" finding was an artefact of oversubscription, and
+is withdrawn.** It rested on a sweep to twenty-four workers on a host with twelve
+physical cores across two NUMA nodes -- so four of the sweep's six points ran SMT
+siblings against each other on a shared L1 while gathering across a node boundary.
+Pinned to one node's six physical cores with `numactl`, both algorithms improve
+monotonically: `low_cardinality_d4` at four columns runs 12.13, 8.09, 5.57, 5.12
+ns/element at 1, 2, 4 and 6 workers, and `skewed_zipf_s1` at eight columns 675.6 to
+252.7. What survives is the much smaller claim that the quicksort does not scale
+*past the local node's physical cores*, which is unremarkable.
+
+Every parallel number in this plan predating that fix is suspect for the same
+reason, including Q1's twenty-four-worker comparison against
+`std::sort(execution::par)` -- TBB was equally free to spread across both nodes.
+Re-measuring those pinned is the outstanding item.
 
 ## Q5 and Q6 — variant screening and what the primitives buy
 
