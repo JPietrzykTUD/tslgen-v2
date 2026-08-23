@@ -182,7 +182,30 @@ with `EXCLUDE_FROM_ALL` and run by hand:
 ./run_all.sh --quick               # the same shape, narrowed, for checking the pipeline
 ```
 
-Overrides worth knowing: `--styles` narrows Q0's cells on a slow host,
+Tuner flags go through `COSORT_Q0_ARGS`, because `run_all.sh` otherwise derives
+everything from the host:
+
+```bash
+# keep more of the design-space table: only prune cells 2.5x off, not 1.5x
+COSORT_Q0_ARGS="--cell-prune-factor 2.5" ./run_all.sh
+
+# measure every cell in full -- the complete table, and the hours it costs
+COSORT_Q0_ARGS="--cell-prune-factor 0" ./run_all.sh
+
+# one style instead of three: three cells rather than nine
+COSORT_Q0_ARGS="--styles clang_bool" ./run_all.sh
+
+# combined
+COSORT_Q0_ARGS="--cell-prune-factor 2.5 --tie-margin 6" ./run_all.sh
+```
+
+What each factor means, since they are easy to confuse: `--cell-prune-factor` skips
+a whole *cell* whose default is that many times the best cell's default at the same
+key width, `--tie-margin` (a percentage) is how close two candidates must be to count
+as the same answer, and the candidate-level 5x abandon rule inside a cell is
+`--candidate-seconds`' relative counterpart and is not currently a flag.
+
+Other overrides worth knowing: `--styles` narrows Q0's cells on a slow host,
 `--candidate-seconds` bounds a candidate absolutely, `COSORT_Q3_DETECTORS` forces a
 detector list, `TSL_COSORT_ARROW_FETCH=ON` pins Arrow instead of using the system
 one, and `-DTSL_COSORT_PHASES=true` builds a phase-attribution binary that must

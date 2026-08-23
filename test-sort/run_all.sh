@@ -319,8 +319,24 @@ cmake --build "$build" -j "$(nproc)" --target bench_q0_tune
 mkdir -p "$results"
 tuned="$results/best_config.tsv"
 echo
+# Extra flags for the tuner, word-split, for the knobs whose right value is a
+# judgement about how much of the design space is worth the hours:
+#
+#   COSORT_Q0_ARGS="--cell-prune-factor 2.5"     keep more cells in the table
+#   COSORT_Q0_ARGS="--cell-prune-factor 0"       measure every cell in full
+#   COSORT_Q0_ARGS="--styles clang_bool"         one style, three cells not nine
+#   COSORT_Q0_ARGS="--tie-margin 6"              a wider band counts as tied
+#   COSORT_Q0_ARGS="--candidate-seconds 300"     an absolute per-candidate bound
+#
+# Several can be combined in the one string. Everything else about the run stays
+# derived from the host.
+read -r -a q0_extra <<< "${COSORT_Q0_ARGS:-}"
 echo "=== q0_tune (full: decides the cell and every configuration)"
+if [[ ${#q0_extra[@]} -gt 0 ]]; then
+  echo "    extra tuner flags: ${q0_extra[*]}"
+fi
 "${pin[@]}" "$build/bench_q0_tune" --workers "$COSORT_WORKERS" \
+  "${q0_extra[@]+"${q0_extra[@]}"}" \
   --out "$tuned" --csv "$results/q0_tune.csv" 2>&1 \
   | tee "$results/q0_tune.log"
 probe="$(grep '^TSL_COSORT_BEST_CELL' "$results/q0_tune.log" | tail -1 || true)"
