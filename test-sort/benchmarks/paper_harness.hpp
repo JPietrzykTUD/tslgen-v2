@@ -316,6 +316,7 @@ class TslPaperResults {
   TslPaperMachine machine_;
   std::vector<TslPaperRow> rows_;
   bool quiet_ = false;
+  mutable std::chrono::steady_clock::time_point last_progress_{};
   std::size_t unsettled_ = 0;   // rows still wide after the repetition ceiling
   bool header_printed_ = false;
   // Progress. A full run is six to eight hours across six drivers, and without
@@ -359,22 +360,47 @@ class TslPaperResults {
     return text;
   }
 
+  // A live progress line is for a terminal. Redirected to a file the carriage
+  // returns erase nothing, so every update is appended and the log fills with
+  // hundred-line rows of overwritten progress spliced through the middle of the
+  // tables -- which is exactly what a `> bench_sorting.log 2>&1` run produced. When
+  // stderr is not a terminal the line is emitted once per interval as an ordinary
+  // line instead, rare enough to read and frequent enough to see progress.
+  static auto stderr_is_terminal() -> bool {
+    static bool const answer = isatty(fileno(stderr)) != 0;
+    return answer;
+  }
+
   void report_progress() const {
-    auto const elapsed = std::chrono::duration<double>(
-      std::chrono::steady_clock::now() - started_).count();
+    auto const now = std::chrono::steady_clock::now();
+    auto const elapsed = std::chrono::duration<double>(now - started_).count();
     auto const done = rows_.size();
+    // A terminal can take an update per row, because each one overwrites the last.
+    // A file cannot, so it gets one line every half minute: often enough to watch a
+    // seven-hour run, rare enough that the log is still mostly results.
+    if (!stderr_is_terminal()) {
+      auto const since = std::chrono::duration<double>(now - last_progress_).count();
+      if (since < 30.0 && done != expected_) {
+        return;
+      }
+      last_progress_ = now;
+    }
     if (expected_ == 0) {
-      std::fprintf(stderr, "\r[%s] %zu rows, %s elapsed%s%s   ",
-                   binary_.c_str(), done, duration_text(elapsed).c_str(),
-                   stage_.empty() ? "" : " | ", stage_.c_str());
+      std::fprintf(stderr, "%s[%s] %zu rows, %s elapsed%s%s   %s",
+                   stderr_is_terminal() ? "\r" : "", binary_.c_str(), done,
+                   duration_text(elapsed).c_str(),
+                   stage_.empty() ? "" : " | ", stage_.c_str(),
+                   stderr_is_terminal() ? "" : "\n");
     } else {
       auto const fraction = static_cast<double>(done)
                           / static_cast<double>(expected_ < done ? done : expected_);
       auto const remaining = fraction > 0.0 ? elapsed / fraction - elapsed : 0.0;
-      std::fprintf(stderr, "\r[%s] %zu/%zu (%.0f%%) %s elapsed, ~%s left%s%s   ",
-                   binary_.c_str(), done, expected_, fraction * 100.0,
+      std::fprintf(stderr, "%s[%s] %zu/%zu (%.0f%%) %s elapsed, ~%s left%s%s   %s",
+                   stderr_is_terminal() ? "\r" : "", binary_.c_str(), done,
+                   expected_, fraction * 100.0,
                    duration_text(elapsed).c_str(), duration_text(remaining).c_str(),
-                   stage_.empty() ? "" : " | ", stage_.c_str());
+                   stage_.empty() ? "" : " | ", stage_.c_str(),
+                   stderr_is_terminal() ? "" : "\n");
     }
     std::fflush(stderr);
   }
@@ -399,7 +425,9 @@ class TslPaperResults {
   void add(TslPaperRow row) {
     // A carriage-returned progress line and a table on stdout would overwrite each
     // other, so the line is cleared before the row is printed and redrawn after.
-    std::fprintf(stderr, "\r%78s\r", "");
+    if (stderr_is_terminal()) {
+      std::fprintf(stderr, "\r%78s\r", "");
+    }
     std::fflush(stderr);
     // The measurement knows how many samples it took; the row should not have to
     // be told separately, because a driver that forgot would report nine.
