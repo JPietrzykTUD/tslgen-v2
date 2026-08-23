@@ -552,7 +552,13 @@ int main(int argc, char ** argv) {
   // a 4-byte one and costs roughly twice as much whatever the cell, so pricing a
   // u64 cell against the best u32 cell prunes every u64 cell -- which is what the
   // first version of this did, discarding half the design space to a unit error.
-  std::map<std::size_t, double> best_cell_default;
+  // One reference per algorithm per key width. Per algorithm because the two do not
+  // track each other across cells -- at intr/256 the samplesort runs 55.24 and the
+  // quicksort 47.61 -- so pricing one on the other's evidence prunes a cell that
+  // might have been the better cell for the other algorithm. Per key width because
+  // an 8-byte key moves twice the bytes and costs roughly twice as much everywhere.
+  std::map<std::size_t, double> sample_reference;
+  std::map<std::size_t, double> quick_reference;
 
   for (auto const & unit : tsl_tune_units()) {
     if (!style_names.empty()
@@ -582,70 +588,97 @@ int main(int argc, char ** argv) {
                   tsl_style_name(unit.style), unit.width, unit.element_bytes * 8,
                   lanes, workers, workers == 1 ? "" : "s");
 
-      // Price the cell on its default, unless this is the first cell measured.
-      auto const reference = best_cell_default.find(unit.element_bytes);
-      if (cell_prune_factor > 0.0 && reference != best_cell_default.end()
-          && reference->second > 0.0) {
-        auto priced = problem;
-        priced.probe_default_only = true;
-        auto const probe = unit.samplesort(priced);
-        double cell_default = 0.0;
-        for (auto const & candidate : probe) {
-          if (candidate.is_default && candidate.score > 0.0) {
-            cell_default = candidate.score;
-          }
-        }
-        if (cell_default > 0.0
-            && cell_default > cell_prune_factor * reference->second) {
-          std::printf("  cell default %.2f ns/element is %.2fx the best u%zu cell's "
-                      "%.2f: skipping the rest of this cell, no configuration "
-                      "closes that gap\n",
-                      cell_default, cell_default / reference->second,
-                      unit.element_bytes * 8, reference->second);
+      // Price a cell on its own default before tuning it, per algorithm.
+      //
+      // Like for like: the cell's default against the best cell's *default*, not
+      // against the best cell's fastest candidate. Comparing a default to a fastest
+      // makes the threshold quietly stricter than it reads, and a cell whose default
+      // is unrepresentative could be pruned on a number it never claimed.
+      auto price_then_tune =
+        [&](char const * algorithm,
+            std::function<std::vector<TslTuneCandidate>(TslTuneProblem const &)> const &
+              builder,
+            std::map<std::size_t, double> & reference)
+        -> std::vector<TslTuneCandidate> {
+        auto const width_key = unit.element_bytes;
+        auto const found = reference.find(width_key);
+        if (cell_prune_factor > 0.0 && found != reference.end()
+            && found->second > 0.0) {
+          auto priced = problem;
+          priced.probe_default_only = true;
+          auto const probe = builder(priced);
+          double cell_default = 0.0;
           for (auto const & candidate : probe) {
-            auto row = results.make_row();
-            row.shape = "tuning-set";
-            row.rows = rows;
-            row.columns = columns;
-            row.element_bytes = unit.element_bytes;
-            row.algorithm = "samplesort";
-            row.variant = std::string(tsl_style_name(unit.style)) + "/"
-                          + std::to_string(unit.width) + " " + candidate.axis + "="
-                          + candidate.label;
-            row.detector = "scalar";
-            row.workers = workers;
-            if (candidate.score > 0.0) {
-              row.verified = true;
-              row.ns_per_element.median = candidate.score;
-              row.ns_per_element.p25 = candidate.score;
-              row.ns_per_element.p75 = candidate.score;
-              results.add(std::move(row));
-            } else {
-              results.drop(row, "cell priced out: its default is far off the best "
-                                "cell's, so the rest was not measured");
+            if (candidate.is_default && candidate.score > 0.0) {
+              cell_default = candidate.score;
             }
           }
-          continue;
+          if (cell_default > 0.0
+              && cell_default > cell_prune_factor * found->second) {
+            std::printf("  %s: default %.2f ns/element is %.2fx the best u%zu cell's "
+                        "default %.2f, over the %.2fx prune factor -- the rest of "
+                        "this cell is not measured\n",
+                        algorithm, cell_default, cell_default / found->second,
+                        width_key * 8, found->second, cell_prune_factor);
+            for (auto const & candidate : probe) {
+              auto row = results.make_row();
+              row.shape = "tuning-set";
+              row.rows = rows;
+              row.columns = columns;
+              row.element_bytes = unit.element_bytes;
+              row.algorithm = algorithm;
+              row.variant = std::string(tsl_style_name(unit.style)) + "/"
+                            + std::to_string(unit.width) + " " + candidate.axis + "="
+                            + candidate.label;
+              row.detector = "scalar";
+              row.workers = workers;
+              if (candidate.score > 0.0) {
+                row.verified = true;
+                row.ns_per_element.median = candidate.score;
+                row.ns_per_element.p25 = candidate.score;
+                row.ns_per_element.p75 = candidate.score;
+                results.add(std::move(row));
+              } else {
+                results.drop(row, "cell priced out on its default; the rest of this "
+                                  "cell was not measured");
+              }
+            }
+            return {};
+          }
         }
-      }
+        auto measured = builder(problem);
+        for (auto const & candidate : measured) {
+          if (candidate.is_default && candidate.score > 0.0) {
+            auto & best = reference[width_key];
+            if (best == 0.0 || candidate.score < best) {
+              best = candidate.score;
+            }
+          }
+        }
+        return measured;
+      };
 
-      auto const samplesort = unit.samplesort(problem);
+      auto const samplesort = price_then_tune("samplesort", unit.samplesort,
+                                              sample_reference);
+      auto const quicksort = price_then_tune("quicksort", unit.quicksort,
+                                             quick_reference);
+      if (samplesort.empty() && quicksort.empty()) {
+        continue;   // both algorithms priced out of this cell
+      }
       auto const sample_outcome = summarise(samplesort, tie_margin);
-      if (sample_outcome.fastest.score > 0.0) {
-        auto & best = best_cell_default[unit.element_bytes];
-        if (best == 0.0 || sample_outcome.fastest.score < best) {
-          best = sample_outcome.fastest.score;
-        }
+      if (!samplesort.empty()) {
+        report("samplesort", unit.style, unit.width, samplesort, sample_outcome,
+               tie_margin);
       }
-      report("samplesort", unit.style, unit.width, samplesort, sample_outcome,
-             tie_margin);
-
-      auto const quicksort = unit.quicksort(problem);
       auto const quick_outcome = summarise(quicksort, tie_margin);
-      report("quicksort", unit.style, unit.width, quicksort, quick_outcome,
-             tie_margin);
+      if (!quicksort.empty()) {
+        report("quicksort", unit.style, unit.width, quicksort, quick_outcome,
+               tie_margin);
+      }
 
-      report_decomposition(decompose(problem, samplesort, quicksort));
+      if (!samplesort.empty() && !quicksort.empty()) {
+        report_decomposition(decompose(problem, samplesort, quicksort));
+      }
 
       if (workers == worker_counts.front()) {
         auto const key = std::make_tuple(std::string(tsl_style_name(unit.style)),
