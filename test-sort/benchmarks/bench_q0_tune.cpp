@@ -605,21 +605,27 @@ int main(int argc, char ** argv) {
         if (cell_prune_factor > 0.0 && found != reference.end()
             && found->second > 0.0) {
           auto priced = problem;
-          priced.probe_default_only = true;
+          priced.probe_calibration_only = true;
           auto const probe = builder(priced);
+          // The cell's price is its *best* candidate's single pass, not its
+          // default's: a cell is worth tuning if anything in it could win.
           double cell_default = 0.0;
           for (auto const & candidate : probe) {
-            if (candidate.is_default && candidate.score > 0.0) {
-              cell_default = candidate.score;
+            if (!candidate.per_shape.empty()) {
+              auto const pass = candidate.per_shape.front();
+              if (pass > 0.0 && (cell_default == 0.0 || pass < cell_default)) {
+                cell_default = pass;
+              }
             }
           }
           if (cell_default > 0.0
               && cell_default > cell_prune_factor * found->second) {
-            std::printf("  %s: default %.2f ns/element is %.2fx the best u%zu cell's "
-                        "default %.2f, over the %.2fx prune factor -- the rest of "
-                        "this cell is not measured\n",
-                        algorithm, cell_default, cell_default / found->second,
-                        width_key * 8, found->second, cell_prune_factor);
+            std::printf("  %s: best of %zu priced candidates is %.2f ns/element, "
+                        "%.2fx the best u%zu cell's %.2f, over the %.2fx prune "
+                        "factor -- this cell is not tuned\n",
+                        algorithm, probe.size(), cell_default,
+                        cell_default / found->second, width_key * 8, found->second,
+                        cell_prune_factor);
             for (auto const & candidate : probe) {
               auto row = results.make_row();
               row.shape = "tuning-set";
@@ -647,8 +653,10 @@ int main(int argc, char ** argv) {
           }
         }
         auto measured = builder(problem);
+        // The reference is this cell's best candidate, on the same footing the probe
+        // measures: best against best.
         for (auto const & candidate : measured) {
-          if (candidate.is_default && candidate.score > 0.0) {
+          if (candidate.score > 0.0) {
             auto & best = reference[width_key];
             if (best == 0.0 || candidate.score < best) {
               best = candidate.score;

@@ -55,9 +55,15 @@ struct TslTuneProblem {
   // askable on its own and cheaply -- not answered incidentally by whichever cells
   // a tuning run happens to visit.
   bool verify_only = false;
-  // Measure only the documented default. Used to price a whole cell before
-  // committing to tuning it: one candidate says whether the cell is in the running.
-  bool probe_default_only = false;
+  // Price a cell without tuning it: run every candidate's calibration pass on the
+  // first shape and stop. One pass each, no timed rounds.
+  //
+  // Not "measure the default and judge the cell by it" -- the default is not
+  // guaranteed representative, and excluding fourteen candidates on a fifteenth's
+  // number is the weakest step in the whole search. Every candidate is priced on its
+  // own measurement, which is also *cheaper* than the default's full measurement was:
+  // twenty-one single passes against one candidate's forty.
+  bool probe_calibration_only = false;
   // Two-way partitioning is quadratic in the equal-run length, and this tuning set
   // is duplicate-heavy on purpose, so above a working-set size the candidate stops
   // being a measurement and becomes a hang: it was already 66x off the pace at
@@ -91,6 +97,16 @@ struct TslTuneProblem {
   // partition is quadratic -- one such candidate consumed two hours of a run whose
   // useful part was fourteen minutes. Abandoning it is not the same as calling it
   // wrong, and the report says which. 0 means unlimited.
+  // An absolute wall-clock bound per candidate, checked *between* passes. It is a
+  // backstop for the one case the relative rule cannot cover: the first candidate
+  // measured, and the default-only probe, where there is no better candidate yet to
+  // be five times worse than.
+  //
+  // What it cannot do is interrupt a pass in flight. A single sort is the indivisible
+  // unit here, so a candidate that is pathological on its first pass runs that pass
+  // to completion whatever this is set to -- which is why the quadratic two-way
+  // candidate is excluded structurally, on the working-set size, rather than left to
+  // a timeout to catch. 0 disables it.
   double candidate_seconds = 0.0;
 };
 
@@ -212,88 +228,7 @@ auto sorted_image_of_a_permutation(std::vector<std::vector<Key>> const & columns
   return true;
 }
 
-// Geometric mean over the shapes: the right average for a score that is compared
-// as a ratio, and it stops one slow shape from deciding every axis.
-// `best_so_far` is the best per-element cost any candidate in this set has
-// reached, or 0 before the first one finishes. It bounds every later candidate.
-template <class Key, class Run>
-auto geometric_score(TslDatasetSource<Key> & source, TslTuneProblem const & problem,
-                     Run && run, double const * best_so_far = nullptr)
-  -> TslTuneScore {
-  TslTuneScore out;
-  double logs = 0.0;
-  std::size_t counted = 0;
-  auto const started = std::chrono::steady_clock::now();
-  for (auto const & spec : problem.specs) {
-    if (problem.candidate_seconds > 0.0) {
-      auto const spent = std::chrono::duration<double>(
-        std::chrono::steady_clock::now() - started).count();
-      if (spent > problem.candidate_seconds) {
-        out.over_budget = true;
-        break;
-      }
-    }
-    auto const pristine = source.pristine(spec);
-    auto const reference = source.reference(spec, TslDirection::Ascending);
-    std::vector<TslSortColumn<Key>> columns;
-    for (auto const & column : *pristine) {
-      columns.push_back(TslSortColumn<Key>{const_cast<Key *>(column.data()),
-                                           TslSortOrder::ASCENDING});
-    }
-    std::vector<Key> index(spec.rows);
-    auto const body = [&] {
-      run(columns.data(), spec.columns, index.data(), spec.rows, problem.workers);
-    };
-    auto const correct = [&] {
-      return sorted_image_of_a_permutation(*pristine, *reference, index);
-    };
-    if (problem.verify_only) {
-      body();
-      if (!correct()) {
-        out.failures.push_back(spec.id);
-      }
-      continue;  // nothing is timed in a correctness sweep
-    }
-    // Two bounds, whichever bites first. The relative one is the useful one: at
-    // `abandon_factor` times the best per-element cost seen so far, this shape's
-    // single pass would take longer than any winner ever could, so there is
-    // nothing to learn by finishing it. The absolute one stays as a backstop for
-    // the first candidate, when there is no best yet.
-    double per_shape_budget =
-      problem.candidate_seconds > 0.0
-        ? problem.candidate_seconds / static_cast<double>(problem.specs.size())
-        : 0.0;
-    if (best_so_far != nullptr && *best_so_far > 0.0
-        && problem.abandon_factor > 0.0) {
-      auto const relative = problem.abandon_factor * *best_so_far * 1e-9
-                            * static_cast<double>(spec.rows);
-      per_shape_budget = per_shape_budget > 0.0
-                           ? std::min(per_shape_budget, relative)
-                           : relative;
-    }
-    bool abandoned = false;
-    auto const [ok, stats] =
-      tsl_paper_measure(body, correct, spec.rows, per_shape_budget, &abandoned);
-    if (abandoned) {
-      out.over_budget = true;
-      break;
-    }
-    if (!ok || stats.median <= 0.0) {
-      out.failures.push_back(spec.id);
-      return out;  // a wrong candidate cannot win, whatever its time
-    }
-    out.per_shape.push_back(stats.median);
-    logs += std::log(stats.median);
-    ++counted;
-  }
-  out.score = (counted == 0 || !out.failures.empty() || out.over_budget)
-                ? 0.0
-                : std::exp(logs / static_cast<double>(counted));
-  return out;
-}
-
 }  // namespace tsl_tune_detail
-
 
 // --- interleaved measurement ----------------------------------------------------
 // Measuring candidate A to completion and then candidate B charges any drift
@@ -358,21 +293,6 @@ auto measure_interleaved(TslDatasetSource<Key> & source,
   // answer to the only question that matters, "is this resolvably faster".
   std::vector<std::vector<double>> ratios(entrants.size());
 
-  // Pricing a cell: measure the default alone. One candidate is enough to say
-  // whether a cell is within reach of the best cell so far, and fifteen are not
-  // needed to say it is not.
-  std::vector<char> priced(entrants.size(), 1);
-  if (problem.probe_default_only && default_at < entrants.size()) {
-    std::fill(priced.begin(), priced.end(), 0);
-    priced[default_at] = 1;
-    for (std::size_t at = 0; at < entrants.size(); ++at) {
-      if (priced[at] == 0) {
-        alive[at] = 0;
-        out[at].skipped = "not measured: this cell was priced on its default alone";
-      }
-    }
-  }
-
   for (auto const & spec : problem.specs) {
     auto const pristine = source.pristine(spec);
     auto const reference = source.reference(spec, TslDirection::Ascending);
@@ -415,6 +335,38 @@ auto measure_interleaved(TslDatasetSource<Key> & source,
       for (std::size_t at = 0; at < entrants.size(); ++at) {
         if (alive[at] != 0
             && calibration[at] > problem.abandon_factor * best_calibration) {
+          out[at].over_budget = true;
+          alive[at] = 0;
+        }
+      }
+    }
+
+    // Pricing mode stops here: every candidate has one measured pass on this shape,
+    // which is what the caller asked for. The score is left at zero -- a single pass
+    // is not a measurement -- and the calibration is reported through `per_shape` so
+    // the caller can price the cell without mistaking it for a tuning result.
+    if (problem.probe_calibration_only) {
+      for (std::size_t at = 0; at < entrants.size(); ++at) {
+        if (alive[at] != 0 && calibration[at] > 0.0) {
+          out[at].per_shape.push_back(calibration[at]);
+        }
+        out[at].skipped = "priced only: one calibration pass, no timed rounds";
+      }
+      return out;
+    }
+
+    // The absolute bound, applied to what the calibration pass revealed. Checked
+    // here rather than during a pass, because a pass cannot be interrupted.
+    if (problem.candidate_seconds > 0.0) {
+      auto const per_shape =
+        problem.candidate_seconds / static_cast<double>(problem.specs.size());
+      for (std::size_t at = 0; at < entrants.size(); ++at) {
+        // The calibration is per element; one pass over this shape is that times the
+        // rows. If a single pass already exceeds the share, nine rounds cannot fit.
+        auto const one_pass = calibration[at] * 1e-9
+                              * static_cast<double>(spec.rows);
+        if (alive[at] != 0 && calibration[at] > 0.0
+            && one_pass * tsl_paper_repetitions > per_shape) {
           out[at].over_budget = true;
           alive[at] = 0;
         }
@@ -486,56 +438,3 @@ auto measure_interleaved(TslDatasetSource<Key> & source,
 }
 
 }  // namespace tsl_tune_detail
-
-// --- samplesort ---------------------------------------------------------------
-
-template <class Key, class Simd, int K, TslSampleSortBuckets B, TslSampleSortBase P,
-          std::size_t BC, std::size_t F, TslSampleSortIds I,
-          TslSampleSortMovement M>
-auto tsl_tune_samplesort_point(TslDatasetSource<Key> & source,
-                               TslTuneProblem const & problem,
-                               double const * best_so_far = nullptr)
-  -> TslTuneScore {
-  using Sorter = TslSampleSortMultiColumn<Key, Simd, K, B, 8, BC, P, I,
-                                          BC / Simd::lane_count_v, F, M, false>;
-  Sorter sorter;
-  return tsl_tune_detail::geometric_score<Key>(
-    source, problem,
-    [&](TslSortColumn<Key> * columns, std::size_t column_count, Key * index,
-        std::size_t rows, std::size_t workers) {
-      TslIndexScalarDetector<Key> detector;
-      if (workers > 1) {
-        sorter.sort_index_parallel(columns, column_count, index, rows, detector,
-                                   workers);
-      } else {
-        sorter.sort_index(columns, column_count, index, rows, detector);
-      }
-    });
-}
-
-
-// --- quicksort ----------------------------------------------------------------
-
-template <class Key, class Simd, TslPartitionKind Partition, TslLeafKind Leaf,
-          std::size_t Fill>
-auto tsl_tune_quicksort_point(TslDatasetSource<Key> & source,
-                              TslTuneProblem const & problem,
-                              TslRunDiscoveryKind discovery,
-                              std::size_t partition_threshold,
-                              double const * best_so_far = nullptr)
-  -> TslTuneScore {
-  using Sorter = TslMultiColumnIndexSorter<Key, Partition, Leaf, Simd, Fill>;
-  Sorter sorter(0x5A3F1E77);
-  return tsl_tune_detail::geometric_score<Key>(
-    source, problem,
-    [&](TslSortColumn<Key> * columns, std::size_t column_count, Key * index,
-        std::size_t rows, std::size_t workers) {
-      TslIndexScalarDetector<Key> detector;
-      if (workers > 1) {
-        sorter.sort_index_parallel(columns, column_count, index, rows, discovery,
-                                   detector, workers, partition_threshold);
-      } else {
-        sorter.sort_index(columns, column_count, index, rows, discovery, detector);
-      }
-    });
-}
