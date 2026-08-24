@@ -1,30 +1,87 @@
 #!/usr/bin/env bash
-# Re-run only the corpus stages. They read nothing from best_config.tsv -- the
-# corpus enumerates its own variant space -- so Q0's output is not needed and
-# Q0-Q4's CSVs are untouched.
+# Re-run only the corpus stages (Q5 screen, Q6 attribute).
+#
+# They read nothing from best_config.tsv -- the corpus enumerates its own variant
+# space -- so when they are the only stages that failed there is nothing to carry
+# over from Q0 and no reason to repeat Q1 through Q4.
+#
+# The two stages want opposite treatment:
+#
+#   screen     registers parallel and deep-parallel families, so each case wants the
+#              whole pin. One process, all cores.
+#   attribute  admits only serial variants -- 660 cases, every one single-threaded --
+#              so one process uses one core and leaves five idle. It is sharded, one
+#              shard per core, each pinned to its own CPU so the shards do not
+#              contend and their timings stay comparable.
 set -euo pipefail
 build="${TSL_COSORT_BUILD_DIR:-$HOME/bench-sort-build}"
-results="${1:?usage: rerun_q5q6.sh <results-dir>}"
+results="${1:?usage: rerun_corpus.sh <results-dir>}"
 here="$(cd "$(dirname "$0")" && pwd)"
+convert="$here/benchmarks/visualization/gbench_to_paper.py"
+mkdir -p "$results"
 
 # One thread per physical core of node 0, as run_all.sh does.
 phys="$(lscpu -p=CPU,CORE,NODE | grep -v '^#' \
         | awk -F, '$3==0 { if (!($2 in seen)) { seen[$2]=1; printf "%s%s", sep, $1; sep="," } }')"
-pin=(numactl --physcpubind="$phys" --membind=0)
-# Belt and braces: the corpus now sizes its pool from the affinity mask, but saying
-# it explicitly means a run under a pin this script did not set is still right.
-export COSORT_WORKERS="$(awk -F, '{print NF}' <<< "$phys")"
-echo "pinned to $phys, $COSORT_WORKERS workers"
+IFS=',' read -r -a cpus <<< "$phys"
+export COSORT_WORKERS="${#cpus[@]}"
+echo "node 0 physical cores: $phys (${#cpus[@]} of them)"
 
-for stage in screen:q5_variants attribute:q6_portability; do
-  name="${stage#*:}"
-  began=$SECONDS
-  echo "=== $name (${stage%%:*})"
-  COSORT_STAGE="${stage%%:*}" "${pin[@]}" "$build/cosort_bench" \
-    --benchmark_repetitions=9 --benchmark_report_aggregates_only=true \
-    --benchmark_format=console --benchmark_out_format=json \
-    --benchmark_out="$results/$name.json" > "$results/$name.log" 2>&1
-  python3 "$here/benchmarks/visualization/gbench_to_paper.py" \
-    "$results/$name.json" "$results/$name.csv" --question "$name"
-  echo "--- $name done in $(( (SECONDS - began) / 60 ))m"
+gbench=(--benchmark_repetitions=9 --benchmark_report_aggregates_only=true
+        --benchmark_format=console --benchmark_out_format=json)
+
+# --- Q5: one process, the whole pin -------------------------------------------
+began=$SECONDS
+echo "=== q5_variants (screen)"
+COSORT_STAGE=screen numactl --physcpubind="$phys" --membind=0 "$build/cosort_bench" \
+  "${gbench[@]}" --benchmark_out="$results/q5_variants.json" \
+  > "$results/q5_variants.log" 2>&1
+python3 "$convert" "$results/q5_variants.json" "$results/q5_variants.csv" \
+  --question q5_variants
+echo "--- q5_variants done in $(( (SECONDS - began) / 60 ))m"
+
+# --- Q6: one shard per core ----------------------------------------------------
+# Six filters that partition the 660 cases exactly. The last carries `style=na` --
+# the scalar `std_lex_argsort` baseline, which has no SIMD style and would otherwise
+# be dropped silently by a style-based split. Verified by counting: 5x108 + 120 = 660.
+shards=(
+  'style=intr/.*size=L2/'
+  'style=intr/.*size=LLC/'
+  'style=clang/.*size=L2/'
+  'style=clang/.*size=LLC/'
+  'style=clang_bool/.*size=L2/'
+  '(style=clang_bool/.*size=LLC/|style=na/)'
+)
+began=$SECONDS
+echo "=== q6_portability (attribute), ${#shards[@]} shards on ${#cpus[@]} cores"
+pids=()
+for index in "${!shards[@]}"; do
+  cpu="${cpus[$(( index % ${#cpus[@]} ))]}"
+  COSORT_STAGE=attribute numactl --physcpubind="$cpu" --membind=0 \
+    "$build/cosort_bench" "${gbench[@]}" \
+    --benchmark_filter="${shards[$index]}" \
+    --benchmark_out="$results/q6_shard$index.json" \
+    > "$results/q6_shard$index.log" 2>&1 &
+  pids+=($!)
 done
+failed=0
+for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
+if [[ "$failed" != 0 ]]; then
+  echo "at least one shard failed; see $results/q6_shard*.log" >&2
+  exit 1
+fi
+
+# One CSV from the shards: the converter emits a header per file, so all but the
+# first are dropped.
+: > "$results/q6_portability.csv"
+for index in "${!shards[@]}"; do
+  python3 "$convert" "$results/q6_shard$index.json" \
+    "$results/q6_shard$index.csv" --question q6_portability
+  if [[ "$index" == 0 ]]; then
+    cat "$results/q6_shard$index.csv" >> "$results/q6_portability.csv"
+  else
+    tail -n +2 "$results/q6_shard$index.csv" >> "$results/q6_portability.csv"
+  fi
+done
+echo "--- q6_portability done in $(( (SECONDS - began) / 60 ))m, \
+$(( $(wc -l < "$results/q6_portability.csv") - 1 )) rows"
