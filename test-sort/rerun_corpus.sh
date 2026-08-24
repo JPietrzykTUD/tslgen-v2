@@ -113,6 +113,10 @@ IFS=',' read -r -a cpus <<< "$phys"
 export COSORT_WORKERS="${#cpus[@]}"
 pin=(numactl --physcpubind="$phys" --membind=0)
 echo "pin: node 0 physical cores $phys (${#cpus[@]} of them)"
+# Echo the size grid. It is an environment variable read inside the binary, so a run
+# that was meant to include 2xLLC and silently did not looks exactly like one that
+# was not: the only evidence is the size= field of every case name in the log.
+echo "size levels: ${COSORT_SIZE_LEVELS:-stage default (1,3 = L2 and LLC)}"
 echo "stages: ${stages[*]}"
 echo "build: $build"
 echo "results: $results"
