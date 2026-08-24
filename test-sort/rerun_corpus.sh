@@ -5,14 +5,11 @@
 # space -- so when they are the only stages that failed there is nothing to carry
 # over from Q0 and no reason to repeat Q1 through Q4.
 #
-# The two stages want opposite treatment:
-#
-#   screen     registers parallel and deep-parallel families, so each case wants the
-#              whole pin. One process, all cores.
-#   attribute  admits only serial variants -- 660 cases, every one single-threaded --
-#              so one process uses one core and leaves five idle. It is sharded, one
-#              shard per core, each pinned to its own CPU so the shards do not
-#              contend and their timings stay comparable.
+# Both stages run as a single process, one after the other. Neither is split across
+# cores, and the idle cores during the serial attribute stage are deliberate: the
+# socket has one shared L3 and one memory controller per node, so concurrent
+# processes measure each other's cache and bandwidth pressure rather than the sorter.
+# Wall clock is bought by measuring fewer cases, never by measuring them at once.
 set -euo pipefail
 build="${TSL_COSORT_BUILD_DIR:-$HOME/bench-sort-build}"
 results="${1:?usage: rerun_corpus.sh <results-dir>}"
