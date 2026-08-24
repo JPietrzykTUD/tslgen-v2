@@ -27,7 +27,27 @@ IFS=',' read -r -a cpus <<< "$phys"
 export COSORT_WORKERS="${#cpus[@]}"
 echo "node 0 physical cores: $phys (${#cpus[@]} of them)"
 
-gbench=(--benchmark_repetitions=9 --benchmark_report_aggregates_only=true
+# Screening is a coarser question than reporting, and its grid is much larger, so it
+# gets its own settings rather than the paper's:
+#
+#   rle=scalar      the detector axis is Q3's, and Q3 measures it against the tuned
+#                   sorter with a phase split. Screen carrying dml_sw, dsa_hw and
+#                   both async backends multiplied it from 552 cases to 918 on a host
+#                   with DSA -- two thirds again, for a question already answered
+#                   better elsewhere.
+#   3 repetitions   the output is "viable / not viable". Nine is the reporting
+#                   methodology, and the reporting drivers keep it; spending 3x here
+#                   buys precision the answer does not use.
+#
+# Together these turn a nine-hour screen into under two. Override either if you want
+# the full grid: COSORT_RLE= (empty for all) and COSORT_SCREEN_REPETITIONS=9.
+screen_reps="${COSORT_SCREEN_REPETITIONS:-3}"
+attribute_reps="${COSORT_ATTRIBUTE_REPETITIONS:-9}"
+export COSORT_RLE="${COSORT_RLE-scalar}"
+echo "screen: rle=${COSORT_RLE:-all}, $screen_reps repetitions; \
+attribute: $attribute_reps repetitions"
+
+gbench=(--benchmark_report_aggregates_only=true
         --benchmark_format=console --benchmark_out_format=json)
 
 # Line-buffered, because the output is redirected to a file. libc block-buffers a
@@ -45,7 +65,8 @@ began=$SECONDS
 echo "=== q5_variants (screen)"
 COSORT_STAGE=screen numactl --physcpubind="$phys" --membind=0 \
   "${line_buffered[@]+"${line_buffered[@]}"}" "$build/cosort_bench" \
-  "${gbench[@]}" --benchmark_out="$results/q5_variants.json" \
+  "${gbench[@]}" --benchmark_repetitions="$screen_reps" \
+  --benchmark_out="$results/q5_variants.json" \
   > "$results/q5_variants.log" 2>&1
 python3 "$convert" "$results/q5_variants.json" "$results/q5_variants.csv" \
   --question q5_variants
@@ -70,6 +91,7 @@ for index in "${!shards[@]}"; do
   cpu="${cpus[$(( index % ${#cpus[@]} ))]}"
   COSORT_STAGE=attribute numactl --physcpubind="$cpu" --membind=0 \
     "${line_buffered[@]+"${line_buffered[@]}"}" "$build/cosort_bench" "${gbench[@]}" \
+    --benchmark_repetitions="$attribute_reps" \
     --benchmark_filter="${shards[$index]}" \
     --benchmark_out="$results/q6_shard$index.json" \
     > "$results/q6_shard$index.log" 2>&1 &
