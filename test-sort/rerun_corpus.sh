@@ -41,11 +41,26 @@ echo "node 0 physical cores: $phys (${#cpus[@]} of them)"
 #
 # Together these turn a nine-hour screen into under two. Override either if you want
 # the full grid: COSORT_RLE= (empty for all) and COSORT_SCREEN_REPETITIONS=9.
+# The one cell combination that dominates the screen stage, excluded by name rather
+# than by dropping its family.
+#
+# `unique_last_gN` is 3.9M groups of N at LLC and its whole purpose is maximal depth
+# -- the corpus comment reads "per-task cost dominates". `deep_parallel` submits every
+# sub-range above the partition threshold as its own task, so it maximises exactly
+# the cost that shape is built to expose. Stacked at LLC these are the most expensive
+# cells in the grid by a wide margin, and they are what stalled two runs.
+#
+# Dropping the *family* would remove an execution axis from the question screening
+# exists to answer, which is not acceptable: it is 108 cases and leaves none. This
+# drops 24 and leaves 84, so deep-parallel is still screened at L2 on every shape and
+# at LLC on every shape that is not maximal-depth. Set COSORT_SCREEN_FILTER= to
+# measure them anyway, and expect hours.
+screen_filter="${COSORT_SCREEN_FILTER--deep_parallel.*unique_last.*size=LLC}"
 screen_reps="${COSORT_SCREEN_REPETITIONS:-3}"
 attribute_reps="${COSORT_ATTRIBUTE_REPETITIONS:-9}"
 export COSORT_RLE="${COSORT_RLE-scalar}"
-echo "screen: rle=${COSORT_RLE:-all}, $screen_reps repetitions; \
-attribute: $attribute_reps repetitions"
+echo "screen: rle=${COSORT_RLE:-all}, $screen_reps repetitions, \
+filter=${screen_filter:-none}; attribute: $attribute_reps repetitions"
 
 # `report_aggregates_only` governs the *file*, `display_aggregates_only` the
 # *console*, and they are independent. So the JSON keeps only the aggregates the
@@ -79,6 +94,7 @@ COSORT_STAGE=screen numactl --physcpubind="$phys" --membind=0 \
   "${line_buffered[@]+"${line_buffered[@]}"}" "$build/cosort_bench" \
   "${gbench[@]}" --benchmark_repetitions="$screen_reps" \
   --benchmark_min_time="$COSORT_MIN_TIME" \
+  ${screen_filter:+--benchmark_filter="$screen_filter"} \
   --benchmark_out="$results/q5_variants.json" \
   > "$results/q5_variants.log" 2>&1
 python3 "$convert" "$results/q5_variants.json" "$results/q5_variants.csv" \
