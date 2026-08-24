@@ -251,14 +251,13 @@ if [[ -x "$build/cosort_bench" ]]; then
   # stage looked identical to a hang, and the file was going to be json anyway
   # because that is the default for --benchmark_out. Console for progress, json for
   # the file.
-  # Both stages are dominated by the maximal-depth shapes at the LLC size, measured
-  # at ~15s per iteration -- 122 of screen's 552 cases and 128 of attribute's 660 cost
-  # more than the other 962 together, which is what turned these two stages into an
-  # overnight wait. They are still screened at L2, so excluding them costs the
-  # out-of-cache regime of two shapes rather than the shapes. Set the two variables
-  # empty to measure the full grid.
-  screen_filter="${COSORT_SCREEN_FILTER--unique_last.*size=LLC}"
-  attribute_filter="${COSORT_ATTRIBUTE_FILTER--unique_last.*size=LLC}"
+  # No exclusions: the full size grid, every shape. These two stages once ran for
+  # hours, but that was two-way partitioning being admitted onto data whose equal
+  # runs it cannot partition -- a gate that read the wrong parameter, since fixed --
+  # not the number of cases. Measured after the fix: screen 38 minutes, attribute 31.
+  # The two variables narrow a re-run by hand; they are not needed for a full one.
+  screen_filter="${COSORT_SCREEN_FILTER-}"
+  attribute_filter="${COSORT_ATTRIBUTE_FILTER-}"
   export COSORT_RLE="${COSORT_RLE-scalar}"
   export COSORT_MIN_TIME="${COSORT_MIN_TIME:-0.2s}"
   for stage in "screen:q5_variants:${COSORT_SCREEN_REPETITIONS:-3}:$screen_filter" \

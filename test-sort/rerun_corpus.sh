@@ -5,11 +5,16 @@
 # space -- so when they are the only stages that failed there is nothing to carry
 # over from Q0 and no reason to repeat Q1 through Q4.
 #
-# Both stages run as a single process, one after the other. Neither is split across
-# cores, and the idle cores during the serial attribute stage are deliberate: the
-# socket has one shared L3 and one memory controller per node, so concurrent
-# processes measure each other's cache and bandwidth pressure rather than the sorter.
-# Wall clock is bought by measuring fewer cases, never by measuring them at once.
+# Both stages run as a single process, one after the other, over the full size grid.
+# Neither is split across cores, and the idle cores during the serial attribute stage
+# are deliberate: the socket has one shared L3 and one memory controller per node, so
+# concurrent processes measure each other's cache and bandwidth pressure rather than
+# the sorter.
+#
+# Neither stage excludes anything. What made them an overnight wait was a gate bug,
+# not the size of the grid -- see two_way_allowed in cosort_bench.cpp. Screen is 38
+# minutes and attribute 31, both measured, with every shape present at every level.
+# The two filter variables remain for narrowing a re-run by hand.
 set -euo pipefail
 build="${TSL_COSORT_BUILD_DIR:-$HOME/bench-sort-build}"
 results="${1:?usage: rerun_corpus.sh <results-dir>}"
@@ -36,28 +41,27 @@ echo "node 0 physical cores: $phys (${#cpus[@]} of them)"
 #                   methodology, and the reporting drivers keep it; spending 3x here
 #                   buys precision the answer does not use.
 #
-# Together these turn a nine-hour screen into under two. Override either if you want
-# the full grid: COSORT_RLE= (empty for all) and COSORT_SCREEN_REPETITIONS=9.
-# What actually dominates the screen stage, measured rather than guessed.
+# Override either if you want those axes in full: COSORT_RLE= (empty for all) and
+# COSORT_SCREEN_REPETITIONS=9.
 #
-# One iteration, per shape, at the LLC level, every variant family:
+# Nothing is excluded. Both stages run the full size grid with every shape present
+# at every level.
 #
-#   unique_first                62 cases in 19s
-#   independent_uniform_c1024   32 cases in 22s
-#   skewed_zipf_s1              32 cases in 14s
-#   low_cardinality_d4          32 cases in  9s
-#   unique_last_g2              46 of 62 cases in 90s
-#   unique_last_g64              6 of 62 cases in 90s   -- ~15s per iteration
+# These stages did once take hours, and the reason was a gate bug rather than the
+# number of cases: two_way_allowed read the distinct-count parameters `d`, `d1` and
+# `c`, but the unique_last family carries `g` -- the terminal group size, which *is*
+# the equal-run length. No `d`/`d1`/`c` meant "no cardinality, treat as unique", so
+# every group size up to 4096 was admitted to two-way partitioning, which is
+# quadratic in exactly that run. Measured at the LLC size, `unique_last_g64` cost 60s
+# per iteration per two-way variant against 0.24s for three-way on the same data.
+# With `g` read, that case is 0.65s and the stage is 38 minutes.
 #
-# The maximal-depth shapes are the cost, across every family -- not `deep_parallel`,
-# which was my first guess and wrong. At three repetitions a 15-second iteration is
-# 45s of case, and 124 such cases is most of the stage.
+# Measured after the fix, at the repetition counts below: screen 38 minutes (492
+# cases), attribute 31 minutes (552 cases).
 #
-# `unique_last_*` is still screened at L2, where the same 124 cases take seconds, so
-# what is lost is those shapes in the out-of-cache regime rather than the shapes
-# themselves. Set COSORT_SCREEN_FILTER= to measure them and expect two to three
-# hours.
-screen_filter="${COSORT_SCREEN_FILTER--unique_last.*size=LLC}"
+# COSORT_SCREEN_FILTER and COSORT_ATTRIBUTE_FILTER take a gbench filter for narrowing
+# a re-run by hand. A full run needs neither.
+screen_filter="${COSORT_SCREEN_FILTER-}"
 screen_reps="${COSORT_SCREEN_REPETITIONS:-3}"
 attribute_reps="${COSORT_ATTRIBUTE_REPETITIONS:-9}"
 export COSORT_RLE="${COSORT_RLE-scalar}"
@@ -114,11 +118,7 @@ echo "--- q5_variants done in $(( (SECONDS - began) / 60 ))m"
 # that are six-way cache contention rather than the sorter. Benchmarks do not run
 # concurrently.
 #
-# The time is bought back by measuring fewer cases, not by measuring them badly:
-# `unique_last_*` at LLC is ~15s per iteration and dominates here as it does in
-# screen, and COSORT_ELEMENT_BYTES=4 halves the stage if the 8-byte half of the style
-# table is not needed.
-attribute_filter="${COSORT_ATTRIBUTE_FILTER--unique_last.*size=LLC}"
+attribute_filter="${COSORT_ATTRIBUTE_FILTER-}"
 began=$SECONDS
 echo "=== q6_portability (attribute), one process, filter=${attribute_filter:-none}"
 COSORT_STAGE=attribute numactl --physcpubind="$phys" --membind=0 \

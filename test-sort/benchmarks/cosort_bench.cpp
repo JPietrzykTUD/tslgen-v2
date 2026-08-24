@@ -609,6 +609,18 @@ struct Registrar {
         return false;
       }
     }
+    // `g` is the terminal group size of the unique_last and extreme_values
+    // families. It is the equal-run length itself, not a cardinality to divide the
+    // row count by -- both generators assert `max group at level m-1 == g` in their
+    // own invariant checks. Falling through to the rows/distinct formula below found
+    // no `d`, `d1` or `c`, concluded "no cardinality, treat as unique", and admitted
+    // every group size up to 4096. Measured at the LLC size, `unique_last_g64` cost
+    // 60s per iteration for each two-way variant against 0.24s for three-way on the
+    // same data; the shape's whole point is an equal run two-way cannot partition.
+    auto const group = spec.param("g", 0.0);
+    if (group > 0.0) {
+      return group <= tsl_two_way_run_cap;
+    }
     // The distinct-value count under any of the names the generator uses: `d` for
     // the low-cardinality family, `d1` for the hierarchical and skewed ones, `c`
     // for the uniform and correlated ones.
