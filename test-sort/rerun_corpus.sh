@@ -221,20 +221,31 @@ run_q4() {
   # directory. COSORT_SCALE picks another, TPCDS_KEYS names a path outright.
   local tpcds=() dir="${TPCDS_KEYS:-}"
   if [[ -z "$dir" ]]; then
-    local scale="${COSORT_SCALE:-1}"
-    dir="$here/TMP/tpcds_keys/sf$scale"
-    if [[ ! -d "$dir" ]]; then
-      local available=()
-      for candidate in "$here"/TMP/tpcds_keys/sf*; do
-        [[ -d "$candidate" ]] && compgen -G "$candidate/*.tsldset" > /dev/null \
-          && available+=("$(basename "$candidate")")
-      done
-      if [[ ${#available[@]} -gt 0 ]]; then
-        echo "  no keys at scale factor $scale; extracted sets present:" \
-             "${available[*]}" >&2
-        echo "  set COSORT_SCALE to one of them, or TPCDS_KEYS to a path" >&2
+    local available=()
+    for candidate in "$here"/TMP/tpcds_keys/sf*; do
+      [[ -d "$candidate" ]] && compgen -G "$candidate/*.tsldset" > /dev/null \
+        && available+=("$(basename "$candidate")")
+    done
+    if [[ -n "${COSORT_SCALE:-}" ]]; then
+      dir="$here/TMP/tpcds_keys/sf$COSORT_SCALE"
+      if [[ ! -d "$dir" ]]; then
+        echo "  no keys at scale factor $COSORT_SCALE; extracted sets present:" \
+             "${available[*]-none}" >&2
         return 2
       fi
+    elif [[ ${#available[@]} -eq 1 ]]; then
+      dir="$here/TMP/tpcds_keys/${available[0]}"
+    elif [[ ${#available[@]} -gt 1 ]]; then
+      # No default when there is a choice to get wrong. Picking one silently is how
+      # a Q4 re-run came to measure sf1 keys against rows the rest of the suite had
+      # measured at sf10 -- an inconsistency invisible in the output, because the
+      # csv records the row count and not the scale factor it came from.
+      echo "  more than one extracted key set: ${available[*]}" >&2
+      echo "  set COSORT_SCALE to the one the rest of these results used." >&2
+      echo "  The row count identifies it: a key file is named" >&2
+      echo "  tpcds_qNNN_u32_n<rows>_m<cols>.tsldset, and q2_algorithms.csv records" >&2
+      echo "  the rows it measured." >&2
+      return 2
     fi
   fi
   if [[ -d "$dir" ]] && compgen -G "$dir/*.tsldset" > /dev/null; then
