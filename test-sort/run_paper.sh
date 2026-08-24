@@ -142,7 +142,39 @@ fi
 # benchmarks/datagen/tpcds/README.md for producing them; they are large and
 # per-scale-factor, so they are not in the repository.
 tpcds_args=()
-tpcds_dir="${TPCDS_KEYS:-$(dirname "$0")/data/tpcds}"
+# run_all.sh extracts keys to TMP/tpcds_keys/sf$scale and passes the path down, so
+# this default only matters when the script is invoked directly -- which is exactly
+# when it used to point at `data/tpcds`, a directory nothing writes. A standalone
+# verification run then measured synthetic shapes only and said so in a line nobody
+# reads until afterwards. Search the scale directories instead, and when there is
+# more than one, ask the results directory which the run being reproduced used.
+tpcds_dir="${TPCDS_KEYS:-}"
+if [[ -z "$tpcds_dir" ]]; then
+  keys_root="$(dirname "$0")/TMP/tpcds_keys"
+  mapfile -t key_sets < <(
+    for candidate in "$keys_root"/sf*; do
+      [[ -d "$candidate" ]] && compgen -G "$candidate/*.tsldset" > /dev/null \
+        && basename "$candidate"
+    done)
+  if [[ ${#key_sets[@]} -eq 1 ]]; then
+    tpcds_dir="$keys_root/${key_sets[0]}"
+  elif [[ ${#key_sets[@]} -gt 1 ]]; then
+    inferred="$(python3 "$(dirname "$0")/benchmarks/visualization/infer_key_scale.py" \
+                "$keys_root" "$results" 2>/dev/null || true)"
+    if [[ -n "$inferred" ]]; then
+      tpcds_dir="$keys_root/$inferred"
+      echo "TPC-DS scale factor from the results directory: $inferred"
+    else
+      echo "!! more than one extracted key set (${key_sets[*]}) and nothing in" >&2
+      echo "   $results to infer from. Set TPCDS_KEYS to the one you want; without" >&2
+      echo "   it Q1, Q2 and Q4 measure synthetic shapes only." >&2
+      tpcds_dir="$keys_root/${key_sets[0]}"
+      echo "   defaulting to ${key_sets[0]}" >&2
+    fi
+  else
+    tpcds_dir="$(dirname "$0")/data/tpcds"
+  fi
+fi
 if [[ -d "$tpcds_dir" ]] && compgen -G "$tpcds_dir/*.tsldset" > /dev/null; then
   echo "real TPC-DS keys: $tpcds_dir ($(ls "$tpcds_dir"/*.tsldset | wc -l) files)"
   tpcds_args=(--tpcds-dir "$tpcds_dir")
