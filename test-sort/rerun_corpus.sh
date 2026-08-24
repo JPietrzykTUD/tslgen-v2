@@ -47,8 +47,20 @@ export COSORT_RLE="${COSORT_RLE-scalar}"
 echo "screen: rle=${COSORT_RLE:-all}, $screen_reps repetitions; \
 attribute: $attribute_reps repetitions"
 
+# `report_aggregates_only` governs the *file*, `display_aggregates_only` the
+# *console*, and they are independent. So the JSON keeps only the aggregates the
+# converter reads, while the console prints every repetition -- three lines per case
+# instead of one set, which is three times finer progress and, more usefully, shows
+# movement *within* a case rather than only at its end. A case that takes minutes
+# stops looking like a stall.
 gbench=(--benchmark_report_aggregates_only=true
+        --benchmark_display_aggregates_only=false
         --benchmark_format=console --benchmark_out_format=json)
+
+# Per-repetition time floor. gbench auto-tunes iterations to reach it, so it is the
+# knob that decides what a case costs: at 0.5s a case is nine repetitions of at
+# least half a second. Screening does not need that resolution.
+export COSORT_MIN_TIME="${COSORT_MIN_TIME:-0.2s}"
 
 # Line-buffered, because the output is redirected to a file. libc block-buffers a
 # non-tty stdout in 4 KiB chunks, so a stage that emits one line per completed case
@@ -66,6 +78,7 @@ echo "=== q5_variants (screen)"
 COSORT_STAGE=screen numactl --physcpubind="$phys" --membind=0 \
   "${line_buffered[@]+"${line_buffered[@]}"}" "$build/cosort_bench" \
   "${gbench[@]}" --benchmark_repetitions="$screen_reps" \
+  --benchmark_min_time="$COSORT_MIN_TIME" \
   --benchmark_out="$results/q5_variants.json" \
   > "$results/q5_variants.log" 2>&1
 python3 "$convert" "$results/q5_variants.json" "$results/q5_variants.csv" \
@@ -92,6 +105,7 @@ for index in "${!shards[@]}"; do
   COSORT_STAGE=attribute numactl --physcpubind="$cpu" --membind=0 \
     "${line_buffered[@]+"${line_buffered[@]}"}" "$build/cosort_bench" "${gbench[@]}" \
     --benchmark_repetitions="$attribute_reps" \
+    --benchmark_min_time="$COSORT_MIN_TIME" \
     --benchmark_filter="${shards[$index]}" \
     --benchmark_out="$results/q6_shard$index.json" \
     > "$results/q6_shard$index.log" 2>&1 &
