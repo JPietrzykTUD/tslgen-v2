@@ -307,7 +307,7 @@ void run_width(TslPaperResults & results, std::string const & tpcds_dir,
       std::printf("\n-- rows, %s, %zu columns, u%zu --\n", shape.c_str(),
                   base_columns, sizeof(Key) * 8);
       for (std::size_t rows : {1u << 18, 1u << 20, 1u << 22, 1u << 24}) {
-        for (std::size_t workers : {1u, 24u}) {
+        for (std::size_t workers : {std::size_t{1}, g_max_workers}) {
           measure_cell<Key>(results, source, {shape, rows, base_columns, workers},
                             serial);
         }
@@ -317,7 +317,7 @@ void run_width(TslPaperResults & results, std::string const & tpcds_dir,
       std::printf("\n-- columns, %s, %zu rows, u%zu --\n", shape.c_str(), base_rows,
                   sizeof(Key) * 8);
       for (std::size_t columns : {1u, 2u, 4u, 8u, 16u}) {
-        for (std::size_t workers : {1u, 24u}) {
+        for (std::size_t workers : {std::size_t{1}, g_max_workers}) {
           measure_cell<Key>(results, source, {shape, base_rows, columns, workers},
                             serial);
         }
@@ -419,8 +419,11 @@ int main(int argc, char ** argv) {
     }
     g_tuned = tuned;
   }
-  // Threads {1,2,4,8,16,24} plus rows {4} x workers {2} plus columns {5} x
-  // workers {2} = 24 cells per shape per width, each measuring both algorithms.
+  // Thread points plus rows {4} x workers {2} plus columns {5} x workers {2} cells
+  // per shape per width, each measuring both algorithms. The worker pair on the row
+  // and column axes is {1, one thread per physical core of one node}, from the same
+  // topology as the thread axis -- not a constant, which on a pinned run would
+  // oversubscribe and measure SMT contention instead of the shape.
   {
     std::size_t per_shape = 0;
     if (axis == "threads" || axis == "all") per_shape += 6;

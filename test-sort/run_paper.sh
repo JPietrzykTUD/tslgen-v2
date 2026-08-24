@@ -121,7 +121,8 @@ $(elapsed_text $(( SECONDS - suite_started ))) total so far"
 
 if [[ "$quick" == "--quick" ]]; then
   # A shape and size per question: proves the pipeline, not the paper.
-  narrow_q1=(--shapes low_cardinality_d4 --rows 1048576 --cols 1,4 --workers 1,24)
+  narrow_q1=(--shapes low_cardinality_d4 --rows 1048576 --cols 1,4 \
+             --workers "1,${COSORT_WORKERS:-$(nproc)}")
   narrow_q2=(--shapes low_cardinality_d4,skewed_zipf_s1 --rows 1048576 --cols 4 --widths 4)
   narrow_q3=(--cardinalities 1024 --cols 4 --widths 4 --workers 1 --rows 1048576)
   narrow_q4=(--axis threads --shapes skewed_zipf_s1 --widths 4 --rows 1048576)
@@ -250,8 +251,20 @@ if [[ -x "$build/cosort_bench" ]]; then
   # stage looked identical to a hang, and the file was going to be json anyway
   # because that is the default for --benchmark_out. Console for progress, json for
   # the file.
-  for stage in screen:q5_variants attribute:q6_portability; do
-    name="${stage#*:}"
+  # Both stages are dominated by the maximal-depth shapes at the LLC size, measured
+  # at ~15s per iteration -- 122 of screen's 552 cases and 128 of attribute's 660 cost
+  # more than the other 962 together, which is what turned these two stages into an
+  # overnight wait. They are still screened at L2, so excluding them costs the
+  # out-of-cache regime of two shapes rather than the shapes. Set the two variables
+  # empty to measure the full grid.
+  screen_filter="${COSORT_SCREEN_FILTER--unique_last.*size=LLC}"
+  attribute_filter="${COSORT_ATTRIBUTE_FILTER--unique_last.*size=LLC}"
+  export COSORT_RLE="${COSORT_RLE-scalar}"
+  export COSORT_MIN_TIME="${COSORT_MIN_TIME:-0.2s}"
+  for stage in "screen:q5_variants:${COSORT_SCREEN_REPETITIONS:-3}:$screen_filter" \
+               "attribute:q6_portability:${COSORT_ATTRIBUTE_REPETITIONS:-9}:$attribute_filter"; do
+    IFS=':' read -r stage_name name stage_reps stage_filter <<< "$stage"
+    stage="$stage_name:$name"
     stage_index=$(( stage_index + 1 ))
     corpus_began=$SECONDS
     echo
@@ -262,7 +275,10 @@ $(elapsed_text $(( corpus_began - suite_started ))) into the run"
     # accumulate.
     if (cd "$build" && COSORT_STAGE="${stage%%:*}" \
           ${TSL_COSORT_STDBUF:-stdbuf -oL -eL} ./cosort_bench \
-          --benchmark_repetitions=9 --benchmark_report_aggregates_only=true \
+          --benchmark_repetitions="$stage_reps" \
+          --benchmark_report_aggregates_only=true \
+          --benchmark_min_time="$COSORT_MIN_TIME" \
+          ${stage_filter:+--benchmark_filter="$stage_filter"} \
           --benchmark_format=console --benchmark_out_format=json \
           --benchmark_out="$results/$name.json") \
         > "$results/$name.log" 2>&1; then
