@@ -212,13 +212,46 @@ run_q4() {
     echo "configuration in; measuring the defaults would mislabel them as tuned." >&2
     return 2
   fi
-  local tpcds=() dir="${TPCDS_KEYS:-$here/data/tpcds}"
+  # run_all.sh extracts keys to TMP/tpcds_keys/sf$scale and passes the path down as
+  # TPCDS_KEYS. run_paper.sh also carries a data/tpcds fallback that nothing writes,
+  # and taking that as the default here meant Q4 silently ran synthetic-only while
+  # 365 MB of extracted keys sat two directories away. So the scale directories are
+  # searched directly, and a scale factor is chosen rather than assumed: sf1, matching
+  # run_all.sh's own default, so a re-run stays comparable with results already in the
+  # directory. COSORT_SCALE picks another, TPCDS_KEYS names a path outright.
+  local tpcds=() dir="${TPCDS_KEYS:-}"
+  if [[ -z "$dir" ]]; then
+    local scale="${COSORT_SCALE:-1}"
+    dir="$here/TMP/tpcds_keys/sf$scale"
+    if [[ ! -d "$dir" ]]; then
+      local available=()
+      for candidate in "$here"/TMP/tpcds_keys/sf*; do
+        [[ -d "$candidate" ]] && compgen -G "$candidate/*.tsldset" > /dev/null \
+          && available+=("$(basename "$candidate")")
+      done
+      if [[ ${#available[@]} -gt 0 ]]; then
+        echo "  no keys at scale factor $scale; extracted sets present:" \
+             "${available[*]}" >&2
+        echo "  set COSORT_SCALE to one of them, or TPCDS_KEYS to a path" >&2
+        return 2
+      fi
+    fi
+  fi
   if [[ -d "$dir" ]] && compgen -G "$dir/*.tsldset" > /dev/null; then
     tpcds=(--tpcds-dir "$dir")
-    echo "  real TPC-DS keys: $dir ($(ls "$dir"/*.tsldset | wc -l) files)"
+    echo "  real TPC-DS keys: $dir ($(ls "$dir"/*.tsldset | wc -l) files," \
+         "scale factor $(sed -n 's/^scale_factor=//p' "$dir/manifest.txt" 2>/dev/null || echo unrecorded))"
   else
-    echo "  no TPC-DS keys at $dir; synthetic shapes only, and the algorithm"
-    echo "  crossover is only visible on measured keys"
+    # Not a warning buried in a log: the crossover between the two algorithms is
+    # only visible on measured keys, so without them Q4 answers a smaller question
+    # than the one it is in the suite to answer.
+    echo "  refusing to run Q4 without TPC-DS keys: the algorithm crossover is only" >&2
+    echo "  visible on measured keys, and a synthetic-only Q4 would replace the" >&2
+    echo "  existing rows with a weaker answer. Looked in $dir." >&2
+    echo "  Extract them with ./run_all.sh, or set COSORT_SYNTHETIC_ONLY=1 to" >&2
+    echo "  measure synthetic shapes deliberately." >&2
+    [[ "${COSORT_SYNTHETIC_ONLY:-0}" == "1" ]] || return 2
+    echo "  COSORT_SYNTHETIC_ONLY=1: synthetic shapes only" >&2
   fi
   # Extra flags for a narrowed re-run, as COSORT_Q0_ARGS does for the tuner:
   #   COSORT_Q4_ARGS="--axis threads"                    one axis
