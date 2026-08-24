@@ -41,21 +41,26 @@ echo "node 0 physical cores: $phys (${#cpus[@]} of them)"
 #
 # Together these turn a nine-hour screen into under two. Override either if you want
 # the full grid: COSORT_RLE= (empty for all) and COSORT_SCREEN_REPETITIONS=9.
-# The one cell combination that dominates the screen stage, excluded by name rather
-# than by dropping its family.
+# What actually dominates the screen stage, measured rather than guessed.
 #
-# `unique_last_gN` is 3.9M groups of N at LLC and its whole purpose is maximal depth
-# -- the corpus comment reads "per-task cost dominates". `deep_parallel` submits every
-# sub-range above the partition threshold as its own task, so it maximises exactly
-# the cost that shape is built to expose. Stacked at LLC these are the most expensive
-# cells in the grid by a wide margin, and they are what stalled two runs.
+# One iteration, per shape, at the LLC level, every variant family:
 #
-# Dropping the *family* would remove an execution axis from the question screening
-# exists to answer, which is not acceptable: it is 108 cases and leaves none. This
-# drops 24 and leaves 84, so deep-parallel is still screened at L2 on every shape and
-# at LLC on every shape that is not maximal-depth. Set COSORT_SCREEN_FILTER= to
-# measure them anyway, and expect hours.
-screen_filter="${COSORT_SCREEN_FILTER--deep_parallel.*unique_last.*size=LLC}"
+#   unique_first                62 cases in 19s
+#   independent_uniform_c1024   32 cases in 22s
+#   skewed_zipf_s1              32 cases in 14s
+#   low_cardinality_d4          32 cases in  9s
+#   unique_last_g2              46 of 62 cases in 90s
+#   unique_last_g64              6 of 62 cases in 90s   -- ~15s per iteration
+#
+# The maximal-depth shapes are the cost, across every family -- not `deep_parallel`,
+# which was my first guess and wrong. At three repetitions a 15-second iteration is
+# 45s of case, and 124 such cases is most of the stage.
+#
+# `unique_last_*` is still screened at L2, where the same 124 cases take seconds, so
+# what is lost is those shapes in the out-of-cache regime rather than the shapes
+# themselves. Set COSORT_SCREEN_FILTER= to measure them and expect two to three
+# hours.
+screen_filter="${COSORT_SCREEN_FILTER--unique_last.*size=LLC}"
 screen_reps="${COSORT_SCREEN_REPETITIONS:-3}"
 attribute_reps="${COSORT_ATTRIBUTE_REPETITIONS:-9}"
 export COSORT_RLE="${COSORT_RLE-scalar}"
