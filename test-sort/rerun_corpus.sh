@@ -30,10 +30,21 @@ echo "node 0 physical cores: $phys (${#cpus[@]} of them)"
 gbench=(--benchmark_repetitions=9 --benchmark_report_aggregates_only=true
         --benchmark_format=console --benchmark_out_format=json)
 
+# Line-buffered, because the output is redirected to a file. libc block-buffers a
+# non-tty stdout in 4 KiB chunks, so a stage that emits one line per completed case
+# appears frozen for as long as it takes ten of them to finish -- which is
+# indistinguishable from the hang we were actually looking for. `stdbuf -oL` makes
+# the log a live progress signal instead of a periodic dump.
+line_buffered=()
+if command -v stdbuf > /dev/null; then
+  line_buffered=(stdbuf -oL -eL)
+fi
+
 # --- Q5: one process, the whole pin -------------------------------------------
 began=$SECONDS
 echo "=== q5_variants (screen)"
-COSORT_STAGE=screen numactl --physcpubind="$phys" --membind=0 "$build/cosort_bench" \
+COSORT_STAGE=screen numactl --physcpubind="$phys" --membind=0 \
+  "${line_buffered[@]+"${line_buffered[@]}"}" "$build/cosort_bench" \
   "${gbench[@]}" --benchmark_out="$results/q5_variants.json" \
   > "$results/q5_variants.log" 2>&1
 python3 "$convert" "$results/q5_variants.json" "$results/q5_variants.csv" \
@@ -58,7 +69,7 @@ pids=()
 for index in "${!shards[@]}"; do
   cpu="${cpus[$(( index % ${#cpus[@]} ))]}"
   COSORT_STAGE=attribute numactl --physcpubind="$cpu" --membind=0 \
-    "$build/cosort_bench" "${gbench[@]}" \
+    "${line_buffered[@]+"${line_buffered[@]}"}" "$build/cosort_bench" "${gbench[@]}" \
     --benchmark_filter="${shards[$index]}" \
     --benchmark_out="$results/q6_shard$index.json" \
     > "$results/q6_shard$index.log" 2>&1 &

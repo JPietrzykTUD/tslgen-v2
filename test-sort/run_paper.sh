@@ -257,7 +257,11 @@ if [[ -x "$build/cosort_bench" ]]; then
     echo
     echo "=== [$stage_index/$stage_total] $name (cosort_bench, ${stage%%:*} stage) \
 $(elapsed_text $(( corpus_began - suite_started ))) into the run"
-    if (cd "$build" && COSORT_STAGE="${stage%%:*}" ./cosort_bench \
+    # `stdbuf -oL`: the output is redirected, and libc block-buffers a non-tty
+    # stdout, so without it a live stage looks frozen until 4 KiB of results
+    # accumulate.
+    if (cd "$build" && COSORT_STAGE="${stage%%:*}" \
+          ${TSL_COSORT_STDBUF:-stdbuf -oL -eL} ./cosort_bench \
           --benchmark_repetitions=9 --benchmark_report_aggregates_only=true \
           --benchmark_format=console --benchmark_out_format=json \
           --benchmark_out="$results/$name.json") \
