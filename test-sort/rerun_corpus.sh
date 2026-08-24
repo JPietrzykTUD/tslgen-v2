@@ -235,6 +235,17 @@ run_q4() {
       fi
     elif [[ ${#available[@]} -eq 1 ]]; then
       dir="$here/TMP/tpcds_keys/${available[0]}"
+    elif [[ ${#available[@]} -gt 1 ]] \
+         && inferred="$(python3 "$here/benchmarks/visualization/infer_key_scale.py" \
+                        "$here/TMP/tpcds_keys" "$results" 2>/dev/null)" \
+         && [[ -n "$inferred" ]]; then
+      # The results already record which set they used: a key file's name carries its
+      # row count and the csv records the rows it measured, so matching one against
+      # the other identifies it. Better than a default, because the answer comes from
+      # the directory being added to rather than from a guess about it.
+      dir="$here/TMP/tpcds_keys/$inferred"
+      echo "  scale factor from the existing results: $inferred" \
+           "(override with COSORT_SCALE)"
     elif [[ ${#available[@]} -gt 1 ]]; then
       # No default when there is a choice to get wrong. Picking one silently is how
       # a Q4 re-run came to measure sf1 keys against rows the rest of the suite had
