@@ -187,6 +187,19 @@ struct TslPaperMachine {
     return machine;
   }
 
+  // The largest worker count a measurement may ask for: one thread per physical core
+  // of one NUMA node, and never more than the affinity mask allows. The two limits
+  // answer different questions -- `physical_per_node` comes from sysfs and describes
+  // the machine, `allowed_cpus` describes this process -- and a run pinned to fewer
+  // CPUs than a node has would oversubscribe them if only the first were consulted.
+  auto parallel_width() const -> std::size_t {
+    auto width = physical_per_node > 0 ? physical_per_node : 1;
+    if (allowed_cpus > 0) {
+      width = std::min(width, allowed_cpus);
+    }
+    return std::max<std::size_t>(std::size_t{1}, width);
+  }
+
   void print() const {
     std::printf("host=%s cores=%zu governor=%s clock=%.0fMHz load=%.2f compiler=%s\n",
                 host.c_str(), cores, governor.c_str(), clock_mhz, load,
@@ -714,8 +727,7 @@ inline auto tsl_rows_in_cache(TslPaperMachine const & machine, std::size_t colum
 // thread evicting the first one's lines.
 inline auto tsl_default_workers(TslPaperMachine const & machine)
   -> std::vector<std::size_t> {
-  auto const many = machine.physical_per_node > 0 ? machine.physical_per_node
-                                                  : 1;
+  auto const many = machine.parallel_width();
   if (many <= 1) {
     return {1};
   }

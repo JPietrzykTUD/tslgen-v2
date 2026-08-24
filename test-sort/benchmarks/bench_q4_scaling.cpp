@@ -399,11 +399,13 @@ int main(int argc, char ** argv) {
     std::printf("rows=%zu (derived from this machine)\n", base_rows);
   }
   if (g_max_workers == 0) {
-    // One thread per physical core of one NUMA node, which is what the harness
-    // probed. Falling back to the logical count would sweep past the point where
-    // the curve stops being about the sorter.
-    g_max_workers = std::max<std::size_t>(1, results.machine().physical_per_node);
-    std::printf("thread sweep capped at %zu (physical cores per NUMA node); "
+    // One thread per physical core of one NUMA node, capped by the affinity mask.
+    // Falling back to the logical count would sweep past the point where the curve
+    // stops being about the sorter, and reading the topology alone would oversubscribe
+    // a run pinned to fewer CPUs than a node has.
+    g_max_workers = results.machine().parallel_width();
+    std::printf("thread sweep capped at %zu (physical cores per NUMA node, "
+                "within the affinity mask); "
                 "override with --max-workers\n", g_max_workers);
   }
 
