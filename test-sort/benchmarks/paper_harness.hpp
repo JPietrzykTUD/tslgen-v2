@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tsl_simd_for.hpp"
+#include "common/cpu_affinity.hpp"
 #include "common/instrumentation.hpp"
 
 // The measurement method every `bench_qN_*` driver shares, so it exists once.
@@ -109,13 +110,7 @@ struct TslPaperMachine {
     }
     // What this process may actually run on, which is the number that matters:
     // a worker count above it oversubscribes whatever `numactl` allowed.
-    {
-      cpu_set_t allowed;
-      CPU_ZERO(&allowed);
-      if (sched_getaffinity(0, sizeof(allowed), &allowed) == 0) {
-        machine.allowed_cpus = static_cast<std::size_t>(CPU_COUNT(&allowed));
-      }
-    }
+    machine.allowed_cpus = tsl_usable_cpu_count();
     // Physical cores per NUMA node, from sysfs: one entry per logical cpu, and
     // `thread_siblings_list` names the SMT group so each physical core is counted
     // once. Nodes come from the `node*` directories.

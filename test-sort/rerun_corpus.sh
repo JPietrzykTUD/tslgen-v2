@@ -11,7 +11,10 @@ here="$(cd "$(dirname "$0")" && pwd)"
 phys="$(lscpu -p=CPU,CORE,NODE | grep -v '^#' \
         | awk -F, '$3==0 { if (!($2 in seen)) { seen[$2]=1; printf "%s%s", sep, $1; sep="," } }')"
 pin=(numactl --physcpubind="$phys" --membind=0)
-echo "pinned to $phys"
+# Belt and braces: the corpus now sizes its pool from the affinity mask, but saying
+# it explicitly means a run under a pin this script did not set is still right.
+export COSORT_WORKERS="$(awk -F, '{print NF}' <<< "$phys")"
+echo "pinned to $phys, $COSORT_WORKERS workers"
 
 for stage in screen:q5_variants attribute:q6_portability; do
   name="${stage#*:}"

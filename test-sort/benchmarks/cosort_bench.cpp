@@ -51,6 +51,7 @@
 #include "sorting/sample_sort/samplesort_multicolumn.hpp"
 #include "sorting/quicksort/multicolumn_index_sort.hpp"
 #include "cosort_detectors.hpp"
+#include "common/cpu_affinity.hpp"
 #include "cosort_plan.hpp"
 #include "datagen/dataset_catalog.hpp"
 #include "datagen/dataset_descriptor.hpp"
@@ -136,7 +137,7 @@ auto load_plan() -> TslStagePlan {
   if (auto const * value = std::getenv("COSORT_SHAPES")) plan.shapes = split_list(value);
   plan.worker_count = static_cast<std::size_t>(env_u64(
     "COSORT_WORKERS",
-    plan.worker_count == 0 ? std::max(1u, std::thread::hardware_concurrency()) : plan.worker_count
+    plan.worker_count == 0 ? tsl_usable_cpu_count() : plan.worker_count
   ));
   plan.task_threshold = static_cast<std::size_t>(env_u64("COSORT_TASK_THRESHOLD", plan.task_threshold));
   plan.partition_threshold =
