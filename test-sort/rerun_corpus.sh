@@ -106,50 +106,31 @@ python3 "$convert" "$results/q5_variants.json" "$results/q5_variants.csv" \
   --question q5_variants
 echo "--- q5_variants done in $(( (SECONDS - began) / 60 ))m"
 
-# --- Q6: one shard per core ----------------------------------------------------
-# Six filters that partition the 660 cases exactly. The last carries `style=na` --
-# the scalar `std_lex_argsort` baseline, which has no SIMD style and would otherwise
-# be dropped silently by a style-based split. Verified by counting: 5x108 + 120 = 660.
-shards=(
-  'style=intr/.*size=L2/'
-  'style=intr/.*size=LLC/'
-  'style=clang/.*size=L2/'
-  'style=clang/.*size=LLC/'
-  'style=clang_bool/.*size=L2/'
-  '(style=clang_bool/.*size=LLC/|style=na/)'
-)
+# --- Q6: one process, sequentially ------------------------------------------------
+# NOT sharded across cores, though it is single-threaded and six sit idle.
+#
+# One 30 MiB L3 is shared by every core on this socket, and one memory controller by
+# every core on the node. Six concurrent processes each holding a ~30 MB working set
+# would get a fifth of the cache each and a sixth of the bandwidth -- and the cases
+# sized to the LLC are exactly the ones that would interfere, which are exactly the
+# ones worth measuring. A sharded run finishes six times sooner and reports numbers
+# that are six-way cache contention rather than the sorter. Benchmarks do not run
+# concurrently.
+#
+# The time is bought back by measuring fewer cases, not by measuring them badly:
+# `unique_last_*` at LLC is ~15s per iteration and dominates here as it does in
+# screen, and COSORT_ELEMENT_BYTES=4 halves the stage if the 8-byte half of the style
+# table is not needed.
+attribute_filter="${COSORT_ATTRIBUTE_FILTER--unique_last.*size=LLC}"
 began=$SECONDS
-echo "=== q6_portability (attribute), ${#shards[@]} shards on ${#cpus[@]} cores"
-pids=()
-for index in "${!shards[@]}"; do
-  cpu="${cpus[$(( index % ${#cpus[@]} ))]}"
-  COSORT_STAGE=attribute numactl --physcpubind="$cpu" --membind=0 \
-    "${line_buffered[@]+"${line_buffered[@]}"}" "$build/cosort_bench" "${gbench[@]}" \
-    --benchmark_repetitions="$attribute_reps" \
-    --benchmark_min_time="$COSORT_MIN_TIME" \
-    --benchmark_filter="${shards[$index]}" \
-    --benchmark_out="$results/q6_shard$index.json" \
-    > "$results/q6_shard$index.log" 2>&1 &
-  pids+=($!)
-done
-failed=0
-for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
-if [[ "$failed" != 0 ]]; then
-  echo "at least one shard failed; see $results/q6_shard*.log" >&2
-  exit 1
-fi
-
-# One CSV from the shards: the converter emits a header per file, so all but the
-# first are dropped.
-: > "$results/q6_portability.csv"
-for index in "${!shards[@]}"; do
-  python3 "$convert" "$results/q6_shard$index.json" \
-    "$results/q6_shard$index.csv" --question q6_portability
-  if [[ "$index" == 0 ]]; then
-    cat "$results/q6_shard$index.csv" >> "$results/q6_portability.csv"
-  else
-    tail -n +2 "$results/q6_shard$index.csv" >> "$results/q6_portability.csv"
-  fi
-done
-echo "--- q6_portability done in $(( (SECONDS - began) / 60 ))m, \
-$(( $(wc -l < "$results/q6_portability.csv") - 1 )) rows"
+echo "=== q6_portability (attribute), one process, filter=${attribute_filter:-none}"
+COSORT_STAGE=attribute numactl --physcpubind="$phys" --membind=0 \
+  "${line_buffered[@]+"${line_buffered[@]}"}" "$build/cosort_bench" "${gbench[@]}" \
+  --benchmark_repetitions="$attribute_reps" \
+  --benchmark_min_time="$COSORT_MIN_TIME" \
+  ${attribute_filter:+--benchmark_filter="$attribute_filter"} \
+  --benchmark_out="$results/q6_portability.json" \
+  > "$results/q6_portability.log" 2>&1
+python3 "$convert" "$results/q6_portability.json" "$results/q6_portability.csv" \
+  --question q6_portability
+echo "--- q6_portability done in $(( (SECONDS - began) / 60 ))m"
