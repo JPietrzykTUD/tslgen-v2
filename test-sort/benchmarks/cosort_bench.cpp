@@ -121,6 +121,11 @@ auto load_plan() -> TslStagePlan {
   plan.widths = env_numeric_list<std::size_t>("COSORT_WIDTHS", plan.widths);
   plan.element_bytes = env_numeric_list<std::size_t>("COSORT_ELEMENTS", plan.element_bytes);
   plan.size_levels = env_numeric_list<std::size_t>("COSORT_SIZE_LEVELS", plan.size_levels);
+  // The key-width axis, overridable like every other. The attribute stage runs both
+  // widths because lane count is what separates one style's codegen from another's,
+  // which doubles it -- and without a knob there was no way to halve it again on a
+  // host where that stage is the long pole.
+  plan.element_bytes = env_numeric_list<std::size_t>("COSORT_ELEMENT_BYTES", plan.element_bytes);
   plan.columns = env_numeric_list<std::size_t>("COSORT_COLUMNS", plan.columns);
   plan.directions = env_numeric_list<int>("COSORT_DIRECTIONS", plan.directions);
   if (auto const * value = std::getenv("COSORT_SHAPES")) plan.shapes = split_list(value);

@@ -244,6 +244,12 @@ if [[ -x "$build/cosort_bench" ]]; then
   # accounting to produce numbers it already produces. What the paper needs from
   # them is the shared schema, so the JSON is converted into it.
   converter="$(dirname "$0")/benchmarks/visualization/gbench_to_paper.py"
+  # `--benchmark_format` is the *console* format and `--benchmark_out_format` the
+  # file's. Setting the console to json made gbench emit nothing at all until the
+  # entire stage finished -- it writes one document at the end -- so an eight-hour
+  # stage looked identical to a hang, and the file was going to be json anyway
+  # because that is the default for --benchmark_out. Console for progress, json for
+  # the file.
   for stage in screen:q5_variants attribute:q6_portability; do
     name="${stage#*:}"
     stage_index=$(( stage_index + 1 ))
@@ -253,7 +259,8 @@ if [[ -x "$build/cosort_bench" ]]; then
 $(elapsed_text $(( corpus_began - suite_started ))) into the run"
     if (cd "$build" && COSORT_STAGE="${stage%%:*}" ./cosort_bench \
           --benchmark_repetitions=9 --benchmark_report_aggregates_only=true \
-          --benchmark_format=json --benchmark_out="$results/$name.json") \
+          --benchmark_format=console --benchmark_out_format=json \
+          --benchmark_out="$results/$name.json") \
         > "$results/$name.log" 2>&1; then
       python3 "$converter" "$results/$name.json" "$results/$name.csv" \
         --question "$name" || echo "  conversion failed"
