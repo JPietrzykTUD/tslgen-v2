@@ -58,6 +58,11 @@
 
 namespace {
 
+// The longest equal run two-way partitioning may face above the size cap. Eight is
+// generous: at that length the quadratic term is 32 comparisons per run, which is
+// inside the noise, while the 512-long runs of independent_uniform_c1024 are not.
+inline constexpr double tsl_two_way_run_cap = 8.0;
+
 constexpr auto tsl_style_available(TslStyle style) -> bool {
   switch (style) {
     case TslStyle::Intrinsics: return true;
@@ -559,11 +564,49 @@ struct Registrar {
 
   // Two-way peels one element per level out of an all-equal range, so it is
   // quadratic in the equal-run length. Registered only where that stays bounded.
+  // Two-way partitioning is quadratic in the *equal-run length*: a run of r costs
+  // about r^2/2, and there are rows/r of them, so the whole column costs rows*r/2.
+  // What decides that is the distinct-value count, which every generated spec
+  // carries -- `d` for the low-cardinality family, `c` for the uniform and
+  // hierarchy ones.
+  //
+  // This used to test the dataset's *name* instead: only labels beginning
+  // "low_cardinality" or "all_equal" were gated. `independent_uniform_c1024` was
+  // therefore admitted at every size, and at 524,288 rows over 1024 values its runs
+  // are 512 long. One such case ran for eleven and a half hours in the screen stage
+  // before it was killed -- a name-based test for a numeric property, and the
+  // property was right there in the spec.
   auto two_way_allowed(TslDatasetSpec const & spec, TslSizeLevel const & size) -> bool {
+    if (size.per_column_bytes <= plan.two_way_size_cap) {
+      return true;   // small enough that even the quadratic case is cheap
+    }
+    // Families whose duplication is the point of the shape rather than a parameter
+    // of it. A heavy-tailed distribution has no cardinality to read -- Zipf carries
+    // only its exponent -- but its head is a long equal run by construction, which
+    // is precisely what two-way cannot partition. Naming them is right here; naming
+    // them *instead of* reading the parameter where one exists was the bug.
     auto const label = tsl_dataset_label(spec);
-    auto const low_cardinality =
-      label.rfind("low_cardinality", 0) == 0 || label.rfind("all_equal", 0) == 0;
-    return !low_cardinality || size.per_column_bytes <= plan.two_way_size_cap;
+    for (auto const * family : {"low_cardinality", "all_equal", "skewed_zipf",
+                                "heavy_hitter", "duplicates_at_pivot"}) {
+      if (label.rfind(family, 0) == 0) {
+        return false;
+      }
+    }
+    // The distinct-value count under any of the names the generator uses: `d` for
+    // the low-cardinality family, `d1` for the hierarchical and skewed ones, `c`
+    // for the uniform and correlated ones.
+    auto distinct = spec.param("d", 0.0);
+    if (distinct <= 0.0) {
+      distinct = spec.param("d1", 0.0);
+    }
+    if (distinct <= 0.0) {
+      distinct = spec.param("c", 0.0);
+    }
+    if (distinct <= 0.0) {
+      return true;   // no cardinality and not a skewed family: treat as unique
+    }
+    auto const run = static_cast<double>(spec.rows) / distinct;
+    return run <= tsl_two_way_run_cap;
   }
 
   auto footprint_ok(TslDatasetSpec const & spec) -> bool {
