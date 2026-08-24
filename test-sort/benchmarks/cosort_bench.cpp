@@ -25,6 +25,7 @@
  *   COSORT_COLUMNS     sort-column counts
  *   COSORT_DIRECTIONS  0 asc, 1 desc, 2 alternating
  *   COSORT_VARIANTS    algorithm names to keep, e.g. post_3way_ins; empty = stage default
+ *   COSORT_SKIP_VARIANTS  name prefixes to drop, e.g. deep_parallel; empty = drop none
  *   COSORT_RLE         detector backends: scalar,dml_sw,dsa_hw,dml_sw_async,
  *                      dsa_hw_async,iaa_hw,iaa_hw_async -- whichever the build has
  *   COSORT_REGION_BYTES / COSORT_MIN_OFFLOAD / COSORT_DSA_SLOTS / COSORT_DSA_DEPTH
@@ -541,6 +542,11 @@ struct Registrar {
   TslStagePlan plan;
   std::vector<TslSizeLevel> levels;
   std::vector<std::string> keep_variants;   // COSORT_VARIANTS, empty keeps all
+  // COSORT_SKIP_VARIANTS, matched as a prefix. COSORT_VARIANTS is an allow-list, so
+  // excluding one family through it means naming the other twenty-four -- and
+  // "run everything except the family I am currently debugging" is the common case,
+  // not the rare one.
+  std::vector<std::string> skip_variants;
   TslDropLog drops;
   std::size_t registered = 0;
 
@@ -554,6 +560,15 @@ struct Registrar {
       if (std::find(keep_variants.begin(), keep_variants.end(), name) == keep_variants.end()) {
         drops.drop(TslDropReason::StageVariant);
         return false;
+      }
+    }
+    if (!skip_variants.empty()) {
+      auto const name = variant.algorithm_name();
+      for (auto const & prefix : skip_variants) {
+        if (!prefix.empty() && name.rfind(prefix, 0) == 0) {
+          drops.drop(TslDropReason::StageVariant);
+          return false;
+        }
       }
     }
     if (!tsl_style_available(variant.style)) {
@@ -842,6 +857,7 @@ int main(int argc, char ** argv) try {
   auto const caches = tsl_detect_caches();
   registrar.levels = tsl_size_levels(caches);
   registrar.keep_variants = split_list(env_text("COSORT_VARIANTS", ""));
+  registrar.skip_variants = split_list(env_text("COSORT_SKIP_VARIANTS", ""));
 
   std::fprintf(stderr,
     "stage=%s  caches: L1=%lluKiB L2=%lluKiB LLC=%lluKiB\n",
