@@ -123,14 +123,26 @@ def styled(chart: alt.Chart, mode: str) -> alt.Chart:
             .configure_title(color=ink["primary"], fontSize=13, anchor="start"))
 
 
+# The palette has eight slots and a categorical hue is never generated or cycled
+# past them, so a field with more distinct values than this is not offered as a
+# colour at all -- it goes on an axis or into the table instead.
+MAX_SERIES = 8
+# Bars below this stay individually readable; past it the axis is unreadable
+# whatever the colour does.
+MAX_X = 30
+
+
 def nominal_scale(values: list[str], mode: str) -> alt.Scale:
-    """Fixed slot order over the *unfiltered* domain, so filtering never recolors."""
+    """Fixed slot order over the values passed, so filtering never recolors.
+
+    Callers must pass at most MAX_SERIES values. Silently truncating instead -- which
+    is what this used to do -- left every mark past the eighth outside the scale's
+    domain and therefore drawn with no fill: present, positioned, invisible. The
+    caller either narrows the field or does not colour by it.
+    """
     domain = sorted({str(v) for v in values
-                     if v is not None and str(v) not in ("", "nan")})
-    palette = CATEGORICAL[mode]
-    if len(domain) > len(palette):
-        domain = domain[:len(palette)]
-    return alt.Scale(domain=domain, range=palette[:len(domain)])
+                     if v is not None and str(v) not in ("", "nan")})[:MAX_SERIES]
+    return alt.Scale(domain=domain, range=CATEGORICAL[mode][:len(domain)])
 
 
 def as_text(series: pd.Series) -> pd.Series:
@@ -219,16 +231,22 @@ with tabs[0]:
 with tabs[1]:
     stage = st.selectbox("Stage", list(frames), format_func=STAGES.get, key="cmp_stage")
     frame = measured(frames[stage])
-    dimensions = [c for c in ("shape", "algorithm", "variant", "style", "lanes", "move",
-                              "detector", "workers", "columns", "element_bytes",
-                              "register_bits", "rows")
-                  if c in frame and as_text(frame[c]).nunique() > 1]
+    cardinality = {c: as_text(frame[c]).nunique()
+                   for c in ("shape", "algorithm", "variant", "style", "lanes", "move",
+                             "detector", "workers", "columns", "element_bytes",
+                             "register_bits", "rows") if c in frame}
+    dimensions = [c for c, n in cardinality.items() if n > 1]
     if not dimensions:
         st.info("Nothing varies in this stage.")
     else:
         left, right = st.columns(2)
         x_field = left.selectbox("Compare across", dimensions, key="cmp_x")
-        colour_options = ["(none)"] + [d for d in dimensions if d != x_field]
+        # A field with more values than the palette has slots is not offered as a
+        # colour. Offering `variant` here -- 180 distinct tuning configurations --
+        # produced a chart of 180 sub-pixel bars, 172 of them outside the colour
+        # scale's domain and so drawn with no fill: present, positioned, invisible.
+        colour_options = ["(none)"] + [d for d in dimensions
+                                       if d != x_field and cardinality[d] <= MAX_SERIES]
         colour = right.selectbox("Colour by", colour_options,
                                  index=min(1, len(colour_options) - 1), key="cmp_c")
         subset = frame.copy()
@@ -245,28 +263,49 @@ with tabs[1]:
             st.warning("Every row filtered out.")
         else:
             grouped = [x_field] + ([colour] if colour != "(none)" else [])
-            agg = (subset.groupby([c for c in grouped], dropna=False)
+            agg = (subset.groupby(grouped, dropna=False)
                    .agg(ns_per_row=("ns_per_row", "median"), cases=("ns_per_row", "size"))
                    .reset_index())
             agg[x_field] = as_text(agg[x_field])
+
+            # Categories on the x axis are capped too, and what was cut is stated.
+            # A silent top-N reads as "this is everything".
+            omitted = 0
+            if agg[x_field].nunique() > MAX_X:
+                keep = (agg.groupby(x_field)["ns_per_row"].median()
+                        .sort_values().index[:MAX_X])
+                omitted = agg[x_field].nunique() - len(keep)
+                agg = agg[agg[x_field].isin(set(keep))]
+
+            if colour != "(none)":
+                agg[colour] = as_text(agg[colour])
+
             encode = dict(
-                x=alt.X(f"{x_field}:N", sort="-y", title=x_field,
+                x=alt.X(f"{x_field}:N", sort="y", title=x_field,
                         axis=alt.Axis(labelAngle=-30, labelLimit=180)),
                 y=alt.Y("ns_per_row:Q", title="ns per row (median)",
                         scale=alt.Scale(type=scale_type, zero=not log_scale)),
                 tooltip=[alt.Tooltip(c) for c in agg.columns],
             )
             if colour != "(none)":
-                agg[colour] = as_text(agg[colour])
                 encode["color"] = alt.Color(
                     f"{colour}:N", title=colour,
-                    scale=nominal_scale(as_text(frames[stage][colour]).unique().tolist(), mode),
+                    scale=nominal_scale(agg[colour].unique().tolist(), mode),
                     legend=alt.Legend(orient="top"))
                 encode["xOffset"] = alt.XOffset(f"{colour}:N")
-            bars = alt.Chart(agg).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4,
-                                           stroke=None).encode(**encode)
-            # Direct labels: the relief the light palette's contrast WARN obliges,
-            # and only where few enough marks that they stay legible.
+            # A bar encodes magnitude from zero, and a log scale has no zero, so
+            # Vega-Lite drew no bars at all -- the labels and axes rendered and the
+            # data did not. On a log scale the honest form is a dot plot: position
+            # alone, no implied baseline.
+            if log_scale:
+                bars = alt.Chart(agg).mark_point(size=90, filled=True,
+                                                 opacity=1).encode(**encode)
+            else:
+                bars = alt.Chart(agg).mark_bar(cornerRadiusTopLeft=4,
+                                               cornerRadiusTopRight=4,
+                                               stroke=None).encode(**encode)
+            # Direct labels are the relief the light palette's contrast warning
+            # obliges, and only where few enough marks that they stay legible.
             chart = bars
             if len(agg) <= 24:
                 labels = alt.Chart(agg).mark_text(
@@ -275,12 +314,19 @@ with tabs[1]:
                     text=alt.Text("ns_per_row:Q", format=".1f"),
                     **({"xOffset": encode["xOffset"]} if colour != "(none)" else {}))
                 chart = bars + labels
-            st.altair_chart(styled(chart.properties(height=420), mode),
-                            width='stretch')
+            st.altair_chart(styled(chart.properties(height=420), mode), width='stretch')
+
+            notes = [f"medians over {int(agg['cases'].sum())} measured cases"]
+            if omitted:
+                notes.append(f"showing the {MAX_X} fastest {x_field} values, "
+                             f"{omitted} not shown")
             if not subset["has_interval"].any():
-                st.caption("This stage reports no quartiles, so no interval is drawn. "
-                           "Bars are medians over "
-                           f"{int(agg['cases'].sum())} measured cases.")
+                notes.append("this stage reports no quartiles, so no interval is drawn")
+            st.caption("; ".join(notes) + ".")
+            if cardinality.get("variant", 0) > MAX_SERIES and colour != "variant":
+                st.caption(f"`variant` has {cardinality['variant']} values here — too "
+                           "many to colour by. Put it on the x axis to rank them, or "
+                           "use the Data tab.")
 
 # --- Head to head ------------------------------------------------------------
 with tabs[2]:
@@ -305,31 +351,55 @@ with tabs[2]:
         if {a, b} <= set(pivot.columns):
             pivot = pivot.dropna(subset=[a, b]).reset_index()
             pivot["ratio"] = pivot[a] / pivot[b]
-            top = float(max(abs(pivot["ratio"].max() - 1), abs(1 - pivot["ratio"].min())))
-            marks = alt.Chart(pivot).mark_bar(
-                cornerRadiusEnd=4, height=14, stroke=None).encode(
-                y=alt.Y("shape:N", sort="x", title=None,
-                        axis=alt.Axis(labelLimit=240)),
-                x=alt.X("ratio:Q", title=f"{a} ÷ {b}",
-                        scale=alt.Scale(domain=[max(0, 1 - top * 1.1), 1 + top * 1.1])),
-                color=alt.Color("ratio:Q", title=f"{a} ÷ {b}",
-                                scale=alt.Scale(domain=[1 - top, 1, 1 + top],
-                                                range=DIVERGING[mode]),
-                                legend=alt.Legend(orient="top", gradientLength=140)),
-                tooltip=["shape", alt.Tooltip(a, format=".2f"),
-                         alt.Tooltip(b, format=".2f"), alt.Tooltip("ratio", format=".3f")])
-            parity = alt.Chart(pd.DataFrame({"x": [1.0]})).mark_rule(
-                color=INK[mode]["secondary"], strokeWidth=1).encode(x="x:Q")
-            text = alt.Chart(pivot).mark_text(
-                align="left", dx=4, fontSize=10, color=INK[mode]["secondary"]).encode(
-                y=alt.Y("shape:N", sort="x"), x="ratio:Q",
-                text=alt.Text("ratio:Q", format=".2f"))
-            st.altair_chart(
-                styled((marks + parity + text).properties(height=28 * len(pivot) + 60), mode),
-                width='stretch')
-            wins = int((pivot["ratio"] < 1).sum())
-            st.caption(f"`{a}` is faster on {wins} of {len(pivot)} shapes; "
-                       f"median ratio {pivot['ratio'].median():.2f}.")
+            if len(pivot) == 1:
+                # One shape is one number, and a one-bar chart is not a chart.
+                row = pivot.iloc[0]
+                cols = st.columns(3)
+                cols[0].metric(a, f"{row[a]:.2f} ns/row")
+                cols[1].metric(b, f"{row[b]:.2f} ns/row")
+                cols[2].metric("ratio", f"{row['ratio']:.3f}",
+                               delta=f"{(row['ratio'] - 1) * 100:+.1f}% vs parity",
+                               delta_color="inverse")
+                st.caption(f"Only one shape in this stage (`{row['shape']}`), so there "
+                           "is nothing to rank.")
+            else:
+                top = float(max(abs(pivot["ratio"].max() - 1),
+                                abs(1 - pivot["ratio"].min())))
+                span = alt.Scale(domain=[max(0.0, 1 - top * 1.25), 1 + top * 1.25])
+                colour = alt.Color("ratio:Q", title=f"{a} ÷ {b}",
+                                   scale=alt.Scale(domain=[1 - top, 1, 1 + top],
+                                                   range=DIVERGING[mode]),
+                                   legend=alt.Legend(orient="top", gradientLength=140))
+                order = alt.Y("shape:N", sort="x", title=None,
+                              axis=alt.Axis(labelLimit=240))
+                # Anchored at parity, not at zero. A bar starts at its scale's
+                # baseline, and this scale deliberately excludes zero -- so bars were
+                # clipped to nothing and the chart came out empty. A rule from 1.0 to
+                # the value says "how far from parity" and needs no baseline.
+                stems = alt.Chart(pivot).mark_rule(strokeWidth=3).encode(
+                    y=order, x=alt.X("ratio:Q", title=f"{a} ÷ {b}", scale=span),
+                    x2=alt.datum(1.0), color=colour,
+                    tooltip=["shape", alt.Tooltip(a, format=".2f"),
+                             alt.Tooltip(b, format=".2f"),
+                             alt.Tooltip("ratio", format=".3f")])
+                dots = alt.Chart(pivot).mark_point(size=90, filled=True,
+                                                   opacity=1).encode(
+                    y=order, x=alt.X("ratio:Q", scale=span), color=colour,
+                    tooltip=["shape", alt.Tooltip("ratio", format=".3f")])
+                parity = alt.Chart(pd.DataFrame({"x": [1.0]})).mark_rule(
+                    color=INK[mode]["secondary"], strokeWidth=1).encode(x="x:Q")
+                text = alt.Chart(pivot).mark_text(
+                    align="left", dx=9, fontSize=10,
+                    color=INK[mode]["secondary"]).encode(
+                    y=order, x=alt.X("ratio:Q", scale=span),
+                    text=alt.Text("ratio:Q", format=".2f"))
+                st.altair_chart(
+                    styled((parity + stems + dots + text)
+                           .properties(height=alt.Step(26)), mode), width='stretch')
+                wins = int((pivot["ratio"] < 1).sum())
+                st.caption(f"`{a}` is faster on {wins} of {len(pivot)} shapes; "
+                           f"median ratio {pivot['ratio'].median():.2f}. The line marks "
+                           "parity; length is distance from it.")
 
 # --- Scaling -----------------------------------------------------------------
 with tabs[3]:
@@ -339,7 +409,13 @@ with tabs[3]:
         frame = measured(frames["q4_scaling"])
         thread_axis = frame[frame["workers"].notna()]
         shapes = sorted(thread_axis["shape"].unique())
-        chosen = st.multiselect("Shapes", shapes, default=shapes[:6])
+        chosen = st.multiselect("Shapes", shapes, default=shapes[:MAX_SERIES],
+                                max_selections=MAX_SERIES,
+                                help=f"At most {MAX_SERIES} — one per palette slot. "
+                                     "A ninth line would have no colour.")
+        if not chosen:
+            st.info("Select at least one shape.")
+            st.stop()
         view = st.radio("Show", ["ns per row", "speedup vs 1 worker",
                                  "parallel efficiency"], horizontal=True)
         subset = thread_axis[thread_axis["shape"].isin(chosen)]
@@ -355,11 +431,15 @@ with tabs[3]:
         y = alt.Y(f"{measure}:Q", title=view,
                   scale=alt.Scale(type=scale_type if measure == "ns_per_row" else "linear",
                                   zero=measure != "ns_per_row"))
-        colour = alt.Color("shape:N", scale=nominal_scale(shapes, mode),
+        colour = alt.Color("shape:N", scale=nominal_scale(chosen, mode),
                            legend=alt.Legend(orient="top", columns=3))
         lines = alt.Chart(curve).mark_line(strokeWidth=2, point=alt.OverlayMarkDef(size=45)).encode(
             x=alt.X("workers:Q", title="workers",
-                    scale=alt.Scale(type="log", base=2, nice=False)),
+                    scale=alt.Scale(type="log", base=2, nice=False),
+                    # Only the counts that were measured. A log axis otherwise
+                    # labels 1.5 and 2.5 workers, which do not exist.
+                    axis=alt.Axis(values=sorted(curve["workers"].unique().tolist()),
+                                  format="d")),
             y=y, color=colour, strokeDash=alt.StrokeDash("algorithm:N", title="algorithm"),
             tooltip=["shape", "algorithm", "workers",
                      alt.Tooltip("ns_per_row", format=".2f"),
@@ -399,13 +479,21 @@ with tabs[4]:
                             scale=alt.Scale(range=SEQUENTIAL),
                             legend=alt.Legend(orient="top", gradientLength=160)),
             tooltip=["style", "cell", alt.Tooltip("ns_per_row", format=".1f")])
-        # A continuous scale must never be the only encoding: the number is on the cell.
-        text = alt.Chart(cell).mark_text(fontSize=10).encode(
+        # A continuous scale must never be the only encoding: the number is on the
+        # cell. Its ink flips against the ramp rather than at the data's median --
+        # the ramp's midpoint is what decides whether white or black is readable,
+        # and a plain float is used because a numpy scalar does not serialise into
+        # the Vega predicate.
+        midpoint = float(cell["ns_per_row"].min()
+                         + (cell["ns_per_row"].max() - cell["ns_per_row"].min()) * 0.55)
+        text = alt.Chart(cell).mark_text(fontSize=11).encode(
             x=alt.X("cell:N", sort=order), y="style:N",
             text=alt.Text("ns_per_row:Q", format=".0f"),
-            color=alt.condition(alt.datum.ns_per_row > cell["ns_per_row"].median(),
+            color=alt.condition(f"datum.ns_per_row > {midpoint}",
                                 alt.value("#ffffff"), alt.value("#0b0b0b")))
-        st.altair_chart(styled((heat + text).properties(height=200), mode),
+        # A band scale sized by step, not by total height: asking for 200px gave
+        # three 16px rows and dropped the middle row's axis label entirely.
+        st.altair_chart(styled((heat + text).properties(height=alt.Step(46)), mode),
                         width='stretch')
         ranked = (cell.pivot_table(index="cell", columns="style", values="ns_per_row")
                   .reindex(order))
@@ -429,18 +517,32 @@ with tabs[5]:
                .median().reset_index())
         ours = {"quicksort", "samplesort"}
         agg["side"] = agg["algorithm"].apply(lambda a: "ours" if a in ours else "baseline")
-        chart = alt.Chart(agg).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4,
-                                        stroke=None).encode(
-            x=alt.X("algorithm:N", sort="y", title=None,
-                    axis=alt.Axis(labelAngle=-40, labelLimit=140)),
-            y=alt.Y("ns_per_row:Q", title="ns per row (median)",
+        agg["columns"] = agg["columns"].astype(int)
+        # Algorithm names on the y axis and one row per column count. Faceted into
+        # narrow columns they were rotated to -40 degrees in 150px and collided into
+        # each other; horizontally they need no rotation at all.
+        mark = dict(size=90, filled=True, opacity=1) if log_scale else {}
+        base = alt.Chart(agg).encode(
+            y=alt.Y("algorithm:N", sort="x", title=None,
+                    axis=alt.Axis(labelLimit=170)),
+            x=alt.X("ns_per_row:Q", title="ns per row (median)",
                     scale=alt.Scale(type=scale_type, zero=not log_scale)),
             color=alt.Color("side:N", title=None,
                             scale=nominal_scale(["ours", "baseline"], mode),
                             legend=alt.Legend(orient="top")),
-            column=alt.Column("columns:O", title="sort columns"),
             tooltip=["algorithm", "columns", alt.Tooltip("ns_per_row", format=".2f")])
-        st.altair_chart(styled(chart.properties(height=300, width=150), mode))
+        marks = (base.mark_point(**mark) if log_scale
+                 else base.mark_bar(cornerRadiusEnd=4, stroke=None))
+        labels = base.mark_text(align="left", dx=8, fontSize=10,
+                                color=INK[mode]["secondary"]).encode(
+            text=alt.Text("ns_per_row:Q", format=".1f"), color=alt.value(INK[mode]["secondary"]))
+        chart = (marks + labels).properties(height=alt.Step(20)).facet(
+            row=alt.Row("columns:O", title="sort columns",
+                        header=alt.Header(labelAngle=0, labelAlign="left")))
+        st.altair_chart(styled(chart, mode), width='stretch')
+        st.caption(f"{len(subset)} measured rows at {chosen_w} worker(s). "
+                   "`avx512_argsort` appears only in the 1-column row; Arrow only in "
+                   "the serial one.")
 
 # --- Data --------------------------------------------------------------------
 with tabs[6]:
