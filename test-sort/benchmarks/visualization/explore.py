@@ -90,6 +90,18 @@ def load(results_dir: str) -> dict[str, pd.DataFrame]:
             frame[key] = frame["variant"].str.extract(rf"{key}=([^/]+)", expand=False)
         frame["lanes_n"] = pd.to_numeric(frame["lanes"], errors="coerce")
 
+        # The tuner packs three separate things into one `variant` string:
+        #   clang_bool/512 cross=K8/net/f25
+        #   ^cell          ^axis ^candidate
+        # Pooling across them -- which is what a median over `variant` does -- mixes
+        # six (style, width) cells, several independent knobs and both algorithms
+        # into one number. Split them so each can be held fixed.
+        tuned = frame["variant"].str.extract(
+            r"^(?P<cell>[a-z_]+/\d+)\s+(?P<tune_axis>[a-z_]+)=(?P<candidate>.+)$")
+        frame["cell"] = tuned["cell"]
+        frame["tune_axis"] = tuned["tune_axis"]
+        frame["candidate"] = tuned["candidate"]
+
         frame["key_bits"] = frame["element_bytes"] * 8
         # Register width is the product, which is why neither factor identifies a
         # cell on its own: eight lanes is 256-bit over u32 or 512-bit over u64.
@@ -155,6 +167,20 @@ def as_text(series: pd.Series) -> pd.Series:
     return series.map(lambda value: "" if pd.isna(value) else str(value))
 
 
+def tuned_line(results_dir: str, algorithm: str, cell: str, element_bytes: int) -> str:
+    """What best_config.tsv actually recorded for this cell, so the chart can be
+    checked against the decision it fed."""
+    style, _, width = cell.partition("/")
+    key = f"{algorithm}|{style}|{width}|{element_bytes}"
+    path = Path(results_dir) / "best_config.tsv"
+    if not path.is_file():
+        return ""
+    for line in path.read_text().splitlines():
+        if line.startswith(key + "\t"):
+            return line.split("\t", 1)[1]
+    return ""
+
+
 def measured(frame: pd.DataFrame) -> pd.DataFrame:
     return frame[(frame["verified"] == "1") & frame["ns_per_element_median"].notna()]
 
@@ -179,8 +205,8 @@ log_scale = st.sidebar.checkbox("Log scale for time", value=True,
                                help="ns/row spans two orders of magnitude across stages.")
 scale_type = "log" if log_scale else "linear"
 
-tabs = st.tabs(["Run", "Compare", "Head to head", "Scaling", "Style x width",
-                "Baselines", "Data"])
+tabs = st.tabs(["Run", "Compare", "Head to head", "Tuning", "Scaling",
+                "Style x width", "Baselines", "Data"])
 
 # --- Run ---------------------------------------------------------------------
 with tabs[0]:
@@ -232,9 +258,10 @@ with tabs[1]:
     stage = st.selectbox("Stage", list(frames), format_func=STAGES.get, key="cmp_stage")
     frame = measured(frames[stage])
     cardinality = {c: as_text(frame[c]).nunique()
-                   for c in ("shape", "algorithm", "variant", "style", "lanes", "move",
-                             "detector", "workers", "columns", "element_bytes",
-                             "register_bits", "rows") if c in frame}
+                   for c in ("shape", "algorithm", "cell", "tune_axis", "candidate",
+                             "variant", "style", "lanes", "move", "detector", "workers",
+                             "columns", "element_bytes", "register_bits", "rows")
+                   if c in frame}
     dimensions = [c for c, n in cardinality.items() if n > 1]
     if not dimensions:
         st.info("Nothing varies in this stage.")
@@ -255,7 +282,11 @@ with tabs[1]:
                 continue
             values = sorted(as_text(subset[dim]).unique())
             if 1 < len(values) <= 40:
-                chosen = st.sidebar.multiselect(f"{stage} · {dim}", values, default=values,
+                # Named for the tab they belong to: these sit in the sidebar, which
+                # is visible from every tab, and a reader on the Tuning tab should
+                # not take them for its controls.
+                chosen = st.sidebar.multiselect(f"Compare · {dim}", values,
+                                                default=values,
                                                 key=f"f_{stage}_{dim}")
                 if chosen:
                     subset = subset[as_text(subset[dim]).isin(chosen)]
@@ -401,8 +432,86 @@ with tabs[2]:
                            f"median ratio {pivot['ratio'].median():.2f}. The line marks "
                            "parity; length is distance from it.")
 
-# --- Scaling -----------------------------------------------------------------
+# --- Tuning ------------------------------------------------------------------
+# Q0 does not share the other stages' shape: its rows are candidates, not
+# measurements of a fixed configuration, and a candidate is only comparable with the
+# others tried along the same knob, in the same (style, width) cell, at the same key
+# width and worker count. Everything else pooled together -- which is what a generic
+# "compare across variant" does -- averages six cells and several independent knobs
+# into one meaningless number.
 with tabs[3]:
+    if "q0_tune" not in frames:
+        st.info("q0_tune.csv is not present.")
+    else:
+        frame = measured(frames["q0_tune"])
+        frame = frame[frame["cell"].notna()]
+        if frame.empty:
+            st.info("No parsable tuning rows.")
+        else:
+            st.caption("One knob at a time, within one cell. A candidate is comparable "
+                       "only with the others tried along the same knob at the same "
+                       "cell, key width and worker count — so all four are fixed here "
+                       "rather than averaged over.")
+            # Options ordered by how much the tuner actually measured, so the tab
+            # opens on a cell it explored rather than on the alphabetically first
+            # one -- most cells are priced out on their default and hold nothing.
+            def by_volume(column):
+                counts = frame[column].value_counts()
+                return list(counts.index)
+
+            picks = st.columns(4)
+            cell = picks[0].selectbox("Cell (style/width)", by_volume("cell"),
+                                      key="tn_cell")
+            algo = picks[1].selectbox("Algorithm", by_volume("algorithm"), key="tn_algo")
+            eb = picks[2].selectbox("Key width", by_volume("element_bytes"),
+                                    format_func=lambda v: f"u{int(v) * 8}", key="tn_eb")
+            workers = picks[3].selectbox("Workers", by_volume("workers"),
+                                         format_func=lambda v: str(int(v)), key="tn_w")
+            subset = frame[(frame["cell"] == cell) & (frame["algorithm"] == algo)
+                           & (frame["element_bytes"] == eb) & (frame["workers"] == workers)]
+            if subset.empty:
+                st.warning("The tuner measured nothing for that combination — most "
+                           "cells are priced out on their default and never explored. "
+                           "The Run tab lists the drop reasons.")
+            else:
+                best = subset["ns_per_row"].min()
+                plot = subset.assign(ratio=subset["ns_per_row"] / best)
+                order = alt.Y("candidate:N", sort="x", title=None,
+                              axis=alt.Axis(labelLimit=220))
+                x = alt.X("ns_per_row:Q", title="ns per row (median)",
+                          scale=alt.Scale(type=scale_type, zero=not log_scale))
+                dots = alt.Chart(plot).mark_point(size=95, filled=True, opacity=1).encode(
+                    y=order, x=x,
+                    color=alt.Color("tune_axis:N", title="knob",
+                                    scale=nominal_scale(
+                                        sorted(frame["tune_axis"].dropna().unique()), mode),
+                                    legend=alt.Legend(orient="top")),
+                    tooltip=["tune_axis", "candidate",
+                             alt.Tooltip("ns_per_row", format=".2f"),
+                             alt.Tooltip("ratio", format=".3f")])
+                labels = alt.Chart(plot).mark_text(
+                    align="left", dx=9, fontSize=10,
+                    color=INK[mode]["secondary"]).encode(
+                    y=order, x=x, text=alt.Text("ns_per_row:Q", format=".1f"))
+                # Independent y per block. Shared, every knob's block listed every
+                # other knob's candidates -- eighteen labels per block of which one
+                # or two had a mark.
+                chart = ((dots + labels).properties(height=alt.Step(24)).facet(
+                    row=alt.Row("tune_axis:N", title=None,
+                                header=alt.Header(labelAngle=0, labelAlign="left")))
+                    .resolve_scale(y="independent"))
+                st.altair_chart(styled(chart, mode), width='stretch')
+                st.caption(f"{len(subset)} candidates; fastest {best:.2f} ns/row. Each "
+                           "block is one knob — compare within a block, not across "
+                           "them, because the tuner varies one knob at a time from a "
+                           "common default.")
+                chosen = tuned_line(results_dir, algo, cell, int(eb))
+                if chosen:
+                    st.caption(f"best_config.tsv for `{algo}|{cell}|{int(eb)}`: "
+                               f"`{chosen}`")
+
+# --- Scaling -----------------------------------------------------------------
+with tabs[4]:
     if "q4_scaling" not in frames:
         st.info("q4_scaling.csv is not present.")
     else:
@@ -459,7 +568,7 @@ with tabs[3]:
                        "coordination plus whatever the memory system will not give twice.")
 
 # --- Style x width -----------------------------------------------------------
-with tabs[4]:
+with tabs[5]:
     if "q6_portability" not in frames:
         st.info("q6_portability.csv is not present.")
     else:
@@ -501,7 +610,7 @@ with tabs[4]:
         st.dataframe(ranked.round(1), width='stretch')
 
 # --- Baselines ---------------------------------------------------------------
-with tabs[5]:
+with tabs[6]:
     if "q1_baselines" not in frames:
         st.info("q1_baselines.csv is not present.")
     else:
@@ -545,7 +654,7 @@ with tabs[5]:
                    "the serial one.")
 
 # --- Data --------------------------------------------------------------------
-with tabs[6]:
+with tabs[7]:
     st.caption("The table view. Every chart above is readable here as numbers, which is "
                "what makes the colour encodings safe to rely on.")
     stage = st.selectbox("Stage", list(frames), format_func=STAGES.get, key="raw_stage")
@@ -553,7 +662,8 @@ with tabs[6]:
     only_measured = st.checkbox("Measured rows only", value=True)
     shown = measured(frame) if only_measured else frame
     keep = [c for c in ("shape", "shape_params", "rows", "columns", "element_bytes",
-                        "algorithm", "variant", "style", "lanes", "register_bits",
+                        "algorithm", "cell", "tune_axis", "candidate",
+                        "variant", "style", "lanes", "register_bits",
                         "move", "detector", "workers", "repetitions", "ns_per_row",
                         "iqr_pct", "working_set_mib", "verified", "drop_reason")
             if c in shown]
