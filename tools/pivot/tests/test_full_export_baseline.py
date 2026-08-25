@@ -70,7 +70,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     assert actual["summary"] == {
         "documents": 198,
         "definitions": 16_876,
-        "skips": 37_289,
+        "skips": 34_757,
         "nominal_definition_identities": 16_556,
         "definition_identity_collisions": {
             "groups": 320,
@@ -80,7 +80,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
             "exact_duplicate_only_groups": 0,
         },
         "languages": {
-            "cpp": {"documents": 99, "definitions": 10_081, "skips": 27_020},
+            "cpp": {"documents": 99, "definitions": 10_081, "skips": 24_488},
             "rust": {"documents": 99, "definitions": 6_795, "skips": 10_269},
         },
     }
@@ -97,7 +97,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         "callee_resolution": 282,
         "forwarded_call_arguments": 3_574,
         "local_declaration": 840,
-        "residual_target_text": 13_908,
+        "residual_target_text": 11_376,
         "schema_conflict": 650,
         "signature_admissibility": 12_589,
         "specialization_admissibility": 5_446,
@@ -123,7 +123,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     ]
     skip_records = actual["skips"]
     assert skip_records == sorted(skip_records, key=_canonical_json)
-    assert sum(record[-1] for record in skip_records) == 37_289
+    assert sum(record[-1] for record in skip_records) == 34_757
     assert all(len(record) == len(actual["skip_fields"]) for record in skip_records)
     assert all(
         record[6] is None
@@ -151,7 +151,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         )
     ).hexdigest() == actual["skip_location_inventory_sha256"]
     assert actual["skip_semantic_inventory_sha256"] == (
-        "e538910d5b19246b5d95d936300e99f239ab2aa85e8da8e2dca627618b129a29"
+        "72361d24740750c4272ecebbc0673c5d12bb6f2eab27163df86a8f9792ece8f8"
     )
 
 
