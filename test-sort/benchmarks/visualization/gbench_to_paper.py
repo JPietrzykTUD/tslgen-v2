@@ -22,7 +22,7 @@ import json
 import os
 
 FIELDS = ["question", "binary", "shape", "shape_params", "rows", "columns",
-          "element_bytes", "algorithm", "variant", "detector", "workers",
+          "element_bytes", "algorithm", "variant", "detector", "workers", "size_level",
           "repetitions", "ns_per_element_median", "ns_per_element_p25",
           "ns_per_element_p75", "ns_materialize", "ns_sort", "ns_detect",
           "verified", "drop_reason", "host", "governor", "clock_mhz", "compiler"]
@@ -80,6 +80,11 @@ def main():
             "binary": "cosort_bench",
             "shape": fields.get("shape", ""),
             "shape_params": fields.get("sparams", ""),
+            # The cache tier the row count was derived from -- L2, LLC, 2xLLC. The
+            # row count alone does not say it, and it is the vocabulary every plot
+            # and table uses, so dropping it forced every reader to divide by the
+            # LLC size in their head.
+            "size_level": fields.get("size", ""),
             "rows": int(count),
             "columns": fields.get("cols", ""),
             # gbench also emits it as a counter, which is authoritative; the name
