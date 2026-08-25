@@ -45,7 +45,6 @@ prim<m:=(v,v)> equal(left, right):
   impls:
     [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
@@ -392,7 +391,6 @@ prim<m:=(v,v)> nequal(left, right):
   impls:
     [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
@@ -716,7 +714,6 @@ prim<m:=(v,v)> less_than(left, right):
   impls:
     [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
@@ -1226,7 +1223,6 @@ prim<m:=(v,v)> greater_than(left, right):
   impls:
     [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
@@ -1556,7 +1552,6 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
   impls:
     [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []
@@ -2017,7 +2012,6 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
   impls:
     [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        prefer_fixed_native true
         requires:
           scalar []
           clang_v128 []

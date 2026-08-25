@@ -62,7 +62,11 @@ def _compiler_basename(command: str) -> str:
 
 
 def _native_clangxx() -> str | None:
-    candidates = ("/usr/bin/clang++", shutil.which("clang++"))
+    candidates = (
+        shutil.which("clang++-22"),
+        "/usr/bin/clang++",
+        shutil.which("clang++"),
+    )
     for candidate in candidates:
         if candidate is None or not Path(candidate).is_file():
             continue
@@ -180,6 +184,8 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
 
             add_executable(clang_vector_probe main.cpp)
             target_link_libraries(clang_vector_probe PRIVATE tsl::sse2_clang)
+            target_compile_options(
+              clang_vector_probe PRIVATE -Werror=expansion-to-defined)
             """
         ).lstrip(),
         encoding="utf-8",

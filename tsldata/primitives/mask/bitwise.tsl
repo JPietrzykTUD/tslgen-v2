@@ -24,7 +24,6 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
   impls:
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512]:
       arith:
-        prefer_fixed_native true
         requires:
           clang_v128 []
           clang_v256 []
@@ -216,7 +215,6 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
   impls:
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512]:
       arith:
-        prefer_fixed_native true
         requires:
           clang_v128 []
           clang_v256 []
@@ -408,7 +406,6 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
   impls:
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512]:
       arith:
-        prefer_fixed_native true
         requires:
           clang_v128 []
           clang_v256 []
@@ -602,7 +599,6 @@ prim<m:=m> mask_binary_not(mask):
   impls:
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512]:
       arith:
-        prefer_fixed_native true
         requires:
           clang_v128 []
           clang_v256 []

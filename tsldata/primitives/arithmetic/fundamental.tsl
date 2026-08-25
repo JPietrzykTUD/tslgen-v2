@@ -70,7 +70,6 @@ prim<v:=(v,v)> add(left, right):
           """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -603,7 +602,6 @@ prim<v:=(v,v)> sub(left, right):
           """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -1391,7 +1389,6 @@ prim<v:=(v)> abs(data):
           """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ui?:
-        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false

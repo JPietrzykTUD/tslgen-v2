@@ -194,7 +194,6 @@ prim<v:=s> set1(value):
           tsil "complete(value);"
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -381,7 +380,6 @@ prim<v:=()>[value=zero] set_zero():
           tsil "complete(cast<static>(base::in, 0));"
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -765,7 +763,6 @@ prim<v:=(lanes<s>)> set(values):
           """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false

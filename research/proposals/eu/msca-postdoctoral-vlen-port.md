@@ -85,6 +85,46 @@ VLEN-PORT has four objectives:
 - Deliver a tutorial on reproducible scalable-vector experiments and a plan for
   the fellow's next independent funding step.
 
+## Showcase experiment: held-out vector-length decoder
+
+The showcase uses one standards-based kernel rather than a synthetic add loop:
+the miniblock stage of a Parquet `DELTA_BINARY_PACKED` optional `INT32` column.
+It performs bit unpacking, prefix reconstruction, validity handling, and a
+checked scalar tail. An independent Parquet reader supplies the page-level
+oracle.
+
+### Protocol
+
+Generate valid pages containing at least 64 Mi decoded values and sweep bit
+widths 1, 3, 7, 13, 21, and 31; constant, alternating, and pseudo-random delta
+patterns; 0% and 10% nulls; and every tail length up to the maximum tested
+vector length. Compare:
+
+- **U:** one unchanged vector algorithm;
+- **S:** the same semantics with capability-selected unpack, prefix, mask, and
+  tail strategies;
+- **N:** independently written AVX2, SVE, and RVV native baselines.
+
+The fellow develops and calibrates on AVX2 and one SVE machine. RVV is used only
+for emulator-backed correctness during development; a real RVV board, its
+effective vector length, and one compiler version remain sealed until the
+strategy and performance prediction are registered. The secondment host then
+repeats the held-out run from the archived package without the fellow changing
+source. Variants are randomly interleaved after warm-up, with fixed clocks,
+allocations, input bytes, and compiler flags.
+
+### Measurements and decision rule
+
+Measure decoded values/s, cycles/value, joules/value, tail overhead, code size,
+semantic mismatches, source locations changed per target, and native-normalized
+regret. The scientific lever is supported if S halves U's median regret, stays
+within 15% of N in at least 75% of registered cells, predicts held-out RVV
+regret within ten percentage points, and is independently replayed. It is absent
+for this decoder if the held-out target needs an unplanned ISA-specific
+algorithm, if S is consistently more than 30% behind N, or if U already matches
+N and capability selection adds no explanatory value. These thresholds are
+frozen pilot rules, not guaranteed fellowship outcomes.
+
 ## Training and two-way knowledge transfer
 
 MSCA evaluates researcher development, mobility, supervision, and impact as

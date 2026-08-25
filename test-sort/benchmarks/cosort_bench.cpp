@@ -17,6 +17,7 @@
  *
  *   COSORT_STAGE       screen | tune | characterize | attribute  (default screen)
  *   COSORT_STYLES      intr,clang,clang_bool      which implementation families
+ *   COSORT_MOVEMENTS   direct,index               permute columns, or a row index
  *   COSORT_WIDTHS      128,256,512                register widths in bits
  *   COSORT_ELEMENTS    4,8                        element widths in bytes
  *   COSORT_SHAPES      dataset id prefixes, e.g. unique_last_g64; empty = all
@@ -24,6 +25,7 @@
  *   COSORT_COLUMNS     sort-column counts
  *   COSORT_DIRECTIONS  0 asc, 1 desc, 2 alternating
  *   COSORT_VARIANTS    algorithm names to keep, e.g. post_3way_ins; empty = stage default
+ *   COSORT_SKIP_VARIANTS  name prefixes to drop, e.g. deep_parallel; empty = drop none
  *   COSORT_RLE         detector backends: scalar,dml_sw,dsa_hw,dml_sw_async,
  *                      dsa_hw_async,iaa_hw,iaa_hw_async -- whichever the build has
  *   COSORT_REGION_BYTES / COSORT_MIN_OFFLOAD / COSORT_DSA_SLOTS / COSORT_DSA_DEPTH
@@ -37,6 +39,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <chrono>
 #include <cstdlib>
 #include <numeric>
 #include <stdexcept>
@@ -47,69 +50,21 @@
 #include <benchmark/benchmark.h>
 
 #include "cosort_case.hpp"
+#include "sorting/sample_sort/samplesort_multicolumn.hpp"
+#include "sorting/quicksort/multicolumn_index_sort.hpp"
 #include "cosort_detectors.hpp"
+#include "common/cpu_affinity.hpp"
 #include "cosort_plan.hpp"
-#include "dataset_catalog.hpp"
-#include "dataset_descriptor.hpp"
+#include "datagen/dataset_catalog.hpp"
+#include "datagen/dataset_descriptor.hpp"
+#include "tsl_simd_for.hpp"
 
 namespace {
 
-// --- style and width to a TSL vector type -----------------------------------
-
-template <class DataType, TslStyle Style, std::size_t Width>
-struct tsl_simd_for;
-
-template <class DataType> struct tsl_simd_for<DataType, TslStyle::Intrinsics, 128> {
-  using type = tsl::simd<DataType, tsl::sse>;
-};
-template <class DataType> struct tsl_simd_for<DataType, TslStyle::Intrinsics, 256> {
-  using type = tsl::simd<DataType, tsl::avx2>;
-};
-template <class DataType> struct tsl_simd_for<DataType, TslStyle::Intrinsics, 512> {
-  using type = tsl::simd<DataType, tsl::avx512>;
-};
-
-#if defined(TSL_COSORT_HAVE_CLANG_STYLE)
-template <class DataType> struct tsl_simd_for<DataType, TslStyle::ClangBuiltin, 128> {
-  using type = tsl::simd<DataType, tsl::clang_v128>;
-};
-template <class DataType> struct tsl_simd_for<DataType, TslStyle::ClangBuiltin, 256> {
-  using type = tsl::simd<DataType, tsl::clang_v256>;
-};
-template <class DataType> struct tsl_simd_for<DataType, TslStyle::ClangBuiltin, 512> {
-  using type = tsl::simd<DataType, tsl::clang_v512>;
-};
-constexpr bool tsl_clang_style_available = true;
-#else
-// The clang profile header needs a clang new enough for its elementwise builtins;
-// CMake probes for that and only then defines TSL_COSORT_HAVE_CLANG_STYLE. The
-// style axis stays in the model either way, so a run reports what it could not
-// measure instead of silently omitting it.
-template <class DataType, std::size_t Width> struct tsl_simd_for<DataType, TslStyle::ClangBuiltin, Width> {
-  using type = tsl::simd<DataType, tsl::avx512>;  // never registered; keeps the table total
-};
-constexpr bool tsl_clang_style_available = false;
-#endif
-
-#if defined(TSL_COSORT_HAVE_CLANG_BOOL_STYLE)
-template <class DataType> struct tsl_simd_for<DataType, TslStyle::ClangBoolMask, 128> {
-  using type = tsl::simd<DataType, tsl::clang_v128_bool>;
-};
-template <class DataType> struct tsl_simd_for<DataType, TslStyle::ClangBoolMask, 256> {
-  using type = tsl::simd<DataType, tsl::clang_v256_bool>;
-};
-template <class DataType> struct tsl_simd_for<DataType, TslStyle::ClangBoolMask, 512> {
-  using type = tsl::simd<DataType, tsl::clang_v512_bool>;
-};
-constexpr bool tsl_clang_bool_style_available = true;
-#else
-// `clang_v*_bool` additionally needs the ext_vector_type boolean extension, which
-// is a separate capability from the elementwise builtins, so it gets its own probe.
-template <class DataType, std::size_t Width> struct tsl_simd_for<DataType, TslStyle::ClangBoolMask, Width> {
-  using type = tsl::simd<DataType, tsl::avx512>;  // never registered; keeps the table total
-};
-constexpr bool tsl_clang_bool_style_available = false;
-#endif
+// The longest equal run two-way partitioning may face above the size cap. Eight is
+// generous: at that length the quadratic term is 32 comparisons per run, which is
+// inside the noise, while the 512-long runs of independent_uniform_c1024 are not.
+inline constexpr double tsl_two_way_run_cap = 8.0;
 
 constexpr auto tsl_style_available(TslStyle style) -> bool {
   switch (style) {
@@ -164,15 +119,27 @@ auto load_plan() -> TslStagePlan {
       plan.styles.push_back(tsl_style_from_name(token));
     }
   }
+  if (auto const * value = std::getenv("COSORT_MOVEMENTS")) {
+    plan.movements.clear();
+    for (auto const & token : split_list(value)) {
+      plan.movements.push_back(tsl_movement_from_name(token));
+    }
+    if (plan.movements.empty()) plan.movements = {TslMovement::Direct};
+  }
   plan.widths = env_numeric_list<std::size_t>("COSORT_WIDTHS", plan.widths);
   plan.element_bytes = env_numeric_list<std::size_t>("COSORT_ELEMENTS", plan.element_bytes);
   plan.size_levels = env_numeric_list<std::size_t>("COSORT_SIZE_LEVELS", plan.size_levels);
+  // The key-width axis, overridable like every other. The attribute stage runs both
+  // widths because lane count is what separates one style's codegen from another's,
+  // which doubles it -- and without a knob there was no way to halve it again on a
+  // host where that stage is the long pole.
+  plan.element_bytes = env_numeric_list<std::size_t>("COSORT_ELEMENT_BYTES", plan.element_bytes);
   plan.columns = env_numeric_list<std::size_t>("COSORT_COLUMNS", plan.columns);
   plan.directions = env_numeric_list<int>("COSORT_DIRECTIONS", plan.directions);
   if (auto const * value = std::getenv("COSORT_SHAPES")) plan.shapes = split_list(value);
   plan.worker_count = static_cast<std::size_t>(env_u64(
     "COSORT_WORKERS",
-    plan.worker_count == 0 ? std::max(1u, std::thread::hardware_concurrency()) : plan.worker_count
+    plan.worker_count == 0 ? tsl_usable_cpu_count() : plan.worker_count
   ));
   plan.task_threshold = static_cast<std::size_t>(env_u64("COSORT_TASK_THRESHOLD", plan.task_threshold));
   plan.partition_threshold =
@@ -219,10 +186,12 @@ auto case_name(
   TslStagePlan const & plan,
   TslDetectorBackend backend,
   bool parallel,
-  bool deep
+  bool deep,
+  TslMovement movement
 ) -> std::string {
   auto name = algorithm
     + "/" + type_name
+    + "/move=" + tsl_movement_name(movement)
     + "/style=" + style
     + "/lanes=" + lanes
     + "/shape=" + tsl_dataset_label(spec)
@@ -290,7 +259,7 @@ void publish(
 // --- the measured body ------------------------------------------------------
 
 template <class DataType, TslStyle Style, std::size_t Width,
-          TslPartitionKind Partition, TslLeafKind Leaf>
+          TslPartitionKind Partition, TslLeafKind Leaf, std::size_t FillPercent>
 void run_case(
   benchmark::State & state,
   TslVariant variant,
@@ -300,7 +269,8 @@ void run_case(
   TslStagePlan plan
 ) {
   using Simd = typename tsl_simd_for<DataType, Style, Width>::type;
-  using Sorter = TslMultiColumnQuickSorter<DataType, Partition, Leaf, 16, Simd>;
+  using Sorter =
+    TslMultiColumnQuickSorter<DataType, Partition, Leaf, 16, Simd, FillPercent>;
 
   TslBenchCase<DataType> data(spec, direction_of(direction), plan.cache_bytes);
   Sorter sorter(tsl_spec_seed(spec) ^ static_cast<std::uint64_t>(direction));
@@ -355,6 +325,10 @@ void run_case(
   }
   publish(state, data.rows(), data.column_count(), Simd::lane_count_v, sizeof(DataType),
           variant.algorithm_id(), &metrics, plan.describe_datasets ? &descriptor : nullptr);
+  if constexpr (FillPercent != 0) {
+    // The rule is derived from type and lane count, so record which one ran.
+    state.counters["hybrid_fill_percent"] = static_cast<double>(FillPercent);
+  }
 }
 
 template <class DataType>
@@ -400,12 +374,180 @@ void run_baseline(
   publish(state, data.rows(), spec.columns, 0, sizeof(DataType), 0, nullptr, nullptr);
 }
 
+// The indirect body: the columns stay read-only and the sort produces a row
+// permutation, so the oracle is the value image the permutation selects.
+template <class DataType, TslStyle Style, std::size_t Width,
+          TslPartitionKind Partition, TslLeafKind Leaf, std::size_t FillPercent>
+void run_index_case(
+  benchmark::State & state,
+  TslVariant variant,
+  TslDatasetSpec spec,
+  int direction,
+  TslDetectorBackend backend,
+  TslStagePlan plan
+) {
+  using Simd = typename tsl_simd_for<DataType, Style, Width>::type;
+  using Sorter =
+    TslMultiColumnIndexSorter<DataType, Partition, Leaf, Simd, FillPercent>;
+
+  TslBenchCase<DataType> data(spec, direction_of(direction), plan.cache_bytes);
+  Sorter sorter(tsl_spec_seed(spec) ^ static_cast<std::uint64_t>(direction));
+  TslIndexSortMetrics metrics;
+
+  // Discovery runs between levels on the materialized key buffer, so the seam is
+  // available on this serial path -- unlike the direct serial driver, which calls
+  // the scalar scan directly. Asynchronous backends are excluded at registration.
+  tsl_with_detector<DataType>(backend, plan.detector_config, [&](auto & detector) {
+    if constexpr (tsl_detector_wants_executor<std::decay_t<decltype(detector)>>::value) {
+      state.SkipWithError("asynchronous detectors have no indirect form");
+    } else {
+      auto const parallel = variant.execution != TslExecution::Serial;
+      for (auto _ : state) {
+        if (parallel) {
+          sorter.sort_index_parallel(data.specs(), data.column_count(), data.index(),
+                                     data.rows(), variant.discovery, detector,
+                                     plan.worker_count, &metrics);
+        } else {
+          sorter.sort_index(data.specs(), data.column_count(), data.index(), data.rows(),
+                            variant.discovery, detector, &metrics);
+        }
+        benchmark::DoNotOptimize(data.index());
+        benchmark::ClobberMemory();
+      }
+      // Same publication the direct path does: without it a frequency-backed row
+      // shows a plausible ratio and no way to tell how much of its discovery
+      // actually came from the counts.
+      auto const iterations = std::max<std::int64_t>(state.iterations(), 1);
+      tsl_publish_detector_metrics(detector, [&](char const * name, double value) {
+        auto const ratio = std::string(name).find("coverage") != std::string::npos
+          || std::string(name).find("frac") != std::string::npos;
+        state.counters[name] = ratio ? value : value / static_cast<double>(iterations);
+      });
+    }
+  });
+
+  if (auto const error = data.verify_index(); !error.empty()) {
+    state.SkipWithError(error.c_str());
+    return;
+  }
+
+  auto const published_iterations = std::max<std::int64_t>(state.iterations(), 1);
+  state.counters["materialized_per_row"] = data.rows() == 0
+    ? 0.0
+    : static_cast<double>(metrics.materialized_elements)
+      / static_cast<double>(published_iterations * static_cast<std::int64_t>(data.rows()));
+  state.counters["levels"] =
+    static_cast<double>(metrics.levels) / static_cast<double>(published_iterations);
+  state.counters["ranges_sorted"] =
+    static_cast<double>(metrics.ranges_sorted) / static_cast<double>(published_iterations);
+  state.counters["tasks"] =
+    static_cast<double>(metrics.tasks) / static_cast<double>(published_iterations);
+  state.counters["levels_split"] =
+    static_cast<double>(metrics.levels_split) / static_cast<double>(published_iterations);
+  TslMultiColumnSortMetrics shared{};
+  auto const per_iteration = static_cast<std::size_t>(published_iterations);
+  shared.rle_values_scanned = metrics.rle_values_scanned / per_iteration;
+  shared.direct_equal_bands = metrics.direct_equal_bands / per_iteration;
+  shared.direct_equal_band_rows = metrics.direct_equal_band_rows / per_iteration;
+  publish(state, data.rows(), data.column_count(), Simd::lane_count_v, sizeof(DataType),
+          variant.algorithm_id(), &shared, nullptr);
+  if constexpr (FillPercent != 0) {
+    state.counters["hybrid_fill_percent"] = static_cast<double>(FillPercent);
+  }
+}
+
+
+// --- samplesort, for the portability question ---------------------------------
+//
+// Q6 asks whether the implementation style and register width cost anything, and
+// until now it answered that for the quicksort only -- so "TSL gives portable
+// performance" rested on one of the two algorithms. The samplesort is not a point
+// in the quicksort's variant space (its axes are bucket count, base case, base
+// leaf, ids, movement), so it is registered separately, and with one
+// configuration per cell rather than its own product: the question here is the
+// cell, not the configuration. That configuration is the reference point the
+// descent settled on, fixed in source deliberately -- this driver is a
+// google-benchmark binary with no access to `best_config.tsv`, and a portability
+// comparison wants the *same* configuration in every cell anyway, otherwise it
+// measures tuning rather than portability.
+template <class DataType, TslStyle Style, std::size_t Width>
+void run_samplesort_case(
+  benchmark::State & state,
+  TslDatasetSpec spec,
+  int direction,
+  TslDetectorBackend backend,
+  TslStagePlan plan,
+  bool parallel
+) {
+  using Simd = typename tsl_simd_for<DataType, Style, Width>::type;
+  constexpr std::size_t base_case = 256;
+  using Sorter = TslSampleSortMultiColumn<
+    DataType, Simd, 16, TslSampleSortBuckets::Adaptive, 8, base_case,
+    TslSampleSortBase::Network, TslSampleSortIds::Byte,
+    base_case / Simd::lane_count_v, 50, TslSampleSortMovement::OutOfPlace, false>;
+
+  TslBenchCase<DataType> data(spec, direction_of(direction), plan.cache_bytes);
+  Sorter sorter;
+  TslSampleSortColumnMetrics metrics;
+
+  tsl_with_detector<DataType>(backend, plan.detector_config, [&](auto & detector) {
+    if constexpr (tsl_detector_wants_executor<std::decay_t<decltype(detector)>>::value) {
+      state.SkipWithError("asynchronous detectors have no samplesort form");
+    } else {
+      for (auto _ : state) {
+        if (parallel) {
+          sorter.sort_index_parallel(data.specs(), data.column_count(), data.index(),
+                                     data.rows(), detector, plan.worker_count,
+                                     &metrics);
+        } else {
+          sorter.sort_index(data.specs(), data.column_count(), data.index(),
+                            data.rows(), detector, &metrics);
+        }
+        benchmark::DoNotOptimize(data.index());
+        benchmark::ClobberMemory();
+      }
+      auto const iterations = std::max<std::int64_t>(state.iterations(), 1);
+      tsl_publish_detector_metrics(detector, [&](char const * name, double value) {
+        auto const ratio = std::string(name).find("coverage") != std::string::npos
+          || std::string(name).find("frac") != std::string::npos;
+        state.counters[name] = ratio ? value : value / static_cast<double>(iterations);
+      });
+    }
+  });
+
+  if (auto const error = data.verify_index(); !error.empty()) {
+    state.SkipWithError(error.c_str());
+    return;
+  }
+
+  auto const published = std::max<std::int64_t>(state.iterations(), 1);
+  state.counters["materialized_per_row"] = data.rows() == 0
+    ? 0.0
+    : static_cast<double>(metrics.materialized_elements)
+      / static_cast<double>(published * static_cast<std::int64_t>(data.rows()));
+  state.counters["ranges_sorted"] =
+    static_cast<double>(metrics.ranges) / static_cast<double>(published);
+  state.counters["deepest_column"] = static_cast<double>(metrics.deepest_column);
+  TslMultiColumnSortMetrics shared{};
+  shared.rle_values_scanned =
+    metrics.detected_elements / static_cast<std::size_t>(published);
+  // 200-series ids: the index quicksort uses 100 + its algorithmic id, so the
+  // samplesort starts above that and no published id moves.
+  publish(state, data.rows(), data.column_count(), Simd::lane_count_v,
+          sizeof(DataType), parallel ? 201 : 200, &shared, nullptr);
+}
+
 // --- registration -----------------------------------------------------------
 
 struct Registrar {
   TslStagePlan plan;
   std::vector<TslSizeLevel> levels;
   std::vector<std::string> keep_variants;   // COSORT_VARIANTS, empty keeps all
+  // COSORT_SKIP_VARIANTS, matched as a prefix. COSORT_VARIANTS is an allow-list, so
+  // excluding one family through it means naming the other twenty-four -- and
+  // "run everything except the family I am currently debugging" is the common case,
+  // not the rare one.
+  std::vector<std::string> skip_variants;
   TslDropLog drops;
   std::size_t registered = 0;
 
@@ -421,6 +563,15 @@ struct Registrar {
         return false;
       }
     }
+    if (!skip_variants.empty()) {
+      auto const name = variant.algorithm_name();
+      for (auto const & prefix : skip_variants) {
+        if (!prefix.empty() && name.rfind(prefix, 0) == 0) {
+          drops.drop(TslDropReason::StageVariant);
+          return false;
+        }
+      }
+    }
     if (!tsl_style_available(variant.style)) {
       drops.drop(TslDropReason::StyleUnavailable);
       return false;
@@ -430,11 +581,61 @@ struct Registrar {
 
   // Two-way peels one element per level out of an all-equal range, so it is
   // quadratic in the equal-run length. Registered only where that stays bounded.
+  // Two-way partitioning is quadratic in the *equal-run length*: a run of r costs
+  // about r^2/2, and there are rows/r of them, so the whole column costs rows*r/2.
+  // What decides that is the distinct-value count, which every generated spec
+  // carries -- `d` for the low-cardinality family, `c` for the uniform and
+  // hierarchy ones.
+  //
+  // This used to test the dataset's *name* instead: only labels beginning
+  // "low_cardinality" or "all_equal" were gated. `independent_uniform_c1024` was
+  // therefore admitted at every size, and at 524,288 rows over 1024 values its runs
+  // are 512 long. One such case ran for eleven and a half hours in the screen stage
+  // before it was killed -- a name-based test for a numeric property, and the
+  // property was right there in the spec.
   auto two_way_allowed(TslDatasetSpec const & spec, TslSizeLevel const & size) -> bool {
+    if (size.per_column_bytes <= plan.two_way_size_cap) {
+      return true;   // small enough that even the quadratic case is cheap
+    }
+    // Families whose duplication is the point of the shape rather than a parameter
+    // of it. A heavy-tailed distribution has no cardinality to read -- Zipf carries
+    // only its exponent -- but its head is a long equal run by construction, which
+    // is precisely what two-way cannot partition. Naming them is right here; naming
+    // them *instead of* reading the parameter where one exists was the bug.
     auto const label = tsl_dataset_label(spec);
-    auto const low_cardinality =
-      label.rfind("low_cardinality", 0) == 0 || label.rfind("all_equal", 0) == 0;
-    return !low_cardinality || size.per_column_bytes <= plan.two_way_size_cap;
+    for (auto const * family : {"low_cardinality", "all_equal", "skewed_zipf",
+                                "heavy_hitter", "duplicates_at_pivot"}) {
+      if (label.rfind(family, 0) == 0) {
+        return false;
+      }
+    }
+    // `g` is the terminal group size of the unique_last and extreme_values
+    // families. It is the equal-run length itself, not a cardinality to divide the
+    // row count by -- both generators assert `max group at level m-1 == g` in their
+    // own invariant checks. Falling through to the rows/distinct formula below found
+    // no `d`, `d1` or `c`, concluded "no cardinality, treat as unique", and admitted
+    // every group size up to 4096. Measured at the LLC size, `unique_last_g64` cost
+    // 60s per iteration for each two-way variant against 0.24s for three-way on the
+    // same data; the shape's whole point is an equal run two-way cannot partition.
+    auto const group = spec.param("g", 0.0);
+    if (group > 0.0) {
+      return group <= tsl_two_way_run_cap;
+    }
+    // The distinct-value count under any of the names the generator uses: `d` for
+    // the low-cardinality family, `d1` for the hierarchical and skewed ones, `c`
+    // for the uniform and correlated ones.
+    auto distinct = spec.param("d", 0.0);
+    if (distinct <= 0.0) {
+      distinct = spec.param("d1", 0.0);
+    }
+    if (distinct <= 0.0) {
+      distinct = spec.param("c", 0.0);
+    }
+    if (distinct <= 0.0) {
+      return true;   // no cardinality and not a skewed family: treat as unique
+    }
+    auto const run = static_cast<double>(spec.rows) / distinct;
+    return run <= tsl_two_way_run_cap;
   }
 
   auto footprint_ok(TslDatasetSpec const & spec) -> bool {
@@ -445,14 +646,20 @@ struct Registrar {
 };
 
 template <class DataType, TslStyle Style, std::size_t Width,
-          TslPartitionKind Partition, TslLeafKind Leaf>
+          TslPartitionKind Partition, TslLeafKind Leaf, std::size_t FillPercent>
 void register_leaf(Registrar & registrar, char const * type_name) {
   auto const & plan = registrar.plan;
-  for (auto execution : {TslExecution::Serial, TslExecution::Parallel,
+  for (auto movement : plan.movements) {
+   for (auto execution : {TslExecution::Serial, TslExecution::Parallel,
                          TslExecution::DeepParallel}) {
     for (auto discovery : {TslRunDiscoveryKind::POST_SORT, TslRunDiscoveryKind::INCREMENTAL}) {
-      TslVariant const variant{execution, discovery, Partition, Leaf, Style, Width};
-      if (!tsl_variant_is_implementable(variant) || !registrar.wants(variant)) {
+      TslVariant const variant{execution, discovery, Partition, Leaf, Style, Width,
+                               movement, FillPercent != 0};
+      if (!tsl_variant_is_implementable(variant)) {
+        registrar.drops.drop(TslDropReason::MovementUnsupported);
+        continue;
+      }
+      if (!registrar.wants(variant)) {
         continue;
       }
       for (auto level : plan.size_levels) {
@@ -491,19 +698,97 @@ void register_leaf(Registrar & registrar, char const * type_name) {
                 auto const name = case_name(
                   variant.algorithm_name(), type_name, tsl_style_name(Style),
                   std::to_string(tsl_simd_for<DataType, Style, Width>::type::lane_count_v),
-                  spec, direction, size, plan, backend, parallel, deep
+                  spec, direction, size, plan, backend, parallel, deep, movement
                 );
-                benchmark::RegisterBenchmark(
-                  name,
-                  [variant, spec, direction, backend, plan](benchmark::State & state) {
-                    run_case<DataType, Style, Width, Partition, Leaf>(
-                      state, variant, spec, direction, backend, plan
-                    );
-                  }
-                )->Unit(benchmark::kNanosecond)->UseRealTime();
+                if (movement == TslMovement::Index) {
+                  benchmark::RegisterBenchmark(
+                    name,
+                    [variant, spec, direction, backend, plan](benchmark::State & state) {
+                      run_index_case<DataType, Style, Width, Partition, Leaf,
+                                     FillPercent>(
+                        state, variant, spec, direction, backend, plan
+                      );
+                    }
+                  )->Unit(benchmark::kNanosecond)->UseRealTime();
+                } else {
+                  benchmark::RegisterBenchmark(
+                    name,
+                    [variant, spec, direction, backend, plan](benchmark::State & state) {
+                      run_case<DataType, Style, Width, Partition, Leaf, FillPercent>(
+                        state, variant, spec, direction, backend, plan
+                      );
+                    }
+                  )->Unit(benchmark::kNanosecond)->UseRealTime();
+                }
                 ++registrar.registered;
               }
             }
+          }
+        }
+      }
+    }
+   }
+  }
+}
+
+
+// One samplesort per cell, serial and parallel. Only the stages that ask a
+// style/width question register it; `screen` and `characterize` are about the
+// quicksort's variant space.
+template <class DataType, TslStyle Style, std::size_t Width>
+void register_samplesort(Registrar & registrar, char const * type_name) {
+  auto const & plan = registrar.plan;
+  if (plan.stage != TslStage::Attribute) {
+    return;
+  }
+  for (auto level : plan.size_levels) {
+    if (level >= registrar.levels.size()) {
+      registrar.drops.drop(TslDropReason::StageAxis);
+      continue;
+    }
+    auto const size = registrar.levels[level];
+    auto rows = static_cast<std::size_t>(size.per_column_bytes / sizeof(DataType));
+    if (rows < 2) rows = 2;
+    for (auto columns : plan.columns) {
+      auto const catalog = tsl_default_catalog(rows, columns, sizeof(DataType));
+      auto const chosen = tsl_select_datasets(catalog, plan.shapes, sizeof(DataType));
+      for (auto const & spec : chosen) {
+        if (!registrar.footprint_ok(spec)) {
+          registrar.drops.drop(TslDropReason::FootprintCap);
+          continue;
+        }
+        for (auto direction : plan.directions) {
+          for (auto backend : plan.detectors) {
+            if (!tsl_detector_compiled(backend)) {
+              registrar.drops.drop(TslDropReason::DetectorUnavailable);
+              continue;
+            }
+            // The attribute stage is serial by design -- style against style with
+            // nothing else moving -- so only the serial form is registered, and
+            // the detector predicate is asked about the equivalent quicksort
+            // variant because the seam is the same one.
+            TslVariant const equivalent{
+              TslExecution::Serial, TslRunDiscoveryKind::POST_SORT,
+              TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK, Style, Width,
+              TslMovement::Index, false};
+            if (!plan.detector_applies(equivalent, backend, spec.columns, level)) {
+              registrar.drops.drop(TslDropReason::DetectorInapplicable);
+              continue;
+            }
+            auto const name = case_name(
+              "samplesort", type_name, tsl_style_name(Style),
+              std::to_string(tsl_simd_for<DataType, Style, Width>::type::lane_count_v),
+              spec, direction, size, plan, backend, false, false, TslMovement::Index
+            );
+            benchmark::RegisterBenchmark(
+              name,
+              [spec, direction, backend, plan](benchmark::State & state) {
+                run_samplesort_case<DataType, Style, Width>(
+                  state, spec, direction, backend, plan, false
+                );
+              }
+            )->Unit(benchmark::kNanosecond)->UseRealTime();
+            ++registrar.registered;
           }
         }
       }
@@ -513,10 +798,17 @@ void register_leaf(Registrar & registrar, char const * type_name) {
 
 template <class DataType, TslStyle Style, std::size_t Width>
 void register_width(Registrar & registrar, char const * type_name) {
-  register_leaf<DataType, Style, Width, TslPartitionKind::TWO_WAY, TslLeafKind::INSERTION>(registrar, type_name);
-  register_leaf<DataType, Style, Width, TslPartitionKind::TWO_WAY, TslLeafKind::NETWORK>(registrar, type_name);
-  register_leaf<DataType, Style, Width, TslPartitionKind::THREE_WAY, TslLeafKind::INSERTION>(registrar, type_name);
-  register_leaf<DataType, Style, Width, TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK>(registrar, type_name);
+  register_samplesort<DataType, Style, Width>(registrar, type_name);
+  using Simd = typename tsl_simd_for<DataType, Style, Width>::type;
+  // The hybrid's threshold is derived from this type and width, not chosen, so it
+  // is a constant here rather than an axis value.
+  constexpr std::size_t hybrid = tsl_hybrid_auto_percent<DataType, Simd>();
+  register_leaf<DataType, Style, Width, TslPartitionKind::TWO_WAY, TslLeafKind::INSERTION, 0>(registrar, type_name);
+  register_leaf<DataType, Style, Width, TslPartitionKind::TWO_WAY, TslLeafKind::NETWORK, 0>(registrar, type_name);
+  register_leaf<DataType, Style, Width, TslPartitionKind::TWO_WAY, TslLeafKind::NETWORK, hybrid>(registrar, type_name);
+  register_leaf<DataType, Style, Width, TslPartitionKind::THREE_WAY, TslLeafKind::INSERTION, 0>(registrar, type_name);
+  register_leaf<DataType, Style, Width, TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK, 0>(registrar, type_name);
+  register_leaf<DataType, Style, Width, TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK, hybrid>(registrar, type_name);
 }
 
 template <class DataType, TslStyle Style>
@@ -555,7 +847,8 @@ void register_type(Registrar & registrar, char const * type_name) {
         for (auto direction : plan.directions) {
           auto const name = case_name("std_lex_argsort", type_name, "na", "na",
                                       spec, direction, size, plan,
-                                      TslDetectorBackend::Scalar, false, false);
+                                      TslDetectorBackend::Scalar, false, false,
+                                      TslMovement::Direct);
           benchmark::RegisterBenchmark(
             name,
             [spec, direction, plan](benchmark::State & state) {
@@ -577,6 +870,7 @@ int main(int argc, char ** argv) try {
   auto const caches = tsl_detect_caches();
   registrar.levels = tsl_size_levels(caches);
   registrar.keep_variants = split_list(env_text("COSORT_VARIANTS", ""));
+  registrar.skip_variants = split_list(env_text("COSORT_SKIP_VARIANTS", ""));
 
   std::fprintf(stderr,
     "stage=%s  caches: L1=%lluKiB L2=%lluKiB LLC=%lluKiB\n",

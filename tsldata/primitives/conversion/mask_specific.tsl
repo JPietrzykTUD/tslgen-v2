@@ -518,7 +518,6 @@ prim<v:=m> to_vector(mask):
           """
     [clang_v128, clang_v256, clang_v512]:
       arith:
-        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false

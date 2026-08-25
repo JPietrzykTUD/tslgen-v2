@@ -1,11 +1,15 @@
 {
   "version": 3,
-  "cmakeMinimumRequired": { "major": 3, "minor": 20, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "clang",
       "displayName": "clang 22, release, no accelerator",
-      "description": "Baseline for every host. clang 22 is required for the clang implementation family (tsl::clang_v*), whose profile header needs __builtin_elementwise_clzg.",
+      "description": "Baseline for every host. clang 22 is required for the clang implementation family (tsl::clang_v*), whose profile header needs __builtin_elementwise_clzg. The compiler is pinned by name; the actual requirement is clang 22 or newer, so on a host with only a later one override both CMAKE_CXX_COMPILER and CMAKE_C_COMPILER, or use run_all.sh which discovers them.",
       "binaryDir": "${sourceParentDir}/tslctmp/test-sort-${presetName}",
       "cacheVariables": {
         "CMAKE_C_COMPILER": "clang-22",
@@ -44,12 +48,124 @@
         "CMAKE_BUILD_TYPE": "Release",
         "ENABLE_VQSORT_BENCHMARK": "OFF"
       }
+    },
+    {
+      "name": "bench",
+      "inherits": "clang",
+      "displayName": "clang 22, release, measurement: counters compiled out",
+      "cacheVariables": {
+        "TSL_COSORT_NO_INSTRUMENTATION": "ON"
+      },
+      "description": "Counters are compiled out, so a measured run collects nothing while it measures. run_paper.sh requires this."
+    },
+    {
+      "name": "bench-dsa",
+      "inherits": "clang",
+      "displayName": "Measurement on a host with Intel DSA",
+      "cacheVariables": {
+        "TSL_COSORT_NO_INSTRUMENTATION": "ON",
+        "TSL_COSORT_ENABLE_DSA": "ON"
+      },
+      "description": "Counters are compiled out, so a measured run collects nothing while it measures. run_paper.sh requires this."
+    },
+    {
+      "name": "bench-iaa",
+      "inherits": "clang",
+      "displayName": "Measurement on a host with Intel IAA",
+      "cacheVariables": {
+        "TSL_COSORT_NO_INSTRUMENTATION": "ON",
+        "TSL_COSORT_ENABLE_IAA": "ON"
+      },
+      "description": "Counters are compiled out, so a measured run collects nothing while it measures. run_paper.sh requires this."
+    },
+    {
+      "name": "bench-dsa-baselines",
+      "inherits": "clang",
+      "displayName": "Measurement with DSA and the Q1 external baselines",
+      "cacheVariables": {
+        "TSL_COSORT_NO_INSTRUMENTATION": "ON",
+        "TSL_COSORT_ENABLE_DSA": "ON",
+        "TSL_COSORT_ENABLE_BASELINES": "ON"
+      },
+      "description": "Counters are compiled out, so a measured run collects nothing while it measures. run_paper.sh requires this."
+    },
+    {
+      "name": "bench-iaa-baselines",
+      "inherits": "clang",
+      "displayName": "Measurement with IAA and the Q1 external baselines",
+      "cacheVariables": {
+        "TSL_COSORT_NO_INSTRUMENTATION": "ON",
+        "TSL_COSORT_ENABLE_IAA": "ON",
+        "TSL_COSORT_ENABLE_BASELINES": "ON"
+      },
+      "description": "Counters are compiled out, so a measured run collects nothing while it measures. run_paper.sh requires this."
+    },
+    {
+      "name": "phases",
+      "inherits": "clang",
+      "displayName": "Diagnosis: phase timers on. Never for published numbers.",
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "-DTSL_COSORT_PHASES=true"
+      },
+      "description": "Selects the profiled instantiation of both sorters. The timers cost 1.08x-1.28x on the samplesort and up to 1.79x on the quicksort, so run_paper.sh refuses this build."
     }
   ],
   "buildPresets": [
-    { "name": "clang", "configurePreset": "clang", "targets": ["cosort_bench", "reference", "generate_datasets", "verify_datasets"] },
-    { "name": "dsa", "configurePreset": "dsa", "targets": ["cosort_bench", "test_dsa_run_detector"] },
-    { "name": "iaa", "configurePreset": "iaa", "targets": ["cosort_bench"] },
-    { "name": "gcc", "configurePreset": "gcc", "targets": ["cosort_bench"] }
+    {
+      "name": "clang",
+      "configurePreset": "clang",
+      "targets": [
+        "cosort_bench",
+        "reference",
+        "generate_datasets",
+        "verify_datasets"
+      ]
+    },
+    {
+      "name": "dsa",
+      "configurePreset": "dsa",
+      "targets": [
+        "cosort_bench",
+        "test_dsa_run_detector"
+      ]
+    },
+    {
+      "name": "iaa",
+      "configurePreset": "iaa",
+      "targets": [
+        "cosort_bench"
+      ]
+    },
+    {
+      "name": "gcc",
+      "configurePreset": "gcc",
+      "targets": [
+        "cosort_bench"
+      ]
+    },
+    {
+      "name": "bench",
+      "configurePreset": "bench"
+    },
+    {
+      "name": "bench-dsa",
+      "configurePreset": "bench-dsa"
+    },
+    {
+      "name": "bench-iaa",
+      "configurePreset": "bench-iaa"
+    },
+    {
+      "name": "bench-dsa-baselines",
+      "configurePreset": "bench-dsa-baselines"
+    },
+    {
+      "name": "bench-iaa-baselines",
+      "configurePreset": "bench-iaa-baselines"
+    },
+    {
+      "name": "phases",
+      "configurePreset": "phases"
+    }
   ]
 }

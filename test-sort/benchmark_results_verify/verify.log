@@ -1,0 +1,74 @@
+Q0 tuning / bench_q0_tune
+host=bolvar cores=24 governor=performance clock=4059MHz load=1.80 compiler=clang 24.0
+topology: 2 NUMA node(s), 6 physical core(s) per node, 6 logical cpu(s) available to this process [pinned], LLC 30 MiB
+  !! load average above 1.0: another process is competing and these numbers are not publishable
+instrumentation=off (counters compiled out)
+measure-cell=clang_bool/512-bit
+
+u32: tuning on 4 shapes
+  tpcds_q67_sf1_u32_n65536_m4                    65536 rows x  4 columns
+  skewed_zipf_s1_u32_n65536_m4                   65536 rows x  4 columns
+  low_cardinality_d4_u32_n65536_m4               65536 rows x  4 columns
+  independent_uniform_c1024_u32_n65536_m4        65536 rows x  4 columns
+
+u64: tuning on 4 shapes
+  tpcds_q67_sf1_u64_n65536_m4                    65536 rows x  4 columns
+  skewed_zipf_s1_u64_n65536_m4                   65536 rows x  4 columns
+  low_cardinality_d4_u64_n65536_m4               65536 rows x  4 columns
+  independent_uniform_c1024_u64_n65536_m4        65536 rows x  4 columns
+
+clang_bool / 512-bit / u32 / 6 workers
+  20 configurations checked so far, 0 wrong
+
+clang_bool / 512-bit / u64 / 6 workers
+  40 configurations checked so far, 0 wrong
+
+intr / 512-bit / u32 / 6 workers
+  60 configurations checked so far, 0 wrong
+
+intr / 512-bit / u64 / 6 workers
+  80 configurations checked so far, 0 wrong
+
+clang / 512-bit / u32 / 6 workers
+  100 configurations checked so far, 0 wrong
+
+clang / 512-bit / u64 / 6 workers
+  120 configurations checked so far, 0 wrong
+
+clang_bool / 256-bit / u32 / 6 workers
+  140 configurations checked so far, 0 wrong
+
+clang_bool / 256-bit / u64 / 6 workers
+  160 configurations checked so far, 0 wrong
+
+intr / 256-bit / u32 / 6 workers
+  180 configurations checked so far, 0 wrong
+
+intr / 256-bit / u64 / 6 workers
+  200 configurations checked so far, 0 wrong
+
+clang / 256-bit / u32 / 6 workers
+  220 configurations checked so far, 0 wrong
+
+clang / 256-bit / u64 / 6 workers
+  240 configurations checked so far, 0 wrong
+
+clang_bool / 128-bit / u32 / 6 workers
+  260 configurations checked so far, 0 wrong
+
+clang_bool / 128-bit / u64 / 6 workers
+  280 configurations checked so far, 0 wrong
+
+intr / 128-bit / u32 / 6 workers
+  300 configurations checked so far, 0 wrong
+
+intr / 128-bit / u64 / 6 workers
+  320 configurations checked so far, 0 wrong
+
+clang / 128-bit / u32 / 6 workers
+  340 configurations checked so far, 0 wrong
+
+clang / 128-bit / u64 / 6 workers
+  360 configurations checked so far, 0 wrong
+
+360 configurations checked, 0 sorted wrongly

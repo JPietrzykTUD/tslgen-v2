@@ -1,0 +1,9 @@
+host: bolvar
+date: 2026-08-24T23:09:27+02:00
+kernel: Linux 6.8.0-60-generic
+cpu: Intel(R) Xeon(R) w5-3425
+cores: 6
+governor: performance
+load: 1.80 1.93 0.83
+measure-cell: clang_bool/512-bit
+devices: dsa=/dev/dsa iax=absent

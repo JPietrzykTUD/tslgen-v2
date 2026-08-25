@@ -106,6 +106,51 @@ performance and energy regret, compiler/hardware sensitivity, target-specific
 semantic duplication, and change amplification when a new operation or target
 is added.
 
+## Showcase experiment: blind cross-site portability relay
+
+The network needs evidence that a shared methodology transfers between people
+and institutions, not only that one expert can tune several targets. The relay
+therefore combines a technical portability test with a reproducibility and
+training test.
+
+### Relay task
+
+The originating doctoral project publishes a typed semantic contract, generator
+input, build manifest, oracle, and evidence schema—but no implementation for the
+three hidden receiver targets—for a nullable analytics kernel:
+
+`range filter -> compact qualifying row IDs -> gather float measure -> sum`
+
+The public training corpus spans 1%, 10%, 50%, and 90% selectivity, 0% and 10%
+nulls, clustered and random matches, and all vector-tail lengths. A coordinator
+retains additional edge cases and distributes AVX-512, SVE, and RVV targets
+among three receiving sites. Each site produces (S) a specialization through
+the shared TSL method and (N) an independently reviewed native baseline. In a
+second round, sites receive a semantic change—the gathered measure becomes
+independently nullable and its nulls must be excluded from the sum while the
+selected row IDs are preserved—and exchange targets. Assignment order is
+balanced so the result is not just an order or familiarity effect.
+
+All runs use containerized toolchains, pinned inputs, randomized variant order,
+warm-up, repeated measurements, bitwise result hashes, and a replay by a second
+site. If person-level observations are retained as research data, participation,
+consent, and reporting are handled under the host institutions' ethics rules;
+otherwise only aggregate artifact/process measures are kept.
+
+### Measurements and decision rule
+
+Record time and engineer-hours to first hidden-test pass, number of support
+interventions, undocumented assumptions found, semantic and target-specific
+lines changed, replay success, rows/s, joules/row, and S's regret relative to N.
+The network lever is present if all three sites pass the hidden corpus from the
+same semantic contract, a second site reproduces each result within the
+pre-declared confidence interval, S stays within 20% of N in at least 75% of
+benchmark cells, and the change request does not create semantic forks. It is
+absent if success depends on the originating expert, evidence cannot be replayed,
+or each target requires an independent semantic implementation. Thresholds are
+pilot gates and negative results become training material rather than being
+discarded.
+
 ## Training programme
 
 ### Network schools

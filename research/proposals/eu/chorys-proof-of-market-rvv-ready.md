@@ -85,6 +85,53 @@ Open-source use does not automatically create revenue. The project must test
 who pays, what remains open, and which assurance, maintenance, or integration
 service is scarce.
 
+## Showcase experiment: 48-hour RVV integration challenge
+
+This experiment tests the commercial lever directly: whether the product reduces
+the effort and risk of adopting RVV, rather than merely generating code that is
+fast in an internal benchmark.
+
+### Workload and comparison
+
+Two design partners receive the same hidden acceptance corpus for a nullable
+`int32` pipeline: load at least 64 Mi values, apply a one-sided threshold predicate,
+compact the qualifying values, and return a 64-bit count and checksum. The
+corpus spans selectivities of 1%, 10%, 50%, and 90%; average value and null run
+lengths of 1, 16, and 256; 0% and 10% nulls; and every tail length up to one
+vector. The working set must exceed four times the target's last-level cache.
+
+Each partner integrates two matched predicate variants in randomized order:
+
+- the RVV-READY package generated from one TSL semantic source, including the
+  build recipe, correctness tests, target manifest, and evidence report;
+- the partner's normal route, using scalar/autovectorized code or hand-written
+  RVV intrinsics and its usual qualification procedure.
+
+After first acceptance, both routes receive the same change request: replace a
+one-sided predicate with the inclusive range predicate and qualify a new
+compiler minor version. Runs use the same board, compiler flags, clock policy,
+input bytes, and output checks. A scalar implementation is the correctness and
+performance floor; an expert RVV implementation is the native-performance
+reference. TSL developers may answer documented support questions but may not
+write integration code for the partner.
+
+### Measurements and decision rule
+
+Record engineer-hours to first correct run and to qualified release, hidden-test
+failures, support interventions, change-turnaround time, rows/s, joules/row,
+binary size, and performance relative to the expert RVV reference. Report
+per-partner results as well as the paired aggregate so that one unusually strong
+engineer cannot hide a failed integration.
+
+The commercial lever is present if both partners complete without TSL-team code
+changes, the packaged route at least halves median qualification effort, has no
+semantic mismatches, and reaches at least 85% of native throughput throughout
+the declared support envelope. It is absent if adoption still requires custom
+RVV work, the evidence package does not shorten qualification, or performance
+falls below the partner's acceptance floor. These are pre-registered pilot
+screening thresholds, not promised tender outcomes; failed cells remain part of
+the product decision.
+
 ## Work plan
 
 ### WP1 — Result and rights

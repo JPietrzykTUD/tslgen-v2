@@ -42,7 +42,6 @@ prim<v:=(v,v)> binary_and(left, right):
   impls:
     [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
-        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -279,7 +278,6 @@ prim<v:=(v,v)> binary_andnot(left, right):
   impls:
     [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
-        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -523,7 +521,6 @@ prim<v:=(v,v)> binary_or(left, right):
   impls:
     [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
-        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -774,7 +771,6 @@ prim<v:=(v,v)> binary_xor(left, right):
   impls:
     [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
-        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false

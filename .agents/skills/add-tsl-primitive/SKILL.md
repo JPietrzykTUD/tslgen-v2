@@ -23,7 +23,13 @@ description: Add or update a TSL primitive in tsldata and the tslc compiler. Use
    values. Avoid raw string rewrites and avoid leaking dictionaries past catalog
    boundaries. Compiler-specific alternatives use semantic capability-selected
    implementations plus an unconditional fallback, never raw preprocessor
-   selection in implementation text.
+   selection in implementation text. For fixed-width compiler-vector overlays,
+   prefer an exact compiler operation first, including a documented vector
+   operator as well as a named builtin. Only when no exact compiler operation
+   exists may the source opt into the exact-width native `vector::fixed` facade;
+   retain an overlay-owned portable body for profiles without a native leaf.
+   Do not set `prefer_fixed_native` on an exact compiler-operation body because
+   native delegation runs before the authored body.
 6. If rendering or value tests need support, add backend capability checks before render-time surprises.
 7. When a schema, selector, region, or query vocabulary changes, also use
    `extend-tslc-authoring` and prove completion/index/query projection from the

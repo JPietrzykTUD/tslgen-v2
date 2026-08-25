@@ -1,0 +1,81 @@
+perf.corpus.post_3way_hyb.direct = 4.42416e+06
+perf.corpus.post_3way_hyb.index = 5.40949e+06
+perf.corpus.post_3way_ins.direct = 4.43593e+06
+perf.corpus.post_3way_ins.index = 5.48625e+06
+perf.corpus.post_3way_net.direct = 4.48707e+06
+perf.corpus.post_3way_net.index = 5.31638e+06
+perf.corpus.std_lex_argsort.direct = 6.83682e+07
+perf.hybrid_leaf.low_cardinality_d4.c4.hyb@1.f1 = 2.181
+perf.hybrid_leaf.low_cardinality_d4.c4.hyb@100.f100 = 2.21375
+perf.hybrid_leaf.low_cardinality_d4.c4.hyb@13.f13 = 2.19399
+perf.hybrid_leaf.low_cardinality_d4.c4.hyb@38.f38 = 2.26278
+perf.hybrid_leaf.low_cardinality_d4.c4.hyb@50.f50 = 2.22563
+perf.hybrid_leaf.low_cardinality_d4.c4.hyb@6.f6 = 2.1781
+perf.hybrid_leaf.low_cardinality_d4.c4.hyb@75.f75 = 2.31879
+perf.hybrid_leaf.low_cardinality_d4.c4.hyb@auto.f25 = 2.17757
+perf.hybrid_leaf.low_cardinality_d4.c4.ins.f0 = 2.12576
+perf.hybrid_leaf.low_cardinality_d4.c4.net.f0 = 2.31876
+perf.samplesort.classify_one_pass.u32.k16.equality.c1 = 1.00364
+perf.samplesort.classify_one_pass.u32.k16.ordered.c1 = 1.00706
+perf.samplesort.classify_one_pass.u64.k16.equality.c1 = 1.36616
+perf.samplesort.classify_one_pass.u64.k16.ordered.c1 = 1.36721
+perf.samplesort.combined_one_pass.u32.k16.equality.c1 = 2.4157
+perf.samplesort.combined_one_pass.u32.k16.ordered.c1 = 2.19361
+perf.samplesort.combined_one_pass.u64.k16.equality.c1 = 3.42181
+perf.samplesort.combined_one_pass.u64.k16.ordered.c1 = 3.40517
+perf.samplesort.distribute_key+index_one_pass.u32.k16.equality.c1 = 1.40704
+perf.samplesort.distribute_key+index_one_pass.u32.k16.ordered.c1 = 1.13076
+perf.samplesort.distribute_key+index_one_pass.u64.k16.equality.c1 = 2.05565
+perf.samplesort.distribute_key+index_one_pass.u64.k16.ordered.c1 = 2.04871
+perf.samplesort.end_to_end.u32.k16.equality.c1 = 36.8803
+perf.samplesort.end_to_end.u32.k16.equality.c16 = 30.154
+perf.samplesort.end_to_end.u32.k16.equality.c2 = 29.1358
+perf.samplesort.end_to_end.u32.k16.equality.c4 = 29.4193
+perf.samplesort.end_to_end.u32.k16.equality.c8 = 29.4663
+perf.samplesort.end_to_end.u32.k16.ordered.c1 = 28.2957
+perf.samplesort.end_to_end.u32.k32.ordered.c1 = 32.617
+perf.samplesort.end_to_end.u32.k8.equality.c1 = 31.5744
+perf.samplesort.end_to_end.u32.k8.ordered.c1 = 30.9967
+perf.samplesort.end_to_end.u64.k16.equality.c1 = 41.679
+perf.samplesort.end_to_end.u64.k16.ordered.c1 = 33.6711
+perf.samplesort.end_to_end.u64.k32.ordered.c1 = 36.472
+perf.samplesort.quicksort_parallel_net.u32.k0.-.c1 = 19.9096
+perf.samplesort.quicksort_parallel_net.u32.k0.-.c16 = 3.66968
+perf.samplesort.quicksort_parallel_net.u32.k0.-.c2 = 10.9325
+perf.samplesort.quicksort_parallel_net.u32.k0.-.c24 = 3.43602
+perf.samplesort.quicksort_parallel_net.u32.k0.-.c4 = 6.52664
+perf.samplesort.quicksort_parallel_net.u32.k0.-.c8 = 4.3854
+perf.samplesort.quicksort_parallel_net.u64.k0.-.c1 = 39.7959
+perf.samplesort.quicksort_parallel_net.u64.k0.-.c24 = 6.57962
+perf.samplesort.quicksort_parallel_net.u64.k0.-.c8 = 9.04799
+perf.samplesort.quicksort_sort_key_+_index_ins.u32.k0.-.c1 = 28.447
+perf.samplesort.quicksort_sort_key_+_index_ins.u64.k0.-.c1 = 41.8098
+perf.samplesort.quicksort_sort_key_+_index_net.u32.k0.-.c1 = 19.2399
+perf.samplesort.quicksort_sort_key_+_index_net.u64.k0.-.c1 = 38.4312
+perf.samplesort.samplesort_parallel.u32.k16.adaptive.c1 = 25.512
+perf.samplesort.samplesort_parallel.u32.k16.adaptive.c16 = 2.46847
+perf.samplesort.samplesort_parallel.u32.k16.adaptive.c2 = 13.1479
+perf.samplesort.samplesort_parallel.u32.k16.adaptive.c24 = 3.60917
+perf.samplesort.samplesort_parallel.u32.k16.adaptive.c4 = 8.51699
+perf.samplesort.samplesort_parallel.u32.k16.adaptive.c8 = 5.06839
+perf.samplesort.samplesort_parallel.u64.k16.adaptive.c1 = 30.5877
+perf.samplesort.samplesort_parallel.u64.k16.adaptive.c24 = 4.31369
+perf.samplesort.samplesort_parallel.u64.k16.adaptive.c8 = 6.6024
+perf.samplesort.std::sort_over_pairs.u32.k0.-.c1 = 59.5176
+perf.samplesort.std::sort_over_pairs.u64.k0.-.c1 = 61.8756
+perf.samplesort.std::stable_sort_over_pairs.u32.k0.-.c1 = 55.243
+perf.samplesort.std::stable_sort_over_pairs.u64.k0.-.c1 = 87.208
+test.dsa_run_detector = passed checks=2864
+test.iaa_distinct_frequencies = passed checks=1157
+test.iaa_frequency = passed checks=84
+test.iaa_run_detector = passed checks=662
+test.multicolumn_index_sort = passed checks=566
+test.multicolumn_sort = passed
+test.samplesort = passed checks=1965
+test.samplesort_multicolumn = passed checks=172
+test.sort = passed
+tree.code_lines = 25623
+tree.files_tracked = 94
+tree.headers = 31
+tree.max_depth = 3
+tree.sources = 28

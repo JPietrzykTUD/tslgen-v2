@@ -91,6 +91,46 @@ The benchmark protocol will define warm-up, repetitions, clocks, flags,
 measurement boundaries, uncertainty, and exclusion rules before the main
 experiment.
 
+## Showcase experiment: bit-packed decoder portability matrix
+
+The showcase uses valid Parquet pages so that the benchmark cannot optimize an
+invented decode loop while missing file-format semantics. The workload is an
+optional `INT32` column encoded with `RLE_DICTIONARY`: decode definition levels
+and RLE/bit-packed dictionary indices, gather dictionary values, apply a range
+predicate, compact qualifying row IDs, and return a count and checksum. A
+reference Parquet reader is the page-level oracle.
+
+### Matrix and variants
+
+Generate at least 64 Mi decoded rows with dictionary-index widths 1, 3, 7, and
+12 bits; RLE run lengths 1, 4, 32, and 256; 0%, 10%, and 50% nulls; predicate
+selectivities 1%, 10%, 50%, and 90%; and every vector-tail length. Preserve the
+exact encoded bytes across targets. Compare:
+
+- **U — uniform:** one unchanged decode algorithm;
+- **S — strategy:** one semantic source with capability-selected unpack,
+  prefix/mask, gather, compaction, and tail mechanisms;
+- **N — native:** reviewed AVX2, SVE, and RVV implementations.
+
+Run on real AVX2, SVE, and RVV systems; use QEMU only for extra VLEN correctness
+checks at 128, 256, and 512 bits. Pin compilers, clocks, allocation and page
+buffers, randomize variant order after warm-up, repeat trials, and report
+steady-state kernel time alongside whole-page decode time. Fit a strategy/cost
+model without one real machine/compiler pair and then test its sealed prediction.
+
+### Measurements and decision rule
+
+Measure decoded rows/s, cycles and joules/row, tail cost, cache traffic, peak
+temporary bytes, binary size, correctness failures, code duplication, and
+native-normalized regret. The lever is supported if S halves U's median regret,
+stays within 15% of N in at least 75% of the registered SVE/RVV cells, passes
+every reference page, and predicts held-out regret within ten percentage points.
+It is absent for this pipeline if S is target-name branching in disguise, if
+native code wins by more than 30% across broad regions, or if U already matches
+N and no strategy layer is needed. These pilot thresholds will be registered
+before measurement; every negative cell remains evidence for the research
+grant rather than being averaged away.
+
 ## Work programme
 
 ### WP1 — Specification and pilot, months 1–6

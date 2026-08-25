@@ -1,0 +1,443 @@
+// Q2: quicksort or samplesort -- which, where, and why?
+//
+// Both sort a table lexicographically by filling an index column and leaving the
+// data untouched, so this is like-for-like. What made the earlier numbers hard to
+// defend is that they came from different grids: the samplesort sweeps used their
+// own row counts and shapes while the corpus uses cache-derived size levels. This
+// drives both over one grid.
+//
+// Each samplesort row carries its phase split -- materialise, sort, detect --
+// because the interesting result is not which wins but why. The quicksort rows
+// carry no split yet: `TslMultiColumnIndexSorter` has no phase timing, and adding
+// it to a header the whole corpus instantiates is a change of its own. So the
+// attribution here is one-sided, and says so.
+//
+//   ./bench_q2_algorithms
+//   ./bench_q2_algorithms --rows 1048576 --cols 4 --shapes skewed_zipf_s1
+//   ./bench_q2_algorithms --all --csv results/q2_algorithms.csv
+
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <numeric>
+#include <string>
+#include <vector>
+
+#include "tsl_simd_for.hpp"
+#include "dataset_catalog.hpp"
+#include "dataset_reference.hpp"
+#include "dataset_source.hpp"
+#include "paper_harness.hpp"
+#include "tuned_config.hpp"
+#include "tuned_dispatch.hpp"
+#include "sorting/quicksort/multicolumn_index_sort.hpp"
+#include "sorting/sample_sort/samplesort_multicolumn.hpp"
+
+// Phase attribution is a build-time choice, not a runtime one: it selects a
+// different instantiation of both sorters. It is off unless asked for, because
+// the timers cost 1.08x-1.28x on the samplesort and up to 1.79x on the quicksort
+// -- enough to move a conclusion. Build with -DTSL_COSORT_PHASES=true when
+// attributing time; the published numbers come from a build without it.
+#if !defined(TSL_COSORT_PHASES)
+#define TSL_COSORT_PHASES false
+#endif
+
+namespace {
+
+// Shape classes rather than every parameterisation: opposite range structures,
+// which is what separates the two algorithms. `--all` takes the whole catalog.
+auto default_shapes() -> std::vector<std::string> {
+  return {"tpcds_q67_sf1", "tpcds_q67_sf100",
+          "unique_first", "unique_last_g2", "unique_last_g64", "unique_last_g4096",
+          "independent_uniform_c16", "independent_uniform_c1024",
+          "independent_uniform_c65536", "balanced_hierarchy_c64",
+          "skewed_zipf_s0.5", "skewed_zipf_s1", "skewed_zipf_s2",
+          "heavy_hitter_f90", "low_cardinality_d4"};
+}
+
+auto split(std::string const & text, char separator) -> std::vector<std::string> {
+  std::vector<std::string> parts;
+  std::size_t start = 0;
+  while (start <= text.size()) {
+    auto const cut = text.find(separator, start);
+    auto const end = cut == std::string::npos ? text.size() : cut;
+    if (end > start) {
+      parts.push_back(text.substr(start, end - start));
+    }
+    if (cut == std::string::npos) {
+      break;
+    }
+    start = cut + 1;
+  }
+  return parts;
+}
+
+template <class Key>
+auto image_matches(std::vector<std::vector<Key>> const & columns,
+                   std::vector<std::vector<Key>> const & reference,
+                   std::vector<Key> const & index) -> bool {
+  for (std::size_t column = 0; column < columns.size(); ++column) {
+    for (std::size_t at = 0; at < index.size(); ++at) {
+      if (columns[column][static_cast<std::size_t>(index[at])]
+          != reference[column][at]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// The configuration bench_q0_tune chose, or the defaults when it has not run.
+// This is not a convenience: hard-coding a knob here is how the first version of
+// this driver came to report the quicksort with a network leaf on keys where the
+// insertion leaf is up to 6.6x faster, which made a comparison look like a result.
+TslTunedConfig g_samplesort_config;
+TslTunedConfig g_quicksort_config;
+std::map<std::string, TslTunedConfig> g_tuned;
+bool g_tuned_from_file = false;
+
+// Both algorithms plus the scalar reference over one dataset. Shared so a
+// measured key and a generated one go through exactly the same measurement.
+template <class Key>
+void run_pair(TslPaperResults & results, TslDatasetSource<Key> & source,
+              TslDatasetSpec const & spec, TslPaperRow const & blank,
+              std::vector<std::size_t> const & worker_counts) {
+  // The cell this binary was built for: intr/512 unless
+  // TSL_COSORT_MEASURE_STYLE/WIDTH say otherwise. Q0 checks that default against
+  // the nine cells it measured, so a host where it is the wrong choice says so
+  // rather than reporting a quietly suboptimal number.
+  using Simd = tsl_measure_simd_t<Key>;
+  auto const columns = spec.columns;
+  auto const rows = spec.rows;
+  auto const pristine = source.pristine(spec);
+  auto const reference = source.reference(spec, TslDirection::Ascending);
+  std::vector<TslSortColumn<Key>> specs;
+  for (auto const & column : *pristine) {
+    specs.push_back(TslSortColumn<Key>{const_cast<Key *>(column.data()),
+                                       TslSortOrder::ASCENDING});
+  }
+
+  for (auto const workers : worker_counts) {
+    std::vector<Key> index(rows);
+    {
+      auto row = blank;
+      row.algorithm = "samplesort";
+      row.detector = "scalar";
+      row.workers = workers;
+      // The config's own flag, not a separate global: the selection now happens
+      // per key width, so a global computed once in main was always stale and
+      // labelled tuned rows "(default)".
+      row.variant = g_samplesort_config.describe_samplesort()
+                    + (g_samplesort_config.from_file ? " (tuned)" : " (default)");
+      TslSampleSortColumnMetrics metrics;
+      auto const dispatched = with_samplesort<Key, Simd, TSL_COSORT_PHASES>(
+        g_samplesort_config, [&](auto sorter) {
+          auto const [ok, stats] = tsl_paper_measure(
+            [&] {
+              TslIndexScalarDetector<Key> detector;
+              metrics = {};
+              if (workers > 1) {
+                sorter.sort_index_parallel(specs.data(), columns, index.data(), rows,
+                                           detector, workers, &metrics);
+              } else {
+                sorter.sort_index(specs.data(), columns, index.data(), rows, detector,
+                                  &metrics);
+              }
+            },
+            [&] { return image_matches(*pristine, *reference, index); }, rows);
+          row.verified = ok;
+          row.ns_per_element = stats;
+          auto const scale = static_cast<double>(rows);
+          row.ns_materialize = metrics.ns_materialize / scale;
+          row.ns_sort = metrics.ns_sort / scale;
+          row.ns_detect = metrics.ns_detect / scale;
+        });
+      if (dispatched) {
+        results.add(std::move(row));
+      } else {
+        results.drop(row, "tuned configuration is not instantiated in this driver: "
+                          + g_samplesort_config.describe_samplesort());
+      }
+    }
+    {
+      auto row = blank;
+      row.algorithm = "quicksort";
+      row.detector = "scalar";
+      row.workers = workers;
+      row.variant = g_quicksort_config.describe_quicksort()
+                    + (g_quicksort_config.from_file ? " (tuned)" : " (default)");
+      TslIndexSortMetrics quick_metrics;
+      auto const dispatched = with_quicksort_leaf<Key, Simd, TSL_COSORT_PHASES>(
+        g_quicksort_config, [&](auto sorter) {
+          auto const [ok, stats] = tsl_paper_measure(
+            [&] {
+              TslIndexScalarDetector<Key> detector;
+              quick_metrics = {};
+              if (workers > 1) {
+                sorter.sort_index_parallel(specs.data(), columns, index.data(), rows,
+                                           g_quicksort_config.discovery, detector,
+                                           workers,
+                                           g_quicksort_config.partition_threshold,
+                                           &quick_metrics);
+              } else {
+                sorter.sort_index(specs.data(), columns, index.data(), rows,
+                                  g_quicksort_config.discovery, detector,
+                                  &quick_metrics);
+              }
+            },
+            [&] { return image_matches(*pristine, *reference, index); }, rows);
+          row.verified = ok;
+          row.ns_per_element = stats;
+          auto const scale = static_cast<double>(rows);
+          row.ns_materialize = quick_metrics.ns_materialize / scale;
+          row.ns_sort = quick_metrics.ns_sort / scale;
+          row.ns_detect = quick_metrics.ns_detect / scale;
+        });
+      if (dispatched) {
+        results.add(std::move(row));
+      } else {
+        results.drop(row, "tuned configuration is not instantiated in this driver: "
+                          + g_quicksort_config.describe_quicksort());
+      }
+    }
+  }
+  {
+    auto row = blank;
+    row.algorithm = "std::sort lexicographic";
+    row.detector = "-";
+    row.workers = 1;
+    std::vector<Key> index(rows);
+    auto const & data = *pristine;
+    auto const [ok, stats] = tsl_paper_measure(
+      [&] {
+        std::iota(index.begin(), index.end(), Key{0});
+        std::sort(index.begin(), index.end(), [&](Key left, Key right) {
+          for (std::size_t column = 0; column < data.size(); ++column) {
+            if (data[column][left] != data[column][right]) {
+              return data[column][left] < data[column][right];
+            }
+          }
+          return false;
+        });
+      },
+      [&] { return image_matches(*pristine, *reference, index); }, rows);
+    row.verified = ok;
+    row.ns_per_element = stats;
+    results.add(std::move(row));
+  }
+}
+
+
+// The measured keys, read rather than generated. Their row count and column count
+// come from the data, so they ignore the grid's rows/cols axes -- a real key has
+// the width the query gives it.
+template <class Key>
+void run_external(TslPaperResults & results, std::string const & directory,
+                  std::vector<std::size_t> const & worker_counts) {
+  TslDatasetSource<Key> source(12ull << 30);
+  for (auto const & spec : tsl_external_catalog(directory, sizeof(Key))) {
+    auto blank = results.make_row();
+    blank.shape = spec.id.substr(0, spec.id.find("_u"));
+    blank.shape_params = "measured";
+    blank.rows = spec.rows;
+    blank.columns = spec.columns;
+    blank.element_bytes = sizeof(Key);
+    try {
+      run_pair<Key>(results, source, spec, blank, worker_counts);
+    } catch (std::exception const & error) {
+      auto row = blank;
+      row.algorithm = "-";
+      results.drop(row, std::string("could not read: ") + error.what());
+    }
+  }
+}
+
+template <class Key>
+void run_grid(TslPaperResults & results, std::vector<std::string> const & shapes,
+              std::vector<std::size_t> const & row_counts,
+              std::vector<std::size_t> const & column_counts,
+              std::vector<std::size_t> const & worker_counts) {
+  // The cell this binary was built for: intr/512 unless
+  // TSL_COSORT_MEASURE_STYLE/WIDTH say otherwise. Q0 checks that default against
+  // the nine cells it measured, so a host where it is the wrong choice says so
+  // rather than reporting a quietly suboptimal number.
+  using Simd = tsl_measure_simd_t<Key>;
+  TslDatasetSource<Key> source(8ull << 30);
+  auto const tail = "_u" + std::to_string(sizeof(Key) * 8) + "_n";
+
+  for (auto const & shape : shapes) {
+    for (auto const rows : row_counts) {
+      for (auto const columns : column_counts) {
+        auto const catalog = tsl_default_catalog(rows, columns, sizeof(Key));
+        TslDatasetSpec const * spec = nullptr;
+        for (auto const & candidate : catalog) {
+          if (candidate.id.rfind(shape + tail, 0) == 0) {
+            spec = &candidate;
+            break;
+          }
+        }
+        auto blank = results.make_row();
+        blank.shape = shape;
+        blank.rows = rows;
+        blank.columns = columns;
+        blank.element_bytes = sizeof(Key);
+        if (spec == nullptr) {
+          blank.algorithm = "-";
+          results.drop(blank, "no such dataset at this size and column count");
+          continue;
+        }
+        // `params` is a name->value map; flatten it so one CSV column carries it.
+        for (auto const & [name, value] : spec->params) {
+          if (!blank.shape_params.empty()) {
+            blank.shape_params += ';';
+          }
+          auto text = std::to_string(value);
+          // Trim the trailing zeros std::to_string leaves on a double.
+          if (text.find('.') != std::string::npos) {
+            text.erase(text.find_last_not_of('0') + 1);
+            if (!text.empty() && text.back() == '.') {
+              text.pop_back();
+            }
+          }
+          blank.shape_params += name + '=' + text;
+        }
+
+        run_pair<Key>(results, source, *spec, blank, worker_counts);
+      }
+    }
+  }
+}
+
+}  // namespace
+
+int main(int argc, char ** argv) {
+  std::vector<std::string> shapes = default_shapes();
+  std::vector<std::size_t> row_counts;      // machine-derived unless --rows
+  std::vector<std::size_t> column_counts{2, 4, 8};
+  std::vector<std::size_t> worker_counts;   // machine-derived unless --workers
+  std::vector<std::size_t> widths{4, 8};
+  std::string csv_path;
+  std::string tpcds_dir;
+  std::string tuned_path = "best_config.tsv";
+
+  for (int i = 1; i < argc; ++i) {
+    auto const flag = std::string(argv[i]);
+    auto const value = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
+    if (flag == "--shapes") {
+      shapes = split(value(), ',');
+    } else if (flag == "--rows") {
+      row_counts.clear();
+      for (auto const & part : split(value(), ',')) {
+        row_counts.push_back(std::strtoull(part.c_str(), nullptr, 10));
+      }
+    } else if (flag == "--cols") {
+      column_counts.clear();
+      for (auto const & part : split(value(), ',')) {
+        column_counts.push_back(std::strtoull(part.c_str(), nullptr, 10));
+      }
+    } else if (flag == "--workers") {
+      worker_counts.clear();
+      for (auto const & part : split(value(), ',')) {
+        worker_counts.push_back(std::strtoull(part.c_str(), nullptr, 10));
+      }
+    } else if (flag == "--element-bytes" || flag == "--widths") {
+      // `--widths` was the old name and meant element *bytes*, which reads as
+      // register width and misled a reader into thinking these drivers sweep
+      // 128/256/512. They do not: register width is bench_q0_tune's axis and
+      // bench_q6_portability's. Kept as an alias so old command lines still work.
+      if (flag == "--widths") {
+        std::printf("note: --widths means element bytes; prefer --element-bytes\n");
+      }
+      widths.clear();
+      for (auto const & part : split(value(), ',')) {
+        widths.push_back(std::strtoull(part.c_str(), nullptr, 10));
+      }
+    } else if (flag == "--tuned") {
+      tuned_path = value();
+    } else if (flag == "--tpcds-dir") {
+      tpcds_dir = value();
+    } else if (flag == "--csv") {
+      csv_path = value();
+    } else if (flag == "--all") {
+      shapes.clear();  // an empty selector means every shape the catalog offers
+    } else {
+      std::printf("unknown argument: %s\n", flag.c_str());
+      return 2;
+    }
+  }
+
+  TslPaperResults results("Q2 algorithms", "bench_q2_algorithms");
+  if (worker_counts.empty()) {
+    worker_counts = tsl_default_workers(results.machine());
+  }
+  if (row_counts.empty()) {
+    // Both regimes on purpose: one working set inside the last level and one well
+    // outside it. Which side of the cache a sort lands on changes what dominates,
+    // so it is a shape axis rather than a size to be picked.
+    row_counts = {tsl_rows_in_cache(results.machine(), 4, 4),
+                  tsl_rows_out_of_cache(results.machine(), 4, 4)};
+  }
+  std::printf("workers=%zu..%zu, rows=%zu and %zu (derived from this machine)\n",
+              worker_counts.front(), worker_counts.back(), row_counts.front(),
+              row_counts.back());
+
+  // Read the descent's answer. Without it the defaults are used and every row
+  // says "(default)", so a figure can never quietly rest on an untuned knob.
+  g_tuned = tsl_read_tuned(tuned_path);
+  g_tuned_from_file = !g_tuned.empty();
+  std::printf("tuning: %s\n  samplesort %s\n  quicksort  %s\n",
+              g_tuned_from_file ? tuned_path.c_str()
+                                : "not found, using defaults",
+              g_samplesort_config.describe_samplesort().c_str(),
+              g_quicksort_config.describe_quicksort().c_str());
+
+  if (shapes.empty()) {
+    // Every shape at the smallest requested size and column count, so `--all`
+    // stays runnable; widen the other axes explicitly.
+    auto const catalog = tsl_default_catalog(row_counts.front(),
+                                             column_counts.front(), 4);
+    auto const tail = std::string("_u32_n");
+    for (auto const & spec : catalog) {
+      auto const cut = spec.id.find(tail);
+      if (cut != std::string::npos) {
+        shapes.push_back(spec.id.substr(0, cut));
+      }
+    }
+    std::printf("--all: %zu shapes\n", shapes.size());
+  }
+
+  // Rows this run intends: every (shape, row count, column count, width) cell
+  // measures both algorithms at each worker count plus one std::sort, and the
+  // external keys add their own. Approximate is fine -- it feeds the estimate.
+  results.expect(shapes.size() * row_counts.size() * column_counts.size()
+                 * widths.size() * (worker_counts.size() * 2 + 1));
+  for (auto const width : widths) {
+    if (width == 4) {
+      // The configuration Q0 found for *this* key width. Asking for the 4-byte one
+      // while measuring 8-byte keys would report a proxy as tuned.
+      tsl_select_tuned<std::uint32_t>(g_tuned, g_samplesort_config,
+                                      g_quicksort_config);
+      if (!tpcds_dir.empty()) {
+        run_external<std::uint32_t>(results, tpcds_dir, worker_counts);
+      }
+      results.stage("u32");
+      run_grid<std::uint32_t>(results, shapes, row_counts, column_counts,
+                              worker_counts);
+    } else if (width == 8) {
+      tsl_select_tuned<std::uint64_t>(g_tuned, g_samplesort_config,
+                                      g_quicksort_config);
+      results.stage("u64");
+      run_grid<std::uint64_t>(results, shapes, row_counts, column_counts,
+                              worker_counts);
+    } else {
+      std::printf("unsupported element width: %zu\n", width);
+    }
+  }
+
+  std::printf("\n%s\n", results.summary().c_str());
+  if (!csv_path.empty()) {
+    results.write_csv(csv_path);
+  }
+  return 0;
+}

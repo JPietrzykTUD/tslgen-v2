@@ -1,0 +1,1042 @@
+[bench_q2_algorithms] 1/900 (0%) 28s elapsed, ~7h07m left   
+[bench_q2_algorithms] 5/900 (1%) 2m33s elapsed, ~7h38m left   
+[bench_q2_algorithms] 8/900 (1%) 3m04s elapsed, ~5h42m left   
+[bench_q2_algorithms] 10/900 (1%) 3m39s elapsed, ~5h24m left   
+[bench_q2_algorithms] 11/900 (1%) 4m53s elapsed, ~6h35m left   
+[bench_q2_algorithms] 12/900 (1%) 5m34s elapsed, ~6h52m left   
+[bench_q2_algorithms] 14/900 (2%) 6m24s elapsed, ~6h45m left   
+[bench_q2_algorithms] 15/900 (2%) 8m44s elapsed, ~8h36m left   
+[bench_q2_algorithms] 16/900 (2%) 9m38s elapsed, ~8h53m left   
+[bench_q2_algorithms] 18/900 (2%) 10m19s elapsed, ~8h25m left   
+[bench_q2_algorithms] 20/900 (2%) 13m15s elapsed, ~9h43m left   
+Q2 algorithms / bench_q2_algorithms
+host=bolvar cores=24 governor=performance clock=4192MHz load=1.90 compiler=clang 24.0
+topology: 2 NUMA node(s), 6 physical core(s) per node, 6 logical cpu(s) available to this process [pinned], LLC 30 MiB
+  !! load average above 1.0: another process is competing and these numbers are not publishable
+instrumentation=off (counters compiled out)
+measure-cell=clang_bool/512-bit
+workers=1..6, rows=1048576 and 8388608 (derived from this machine)
+tuning: /home/pietrzyk/tslgen-v99/test-sort/benchmark_results_verify/best_config.tsv
+  samplesort K=16/adaptive/net/base256/fill50/byteid/oop
+  quicksort  3way/net/post
+
+shape                      params        cols     rows algorithm                detector       workers    ns/elem      iqr
+tpcds_q010                 measured         8 26558236 samplesort               scalar               1      61.01     0.1%
+tpcds_q010                 measured         8 26558236 quicksort                scalar               1      47.60     0.3%
+tpcds_q010                 measured         8 26558236 samplesort               scalar               6      20.70     2.2%
+tpcds_q010                 measured         8 26558236 quicksort                scalar               6      13.28     2.2%
+tpcds_q010                 measured         8 26558236 std::sort lexicographic  -                    1     373.00     0.0%
+tpcds_q050                 measured        10 27504853 samplesort               scalar               1      42.03     0.2%
+tpcds_q050                 measured        10 27504853 quicksort                scalar               1      20.15     0.1%
+tpcds_q050                 measured        10 27504853 samplesort               scalar               6      32.15     1.5%
+tpcds_q050                 measured        10 27504853 quicksort                scalar               6      10.54     8.6%
+tpcds_q050                 measured        10 27504853 std::sort lexicographic  -                    1      86.86     0.3%
+tpcds_q064                 measured         9 26532108 samplesort               scalar               1     204.85     0.2%
+tpcds_q064                 measured         9 26532108 quicksort                scalar               1     145.27     0.2%
+tpcds_q064                 measured         9 26532108 samplesort               scalar               6      46.52     0.4%
+tpcds_q064                 measured         9 26532108 quicksort                scalar               6     125.98     1.4%
+tpcds_q064                 measured         9 26532108 std::sort lexicographic  -                    1     521.29     0.1%
+tpcds_q067                 measured         8 26856871 samplesort               scalar               1     134.37     0.1%
+tpcds_q067                 measured         8 26856871 quicksort                scalar               1     105.21     0.2%
+tpcds_q067                 measured         8 26856871 samplesort               scalar               6      34.45     2.8%
+tpcds_q067                 measured         8 26856871 quicksort                scalar               6      51.74     1.1%
+tpcds_q067                 measured         8 26856871 std::sort lexicographic  -                    1     591.44     0.3%
+tpcds_q081                 measured        15   500000 samplesort               scalar               1      19.49     3.7%
+tpcds_q081                 measured        15   500000 quicksort                scalar               1      17.37     1.1%
+tpcds_q081                 measured        15   500000 samplesort               scalar               6       9.43     2.2%
+tpcds_q081                 measured        15   500000 quicksort                scalar               6       7.56     6.4%
+tpcds_q081                 measured        15   500000 std::sort lexicographic  -                    1      75.43     2.5%
+tpcds_q67_sf1                               2  1048576 -                                             0   dropped: no such dataset at this size and column count
+tpcds_q67_sf1              sf=1             4  1048576 samplesort               scalar  [bench_q2_algorithms] 42/900 (5%) 14m08s elapsed, ~4h48m left | u32   
+[bench_q2_algorithms] 44/900 (5%) 14m44s elapsed, ~4h46m left | u32   
+[bench_q2_algorithms] 47/900 (5%) 15m54s elapsed, ~4h48m left | u32   
+             1      26.13     2.8%
+tpcds_q67_sf1              sf=1             4  1048576 quicksort                scalar               1      23.42     1.6%
+tpcds_q67_sf1              sf=1             4  1048576 samplesort               scalar               6       8.60     1.0%
+tpcds_q67_sf1              sf=1             4  1048576 quicksort                scalar               6       8.67     3.8%
+tpcds_q67_sf1              sf=1             4  1048576 std::sort lexicographic  -                    1     175.00     2.4%
+tpcds_q67_sf1              sf=1             8  1048576 samplesort               scalar               1     179.03     2.0%
+tpcds_q67_sf1              sf=1             8  1048576 quicksort                scalar               1     100.81     0.6%
+tpcds_q67_sf1              sf=1             8  1048576 samplesort               scalar               6      39.60     4.6%
+tpcds_q67_sf1              sf=1             8  1048576 quicksort                scalar               6     169.24     0.6%
+tpcds_q67_sf1              sf=1             8  1048576 std::sort lexicographic  -                    1     304.65     2.3%
+tpcds_q67_sf1                               2  8388608 -                                             0   dropped: no such dataset at this size and column count
+tpcds_q67_sf1              sf=1             4  8388608 samplesort               scalar               1      36.43     0.3%
+tpcds_q67_sf1              sf=1             4  8388608 quicksort                scalar               1      27.50     0.6%
+tpcds_q67_sf1              sf=1             4  8388608 samplesort               scalar               6      14.16     1.9%
+tpcds_q67_sf1              sf=1             4  8388608 quicksort                scalar               6      10.10     0.5%
+tpcds_q67_sf1              sf=1             4  8388608 std::sort lexicographic  -                    1     334.35     0.3%
+tpcds_q67_sf1              sf=1             8  8388608 samplesort               scalar               1     216.84     0.5%
+tpcds_q67_sf1              sf=1             8  8388608 quicksort                scalar               1     130.49     1.4%
+tpcds_q67_sf1              sf=1             8  8388608 samplesort               scalar               6      47.56     1.1%
+tpcds_q67_sf1              sf=1             8  8388608 quicksort                scalar               6     127.78     0.4%
+tpcds_q67_sf1              sf=1             8  8388608 std::sort lexicographic  -                    1     640.79     0.2%
+tpcds_q67_sf100                             2  1048576 -                                             0   dropped: no such dataset at this size and column count
+tpcds_q67_sf100            sf=100           4  1048576 samplesort               scalar               1      32.33     3.6%
+tpcds_q67_sf100            sf=100           4  1048576 quicksort                scalar               1      32.09     2.6%
+tpcds_q67_sf100            sf=100           4  1048576 samplesort               scalar               6      10.82     0.9%
+tpcds_q67_sf100            sf=100           4  1048576 quicksort                scalar               6       9.26     2.4%
+tpcds_q67_sf100            sf=100           4  1048576 std::sort lexicographic  -                    1     176.69     2.7%
+tpcds_q67_sf100            sf=100           8  1048576 samplesort               scalar               1     178.43     1.4%
+tpcds_q67_sf100            sf=100           8  1048576 quicksort                scalar               1      95.78     2.3%
+tpcds_q67_sf100            sf=100           8  1048576 samplesort               scalar               6      41.04     2.8%
+tpcds_q67_sf100            sf=100           8  1048576 quicksort                scalar               6     187.30     1.1%
+tpcds_q67_sf100            sf=100           8  1048576 std::sort lexicographic  -                    1     240.51     2.1%
+tpcds_q67_sf100                             2  8388608 -                                             0   dropped: no such dataset at this size and column count
+tpcds_q67_sf10[bench_q2_algorithms] 64/900 (7%) 16m48s elapsed, ~3h39m left | u32   
+[bench_q2_algorithms] 66/900 (7%) 17m28s elapsed, ~3h40m left | u32   
+[bench_q2_algorithms] 69/900 (8%) 18m35s elapsed, ~3h43m left | u32   
+[bench_q2_algorithms] 91/900 (10%) 19m06s elapsed, ~2h49m left | u32   
+0            sf=100           4  8388608 samplesort               scalar               1      46.58     0.5%
+tpcds_q67_sf100            sf=100           4  8388608 quicksort                scalar               1      36.16     0.7%
+tpcds_q67_sf100            sf=100           4  8388608 samplesort               scalar               6      16.37     1.5%
+tpcds_q67_sf100            sf=100           4  8388608 quicksort                scalar               6      11.94     7.0%
+tpcds_q67_sf100            sf=100           4  8388608 std::sort lexicographic  -                    1     310.26     0.4%
+tpcds_q67_sf100            sf=100           8  8388608 samplesort               scalar               1     254.31     0.1%
+tpcds_q67_sf100            sf=100           8  8388608 quicksort                scalar               1     142.96     1.2%
+tpcds_q67_sf100            sf=100           8  8388608 samplesort               scalar               6      58.80     0.6%
+tpcds_q67_sf100            sf=100           8  8388608 quicksort                scalar               6     183.49     0.3%
+tpcds_q67_sf100            sf=100           8  8388608 std::sort lexicographic  -                    1     535.52     0.2%
+unique_first                                2  1048576 samplesort               scalar               1      22.19     3.0%
+unique_first                                2  1048576 quicksort                scalar               1      18.17     1.9%
+unique_first                                2  1048576 samplesort               scalar               6       9.22     2.7%
+unique_first                                2  1048576 quicksort                scalar               6       6.50     6.1%
+unique_first                                2  1048576 std::sort lexicographic  -                    1      86.10     1.0%
+unique_first                                4  1048576 samplesort               scalar               1      21.70     3.0%
+unique_first                                4  1048576 quicksort                scalar               1      18.18     2.4%
+unique_first                                4  1048576 samplesort               scalar               6       8.82     1.6%
+unique_first                                4  1048576 quicksort                scalar               6       6.84     4.6%
+unique_first                                4  1048576 std::sort lexicographic  -                    1      85.55     1.2%
+unique_first                                8  1048576 samplesort               scalar               1      22.13     0.9%
+unique_first                                8  1048576 quicksort                scalar               1      17.88     3.4%
+unique_first                                8  1048576 samplesort               scalar               6       8.91     3.9%
+unique_first                                8  1048576 quicksort                scalar               6       7.13     3.3%
+unique_first                                8  1048576 std::sort lexicographic  -                    1      85.76     2.1%
+unique_first                                2  8388608 samplesort               scalar               1      28.37     1.5%
+unique_first                                2  8388608 quicksort                scalar               1      20.98     2.3%
+unique_first                                2  8388608 samplesort               scalar               6      14.88     3.3%
+unique_first                                2  8388608 quicksort                scalar               6       6.22     2.7%
+unique_first                                2  8388608 std::sort lexicographic  -                    1     123.27     0.7%
+unique_first                                4  8388608 samplesort               scalar               1      28.48     1.2%
+unique_first                                4  8388608 quicksort                scalar               1      20.90     1.3%
+unique_first                                4  8388608 samplesort               scalar               6      14.52     2.1%
+unique_first                                4  8388[bench_q2_algorithms] 99/900 (11%) 19m40s elapsed, ~2h39m left | u32   
+[bench_q2_algorithms] 115/900 (13%) 20m18s elapsed, ~2h18m left | u32   
+[bench_q2_algorithms] 118/900 (13%) 21m10s elapsed, ~2h20m left | u32   
+[bench_q2_algorithms] 120/900 (13%) 21m43s elapsed, ~2h21m left | u32   
+[bench_q2_algorithms] 124/900 (14%) 22m34s elapsed, ~2h21m left | u32   
+608 quicksort                scalar               6       6.19     1.8%
+unique_first                                4  8388608 std::sort lexicographic  -                    1     122.49     0.6%
+unique_first                                8  8388608 samplesort               scalar               1      29.27     1.3%
+unique_first                                8  8388608 quicksort                scalar               1      21.76     1.4%
+unique_first                                8  8388608 samplesort               scalar               6      14.66     0.7%
+unique_first                                8  8388608 quicksort                scalar               6       6.41     3.2%
+unique_first                                8  8388608 std::sort lexicographic  -                    1     122.32     0.5%
+unique_last_g2             g=2              2  1048576 samplesort               scalar               1     113.06     0.7%
+unique_last_g2             g=2              2  1048576 quicksort                scalar               1      52.16     1.3%
+unique_last_g2             g=2              2  1048576 samplesort               scalar               6     220.11     0.6%
+unique_last_g2             g=2              2  1048576 quicksort                scalar               6      59.18     3.9%
+unique_last_g2             g=2              2  1048576 std::sort lexicographic  -                    1      95.35     1.0%
+unique_last_g2             g=2              4  1048576 samplesort               scalar               1     117.78     1.6%
+unique_last_g2             g=2              4  1048576 quicksort                scalar               1      62.31     2.5%
+unique_last_g2             g=2              4  1048576 samplesort               scalar               6      26.14     3.1%
+unique_last_g2             g=2              4  1048576 quicksort                scalar               6     151.45     0.3%
+unique_last_g2             g=2              4  1048576 std::sort lexicographic  -                    1     163.77     1.4%
+unique_last_g2             g=2              8  1048576 samplesort               scalar               1     195.51     2.7%
+unique_last_g2             g=2              8  1048576 quicksort                scalar               1      99.66     0.9%
+unique_last_g2             g=2              8  1048576 samplesort               scalar               6      61.08     1.2%
+unique_last_g2             g=2              8  1048576 quicksort                scalar               6     200.12     0.9%
+unique_last_g2             g=2              8  1048576 std::sort lexicographic  -                    1     335.95     1.6%
+unique_last_g2             g=2              2  8388608 samplesort               scalar               1     155.00     0.6%
+unique_last_g2             g=2              2  8388608 quicksort                scalar               1      84.47     1.8%
+unique_last_g2             g=2              2  8388608 samplesort               scalar               6     247.26     0.4%
+unique_last_g2             g=2              2  8388608 quicksort                scalar               6      83.86    12.7%
+unique_last_g2             g=2              2  8388608 std::sort lexicographic  -                    1     152.61     1.0%
+unique_last_g2             g=2              4  8388608 samplesort               scalar               1     190.36     0.7%
+unique_last_g2             g=2              4  8388608 quicksort                scalar               1      98.34     0.9%
+unique_last_g2             g=2              4  8388608 samplesort               scalar               6      40.80     0.5%
+unique_last_g2             g=2              4  8388608 quicksort                scalar               6     176.50     0.9%
+unique_last_g2             g=2              4  8388608 std::sort lexicographic  -                    1     283.85     0.2%
+unique_last_g2             g=2              8  8388608 samplesort               scalar               1     252.40     0.2%
+unique_last_g2             g=2              8  8388608 quicksort                scalar  [bench_q2_algorithms] 126/900 (14%) 23m15s elapsed, ~2h22m left | u32   
+[bench_q2_algorithms] 129/900 (14%) 24m30s elapsed, ~2h26m left | u32   
+[bench_q2_algorithms] 149/900 (17%) 25m15s elapsed, ~2h07m left | u32   
+[bench_q2_algorithms] 154/900 (17%) 26m02s elapsed, ~2h06m left | u32   
+[bench_q2_algorithms] 159/900 (18%) 27m34s elapsed, ~2h08m left | u32   
+             1     139.29     0.8%
+unique_last_g2             g=2              8  8388608 samplesort               scalar               6      64.32     0.5%
+unique_last_g2             g=2              8  8388608 quicksort                scalar               6     189.72     0.7%
+unique_last_g2             g=2              8  8388608 std::sort lexicographic  -                    1     632.25     0.1%
+unique_last_g64            g=64             2  1048576 samplesort               scalar               1      37.94     1.0%
+unique_last_g64            g=64             2  1048576 quicksort                scalar               1      35.91     2.1%
+unique_last_g64            g=64             2  1048576 samplesort               scalar               6      15.75     1.5%
+unique_last_g64            g=64             2  1048576 quicksort                scalar               6      27.84     3.7%
+unique_last_g64            g=64             2  1048576 std::sort lexicographic  -                    1     118.68     1.3%
+unique_last_g64            g=64             4  1048576 samplesort               scalar               1      43.99     0.3%
+unique_last_g64            g=64             4  1048576 quicksort                scalar               1      39.92     4.0%
+unique_last_g64            g=64             4  1048576 samplesort               scalar               6      13.39     1.9%
+unique_last_g64            g=64             4  1048576 quicksort                scalar               6      11.52     2.2%
+unique_last_g64            g=64             4  1048576 std::sort lexicographic  -                    1     186.88     1.0%
+unique_last_g64            g=64             8  1048576 samplesort               scalar               1      64.38     2.4%
+unique_last_g64            g=64             8  1048576 quicksort                scalar               1      49.09     1.9%
+unique_last_g64            g=64             8  1048576 samplesort               scalar               6      18.53     0.4%
+unique_last_g64            g=64             8  1048576 quicksort                scalar               6      17.49     0.8%
+unique_last_g64            g=64             8  1048576 std::sort lexicographic  -                    1     384.02     1.0%
+unique_last_g64            g=64             2  8388608 samplesort               scalar               1      50.52     0.7%
+unique_last_g64            g=64             2  8388608 quicksort                scalar               1      44.27     0.7%
+unique_last_g64            g=64             2  8388608 samplesort               scalar               6      20.61     0.7%
+unique_last_g64            g=64             2  8388608 quicksort                scalar               6      34.83     3.8%
+unique_last_g64            g=64             2  8388608 std::sort lexicographic  -                    1     193.51     0.4%
+unique_last_g64            g=64             4  8388608 samplesort               scalar               1      71.58     1.1%
+unique_last_g64            g=64             4  8388608 quicksort                scalar               1      56.47     1.8%
+unique_last_g64            g=64             4  8388608 samplesort               scalar               6      19.91     1.5%
+unique_last_g64            g=64             4  8388608 quicksort                scalar               6      15.25     2.4%
+unique_last_g64            g=64             4  8388608 std::sort lexicographic  -                    1     336.59     0.2%
+unique_last_g64            g=64             8  8388608 samplesort               scalar               1     110.32     0.2%
+unique_last_g64            g=64             8  8388608 quicksort                scalar               1      74.47     0.5%
+unique_last_g64            g=64             8  8388608 samplesort               scalar               6      29.86     1.6%
+unique_last_g64            g=64             8  8388608 quicksort                scalar               6      21.58     1.5%
+unique_last_g64            g=64             8  8388608 std::sort lexicographic  -                    1     747.95     0.1%
+un[bench_q2_algorithms] 179/900 (20%) 28m13s elapsed, ~1h53m left | u32   
+[bench_q2_algorithms] 184/900 (20%) 28m58s elapsed, ~1h52m left | u32   
+[bench_q2_algorithms] 189/900 (21%) 30m36s elapsed, ~1h55m left | u32   
+ique_last_g4096          g=4096           2  1048576 samplesort               scalar               1      26.64     1.8%
+unique_last_g4096          g=4096           2  1048576 quicksort                scalar               1      20.40     2.0%
+unique_last_g4096          g=4096           2  1048576 samplesort               scalar               6       8.85     2.1%
+unique_last_g4096          g=4096           2  1048576 quicksort                scalar               6       6.22     3.8%
+unique_last_g4096          g=4096           2  1048576 std::sort lexicographic  -                    1     122.61     2.8%
+unique_last_g4096          g=4096           4  1048576 samplesort               scalar               1      34.04     1.4%
+unique_last_g4096          g=4096           4  1048576 quicksort                scalar               1      23.66     1.2%
+unique_last_g4096          g=4096           4  1048576 samplesort               scalar               6      10.18     8.8%
+unique_last_g4096          g=4096           4  1048576 quicksort                scalar               6       7.38     3.5%
+unique_last_g4096          g=4096           4  1048576 std::sort lexicographic  -                    1     195.19     1.1%
+unique_last_g4096          g=4096           8  1048576 samplesort               scalar               1      50.88     2.8%
+unique_last_g4096          g=4096           8  1048576 quicksort                scalar               1      29.84     1.4%
+unique_last_g4096          g=4096           8  1048576 samplesort               scalar               6      20.75     2.2%
+unique_last_g4096          g=4096           8  1048576 quicksort                scalar               6       9.81     4.6%
+unique_last_g4096          g=4096           8  1048576 std::sort lexicographic  -                    1     422.66     1.4%
+unique_last_g4096          g=4096           2  8388608 samplesort               scalar               1      37.74     1.2%
+unique_last_g4096          g=4096           2  8388608 quicksort                scalar               1      27.49     1.1%
+unique_last_g4096          g=4096           2  8388608 samplesort               scalar               6      13.48     2.2%
+unique_last_g4096          g=4096           2  8388608 quicksort                scalar               6       7.11     3.2%
+unique_last_g4096          g=4096           2  8388608 std::sort lexicographic  -                    1     191.66     0.3%
+unique_last_g4096          g=4096           4  8388608 samplesort               scalar               1      53.16     0.3%
+unique_last_g4096          g=4096           4  8388608 quicksort                scalar               1      35.44     1.4%
+unique_last_g4096          g=4096           4  8388608 samplesort               scalar               6      19.17     0.5%
+unique_last_g4096          g=4096           4  8388608 quicksort                scalar               6      10.19     0.6%
+unique_last_g4096          g=4096           4  8388608 std::sort lexicographic  -                    1     359.64     0.1%
+unique_last_g4096          g=4096           8  8388608 samplesort               scalar               1      85.80     0.4%
+unique_last_g4096          g=4096           8  8388608 quicksort                scalar               1      52.02     0.9%
+unique_last_g4096          g=4096           8  8388608 samplesort               scalar               6      24.64     2.4%
+unique_last_g4096          g=4096           8  8388608 quicksort                scalar               6      14.76     3.0%
+unique_last_g4096          g=4096           8  8388608 std::sort lexicographic  -                    1     879.11     0.0%
+independent_uniform_c16    c=16             2  1048576 samplesort               scalar               1       8.60     3.4%
+independent_uniform_c16    c=16             2  1048576 quicksort                scalar               1       9.22     4.7%
+independent_uniform_c16    c=16             2  1048576 samplesort               scalar               6       5.36     3.3%
+independent_uniform_c16    c=16        [bench_q2_algorithms] 210/900 (23%) 31m13s elapsed, ~1h42m left | u32   
+[bench_q2_algorithms] 214/900 (24%) 31m46s elapsed, ~1h41m left | u32   
+[bench_q2_algorithms] 216/900 (24%) 32m17s elapsed, ~1h42m left | u32   
+[bench_q2_algorithms] 219/900 (24%) 33m15s elapsed, ~1h43m left | u32   
+     2  1048576 quicksort                scalar               6       4.92     4.9%
+independent_uniform_c16    c=16             2  1048576 std::sort lexicographic  -                    1      77.04     1.6%
+independent_uniform_c16    c=16             4  1048576 samplesort               scalar               1      31.49     1.7%
+independent_uniform_c16    c=16             4  1048576 quicksort                scalar               1      26.02     0.9%
+independent_uniform_c16    c=16             4  1048576 samplesort               scalar               6      10.27     3.0%
+independent_uniform_c16    c=16             4  1048576 quicksort                scalar               6       8.76     4.4%
+independent_uniform_c16    c=16             4  1048576 std::sort lexicographic  -                    1     172.85     0.3%
+independent_uniform_c16    c=16             8  1048576 samplesort               scalar               1     132.22     3.5%
+independent_uniform_c16    c=16             8  1048576 quicksort                scalar               1      72.52     5.7%
+independent_uniform_c16    c=16             8  1048576 samplesort               scalar               6      31.53     2.1%
+independent_uniform_c16    c=16             8  1048576 quicksort                scalar               6     126.81     1.2%
+independent_uniform_c16    c=16             8  1048576 std::sort lexicographic  -                    1     239.18     1.3%
+independent_uniform_c16    c=16             2  8388608 samplesort               scalar               1      15.85     0.8%
+independent_uniform_c16    c=16             2  8388608 quicksort                scalar               1      11.65     0.7%
+independent_uniform_c16    c=16             2  8388608 samplesort               scalar               6      10.08     1.9%
+independent_uniform_c16    c=16             2  8388608 quicksort                scalar               6       5.07     0.9%
+independent_uniform_c16    c=16             2  8388608 std::sort lexicographic  -                    1     132.09     0.2%
+independent_uniform_c16    c=16             4  8388608 samplesort               scalar               1      44.07     0.9%
+independent_uniform_c16    c=16             4  8388608 quicksort                scalar               1      35.38     1.2%
+independent_uniform_c16    c=16             4  8388608 samplesort               scalar               6      15.29     0.6%
+independent_uniform_c16    c=16             4  8388608 quicksort                scalar               6      11.32     3.2%
+independent_uniform_c16    c=16             4  8388608 std::sort lexicographic  -                    1     314.38     0.2%
+independent_uniform_c16    c=16             8  8388608 samplesort               scalar               1     184.68     0.4%
+independent_uniform_c16    c=16             8  8388608 quicksort                scalar               1     110.55     0.7%
+independent_uniform_c16    c=16             8  8388608 samplesort               scalar               6      42.88     1.2%
+independent_uniform_c16    c=16             8  8388608 quicksort                scalar               6     112.44     0.7%
+independent_uniform_c16    c=16             8  8388608 std::sort lexicographic  -                    1     517.69     0.1%
+independent_uniform_c1024  c=1024           2  1048576 samplesort               scalar               1      21.45     2.3%
+independent_uniform_c1024  c=1024           2  1048576 quicksort                scalar               1      23.58     1.0%
+independent_uniform_c1024  c=1024           2  1048576 samplesort               scalar               6       8.33     3.8%
+independent_uniform_c1024  c=1024           2  1048576 quicksort                scalar               6       6.83     4.7%
+independent_uniform_c1024  c=1024           2  1048576 std::sort lexicographic  -                    1     120.65     3.5%
+independent_uniform_c1024  c=1024           4  1048576 samplesort               scalar               1      78.24     0.9%
+independent_uniform_c1024  c=1024           4  1048576 quicksort            [bench_q2_algorithms] 239/900 (27%) 33m50s elapsed, ~1h33m left | u32   
+[bench_q2_algorithms] 244/900 (27%) 34m33s elapsed, ~1h32m left | u32   
+[bench_q2_algorithms] 249/900 (28%) 35m17s elapsed, ~1h32m left | u32   
+    scalar               1      43.88     1.1%
+independent_uniform_c1024  c=1024           4  1048576 samplesort               scalar               6      19.41     3.2%
+independent_uniform_c1024  c=1024           4  1048576 quicksort                scalar               6      86.05     0.9%
+independent_uniform_c1024  c=1024           4  1048576 std::sort lexicographic  -                    1     130.07     4.3%
+independent_uniform_c1024  c=1024           8  1048576 samplesort               scalar               1      79.46     2.2%
+independent_uniform_c1024  c=1024           8  1048576 quicksort                scalar               1      43.06     1.2%
+independent_uniform_c1024  c=1024           8  1048576 samplesort               scalar               6      19.64     4.9%
+independent_uniform_c1024  c=1024           8  1048576 quicksort                scalar               6      86.13     1.1%
+independent_uniform_c1024  c=1024           8  1048576 std::sort lexicographic  -                    1     128.13     2.7%
+independent_uniform_c1024  c=1024           2  8388608 samplesort               scalar               1      32.37     2.0%
+independent_uniform_c1024  c=1024           2  8388608 quicksort                scalar               1      29.34     1.2%
+independent_uniform_c1024  c=1024           2  8388608 samplesort               scalar               6      12.69     1.0%
+independent_uniform_c1024  c=1024           2  8388608 quicksort                scalar               6       7.52     2.5%
+independent_uniform_c1024  c=1024           2  8388608 std::sort lexicographic  -                    1     176.51     0.1%
+independent_uniform_c1024  c=1024           4  8388608 samplesort               scalar               1      89.13     0.6%
+independent_uniform_c1024  c=1024           4  8388608 quicksort                scalar               1      59.69     2.7%
+independent_uniform_c1024  c=1024           4  8388608 samplesort               scalar               6      22.55     0.7%
+independent_uniform_c1024  c=1024           4  8388608 quicksort                scalar               6      43.75     0.9%
+independent_uniform_c1024  c=1024           4  8388608 std::sort lexicographic  -                    1     243.06     0.2%
+independent_uniform_c1024  c=1024           8  8388608 samplesort               scalar               1      89.02     0.4%
+independent_uniform_c1024  c=1024           8  8388608 quicksort                scalar               1      59.98     1.8%
+independent_uniform_c1024  c=1024           8  8388608 samplesort               scalar               6      22.68     1.7%
+independent_uniform_c1024  c=1024           8  8388608 quicksort                scalar               6      43.85     1.2%
+independent_uniform_c1024  c=1024           8  8388608 std::sort lexicographic  -                    1     242.00     0.3%
+independent_uniform_c65536 c=65536          2  1048576 samplesort               scalar               1      41.48     4.4%
+independent_uniform_c65536 c=65536          2  1048576 quicksort                scalar               1      33.70     1.3%
+independent_uniform_c65536 c=65536          2  1048576 samplesort               scalar               6      39.81     1.1%
+independent_uniform_c65536 c=65536          2  1048576 quicksort                scalar               6      24.12     0.6%
+independent_uniform_c65536 c=65536          2  1048576 std::sort lexicographic  -                    1     117.04     1.8%
+independent_uniform_c65536 c=65536          4  1048576 samplesort               scalar               1      43.44     2.3%
+independent_uniform_c65536 c=65536          4  1048576 quicksort                scalar               1      33.51     1.1%
+independent_uniform_c65536 c=65536          4  1048576 samplesort               scalar               6      39.77     0.4%
+independent_uniform_c65536 c=65536          4  1048576 quicksort                scalar               6      26.18    18.9%
+independent_uniform_c65536 c=65536          4  1048576 std::sort lexicographic  -                    1     116.11[bench_q2_algorithms] 269/900 (30%) 35m55s elapsed, ~1h24m left | u32   
+[bench_q2_algorithms] 274/900 (30%) 36m26s elapsed, ~1h23m left | u32   
+[bench_q2_algorithms] 279/900 (31%) 36m56s elapsed, ~1h22m left | u32   
+     2.2%
+independent_uniform_c65536 c=65536          8  1048576 samplesort               scalar               1      43.07     1.8%
+independent_uniform_c65536 c=65536          8  1048576 quicksort                scalar               1      32.68     3.8%
+independent_uniform_c65536 c=65536          8  1048576 samplesort               scalar               6      41.73     1.8%
+independent_uniform_c65536 c=65536          8  1048576 quicksort                scalar               6      25.21    18.9%
+independent_uniform_c65536 c=65536          8  1048576 std::sort lexicographic  -                    1     117.79     1.0%
+independent_uniform_c65536 c=65536          2  8388608 samplesort               scalar               1      35.82     0.3%
+independent_uniform_c65536 c=65536          2  8388608 quicksort                scalar               1      34.35     0.7%
+independent_uniform_c65536 c=65536          2  8388608 samplesort               scalar               6      15.50     2.1%
+independent_uniform_c65536 c=65536          2  8388608 quicksort                scalar               6      24.03     2.9%
+independent_uniform_c65536 c=65536          2  8388608 std::sort lexicographic  -                    1     190.50     0.5%
+independent_uniform_c65536 c=65536          4  8388608 samplesort               scalar               1      37.28     2.0%
+independent_uniform_c65536 c=65536          4  8388608 quicksort                scalar               1      35.15     0.7%
+independent_uniform_c65536 c=65536          4  8388608 samplesort               scalar               6      14.66     3.2%
+independent_uniform_c65536 c=65536          4  8388608 quicksort                scalar               6      24.37     2.3%
+independent_uniform_c65536 c=65536          4  8388608 std::sort lexicographic  -                    1     191.18     0.3%
+independent_uniform_c65536 c=65536          8  8388608 samplesort               scalar               1      38.27     0.6%
+independent_uniform_c65536 c=65536          8  8388608 quicksort                scalar               1      35.33     0.7%
+independent_uniform_c65536 c=65536          8  8388608 samplesort               scalar               6      15.77     3.4%
+independent_uniform_c65536 c=65536          8  8388608 quicksort                scalar               6      24.80     0.9%
+independent_uniform_c65536 c=65536          8  8388608 std::sort lexicographic  -                    1     188.92     0.2%
+balanced_hierarchy_c64     c=64             2  1048576 samplesort               scalar               1      13.97     4.2%
+balanced_hierarchy_c64     c=64             2  1048576 quicksort                scalar               1      15.27     2.6%
+balanced_hierarchy_c64     c=64             2  1048576 samplesort               scalar               6       6.34     0.8%
+balanced_hierarchy_c64     c=64             2  1048576 quicksort                scalar               6       6.29     3.9%
+balanced_hierarchy_c64     c=64             2  1048576 std::sort lexicographic  -                    1      95.05     1.8%
+balanced_hierarchy_c64     c=64             4  1048576 samplesort               scalar               1      74.01     0.2%
+balanced_hierarchy_c64     c=64             4  1048576 quicksort                scalar               1      46.41     1.6%
+balanced_hierarchy_c64     c=64             4  1048576 samplesort               scalar               6      17.95     4.0%
+balanced_hierarchy_c64     c=64             4  1048576 quicksort                scalar               6      85.63     1.9%
+balanced_hierarchy_c64     c=64             4  1048576 std::sort lexicographic  -                    1     171.23     2.0%
+balanced_hierarchy_c64     c=64             8  1048576 samplesort               scalar               1      78.05     1.7%
+balanced_hierarchy_c64     c=64             8  1048576 quicksort                scalar               1      45.23     3.9%
+balanced_hierarchy_c64     c=64             8  1048576 samplesort               scalar               6      18.78     4.6%
+balanced_hierarchy_c64     [bench_q2_algorithms] 299/900 (33%) 37m29s elapsed, ~1h15m left | u32   
+[bench_q2_algorithms] 304/900 (34%) 38m18s elapsed, ~1h15m left | u32   
+[bench_q2_algorithms] 309/900 (34%) 39m06s elapsed, ~1h14m left | u32   
+c=64             8  1048576 quicksort                scalar               6      85.38     1.1%
+balanced_hierarchy_c64     c=64             8  1048576 std::sort lexicographic  -                    1     170.06     1.6%
+balanced_hierarchy_c64     c=64             2  8388608 samplesort               scalar               1      19.70     0.7%
+balanced_hierarchy_c64     c=64             2  8388608 quicksort                scalar               1      17.55     0.4%
+balanced_hierarchy_c64     c=64             2  8388608 samplesort               scalar               6      10.36     2.9%
+balanced_hierarchy_c64     c=64             2  8388608 quicksort                scalar               6       6.54     9.3%
+balanced_hierarchy_c64     c=64             2  8388608 std::sort lexicographic  -                    1     155.53     0.3%
+balanced_hierarchy_c64     c=64             4  8388608 samplesort               scalar               1      70.74     0.5%
+balanced_hierarchy_c64     c=64             4  8388608 quicksort                scalar               1      53.36     0.7%
+balanced_hierarchy_c64     c=64             4  8388608 samplesort               scalar               6      18.56     1.0%
+balanced_hierarchy_c64     c=64             4  8388608 quicksort                scalar               6      15.89     5.9%
+balanced_hierarchy_c64     c=64             4  8388608 std::sort lexicographic  -                    1     331.84     0.2%
+balanced_hierarchy_c64     c=64             8  8388608 samplesort               scalar               1      72.13     0.3%
+balanced_hierarchy_c64     c=64             8  8388608 quicksort                scalar               1      52.48     0.5%
+balanced_hierarchy_c64     c=64             8  8388608 samplesort               scalar               6      19.84     1.5%
+balanced_hierarchy_c64     c=64             8  8388608 quicksort                scalar               6      16.64     3.7%
+balanced_hierarchy_c64     c=64             8  8388608 std::sort lexicographic  -                    1     328.15     0.3%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  1048576 samplesort               scalar               1      23.78     1.5%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  1048576 quicksort                scalar               1      20.78     0.9%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  1048576 samplesort               scalar               6       9.06     4.1%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  1048576 quicksort                scalar               6       6.76     7.1%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  1048576 std::sort lexicographic  -                    1     117.48     0.6%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  1048576 samplesort               scalar               1      66.08     2.0%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  1048576 quicksort                scalar               1      47.53     0.9%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  1048576 samplesort               scalar               6      16.23     2.8%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  1048576 quicksort                scalar               6      38.96     0.9%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  1048576 std::sort lexicographic  -                    1     173.10     1.3%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  1048576 samplesort               scalar               1     239.86     2.7%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  1048576 quicksort                scalar               1     118.71     1.0%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  1048576 samplesort               scalar               6      48.90     3.1%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  1048576 quicksort                scalar               6     250.49     0.9%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  1048576 std::sort lexicographic  -                    1     306.09     1.2%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  8388608 samplesort               scalar               1      32.47     0.6%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  [bench_q2_algorithms] 329/900 (37%) 39m49s elapsed, ~1h09m left | u32   
+[bench_q2_algorithms] 334/900 (37%) 40m35s elapsed, ~1h08m left | u32   
+[bench_q2_algorithms] 336/900 (37%) 41m17s elapsed, ~1h09m left | u32   
+[bench_q2_algorithms] 339/900 (38%) 42m22s elapsed, ~1h10m left | u32   
+8388608 quicksort                scalar               1      27.56     1.4%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  8388608 samplesort               scalar               6      11.10     2.3%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  8388608 quicksort                scalar               6       7.67     1.2%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  8388608 std::sort lexicographic  -                    1     196.16     0.4%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  8388608 samplesort               scalar               1      81.94     1.1%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  8388608 quicksort                scalar               1      55.09     0.1%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  8388608 samplesort               scalar               6      22.03     0.4%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  8388608 quicksort                scalar               6      22.10     1.5%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  8388608 std::sort lexicographic  -                    1     312.14     0.2%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  8388608 samplesort               scalar               1     255.60     0.1%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  8388608 quicksort                scalar               1     145.62     0.9%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  8388608 samplesort               scalar               6      52.94     0.7%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  8388608 quicksort                scalar               6     161.43     0.3%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  8388608 std::sort lexicographic  -                    1     544.42     0.0%
+skewed_zipf_s1             d1=1024;s=1      2  1048576 samplesort               scalar               1      24.62     1.6%
+skewed_zipf_s1             d1=1024;s=1      2  1048576 quicksort                scalar               1      20.43     0.8%
+skewed_zipf_s1             d1=1024;s=1      2  1048576 samplesort               scalar               6      10.65     4.3%
+skewed_zipf_s1             d1=1024;s=1      2  1048576 quicksort                scalar               6       7.36     3.5%
+skewed_zipf_s1             d1=1024;s=1      2  1048576 std::sort lexicographic  -                    1     116.81     1.4%
+skewed_zipf_s1             d1=1024;s=1      4  1048576 samplesort               scalar               1      57.67     0.8%
+skewed_zipf_s1             d1=1024;s=1      4  1048576 quicksort                scalar               1      42.31     4.7%
+skewed_zipf_s1             d1=1024;s=1      4  1048576 samplesort               scalar               6      18.30     1.1%
+skewed_zipf_s1             d1=1024;s=1      4  1048576 quicksort                scalar               6      31.19     0.9%
+skewed_zipf_s1             d1=1024;s=1      4  1048576 std::sort lexicographic  -                    1     179.52     1.5%
+skewed_zipf_s1             d1=1024;s=1      8  1048576 samplesort               scalar               1     200.97     1.7%
+skewed_zipf_s1             d1=1024;s=1      8  1048576 quicksort                scalar               1     101.62     1.5%
+skewed_zipf_s1             d1=1024;s=1      8  1048576 samplesort               scalar               6      42.28     1.2%
+skewed_zipf_s1             d1=1024;s=1      8  1048576 quicksort                scalar               6     194.13     0.8%
+skewed_zipf_s1             d1=1024;s=1      8  1048576 std::sort lexicographic  -                    1     325.16     1.8%
+skewed_zipf_s1             d1=1024;s=1      2  8388608 samplesort               scalar               1      32.53     0.9%
+skewed_zipf_s1             d1=1024;s=1      2  8388608 quicksort                scalar               1      28.23     0.7%
+skewed_zipf_s1             d1=1024;s=1      2  8388608 samplesort               scalar               6      13.50     1.3%
+skewed_zipf_s1             d1=1024;s=1      2  8388608 quicksort                scalar               6      10.26     2.0%
+skewed_zipf_s1             d1=1024;s=1      2  8388608 std::sort lexico[bench_q2_algorithms] 359/900 (40%) 43m05s elapsed, ~1h04m left | u32   
+[bench_q2_algorithms] 364/900 (40%) 43m51s elapsed, ~1h04m left | u32   
+[bench_q2_algorithms] 366/900 (41%) 44m28s elapsed, ~1h04m left | u32   
+[bench_q2_algorithms] 369/900 (41%) 45m34s elapsed, ~1h05m left | u32   
+[bench_q2_algorithms] 389/900 (43%) 46m17s elapsed, ~1h00m left | u32   
+graphic  -                    1     203.61     0.4%
+skewed_zipf_s1             d1=1024;s=1      4  8388608 samplesort               scalar               1      73.62     0.6%
+skewed_zipf_s1             d1=1024;s=1      4  8388608 quicksort                scalar               1      54.47     0.5%
+skewed_zipf_s1             d1=1024;s=1      4  8388608 samplesort               scalar               6      23.84     1.4%
+skewed_zipf_s1             d1=1024;s=1      4  8388608 quicksort                scalar               6      19.04     2.2%
+skewed_zipf_s1             d1=1024;s=1      4  8388608 std::sort lexicographic  -                    1     320.16     0.2%
+skewed_zipf_s1             d1=1024;s=1      8  8388608 samplesort               scalar               1     219.09     0.2%
+skewed_zipf_s1             d1=1024;s=1      8  8388608 quicksort                scalar               1     128.06     0.6%
+skewed_zipf_s1             d1=1024;s=1      8  8388608 samplesort               scalar               6      57.99     0.4%
+skewed_zipf_s1             d1=1024;s=1      8  8388608 quicksort                scalar               6     124.18     0.5%
+skewed_zipf_s1             d1=1024;s=1      8  8388608 std::sort lexicographic  -                    1     588.97     0.1%
+skewed_zipf_s2             d1=1024;s=2      2  1048576 samplesort               scalar               1      23.47     1.9%
+skewed_zipf_s2             d1=1024;s=2      2  1048576 quicksort                scalar               1      19.12     1.1%
+skewed_zipf_s2             d1=1024;s=2      2  1048576 samplesort               scalar               6      20.21     4.6%
+skewed_zipf_s2             d1=1024;s=2      2  1048576 quicksort                scalar               6      15.64     4.7%
+skewed_zipf_s2             d1=1024;s=2      2  1048576 std::sort lexicographic  -                    1     119.77     1.6%
+skewed_zipf_s2             d1=1024;s=2      4  1048576 samplesort               scalar               1      44.34     3.5%
+skewed_zipf_s2             d1=1024;s=2      4  1048576 quicksort                scalar               1      36.69     0.8%
+skewed_zipf_s2             d1=1024;s=2      4  1048576 samplesort               scalar               6      33.03     2.9%
+skewed_zipf_s2             d1=1024;s=2      4  1048576 quicksort                scalar               6      12.26     7.2%
+skewed_zipf_s2             d1=1024;s=2      4  1048576 std::sort lexicographic  -                    1     179.80     1.8%
+skewed_zipf_s2             d1=1024;s=2      8  1048576 samplesort               scalar               1     130.74     0.5%
+skewed_zipf_s2             d1=1024;s=2      8  1048576 quicksort                scalar               1      73.86     1.0%
+skewed_zipf_s2             d1=1024;s=2      8  1048576 samplesort               scalar               6      33.27     0.9%
+skewed_zipf_s2             d1=1024;s=2      8  1048576 quicksort                scalar               6      92.85     1.3%
+skewed_zipf_s2             d1=1024;s=2      8  1048576 std::sort lexicographic  -                    1     359.17     1.1%
+skewed_zipf_s2             d1=1024;s=2      2  8388608 samplesort               scalar               1      30.62     0.8%
+skewed_zipf_s2             d1=1024;s=2      2  8388608 quicksort                scalar               1      23.98     1.2%
+skewed_zipf_s2             d1=1024;s=2      2  8388608 samplesort               scalar               6      22.64     3.2%
+skewed_zipf_s2             d1=1024;s=2      2  8388608 quicksort                scalar               6      17.15     3.1%
+skewed_zipf_s2             d1=1024;s=2      2  8388608 std::sort lexicographic  -                    1     207.65     0.3%
+skewed_zipf_s2             d1=1024;s=2      4  8388608 samplesort               scalar               1      54.54     0.5%
+skewed_zipf_s2             d1=1024;s=2      4  8388608 quicksort                scalar               1      44.07     0.9%
+skewed_zipf_s2             d1=1024;s=2      4  8388608 samplesort               scalar               6      [bench_q2_algorithms] 394/900 (44%) 47m03s elapsed, ~1h00m left | u32   
+[bench_q2_algorithms] 397/900 (44%) 47m36s elapsed, ~1h00m left | u32   
+[bench_q2_algorithms] 399/900 (44%) 48m38s elapsed, ~1h01m left | u32   
+[bench_q2_algorithms] 419/900 (47%) 49m18s elapsed, ~56m35s left | u32   
+[bench_q2_algorithms] 424/900 (47%) 49m58s elapsed, ~56m06s left | u32   
+35.34     4.1%
+skewed_zipf_s2             d1=1024;s=2      4  8388608 quicksort                scalar               6      12.61     4.9%
+skewed_zipf_s2             d1=1024;s=2      4  8388608 std::sort lexicographic  -                    1     332.49     0.1%
+skewed_zipf_s2             d1=1024;s=2      8  8388608 samplesort               scalar               1     161.08     0.2%
+skewed_zipf_s2             d1=1024;s=2      8  8388608 quicksort                scalar               1      99.15     0.9%
+skewed_zipf_s2             d1=1024;s=2      8  8388608 samplesort               scalar               6      39.79     2.8%
+skewed_zipf_s2             d1=1024;s=2      8  8388608 quicksort                scalar               6      59.13     0.6%
+skewed_zipf_s2             d1=1024;s=2      8  8388608 std::sort lexicographic  -                    1     661.35     0.1%
+heavy_hitter_f90           frac=0.9         2  1048576 samplesort               scalar               1      23.67     4.3%
+heavy_hitter_f90           frac=0.9         2  1048576 quicksort                scalar               1      18.85     2.6%
+heavy_hitter_f90           frac=0.9         2  1048576 samplesort               scalar               6      13.86     2.8%
+heavy_hitter_f90           frac=0.9         2  1048576 quicksort                scalar               6      21.34     4.0%
+heavy_hitter_f90           frac=0.9         2  1048576 std::sort lexicographic  -                    1     113.78     2.2%
+heavy_hitter_f90           frac=0.9         4  1048576 samplesort               scalar               1      35.33     2.7%
+heavy_hitter_f90           frac=0.9         4  1048576 quicksort                scalar               1      33.33     3.1%
+heavy_hitter_f90           frac=0.9         4  1048576 samplesort               scalar               6      15.10     3.1%
+heavy_hitter_f90           frac=0.9         4  1048576 quicksort                scalar               6      15.74     3.9%
+heavy_hitter_f90           frac=0.9         4  1048576 std::sort lexicographic  -                    1     163.74     1.3%
+heavy_hitter_f90           frac=0.9         8  1048576 samplesort               scalar               1      95.45     0.9%
+heavy_hitter_f90           frac=0.9         8  1048576 quicksort                scalar               1      59.79     1.1%
+heavy_hitter_f90           frac=0.9         8  1048576 samplesort               scalar               6      34.59     2.8%
+heavy_hitter_f90           frac=0.9         8  1048576 quicksort                scalar               6      64.58     1.9%
+heavy_hitter_f90           frac=0.9         8  1048576 std::sort lexicographic  -                    1     341.50     0.8%
+heavy_hitter_f90           frac=0.9         2  8388608 samplesort               scalar               1      30.32     0.8%
+heavy_hitter_f90           frac=0.9         2  8388608 quicksort                scalar               1      23.53     1.9%
+heavy_hitter_f90           frac=0.9         2  8388608 samplesort               scalar               6      15.40     2.5%
+heavy_hitter_f90           frac=0.9         2  8388608 quicksort                scalar               6      23.88     4.3%
+heavy_hitter_f90           frac=0.9         2  8388608 std::sort lexicographic  -                    1     198.76     0.4%
+heavy_hitter_f90           frac=0.9         4  8388608 samplesort               scalar               1      42.63     0.8%
+heavy_hitter_f90           frac=0.9         4  8388608 quicksort                scalar               1      36.94     0.5%
+heavy_hitter_f90           frac=0.9         4  8388608 samplesort               scalar               6      18.52     0.6%
+heavy_hitter_f90           frac=0.9         4  8388608 quicksort                scalar               6      17.37     1.0%
+heavy_hitter_f90           frac=0.9         4  8388608 std::sort lexicographic  -                    1     313.41     0.1%
+heavy_hitter_f90           frac=0.9         8  8388608 samplesort               scalar               1     134.50     1.2%
+heavy_hitter_f90      [bench_q2_algorithms] 428/900 (48%) 50m32s elapsed, ~55m44s left | u32   
+[bench_q2_algorithms] 429/900 (48%) 51m27s elapsed, ~56m30s left | u32   
+[bench_q2_algorithms] 453/900 (50%) 51m57s elapsed, ~51m16s left | u32   
+[bench_q2_algorithms] 455/900 (51%) 52m34s elapsed, ~51m25s left | u32   
+     frac=0.9         8  8388608 quicksort                scalar               1      85.76     0.5%
+heavy_hitter_f90           frac=0.9         8  8388608 samplesort               scalar               6      38.54     0.5%
+heavy_hitter_f90           frac=0.9         8  8388608 quicksort                scalar               6      43.32     1.8%
+heavy_hitter_f90           frac=0.9         8  8388608 std::sort lexicographic  -                    1     647.56     0.1%
+low_cardinality_d4         d=4              2  1048576 samplesort               scalar               1       5.57     4.4%
+low_cardinality_d4         d=4              2  1048576 quicksort                scalar               1       4.75     4.9%
+low_cardinality_d4         d=4              2  1048576 samplesort               scalar               6       6.31     3.3%
+low_cardinality_d4         d=4              2  1048576 quicksort                scalar               6       4.34     7.9%
+low_cardinality_d4         d=4              2  1048576 std::sort lexicographic  -                    1      47.45     1.5%
+low_cardinality_d4         d=4              4  1048576 samplesort               scalar               1      14.66     0.9%
+low_cardinality_d4         d=4              4  1048576 quicksort                scalar               1      11.44     0.7%
+low_cardinality_d4         d=4              4  1048576 samplesort               scalar               6       7.86     2.6%
+low_cardinality_d4         d=4              4  1048576 quicksort                scalar               6       5.13     3.1%
+low_cardinality_d4         d=4              4  1048576 std::sort lexicographic  -                    1     128.32     1.9%
+low_cardinality_d4         d=4              8  1048576 samplesort               scalar               1      64.52     1.0%
+low_cardinality_d4         d=4              8  1048576 quicksort                scalar               1      49.39     1.9%
+low_cardinality_d4         d=4              8  1048576 samplesort               scalar               6      18.88     1.1%
+low_cardinality_d4         d=4              8  1048576 quicksort                scalar               6      17.75     3.2%
+low_cardinality_d4         d=4              8  1048576 std::sort lexicographic  -                    1     354.84     1.1%
+low_cardinality_d4         d=4              2  8388608 samplesort               scalar               1      11.75     3.4%
+low_cardinality_d4         d=4              2  8388608 quicksort                scalar               1       6.52     0.7%
+low_cardinality_d4         d=4              2  8388608 samplesort               scalar               6       8.84     1.3%
+low_cardinality_d4         d=4              2  8388608 quicksort                scalar               6       4.88     1.0%
+low_cardinality_d4         d=4              2  8388608 std::sort lexicographic  -                    1      87.80     0.4%
+low_cardinality_d4         d=4              4  8388608 samplesort               scalar               1      27.30     0.3%
+low_cardinality_d4         d=4              4  8388608 quicksort                scalar               1      18.21     0.3%
+low_cardinality_d4         d=4              4  8388608 samplesort               scalar               6      13.19     2.1%
+low_cardinality_d4         d=4              4  8388608 quicksort                scalar               6       7.19     2.6%
+low_cardinality_d4         d=4              4  8388608 std::sort lexicographic  -                    1     273.15     0.2%
+low_cardinality_d4         d=4              8  8388608 samplesort               scalar               1      76.88     0.4%
+low_cardinality_d4         d=4              8  8388608 quicksort                scalar               1      51.58     0.4%
+low_cardinality_d4         d=4              8  8388608 samplesort               scalar               6      22.60     0.6%
+low_cardinality_d4         d=4              8  8388608 quicksort                scalar               6      15.81     2.4%
+low_cardinality_d4         d=4              8  8388608 std:[bench_q2_algorithms] 459/900 (51%) 53m42s elapsed, ~51m35s left | u32   
+[bench_q2_algorithms] 474/900 (53%) 54m13s elapsed, ~48m44s left | u64   
+[bench_q2_algorithms] 476/900 (53%) 54m44s elapsed, ~48m45s left | u64   
+[bench_q2_algorithms] 478/900 (53%) 55m28s elapsed, ~48m58s left | u64   
+[bench_q2_algorithms] 481/900 (53%) 56m47s elapsed, ~49m28s left | u64   
+:sort lexicographic  -                    1     692.32     0.2%
+tpcds_q67_sf1                               2  1048576 -                                             0   dropped: no such dataset at this size and column count
+tpcds_q67_sf1              sf=1             4  1048576 samplesort               scalar               1      44.40     2.9%
+tpcds_q67_sf1              sf=1             4  1048576 quicksort                scalar               1      39.22     1.4%
+tpcds_q67_sf1              sf=1             4  1048576 samplesort               scalar               6      14.34     1.6%
+tpcds_q67_sf1              sf=1             4  1048576 quicksort                scalar               6      13.56     3.1%
+tpcds_q67_sf1              sf=1             4  1048576 std::sort lexicographic  -                    1     201.87     0.9%
+tpcds_q67_sf1              sf=1             8  1048576 samplesort               scalar               1     230.47     1.0%
+tpcds_q67_sf1              sf=1             8  1048576 quicksort                scalar               1     131.15     0.8%
+tpcds_q67_sf1              sf=1             8  1048576 samplesort               scalar               6      49.55     0.7%
+tpcds_q67_sf1              sf=1             8  1048576 quicksort                scalar               6     180.35     0.8%
+tpcds_q67_sf1              sf=1             8  1048576 std::sort lexicographic  -                    1     422.74     0.5%
+tpcds_q67_sf1                               2  8388608 -                                             0   dropped: no such dataset at this size and column count
+tpcds_q67_sf1              sf=1             4  8388608 samplesort               scalar               1      57.19     1.0%
+tpcds_q67_sf1              sf=1             4  8388608 quicksort                scalar               1      48.07     0.6%
+tpcds_q67_sf1              sf=1             4  8388608 samplesort               scalar               6      22.32     0.9%
+tpcds_q67_sf1              sf=1             4  8388608 quicksort                scalar               6      16.37     4.2%
+tpcds_q67_sf1              sf=1             4  8388608 std::sort lexicographic  -                    1     348.26     0.8%
+tpcds_q67_sf1              sf=1             8  8388608 samplesort               scalar               1     232.77     0.8%
+tpcds_q67_sf1              sf=1             8  8388608 quicksort                scalar               1     174.63     0.3%
+tpcds_q67_sf1              sf=1             8  8388608 samplesort               scalar               6      55.03     0.6%
+tpcds_q67_sf1              sf=1             8  8388608 quicksort                scalar               6     135.61     0.3%
+tpcds_q67_sf1              sf=1             8  8388608 std::sort lexicographic  -                    1     727.68     0.6%
+tpcds_q67_sf100                             2  1048576 -                                             0   dropped: no such dataset at this size and column count
+tpcds_q67_sf100            sf=100           4  1048576 samplesort               scalar               1      52.05     1.2%
+tpcds_q67_sf100            sf=100           4  1048576 quicksort                scalar               1      47.49     1.7%
+tpcds_q67_sf100            sf=100           4  1048576 samplesort               scalar               6      17.06     2.7%
+tpcds_q67_sf100            sf=100           4  1048576 quicksort                scalar               6      16.52     4.9%
+tpcds_q67_sf100            sf=100           4  1048576 std::sort lexicographic  -                    1     204.24     0.7%
+tpcds_q67_sf100            sf=100           8  1048576 samplesort               scalar               1     226.09     1.6%
+tpcds_q67_sf100            sf=100           8  1048576 quicksort                scalar               1     127.96     0.4%
+tpcds_q67_sf100            sf=100           8  1048576 samplesort               scalar               6      52.81     0.4%
+tpcds_q67_sf100            sf=100           8  1048576 quicksort                scalar               6     2[bench_q2_algorithms] 496/900 (55%) 57m20s elapsed, ~46m42s left | u64   
+[bench_q2_algorithms] 498/900 (55%) 57m55s elapsed, ~46m45s left | u64   
+[bench_q2_algorithms] 499/900 (55%) 58m26s elapsed, ~46m58s left | u64   
+[bench_q2_algorithms] 502/900 (56%) 59m06s elapsed, ~46m51s left | u64   
+[bench_q2_algorithms] 503/900 (56%) 59m57s elapsed, ~47m19s left | u64   
+[bench_q2_algorithms] 523/900 (58%) 1h00m elapsed, ~43m36s left | u64   
+00.73     0.3%
+tpcds_q67_sf100            sf=100           8  1048576 std::sort lexicographic  -                    1     311.44     0.7%
+tpcds_q67_sf100                             2  8388608 -                                             0   dropped: no such dataset at this size and column count
+tpcds_q67_sf100            sf=100           4  8388608 samplesort               scalar               1      66.26     0.5%
+tpcds_q67_sf100            sf=100           4  8388608 quicksort                scalar               1      58.79     0.5%
+tpcds_q67_sf100            sf=100           4  8388608 samplesort               scalar               6      24.54     0.7%
+tpcds_q67_sf100            sf=100           4  8388608 quicksort                scalar               6      17.91     6.0%
+tpcds_q67_sf100            sf=100           4  8388608 std::sort lexicographic  -                    1     355.58     0.2%
+tpcds_q67_sf100            sf=100           8  8388608 samplesort               scalar               1     276.75     0.0%
+tpcds_q67_sf100            sf=100           8  8388608 quicksort                scalar               1     194.18     0.1%
+tpcds_q67_sf100            sf=100           8  8388608 samplesort               scalar               6      67.38     0.6%
+tpcds_q67_sf100            sf=100           8  8388608 quicksort                scalar               6     190.36     0.4%
+tpcds_q67_sf100            sf=100           8  8388608 std::sort lexicographic  -                    1     595.05     0.1%
+unique_first                                2  1048576 samplesort               scalar               1      30.15     4.5%
+unique_first                                2  1048576 quicksort                scalar               1      33.11     2.5%
+unique_first                                2  1048576 samplesort               scalar               6      11.96     3.7%
+unique_first                                2  1048576 quicksort                scalar               6      11.19     4.7%
+unique_first                                2  1048576 std::sort lexicographic  -                    1      87.70     0.4%
+unique_first                                4  1048576 samplesort               scalar               1      29.08     3.9%
+unique_first                                4  1048576 quicksort                scalar               1      31.93     1.7%
+unique_first                                4  1048576 samplesort               scalar               6      11.63     3.3%
+unique_first                                4  1048576 quicksort                scalar               6      10.61     4.0%
+unique_first                                4  1048576 std::sort lexicographic  -                    1      90.56     2.1%
+unique_first                                8  1048576 samplesort               scalar               1      30.17     2.0%
+unique_first                                8  1048576 quicksort                scalar               1      33.28     1.9%
+unique_first                                8  1048576 samplesort               scalar               6      12.04     2.4%
+unique_first                                8  1048576 quicksort                scalar               6      11.29     4.6%
+unique_first                                8  1048576 std::sort lexicographic  -                    1      91.95     2.2%
+unique_first                                2  8388608 samplesort               scalar               1      43.11     0.9%
+unique_first                                2  8388608 quicksort                scalar               1      40.98     1.0%
+unique_first                                2  8388608 samplesort               scalar               6      24.02     1.4%
+unique_first                                2  8388608 quicksort                scalar               6      12.72     0.8%
+unique_first                                2  8388608 std::sort lexicographic  -                    1     143.30     0.2%
+unique_first                                4  8388608 samplesort               scalar               1      [bench_q2_algorithms] 529/900 (59%) 1h01m elapsed, ~42m51s left | u64   
+[bench_q2_algorithms] 539/900 (60%) 1h01m elapsed, ~41m16s left | u64   
+[bench_q2_algorithms] 549/900 (61%) 1h02m elapsed, ~39m47s left | u64   
+[bench_q2_algorithms] 551/900 (61%) 1h02m elapsed, ~39m45s left | u64   
+[bench_q2_algorithms] 552/900 (61%) 1h03m elapsed, ~39m55s left | u64   
+[bench_q2_algorithms] 554/900 (62%) 1h03m elapsed, ~39m55s left | u64   
+[bench_q2_algorithms] 557/900 (62%) 1h04m elapsed, ~39m41s left | u64   
+43.04     0.7%
+unique_first                                4  8388608 quicksort                scalar               1      41.19     0.5%
+unique_first                                4  8388608 samplesort               scalar               6      24.08     1.6%
+unique_first                                4  8388608 quicksort                scalar               6      12.89     4.3%
+unique_first                                4  8388608 std::sort lexicographic  -                    1     142.87     0.2%
+unique_first                                8  8388608 samplesort               scalar               1      41.93     3.2%
+unique_first                                8  8388608 quicksort                scalar               1      40.67     1.2%
+unique_first                                8  8388608 samplesort               scalar               6      24.02     0.8%
+unique_first                                8  8388608 quicksort                scalar               6      12.44     1.9%
+unique_first                                8  8388608 std::sort lexicographic  -                    1     141.37     0.3%
+unique_last_g2             g=2              2  1048576 samplesort               scalar               1     133.74     3.1%
+unique_last_g2             g=2              2  1048576 quicksort                scalar               1      74.47     1.1%
+unique_last_g2             g=2              2  1048576 samplesort               scalar               6     225.15     0.8%
+unique_last_g2             g=2              2  1048576 quicksort                scalar               6      65.84    15.1%
+unique_last_g2             g=2              2  1048576 std::sort lexicographic  -                    1     101.30     3.4%
+unique_last_g2             g=2              4  1048576 samplesort               scalar               1     146.54     1.6%
+unique_last_g2             g=2              4  1048576 quicksort                scalar               1      93.37     1.2%
+unique_last_g2             g=2              4  1048576 samplesort               scalar               6      34.66     0.6%
+unique_last_g2             g=2              4  1048576 quicksort                scalar               6     160.78     0.7%
+unique_last_g2             g=2              4  1048576 std::sort lexicographic  -                    1     192.68     1.4%
+unique_last_g2             g=2              8  1048576 samplesort               scalar               1     247.72     0.9%
+unique_last_g2             g=2              8  1048576 quicksort                scalar               1     131.70     0.6%
+unique_last_g2             g=2              8  1048576 samplesort               scalar               6      84.76     0.7%
+unique_last_g2             g=2              8  1048576 quicksort                scalar               6     211.93     0.8%
+unique_last_g2             g=2              8  1048576 std::sort lexicographic  -                    1     463.71     0.6%
+unique_last_g2             g=2              2  8388608 samplesort               scalar               1     188.45     1.2%
+unique_last_g2             g=2              2  8388608 quicksort                scalar               1     124.39     0.2%
+unique_last_g2             g=2              2  8388608 samplesort               scalar               6     254.49     0.7%
+unique_last_g2             g=2              2  8388608 quicksort                scalar               6     109.38    11.5%
+unique_last_g2             g=2              2  8388608 std::sort lexicographic  -                    1     170.10     0.6%
+unique_last_g2             g=2              4  8388608 samplesort               scalar               1     204.48     0.2%
+unique_last_g2             g=2              4  8388608 quicksort                scalar               1     143.99     0.8%
+unique_last_g2             g=2              4  8388608 samplesort               scalar               6      48.01     0.1%
+unique_last_g2             g=2              4  8388608 quicksort                scalar               6     176.91     0.4%
+unique_last_g2        [bench_q2_algorithms] 559/900 (62%) 1h05m elapsed, ~39m55s left | u64   
+[bench_q2_algorithms] 562/900 (62%) 1h06m elapsed, ~39m46s left | u64   
+[bench_q2_algorithms] 563/900 (63%) 1h07m elapsed, ~40m10s left | u64   
+[bench_q2_algorithms] 580/900 (64%) 1h07m elapsed, ~37m21s left | u64   
+[bench_q2_algorithms] 584/900 (65%) 1h08m elapsed, ~36m57s left | u64   
+[bench_q2_algorithms] 588/900 (65%) 1h09m elapsed, ~36m40s left | u64   
+     g=2              4  8388608 std::sort lexicographic  -                    1     313.26     0.1%
+unique_last_g2             g=2              8  8388608 samplesort               scalar               1     281.13     0.1%
+unique_last_g2             g=2              8  8388608 quicksort                scalar               1     190.62     0.2%
+unique_last_g2             g=2              8  8388608 samplesort               scalar               6      75.77     0.7%
+unique_last_g2             g=2              8  8388608 quicksort                scalar               6     190.70     1.1%
+unique_last_g2             g=2              8  8388608 std::sort lexicographic  -                    1     708.15     0.2%
+unique_last_g64            g=64             2  1048576 samplesort               scalar               1      41.40     1.0%
+unique_last_g64            g=64             2  1048576 quicksort                scalar               1      45.94     1.7%
+unique_last_g64            g=64             2  1048576 samplesort               scalar               6      19.50     2.0%
+unique_last_g64            g=64             2  1048576 quicksort                scalar               6      29.14     4.6%
+unique_last_g64            g=64             2  1048576 std::sort lexicographic  -                    1     121.98     0.8%
+unique_last_g64            g=64             4  1048576 samplesort               scalar               1      62.73     1.3%
+unique_last_g64            g=64             4  1048576 quicksort                scalar               1      56.17     1.3%
+unique_last_g64            g=64             4  1048576 samplesort               scalar               6      19.67     0.8%
+unique_last_g64            g=64             4  1048576 quicksort                scalar               6      18.25     3.5%
+unique_last_g64            g=64             4  1048576 std::sort lexicographic  -                    1     228.98     0.9%
+unique_last_g64            g=64             8  1048576 samplesort               scalar               1      97.88     0.4%
+unique_last_g64            g=64             8  1048576 quicksort                scalar               1      69.45     1.4%
+unique_last_g64            g=64             8  1048576 samplesort               scalar               6      27.59     0.7%
+unique_last_g64            g=64             8  1048576 quicksort                scalar               6      23.60     3.8%
+unique_last_g64            g=64             8  1048576 std::sort lexicographic  -                    1     534.68     0.6%
+unique_last_g64            g=64             2  8388608 samplesort               scalar               1      62.95     3.4%
+unique_last_g64            g=64             2  8388608 quicksort                scalar               1      62.41     0.7%
+unique_last_g64            g=64             2  8388608 samplesort               scalar               6      29.16     1.8%
+unique_last_g64            g=64             2  8388608 quicksort                scalar               6      39.63     2.9%
+unique_last_g64            g=64             2  8388608 std::sort lexicographic  -                    1     204.60     0.1%
+unique_last_g64            g=64             4  8388608 samplesort               scalar               1      80.48     0.3%
+unique_last_g64            g=64             4  8388608 quicksort                scalar               1      81.13     2.4%
+unique_last_g64            g=64             4  8388608 samplesort               scalar               6      20.71     0.7%
+unique_last_g64            g=64             4  8388608 quicksort                scalar               6      22.46    10.0%
+unique_last_g64            g=64             4  8388608 std::sort lexicographic  -                    1     374.60     0.2%
+unique_last_g64            g=64             8  8388608 samplesort               scalar               1     123.46     0.4%
+unique_last_g64            g=64             8  8388608 quicksort                scalar               1     106.80     0.3%
+unique_last_g64            g=64             8  8388608 samp[bench_q2_algorithms] 591/900 (66%) 1h09m elapsed, ~36m25s left | u64   
+[bench_q2_algorithms] 593/900 (66%) 1h10m elapsed, ~36m39s left | u64   
+[bench_q2_algorithms] 612/900 (68%) 1h11m elapsed, ~33m33s left | u64   
+[bench_q2_algorithms] 615/900 (68%) 1h11m elapsed, ~33m19s left | u64   
+[bench_q2_algorithms] 618/900 (69%) 1h12m elapsed, ~33m08s left | u64   
+[bench_q2_algorithms] 621/900 (69%) 1h13m elapsed, ~32m51s left | u64   
+[bench_q2_algorithms] 623/900 (69%) 1h14m elapsed, ~33m08s left | u64   
+lesort               scalar               6      38.07     1.2%
+unique_last_g64            g=64             8  8388608 quicksort                scalar               6      28.59     4.2%
+unique_last_g64            g=64             8  8388608 std::sort lexicographic  -                    1     772.09     0.5%
+unique_last_g4096          g=4096           2  1048576 samplesort               scalar               1      34.01     1.4%
+unique_last_g4096          g=4096           2  1048576 quicksort                scalar               1      36.88     2.0%
+unique_last_g4096          g=4096           2  1048576 samplesort               scalar               6      12.06     1.0%
+unique_last_g4096          g=4096           2  1048576 quicksort                scalar               6      11.73     5.0%
+unique_last_g4096          g=4096           2  1048576 std::sort lexicographic  -                    1     122.16     0.9%
+unique_last_g4096          g=4096           4  1048576 samplesort               scalar               1      50.51     1.1%
+unique_last_g4096          g=4096           4  1048576 quicksort                scalar               1      45.61     0.4%
+unique_last_g4096          g=4096           4  1048576 samplesort               scalar               6      14.36     1.4%
+unique_last_g4096          g=4096           4  1048576 quicksort                scalar               6      13.53     3.0%
+unique_last_g4096          g=4096           4  1048576 std::sort lexicographic  -                    1     236.11     1.2%
+unique_last_g4096          g=4096           8  1048576 samplesort               scalar               1      81.45     0.5%
+unique_last_g4096          g=4096           8  1048576 quicksort                scalar               1      55.37     1.1%
+unique_last_g4096          g=4096           8  1048576 samplesort               scalar               6      32.10     1.7%
+unique_last_g4096          g=4096           8  1048576 quicksort                scalar               6      17.73     2.7%
+unique_last_g4096          g=4096           8  1048576 std::sort lexicographic  -                    1     565.87     0.2%
+unique_last_g4096          g=4096           2  8388608 samplesort               scalar               1      51.15     0.3%
+unique_last_g4096          g=4096           2  8388608 quicksort                scalar               1      49.52     0.6%
+unique_last_g4096          g=4096           2  8388608 samplesort               scalar               6      20.92     1.3%
+unique_last_g4096          g=4096           2  8388608 quicksort                scalar               6      14.53     0.9%
+unique_last_g4096          g=4096           2  8388608 std::sort lexicographic  -                    1     204.98     0.5%
+unique_last_g4096          g=4096           4  8388608 samplesort               scalar               1      72.60     0.3%
+unique_last_g4096          g=4096           4  8388608 quicksort                scalar               1      64.73     0.4%
+unique_last_g4096          g=4096           4  8388608 samplesort               scalar               6      27.37     0.6%
+unique_last_g4096          g=4096           4  8388608 quicksort                scalar               6      20.91     6.8%
+unique_last_g4096          g=4096           4  8388608 std::sort lexicographic  -                    1     403.94     0.2%
+unique_last_g4096          g=4096           8  8388608 samplesort               scalar               1     114.67     0.2%
+unique_last_g4096          g=4096           8  8388608 quicksort                scalar               1      90.19     0.4%
+unique_last_g4096          g=4096           8  8388608 samplesort               scalar               6      37.24     1.9%
+unique_last_g4096          g=4096           8  8388608 quicksort                scalar               6      23.70     3.7%
+unique_last_g4096          g=4096           8  8388608 std::sort lexicographic  -                    1     961.88     0.2%
+independent_uniform_c16    c=16             2  1048576 samplesort               scalar          [bench_q2_algorithms] 643/900 (71%) 1h15m elapsed, ~30m02s left | u64   
+[bench_q2_algorithms] 648/900 (72%) 1h16m elapsed, ~29m33s left | u64   
+[bench_q2_algorithms] 650/900 (72%) 1h16m elapsed, ~29m29s left | u64   
+[bench_q2_algorithms] 653/900 (73%) 1h17m elapsed, ~29m25s left | u64   
+     1      14.89     0.7%
+independent_uniform_c16    c=16             2  1048576 quicksort                scalar               1      17.43     2.1%
+independent_uniform_c16    c=16             2  1048576 samplesort               scalar               6       8.98     0.9%
+independent_uniform_c16    c=16             2  1048576 quicksort                scalar               6       9.46     4.5%
+independent_uniform_c16    c=16             2  1048576 std::sort lexicographic  -                    1      87.70     1.0%
+independent_uniform_c16    c=16             4  1048576 samplesort               scalar               1      50.74     0.9%
+independent_uniform_c16    c=16             4  1048576 quicksort                scalar               1      46.80     3.1%
+independent_uniform_c16    c=16             4  1048576 samplesort               scalar               6      15.91     3.1%
+independent_uniform_c16    c=16             4  1048576 quicksort                scalar               6      15.00     2.0%
+independent_uniform_c16    c=16             4  1048576 std::sort lexicographic  -                    1     206.32     0.4%
+independent_uniform_c16    c=16             8  1048576 samplesort               scalar               1     174.63     0.2%
+independent_uniform_c16    c=16             8  1048576 quicksort                scalar               1     104.44     1.0%
+independent_uniform_c16    c=16             8  1048576 samplesort               scalar               6      41.47     0.5%
+independent_uniform_c16    c=16             8  1048576 quicksort                scalar               6     133.33     0.8%
+independent_uniform_c16    c=16             8  1048576 std::sort lexicographic  -                    1     331.01     1.0%
+independent_uniform_c16    c=16             2  8388608 samplesort               scalar               1      30.31     0.5%
+independent_uniform_c16    c=16             2  8388608 quicksort                scalar               1      23.51     0.9%
+independent_uniform_c16    c=16             2  8388608 samplesort               scalar               6      17.04     3.6%
+independent_uniform_c16    c=16             2  8388608 quicksort                scalar               6      10.35     3.3%
+independent_uniform_c16    c=16             2  8388608 std::sort lexicographic  -                    1     160.95     0.1%
+independent_uniform_c16    c=16             4  8388608 samplesort               scalar               1      64.07     2.9%
+independent_uniform_c16    c=16             4  8388608 quicksort                scalar               1      57.21     0.9%
+independent_uniform_c16    c=16             4  8388608 samplesort               scalar               6      24.12     1.7%
+independent_uniform_c16    c=16             4  8388608 quicksort                scalar               6      18.63     3.0%
+independent_uniform_c16    c=16             4  8388608 std::sort lexicographic  -                    1     371.18     0.0%
+independent_uniform_c16    c=16             8  8388608 samplesort               scalar               1     218.10     0.2%
+independent_uniform_c16    c=16             8  8388608 quicksort                scalar               1     150.34     0.3%
+independent_uniform_c16    c=16             8  8388608 samplesort               scalar               6      53.99     0.7%
+independent_uniform_c16    c=16             8  8388608 quicksort                scalar               6     119.84     1.8%
+independent_uniform_c16    c=16             8  8388608 std::sort lexicographic  -                    1     585.05     0.2%
+independent_uniform_c1024  c=1024           2  1048576 samplesort               scalar               1      35.70     0.5%
+independent_uniform_c1024  c=1024           2  1048576 quicksort                scalar               1      39.71     2.2%
+independent_uniform_c1024  c=1024           2  1048576 samplesort               scalar               6      12.17     2.7%
+independent_uniform_c1024  c=1024           2  1048576 quicksort                scalar               6      12.80     4.4%
+independen[bench_q2_algorithms] 673/900 (75%) 1h18m elapsed, ~26m28s left | u64   
+[bench_q2_algorithms] 678/900 (75%) 1h19m elapsed, ~25m59s left | u64   
+[bench_q2_algorithms] 682/900 (76%) 1h19m elapsed, ~25m31s left | u64   
+t_uniform_c1024  c=1024           2  1048576 std::sort lexicographic  -                    1     125.99     1.1%
+independent_uniform_c1024  c=1024           4  1048576 samplesort               scalar               1     102.99     1.9%
+independent_uniform_c1024  c=1024           4  1048576 quicksort                scalar               1      68.82     1.0%
+independent_uniform_c1024  c=1024           4  1048576 samplesort               scalar               6      25.20     2.7%
+independent_uniform_c1024  c=1024           4  1048576 quicksort                scalar               6      93.65     0.6%
+independent_uniform_c1024  c=1024           4  1048576 std::sort lexicographic  -                    1     140.24     2.1%
+independent_uniform_c1024  c=1024           8  1048576 samplesort               scalar               1     101.87     1.4%
+independent_uniform_c1024  c=1024           8  1048576 quicksort                scalar               1      69.43     1.0%
+independent_uniform_c1024  c=1024           8  1048576 samplesort               scalar               6      24.17     5.0%
+independent_uniform_c1024  c=1024           8  1048576 quicksort                scalar               6      94.10     0.6%
+independent_uniform_c1024  c=1024           8  1048576 std::sort lexicographic  -                    1     140.20     1.3%
+independent_uniform_c1024  c=1024           2  8388608 samplesort               scalar               1      52.72     0.4%
+independent_uniform_c1024  c=1024           2  8388608 quicksort                scalar               1      50.50     0.9%
+independent_uniform_c1024  c=1024           2  8388608 samplesort               scalar               6      20.45     0.3%
+independent_uniform_c1024  c=1024           2  8388608 quicksort                scalar               6      14.28     1.4%
+independent_uniform_c1024  c=1024           2  8388608 std::sort lexicographic  -                    1     197.06     0.3%
+independent_uniform_c1024  c=1024           4  8388608 samplesort               scalar               1     107.21     0.1%
+independent_uniform_c1024  c=1024           4  8388608 quicksort                scalar               1      88.61     0.3%
+independent_uniform_c1024  c=1024           4  8388608 samplesort               scalar               6      29.58     0.3%
+independent_uniform_c1024  c=1024           4  8388608 quicksort                scalar               6      48.19     0.8%
+independent_uniform_c1024  c=1024           4  8388608 std::sort lexicographic  -                    1     272.21     0.3%
+independent_uniform_c1024  c=1024           8  8388608 samplesort               scalar               1     109.31     0.5%
+independent_uniform_c1024  c=1024           8  8388608 quicksort                scalar               1      88.85     0.2%
+independent_uniform_c1024  c=1024           8  8388608 samplesort               scalar               6      30.74     2.3%
+independent_uniform_c1024  c=1024           8  8388608 quicksort                scalar               6      47.73     3.0%
+independent_uniform_c1024  c=1024           8  8388608 std::sort lexicographic  -                    1     273.33     0.2%
+independent_uniform_c65536 c=65536          2  1048576 samplesort               scalar               1      50.75     1.3%
+independent_uniform_c65536 c=65536          2  1048576 quicksort                scalar               1      48.99     1.1%
+independent_uniform_c65536 c=65536          2  1048576 samplesort               scalar               6      43.48     1.1%
+independent_uniform_c65536 c=65536          2  1048576 quicksort                scalar               6      29.79     4.4%
+independent_uniform_c65536 c=65536          2  1048576 std::sort lexicographic  -                    1     119.98     0.9%
+independent_uniform_c65536 c=65536          4  1048576 samplesort               scalar               1      53.75     1.6%
+independent_uniform_c65536 c=65536          4  1048576 quicksort                scalar               1      50.09     1.1%
+independent_uniform_c65536 c=65536          4  [bench_q2_algorithms] 693/900 (77%) 1h20m elapsed, ~24m00s left | u64   
+[bench_q2_algorithms] 703/900 (78%) 1h21m elapsed, ~22m42s left | u64   
+[bench_q2_algorithms] 708/900 (79%) 1h21m elapsed, ~22m08s left | u64   
+[bench_q2_algorithms] 713/900 (79%) 1h22m elapsed, ~21m34s left | u64   
+1048576 samplesort               scalar               6      41.87     1.1%
+independent_uniform_c65536 c=65536          4  1048576 quicksort                scalar               6      30.02    11.4%
+independent_uniform_c65536 c=65536          4  1048576 std::sort lexicographic  -                    1     120.43     0.9%
+independent_uniform_c65536 c=65536          8  1048576 samplesort               scalar               1      52.42     1.5%
+independent_uniform_c65536 c=65536          8  1048576 quicksort                scalar               1      49.52     3.8%
+independent_uniform_c65536 c=65536          8  1048576 samplesort               scalar               6      42.31     1.8%
+independent_uniform_c65536 c=65536          8  1048576 quicksort                scalar               6      30.34     4.4%
+independent_uniform_c65536 c=65536          8  1048576 std::sort lexicographic  -                    1     120.84     1.3%
+independent_uniform_c65536 c=65536          2  8388608 samplesort               scalar               1      59.73     0.8%
+independent_uniform_c65536 c=65536          2  8388608 quicksort                scalar               1      51.73     0.4%
+independent_uniform_c65536 c=65536          2  8388608 samplesort               scalar               6      24.08     1.8%
+independent_uniform_c65536 c=65536          2  8388608 quicksort                scalar               6      32.42     2.0%
+independent_uniform_c65536 c=65536          2  8388608 std::sort lexicographic  -                    1     202.47     0.8%
+independent_uniform_c65536 c=65536          4  8388608 samplesort               scalar               1      60.78     0.6%
+independent_uniform_c65536 c=65536          4  8388608 quicksort                scalar               1      52.78     0.7%
+independent_uniform_c65536 c=65536          4  8388608 samplesort               scalar               6      24.33     0.9%
+independent_uniform_c65536 c=65536          4  8388608 quicksort                scalar               6      32.61     2.4%
+independent_uniform_c65536 c=65536          4  8388608 std::sort lexicographic  -                    1     202.10     0.4%
+independent_uniform_c65536 c=65536          8  8388608 samplesort               scalar               1      56.76     0.9%
+independent_uniform_c65536 c=65536          8  8388608 quicksort                scalar               1      52.18     1.3%
+independent_uniform_c65536 c=65536          8  8388608 samplesort               scalar               6      20.27     1.8%
+independent_uniform_c65536 c=65536          8  8388608 quicksort                scalar               6      32.73     2.7%
+independent_uniform_c65536 c=65536          8  8388608 std::sort lexicographic  -                    1     203.38     0.3%
+balanced_hierarchy_c64     c=64             2  1048576 samplesort               scalar               1      18.63     0.8%
+balanced_hierarchy_c64     c=64             2  1048576 quicksort                scalar               1      23.54     1.9%
+balanced_hierarchy_c64     c=64             2  1048576 samplesort               scalar               6       9.20     4.2%
+balanced_hierarchy_c64     c=64             2  1048576 quicksort                scalar               6       8.59     4.6%
+balanced_hierarchy_c64     c=64             2  1048576 std::sort lexicographic  -                    1     109.10     0.2%
+balanced_hierarchy_c64     c=64             4  1048576 samplesort               scalar               1      96.78     1.0%
+balanced_hierarchy_c64     c=64             4  1048576 quicksort                scalar               1      72.12     2.1%
+balanced_hierarchy_c64     c=64             4  1048576 samplesort               scalar               6      25.20     1.0%
+balanced_hierarchy_c64     c=64             4  1048576 quicksort                scalar               6      91.82     1.8%
+balanced_hierarchy_c64     c=64             4  1048576 std::sort lexicographic  -                    1     201.61     1.5%
+balanced_hierarchy_c64     c=64             8  1048576 samplesort               scal[bench_q2_algorithms] 733/900 (81%) 1h22m elapsed, ~18m54s left | u64   
+[bench_q2_algorithms] 738/900 (82%) 1h23m elapsed, ~18m25s left | u64   
+[bench_q2_algorithms] 743/900 (83%) 1h24m elapsed, ~17m56s left | u64   
+ar               1     100.20     1.1%
+balanced_hierarchy_c64     c=64             8  1048576 quicksort                scalar               1      71.25     1.0%
+balanced_hierarchy_c64     c=64             8  1048576 samplesort               scalar               6      25.88     0.8%
+balanced_hierarchy_c64     c=64             8  1048576 quicksort                scalar               6      92.10     1.6%
+balanced_hierarchy_c64     c=64             8  1048576 std::sort lexicographic  -                    1     200.74     1.3%
+balanced_hierarchy_c64     c=64             2  8388608 samplesort               scalar               1      31.37     0.6%
+balanced_hierarchy_c64     c=64             2  8388608 quicksort                scalar               1      32.12     0.7%
+balanced_hierarchy_c64     c=64             2  8388608 samplesort               scalar               6      17.55     1.8%
+balanced_hierarchy_c64     c=64             2  8388608 quicksort                scalar               6      13.44     8.9%
+balanced_hierarchy_c64     c=64             2  8388608 std::sort lexicographic  -                    1     182.00     1.1%
+balanced_hierarchy_c64     c=64             4  8388608 samplesort               scalar               1      92.40     0.4%
+balanced_hierarchy_c64     c=64             4  8388608 quicksort                scalar               1      82.03     0.4%
+balanced_hierarchy_c64     c=64             4  8388608 samplesort               scalar               6      27.35     1.4%
+balanced_hierarchy_c64     c=64             4  8388608 quicksort                scalar               6      22.41     2.4%
+balanced_hierarchy_c64     c=64             4  8388608 std::sort lexicographic  -                    1     362.28     0.1%
+balanced_hierarchy_c64     c=64             8  8388608 samplesort               scalar               1      93.32     0.3%
+balanced_hierarchy_c64     c=64             8  8388608 quicksort                scalar               1      83.68     0.3%
+balanced_hierarchy_c64     c=64             8  8388608 samplesort               scalar               6      27.22     0.9%
+balanced_hierarchy_c64     c=64             8  8388608 quicksort                scalar               6      23.64     1.7%
+balanced_hierarchy_c64     c=64             8  8388608 std::sort lexicographic  -                    1     365.48     0.8%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  1048576 samplesort               scalar               1      35.12     0.3%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  1048576 quicksort                scalar               1      36.42     2.4%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  1048576 samplesort               scalar               6      12.59     9.5%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  1048576 quicksort                scalar               6      10.63     3.1%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  1048576 std::sort lexicographic  -                    1     123.16     1.1%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  1048576 samplesort               scalar               1      80.58     1.3%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  1048576 quicksort                scalar               1      64.50     0.7%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  1048576 samplesort               scalar               6      22.22     1.3%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  1048576 quicksort                scalar               6      42.36     1.5%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  1048576 std::sort lexicographic  -                    1     210.45     0.8%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  1048576 samplesort               scalar               1     302.96     0.9%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  1048576 quicksort                scalar               1     146.05     1.7%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  1048576 samplesort               scalar               6      61.81     0.9%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  1048576 quicksort                scalar               6     [bench_q2_algorithms] 760/900 (84%) 1h25m elapsed, ~15m44s left | u64   
+[bench_q2_algorithms] 764/900 (85%) 1h26m elapsed, ~15m18s left | u64   
+[bench_q2_algorithms] 768/900 (85%) 1h26m elapsed, ~14m54s left | u64   
+[bench_q2_algorithms] 769/900 (85%) 1h27m elapsed, ~14m51s left | u64   
+[bench_q2_algorithms] 772/900 (86%) 1h27m elapsed, ~14m34s left | u64   
+[bench_q2_algorithms] 773/900 (86%) 1h28m elapsed, ~14m34s left | u64   
+[bench_q2_algorithms] 790/900 (88%) 1h29m elapsed, ~12m25s left | u64   
+261.48     1.0%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  1048576 std::sort lexicographic  -                    1     389.45     0.8%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  8388608 samplesort               scalar               1      51.66     0.4%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  8388608 quicksort                scalar               1      49.92     0.9%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  8388608 samplesort               scalar               6      21.20     1.5%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  8388608 quicksort                scalar               6      16.16     1.3%
+skewed_zipf_s0.5           d1=1024;s=0.5     2  8388608 std::sort lexicographic  -                    1     211.26     0.4%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  8388608 samplesort               scalar               1      94.19     0.4%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  8388608 quicksort                scalar               1      82.25     0.7%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  8388608 samplesort               scalar               6      28.77     1.1%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  8388608 quicksort                scalar               6      26.40     1.1%
+skewed_zipf_s0.5           d1=1024;s=0.5     4  8388608 std::sort lexicographic  -                    1     350.41     0.2%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  8388608 samplesort               scalar               1     276.62     0.8%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  8388608 quicksort                scalar               1     196.87     2.2%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  8388608 samplesort               scalar               6      62.67     0.6%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  8388608 quicksort                scalar               6     165.28     0.6%
+skewed_zipf_s0.5           d1=1024;s=0.5     8  8388608 std::sort lexicographic  -                    1     603.15     0.1%
+skewed_zipf_s1             d1=1024;s=1      2  1048576 samplesort               scalar               1      35.50     1.5%
+skewed_zipf_s1             d1=1024;s=1      2  1048576 quicksort                scalar               1      36.54     1.8%
+skewed_zipf_s1             d1=1024;s=1      2  1048576 samplesort               scalar               6      15.36     1.1%
+skewed_zipf_s1             d1=1024;s=1      2  1048576 quicksort                scalar               6      11.17     1.6%
+skewed_zipf_s1             d1=1024;s=1      2  1048576 std::sort lexicographic  -                    1     121.55     0.6%
+skewed_zipf_s1             d1=1024;s=1      4  1048576 samplesort               scalar               1      77.37     0.7%
+skewed_zipf_s1             d1=1024;s=1      4  1048576 quicksort                scalar               1      60.55     1.0%
+skewed_zipf_s1             d1=1024;s=1      4  1048576 samplesort               scalar               6      24.46     3.7%
+skewed_zipf_s1             d1=1024;s=1      4  1048576 quicksort                scalar               6      34.25     1.7%
+skewed_zipf_s1             d1=1024;s=1      4  1048576 std::sort lexicographic  -                    1     209.66     0.8%
+skewed_zipf_s1             d1=1024;s=1      8  1048576 samplesort               scalar               1     257.20     1.1%
+skewed_zipf_s1             d1=1024;s=1      8  1048576 quicksort                scalar               1     127.66     0.8%
+skewed_zipf_s1             d1=1024;s=1      8  1048576 samplesort               scalar               6      54.44     0.8%
+skewed_zipf_s1             d1=1024;s=1      8  1048576 quicksort                scalar               6     200.35     0.9%
+skewed_zipf_s1             d1=1024;s=1      8  1048576 std::sort lexicographic  -                    1     412.79     0.6%
+skewed_zipf_s1             d1=1024;s=1      2  8388608 samplesort               scalar               1      51.50     1.0%
+skewed_zipf_s1             d1=1024;s=1      2  8388608 quicksort                scalar               1      50.59     0.8%
+skewe[bench_q2_algorithms] 794/900 (88%) 1h29m elapsed, ~11m59s left | u64   
+[bench_q2_algorithms] 798/900 (89%) 1h30m elapsed, ~11m34s left | u64   
+[bench_q2_algorithms] 800/900 (89%) 1h31m elapsed, ~11m25s left | u64   
+[bench_q2_algorithms] 803/900 (89%) 1h32m elapsed, ~11m10s left | u64   
+[bench_q2_algorithms] 821/900 (91%) 1h33m elapsed, ~8m57s left | u64   
+d_zipf_s1             d1=1024;s=1      2  8388608 samplesort               scalar               6      22.99     2.0%
+skewed_zipf_s1             d1=1024;s=1      2  8388608 quicksort                scalar               6      18.65     3.9%
+skewed_zipf_s1             d1=1024;s=1      2  8388608 std::sort lexicographic  -                    1     216.84     0.3%
+skewed_zipf_s1             d1=1024;s=1      4  8388608 samplesort               scalar               1      92.65     0.8%
+skewed_zipf_s1             d1=1024;s=1      4  8388608 quicksort                scalar               1      80.27     0.4%
+skewed_zipf_s1             d1=1024;s=1      4  8388608 samplesort               scalar               6      32.24     1.0%
+skewed_zipf_s1             d1=1024;s=1      4  8388608 quicksort                scalar               6      25.10     4.5%
+skewed_zipf_s1             d1=1024;s=1      4  8388608 std::sort lexicographic  -                    1     362.36     0.3%
+skewed_zipf_s1             d1=1024;s=1      8  8388608 samplesort               scalar               1     240.30     1.0%
+skewed_zipf_s1             d1=1024;s=1      8  8388608 quicksort                scalar               1     177.87     0.2%
+skewed_zipf_s1             d1=1024;s=1      8  8388608 samplesort               scalar               6      67.77     0.4%
+skewed_zipf_s1             d1=1024;s=1      8  8388608 quicksort                scalar               6     129.56     0.7%
+skewed_zipf_s1             d1=1024;s=1      8  8388608 std::sort lexicographic  -                    1     654.28     0.1%
+skewed_zipf_s2             d1=1024;s=2      2  1048576 samplesort               scalar               1      35.14     1.3%
+skewed_zipf_s2             d1=1024;s=2      2  1048576 quicksort                scalar               1      35.24     2.2%
+skewed_zipf_s2             d1=1024;s=2      2  1048576 samplesort               scalar               6      28.01     2.5%
+skewed_zipf_s2             d1=1024;s=2      2  1048576 quicksort                scalar               6      26.26     4.0%
+skewed_zipf_s2             d1=1024;s=2      2  1048576 std::sort lexicographic  -                    1     117.27     0.9%
+skewed_zipf_s2             d1=1024;s=2      4  1048576 samplesort               scalar               1      59.80     1.8%
+skewed_zipf_s2             d1=1024;s=2      4  1048576 quicksort                scalar               1      52.11     1.0%
+skewed_zipf_s2             d1=1024;s=2      4  1048576 samplesort               scalar               6      40.85     2.5%
+skewed_zipf_s2             d1=1024;s=2      4  1048576 quicksort                scalar               6      19.06     4.1%
+skewed_zipf_s2             d1=1024;s=2      4  1048576 std::sort lexicographic  -                    1     223.13     1.0%
+skewed_zipf_s2             d1=1024;s=2      8  1048576 samplesort               scalar               1     168.46     0.7%
+skewed_zipf_s2             d1=1024;s=2      8  1048576 quicksort                scalar               1      99.07     1.2%
+skewed_zipf_s2             d1=1024;s=2      8  1048576 samplesort               scalar               6      43.67     1.6%
+skewed_zipf_s2             d1=1024;s=2      8  1048576 quicksort                scalar               6      95.88     1.2%
+skewed_zipf_s2             d1=1024;s=2      8  1048576 std::sort lexicographic  -                    1     472.78     0.6%
+skewed_zipf_s2             d1=1024;s=2      2  8388608 samplesort               scalar               1      51.06     0.6%
+skewed_zipf_s2             d1=1024;s=2      2  8388608 quicksort                scalar               1      45.50     0.6%
+skewed_zipf_s2             d1=1024;s=2      2  8388608 samplesort               scalar               6      40.32     1.7%
+skewed_zipf_s2             d1=1024;s=2      2  8388608 quicksort                scalar               6      32.63     2.9%
+skewed_zipf_s2             d1=1024;s=2      2  8388608 std::sort lexicographic  -                    1     236.46     0.3%
+skewed_zipf_s2             d1=1024;s=2    [bench_q2_algorithms] 824/900 (92%) 1h33m elapsed, ~8m38s left | u64   
+[bench_q2_algorithms] 828/900 (92%) 1h34m elapsed, ~8m12s left | u64   
+[bench_q2_algorithms] 830/900 (92%) 1h35m elapsed, ~8m01s left | u64   
+[bench_q2_algorithms] 833/900 (93%) 1h36m elapsed, ~7m44s left | u64   
+[bench_q2_algorithms] 851/900 (95%) 1h36m elapsed, ~5m34s left | u64   
+[bench_q2_algorithms] 854/900 (95%) 1h37m elapsed, ~5m14s left | u64   
+  4  8388608 samplesort               scalar               1      78.53     0.2%
+skewed_zipf_s2             d1=1024;s=2      4  8388608 quicksort                scalar               1      67.89     0.6%
+skewed_zipf_s2             d1=1024;s=2      4  8388608 samplesort               scalar               6      53.76     4.0%
+skewed_zipf_s2             d1=1024;s=2      4  8388608 quicksort                scalar               6      22.90     4.6%
+skewed_zipf_s2             d1=1024;s=2      4  8388608 std::sort lexicographic  -                    1     386.71     0.5%
+skewed_zipf_s2             d1=1024;s=2      8  8388608 samplesort               scalar               1     174.02     0.3%
+skewed_zipf_s2             d1=1024;s=2      8  8388608 quicksort                scalar               1     139.34     0.2%
+skewed_zipf_s2             d1=1024;s=2      8  8388608 samplesort               scalar               6      43.57     1.1%
+skewed_zipf_s2             d1=1024;s=2      8  8388608 quicksort                scalar               6      63.68     1.3%
+skewed_zipf_s2             d1=1024;s=2      8  8388608 std::sort lexicographic  -                    1     739.41     0.1%
+heavy_hitter_f90           frac=0.9         2  1048576 samplesort               scalar               1      33.11     0.8%
+heavy_hitter_f90           frac=0.9         2  1048576 quicksort                scalar               1      35.66     1.6%
+heavy_hitter_f90           frac=0.9         2  1048576 samplesort               scalar               6      19.04     4.4%
+heavy_hitter_f90           frac=0.9         2  1048576 quicksort                scalar               6      38.41     2.9%
+heavy_hitter_f90           frac=0.9         2  1048576 std::sort lexicographic  -                    1     114.89     0.3%
+heavy_hitter_f90           frac=0.9         4  1048576 samplesort               scalar               1      48.17     0.9%
+heavy_hitter_f90           frac=0.9         4  1048576 quicksort                scalar               1      45.80     2.0%
+heavy_hitter_f90           frac=0.9         4  1048576 samplesort               scalar               6      21.35     4.4%
+heavy_hitter_f90           frac=0.9         4  1048576 quicksort                scalar               6      24.53     2.6%
+heavy_hitter_f90           frac=0.9         4  1048576 std::sort lexicographic  -                    1     215.10     1.0%
+heavy_hitter_f90           frac=0.9         8  1048576 samplesort               scalar               1     125.30     0.9%
+heavy_hitter_f90           frac=0.9         8  1048576 quicksort                scalar               1      83.36     4.5%
+heavy_hitter_f90           frac=0.9         8  1048576 samplesort               scalar               6      44.23     1.3%
+heavy_hitter_f90           frac=0.9         8  1048576 quicksort                scalar               6      69.64     1.2%
+heavy_hitter_f90           frac=0.9         8  1048576 std::sort lexicographic  -                    1     467.76     1.2%
+heavy_hitter_f90           frac=0.9         2  8388608 samplesort               scalar               1      47.62     0.5%
+heavy_hitter_f90           frac=0.9         2  8388608 quicksort                scalar               1      44.86     1.5%
+heavy_hitter_f90           frac=0.9         2  8388608 samplesort               scalar               6      29.56     4.9%
+heavy_hitter_f90           frac=0.9         2  8388608 quicksort                scalar               6      44.02     2.4%
+heavy_hitter_f90           frac=0.9         2  8388608 std::sort lexicographic  -                    1     225.26     1.3%
+heavy_hitter_f90           frac=0.9         4  8388608 samplesort               scalar               1      67.73     0.2%
+heavy_hitter_f90           frac=0.9         4  8388608 quicksort                scalar               1      63.97     0.8%
+heavy_hitter_f90           frac=0.9         4  8388608 samplesort               scalar               6      27.02     1.4%
+heavy_hitter_f90           frac=0.9         4  8388608 quicksort               [bench_q2_algorithms] 858/900 (95%) 1h38m elapsed, ~4m48s left | u64   
+[bench_q2_algorithms] 860/900 (96%) 1h38m elapsed, ~4m35s left | u64   
+[bench_q2_algorithms] 863/900 (96%) 1h39m elapsed, ~4m16s left | u64   
+[bench_q2_algorithms] 883/900 (98%) 1h40m elapsed, ~1m55s left | u64   
+[bench_q2_algorithms] 888/900 (99%) 1h41m elapsed, ~1m21s left | u64   
+ scalar               6      28.91     1.6%
+heavy_hitter_f90           frac=0.9         4  8388608 std::sort lexicographic  -                    1     362.99     0.2%
+heavy_hitter_f90           frac=0.9         8  8388608 samplesort               scalar               1     150.35     0.1%
+heavy_hitter_f90           frac=0.9         8  8388608 quicksort                scalar               1     122.36     0.4%
+heavy_hitter_f90           frac=0.9         8  8388608 samplesort               scalar               6      47.25     2.1%
+heavy_hitter_f90           frac=0.9         8  8388608 quicksort                scalar               6      54.79     2.4%
+heavy_hitter_f90           frac=0.9         8  8388608 std::sort lexicographic  -                    1     742.79     0.6%
+low_cardinality_d4         d=4              2  1048576 samplesort               scalar               1      11.91     2.6%
+low_cardinality_d4         d=4              2  1048576 quicksort                scalar               1       8.91     2.9%
+low_cardinality_d4         d=4              2  1048576 samplesort               scalar               6      11.06     1.9%
+low_cardinality_d4         d=4              2  1048576 quicksort                scalar               6       6.61     4.3%
+low_cardinality_d4         d=4              2  1048576 std::sort lexicographic  -                    1      60.89     1.3%
+low_cardinality_d4         d=4              4  1048576 samplesort               scalar               1      28.39     1.0%
+low_cardinality_d4         d=4              4  1048576 quicksort                scalar               1      23.90     1.5%
+low_cardinality_d4         d=4              4  1048576 samplesort               scalar               6      14.33     2.4%
+low_cardinality_d4         d=4              4  1048576 quicksort                scalar               6       9.25     2.7%
+low_cardinality_d4         d=4              4  1048576 std::sort lexicographic  -                    1     175.51     1.0%
+low_cardinality_d4         d=4              8  1048576 samplesort               scalar               1      95.40     0.4%
+low_cardinality_d4         d=4              8  1048576 quicksort                scalar               1      68.86     0.9%
+low_cardinality_d4         d=4              8  1048576 samplesort               scalar               6      27.54     2.0%
+low_cardinality_d4         d=4              8  1048576 quicksort                scalar               6      22.70     2.2%
+low_cardinality_d4         d=4              8  1048576 std::sort lexicographic  -                    1     475.91     1.0%
+low_cardinality_d4         d=4              2  8388608 samplesort               scalar               1      24.48     0.8%
+low_cardinality_d4         d=4              2  8388608 quicksort                scalar               1      13.32     1.0%
+low_cardinality_d4         d=4              2  8388608 samplesort               scalar               6      17.15     1.6%
+low_cardinality_d4         d=4              2  8388608 quicksort                scalar               6       8.67     1.9%
+low_cardinality_d4         d=4              2  8388608 std::sort lexicographic  -                    1     119.45     0.1%
+low_cardinality_d4         d=4              4  8388608 samplesort               scalar               1      46.35     0.2%
+low_cardinality_d4         d=4              4  8388608 quicksort                scalar               1      35.05     0.4%
+low_cardinality_d4         d=4              4  8388608 samplesort               scalar               6      21.08     2.8%
+low_cardinality_d4         d=4              4  8388608 quicksort                scalar               6      14.37     1.4%
+low_cardinality_d4         d=4              4  8388608 std::sort lexicographic  -                    1     357.93     0.1%
+low_cardinality_d4         d=4              8  8388608 samplesort               scalar               1     103.72     0.3%
+low_cardinality_d4         d=4              8  8388608 quicksort                scalar               1      85.10   [bench_q2_algorithms] 892/900 (99%) 1h41m elapsed, ~54s left | u64   
+[bench_q2_algorithms] 893/900 (99%) 1h42m elapsed, ~48s left | u64   
+  0.4%
+low_cardinality_d4         d=4              8  8388608 samplesort               scalar               6      34.26     1.5%
+low_cardinality_d4         d=4              8  8388608 quicksort                scalar               6      22.42     5.7%
+low_cardinality_d4         d=4              8  8388608 std::sort lexicographic  -                    1     763.66     0.1%
+
+885 measured, 8 dropped, 0 incorrect
+  !! 23 row(s) still spread wider than 5% after 33 repetitions: the machine would not settle on those, and their medians should not be compared at fine margins
+
+wrote /home/pietrzyk/tslgen-v99/test-sort/benchmark_results_verify/q2_algorithms.csv (893 rows)

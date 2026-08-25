@@ -1,0 +1,535 @@
+[bench_q1_baselines] 1/336 (0%) 2s elapsed, ~11m55s left | skewed_zipf_s1_u32_n8388608_m1   
+[bench_q1_baselines] 17/336 (5%) 32s elapsed, ~10m05s left | low_cardinality_d4_u32_n8388608_m1   
+Q1 baselines / bench_q1_baselines
+host=bolvar cores=24 governor=performance clock=4100MHz load=3.67 compiler=clang 24.0
+topology: 2 NUMA node(s), 6 physical core(s) per node, 6 logical cpu(s) available to this process [pinned], LLC 30 MiB
+  !! load average above 1.0: another process is competing and these numbers are not publishable
+instrumentation=off (counters compiled out)
+measure-cell=clang_bool/512-bit
+workers=1..6, rows=8388608 (derived from this machine)
+ips4o: built in
+x86-simd-sort: built in (one-column rows only)
+arrow: built in, no compute init needed on this version (serial rows only)
+
+-- skewed_zipf_s1_u32_n8388608_m1, 8388608 rows, 1 columns, u32 --
+
+shape                      params        cols     rows algorithm                detector       workers    ns/elem      iqr
+skewed_zipf_s1             generated        1  8388608 samplesort               scalar               1      10.47     0.4%
+skewed_zipf_s1             generated        1  8388608 quicksort                scalar               1       7.89     1.2%
+skewed_zipf_s1             generated        1  8388608 std::sort                scalar               1      64.79     1.1%
+skewed_zipf_s1             generated        1  8388608 std::stable_sort         scalar               1      70.06     0.8%
+skewed_zipf_s1             generated        1  8388608 ips4o::sort              scalar               1      22.85     1.1%
+skewed_zipf_s1             generated        1  8388608 avx512_argsort           scalar               1      32.50     0.9%
+skewed_zipf_s1             generated        1  8388608 arrow::SortIndices       scalar               1       5.95     0.9%
+skewed_zipf_s1             generated        1  8388608 samplesort               scalar               6       9.82     3.2%
+skewed_zipf_s1             generated        1  8388608 quicksort                scalar               6       4.47     4.4%
+skewed_zipf_s1             generated        1  8388608 std::sort                scalar               6      11.24     1.0%
+skewed_zipf_s1             generated        1  8388608 ips4o::parallel::sort    scalar               6       5.78     6.2%
+skewed_zipf_s1             generated        1  8388608 avx512_argsort           scalar               6   dropped: parallel argsort needs XSS_COMPILE_OPENMP; this build has no OpenMP runtime for clang
+skewed_zipf_s1             generated        1  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- low_cardinality_d4_u32_n8388608_m1, 8388608 rows, 1 columns, u32 --
+low_cardinality_d4         generated        1  8388608 samplesort               scalar               1       7.57     1.8%
+low_cardinality_d4         generated        1  8388608 quicksort                scalar               1       3.11     0.5%
+low_cardinality_d4         generated        1  8388608 std::sort                scalar               1      26.27     0.9%
+low_cardinality_d4         generated        1  8388608 std::stable_sort         scalar               1      36.43     3.8%
+low_cardinality_d4         generated        1  8388608 ips4o::sort              scalar               1      10.39     2.5%
+low_cardinality_d4         generated        1  8388608 avx512_argsort           scalar               1       4.92     0.3%
+low_cardinality_d4         generated        1  8388608 arrow::SortIndices       scalar               1       5.01     2.1%
+low_cardinality_d4         generated        1  8388608 samplesort               scalar               6      10.30     1.0%
+low_cardinality_d4         generated        1  8388608 quicksort                scalar               6       3.44     4.9%
+low_cardinality_d4         generated        1  8388608 std::sort                scalar               6       5.54     0.5%
+low_cardinality_d4         generated        1  8388608 ips4o::parallel::sort    scalar               6       2.43     2.9%
+low_cardinality_d4         generated        1  8388608 avx512_argsort           scalar               6   dropped: parallel [bench_q1_baselines] 36/336 (11%) 1m02s elapsed, ~8m39s left | independent_uniform_c1024_u32_n8388608_m1   
+[bench_q1_baselines] 44/336 (13%) 1m35s elapsed, ~10m31s left | unique_first_u32_n8388608_m1   
+argsort needs XSS_COMPILE_OPENMP; this build has no OpenMP runtime for clang
+low_cardinality_d4         generated        1  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- independent_uniform_c1024_u32_n8388608_m1, 8388608 rows, 1 columns, u32 --
+independent                generated        1  8388608 samplesort               scalar               1      13.89     1.2%
+independent                generated        1  8388608 quicksort                scalar               1      10.51     2.3%
+independent                generated        1  8388608 std::sort                scalar               1      80.51     0.9%
+independent                generated        1  8388608 std::stable_sort         scalar               1      85.96     0.6%
+independent                generated        1  8388608 ips4o::sort              scalar               1      31.77     1.1%
+independent                generated        1  8388608 avx512_argsort           scalar               1      31.85     0.8%
+independent                generated        1  8388608 arrow::SortIndices       scalar               1       6.36     2.6%
+independent                generated        1  8388608 samplesort               scalar               6      10.28     1.5%
+independent                generated        1  8388608 quicksort                scalar               6       4.60     3.1%
+independent                generated        1  8388608 std::sort                scalar               6      13.55     0.8%
+independent                generated        1  8388608 ips4o::parallel::sort    scalar               6       6.50     1.8%
+independent                generated        1  8388608 avx512_argsort           scalar               6   dropped: parallel argsort needs XSS_COMPILE_OPENMP; this build has no OpenMP runtime for clang
+independent                generated        1  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- unique_first_u32_n8388608_m1, 8388608 rows, 1 columns, u32 --
+unique_first               generated        1  8388608 samplesort               scalar               1      28.01     1.3%
+unique_first               generated        1  8388608 quicksort                scalar               1      20.71     1.2%
+unique_first               generated        1  8388608 std::sort                scalar               1     122.36     0.2%
+unique_first               generated        1  8388608 std::stable_sort         scalar               1     124.22     0.5%
+unique_first               generated        1  8388608 ips4o::sort              scalar               1      58.35     1.0%
+unique_first               generated        1  8388608 avx512_argsort           scalar               1      42.50     0.7%
+unique_first               generated        1  8388608 arrow::SortIndices       scalar               1     122.37     0.6%
+unique_first               generated        1  8388608 samplesort               scalar               6      13.11     1.7%
+unique_first               generated        1  8388608 quicksort                scalar               6       6.34     4.5%
+unique_first               generated        1  8388608 std::sort                scalar               6      22.82     1.2%
+unique_first               generated        1  8388608 ips4o::parallel::sort    scalar               6      11.06     0.5%
+unique_first               generated        1  8388608 avx512_argsort           scalar               6   dropped: parallel argsort needs XSS_COMPILE_OPENMP; this build has no OpenMP runtime for clang
+unique_first               generated        1  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- skewed_zipf_s1_u32_n8388608_m4, 8388608 rows, 4 columns, u32 --
+skewed_zipf_s1             generated        4  8388608 samplesort               scalar               1 [bench_q1_baselines] 54/336 (16%) 2m09s elapsed, ~11m16s left | skewed_zipf_s1_u32_n8388608_m4   
+[bench_q1_baselines] 56/336 (17%) 3m02s elapsed, ~15m11s left | skewed_zipf_s1_u32_n8388608_m4   
+[bench_q1_baselines] 59/336 (18%) 3m44s elapsed, ~17m33s left | skewed_zipf_s1_u32_n8388608_m4   
+[bench_q1_baselines] 68/336 (20%) 4m30s elapsed, ~17m46s left | low_cardinality_d4_u32_n8388608_m4   
+[bench_q1_baselines] 72/336 (21%) 5m19s elapsed, ~19m32s left | low_cardinality_d4_u32_n8388608_m4   
+[bench_q1_baselines] 81/336 (24%) 6m03s elapsed, ~19m02s left | independent_uniform_c1024_u32_n8388608_m4   
+     72.20     0.5%
+skewed_zipf_s1             generated        4  8388608 quicksort                scalar               1      53.56     0.8%
+skewed_zipf_s1             generated        4  8388608 std::sort                scalar               1     329.39     0.1%
+skewed_zipf_s1             generated        4  8388608 std::stable_sort         scalar               1     295.29     0.1%
+skewed_zipf_s1             generated        4  8388608 ips4o::sort              scalar               1     238.40     0.2%
+skewed_zipf_s1             generated        4  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+skewed_zipf_s1             generated        4  8388608 arrow::SortIndices       scalar               1     255.99     0.2%
+skewed_zipf_s1             generated        4  8388608 samplesort               scalar               6      23.38     1.4%
+skewed_zipf_s1             generated        4  8388608 quicksort                scalar               6      22.45     1.4%
+skewed_zipf_s1             generated        4  8388608 std::sort                scalar               6      51.28     1.0%
+skewed_zipf_s1             generated        4  8388608 ips4o::parallel::sort    scalar               6      42.19     1.3%
+skewed_zipf_s1             generated        4  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+skewed_zipf_s1             generated        4  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- low_cardinality_d4_u32_n8388608_m4, 8388608 rows, 4 columns, u32 --
+low_cardinality_d4         generated        4  8388608 samplesort               scalar               1      27.33     0.4%
+low_cardinality_d4         generated        4  8388608 quicksort                scalar               1      18.32     2.1%
+low_cardinality_d4         generated        4  8388608 std::sort                scalar               1     305.26     0.1%
+low_cardinality_d4         generated        4  8388608 std::stable_sort         scalar               1     254.29     0.2%
+low_cardinality_d4         generated        4  8388608 ips4o::sort              scalar               1      74.93     1.3%
+low_cardinality_d4         generated        4  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+low_cardinality_d4         generated        4  8388608 arrow::SortIndices       scalar               1     252.56     0.2%
+low_cardinality_d4         generated        4  8388608 samplesort               scalar               6      13.31     2.5%
+low_cardinality_d4         generated        4  8388608 quicksort                scalar               6       7.05     1.9%
+low_cardinality_d4         generated        4  8388608 std::sort                scalar               6      24.43     1.8%
+low_cardinality_d4         generated        4  8388608 ips4o::parallel::sort    scalar               6      14.28     2.3%
+low_cardinality_d4         generated        4  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+low_cardinality_d4         generated        4  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- independent_uniform_c1024_u32_n8388608_m4, 8388608 rows, 4 columns, u32 --
+independent                generated        4  8388608 samplesort               scalar               1      88.86     0.7%
+independent                generated        4  8388608 quicksort                scalar               1      59.32     1.2%
+independent                generated        4  8388608 std::sort                scalar               1     251.03     0.2%
+independent      [bench_q1_baselines] 83/336 (25%) 6m36s elapsed, ~20m09s left | independent_uniform_c1024_u32_n8388608_m4   
+[bench_q1_baselines] 89/336 (26%) 7m09s elapsed, ~19m51s left | independent_uniform_c1024_u32_n8388608_m4   
+[bench_q1_baselines] 96/336 (29%) 7m43s elapsed, ~19m17s left | unique_first_u32_n8388608_m4   
+[bench_q1_baselines] 105/336 (31%) 8m26s elapsed, ~18m33s left | skewed_zipf_s1_u32_n8388608_m8   
+[bench_q1_baselines] 107/336 (32%) 9m28s elapsed, ~20m16s left | skewed_zipf_s1_u32_n8388608_m8   
+[bench_q1_baselines] 108/336 (32%) 10m15s elapsed, ~21m39s left | skewed_zipf_s1_u32_n8388608_m8   
+[bench_q1_baselines] 109/336 (32%) 10m56s elapsed, ~22m47s left | skewed_zipf_s1_u32_n8388608_m8   
+          generated        4  8388608 std::stable_sort         scalar               1     219.12     0.1%
+independent                generated        4  8388608 ips4o::sort              scalar               1     178.06     0.2%
+independent                generated        4  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+independent                generated        4  8388608 arrow::SortIndices       scalar               1     228.06     0.3%
+independent                generated        4  8388608 samplesort               scalar               6      21.61     2.2%
+independent                generated        4  8388608 quicksort                scalar               6      53.17     0.6%
+independent                generated        4  8388608 std::sort                scalar               6      38.45     2.1%
+independent                generated        4  8388608 ips4o::parallel::sort    scalar               6      31.82     0.2%
+independent                generated        4  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+independent                generated        4  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- unique_first_u32_n8388608_m4, 8388608 rows, 4 columns, u32 --
+unique_first               generated        4  8388608 samplesort               scalar               1      28.23     0.5%
+unique_first               generated        4  8388608 quicksort                scalar               1      20.89     1.6%
+unique_first               generated        4  8388608 std::sort                scalar               1     122.57     0.4%
+unique_first               generated        4  8388608 std::stable_sort         scalar               1     123.91     0.4%
+unique_first               generated        4  8388608 ips4o::sort              scalar               1      64.19     2.0%
+unique_first               generated        4  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+unique_first               generated        4  8388608 arrow::SortIndices       scalar               1     134.20     1.9%
+unique_first               generated        4  8388608 samplesort               scalar               6      14.25     1.1%
+unique_first               generated        4  8388608 quicksort                scalar               6       6.47     1.6%
+unique_first               generated        4  8388608 std::sort                scalar               6      22.89     1.2%
+unique_first               generated        4  8388608 ips4o::parallel::sort    scalar               6      12.09     1.0%
+unique_first               generated        4  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+unique_first               generated        4  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- skewed_zipf_s1_u32_n8388608_m8, 8388608 rows, 8 columns, u32 --
+skewed_zipf_s1             generated        8  8388608 samplesort               scalar               1     219.16     0.1%
+skewed_zipf_s1             generated        8  8388608 quicksort                scalar               1     128.39     0.8%
+skewed_zipf_s1             generated        8  8388608 std::sort                scalar               1     599.46     0.2%
+skewed_zipf_s1             generated        8  8388608 std::stable_sort         scalar               1     556.33     0.3%
+skewed_zipf_s1             generated        8  8388608 ips4o::sort              scalar               1     483.97     0.3%
+skewed_zipf_s1             generated        8  8388608 avx512_argsort  [bench_q1_baselines] 111/336 (33%) 11m31s elapsed, ~23m22s left | skewed_zipf_s1_u32_n8388608_m8   
+[bench_q1_baselines] 115/336 (34%) 12m06s elapsed, ~23m15s left | skewed_zipf_s1_u32_n8388608_m8   
+[bench_q1_baselines] 120/336 (36%) 13m24s elapsed, ~24m08s left | low_cardinality_d4_u32_n8388608_m8   
+[bench_q1_baselines] 121/336 (36%) 14m16s elapsed, ~25m21s left | low_cardinality_d4_u32_n8388608_m8   
+[bench_q1_baselines] 122/336 (36%) 14m51s elapsed, ~26m03s left | low_cardinality_d4_u32_n8388608_m8   
+[bench_q1_baselines] 124/336 (37%) 15m28s elapsed, ~26m27s left | low_cardinality_d4_u32_n8388608_m8   
+[bench_q1_baselines] 131/336 (39%) 15m59s elapsed, ~25m01s left | independent_uniform_c1024_u32_n8388608_m8   
+[bench_q1_baselines] 134/336 (40%) 16m45s elapsed, ~25m16s left | independent_uniform_c1024_u32_n8388608_m8   
+[bench_q1_baselines] 137/336 (41%) 17m21s elapsed, ~25m12s left | independent_uniform_c1024_u32_n8388608_m8   
+         scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+skewed_zipf_s1             generated        8  8388608 arrow::SortIndices       scalar               1     415.93     0.3%
+skewed_zipf_s1             generated        8  8388608 samplesort               scalar               6      58.05     0.7%
+skewed_zipf_s1             generated        8  8388608 quicksort                scalar               6     148.15     0.4%
+skewed_zipf_s1             generated        8  8388608 std::sort                scalar               6      96.87     1.0%
+skewed_zipf_s1             generated        8  8388608 ips4o::parallel::sort    scalar               6      84.52     1.2%
+skewed_zipf_s1             generated        8  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+skewed_zipf_s1             generated        8  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- low_cardinality_d4_u32_n8388608_m8, 8388608 rows, 8 columns, u32 --
+low_cardinality_d4         generated        8  8388608 samplesort               scalar               1      76.43     1.6%
+low_cardinality_d4         generated        8  8388608 quicksort                scalar               1      51.06     1.9%
+low_cardinality_d4         generated        8  8388608 std::sort                scalar               1     705.81     0.8%
+low_cardinality_d4         generated        8  8388608 std::stable_sort         scalar               1     608.48     0.2%
+low_cardinality_d4         generated        8  8388608 ips4o::sort              scalar               1     416.60     0.3%
+low_cardinality_d4         generated        8  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+low_cardinality_d4         generated        8  8388608 arrow::SortIndices       scalar               1     432.22     0.1%
+low_cardinality_d4         generated        8  8388608 samplesort               scalar               6      22.47     0.8%
+low_cardinality_d4         generated        8  8388608 quicksort                scalar               6      15.66     2.7%
+low_cardinality_d4         generated        8  8388608 std::sort                scalar               6     106.82     2.2%
+low_cardinality_d4         generated        8  8388608 ips4o::parallel::sort    scalar               6      72.46     1.4%
+low_cardinality_d4         generated        8  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+low_cardinality_d4         generated        8  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- independent_uniform_c1024_u32_n8388608_m8, 8388608 rows, 8 columns, u32 --
+independent                generated        8  8388608 samplesort               scalar               1      88.80     0.8%
+independent                generated        8  8388608 quicksort                scalar               1      59.96     3.7%
+independent                generated        8  8388608 std::sort                scalar               1     251.07     0.1%
+independent                generated        8  8388608 std::stable_sort         scalar               1     219.87     0.4%
+independent                generated        8  8388608 ips4o::sort              scalar               1     182.32     0.4%
+independent                generated        8  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+independent                generated        8  8388608 arrow::SortIndices       scalar               1     228.50     0.5%
+independent                gen[bench_q1_baselines] 146/336 (43%) 17m54s elapsed, ~23m17s left | unique_first_u32_n8388608_m8   
+[bench_q1_baselines] 151/336 (45%) 18m24s elapsed, ~22m33s left | unique_first_u32_n8388608_m8   
+[bench_q1_baselines] 157/336 (47%) 18m59s elapsed, ~21m38s left | tpcds_q010_u32_n26558236_m8   
+[bench_q1_baselines] 159/336 (47%) 20m53s elapsed, ~23m15s left | tpcds_q010_u32_n26558236_m8   
+[bench_q1_baselines] 160/336 (48%) 22m15s elapsed, ~24m28s left | tpcds_q010_u32_n26558236_m8   
+[bench_q1_baselines] 161/336 (48%) 23m11s elapsed, ~25m12s left | tpcds_q010_u32_n26558236_m8   
+[bench_q1_baselines] 163/336 (49%) 24m40s elapsed, ~26m11s left | tpcds_q010_u32_n26558236_m8   
+erated        8  8388608 samplesort               scalar               6      21.77     1.1%
+independent                generated        8  8388608 quicksort                scalar               6      53.08     1.0%
+independent                generated        8  8388608 std::sort                scalar               6      38.29     2.0%
+independent                generated        8  8388608 ips4o::parallel::sort    scalar               6      32.32     0.9%
+independent                generated        8  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+independent                generated        8  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- unique_first_u32_n8388608_m8, 8388608 rows, 8 columns, u32 --
+unique_first               generated        8  8388608 samplesort               scalar               1      29.08     0.7%
+unique_first               generated        8  8388608 quicksort                scalar               1      21.62     0.9%
+unique_first               generated        8  8388608 std::sort                scalar               1     122.37     0.3%
+unique_first               generated        8  8388608 std::stable_sort         scalar               1     124.76     0.8%
+unique_first               generated        8  8388608 ips4o::sort              scalar               1      67.89     1.2%
+unique_first               generated        8  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+unique_first               generated        8  8388608 arrow::SortIndices       scalar               1     137.00     0.7%
+unique_first               generated        8  8388608 samplesort               scalar               6      13.82     1.6%
+unique_first               generated        8  8388608 quicksort                scalar               6       6.32     3.6%
+unique_first               generated        8  8388608 std::sort                scalar               6      22.84     0.7%
+unique_first               generated        8  8388608 ips4o::parallel::sort    scalar               6      12.88     0.7%
+unique_first               generated        8  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+unique_first               generated        8  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- tpcds_q010_u32_n26558236_m8, 26558236 rows, 8 columns, u32 (measured) --
+tpcds_q010                 measured         8 26558236 samplesort               scalar               1      62.84     0.3%
+tpcds_q010                 measured         8 26558236 quicksort                scalar               1      46.86     1.3%
+tpcds_q010                 measured         8 26558236 std::sort                scalar               1     375.71     0.5%
+tpcds_q010                 measured         8 26558236 std::stable_sort         scalar               1     302.30     0.8%
+tpcds_q010                 measured         8 26558236 ips4o::sort              scalar               1     209.25     0.3%
+tpcds_q010                 measured         8 26558236 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+tpcds_q010                 measured         8 26558236 arrow::SortIndices       scalar               1     328.66     0.0%
+tpcds_q010                 measured         8 26558236 samplesort               scalar               6      20.97     3.7%
+tpcds_q010                 measured         8 26558236 quicksort                scalar               6      13.44     2.3%
+tpcds_q010                 measured         8 26558236 std::sort           [bench_q1_baselines] 167/336 (50%) 25m17s elapsed, ~25m35s left | tpcds_q010_u32_n26558236_m8   
+[bench_q1_baselines] 172/336 (51%) 26m01s elapsed, ~24m49s left | tpcds_q050_u32_n27504853_m10   
+[bench_q1_baselines] 176/336 (52%) 27m33s elapsed, ~25m03s left | tpcds_q050_u32_n27504853_m10   
+[bench_q1_baselines] 183/336 (54%) 29m11s elapsed, ~24m24s left | tpcds_q064_u32_n26532108_m9   
+[bench_q1_baselines] 184/336 (55%) 29m52s elapsed, ~24m40s left | tpcds_q064_u32_n26532108_m9   
+[bench_q1_baselines] 185/336 (55%) 32m12s elapsed, ~26m17s left | tpcds_q064_u32_n26532108_m9   
+[bench_q1_baselines] 186/336 (55%) 34m14s elapsed, ~27m37s left | tpcds_q064_u32_n26532108_m9   
+[bench_q1_baselines] 187/336 (56%) 35m48s elapsed, ~28m32s left | tpcds_q064_u32_n26532108_m9   
+[bench_q1_baselines] 189/336 (56%) 37m42s elapsed, ~29m20s left | tpcds_q064_u32_n26532108_m9   
+[bench_q1_baselines] 191/336 (57%) 38m37s elapsed, ~29m19s left | tpcds_q064_u32_n26532108_m9   
+[bench_q1_baselines] 193/336 (57%) 39m20s elapsed, ~29m08s left | tpcds_q064_u32_n26532108_m9   
+     scalar               6      49.34     0.6%
+tpcds_q010                 measured         8 26558236 ips4o::parallel::sort    scalar               6      37.64     0.4%
+tpcds_q010                 measured         8 26558236 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+tpcds_q010                 measured         8 26558236 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- tpcds_q050_u32_n27504853_m10, 27504853 rows, 10 columns, u32 (measured) --
+tpcds_q050                 measured        10 27504853 samplesort               scalar               1      39.36     0.4%
+tpcds_q050                 measured        10 27504853 quicksort                scalar               1      19.15     0.2%
+tpcds_q050                 measured        10 27504853 std::sort                scalar               1      87.08     1.1%
+tpcds_q050                 measured        10 27504853 std::stable_sort         scalar               1      77.33     0.0%
+tpcds_q050                 measured        10 27504853 ips4o::sort              scalar               1      14.70     1.6%
+tpcds_q050                 measured        10 27504853 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+tpcds_q050                 measured        10 27504853 arrow::SortIndices       scalar               1     237.98     0.4%
+tpcds_q050                 measured        10 27504853 samplesort               scalar               6      32.14     4.0%
+tpcds_q050                 measured        10 27504853 quicksort                scalar               6      10.81     6.3%
+tpcds_q050                 measured        10 27504853 std::sort                scalar               6       7.26     1.5%
+tpcds_q050                 measured        10 27504853 ips4o::parallel::sort    scalar               6       4.12     2.1%
+tpcds_q050                 measured        10 27504853 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+tpcds_q050                 measured        10 27504853 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- tpcds_q064_u32_n26532108_m9, 26532108 rows, 9 columns, u32 (measured) --
+tpcds_q064                 measured         9 26532108 samplesort               scalar               1     203.76     0.6%
+tpcds_q064                 measured         9 26532108 quicksort                scalar               1     145.03     0.2%
+tpcds_q064                 measured         9 26532108 std::sort                scalar               1     520.22     0.1%
+tpcds_q064                 measured         9 26532108 std::stable_sort         scalar               1     451.19     0.4%
+tpcds_q064                 measured         9 26532108 ips4o::sort              scalar               1     345.62     0.2%
+tpcds_q064                 measured         9 26532108 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+tpcds_q064                 measured         9 26532108 arrow::SortIndices       scalar               1     421.46     0.1%
+tpcds_q064                 measured         9 26532108 samplesort               scalar               6      45.70     0.3%
+tpcds_q064                 measured         9 26532108 quicksort                scalar               6     142.13     0.3%
+tpcds_q064                 measured         9 26532108 std::sort                scalar               6      82.04     0.4%
+tpcds_q064                 measured         9 26532108 ips4o::parallel::sort    scalar               6      61.40     0.3%
+tpcds_q064                 measured         9 26532108 avx512_argsort           scalar               6   dr[bench_q1_baselines] 196/336 (58%) 40m13s elapsed, ~28m43s left | tpcds_q067_u32_n26856871_m8   
+[bench_q1_baselines] 198/336 (59%) 43m23s elapsed, ~30m14s left | tpcds_q067_u32_n26856871_m8   
+[bench_q1_baselines] 199/336 (59%) 45m22s elapsed, ~31m14s left | tpcds_q067_u32_n26856871_m8   
+[bench_q1_baselines] 200/336 (60%) 46m53s elapsed, ~31m53s left | tpcds_q067_u32_n26856871_m8   
+[bench_q1_baselines] 202/336 (60%) 49m04s elapsed, ~32m33s left | tpcds_q067_u32_n26856871_m8   
+[bench_q1_baselines] 205/336 (61%) 49m53s elapsed, ~31m53s left | tpcds_q067_u32_n26856871_m8   
+opped: single column only: an argsort cannot express a lexicographic key over several columns
+tpcds_q064                 measured         9 26532108 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- tpcds_q067_u32_n26856871_m8, 26856871 rows, 8 columns, u32 (measured) --
+tpcds_q067                 measured         8 26856871 samplesort               scalar               1     133.00     0.2%
+tpcds_q067                 measured         8 26856871 quicksort                scalar               1     104.01     0.2%
+tpcds_q067                 measured         8 26856871 std::sort                scalar               1     590.51     0.4%
+tpcds_q067                 measured         8 26856871 std::stable_sort         scalar               1     438.14     0.6%
+tpcds_q067                 measured         8 26856871 ips4o::sort              scalar               1     334.03     0.5%
+tpcds_q067                 measured         8 26856871 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+tpcds_q067                 measured         8 26856871 arrow::SortIndices       scalar               1     480.29     0.1%
+tpcds_q067                 measured         8 26856871 samplesort               scalar               6      34.84     3.1%
+tpcds_q067                 measured         8 26856871 quicksort                scalar               6      64.16     1.4%
+tpcds_q067                 measured         8 26856871 std::sort                scalar               6      67.56     0.4%
+tpcds_q067                 measured         8 26856871 ips4o::parallel::sort    scalar               6      59.88     0.6%
+tpcds_q067                 measured         8 26856871 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+tpcds_q067                 measured         8 26856871 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- tpcds_q081_u32_n500000_m15, 500000 rows, 15 columns, u32 (measured) --
+tpcds_q081                 measured        15   500000 samplesort               scalar               1      19.55     4.3%
+tpcds_q081                 measured        15   500000 quicksort                scalar               1      17.33     3.8%
+tpcds_q081                 measured        15   500000 std::sort                scalar               1      74.66     1.1%
+tpcds_q081                 measured        15   500000 std::stable_sort         scalar               1      82.33     2.4%
+tpcds_q081                 measured        15   500000 ips4o::sort              scalar               1      38.34     2.8%
+tpcds_q081                 measured        15   500000 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+tpcds_q081                 measured        15   500000 arrow::SortIndices       scalar               1      81.73     2.6%
+tpcds_q081                 measured        15   500000 samplesort               scalar               6       9.88     3.1%
+tpcds_q081                 measured        15   500000 quicksort                scalar               6       8.15     4.9%
+tpcds_q081                 measured        15   500000 std::sort                scalar               6      15.28     0.3%
+tpcds_q081                 measured        15   500000 ips4o::parallel::sort    scalar               6       8.38     1.6%
+tpcds_q081                 measured        15   500000 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+tpcds_q081                 measured        15   500000 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within S[bench_q1_baselines] 224/336 (67%) 50m26s elapsed, ~25m13s left | skewed_zipf_s1_u64_n8388608_m1   
+[bench_q1_baselines] 238/336 (71%) 50m57s elapsed, ~20m58s left | low_cardinality_d4_u64_n8388608_m1   
+ortIndices
+
+-- skewed_zipf_s1_u64_n8388608_m1, 8388608 rows, 1 columns, u64 --
+skewed_zipf_s1             generated        1  8388608 samplesort               scalar               1      19.36     0.6%
+skewed_zipf_s1             generated        1  8388608 quicksort                scalar               1      16.47     0.9%
+skewed_zipf_s1             generated        1  8388608 std::sort                scalar               1      82.71     0.7%
+skewed_zipf_s1             generated        1  8388608 std::stable_sort         scalar               1     101.89     0.6%
+skewed_zipf_s1             generated        1  8388608 ips4o::sort              scalar               1      27.07     0.6%
+skewed_zipf_s1             generated        1  8388608 avx512_argsort           scalar               1      38.57     1.0%
+skewed_zipf_s1             generated        1  8388608 arrow::SortIndices       scalar               1       7.82     2.1%
+skewed_zipf_s1             generated        1  8388608 samplesort               scalar               6      18.82     1.1%
+skewed_zipf_s1             generated        1  8388608 quicksort                scalar               6       8.12     2.4%
+skewed_zipf_s1             generated        1  8388608 std::sort                scalar               6      14.76     0.7%
+skewed_zipf_s1             generated        1  8388608 ips4o::parallel::sort    scalar               6       7.23     5.0%
+skewed_zipf_s1             generated        1  8388608 avx512_argsort           scalar               6   dropped: parallel argsort needs XSS_COMPILE_OPENMP; this build has no OpenMP runtime for clang
+skewed_zipf_s1             generated        1  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- low_cardinality_d4_u64_n8388608_m1, 8388608 rows, 1 columns, u64 --
+low_cardinality_d4         generated        1  8388608 samplesort               scalar               1      14.84     0.6%
+low_cardinality_d4         generated        1  8388608 quicksort                scalar               1       6.11     0.3%
+low_cardinality_d4         generated        1  8388608 std::sort                scalar               1      36.20     0.8%
+low_cardinality_d4         generated        1  8388608 std::stable_sort         scalar               1      62.86     2.4%
+low_cardinality_d4         generated        1  8388608 ips4o::sort              scalar               1      10.02     0.5%
+low_cardinality_d4         generated        1  8388608 avx512_argsort           scalar               1       6.20     0.4%
+low_cardinality_d4         generated        1  8388608 arrow::SortIndices       scalar               1       6.51     2.7%
+low_cardinality_d4         generated        1  8388608 samplesort               scalar               6      18.57     0.9%
+low_cardinality_d4         generated        1  8388608 quicksort                scalar               6       5.98    14.2%
+low_cardinality_d4         generated        1  8388608 std::sort                scalar               6       7.89     0.7%
+low_cardinality_d4         generated        1  8388608 ips4o::parallel::sort    scalar               6       2.79     1.7%
+low_cardinality_d4         generated        1  8388608 avx512_argsort           scalar               6   dropped: parallel argsort needs XSS_COMPILE_OPENMP; this build has no OpenMP runtime for clang
+low_cardinality_d4         generated        1  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- independent_uniform_c1024_u64_n8388608_m1, 8388608 rows, 1 columns, u64 --
+independent                generated        1  8388608 samplesort               scalar               1      21.70     0.2%
+independent                generated        1  8388608 quicksort                scalar               1      21.04     0.9%
+independent                generated        1  8388608 std::sort                scalar               1      98.05   [bench_q1_baselines] 251/336 (75%) 51m27s elapsed, ~17m25s left | independent_uniform_c1024_u64_n8388608_m1   
+[bench_q1_baselines] 263/336 (78%) 52m02s elapsed, ~14m26s left | unique_first_u64_n8388608_m1   
+[bench_q1_baselines] 267/336 (79%) 52m39s elapsed, ~13m36s left | unique_first_u64_n8388608_m1   
+[bench_q1_baselines] 276/336 (82%) 53m37s elapsed, ~11m39s left | skewed_zipf_s1_u64_n8388608_m4   
+[bench_q1_baselines] 277/336 (82%) 54m08s elapsed, ~11m31s left | skewed_zipf_s1_u64_n8388608_m4   
+  0.6%
+independent                generated        1  8388608 std::stable_sort         scalar               1     120.36     0.2%
+independent                generated        1  8388608 ips4o::sort              scalar               1      41.54     0.6%
+independent                generated        1  8388608 avx512_argsort           scalar               1      47.65     0.2%
+independent                generated        1  8388608 arrow::SortIndices       scalar               1       8.24     1.6%
+independent                generated        1  8388608 samplesort               scalar               6      17.87     0.7%
+independent                generated        1  8388608 quicksort                scalar               6       9.30     1.0%
+independent                generated        1  8388608 std::sort                scalar               6      17.70     1.5%
+independent                generated        1  8388608 ips4o::parallel::sort    scalar               6       8.64     0.9%
+independent                generated        1  8388608 avx512_argsort           scalar               6   dropped: parallel argsort needs XSS_COMPILE_OPENMP; this build has no OpenMP runtime for clang
+independent                generated        1  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- unique_first_u64_n8388608_m1, 8388608 rows, 1 columns, u64 --
+unique_first               generated        1  8388608 samplesort               scalar               1      42.19     1.2%
+unique_first               generated        1  8388608 quicksort                scalar               1      40.52     1.0%
+unique_first               generated        1  8388608 std::sort                scalar               1     143.59     0.4%
+unique_first               generated        1  8388608 std::stable_sort         scalar               1     153.79     0.4%
+unique_first               generated        1  8388608 ips4o::sort              scalar               1      78.54     0.6%
+unique_first               generated        1  8388608 avx512_argsort           scalar               1      59.61     0.5%
+unique_first               generated        1  8388608 arrow::SortIndices       scalar               1     146.22     1.7%
+unique_first               generated        1  8388608 samplesort               scalar               6      21.67     1.4%
+unique_first               generated        1  8388608 quicksort                scalar               6      12.48     2.4%
+unique_first               generated        1  8388608 std::sort                scalar               6      28.24     1.3%
+unique_first               generated        1  8388608 ips4o::parallel::sort    scalar               6      14.49     0.4%
+unique_first               generated        1  8388608 avx512_argsort           scalar               6   dropped: parallel argsort needs XSS_COMPILE_OPENMP; this build has no OpenMP runtime for clang
+unique_first               generated        1  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- skewed_zipf_s1_u64_n8388608_m4, 8388608 rows, 4 columns, u64 --
+skewed_zipf_s1             generated        4  8388608 samplesort               scalar               1      90.48     0.6%
+skewed_zipf_s1             generated        4  8388608 quicksort                scalar               1      79.99     0.9%
+skewed_zipf_s1             generated        4  8388608 std::sort                scalar               1     355.41     0.8%
+skewed_zipf_s1             generated        4  8388608 std::stable_sort         scalar               1     363.04     0.7%
+skewed_zipf_s1             generated        4  8388608 ips4o::sort              scalar               1     259.99     0.5%
+skewed_zipf_s1             generated        4  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+skew[bench_q1_baselines] 280/336 (83%) 54m55s elapsed, ~10m59s left | skewed_zipf_s1_u64_n8388608_m4   
+[bench_q1_baselines] 289/336 (86%) 55m52s elapsed, ~9m05s left | low_cardinality_d4_u64_n8388608_m4   
+[bench_q1_baselines] 291/336 (87%) 56m28s elapsed, ~8m43s left | low_cardinality_d4_u64_n8388608_m4   
+[bench_q1_baselines] 294/336 (88%) 56m59s elapsed, ~8m08s left | low_cardinality_d4_u64_n8388608_m4   
+[bench_q1_baselines] 302/336 (90%) 57m50s elapsed, ~6m30s left | independent_uniform_c1024_u64_n8388608_m4   
+[bench_q1_baselines] 304/336 (90%) 58m31s elapsed, ~6m09s left | independent_uniform_c1024_u64_n8388608_m4   
+ed_zipf_s1             generated        4  8388608 arrow::SortIndices       scalar               1     293.88     0.2%
+skewed_zipf_s1             generated        4  8388608 samplesort               scalar               6      33.43     1.7%
+skewed_zipf_s1             generated        4  8388608 quicksort                scalar               6      27.35     0.9%
+skewed_zipf_s1             generated        4  8388608 std::sort                scalar               6      63.54     1.1%
+skewed_zipf_s1             generated        4  8388608 ips4o::parallel::sort    scalar               6      46.68     0.3%
+skewed_zipf_s1             generated        4  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+skewed_zipf_s1             generated        4  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- low_cardinality_d4_u64_n8388608_m4, 8388608 rows, 4 columns, u64 --
+low_cardinality_d4         generated        4  8388608 samplesort               scalar               1      48.30     0.2%
+low_cardinality_d4         generated        4  8388608 quicksort                scalar               1      35.52     0.4%
+low_cardinality_d4         generated        4  8388608 std::sort                scalar               1     345.54     0.2%
+low_cardinality_d4         generated        4  8388608 std::stable_sort         scalar               1     342.43     1.3%
+low_cardinality_d4         generated        4  8388608 ips4o::sort              scalar               1      75.66     2.6%
+low_cardinality_d4         generated        4  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+low_cardinality_d4         generated        4  8388608 arrow::SortIndices       scalar               1     337.45     0.2%
+low_cardinality_d4         generated        4  8388608 samplesort               scalar               6      22.62     1.6%
+low_cardinality_d4         generated        4  8388608 quicksort                scalar               6      13.43     5.0%
+low_cardinality_d4         generated        4  8388608 std::sort                scalar               6      33.16     0.8%
+low_cardinality_d4         generated        4  8388608 ips4o::parallel::sort    scalar               6      15.07     1.6%
+low_cardinality_d4         generated        4  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+low_cardinality_d4         generated        4  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- independent_uniform_c1024_u64_n8388608_m4, 8388608 rows, 4 columns, u64 --
+independent                generated        4  8388608 samplesort               scalar               1     108.71     0.5%
+independent                generated        4  8388608 quicksort                scalar               1      89.95     0.4%
+independent                generated        4  8388608 std::sort                scalar               1     274.98     0.3%
+independent                generated        4  8388608 std::stable_sort         scalar               1     272.29     0.4%
+independent                generated        4  8388608 ips4o::sort              scalar               1     201.63     0.3%
+independent                generated        4  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+independent                generated        4  8388608 arrow::SortIndices       scalar               1     257.29     0.4%
+independent                generated        4  8388608 samplesort               scalar               6      30.52     0.7%
+independent                generated     [bench_q1_baselines] 308/336 (92%) 59m01s elapsed, ~5m21s left | independent_uniform_c1024_u64_n8388608_m4   
+[bench_q1_baselines] 315/336 (94%) 59m31s elapsed, ~3m58s left | unique_first_u64_n8388608_m4   
+[bench_q1_baselines] 319/336 (95%) 1h00m elapsed, ~3m12s left | unique_first_u64_n8388608_m4   
+[bench_q1_baselines] 326/336 (97%) 1h00m elapsed, ~1m51s left | skewed_zipf_s1_u64_n8388608_m8   
+[bench_q1_baselines] 328/336 (98%) 1h01m elapsed, ~1m30s left | skewed_zipf_s1_u64_n8388608_m8   
+[bench_q1_baselines] 329/336 (98%) 1h02m elapsed, ~1m20s left | skewed_zipf_s1_u64_n8388608_m8   
+[bench_q1_baselines] 330/336 (98%) 1h03m elapsed, ~1m09s left | skewed_zipf_s1_u64_n8388608_m8   
+[bench_q1_baselines] 332/336 (99%) 1h04m elapsed, ~46s left | skewed_zipf_s1_u64_n8388608_m8   
+[bench_q1_baselines] 335/336 (100%) 1h04m elapsed, ~11s left | skewed_zipf_s1_u64_n8388608_m8   
+   4  8388608 quicksort                scalar               6      57.10     0.6%
+independent                generated        4  8388608 std::sort                scalar               6      47.49     0.7%
+independent                generated        4  8388608 ips4o::parallel::sort    scalar               6      35.87     0.5%
+independent                generated        4  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+independent                generated        4  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- unique_first_u64_n8388608_m4, 8388608 rows, 4 columns, u64 --
+unique_first               generated        4  8388608 samplesort               scalar               1      41.69     1.4%
+unique_first               generated        4  8388608 quicksort                scalar               1      40.88     0.7%
+unique_first               generated        4  8388608 std::sort                scalar               1     142.72     0.5%
+unique_first               generated        4  8388608 std::stable_sort         scalar               1     149.95     0.5%
+unique_first               generated        4  8388608 ips4o::sort              scalar               1      82.67     0.4%
+unique_first               generated        4  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+unique_first               generated        4  8388608 arrow::SortIndices       scalar               1     157.27     0.6%
+unique_first               generated        4  8388608 samplesort               scalar               6      23.78     0.4%
+unique_first               generated        4  8388608 quicksort                scalar               6      13.26     3.3%
+unique_first               generated        4  8388608 std::sort                scalar               6      28.27     1.7%
+unique_first               generated        4  8388608 ips4o::parallel::sort    scalar               6      15.24     0.6%
+unique_first               generated        4  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+unique_first               generated        4  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- skewed_zipf_s1_u64_n8388608_m8, 8388608 rows, 8 columns, u64 --
+skewed_zipf_s1             generated        8  8388608 samplesort               scalar               1     243.15     1.0%
+skewed_zipf_s1             generated        8  8388608 quicksort                scalar               1     181.72     0.2%
+skewed_zipf_s1             generated        8  8388608 std::sort                scalar               1     647.15     0.1%
+skewed_zipf_s1             generated        8  8388608 std::stable_sort         scalar               1     674.64     0.3%
+skewed_zipf_s1             generated        8  8388608 ips4o::sort              scalar               1     506.61     0.4%
+skewed_zipf_s1             generated        8  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+skewed_zipf_s1             generated        8  8388608 arrow::SortIndices       scalar               1     465.00     0.3%
+skewed_zipf_s1             generated        8  8388608 samplesort               scalar               6      67.51     0.7%
+skewed_zipf_s1             generated        8  8388608 quicksort                scalar               6     154.12     0.6%
+skewed_zipf_s1             generated        8  8388608 std::sort                scalar               6     116.75     0.3%
+skewed_zipf_s1             generated        8  8388608 ips4o::parallel::sort    scalar         [bench_q1_baselines] 336/336 (100%) 1h04m elapsed, ~0s left | skewed_zipf_s1_u64_n8388608_m8   
+[bench_q1_baselines] 341/336 (100%) 1h06m elapsed, ~0s left | low_cardinality_d4_u64_n8388608_m8   
+[bench_q1_baselines] 342/336 (100%) 1h07m elapsed, ~0s left | low_cardinality_d4_u64_n8388608_m8   
+[bench_q1_baselines] 343/336 (100%) 1h08m elapsed, ~0s left | low_cardinality_d4_u64_n8388608_m8   
+[bench_q1_baselines] 345/336 (100%) 1h08m elapsed, ~0s left | low_cardinality_d4_u64_n8388608_m8   
+[bench_q1_baselines] 352/336 (100%) 1h09m elapsed, ~0s left | independent_uniform_c1024_u64_n8388608_m8   
+[bench_q1_baselines] 354/336 (100%) 1h10m elapsed, ~0s left | independent_uniform_c1024_u64_n8388608_m8   
+[bench_q1_baselines] 356/336 (100%) 1h10m elapsed, ~0s left | independent_uniform_c1024_u64_n8388608_m8   
+[bench_q1_baselines] 360/336 (100%) 1h11m elapsed, ~0s left | independent_uniform_c1024_u64_n8388608_m8   
+      6      88.90     1.0%
+skewed_zipf_s1             generated        8  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+skewed_zipf_s1             generated        8  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- low_cardinality_d4_u64_n8388608_m8, 8388608 rows, 8 columns, u64 --
+low_cardinality_d4         generated        8  8388608 samplesort               scalar               1     105.59     0.4%
+low_cardinality_d4         generated        8  8388608 quicksort                scalar               1      86.74     0.6%
+low_cardinality_d4         generated        8  8388608 std::sort                scalar               1     790.59     0.2%
+low_cardinality_d4         generated        8  8388608 std::stable_sort         scalar               1     772.32     0.1%
+low_cardinality_d4         generated        8  8388608 ips4o::sort              scalar               1     446.53     0.2%
+low_cardinality_d4         generated        8  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+low_cardinality_d4         generated        8  8388608 arrow::SortIndices       scalar               1     520.15     0.0%
+low_cardinality_d4         generated        8  8388608 samplesort               scalar               6      34.35     1.5%
+low_cardinality_d4         generated        8  8388608 quicksort                scalar               6      22.72     1.9%
+low_cardinality_d4         generated        8  8388608 std::sort                scalar               6     132.25     0.4%
+low_cardinality_d4         generated        8  8388608 ips4o::parallel::sort    scalar               6      78.60     1.3%
+low_cardinality_d4         generated        8  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+low_cardinality_d4         generated        8  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- independent_uniform_c1024_u64_n8388608_m8, 8388608 rows, 8 columns, u64 --
+independent                generated        8  8388608 samplesort               scalar               1     110.54     0.4%
+independent                generated        8  8388608 quicksort                scalar               1      90.48     0.6%
+independent                generated        8  8388608 std::sort                scalar               1     269.04     0.2%
+independent                generated        8  8388608 std::stable_sort         scalar               1     268.24     1.3%
+independent                generated        8  8388608 ips4o::sort              scalar               1     203.06     0.5%
+independent                generated        8  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+independent                generated        8  8388608 arrow::SortIndices       scalar               1     261.95     0.3%
+independent                generated        8  8388608 samplesort               scalar               6      31.50     0.6%
+independent                generated        8  8388608 quicksort                scalar               6      56.67     1.2%
+independent                generated        8  8388608 std::sort                scalar               6      46.70     0.8%
+independent                generated        8  8388608 ips4o::parallel::sort    scalar               6      36.33     0.7%
+independent                generated        8  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+independent                generated        8  8388608[bench_q1_baselines] 367/336 (100%) 1h11m elapsed, ~0s left | unique_first_u64_n8388608_m8   
+[bench_q1_baselines] 371/336 (100%) 1h12m elapsed, ~0s left | unique_first_u64_n8388608_m8   
+ arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+-- unique_first_u64_n8388608_m8, 8388608 rows, 8 columns, u64 --
+unique_first               generated        8  8388608 samplesort               scalar               1      43.44     0.6%
+unique_first               generated        8  8388608 quicksort                scalar               1      41.15     0.9%
+unique_first               generated        8  8388608 std::sort                scalar               1     143.07     1.0%
+unique_first               generated        8  8388608 std::stable_sort         scalar               1     150.44     0.5%
+unique_first               generated        8  8388608 ips4o::sort              scalar               1      86.33     1.0%
+unique_first               generated        8  8388608 avx512_argsort           scalar               1   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+unique_first               generated        8  8388608 arrow::SortIndices       scalar               1     154.46     0.3%
+unique_first               generated        8  8388608 samplesort               scalar               6      22.92     1.3%
+unique_first               generated        8  8388608 quicksort                scalar               6      12.25     3.1%
+unique_first               generated        8  8388608 std::sort                scalar               6      28.19     1.2%
+unique_first               generated        8  8388608 ips4o::parallel::sort    scalar               6      16.05     0.2%
+unique_first               generated        8  8388608 avx512_argsort           scalar               6   dropped: single column only: an argsort cannot express a lexicographic key over several columns
+unique_first               generated        8  8388608 arrow::SortIndices       scalar               6   dropped: single-threaded kernel: Arrow parallelises across plan nodes, not within SortIndices
+
+298 measured, 79 dropped, 0 incorrect
+  !! 3 row(s) still spread wider than 5% after 33 repetitions: the machine would not settle on those, and their medians should not be compared at fine margins
+
+wrote /home/pietrzyk/tslgen-v99/test-sort/benchmark_results_verify/q1_baselines.csv (377 rows)
