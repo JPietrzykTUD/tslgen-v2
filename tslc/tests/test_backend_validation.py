@@ -9,7 +9,9 @@ import pytest
 
 from tslc.backend.cpp_capability import CPP_BACKEND
 from tslc.backend.cpp_compiler_capabilities import (
+    CPP_COMPILER_CAPABILITIES,
     cpp_compiler_capability,
+    cpp_compiler_capability_header_defaults,
     cpp_extensions_compiler_capabilities,
 )
 from tslc.backend.cpp_validation import validate_cpp_profiles
@@ -146,6 +148,32 @@ def test_cpp_clang_builtin_capabilities_use_has_builtin_probes() -> None:
             f"TSL_COMPILER_HAS_{capability_id.upper()}"
         )
         assert capability.preprocessor_probe == f"__has_builtin({builtin})"
+
+
+def test_cpp_capability_header_defaults_resolve_every_probe_to_boolean() -> None:
+    capabilities = tuple(CPP_COMPILER_CAPABILITIES)
+
+    defaults = cpp_compiler_capability_header_defaults(
+        tuple(capability.capability_id for capability in capabilities)
+    )
+
+    for capability in capabilities:
+        assert "\n".join(
+            (
+                f"#ifndef {capability.condition_macro}",
+                f"#  if {capability.preprocessor_probe}",
+                f"#    define {capability.condition_macro} 1",
+                "#  else",
+                f"#    define {capability.condition_macro} 0",
+                "#  endif",
+                "#endif",
+            )
+        ) in defaults
+        assert (
+            f"#  define {capability.condition_macro} "
+            f"({capability.preprocessor_probe})"
+            not in defaults
+        )
 
 
 def test_cpp_unknown_extension_compiler_capability_is_diagnosed() -> None:

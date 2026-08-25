@@ -275,7 +275,7 @@ def test_representative_project_shape_is_byte_stable(
         "cpp/CMakeLists.txt": "a544ca7828628a83dcb9b6dcf22b1834a5d7f69cfce7184bfe6bcd0e4855b35e",
         "cpp/docs/input/tsl_api_docs.hpp": "25c8a21fafad064c394b933b6c5d27b6dc07aaf4a509150d9da7e87ff9f8027d",
         "cpp/include/tsl.hpp": "298cd47b4e1509cd59eb4100f7a0d82bcdbc6e5d9f4eedccb0a68ba0bf667e03",
-        "cpp/include/tsl_primitives.hpp": "64d81e783ee0ab6618cbc45d100458eee1ab27e238fe5f8a9b4844299072ce92",
+        "cpp/include/tsl_primitives.hpp": "11bd34e5b49a236979c11f696478ff627fae56fe113f95ef988b17f74e933d8b",
         "cpp/include/tsl_scalar.hpp": "a3d1b9f8fd299e4710f39f7e887380668a9c666311440d0d6eae281e2ba5cef5",
         "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
         "rust/Cargo.toml": "ec632691434d5f98f5bb2035539e9df258ec7fb252f84e5b4cb21a0aa2a144cc",

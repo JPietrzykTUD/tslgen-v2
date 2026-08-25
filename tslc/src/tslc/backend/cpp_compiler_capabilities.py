@@ -290,13 +290,18 @@ def cpp_compiler_capability_header_defaults(
         "#  define __has_feature(name) 0",
         "#endif",
     ]
+    # Expanding `defined` from a macro replacement list is undefined; resolve
+    # every probe in its own directive and expose only a literal Boolean.
     for capability_id in capability_ids:
         capability = cpp_compiler_capability(capability_id)
         lines.extend(
             (
                 f"#ifndef {capability.condition_macro}",
-                f"#  define {capability.condition_macro} "
-                f"({capability.preprocessor_probe})",
+                f"#  if {capability.preprocessor_probe}",
+                f"#    define {capability.condition_macro} 1",
+                "#  else",
+                f"#    define {capability.condition_macro} 0",
+                "#  endif",
                 "#endif",
             )
         )
