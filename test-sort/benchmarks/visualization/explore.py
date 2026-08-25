@@ -347,6 +347,51 @@ with tabs[1]:
                 chart = bars + labels
             st.altair_chart(styled(chart.properties(height=420), mode), width='stretch')
 
+            # A median is only a comparison if the things being compared were measured
+            # over the same ground. In q1 `ips4o::parallel::sort` has only 6-worker
+            # rows while ours have 1 and 6, so pooling workers compared our
+            # serial-and-parallel median against its parallel-only one -- and made us
+            # look slower on seven of nine shapes when per-cell we win twenty-nine of
+            # thirty-four. Unequal coverage is stated, with the dimension named.
+            # Only measurement conditions are checked. `variant` and `candidate` are
+            # labels of a configuration rather than conditions it was measured under,
+            # and they vary with the conditions by construction -- warning on them
+            # buried the one warning that mattered.
+            CONDITIONS = {"workers", "columns", "element_bytes", "rows", "detector",
+                          "shape", "style", "lanes", "register_bits", "move", "cell"}
+            pooled = [d for d in dimensions
+                      if d not in (x_field, colour) and d in CONDITIONS]
+            if colour != "(none)" and pooled:
+                uneven = []
+                for dim in pooled:
+                    # Two conditions, and both are needed. The dimension has to be
+                    # genuinely averaged over -- more than one of its values inside a
+                    # single (x, colour) cell -- and the groups have to disagree about
+                    # which of its values they cover. `variant` fails the first (each
+                    # algorithm has exactly one) and `rows` usually does too, so
+                    # warning on them was noise that buried the one that mattered.
+                    within = (subset.groupby([x_field, colour])[dim]
+                              .agg(lambda col: as_text(col).nunique()).max())
+                    if within is None or within <= 1:
+                        continue
+                    cover = (subset.groupby(colour)[dim]
+                             .agg(lambda col: frozenset(as_text(col).unique())))
+                    if cover.nunique() > 1:
+                        uneven.append((dim, cover))
+                for dim, cover in uneven:
+                    # Counts, not the values themselves. Listing them turned a
+                    # 180-candidate mismatch into a screen of text nobody reads.
+                    small = all(len(v) <= 4 for v in cover)
+                    detail = ", ".join(
+                        f"`{group}`: " + (", ".join(sorted(values)) if small
+                                          else f"{len(values)} values")
+                        for group, values in sorted(cover.items()))
+                    st.warning(
+                        f"**Not like-for-like:** `{dim}` is pooled into these medians, "
+                        f"and the {colour} groups do not cover the same `{dim}` "
+                        f"values — {detail}. Put `{dim}` on an axis, or filter it to "
+                        f"one value in the sidebar.")
+
             notes = [f"medians over {int(agg['cases'].sum())} measured cases"]
             if omitted:
                 notes.append(f"showing the {MAX_X} fastest {x_field} values, "
