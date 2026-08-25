@@ -55,7 +55,6 @@ prim<v:=(v,v)> mul(factor1, factor2):
           tsil "complete(op<mul>(factor1, factor2));"
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
-        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false
@@ -995,7 +994,6 @@ prim<v:=(v,v)> div(dividend, divisor):
           tsil "complete(helper<arith_div>(dividend, divisor));"
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       f?:
-        prefer_fixed_native true
         requires []
         safety:
           internal_unsafe false

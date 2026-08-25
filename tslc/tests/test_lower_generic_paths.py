@@ -986,7 +986,7 @@ def test_sse_to_mask_builds_lane_bit_constants_without_memory(
         assert intrinsic in lowered.body_text
 
 
-def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridge(
+def test_clang_mask_kernels_use_direct_comparison_and_integral_bridge(
     catalog: Catalog, machine_profiles
 ) -> None:
     profile = machine_profiles["avx2"]
@@ -996,11 +996,7 @@ def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridg
         equal_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert equal is not None
-    assert "::tsl::equal<::tsl::dataparallel::simd_for_t<" in equal.body_text
-    assert "::tsl::to_integral<::tsl::dataparallel::simd_for_t<" in (
-        equal.body_text
-    )
-    assert "::tsl::to_mask<tsl::simd<float, tsl::clang_v256>>" in equal.body_text
+    assert equal.body_text == "return left == right;"
 
     to_integral_slot = _by_key(catalog, profile, "to_integral")[
         ("f32", "clang_v256")
@@ -1038,13 +1034,7 @@ def test_clang_mask_kernels_use_their_declared_representation_and_integral_bridg
         bool_equal_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert bool_equal is not None
-    assert "::tsl::equal<::tsl::dataparallel::simd_for_t<" in bool_equal.body_text
-    assert "::tsl::to_integral<::tsl::dataparallel::simd_for_t<" in (
-        bool_equal.body_text
-    )
-    assert "::tsl::to_mask<tsl::simd<float, tsl::clang_v256_bool>>" in (
-        bool_equal.body_text
-    )
+    assert bool_equal.body_text == "return left == right;"
 
     bool_to_integral_slot = _by_key(catalog, profile, "to_integral")[
         ("f32", "clang_v256_bool")

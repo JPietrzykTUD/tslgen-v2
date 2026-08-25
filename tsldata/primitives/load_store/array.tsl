@@ -660,7 +660,6 @@ prim<s:=v[idx]> extract_value(a):
           """
     [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       arith:
-        prefer_fixed_native true
         requires:
           generic []
           clang_v128 []

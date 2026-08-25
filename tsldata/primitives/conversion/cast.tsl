@@ -186,7 +186,6 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
           wasm128 [simd128]
         ToBase:
           arith:
-            prefer_fixed_native true
             safety:
               internal_unsafe false
               caller_unsafe false
